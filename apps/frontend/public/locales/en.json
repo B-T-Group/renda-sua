@@ -3962,6 +3962,10 @@
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
       "pendingNotice": "You'll be notified once the store confirms your {{orderTotal}} order (they have up to 45 minutes).",
+      "payAtDelivery": {
+        "pendingInfo": "You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.",
+        "outForDeliveryPaymentPending": "The agent will send a payment request when they arrive. Keep your phone nearby to approve it."
+      },
       "storeReadyPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
       "storeReadySendPin": "Your order is ready at the store. Come during your pickup slot and send your PIN so the seller can confirm pickup.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
@@ -4573,13 +4577,14 @@
     "selectCountry": "Select a country.",
     "payAtDelivery": {
       "confirmationTitle": "Payment at delivery",
-      "confirmationMessage": "You chose pay at delivery. You will complete payment in the app when the agent arrives.",
+      "confirmationMessage": "You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.",
+      "info": "When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.",
       "agentInitiateHelp": "Send a mobile payment request to the client. Once they approve it, the order will complete automatically.",
       "agentInitiateSubtitle": "Payment is requested at the doorstep.",
       "clientPhoneHint": "This is the client phone number on the order.",
       "notEligible": "This order is not configured for pay at delivery.",
       "step1": "Your order has been sent to the merchant.",
-      "step2": "When the agent arrives, you will receive a mobile payment request in the app.",
+      "step2": "When the agent arrives, they will send a mobile payment request. Approve it on your phone.",
       "step3": "You will receive updates on your order status via email and in-app notifications. Track progress in My Orders."
     },
     "pickup": {
@@ -4874,8 +4879,8 @@
       "payNowShort": "Approve the payment request right away.",
       "payNowDescription": "We’ll send a payment request to your phone now. Approve it to place your order.",
       "payAtDelivery": "Pay at delivery",
-      "payAtDeliveryShort": "Pay in the app when the agent arrives.",
-      "payAtDeliveryDescription": "You will place the order now and pay at delivery in the app when the agent arrives."
+      "payAtDeliveryShort": "The agent will send a payment request when they arrive.",
+      "payAtDeliveryDescription": "You will place the order now. When the agent arrives, they will send a mobile payment request. Approve it on your phone."
     },
     "buy": "Buy",
     "confirmOrderCompletion": "Confirm Order Completion",

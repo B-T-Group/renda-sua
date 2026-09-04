@@ -373,7 +373,7 @@ const OrderConfirmationPage: React.FC = () => {
             <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
               {t(
                 'orders.payAtDelivery.confirmationMessage',
-                'You chose pay at delivery. You will complete payment in the app when the agent arrives.'
+                'You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
               )}
             </Typography>
           </CardContent>
@@ -734,7 +734,7 @@ const OrderConfirmationPage: React.FC = () => {
                 <Typography variant="body1">
                   {t(
                     'orders.payAtDelivery.step2',
-                    'When the agent arrives, you will receive a mobile payment request in the app.'
+                    'When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
                   )}
                 </Typography>
               </Box>
