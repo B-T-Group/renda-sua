@@ -10,6 +10,10 @@ import {
 } from './whatsapp-inbox-persistence.service';
 import { WhatsAppReplyService } from './whatsapp-reply.service';
 import { NotificationsService } from '../notifications.service';
+import {
+  inboxAttachmentPreview,
+  inboxButtonReplyFromPayload,
+} from '../../whatsapp/whatsapp-inbox-media.util';
 
 interface WhatsAppStatusEvent {
   id?: string;
@@ -177,23 +181,18 @@ export class WhatsAppInboundService {
     from: string,
     message: WhatsAppInboundMessage
   ): Promise<void> {
-    const interactive = message.interactive as
-      | {
-          button_reply?: { id?: string; title?: string };
-          list_reply?: { id?: string; title?: string };
-        }
-      | undefined;
-    const reply = interactive?.button_reply || interactive?.list_reply;
+    const reply = inboxButtonReplyFromPayload(message);
     await this.replyService.handleInteractiveReply({
       fromPhone: from,
-      buttonId: reply?.id,
-      buttonTitle: reply?.title,
+      buttonId: reply?.buttonId,
+      buttonTitle: reply?.buttonTitle,
       messageId: message.id,
       contextMessageId: message.context?.id?.trim() || undefined,
     });
   }
 
   private mapMessageType(type?: string): WhatsAppMessageType {
+    if (type === 'button') return 'interactive';
     const allowed: WhatsAppMessageType[] = [
       'text',
       'image',
@@ -214,20 +213,6 @@ export class WhatsAppInboundService {
     type: WhatsAppMessageType
   ): string {
     if (type === 'text') return message.text?.body?.trim() || '';
-    if (type === 'location') return '[Location]';
-    if (type === 'interactive') {
-      const interactive = message.interactive as
-        | { button_reply?: { title?: string; id?: string } }
-        | undefined;
-      const title = interactive?.button_reply?.title?.trim();
-      const id = interactive?.button_reply?.id?.trim();
-      if (title && id) return `${title} (${id})`;
-      return title || id || '[Interactive reply]';
-    }
-    if (type === 'image') return '[Image]';
-    if (type === 'audio') return '[Audio]';
-    if (type === 'video') return '[Video]';
-    if (type === 'document') return '[Document]';
-    return `[${type}]`;
+    return inboxAttachmentPreview(type, message);
   }
 }

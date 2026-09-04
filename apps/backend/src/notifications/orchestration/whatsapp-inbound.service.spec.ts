@@ -174,6 +174,36 @@ describe('WhatsAppInboundService', () => {
     expect(replyService.handleInboundText).not.toHaveBeenCalled();
   });
 
+  it('stores image captions as the inbox preview', async () => {
+    const service = buildService();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.img.cap',
+                    type: 'image',
+                    image: { id: 'media-2', caption: 'Storefront' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(inbox.persistInbound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'image',
+        body: 'Storefront',
+      })
+    );
+  });
+
   it('routes interactive button replies', async () => {
     const service = buildService();
     replyService.handleInteractiveReply = jest.fn();
@@ -214,6 +244,45 @@ describe('WhatsAppInboundService', () => {
       buttonTitle: 'Confirm',
       messageId: 'wamid.btn',
       contextMessageId: 'wamid.out.order-b',
+    });
+  });
+
+  it('routes template quick-reply button taps', async () => {
+    const service = buildService();
+    replyService.handleInteractiveReply = jest.fn();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.tpl.btn',
+                    type: 'button',
+                    button: { text: 'Confirmer', payload: 'Confirmer' },
+                    context: { id: 'wamid.out.order-c' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(inbox.persistInbound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'interactive',
+        body: 'Confirmer',
+      })
+    );
+    expect(replyService.handleInteractiveReply).toHaveBeenCalledWith({
+      fromPhone: '15557654321',
+      buttonId: 'Confirmer',
+      buttonTitle: 'Confirmer',
+      messageId: 'wamid.tpl.btn',
+      contextMessageId: 'wamid.out.order-c',
     });
   });
 });

@@ -6,7 +6,6 @@ import type {
   ChannelAttemptResult,
   WhatsAppChannelPayload,
 } from '../notification.types';
-import { WhatsAppInboxPersistenceService } from '../whatsapp-inbox-persistence.service';
 import { WhatsAppTemplateService } from '../whatsapp-template.service';
 
 @Injectable()
@@ -16,8 +15,7 @@ export class WhatsAppChannel {
   constructor(
     private readonly whatsAppService: WhatsAppService,
     private readonly templateService: WhatsAppTemplateService,
-    private readonly configService: ConfigService<Configuration>,
-    private readonly inbox: WhatsAppInboxPersistenceService
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   /** True when Graph credentials + app secret are present. */
@@ -100,7 +98,6 @@ export class WhatsAppChannel {
         category: this.templateService.category(params.payload.templateKey),
       });
       const providerMessageId = result.messages[0]?.id;
-      await this.recordTemplateOutbound(params, templateName, providerMessageId);
       return {
         channel: 'whatsapp',
         status: 'sent',
@@ -121,42 +118,6 @@ export class WhatsAppChannel {
         status: 'failed',
         error: error?.message ?? String(error),
       };
-    }
-  }
-
-  private async recordTemplateOutbound(
-    params: {
-      to: string;
-      payload: WhatsAppChannelPayload;
-      entityId?: string;
-      entityType?: string;
-    },
-    templateName: string,
-    wamid?: string
-  ): Promise<void> {
-    const phone = params.to.replace(/^\+/, '').trim();
-    try {
-      await this.inbox.persistOutbound({
-        waId: phone,
-        customerPhone: phone,
-        wamid,
-        source: 'template',
-        type: 'template',
-        body: `Template: ${templateName}`,
-        rawPayload: {
-          templateKey: params.payload.templateKey,
-          templateName,
-          variables: params.payload.variables ?? {},
-          entityId: params.entityId,
-          entityType: params.entityType,
-          orderId: params.entityType === 'order' ? params.entityId : undefined,
-        },
-        status: 'sent',
-      });
-    } catch (error: any) {
-      this.logger.warn(
-        `Failed to persist template outbound: ${error?.message ?? String(error)}`
-      );
     }
   }
 }
