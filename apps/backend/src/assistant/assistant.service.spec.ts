@@ -54,6 +54,7 @@ describe('AssistantService', () => {
         country: 'CM',
         phoneE164: '2376',
         accountType: null,
+        clientId: null,
       },
     });
     expect(result.reply).toMatch(/pay at delivery/i);
@@ -83,6 +84,7 @@ describe('AssistantService', () => {
         country: 'GA',
         phoneE164: null,
         accountType: 'client',
+        clientId: 'c1',
       },
     });
     expect(result.reply).toBe('Bonjour Samuel, oui pour le Gabon.');
@@ -134,6 +136,7 @@ describe('AssistantService', () => {
         country: 'CM',
         phoneE164: null,
         accountType: 'client',
+        clientId: 'c1',
       },
     });
     expect(tools.executeTool).toHaveBeenCalled();

@@ -34,6 +34,7 @@ describe('AssistantIdentityService', () => {
     expect(identity.preferredLanguage).toBe('fr');
     expect(identity.country).toBe('CM');
     expect(identity.accountType).toBe('client');
+    expect(identity.clientId).toBe('c1');
   });
 
   it('returns anonymous identity with inferred country when user is missing', async () => {
