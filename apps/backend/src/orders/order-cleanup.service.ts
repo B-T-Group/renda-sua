@@ -19,6 +19,7 @@ import {
   PAYMENT_FAILED_GRACE_MINUTES,
 } from './order-cleanup.constants';
 import { OrderQueueService } from './order-queue.service';
+import { releaseReservedInventory } from './release-reserved-inventory.util';
 
 interface CleanupOrderRow extends CleanupWindowOrder {
   id: string;
@@ -1064,44 +1065,14 @@ export class OrderCleanupService {
   private async decrementReservedQuantities(
     orderItems: CleanupOrderRow['order_items']
   ): Promise<void> {
-    const valid = (orderItems || []).filter(
-      (item) => item.business_inventory_id && item.quantity
+    const result = await releaseReservedInventory(
+      this.hasuraSystemService,
+      orderItems
     );
-    if (!valid.length) return;
-    const quantityChanges = new Map<string, number>();
-    for (const item of valid) {
-      const id = item.business_inventory_id as string;
-      quantityChanges.set(
-        id,
-        (quantityChanges.get(id) || 0) + Number(item.quantity)
+    if (result.skipped > 0) {
+      this.logger.warn(
+        `Atomic inventory release skipped ${result.skipped} row(s)`
       );
     }
-    const ids = [...quantityChanges.keys()];
-    const currentData = await this.hasuraSystemService.executeQuery(
-      `query($ids: [uuid!]!) {
-        business_inventory(where: { id: { _in: $ids } }) {
-          id reserved_quantity
-        }
-      }`,
-      { ids }
-    );
-    const quantityMap = new Map<string, number>();
-    for (const inv of currentData.business_inventory || []) {
-      quantityMap.set(inv.id, inv.reserved_quantity || 0);
-    }
-    await Promise.all(
-      [...quantityChanges.entries()].map(([id, quantity]) => {
-        const next = Math.max(0, (quantityMap.get(id) || 0) - quantity);
-        return this.hasuraSystemService.executeMutation(
-          `mutation($id: uuid!, $reservedQuantity: Int!) {
-            update_business_inventory_by_pk(
-              pk_columns: { id: $id }
-              _set: { reserved_quantity: $reservedQuantity }
-            ) { id }
-          }`,
-          { id, reservedQuantity: next }
-        );
-      })
-    );
   }
 }
