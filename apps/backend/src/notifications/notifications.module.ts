@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AssistantModule } from '../assistant/assistant.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { SmsModule } from '../sms/sms.module';
@@ -27,8 +28,7 @@ import { NotificationsService } from './notifications.service';
     HasuraModule,
     SmsModule,
     RbacModule,
-    // Lazy require avoids AssistantModule -> AuthModule -> NotificationsModule TDZ.
-    forwardRef(() => require('../assistant/assistant.module').AssistantModule),
+    forwardRef(() => AssistantModule),
     forwardRef(() => WhatsAppModule),
     // Lazy require avoids TDZ with OrdersModule <-> NotificationsModule cycle.
     forwardRef(() => require('../orders/orders.module').OrdersModule),

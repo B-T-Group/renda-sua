@@ -1,4 +1,11 @@
-import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  forwardRef,
+  Optional,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AssistantIdentityService } from '../../assistant/assistant-identity.service';
 import { AssistantService } from '../../assistant/assistant.service';
@@ -44,7 +51,7 @@ const BUTTON_TO_ACTION: Record<string, MerchantWaAction> = {
  * Unmatched text may be answered by the AI assistant when enabled.
  */
 @Injectable()
-export class WhatsAppReplyService {
+export class WhatsAppReplyService implements OnModuleInit {
   private readonly logger = new Logger(WhatsAppReplyService.name);
   /** Per-phone lock so background Bedrock turns do not overlap for one sender. */
   private readonly assistantInFlight = new Set<string>();
@@ -63,11 +70,21 @@ export class WhatsAppReplyService {
     @Inject(forwardRef(() => WhatsAppOrderActionService))
     private readonly orderActions: WhatsAppOrderActionService | null,
     @Optional() private readonly whatsapp: WhatsAppService | null,
-    @Optional() private readonly assistant: AssistantService | null,
-    @Optional() private readonly identityService: AssistantIdentityService | null,
+    @Inject(forwardRef(() => AssistantService))
+    private readonly assistant: AssistantService,
+    @Inject(forwardRef(() => AssistantIdentityService))
+    private readonly identityService: AssistantIdentityService,
     private readonly inbox: WhatsAppInboxPersistenceService,
     private readonly configService: ConfigService<Configuration>
   ) {}
+
+  onModuleInit(): void {
+    const waConfigured = this.whatsapp?.isConfigured() === true;
+    const repliesEnabled = this.assistant.isWhatsAppRepliesEnabled();
+    this.logger.log(
+      `WhatsApp assistant wiring: repliesEnabled=${repliesEnabled} whatsappConfigured=${waConfigured} assistantInjected=${!!this.assistant} identityInjected=${!!this.identityService}`
+    );
+  }
 
   parseCommand(text: string): WhatsAppCommand {
     const normalized = text.trim().toUpperCase().replace(/\s+/g, '_');
@@ -170,7 +187,11 @@ export class WhatsAppReplyService {
     }
 
     if (command === 'UNKNOWN' && params.text) {
-      if (this.assistant?.isWhatsAppRepliesEnabled()) {
+      const repliesEnabled = this.assistant.isWhatsAppRepliesEnabled();
+      if (repliesEnabled) {
+        this.logger.log(
+          `WhatsApp UNKNOWN → enqueue assistant reply (phone=${params.fromPhone.slice(-4)})`
+        );
         this.enqueueAssistantReply({
           fromPhone: params.fromPhone,
           text: params.text,
@@ -179,6 +200,9 @@ export class WhatsAppReplyService {
         });
         return { handled: true, command, userId: userId ?? undefined };
       }
+      this.logger.warn(
+        `WhatsApp UNKNOWN skipped AI: repliesEnabled=false (enabled=${this.assistant.isEnabled()})`
+      );
     }
 
     if (userId) {
@@ -251,16 +275,31 @@ export class WhatsAppReplyService {
     messageId?: string;
     userId: string | null;
   }): Promise<boolean> {
-    if (!this.assistant?.isWhatsAppRepliesEnabled()) return false;
-    if (!this.identityService || !this.whatsapp?.isConfigured()) return false;
+    if (!this.assistant.isWhatsAppRepliesEnabled()) {
+      this.logger.warn('WhatsApp assistant turn skipped: replies disabled');
+      return false;
+    }
+    if (!this.whatsapp?.isConfigured()) {
+      this.logger.warn('WhatsApp assistant turn skipped: WhatsApp not configured');
+      return false;
+    }
     const phoneKey = params.fromPhone.replace(/^\+/, '');
-    if (this.assistantCancelled.has(phoneKey)) return false;
+    if (this.assistantCancelled.has(phoneKey)) {
+      this.logger.log('WhatsApp assistant turn skipped: cancelled (STOP)');
+      return false;
+    }
     const fallbackLocale = this.assistant.detectLocaleFromText(params.text);
+    this.logger.log(
+      `WhatsApp assistant turn start (phone=...${phoneKey.slice(-4)} chars=${params.text.length})`
+    );
     try {
       const result = await this.runAssistantTurn(params.fromPhone, params.text);
       if (this.assistantCancelled.has(phoneKey)) return false;
       await this.sendAssistantReply(params.fromPhone, result.reply);
       await this.trackAssistantReply(params, result);
+      this.logger.log(
+        `WhatsApp assistant turn sent (handoff=${result.handoff} replyChars=${result.reply.length})`
+      );
       return true;
     } catch (error: any) {
       this.logger.warn(`WhatsApp assistant failed: ${error?.message ?? error}`);
@@ -277,9 +316,9 @@ export class WhatsAppReplyService {
     fromPhone: string,
     text: string
   ): Promise<AssistantTurnResult> {
-    const identity = await this.identityService!.resolveFromPhone(fromPhone);
+    const identity = await this.identityService.resolveFromPhone(fromPhone);
     const messages = await this.loadAssistantHistory(fromPhone, text);
-    return this.assistant!.chat({
+    return this.assistant.chat({
       channel: 'whatsapp',
       messages,
       identity,
@@ -337,7 +376,14 @@ export class WhatsAppReplyService {
   }
 
   private async sendAssistantReply(to: string, body: string): Promise<void> {
-    if (!this.whatsapp?.isConfigured() || !body.trim()) return;
+    if (!this.whatsapp?.isConfigured()) {
+      this.logger.warn('WA assistant send skipped: WhatsApp not configured');
+      return;
+    }
+    if (!body.trim()) {
+      this.logger.warn('WA assistant send skipped: empty reply body');
+      return;
+    }
     const reply = this.clipReply(body);
     try {
       const sendResult = await this.whatsapp.sendSessionText({ to, body: reply });

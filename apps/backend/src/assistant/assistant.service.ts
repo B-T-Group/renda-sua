@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ContentBlock, Message } from '@aws-sdk/client-bedrock-runtime';
 import { BedrockLunaService } from '../ai/bedrock-luna.service';
@@ -14,7 +14,7 @@ import type {
 } from './assistant.types';
 
 @Injectable()
-export class AssistantService {
+export class AssistantService implements OnModuleInit {
   private readonly logger = new Logger(AssistantService.name);
 
   constructor(
@@ -23,13 +23,24 @@ export class AssistantService {
     private readonly tools: AssistantToolsService
   ) {}
 
+  onModuleInit(): void {
+    const settings = this.config.get('assistant', { infer: true });
+    this.logger.log(
+      `Assistant config: enabled=${settings?.enabled === true} whatsappReplies=${settings?.whatsappRepliesEnabled === true} envENABLED=${process.env.ASSISTANT_ENABLED} envWA=${process.env.ASSISTANT_WHATSAPP_REPLIES_ENABLED}`
+    );
+  }
+
   isEnabled(): boolean {
     return this.config.get('assistant.enabled', { infer: true }) === true;
   }
 
   isWhatsAppRepliesEnabled(): boolean {
-    const settings = this.config.get('assistant', { infer: true });
-    return settings?.enabled === true && settings.whatsappRepliesEnabled === true;
+    const enabled =
+      this.config.get('assistant.enabled', { infer: true }) === true;
+    const whatsappReplies =
+      this.config.get('assistant.whatsappRepliesEnabled', { infer: true }) ===
+      true;
+    return enabled && whatsappReplies;
   }
 
   chat(input: AssistantChatInput): Promise<AssistantReply> {
