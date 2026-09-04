@@ -3699,6 +3699,10 @@
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
       "pendingNotice": "Vous serez notifié une fois que le magasin confirmera votre commande de {{orderTotal}} (ils disposent de jusqu'à 45 minutes).",
+      "payAtDelivery": {
+        "pendingInfo": "Vous avez choisi de payer à la livraison. Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone.",
+        "outForDeliveryPaymentPending": "L’agent enverra une demande de paiement à son arrivée. Gardez votre téléphone à portée de main pour l’approuver."
+      },
       "storeReadyPayAtPickup": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
       "storeReadySendPin": "Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait et envoyez votre code PIN pour que le vendeur confirme.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
@@ -4309,13 +4313,14 @@
     "selectCountry": "Sélectionnez un pays.",
     "payAtDelivery": {
       "confirmationTitle": "Paiement à la livraison",
-      "confirmationMessage": "Vous avez choisi de payer à la livraison. Vous terminerez le paiement dans l’app lorsque l’agent arrive.",
+      "confirmationMessage": "Vous avez choisi de payer à la livraison. Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone.",
+      "info": "Lorsque l’agent arrive, il enverra une demande de paiement mobile. Gardez votre téléphone à portée de main pour l’approuver.",
       "agentInitiateHelp": "Envoyez une demande de paiement mobile au client. Une fois validée, la commande se terminera automatiquement.",
       "agentInitiateSubtitle": "Le paiement est demandé au moment de la livraison.",
       "clientPhoneHint": "C’est le numéro de téléphone du client sur la commande.",
       "notEligible": "Cette commande n’est pas configurée pour le paiement à la livraison.",
       "step1": "Votre commande a été transmise au commerçant.",
-      "step2": "Lorsque l’agent arrive, vous recevrez une demande de paiement mobile dans l’app.",
+      "step2": "Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone.",
       "step3": "Vous recevrez des mises à jour par e-mail et notifications dans l’app. Suivez l’avancement dans Mes commandes."
     },
     "pickup": {
@@ -4611,8 +4616,8 @@
       "payNowShort": "Validez la demande de paiement immédiatement.",
       "payNowDescription": "Nous enverrons une demande de paiement sur votre téléphone maintenant. Validez-la pour passer la commande.",
       "payAtDelivery": "Payer à la livraison",
-      "payAtDeliveryShort": "Payez dans l’app lorsque l’agent arrive.",
-      "payAtDeliveryDescription": "Vous passez la commande maintenant et vous payez à la livraison dans l’app lorsque l’agent arrive."
+      "payAtDeliveryShort": "L’agent enverra une demande de paiement à son arrivée.",
+      "payAtDeliveryDescription": "Vous passez la commande maintenant. Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone."
     },
     "buy": "Acheter",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",

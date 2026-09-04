@@ -3809,7 +3809,7 @@ const PlaceOrderPage: React.FC = () => {
                           {paymentTiming === 'pay_at_delivery'
                             ? t(
                                 'orders.payAtDelivery.info',
-                                'You will pay at delivery in the app when the agent arrives. Please keep your phone available to approve the payment request.'
+                                'When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.'
                               )
                             : paymentTiming === 'pay_at_pickup'
                               ? t(
@@ -4111,7 +4111,7 @@ const PlaceOrderPage: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" noWrap>
                       {t(
                         'orders.paymentTiming.payAtDeliveryShort',
-                        'Pay in the app when the agent arrives.'
+                        'The agent will send a payment request when they arrive.'
                       )}
                     </Typography>
                   </Box>
@@ -4140,7 +4140,7 @@ const PlaceOrderPage: React.FC = () => {
                   )
                 : t(
                     'orders.paymentTiming.payAtDeliveryDescription',
-                    'You will place the order now and pay at delivery in the app when the agent arrives.'
+                    'You will place the order now. When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
                   )}
             </Typography>
           </Alert>

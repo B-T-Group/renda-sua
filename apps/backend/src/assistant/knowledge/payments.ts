@@ -38,14 +38,14 @@ export function getPaymentsKnowledge(
 - Gabon : Airtel Money, Moov
 - Canada / États-Unis : cartes via Stripe
 
-Options de moment de paiement : payer maintenant, payer à la livraison, ou payer au retrait en magasin (selon le commerçant et le rail). Le paiement à la livraison n'est pas disponible lorsque le vendeur utilise Stripe. Pour un retrait en mobile money, le client appuie sur Payer dans l'application à son arrivée et approuve la demande sur son téléphone ; une fois payée, la commande est finalisée et il peut récupérer ses articles. Le commerçant peut aussi envoyer une demande s'il a besoin d'aide.`
+Options de moment de paiement : payer maintenant, payer à la livraison, ou payer au retrait en magasin (selon le commerçant et le rail). Le paiement à la livraison n'est pas disponible lorsque le vendeur utilise Stripe. Pour le paiement à la livraison, le livreur envoie une demande de paiement mobile à la porte ; le client l'approuve sur son téléphone (il n'appuie pas sur Payer dans l'application). Pour un retrait en mobile money, le client appuie sur Payer dans l'application à son arrivée et approuve la demande sur son téléphone ; une fois payée, la commande est finalisée et il peut récupérer ses articles. Le commerçant peut aussi envoyer une demande s'il a besoin d'aide.`
       : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada and the United States.
 
 - Cameroon: MTN Mobile Money, Orange Money
 - Gabon: Airtel Money, Moov
 - Canada / United States: cards via Stripe
 
-Payment timing options: pay now, pay at delivery, or pay at in-store pickup (depending on the merchant and payment rail). Pay-at-delivery is not available when the seller uses the Stripe rail. For mobile-money pickup, the customer taps Pay in the app when they arrive and approves the request on their phone; after approval the order is complete and they can collect it. The merchant can also send a payment request if they need help.`;
+Payment timing options: pay now, pay at delivery, or pay at in-store pickup (depending on the merchant and payment rail). Pay-at-delivery is not available when the seller uses the Stripe rail. For pay-at-delivery, the courier sends a mobile payment request at the door; the customer approves it on their phone (they do not tap Pay in the app). For mobile-money pickup, the customer taps Pay in the app when they arrive and approves the request on their phone; after approval the order is complete and they can collect it. The merchant can also send a payment request if they need help.`;
 
   return `${base}\n\n${countrySection(country, locale)}`;
 }

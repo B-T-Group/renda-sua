@@ -2961,21 +2961,6 @@ export class NotificationsService {
     return r.users_by_pk ?? null;
   }
 
-  private logPushSent(
-    userId: string,
-    channel: 'web' | 'expo',
-    data?: Record<string, unknown>,
-    messageCount?: number
-  ): void {
-    const orderId = data?.orderId ?? data?.order_id;
-    const orderNumber = data?.orderNumber ?? data?.order_number;
-    const countPart =
-      messageCount != null && messageCount > 0 ? ` messageCount=${messageCount}` : '';
-    this.logger.log(
-      `Push sent channel=${channel} userId=${userId} orderId=${String(orderId ?? 'n/a')} orderNumber=${String(orderNumber ?? 'n/a')}${countPart}`
-    );
-  }
-
   private async shouldUsePushOnlyForUser(
     userId: string | undefined
   ): Promise<boolean> {
@@ -3482,7 +3467,7 @@ export class NotificationsService {
     const payload = JSON.stringify({ title, body, ...data });
     let sent = 0;
     for (const sub of subs) {
-      if (await this.sendOneWebPush(sub, payload, userId, data)) sent += 1;
+      if (await this.sendOneWebPush(sub, payload)) sent += 1;
     }
     return sent;
   }
@@ -3518,9 +3503,7 @@ export class NotificationsService {
 
   private async sendOneWebPush(
     sub: { id: string; endpoint: string; p256dh_key: string; auth_key: string },
-    payload: string,
-    userId: string,
-    data?: Record<string, unknown>
+    payload: string
   ): Promise<boolean> {
     try {
       await webPush.sendNotification(
@@ -3531,7 +3514,6 @@ export class NotificationsService {
         payload,
         { TTL: 86400 }
       );
-      this.logPushSent(userId, 'web', data);
       return true;
     } catch (sendErr: any) {
       await this.handleWebPushSendFailure(sub.id, sub.endpoint, sendErr);
@@ -3910,7 +3892,7 @@ export class NotificationsService {
       const chunks = expo.chunkPushNotifications(messages);
       let sent = 0;
       for (const chunk of chunks) {
-        sent += await this.sendExpoPushChunk(chunk, userId, data);
+        sent += await this.sendExpoPushChunk(chunk);
       }
       return sent;
     } catch (err) {
@@ -3921,16 +3903,12 @@ export class NotificationsService {
     }
   }
 
-  private async sendExpoPushChunk(
-    chunk: ExpoPushMessage[],
-    userId: string,
-    data?: Record<string, unknown>
-  ): Promise<number> {
+  private async sendExpoPushChunk(chunk: ExpoPushMessage[]): Promise<number> {
     const expo = this.getExpoClient();
     if (!expo) return 0;
     try {
       const tickets = await expo.sendPushNotificationsAsync(chunk);
-      return this.applyExpoPushTickets(chunk, tickets, userId, data);
+      return this.applyExpoPushTickets(chunk, tickets);
     } catch (sendErr: any) {
       this.logger.warn(
         `Expo push chunk failed: ${
@@ -3943,15 +3921,12 @@ export class NotificationsService {
 
   private async applyExpoPushTickets(
     chunk: ExpoPushMessage[],
-    tickets: ExpoPushTicket[],
-    userId: string,
-    data?: Record<string, unknown>
+    tickets: ExpoPushTicket[]
   ): Promise<number> {
     let sent = 0;
     for (let i = 0; i < tickets.length; i++) {
       sent += await this.applyOneExpoTicket(this.expoTokenFromMessage(chunk[i]), tickets[i]);
     }
-    if (sent > 0) this.logPushSent(userId, 'expo', data, sent);
     return sent;
   }
 
