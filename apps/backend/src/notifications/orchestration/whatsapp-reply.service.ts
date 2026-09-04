@@ -69,7 +69,8 @@ export class WhatsAppReplyService implements OnModuleInit {
     @Optional()
     @Inject(forwardRef(() => WhatsAppOrderActionService))
     private readonly orderActions: WhatsAppOrderActionService | null,
-    @Optional() private readonly whatsapp: WhatsAppService | null,
+    @Inject(forwardRef(() => WhatsAppService))
+    private readonly whatsapp: WhatsAppService,
     @Inject(forwardRef(() => AssistantService))
     private readonly assistant: AssistantService,
     @Inject(forwardRef(() => AssistantIdentityService))
@@ -79,10 +80,10 @@ export class WhatsAppReplyService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    const waConfigured = this.whatsapp?.isConfigured() === true;
+    const waConfigured = this.whatsapp.isConfigured();
     const repliesEnabled = this.assistant.isWhatsAppRepliesEnabled();
     this.logger.log(
-      `WhatsApp assistant wiring: repliesEnabled=${repliesEnabled} whatsappConfigured=${waConfigured} assistantInjected=${!!this.assistant} identityInjected=${!!this.identityService}`
+      `WhatsApp assistant wiring: repliesEnabled=${repliesEnabled} whatsappConfigured=${waConfigured} whatsappInjected=true assistantInjected=true identityInjected=true`
     );
   }
 
@@ -279,8 +280,10 @@ export class WhatsAppReplyService implements OnModuleInit {
       this.logger.warn('WhatsApp assistant turn skipped: replies disabled');
       return false;
     }
-    if (!this.whatsapp?.isConfigured()) {
-      this.logger.warn('WhatsApp assistant turn skipped: WhatsApp not configured');
+    if (!this.whatsapp.isConfigured()) {
+      this.logger.warn(
+        'WhatsApp assistant turn skipped: WhatsApp Cloud API not configured (need WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET)'
+      );
       return false;
     }
     const phoneKey = params.fromPhone.replace(/^\+/, '');
@@ -376,8 +379,10 @@ export class WhatsAppReplyService implements OnModuleInit {
   }
 
   private async sendAssistantReply(to: string, body: string): Promise<void> {
-    if (!this.whatsapp?.isConfigured()) {
-      this.logger.warn('WA assistant send skipped: WhatsApp not configured');
+    if (!this.whatsapp.isConfigured()) {
+      this.logger.warn(
+        'WA assistant send skipped: WhatsApp Cloud API not configured'
+      );
       return;
     }
     if (!body.trim()) {
@@ -451,7 +456,7 @@ export class WhatsAppReplyService implements OnModuleInit {
   }
 
   private async ackSession(to: string, body: string): Promise<void> {
-    if (!this.whatsapp?.isConfigured()) return;
+    if (!this.whatsapp.isConfigured()) return;
     try {
       await this.whatsapp.sendSessionText({ to, body });
     } catch (error: any) {
