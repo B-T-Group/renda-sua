@@ -53,6 +53,7 @@ import {
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
 import PhoneInput from '../common/PhoneInput';
+import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 
@@ -1330,7 +1331,11 @@ const CheckoutPage: React.FC = () => {
                         'checkout.enterPhoneNumber',
                         'Enter phone number'
                       )}
-                      defaultCountry={selectedAddress?.country || 'GA'}
+                      defaultCountry={pickMobileMoneyDefaultCountry(
+                        preflightGroups[0]?.seller_country ||
+                          selectedAddress?.country
+                      )}
+                      onlyCountries={['CM', 'GA']}
                     />
                     {overridePhoneNumber && (
                       <Typography

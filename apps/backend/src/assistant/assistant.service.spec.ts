@@ -3,8 +3,9 @@ import { AssistantService } from './assistant.service';
 describe('AssistantService', () => {
   const configService = {
     get: (key: string) => {
-      if (key === 'assistant.enabled' || key === 'assistant') {
-        if (key === 'assistant.enabled') return true;
+      if (key === 'assistant.enabled') return true;
+      if (key === 'assistant.whatsappRepliesEnabled') return true;
+      if (key === 'assistant') {
         return {
           enabled: true,
           whatsappRepliesEnabled: true,

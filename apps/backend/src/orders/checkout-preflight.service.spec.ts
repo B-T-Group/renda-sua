@@ -37,6 +37,7 @@ function makeInventoryRow(overrides: {
   id?: string;
   businessId?: string;
   ownerUserId?: string;
+  ownerCountry?: string;
   sellerCountry?: string;
   businessName?: string;
   currency?: string;
@@ -67,7 +68,10 @@ function makeInventoryRow(overrides: {
         id: overrides.businessId ?? 'biz-1',
         name: overrides.businessName ?? 'Test Business',
         can_accept_orders: overrides.canAcceptOrders ?? true,
-        user: { id: overrides.ownerUserId ?? 'owner-1' },
+        user: {
+          id: overrides.ownerUserId ?? 'owner-1',
+          country: overrides.ownerCountry,
+        },
       },
       address: { country: sellerCountry },
       mobile_payment_phone: isStripeCountry
@@ -131,6 +135,9 @@ describe('CheckoutPreflightService', () => {
           provide: MobilePaymentsService,
           useValue: {
             getProvider: jest.fn().mockReturnValue('freemopay'),
+            getProviderForCountry: jest.fn((country?: string) =>
+              String(country || '').toUpperCase() === 'CM' ? 'freemopay' : 'mypvit'
+            ),
           },
         },
         {
@@ -296,6 +303,33 @@ describe('CheckoutPreflightService', () => {
     // Seller is Stripe ? checkout is Stripe, regardless of buyer rail
     expect(result.checkout_method).toBe(CheckoutMethod.STRIPE);
     expect(result.verification_method).toBe(VerificationMethod.EMAIL);
+  });
+
+  it('uses the item location country over the owner users.country', async () => {
+    mockInventory([
+      makeInventoryRow({
+        ownerUserId: 'owner-ga',
+        ownerCountry: 'GA',
+        sellerCountry: 'CM',
+      }),
+    ]);
+    (paymentRoutingService.resolveRailForCountry as jest.Mock).mockImplementation(
+      (country: string) =>
+        Promise.resolve(country === 'CA' ? 'stripe' : 'mobile_money')
+    );
+
+    const result = await service.resolve(
+      {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+      },
+      false
+    );
+
+    expect(result.groups[0].seller_country).toBe('CM');
+    expect(paymentRoutingService.resolveRailForCountry).toHaveBeenCalledWith('CM');
+    expect(mobilePaymentsService.getProviderForCountry).toHaveBeenCalledWith('CM');
+    expect(result.groups[0].mobile_money_provider).toBe('freemopay');
   });
 
   // -------------------------------------------------------------------------

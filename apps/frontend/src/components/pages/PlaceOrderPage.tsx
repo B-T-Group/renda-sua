@@ -95,6 +95,7 @@ import {
 import VariantSelector from '../common/VariantSelector';
 import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import PhoneInput from '../common/PhoneInput';
+import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -2888,9 +2889,11 @@ const PlaceOrderPage: React.FC = () => {
                             'orders.overridePhoneNumber',
                             'Phone Number for Payment'
                           )}
-                          defaultCountry="GA"
+                          defaultCountry={pickMobileMoneyDefaultCountry(
+                            itemOriginCountryIso
+                          )}
                           fullWidth
-                          onlyCountries={supportedCountries}
+                          onlyCountries={['CM', 'GA']}
                           error={
                             !phoneValidation.isValid &&
                             overridePhoneNumber.trim() !== '' &&
@@ -3872,9 +3875,11 @@ const PlaceOrderPage: React.FC = () => {
                               'orders.overridePhoneNumber',
                               'Phone Number for Payment'
                             )}
-                            defaultCountry="GA"
+                            defaultCountry={pickMobileMoneyDefaultCountry(
+                              itemOriginCountryIso
+                            )}
                             fullWidth
-                            onlyCountries={supportedCountries}
+                            onlyCountries={['CM', 'GA']}
                             error={
                               !phoneValidation.isValid &&
                               overridePhoneNumber.trim() !== '' &&

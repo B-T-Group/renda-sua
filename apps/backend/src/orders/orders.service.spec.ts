@@ -227,7 +227,7 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn() } },
+        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn(), getProviderForCountry: jest.fn().mockReturnValue('mypvit') } },
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
@@ -278,6 +278,7 @@ describe('OrdersService', () => {
           useValue: {
             resolveRailForBusiness: jest.fn(),
             resolveRailForUser: jest.fn(),
+            resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
           },
         },
         { provide: StripeCheckoutService, useValue: {} },

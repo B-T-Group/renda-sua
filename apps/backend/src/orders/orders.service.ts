@@ -36,6 +36,7 @@ import {
   MobilePaymentIntegrationProvider,
   MobilePaymentsService,
 } from '../mobile-payments/mobile-payments.service';
+import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import {
   NotificationData,
   NotificationsService,
@@ -2412,9 +2413,20 @@ export class OrdersService {
       order.currency
     );
 
-    // Get payment provider based on phone number (use provided phone_number or fallback to user's phone_number)
+    // Get payment provider from the order item country (not the agent's phone).
     const phoneNumber = request.phone_number || user.phone_number || '';
-    const provider = this.getProvider(phoneNumber);
+    if (!phoneNumber) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Phone number is required for payment',
+          error: 'PHONE_NUMBER_REQUIRED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const momo = this.orderMomoContext(order);
+    const provider = momo.provider;
 
     // Create transaction record before initiating payment
     let paymentTransaction = null;
@@ -2442,6 +2454,7 @@ export class OrdersService {
         description: `claim ${order.order_number}`,
         customerPhone: phoneNumber,
         provider: provider,
+        itemCountry: momo.itemCountry ?? undefined,
         ownerCharge: 'CUSTOMER' as const,
         transactionType: 'PAYMENT' as const,
         payment_entity: 'claim_order' as const,
@@ -3450,7 +3463,8 @@ export class OrdersService {
       };
     }
 
-    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const momo = this.orderMomoContext(order);
+    const provider = momo.provider;
     const account = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
@@ -3482,6 +3496,7 @@ export class OrdersService {
       description: `Order ${order.order_number}`,
       customerPhone: phoneNumber,
       provider,
+      itemCountry: momo.itemCountry ?? undefined,
       ownerCharge: 'MERCHANT' as const,
       transactionType: 'PAYMENT' as const,
       payment_entity: 'order' as const,
@@ -3489,7 +3504,8 @@ export class OrdersService {
 
     const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      paymentAttemptReference
+      paymentAttemptReference,
+      momo.payerUserId
     );
 
     if (!paymentTransaction.success) {
@@ -3609,7 +3625,8 @@ export class OrdersService {
       };
     }
 
-    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const momo = this.orderMomoContext(order);
+    const provider = momo.provider;
     const account = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
@@ -3641,6 +3658,7 @@ export class OrdersService {
       description: `Order ${order.order_number}`,
       customerPhone: phoneNumber,
       provider,
+      itemCountry: momo.itemCountry ?? undefined,
       ownerCharge: 'MERCHANT' as const,
       transactionType: 'PAYMENT' as const,
       payment_entity: 'order' as const,
@@ -3648,7 +3666,8 @@ export class OrdersService {
 
     const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      paymentAttemptReference
+      paymentAttemptReference,
+      momo.payerUserId
     );
 
     if (!paymentTransaction.success) {
@@ -3855,7 +3874,8 @@ export class OrdersService {
       );
     }
 
-    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const momo = this.orderMomoContext(order);
+    const provider = momo.provider;
     const account = await this.hasuraSystemService.getAccount(
       order.client!.user_id,
       order.currency
@@ -3890,6 +3910,7 @@ export class OrdersService {
       description: `Order ${order.order_number}`,
       customerPhone: phoneNumber,
       provider,
+      itemCountry: momo.itemCountry ?? undefined,
       ownerCharge: 'MERCHANT' as const,
       transactionType: 'PAYMENT' as const,
       payment_entity: 'order' as const,
@@ -3897,7 +3918,8 @@ export class OrdersService {
 
     const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      paymentAttemptReference
+      paymentAttemptReference,
+      momo.payerUserId
     );
 
     if (!paymentTransaction.success) {
@@ -4208,7 +4230,8 @@ export class OrdersService {
       }
     );
 
-    const provider = this.mobilePaymentsService.getProvider(phone);
+    const momo = this.orderMomoContext(order);
+    const provider = momo.provider;
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
@@ -4234,13 +4257,15 @@ export class OrdersService {
       description: `Order ${order.order_number} reconciliation`,
       customerPhone: phone,
       provider,
+      itemCountry: momo.itemCountry ?? undefined,
       ownerCharge: 'MERCHANT' as const,
       transactionType: 'PAYMENT' as const,
     };
 
     const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      paymentAttemptReference
+      paymentAttemptReference,
+      momo.payerUserId
     );
 
     if (!paymentTransaction.success) {
@@ -7776,6 +7801,10 @@ export class OrdersService {
           assigned_agent {
             user_id
           }
+          business_location {
+            address { country }
+            business { user { country } }
+          }
           order_items {
             id
             total_price
@@ -7971,21 +8000,26 @@ export class OrdersService {
   }
 
   /**
-   * Get payment integration (MyPVit vs Freemopay) from phone number.
+   * MoMo integration from the order's item location country (not the payer phone).
    */
-  private getProvider(phoneNumber: string): MobilePaymentIntegrationProvider {
-    if (!phoneNumber) {
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Phone number is required for payment',
-          error: 'PHONE_NUMBER_REQUIRED',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
-    return this.mobilePaymentsService.getProvider(phoneNumber);
+  private orderMomoContext(order: Orders): {
+    provider: MobilePaymentIntegrationProvider;
+    itemCountry: string | null;
+    payerUserId?: string;
+  } {
+    const location = order.business_location as {
+      address?: { country?: string | null } | null;
+      business?: { user?: { country?: string | null } | null } | null;
+    } | null | undefined;
+    const itemCountry = resolveItemCountry(
+      location?.address?.country,
+      location?.business?.user?.country
+    );
+    return {
+      provider: this.mobilePaymentsService.getProviderForCountry(itemCountry),
+      itemCountry,
+      payerUserId: order.client?.user_id,
+    };
   }
 
   /**
@@ -8210,6 +8244,7 @@ export class OrdersService {
                 email
                 first_name
                 last_name
+                country
               }
             }
           }
@@ -8648,7 +8683,11 @@ export class OrdersService {
       );
     }
 
-    const provider = this.mobilePaymentsService.getProvider(phoneNumber);
+    const itemCountry = resolveItemCountry(
+      businessInventories[0]?.business_location?.address?.country,
+      businessInventories[0]?.business_location?.business?.user?.country
+    );
+    const provider = this.mobilePaymentsService.getProviderForCountry(itemCountry);
 
     if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
       throw new HttpException(
@@ -8662,13 +8701,10 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       availableBalance >= requiredAmountForHold;
 
-    // Resolve the payment rail for the receiving business owner. Stripe-country
-    // orders are NOT pushed to mobile money; the client pays via hosted Checkout.
-    const businessOwnerUserId =
-      businessInventories[0]?.business_location?.business?.user?.id;
-    const paymentRail = businessOwnerUserId
-      ? await this.paymentRoutingService.resolveRailForUser(businessOwnerUserId)
-      : 'mobile_money';
+    // Resolve the payment rail from the item location country, not the owner user.
+    const paymentRail = await this.paymentRoutingService.resolveRailForCountry(
+      itemCountry ?? undefined
+    );
     const useStripeRail =
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
@@ -9237,6 +9273,8 @@ export class OrdersService {
             phoneNumber,
             provider,
             userEmail: user.email ?? undefined,
+            itemCountry: itemCountry ?? undefined,
+            userId: user.id,
           });
 
         try {
@@ -9417,6 +9455,8 @@ export class OrdersService {
     phoneNumber: string;
     provider: MobilePaymentIntegrationProvider;
     userEmail?: string;
+    itemCountry?: string;
+    userId?: string;
   }): Promise<{ transaction: any; paymentTransaction: any }> {
     const transaction =
       await this.mobilePaymentsDatabaseService.createTransaction({
@@ -9442,10 +9482,12 @@ export class OrdersService {
           description: `Order ${params.orderNumber}`,
           customerPhone: params.phoneNumber,
           provider: params.provider,
+          itemCountry: params.itemCountry,
           ownerCharge: 'MERCHANT' as const,
           transactionType: 'PAYMENT' as const,
         },
-        params.orderNumber
+        params.orderNumber,
+        params.userId
       );
 
     if (!paymentTransaction.success) {
