@@ -61,6 +61,34 @@ describe('AssistantService', () => {
     expect(result.locale).toBe('en');
   });
 
+  it('strips thinking metadata from model replies', async () => {
+    bedrock.converseWithTools.mockResolvedValue({
+      stopReason: 'end_turn',
+      text: '<thinking>User may be in Gabon.</thinking>\nBonjour Samuel, oui pour le Gabon.',
+      toolUses: [],
+      assistantContent: [
+        {
+          text: '<thinking>User may be in Gabon.</thinking>\nBonjour Samuel, oui pour le Gabon.',
+        },
+      ],
+    });
+    const result = await service.runTurn({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'paiement à la livraison ?' }],
+      identity: {
+        isVerified: true,
+        userId: 'u1',
+        firstName: 'Samuel',
+        preferredLanguage: 'fr',
+        country: 'GA',
+        phoneE164: null,
+        accountType: 'client',
+      },
+    });
+    expect(result.reply).toBe('Bonjour Samuel, oui pour le Gabon.');
+    expect(result.reply).not.toMatch(/thinking/i);
+  });
+
   it('runs a tool loop then returns the final answer', async () => {
     bedrock.converseWithTools
       .mockResolvedValueOnce({
