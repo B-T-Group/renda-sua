@@ -79,7 +79,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
               severity: 'success' as const,
               message: t(
                 'client.orders.storeReadyPayAtPickup',
-                'Your order is ready at the store. Come during your pickup slot — the seller will request mobile money payment when you pick up.'
+                'When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.'
               ),
             });
           } else {

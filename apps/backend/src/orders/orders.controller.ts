@@ -595,9 +595,9 @@ export class OrdersController {
 
   @Post(':id/initiate-pay-at-pickup-payment')
   @ApiOperation({
-    summary: 'Initiate pay-at-pickup mobile payment (business only)',
+    summary: 'Initiate pay-at-pickup mobile payment (client or business)',
     description:
-      'For pay-at-pickup orders in ready_for_pickup, the business triggers a mobile payment request to the client. On successful payment callback, the order is settled and marked complete.',
+      'For pay-at-pickup orders in ready_for_pickup, the customer (or the store as fallback) triggers a mobile payment request. On successful payment callback, the order is settled and marked complete.',
   })
   @ApiResponse({ status: 200, description: 'Payment request initiated' })
   @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })

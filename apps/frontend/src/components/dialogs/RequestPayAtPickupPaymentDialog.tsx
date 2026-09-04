@@ -13,18 +13,32 @@ import {
   Switch,
   Typography,
 } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { parsePhoneNumber } from 'libphonenumber-js';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+
+function isPickupMomoPhone(phone: string): boolean {
+  if (!phone.trim()) return false;
+  try {
+    const parsed = parsePhoneNumber(phone);
+    const iso = parsed?.country;
+    return parsed.isValid() && (iso === 'CM' || iso === 'GA');
+  } catch {
+    return false;
+  }
+}
 
 interface RequestPayAtPickupPaymentDialogProps {
   open: boolean;
   order: OrderData;
   onClose: () => void;
   onSuccess?: () => void;
+  /** Client pays in the app; business can still send a request as fallback. */
+  audience?: 'business' | 'client';
 }
 
 export default function RequestPayAtPickupPaymentDialog({
@@ -32,6 +46,7 @@ export default function RequestPayAtPickupPaymentDialog({
   order,
   onClose,
   onSuccess,
+  audience = 'business',
 }: RequestPayAtPickupPaymentDialogProps) {
   const { t } = useTranslation();
   const backendOrders = useBackendOrders();
@@ -41,11 +56,25 @@ export default function RequestPayAtPickupPaymentDialog({
   const [error, setError] = useState<string | null>(null);
 
   const clientPhone = order.client?.user?.phone_number?.trim() || '';
+  const profilePhoneOk = isPickupMomoPhone(clientPhone);
+
+  useEffect(() => {
+    if (!open) {
+      setUseDifferentPhone(false);
+      setOverridePhoneNumber('');
+      return;
+    }
+    setUseDifferentPhone(!profilePhoneOk);
+  }, [open, profilePhoneOk]);
 
   const effectivePhone = useMemo(() => {
     if (useDifferentPhone) return overridePhoneNumber.trim();
     return clientPhone;
   }, [clientPhone, overridePhoneNumber, useDifferentPhone]);
+
+  const canSubmitPhone = useDifferentPhone
+    ? isPickupMomoPhone(effectivePhone)
+    : profilePhoneOk;
 
   const isPayAtPickup =
     order.payment_timing === 'pay_at_pickup' ||
@@ -77,7 +106,9 @@ export default function RequestPayAtPickupPaymentDialog({
   return (
     <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="sm">
       <DialogTitle>
-        {t('orders.pickup.requestPaymentTitle', 'Request pickup payment')}
+        {audience === 'client'
+          ? t('orders.payAtPickup.title', 'Pay at pickup')
+          : t('orders.pickup.requestPaymentTitle', 'Request pickup payment')}
       </DialogTitle>
       <DialogContent>
         {!isPayAtPickup || !isPickupOrder ? (
@@ -89,10 +120,15 @@ export default function RequestPayAtPickupPaymentDialog({
           </Alert>
         ) : (
           <Alert severity="info" sx={{ mb: 2 }}>
-            {t(
-              'orders.pickup.businessInitiateHelp',
-              'Send a mobile payment request to the client. When they approve it, the order will complete automatically.'
-            )}
+            {audience === 'client'
+              ? t(
+                  'orders.payAtPickup.hint',
+                  'We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.'
+                )
+              : t(
+                  'orders.pickup.businessInitiateHelp',
+                  'If the client needs help, send a mobile payment request. When they approve it, the order will complete automatically.'
+                )}
           </Alert>
         )}
 
@@ -160,7 +196,7 @@ export default function RequestPayAtPickupPaymentDialog({
               <Switch
                 checked={useDifferentPhone}
                 onChange={(e) => setUseDifferentPhone(e.target.checked)}
-                disabled={loading}
+                disabled={loading || !profilePhoneOk}
               />
             }
             label={t(
@@ -195,10 +231,12 @@ export default function RequestPayAtPickupPaymentDialog({
           variant="contained"
           onClick={handleSubmit}
           disabled={
-            loading || !isPayAtPickup || !isPickupOrder || !effectivePhone
+            loading || !isPayAtPickup || !isPickupOrder || !canSubmitPhone
           }
         >
-          {t('orderActions.requestPickupPayment', 'Request pickup payment')}
+          {audience === 'client'
+            ? t('orders.payAtPickup.cta', 'Pay now')
+            : t('orderActions.requestPickupPayment', 'Request pickup payment')}
         </Button>
       </DialogActions>
     </Dialog>

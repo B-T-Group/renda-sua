@@ -3309,6 +3309,23 @@ export class NotificationsService {
     };
   }
 
+  private payAtPickupReadyPush(
+    orderNumber: string,
+    language?: string | null
+  ): { title: string; body: string } {
+    const isFr = (language || '').toLowerCase().startsWith('fr');
+    if (isFr) {
+      return {
+        title: 'Prête pour le retrait',
+        body: `La commande ${orderNumber} est prête. À votre arrivée, appuyez sur Payer dans l'application et approuvez la demande sur votre téléphone, puis récupérez vos articles.`,
+      };
+    }
+    return {
+      title: 'Ready for pickup',
+      body: `Order ${orderNumber} is ready. When you arrive, tap Pay in the app and approve the request on your phone, then collect your items.`,
+    };
+  }
+
   /**
    * Get title and body for push notification by order status.
    */
@@ -3320,10 +3337,10 @@ export class NotificationsService {
     if (status === 'ready_for_pickup') {
       if (data?.fulfillmentMethod === 'pickup') {
         if (data.paymentTiming === 'pay_at_pickup') {
-          return {
-            title: 'Ready for pickup',
-            body: `Order ${orderNumber} is ready at the store. Pay with mobile money when you pick up.`,
-          };
+          return this.payAtPickupReadyPush(
+            orderNumber,
+            data.clientPreferredLanguage
+          );
         }
         return {
           title: 'Ready for pickup',
