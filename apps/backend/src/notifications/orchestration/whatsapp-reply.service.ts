@@ -1,4 +1,12 @@
 import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AssistantIdentityService } from '../../assistant/assistant-identity.service';
+import { AssistantService } from '../../assistant/assistant.service';
+import type {
+  AssistantChatMessage,
+  AssistantTurnResult,
+} from '../../assistant/assistant.types';
+import type { Configuration } from '../../config/configuration';
 import { NotificationAnalyticsService } from './notification-analytics.service';
 import { NotificationPreferenceService } from './notification-preference.service';
 import {
@@ -6,6 +14,7 @@ import {
   type MerchantWaAction,
 } from '../../orders/whatsapp-order-action.service';
 import { WhatsAppService } from '../../whatsapp/whatsapp.service';
+import { WhatsAppInboxPersistenceService } from './whatsapp-inbox-persistence.service';
 
 export type WhatsAppCommand =
   | 'CONFIRM'
@@ -32,10 +41,18 @@ const BUTTON_TO_ACTION: Record<string, MerchantWaAction> = {
 /**
  * Preference commands (STOP) are handled immediately.
  * Merchant CONFIRM / BUSY / DECLINE mutate acceptance via WhatsAppOrderActionService.
+ * Unmatched text may be answered by the AI assistant when enabled.
  */
 @Injectable()
 export class WhatsAppReplyService {
   private readonly logger = new Logger(WhatsAppReplyService.name);
+  /** Per-phone lock so background Bedrock turns do not overlap for one sender. */
+  private readonly assistantInFlight = new Set<string>();
+  /** Latest inbound text waiting while a turn is in flight (overwrites older). */
+  private readonly assistantPending = new Map<
+    string,
+    { text: string; messageId?: string; userId: string | null }
+  >();
 
   constructor(
     private readonly prefs: NotificationPreferenceService,
@@ -43,7 +60,11 @@ export class WhatsAppReplyService {
     @Optional()
     @Inject(forwardRef(() => WhatsAppOrderActionService))
     private readonly orderActions: WhatsAppOrderActionService | null,
-    @Optional() private readonly whatsapp: WhatsAppService | null
+    @Optional() private readonly whatsapp: WhatsAppService | null,
+    @Optional() private readonly assistant: AssistantService | null,
+    @Optional() private readonly identityService: AssistantIdentityService | null,
+    private readonly inbox: WhatsAppInboxPersistenceService,
+    private readonly configService: ConfigService<Configuration>
   ) {}
 
   parseCommand(text: string): WhatsAppCommand {
@@ -96,6 +117,7 @@ export class WhatsAppReplyService {
   }): Promise<{ handled: boolean; command: WhatsAppCommand; userId?: string }> {
     return this.dispatch({
       fromPhone: params.fromPhone,
+      text: params.text,
       command: this.parseCommand(params.text),
       messageId: params.messageId,
     });
@@ -118,6 +140,7 @@ export class WhatsAppReplyService {
 
   private async dispatch(params: {
     fromPhone: string;
+    text?: string;
     command: WhatsAppCommand;
     messageId?: string;
     contextMessageId?: string;
@@ -144,6 +167,18 @@ export class WhatsAppReplyService {
       );
     }
 
+    if (command === 'UNKNOWN' && params.text) {
+      if (this.assistant?.isWhatsAppRepliesEnabled()) {
+        this.enqueueAssistantReply({
+          fromPhone: params.fromPhone,
+          text: params.text,
+          messageId: params.messageId,
+          userId,
+        });
+        return { handled: true, command, userId: userId ?? undefined };
+      }
+    }
+
     if (userId) {
       await this.analytics.track({
         notificationType: 'whatsapp.command',
@@ -157,6 +192,151 @@ export class WhatsAppReplyService {
     }
     this.logger.log(`WhatsApp command ${command} recorded (no merchant action)`);
     return { handled: !!userId, command, userId: userId ?? undefined };
+  }
+
+  private enqueueAssistantReply(params: {
+    fromPhone: string;
+    text: string;
+    messageId?: string;
+    userId: string | null;
+  }): void {
+    const phoneKey = params.fromPhone.replace(/^\+/, '');
+    if (this.assistantInFlight.has(phoneKey)) {
+      this.assistantPending.set(phoneKey, {
+        text: params.text,
+        messageId: params.messageId,
+        userId: params.userId,
+      });
+      return;
+    }
+    this.assistantInFlight.add(phoneKey);
+    // Do not await Bedrock — Meta requires a fast webhook 200.
+    void this.tryAssistantReply(params)
+      .catch((error: any) => {
+        this.logger.warn(
+          `WhatsApp assistant background failed: ${error?.message ?? error}`
+        );
+      })
+      .finally(() => {
+        this.assistantInFlight.delete(phoneKey);
+        const pending = this.assistantPending.get(phoneKey);
+        if (!pending) return;
+        this.assistantPending.delete(phoneKey);
+        this.enqueueAssistantReply({
+          fromPhone: params.fromPhone,
+          text: pending.text,
+          messageId: pending.messageId,
+          userId: pending.userId,
+        });
+      });
+  }
+
+  private async tryAssistantReply(params: {
+    fromPhone: string;
+    text: string;
+    messageId?: string;
+    userId: string | null;
+  }): Promise<boolean> {
+    if (!this.assistant?.isWhatsAppRepliesEnabled()) return false;
+    if (!this.identityService || !this.whatsapp?.isConfigured()) return false;
+    const fallbackLocale = this.assistant.detectLocaleFromText(params.text);
+    try {
+      const result = await this.runAssistantTurn(params.fromPhone, params.text);
+      await this.sendAssistantReply(params.fromPhone, result.reply);
+      await this.trackAssistantReply(params, result);
+      return true;
+    } catch (error: any) {
+      this.logger.warn(`WhatsApp assistant failed: ${error?.message ?? error}`);
+      await this.sendAssistantReply(
+        params.fromPhone,
+        this.assistant.fallbackTechnical(fallbackLocale)
+      );
+      return true;
+    }
+  }
+
+  private async runAssistantTurn(
+    fromPhone: string,
+    text: string
+  ): Promise<AssistantTurnResult> {
+    const identity = await this.identityService!.resolveFromPhone(fromPhone);
+    const messages = await this.loadAssistantHistory(fromPhone, text);
+    return this.assistant!.chat({
+      channel: 'whatsapp',
+      messages,
+      identity,
+      locale: identity.preferredLanguage,
+    });
+  }
+
+  private async loadAssistantHistory(
+    waId: string,
+    inboundText: string
+  ): Promise<AssistantChatMessage[]> {
+    const limit =
+      this.configService.get('assistant.maxHistoryMessages', { infer: true }) ??
+      10;
+    const recent = await this.inbox.listRecentMessages(
+      waId.replace(/^\+/, ''),
+      limit
+    );
+    const messages = recent.map((message) => ({
+      role:
+        message.direction === 'inbound'
+          ? ('user' as const)
+          : ('assistant' as const),
+      content: message.body,
+    }));
+    const last = messages[messages.length - 1];
+    if (last?.role !== 'user' || last.content.trim() !== inboundText.trim()) {
+      messages.push({ role: 'user', content: inboundText });
+    }
+    return messages;
+  }
+
+  private async trackAssistantReply(
+    params: { userId: string | null; messageId?: string },
+    result: AssistantTurnResult
+  ): Promise<void> {
+    if (!params.userId) return;
+    await this.analytics.track({
+      notificationType: 'whatsapp.assistant',
+      category: 'informational',
+      userId: params.userId,
+      channel: 'whatsapp',
+      status: 'sent',
+      providerMessageId: params.messageId,
+      meta: { handoff: result.handoff },
+    });
+  }
+
+  private async sendAssistantReply(to: string, body: string): Promise<void> {
+    if (!this.whatsapp?.isConfigured() || !body.trim()) return;
+    const reply = this.clipReply(body);
+    try {
+      const sendResult = await this.whatsapp.sendSessionText({ to, body: reply });
+      await this.inbox.persistOutbound({
+        waId: to.replace(/^\+/, ''),
+        customerPhone: to.replace(/^\+/, ''),
+        wamid: sendResult?.messages?.[0]?.id,
+        source: 'system',
+        type: 'text',
+        body: reply,
+        rawPayload: { source: 'assistant' },
+        status: 'sent',
+      });
+    } catch (error: any) {
+      this.logger.warn(`WA assistant send failed: ${error?.message ?? error}`);
+    }
+  }
+
+  private clipReply(body: string): string {
+    const max =
+      this.configService.get('assistant.whatsappMaxReplyChars', {
+        infer: true,
+      }) ?? 1200;
+    if (body.length <= max) return body;
+    return `${body.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
   }
 
   private toMerchantAction(command: WhatsAppCommand): MerchantWaAction | null {

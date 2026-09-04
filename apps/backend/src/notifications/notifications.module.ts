@@ -27,6 +27,8 @@ import { NotificationsService } from './notifications.service';
     HasuraModule,
     SmsModule,
     RbacModule,
+    // Lazy require avoids AssistantModule -> AuthModule -> NotificationsModule TDZ.
+    forwardRef(() => require('../assistant/assistant.module').AssistantModule),
     forwardRef(() => WhatsAppModule),
     // Lazy require avoids TDZ with OrdersModule <-> NotificationsModule cycle.
     forwardRef(() => require('../orders/orders.module').OrdersModule),

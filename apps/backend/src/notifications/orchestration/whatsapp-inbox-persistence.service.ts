@@ -303,6 +303,37 @@ export class WhatsAppInboxPersistenceService {
     }
   }
 
+  async listRecentMessages(
+    waId: string,
+    limit: number
+  ): Promise<Array<{ direction: string; body: string }>> {
+    const cappedLimit = Math.max(1, Math.min(limit, 40));
+    const res = await this.hasura.executeQuery<{
+      whatsapp_messages: Array<{
+        direction: WhatsAppMessageDirection;
+        body: string;
+      }>;
+    }>(
+      `query WaHistory($waId: String!, $limit: Int!) {
+        whatsapp_messages(
+          where: {
+            conversation: { wa_id: { _eq: $waId } }
+            type: { _eq: "text" }
+            body: { _is_null: false }
+          }
+          order_by: { created_at: desc }
+          limit: $limit
+        ) {
+          direction body
+        }
+      }`,
+      { waId, limit: cappedLimit }
+    );
+    return (res.whatsapp_messages ?? [])
+      .reverse()
+      .filter((message) => !!message.body?.trim());
+  }
+
   private clipPreview(body: string): string {
     const trimmed = (body || '').trim();
     if (!trimmed) return '(attachment)';

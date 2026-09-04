@@ -1,5 +1,6 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import {
+  AutoAwesome,
   Chat,
   ContactSupport,
   DeliveryDining,
@@ -36,7 +37,7 @@ import {
 } from '@mui/material';
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../../hooks/useAgentOnboarding';
 import AgentOnboardingModal from '../dialogs/AgentOnboardingModal';
@@ -304,6 +305,36 @@ const SupportPage: React.FC = () => {
             "We're here to help you every step of the way"
           )}
         </Typography>
+      </Box>
+
+      {/* AI Assistant CTA */}
+      <Box
+        sx={{
+          textAlign: 'center',
+          mb: 5,
+          p: { xs: 3, sm: 4 },
+          borderRadius: 3,
+          background: 'linear-gradient(135deg, rgba(0,172,193,0.08) 0%, rgba(0,100,150,0.06) 100%)',
+          border: '1px solid rgba(0,188,212,0.2)',
+        }}
+      >
+        <AutoAwesome sx={{ fontSize: 36, color: 'info.main', mb: 1.5 }} />
+        <Typography variant="h5" gutterBottom fontWeight={700}>
+          {t('assistant.ctaTitle', 'Ask our AI assistant')}
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 480, mx: 'auto' }}>
+          {t('assistant.ctaBody', 'Get instant answers about delivery, payments, pickup, and more — 24/7.')}
+        </Typography>
+        <Button
+          component={RouterLink}
+          to="/assistant"
+          variant="contained"
+          size="large"
+          startIcon={<AutoAwesome />}
+          sx={{ px: 4 }}
+        >
+          {t('assistant.supportCta', 'Ask our AI assistant')}
+        </Button>
       </Box>
 
       {/* Quick Actions for Authenticated Users */}

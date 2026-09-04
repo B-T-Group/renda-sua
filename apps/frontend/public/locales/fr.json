@@ -7320,5 +7320,28 @@
     "soundHint": "Appuyez une fois sur « Démarrer le mode cuisine » pour autoriser l’alarme dans ce navigateur.",
     "waitingTitle": "En attente de la prochaine commande",
     "waitingBody": "Lorsqu’une nouvelle commande nécessite une confirmation, elle apparaîtra ici immédiatement."
+  },
+  "assistant": {
+    "title": "Assistant Rendasua",
+    "subtitle": "Posez vos questions sur la livraison, les paiements, etc.",
+    "open": "Discuter avec nous",
+    "close": "Fermer le chat",
+    "send": "Envoyer",
+    "placeholder": "Tapez votre question…",
+    "empty": "Demandez où nous sommes situés, comment fonctionnent les paiements ou si le retrait est disponible.",
+    "emptyIllustration": "Discuter avec Rendasua",
+    "typing": "L'assistant écrit…",
+    "handoff": "Nous vous mettons en relation avec notre équipe. Vous pouvez aussi nous joindre sur WhatsApp.",
+    "thinking": "Réflexion en cours…",
+    "emptyTitle": "Comment puis-je vous aider ?",
+    "emptySubtitle": "Posez des questions sur nos services, la livraison, les paiements ou les points de retrait.",
+    "handoffTitle": "Mise en relation avec notre équipe",
+    "handoffBody": "Notre équipe de support vous contactera sous peu.",
+    "errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
+    "clear": "Effacer la conversation",
+    "whatsappCta": "Discuter sur WhatsApp",
+    "supportCta": "Consulter notre assistant IA",
+    "ctaTitle": "Consulter notre assistant IA",
+    "ctaBody": "Obtenez des réponses instantanées sur la livraison, les paiements, le retrait et plus encore — 24h/24, 7j/7."
   }
 }
