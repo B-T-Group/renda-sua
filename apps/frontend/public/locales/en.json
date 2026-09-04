@@ -7304,5 +7304,28 @@
     "soundHint": "Tap Start kitchen mode once to allow alarm sound in this browser.",
     "waitingTitle": "Waiting for the next order",
     "waitingBody": "When a new order needs confirmation, it will appear here immediately."
+  },
+  "assistant": {
+    "title": "Rendasua Assistant",
+    "subtitle": "Ask about delivery, payments, and more",
+    "open": "Chat with us",
+    "close": "Close chat",
+    "send": "Send",
+    "placeholder": "Type your question…",
+    "empty": "Ask where we are located, how payments work, or whether pickup is available.",
+    "emptyIllustration": "Chat with Rendasua",
+    "typing": "Assistant is typing…",
+    "handoff": "We are connecting you with our team. You can also reach us on WhatsApp.",
+    "thinking": "Thinking…",
+    "emptyTitle": "What can I help you with?",
+    "emptySubtitle": "Ask about our services, delivery, payments, or pickup locations.",
+    "handoffTitle": "Connecting you with our team",
+    "handoffBody": "Our support team will follow up with you shortly.",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "clear": "Clear chat",
+    "whatsappCta": "Chat on WhatsApp",
+    "supportCta": "Ask our AI assistant",
+    "ctaTitle": "Ask our AI assistant",
+    "ctaBody": "Get instant answers about delivery, payments, pickup, and more — 24/7."
   }
 }

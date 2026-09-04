@@ -195,6 +195,22 @@ export interface BedrockConfig {
   embeddingModel: string;
 }
 
+/** Channel-agnostic conversational AI assistant (WhatsApp + in-app chat). */
+export interface AssistantConfig {
+  /** Master switch for the assistant service and HTTP chat endpoint. */
+  enabled: boolean;
+  /** Auto-reply to unmatched inbound WhatsApp text via the assistant. */
+  whatsappRepliesEnabled: boolean;
+  /** Optional Converse model override; falls back to bedrock.chatModel. */
+  model: string;
+  /** Max prior messages included in a WhatsApp conversation context. */
+  maxHistoryMessages: number;
+  /** Max tool-use iterations per turn. */
+  maxToolIterations: number;
+  /** Cap on outbound WhatsApp reply length (characters). */
+  whatsappMaxReplyChars: number;
+}
+
 export interface InventorySearchConfig {
   minSimilarity: number;
   matchLimit: number;
@@ -490,6 +506,7 @@ export interface Configuration {
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
   bedrock: BedrockConfig;
+  assistant: AssistantConfig;
   inventorySearch: InventorySearchConfig;
   imageValidation: ImageValidationConfig;
   notification: NotificationConfig;
@@ -863,6 +880,24 @@ export default (): Configuration => {
       embeddingModel:
         process.env.BEDROCK_EMBEDDING_MODEL?.trim() ||
         'amazon.titan-embed-text-v1',
+    },
+    assistant: {
+      enabled: process.env.ASSISTANT_ENABLED === 'true',
+      whatsappRepliesEnabled:
+        process.env.ASSISTANT_WHATSAPP_REPLIES_ENABLED === 'true',
+      model: process.env.ASSISTANT_MODEL?.trim() || '',
+      maxHistoryMessages: parseInt(
+        process.env.ASSISTANT_MAX_HISTORY_MESSAGES || '10',
+        10
+      ),
+      maxToolIterations: parseInt(
+        process.env.ASSISTANT_MAX_TOOL_ITERATIONS || '5',
+        10
+      ),
+      whatsappMaxReplyChars: parseInt(
+        process.env.ASSISTANT_WHATSAPP_MAX_REPLY_CHARS || '1200',
+        10
+      ),
     },
     inventorySearch: {
       minSimilarity: parseFloat(

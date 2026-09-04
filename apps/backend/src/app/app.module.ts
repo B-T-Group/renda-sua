@@ -16,6 +16,7 @@ import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AiModule } from '../ai/ai.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { AssistantModule } from '../assistant/assistant.module';
 import { AuthModule } from '../auth/auth.module';
 import { setupRequestContextCls } from '../auth/request-context-cls.setup';
 import { AwsModule } from '../aws/aws.module';
@@ -193,6 +194,7 @@ import { AppService } from './app.service';
     CategoriesModule,
     SubcategoriesModule,
     AiModule,
+    AssistantModule,
     DashboardModule,
     MerchantEngagementModule,
     DeliveryModule,

@@ -330,6 +330,9 @@ export const AppDeepLinkPage = lazy(
 export const ProfileDeleteRequestPage = lazy(() =>
   import('../components/pages/ProfileDeleteRequestPage')
 );
+export const AssistantPage = lazy(() =>
+  import('../components/pages/AssistantPage')
+);
 export const SupportPage = lazy(() =>
   import('../components/pages/SupportPage')
 );
