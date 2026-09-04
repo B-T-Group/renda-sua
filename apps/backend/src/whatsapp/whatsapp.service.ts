@@ -1,6 +1,7 @@
 import {
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +9,8 @@ import axios, { AxiosInstance, isAxiosError } from 'axios';
 import type { Configuration, WhatsAppConfig } from '../config/configuration';
 import type {
   SendWhatsAppTemplateParams,
+  WhatsAppDownloadedMedia,
+  WhatsAppGraphMediaMeta,
   WhatsAppGraphMessagesResponse,
   WhatsAppSendMessageResult,
 } from './whatsapp.types';
@@ -64,6 +67,20 @@ export class WhatsAppService {
       type: 'text',
       text: { preview_url: false, body: params.body },
     });
+  }
+
+  /**
+   * Download inbound media by Graph media id. Meta's file URL expires in minutes;
+   * the media id lasts longer (~30 days). Never persist the temporary URL.
+   */
+  async downloadMedia(mediaId: string): Promise<WhatsAppDownloadedMedia> {
+    this.assertConfigured();
+    const meta = await this.fetchMediaMeta(mediaId.trim());
+    const buffer = await this.fetchMediaBytes(meta.url);
+    return {
+      buffer,
+      mimeType: meta.mime_type || 'application/octet-stream',
+    };
   }
 
   /**
@@ -131,6 +148,38 @@ export class WhatsAppService {
     }
   }
 
+  private async fetchMediaMeta(
+    mediaId: string
+  ): Promise<{ url: string; mime_type?: string }> {
+    const { accessToken } = this.config;
+    try {
+      const { data } = await this.http.get<WhatsAppGraphMediaMeta>(
+        `/${mediaId}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!data?.url?.trim()) {
+        throw new NotFoundException('WhatsApp media URL missing');
+      }
+      return { url: data.url, mime_type: data.mime_type };
+    } catch (error: any) {
+      throw this.toMediaError(error);
+    }
+  }
+
+  private async fetchMediaBytes(url: string): Promise<Buffer> {
+    const { accessToken } = this.config;
+    try {
+      const { data } = await this.http.get<ArrayBuffer>(url, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      return Buffer.isBuffer(data) ? data : Buffer.from(data);
+    } catch (error: any) {
+      throw this.toMediaError(error);
+    }
+  }
+
   private mapSendResult(
     data: WhatsAppGraphMessagesResponse
   ): WhatsAppSendMessageResult {
@@ -145,6 +194,14 @@ export class WhatsAppService {
         messageStatus: m.message_status,
       })),
     };
+  }
+
+  private toMediaError(error: unknown): Error {
+    if (error instanceof NotFoundException) return error;
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return new NotFoundException('WhatsApp media is no longer available');
+    }
+    return this.toSendError(error);
   }
 
   private toSendError(error: unknown): Error {

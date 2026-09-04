@@ -101,6 +101,9 @@ export class WhatsAppInboxPersistenceService {
   }
 
   async persistOutbound(params: PersistOutboundParams): Promise<string | null> {
+    if (params.source === 'template' || params.type === 'template') {
+      return null;
+    }
     if (params.wamid && (await this.findMessageIdByWamid(params.wamid))) {
       return null;
     }
