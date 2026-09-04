@@ -9,6 +9,7 @@ import {
   type WhatsAppMessageType,
 } from './whatsapp-inbox-persistence.service';
 import { WhatsAppReplyService } from './whatsapp-reply.service';
+import { NotificationsService } from '../notifications.service';
 
 interface WhatsAppStatusEvent {
   id?: string;
@@ -23,6 +24,7 @@ interface WhatsAppInboundMessage {
   id?: string;
   type?: string;
   text?: { body?: string };
+  context?: { id?: string; from?: string };
   [key: string]: unknown;
 }
 
@@ -41,7 +43,8 @@ export class WhatsAppInboundService {
     private readonly configService: ConfigService<Configuration>,
     private readonly analytics: NotificationAnalyticsService,
     private readonly replyService: WhatsAppReplyService,
-    private readonly inbox: WhatsAppInboxPersistenceService
+    private readonly inbox: WhatsAppInboxPersistenceService,
+    private readonly notifications: NotificationsService
   ) {}
 
   assertValidSignature(
@@ -126,21 +129,7 @@ export class WhatsAppInboundService {
     if (!from) return;
     const type = this.mapMessageType(message.type);
     const body = this.extractBody(message, type);
-    try {
-      await this.inbox.persistInbound({
-        waId: from,
-        customerPhone: from,
-        wamid: message.id,
-        type,
-        body,
-        rawPayload: message as Record<string, unknown>,
-        bumpUnread: true,
-      });
-    } catch (error: any) {
-      this.logger.warn(
-        `Inbox persist failed for ${from}: ${error?.message ?? String(error)}`
-      );
-    }
+    await this.persistAndNotifyInbound(from, message, type, body);
     if (type === 'interactive') {
       await this.routeInteractive(from, message);
       return;
@@ -153,6 +142,35 @@ export class WhatsAppInboundService {
       messageId: message.id,
     });
     void value;
+  }
+
+  private async persistAndNotifyInbound(
+    from: string,
+    message: WhatsAppInboundMessage,
+    type: WhatsAppMessageType,
+    body: string
+  ): Promise<void> {
+    try {
+      const persisted = await this.inbox.persistInbound({
+        waId: from,
+        customerPhone: from,
+        wamid: message.id,
+        type,
+        body,
+        rawPayload: message as Record<string, unknown>,
+        bumpUnread: true,
+      });
+      if (!persisted) return;
+      await this.notifications.notifyWhatsAppInboxInbound({
+        conversationId: persisted.conversationId,
+        preview: body,
+        customerPhone: from,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Inbox persist failed for ${from}: ${error?.message ?? String(error)}`
+      );
+    }
   }
 
   private async routeInteractive(
@@ -171,6 +189,7 @@ export class WhatsAppInboundService {
       buttonId: reply?.id,
       buttonTitle: reply?.title,
       messageId: message.id,
+      contextMessageId: message.context?.id?.trim() || undefined,
     });
   }
 

@@ -63,6 +63,10 @@ import {
   type OrderRiskRecipient,
 } from './order-risk-recipients.util';
 import {
+  WHATSAPP_INBOX_STAFF_ROLES,
+  buildWhatsAppInboxPushCopy,
+} from './whatsapp-inbox-push.util';
+import {
   excludeActorFromOrderStatusRecipients,
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
@@ -1653,7 +1657,7 @@ export class NotificationsService {
           locale
         );
         if (!metaName) continue;
-        await this.whatsappService.sendTemplateMessage({
+        const result = await this.whatsappService.sendTemplateMessage({
           to: phone,
           templateName: metaName,
           languageCode: locale === 'fr' ? 'fr' : 'en',
@@ -1667,12 +1671,46 @@ export class NotificationsService {
                 : undefined,
           }),
         });
+        await this.bindWhatsAppMessageToOrder(
+          result.messages[0]?.id,
+          data.orderId
+        );
         return;
       } catch (error: any) {
         this.logger.warn(
           `Location alert WA ${templateKey} failed: ${error?.message ?? error}`
         );
       }
+    }
+  }
+
+  /** Persist wamid → order so WhatsApp button taps act on that order. */
+  private async bindWhatsAppMessageToOrder(
+    wamid: string | undefined,
+    orderId?: string | null
+  ): Promise<void> {
+    if (!wamid || !orderId) return;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation BindWaOrder($object: notification_events_insert_input!) {
+          insert_notification_events_one(object: $object) { id }
+        }`,
+        {
+          object: {
+            notification_type: 'order.created',
+            category: 'actionable',
+            channel: 'whatsapp',
+            status: 'sent',
+            provider_message_id: wamid,
+            entity_type: 'order',
+            entity_id: orderId,
+          },
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `bindWhatsAppMessageToOrder failed: ${error?.message ?? error}`
+      );
     }
   }
 
@@ -4699,6 +4737,53 @@ export class NotificationsService {
           : undefined,
       },
     };
+  }
+
+  async notifyWhatsAppInboxInbound(params: {
+    conversationId: string;
+    preview: string;
+    customerPhone: string;
+  }): Promise<void> {
+    try {
+      await this.deliverWhatsAppInboxPush(params);
+    } catch (error: any) {
+      this.logger.error(
+        `notifyWhatsAppInboxInbound: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async deliverWhatsAppInboxPush(params: {
+    conversationId: string;
+    preview: string;
+    customerPhone: string;
+  }): Promise<void> {
+    const recipients = await this.listWhatsAppInboxRecipients();
+    const links = this.deepLinkService.whatsAppInbox(params.conversationId);
+    for (const recipient of recipients) {
+      const copy = buildWhatsAppInboxPushCopy({
+        preview: params.preview,
+        customerPhone: params.customerPhone,
+        preferredLanguage: recipient.preferredLanguage,
+      });
+      await this.sendPushNotificationByUserId(
+        recipient.userId,
+        copy.title,
+        copy.body,
+        {
+          type: 'whatsapp_inbox_message',
+          conversationId: params.conversationId,
+          url: links.path,
+        }
+      );
+    }
+  }
+
+  private async listWhatsAppInboxRecipients(): Promise<OrderRiskRecipient[]> {
+    return buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: WHATSAPP_INBOX_STAFF_ROLES,
+    });
   }
 
   async notifySuperusersItemAiReviewFailed(params: {
