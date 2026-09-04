@@ -82,13 +82,16 @@ export class AssistantToolsService {
       request.name === 'get_my_recent_orders' ||
       request.name === 'get_order_status'
     ) {
-      if (request.identity.accountType !== 'client') {
+      if (!request.identity.clientId) {
         return {
-          content: 'Order lookup is only available for customer accounts.',
+          content:
+            'No customer order profile is linked to this account, so orders cannot be looked up.',
         };
       }
     }
-    if (request.name === 'get_my_recent_orders') return this.getOrders(request.identity.userId);
+    if (request.name === 'get_my_recent_orders') {
+      return this.getOrders(request.identity.userId!);
+    }
     if (request.name === 'get_order_status') return this.getOrder(request);
     if (request.name === 'get_my_addresses') return this.getAddresses(request.identity);
     if (request.name === 'get_my_profile_summary') return this.getProfile(request.identity);
@@ -211,10 +214,30 @@ export class AssistantToolsService {
     const tools: Tool[] = [
       simpleTool('get_my_profile_summary', 'Get the user’s profile summary.'),
     ];
-    if (identity.accountType === 'client') {
+    if (identity.clientId) {
       tools.unshift(
-        simpleTool('get_my_recent_orders', 'Get the customer’s five recent orders.'),
-        orderStatusTool()
+        {
+          toolSpec: {
+            name: 'get_my_recent_orders',
+            description:
+              'Get this customer’s up to five most recent orders (order number, status, total, business). Call when they ask about their orders, recent purchases, deliveries, or order history.',
+            inputSchema: { json: { type: 'object', properties: {} } },
+          },
+        },
+        {
+          toolSpec: {
+            name: 'get_order_status',
+            description:
+              'Look up one of this customer’s orders by order number. Call when they ask about a specific order’s status.',
+            inputSchema: {
+              json: {
+                type: 'object',
+                properties: { order_number: { type: 'string' } },
+                required: ['order_number'],
+              },
+            },
+          },
+        }
       );
     }
     if (
@@ -236,22 +259,6 @@ function simpleTool(name: string, description: string): Tool {
       name,
       description,
       inputSchema: { json: { type: 'object', properties: {} } },
-    },
-  };
-}
-
-function orderStatusTool(): Tool {
-  return {
-    toolSpec: {
-      name: 'get_order_status',
-      description: 'Get one customer order by order number.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: { order_number: { type: 'string' } },
-          required: ['order_number'],
-        },
-      },
     },
   };
 }

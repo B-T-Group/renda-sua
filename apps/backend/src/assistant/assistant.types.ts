@@ -15,6 +15,8 @@ export type AssistantIdentity = {
   country: string | null;
   phoneE164: string | null;
   accountType: string | null;
+  /** Present when the user has a client profile (orders tools use this). */
+  clientId: string | null;
 };
 
 export type AssistantChatInput = {

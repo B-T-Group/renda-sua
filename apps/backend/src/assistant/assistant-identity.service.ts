@@ -53,6 +53,7 @@ export class AssistantIdentityService {
       country,
       phoneE164,
       accountType: null,
+      clientId: null,
     };
   }
 
@@ -102,6 +103,7 @@ export class AssistantIdentityService {
       country,
       phoneE164,
       accountType: resolveAccountType(user),
+      clientId: user.client?.id ?? null,
     };
   }
 }

@@ -4,6 +4,7 @@ import type { ContentBlock, Message } from '@aws-sdk/client-bedrock-runtime';
 import { BedrockLunaService } from '../ai/bedrock-luna.service';
 import type { Configuration } from '../config/configuration';
 import { GET_BACK_SHORTLY, TECHNICAL_FAILURE } from './assistant-fallback';
+import { sanitizeAssistantReply } from './sanitize-assistant-reply';
 import { AssistantToolsService } from './assistant-tools.service';
 import type {
   AssistantChatInput,
@@ -160,9 +161,11 @@ export class AssistantService {
     return `You are Rendasua's professional customer assistant. ${name}
 Mirror the customer's language; the current language is ${locale}.
 Use tools for company facts and private account data. Never invent information.
+When the customer asks about their orders, recent purchases, deliveries, or a specific order number, call get_my_recent_orders or get_order_status (only available when those tools are provided).
 If no answer is available, request human support and say we will get back shortly.
 For app errors, bugs, or payment failures, request human support and say the technical team will investigate.
-Be concise and never expose internal tools or implementation details.`;
+Be concise and never expose internal tools or implementation details.
+Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reasoning>, or similar metadata in the reply — output only the customer-facing message.`;
   }
 
   private resolveLocale(
@@ -189,11 +192,12 @@ Be concise and never expose internal tools or implementation details.`;
     channel: AssistantChatInput['channel'],
     locale: AssistantLocale
   ): AssistantReply {
-    if (!text.trim()) {
+    const cleaned = sanitizeAssistantReply(text);
+    if (!cleaned) {
       // Empty model output: ask for follow-up, not the technical-failure copy.
       return this.fallback(channel, locale, false);
     }
-    return { reply: this.cap(text.trim(), channel), handoff, locale };
+    return { reply: this.cap(cleaned, channel), handoff, locale };
   }
 
   private fallback(
