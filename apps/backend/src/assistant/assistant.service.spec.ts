@@ -25,6 +25,11 @@ describe('AssistantService', () => {
   const tools = {
     buildToolConfig: jest.fn().mockReturnValue({ tools: [] }),
     executeTool: jest.fn(),
+    isMarketCatalogTool: jest.fn(
+      (name: string) =>
+        name === 'list_supported_country_states' ||
+        name === 'list_supported_payment_systems'
+    ),
   };
   const service = new AssistantService(
     configService as any,
@@ -143,6 +148,157 @@ describe('AssistantService', () => {
     expect(tools.executeTool).toHaveBeenCalled();
     expect(result.locale).toBe('fr');
     expect(result.reply).toMatch(/livraison/i);
+  });
+
+  it('grounds market questions when the model skips get_knowledge', async () => {
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'Rendasua is available in Brazil with Pix.',
+        toolUses: [],
+        assistantContent: [{ text: 'Rendasua is available in Brazil with Pix.' }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'Rendasua is not yet available in Brazil.',
+        toolUses: [],
+        assistantContent: [{ text: 'Rendasua is not yet available in Brazil.' }],
+      });
+    tools.executeTool.mockResolvedValue({
+      content: 'No supported country/state rows found for BR.',
+    });
+
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [{ role: 'user', content: 'and brazil?' }],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: 'en',
+        country: null,
+        phoneE164: '2376',
+        accountType: null,
+        clientId: null,
+      },
+    });
+
+    expect(tools.executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'list_supported_country_states',
+        input: { country_code: 'BR' },
+      })
+    );
+    expect(bedrock.converseWithTools).toHaveBeenCalledTimes(2);
+    expect(result.reply).toMatch(/not yet available in Brazil/i);
+  });
+
+  it('still grounds with live catalog when the model only called get_knowledge', async () => {
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [
+          {
+            toolUseId: 't1',
+            name: 'get_knowledge',
+            input: { topic: 'markets' },
+          },
+        ],
+        assistantContent: [
+          {
+            toolUse: {
+              toolUseId: 't1',
+              name: 'get_knowledge',
+              input: { topic: 'markets' },
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'Rendasua is live in Brazil.',
+        toolUses: [],
+        assistantContent: [{ text: 'Rendasua is live in Brazil.' }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'Rendasua is not yet available in Brazil.',
+        toolUses: [],
+        assistantContent: [{ text: 'Rendasua is not yet available in Brazil.' }],
+      });
+    tools.executeTool
+      .mockResolvedValueOnce({ content: 'Static markets KB mentioning Brazil.' })
+      .mockResolvedValueOnce({
+        content: 'No supported country/state rows found for BR.',
+      });
+
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [{ role: 'user', content: 'and brazil?' }],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: 'en',
+        country: 'GA',
+        phoneE164: '2376',
+        accountType: null,
+        clientId: null,
+      },
+    });
+
+    expect(tools.executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'list_supported_country_states',
+        input: { country_code: 'BR' },
+      })
+    );
+    expect(result.reply).toMatch(/not yet available in Brazil/i);
+  });
+
+  it('grounds broad market questions without identity country scope', async () => {
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'We serve a few markets.',
+        toolUses: [],
+        assistantContent: [{ text: 'We serve a few markets.' }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'Rendasua is available in Cameroon, Gabon, Canada, and more.',
+        toolUses: [],
+        assistantContent: [
+          { text: 'Rendasua is available in Cameroon, Gabon, Canada, and more.' },
+        ],
+      });
+    tools.executeTool.mockResolvedValue({
+      content: 'Configured countries: CM, GA, CA, US, BR.',
+    });
+
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [{ role: 'user', content: 'Which markets do you serve?' }],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: 'en',
+        country: 'GA',
+        phoneE164: '2416',
+        accountType: null,
+        clientId: null,
+      },
+    });
+
+    expect(tools.executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'list_supported_country_states',
+        input: {},
+      })
+    );
+    expect(result.reply).toMatch(/Cameroon/i);
   });
 
   it('detects French locale from message text', () => {

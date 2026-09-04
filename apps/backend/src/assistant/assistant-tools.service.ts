@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Tool, ToolConfiguration } from '@aws-sdk/client-bedrock-runtime';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { AssistantMarketsCatalogService } from './assistant-markets-catalog.service';
 import {
   getKnowledgeSection,
   KNOWLEDGE_TOPICS,
@@ -23,20 +24,38 @@ interface ToolRequest {
   locale?: AssistantLocale;
 }
 
+/** Live config tools that satisfy market/payment grounding (not static KB copy). */
+const MARKET_CATALOG_TOOLS = new Set([
+  'list_supported_country_states',
+  'list_supported_payment_systems',
+]);
+
 @Injectable()
 export class AssistantToolsService {
   private readonly logger = new Logger(AssistantToolsService.name);
 
-  constructor(private readonly hasura: HasuraSystemService) {}
+  constructor(
+    private readonly hasura: HasuraSystemService,
+    private readonly marketsCatalog: AssistantMarketsCatalogService
+  ) {}
 
   getToolConfig(identity: AssistantIdentity): ToolConfiguration {
-    const tools = [this.knowledgeTool(), this.humanSupportTool()];
+    const tools = [
+      this.knowledgeTool(),
+      this.countryStatesTool(),
+      this.paymentSystemsTool(),
+      this.humanSupportTool(),
+    ];
     if (identity.userId) tools.push(...this.userTools(identity));
     return { tools };
   }
 
   buildToolConfig(identity: AssistantIdentity): ToolConfiguration {
     return this.getToolConfig(identity);
+  }
+
+  isMarketCatalogTool(name: string): boolean {
+    return MARKET_CATALOG_TOOLS.has(name);
   }
 
   async executeTool(
@@ -76,6 +95,12 @@ export class AssistantToolsService {
 
   private async runTool(request: ToolRequest): Promise<AssistantToolResult> {
     if (request.name === 'get_knowledge') return this.getKnowledge(request);
+    if (request.name === 'list_supported_country_states') {
+      return this.listCountryStates(request);
+    }
+    if (request.name === 'list_supported_payment_systems') {
+      return this.listPaymentSystems(request);
+    }
     if (request.name === 'request_human_support') return this.handoff(request);
     if (!request.identity.userId) return { content: 'Authentication is required.' };
     if (
@@ -93,9 +118,38 @@ export class AssistantToolsService {
       return this.getOrders(request.identity.userId!);
     }
     if (request.name === 'get_order_status') return this.getOrder(request);
-    if (request.name === 'get_my_addresses') return this.getAddresses(request.identity);
-    if (request.name === 'get_my_profile_summary') return this.getProfile(request.identity);
+    if (request.name === 'get_my_addresses') {
+      return this.getAddresses(request.identity);
+    }
+    if (request.name === 'get_my_profile_summary') {
+      return this.getProfile(request.identity);
+    }
     return { content: `Unknown tool: ${request.name}`, handoff: true };
+  }
+
+  private async listCountryStates(
+    request: ToolRequest
+  ): Promise<AssistantToolResult> {
+    const country = this.resolveOptionalCountry(request);
+    return { content: await this.marketsCatalog.listCountryStates(country) };
+  }
+
+  private async listPaymentSystems(
+    request: ToolRequest
+  ): Promise<AssistantToolResult> {
+    const country = this.resolveOptionalCountry(request);
+    return { content: await this.marketsCatalog.listPaymentSystems(country) };
+  }
+
+  /** Only explicit tool input — omit to list all countries. */
+  private resolveOptionalCountry(request: ToolRequest): string | null {
+    if (typeof request.input.country_code === 'string') {
+      return request.input.country_code;
+    }
+    if (typeof request.input.country === 'string') {
+      return request.input.country;
+    }
+    return null;
   }
 
   private getKnowledge(request: ToolRequest): AssistantToolResult {
@@ -173,7 +227,8 @@ export class AssistantToolsService {
     return {
       toolSpec: {
         name: 'get_knowledge',
-        description: 'Get authoritative Rendasua company and service information.',
+        description:
+          'Get curated Rendasua policy copy (pay-at-delivery process, pickup, support). For live country/state lists and payment systems, prefer list_supported_country_states and list_supported_payment_systems.',
         inputSchema: {
           json: {
             type: 'object',
@@ -182,6 +237,48 @@ export class AssistantToolsService {
               country: { type: 'string' },
             },
             required: ['topic'],
+          },
+        },
+      },
+    };
+  }
+
+  private countryStatesTool(): Tool {
+    return {
+      toolSpec: {
+        name: 'list_supported_country_states',
+        description:
+          'Query live supported_country_states (active/coming_soon). Use for country coverage, regions/states, delivery flags. Optional country_code (ISO-2). If omitted, returns all configured countries.',
+        inputSchema: {
+          json: {
+            type: 'object',
+            properties: {
+              country_code: {
+                type: 'string',
+                description: 'ISO-2 country code, e.g. CM, GA, CA, BR',
+              },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  private paymentSystemsTool(): Tool {
+    return {
+      toolSpec: {
+        name: 'list_supported_payment_systems',
+        description:
+          'Query live supported_payment_systems (active). Use for payment methods/rails by country. Optional country_code (ISO-2). Never invent methods not returned.',
+        inputSchema: {
+          json: {
+            type: 'object',
+            properties: {
+              country_code: {
+                type: 'string',
+                description: 'ISO-2 country code, e.g. CM, GA, CA, BR',
+              },
+            },
           },
         },
       },

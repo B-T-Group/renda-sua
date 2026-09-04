@@ -2,8 +2,15 @@ import { AssistantToolsService } from './assistant-tools.service';
 import type { AssistantIdentity } from './assistant.types';
 
 describe('AssistantToolsService', () => {
-  const hasura = { executeQuery: jest.fn() };
-  const service = new AssistantToolsService(hasura as any);
+  const hasura = { executeQuery: jest.fn(), getAllUserAddresses: jest.fn() };
+  const marketsCatalog = {
+    listCountryStates: jest.fn(),
+    listPaymentSystems: jest.fn(),
+  };
+  const service = new AssistantToolsService(
+    hasura as any,
+    marketsCatalog as any
+  );
 
   const anonymous: AssistantIdentity = {
     isVerified: false,
@@ -25,11 +32,20 @@ describe('AssistantToolsService', () => {
     clientId: 'c1',
   };
 
-  it('exposes only knowledge + handoff tools for anonymous users', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('exposes knowledge, catalog, and handoff tools for anonymous users', () => {
     const tools = service.buildToolConfig(anonymous).tools.map(
       (t) => t.toolSpec?.name
     );
-    expect(tools).toEqual(['get_knowledge', 'request_human_support']);
+    expect(tools).toEqual([
+      'get_knowledge',
+      'list_supported_country_states',
+      'list_supported_payment_systems',
+      'request_human_support',
+    ]);
   });
 
   it('adds order tools when the user has a client profile', () => {
@@ -80,6 +96,30 @@ describe('AssistantToolsService', () => {
     });
     expect(result.content).toMatch(/MTN Mobile Money/i);
     expect(result.content).toMatch(/Cameroon/i);
+  });
+
+  it('queries live country states via the catalog service', async () => {
+    marketsCatalog.listCountryStates.mockResolvedValue('CM configured');
+    const result = await service.executeTool({
+      name: 'list_supported_country_states',
+      input: { country_code: 'BR' },
+      identity: anonymous,
+      locale: 'en',
+    });
+    expect(marketsCatalog.listCountryStates).toHaveBeenCalledWith('BR');
+    expect(result.content).toBe('CM configured');
+  });
+
+  it('queries live payment systems via the catalog service', async () => {
+    marketsCatalog.listPaymentSystems.mockResolvedValue('no payments for BR');
+    const result = await service.executeTool({
+      name: 'list_supported_payment_systems',
+      input: { country_code: 'BR' },
+      identity: anonymous,
+      locale: 'en',
+    });
+    expect(marketsCatalog.listPaymentSystems).toHaveBeenCalledWith('BR');
+    expect(result.content).toMatch(/no payments for BR/i);
   });
 
   it('marks human support as handoff', async () => {
