@@ -186,4 +186,155 @@ describe('WhatsAppOrderActionService', () => {
     expect(result.message).toMatch(/ORD-NEW/);
     expect(result.message).toMatch(/no longer awaiting/i);
   });
+
+  it('binds via inbox payload when the outbound wamid is not in events', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({
+        whatsapp_messages: [
+          {
+            raw_payload: {
+              orderId: '11111111-1111-4111-8111-111111111111',
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: boundPendingOrder('o-inbox', 'ORD-INBOX'),
+      })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.out.inbox',
+    });
+    expect(orders.confirmOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-inbox' }),
+      expect.objectContaining({ businessId: 'b1' })
+    );
+    expect(result.message).toMatch(/ORD-INBOX/);
+  });
+
+  it('resolves inbox orderNumber when orderId is not a uuid', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({
+        whatsapp_messages: [
+          {
+            raw_payload: {
+              orderId: 'not-a-uuid',
+              variables: { orderNumber: 'ORD-NUM' },
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders: [{ id: 'o-num' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: boundPendingOrder('o-num', 'ORD-NUM'),
+      })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.out.num',
+    });
+    expect(orders.confirmOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-num' }),
+      expect.any(Object)
+    );
+    expect(result.message).toMatch(/ORD-NUM/);
+  });
+
+  it('falls through to the oldest pending order when the wamid is unknown', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({ whatsapp_messages: [] })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({
+        orders: [boundPendingOrder('o-old', 'ORD-OLD')],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.unknown',
+    });
+    expect(orders.confirmOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-old' }),
+      expect.any(Object)
+    );
+    expect(result.message).toMatch(/ORD-OLD/);
+  });
+
+  it('treats whitespace-only context as unbound', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({
+        orders: [boundPendingOrder('o-old', 'ORD-OLD')],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: '   ',
+    });
+    expect(hasura.executeQuery.mock.calls[0][0]).toMatch(/WaActor/);
+    expect(orders.confirmOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-old' }),
+      expect.any(Object)
+    );
+  });
+
+  it('does not confirm a bound order for a merchant from another store', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'o-new' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: boundPendingOrder('o-new', 'ORD-NEW'),
+      })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u2', business: { id: 'b2' }, location_delegations: [] }],
+      });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.out.newer',
+    });
+    expect(orders.confirmOrder).not.toHaveBeenCalled();
+    expect(result.handled).toBe(false);
+    expect(result.message).toMatch(/not linked/i);
+  });
 });
+
+function boundPendingOrder(id: string, orderNumber: string) {
+  return {
+    id,
+    order_number: orderNumber,
+    current_status: 'pending',
+    acceptance_state: 'awaiting_acceptance',
+    business_id: 'b1',
+    business_location_id: 'loc1',
+    fulfillment_timing: 'asap',
+    fulfillment_method: 'pickup',
+    delivery_time_windows: [],
+    business_location: {
+      id: 'loc1',
+      business_id: 'b1',
+      order_alert_phone: null,
+      business: { user_id: 'u1' },
+    },
+  };
+}

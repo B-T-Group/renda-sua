@@ -113,4 +113,75 @@ describe('web quiet home utils', () => {
     });
     expect(action?.id).toBe('offer_rentals');
   });
+
+  it('offers sale items after primary catalog tips for rental merchants', () => {
+    const action = resolveQuietHomeNextAction({
+      aggregates: aggregates({
+        approvedItemCount: 12,
+        approvedRentalCount: 12,
+        rentalItemCount: 12,
+        itemCount: 0,
+        hasLogo: true,
+        hasOperatingHours: true,
+      }),
+      verification: {
+        is_verified: true,
+        can_accept_orders: true,
+        accountFullName: 'A',
+        nextAction: 'complete',
+        steps: { agreement: { complete: true } },
+      },
+      mainInterest: 'rent_items',
+      showIdReview: false,
+      showMmPhoneConfirm: false,
+    });
+    expect(action?.id).toBe('offer_sale_items');
+  });
+
+  it('does not offer the other catalog before the first approved item', () => {
+    const action = resolveQuietHomeNextAction({
+      aggregates: aggregates({
+        approvedItemCount: 0,
+        itemCount: 0,
+        rentalItemCount: 0,
+        hasLogo: true,
+        hasOperatingHours: true,
+      }),
+      verification: {
+        is_verified: true,
+        can_accept_orders: true,
+        accountFullName: 'A',
+        nextAction: 'complete',
+        steps: { agreement: { complete: true } },
+      },
+      mainInterest: 'sell_items',
+      showIdReview: false,
+      showMmPhoneConfirm: false,
+    });
+    expect(action?.id).not.toBe('offer_rentals');
+  });
+
+  it('does not offer sale items when a rental merchant already sells', () => {
+    const action = resolveQuietHomeNextAction({
+      aggregates: aggregates({
+        approvedItemCount: 12,
+        approvedRentalCount: 12,
+        rentalItemCount: 12,
+        itemCount: 2,
+        hasLogo: true,
+        hasOperatingHours: true,
+      }),
+      verification: {
+        is_verified: true,
+        can_accept_orders: true,
+        accountFullName: 'A',
+        nextAction: 'complete',
+        steps: { agreement: { complete: true } },
+      },
+      mainInterest: 'rent_items',
+      showIdReview: false,
+      showMmPhoneConfirm: false,
+    });
+    expect(action).toBeNull();
+  });
 });

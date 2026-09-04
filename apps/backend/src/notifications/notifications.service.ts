@@ -77,6 +77,7 @@ import {
   buildPickupReassignedCustomerPushMessage,
   buildPickupReminderPushMessage,
 } from './pickup-push.messages';
+import { buildStorePickupReminderNotify } from './store-pickup-reminder-push';
 import {
   buildBusinessOrderCreatedPushMessage,
   buildBusinessOrderScheduledPushMessage,
@@ -1197,44 +1198,10 @@ export class NotificationsService {
     orderNumber: string;
     preferredLanguage?: string | null;
   }): Promise<void> {
-    const userId = params.clientUserId?.trim();
-    if (!userId) return;
-    const locale = normalizeLanguage(params.preferredLanguage);
-    const isFr = locale === 'fr';
-    const title = isFr
-      ? 'Commande à récupérer'
-      : 'Order ready for pickup';
-    const body = isFr
-      ? `Votre commande ${params.orderNumber} vous attend. Touchez pour annuler, écrire au commerce, ou fermer.`
-      : `Your order ${params.orderNumber} is waiting. Tap to cancel, message the store, or close.`;
-    const path = `/orders/${params.orderId}?pickupReminder=1`;
+    const payload = buildStorePickupReminderNotify(params);
+    if (!payload) return;
     try {
-      await this.orchestrator.notify({
-        type: 'order.store_pickup.reminder',
-        category: 'actionable',
-        recipientUserId: userId,
-        locale,
-        preferenceCategory: 'order_updates',
-        entityType: 'order',
-        entityId: params.orderId,
-        dedupeKey: `order.store_pickup.reminder:${params.orderId}:${new Date()
-          .toISOString()
-          .slice(0, 13)}`,
-        channels: {
-          push: {
-            title,
-            body,
-            interruptible: true,
-            data: {
-              url: path,
-              orderId: params.orderId,
-              orderNumber: params.orderNumber,
-              event: 'store_pickup_reminder',
-              persona: 'client',
-            },
-          },
-        },
-      });
+      await this.orchestrator.notify(payload);
     } catch (error: any) {
       this.logger.warn(
         `sendStorePickupReminderPush failed: ${error?.message ?? String(error)}`
