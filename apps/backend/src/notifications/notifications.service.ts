@@ -63,6 +63,10 @@ import {
   type OrderRiskRecipient,
 } from './order-risk-recipients.util';
 import {
+  WHATSAPP_INBOX_STAFF_ROLES,
+  buildWhatsAppInboxPushCopy,
+} from './whatsapp-inbox-push.util';
+import {
   excludeActorFromOrderStatusRecipients,
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
@@ -4733,6 +4737,53 @@ export class NotificationsService {
           : undefined,
       },
     };
+  }
+
+  async notifyWhatsAppInboxInbound(params: {
+    conversationId: string;
+    preview: string;
+    customerPhone: string;
+  }): Promise<void> {
+    try {
+      await this.deliverWhatsAppInboxPush(params);
+    } catch (error: any) {
+      this.logger.error(
+        `notifyWhatsAppInboxInbound: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async deliverWhatsAppInboxPush(params: {
+    conversationId: string;
+    preview: string;
+    customerPhone: string;
+  }): Promise<void> {
+    const recipients = await this.listWhatsAppInboxRecipients();
+    const links = this.deepLinkService.whatsAppInbox(params.conversationId);
+    for (const recipient of recipients) {
+      const copy = buildWhatsAppInboxPushCopy({
+        preview: params.preview,
+        customerPhone: params.customerPhone,
+        preferredLanguage: recipient.preferredLanguage,
+      });
+      await this.sendPushNotificationByUserId(
+        recipient.userId,
+        copy.title,
+        copy.body,
+        {
+          type: 'whatsapp_inbox_message',
+          conversationId: params.conversationId,
+          url: links.path,
+        }
+      );
+    }
+  }
+
+  private async listWhatsAppInboxRecipients(): Promise<OrderRiskRecipient[]> {
+    return buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: WHATSAPP_INBOX_STAFF_ROLES,
+    });
   }
 
   async notifySuperusersItemAiReviewFailed(params: {

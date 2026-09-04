@@ -47,6 +47,11 @@ export interface PersistInboundParams {
   bumpUnread: boolean;
 }
 
+export interface PersistInboundResult {
+  messageId: string;
+  conversationId: string;
+}
+
 export interface PersistOutboundParams {
   waId: string;
   customerPhone: string;
@@ -69,7 +74,9 @@ export class WhatsAppInboxPersistenceService {
     private readonly prefs: NotificationPreferenceService
   ) {}
 
-  async persistInbound(params: PersistInboundParams): Promise<string | null> {
+  async persistInbound(
+    params: PersistInboundParams
+  ): Promise<PersistInboundResult | null> {
     if (params.wamid && (await this.findMessageIdByWamid(params.wamid))) {
       return null;
     }
@@ -80,7 +87,7 @@ export class WhatsAppInboxPersistenceService {
       isCustomerMessage: true,
       bumpUnread: params.bumpUnread,
     });
-    return this.insertMessage({
+    const messageId = await this.insertMessage({
       conversationId: conversation.id,
       wamid: params.wamid,
       direction: 'inbound',
@@ -90,6 +97,7 @@ export class WhatsAppInboxPersistenceService {
       rawPayload: params.rawPayload,
       status: 'delivered',
     });
+    return { messageId, conversationId: conversation.id };
   }
 
   async persistOutbound(params: PersistOutboundParams): Promise<string | null> {
