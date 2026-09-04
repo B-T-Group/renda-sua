@@ -4613,6 +4613,24 @@
       "error": "Failed to start payment",
       "phoneLabel": "Payment phone"
     },
+    "momoAwaiting": {
+      "navTitle": "Approve payment",
+      "waitingTitle": "Approve on your phone",
+      "waitingBody": "A payment request was sent to {{phone}}. Open the prompt on that phone and approve it with your PIN.",
+      "waitingHint": "Waiting for payment to complete…",
+      "paidTitle": "Payment confirmed",
+      "paidBodyCheckout": "Your payment went through. The merchant will confirm your order next.",
+      "paidBodyPickup": "Your payment went through. You can collect your order at the store.",
+      "failedTitle": "Payment failed",
+      "failedBody": "The mobile money request did not succeed. You can try again or go back to your order.",
+      "timeoutTitle": "Still waiting",
+      "timeoutBody": "We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.",
+      "retry": "Try again",
+      "retryError": "Could not send another payment request.",
+      "back": "Back to order",
+      "viewOrder": "View order",
+      "continue": "Continue"
+    },
     "trackInMyOrders": "Track progress in My Orders",
     "actions": {
       "cancel": "Cancel order",

@@ -394,6 +394,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/orders/awaiting-payment"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.MobileMoneyAwaitingPaymentPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* App route - redirects to appropriate dashboard based on auth flow */}
             <Route

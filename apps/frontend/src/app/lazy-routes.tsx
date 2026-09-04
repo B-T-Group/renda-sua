@@ -311,6 +311,9 @@ export const MessagesCenterPage = lazy(() =>
 export const OrderConfirmationPage = lazy(() =>
   import('../components/pages/OrderConfirmationPage')
 );
+export const MobileMoneyAwaitingPaymentPage = lazy(() =>
+  import('../components/pages/MobileMoneyAwaitingPaymentPage')
+);
 export const AnonAddressPage = lazy(() =>
   import('../components/pages/AnonAddressPage')
 );

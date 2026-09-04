@@ -3642,6 +3642,7 @@ export class OrdersService {
         order.order_number
       );
     if (existing && existing.status === 'pending') {
+      await this.resetOrderPaymentFailure(orderId);
       return {
         success: true,
         message: 'Payment request already pending',
@@ -3721,6 +3722,10 @@ export class OrdersService {
         transaction_id: paymentTransaction.transactionId,
       });
     }
+
+    // Clear a prior failed payment_status so clients polling after a new push
+    // do not immediately treat the order as failed again.
+    await this.resetOrderPaymentFailure(orderId);
 
     return {
       success: true,
@@ -3889,6 +3894,7 @@ export class OrdersService {
         order.order_number
       );
     if (existing && existing.status === 'pending') {
+      await this.resetOrderPaymentFailure(orderId);
       return {
         success: true,
         message: 'Payment request already pending',

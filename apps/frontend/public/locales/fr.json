@@ -4349,6 +4349,24 @@
       "error": "Impossible de démarrer le paiement",
       "phoneLabel": "Téléphone de paiement"
     },
+    "momoAwaiting": {
+      "navTitle": "Approuver le paiement",
+      "waitingTitle": "Approuvez sur votre téléphone",
+      "waitingBody": "Une demande de paiement a été envoyée au {{phone}}. Ouvrez l’invite sur ce téléphone et approuvez avec votre code PIN.",
+      "waitingHint": "En attente de la confirmation du paiement…",
+      "paidTitle": "Paiement confirmé",
+      "paidBodyCheckout": "Votre paiement a réussi. Le commerçant confirmera ensuite votre commande.",
+      "paidBodyPickup": "Votre paiement a réussi. Vous pouvez récupérer votre commande au magasin.",
+      "failedTitle": "Paiement échoué",
+      "failedBody": "La demande de paiement mobile n’a pas abouti. Vous pouvez réessayer ou revenir à votre commande.",
+      "timeoutTitle": "Toujours en attente",
+      "timeoutBody": "Nous n’avons pas encore vu le paiement. Vous pouvez partir — nous mettrons la commande à jour dès qu’il arrivera. Gardez votre téléphone à portée si vous devez encore approuver.",
+      "retry": "Réessayer",
+      "retryError": "Impossible d’envoyer une nouvelle demande de paiement.",
+      "back": "Retour à la commande",
+      "viewOrder": "Voir la commande",
+      "continue": "Continuer"
+    },
     "trackInMyOrders": "Suivez l’avancement dans Mes commandes",
     "actions": {
       "cancel": "Annuler la commande",
