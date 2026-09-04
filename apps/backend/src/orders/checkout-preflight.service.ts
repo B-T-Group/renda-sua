@@ -43,6 +43,8 @@ import {
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { resolveItemCountry } from '../mobile-payments/item-country.util';
+import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 
 const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
   query GetInventoryForPreflight($ids: [uuid!]!) {
@@ -262,15 +264,12 @@ export class CheckoutPreflightService {
       const inv = inventoryById.get(line.business_inventory_id)!;
       const businessId: string = inv.business_location?.business_id;
       const ownerId: string = inv.business_location?.business?.user?.id ?? '';
-      // Seller country comes from the owner's users.country (canonical market
-      // source); fall back to the location address for unbackfilled users.
-      const sellerCountry: string = (
-        inv.business_location?.business?.user?.country ??
-        inv.business_location?.address?.country ??
-        ''
-      )
-        .trim()
-        .toUpperCase();
+      // Item country is the listing location; owner country is only a fallback.
+      const sellerCountry: string =
+        resolveItemCountry(
+          inv.business_location?.address?.country,
+          inv.business_location?.business?.user?.country
+        ) ?? '';
       const sellerState: string = (
         inv.business_location?.address?.state ?? ''
       ).trim();
@@ -531,19 +530,19 @@ export class CheckoutPreflightService {
         }
       }
 
-      // Mobile money provider
       let mobileMoneyProvider: string | null = null;
-      if (rail === 'mobile_money' && dto.phone_number?.trim()) {
-        try {
-          mobileMoneyProvider = this.mobilePaymentsService.getProvider(dto.phone_number.trim());
-        } catch {
-          mobileMoneyProvider = null;
-        }
+      if (rail === 'mobile_money') {
+        mobileMoneyProvider = this.mobilePaymentsService.getProviderForCountry(
+          group.sellerCountry
+        );
       }
 
-      // Phone country alignment for Mobile Money
       if (rail === 'mobile_money' && dto.phone_number?.trim() && group.sellerCountry) {
-        if (!mobileMoneyProvider) {
+        const phoneOk = validatePhoneNumber(
+          dto.phone_number.trim(),
+          group.sellerCountry
+        ).isValid;
+        if (!phoneOk) {
           blockers.push({
             code: 'MOBILE_MONEY_PHONE_UNSUPPORTED',
             message: `The phone number provided is not supported for Mobile Money payments in ${group.sellerCountry}.`,
