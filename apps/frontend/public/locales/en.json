@@ -7326,6 +7326,17 @@
     "whatsappCta": "Chat on WhatsApp",
     "supportCta": "Ask our AI assistant",
     "ctaTitle": "Ask our AI assistant",
-    "ctaBody": "Get instant answers about delivery, payments, pickup, and more — 24/7."
+    "ctaBody": "Get instant answers about delivery, payments, pickup, and more — 24/7.",
+    "statusOnline": "Online · AI powered",
+    "statusThinking": "Generating response",
+    "suggestion": {
+      "location": "Where are you located?",
+      "payDelivery": "Do you support payment at delivery?",
+      "pickup": "Do you support in-store pickup?",
+      "mobilePay": "Do you support mobile payments?"
+    },
+    "homeEntryTitle": "Ask the AI assistant",
+    "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
+    "homeEntryCta": "Open assistant"
   }
 }

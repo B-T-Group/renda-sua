@@ -7342,6 +7342,17 @@
     "whatsappCta": "Discuter sur WhatsApp",
     "supportCta": "Consulter notre assistant IA",
     "ctaTitle": "Consulter notre assistant IA",
-    "ctaBody": "Obtenez des réponses instantanées sur la livraison, les paiements, le retrait et plus encore — 24h/24, 7j/7."
+    "ctaBody": "Obtenez des réponses instantanées sur la livraison, les paiements, le retrait et plus encore — 24h/24, 7j/7.",
+    "statusOnline": "En ligne · Propulsé par l'IA",
+    "statusThinking": "Génération de la réponse",
+    "suggestion": {
+      "location": "Où êtes-vous situés ?",
+      "payDelivery": "Acceptez-vous le paiement à la livraison ?",
+      "pickup": "Proposez-vous le retrait en magasin ?",
+      "mobilePay": "Acceptez-vous le mobile money ?"
+    },
+    "homeEntryTitle": "Demandez à l'assistant IA",
+    "homeEntryBody": "Obtenez des réponses rapides sur la livraison, les paiements, le retrait et votre compte.",
+    "homeEntryCta": "Ouvrir l'assistant"
   }
 }
