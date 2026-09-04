@@ -514,7 +514,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                           )
                         : t(
                             'orders.pickup.payAtPickupHint',
-                            'You will pay when you arrive; the business will send a payment request to your phone.'
+                            'You will pay when you arrive. Tap Pay in the app and approve the request on your phone.'
                           )}
                     </Typography>
                   </Box>
@@ -2067,7 +2067,7 @@ const PlaceOrderPage: React.FC = () => {
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
                     {t(
                       'orders.pickup.payAtPickupHint',
-                      'You will pay when you arrive; the business will send a payment request to your phone.'
+                      'You will pay when you arrive. Tap Pay in the app and approve the request on your phone.'
                     )}
                   </Typography>
                 </Paper>
@@ -2828,7 +2828,7 @@ const PlaceOrderPage: React.FC = () => {
                         {isPickupOrder
                           ? t(
                               'orders.pickup.clientPaymentHint',
-                              'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                              'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
                             )
                           : t(
                               'orders.paymentRequestMessage',
@@ -3814,7 +3814,7 @@ const PlaceOrderPage: React.FC = () => {
                             : paymentTiming === 'pay_at_pickup'
                               ? t(
                                   'orders.pickup.clientPaymentHint',
-                                  'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                                  'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
                                 )
                               : t(
                                   'orders.paymentRequestMessage',

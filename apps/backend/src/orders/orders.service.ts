@@ -3543,31 +3543,61 @@ export class OrdersService {
     };
   }
 
+  private assertJwtCanInitiatePayAtPickup(order: Orders, user: any): void {
+    if (order.client?.user_id === user.id) {
+      this.requireActivePersona(
+        user,
+        'client',
+        'Switch to your customer profile to pay for this pickup'
+      );
+      return;
+    }
+    this.requireActivePersona(
+      user,
+      'business',
+      'Only the store or customer can initiate pickup payment'
+    );
+    this.requireBusinessRecord(user);
+    if (order.business.user_id !== user.id) {
+      throw new HttpException(
+        'You are not authorized to initiate payment for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+  }
+
+  private async loadOrderForPayAtPickup(
+    orderId: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (actor) {
+      this.assertActorOwnsOrder(
+        order,
+        actor,
+        'You are not authorized to initiate payment for this order'
+      );
+      return order;
+    }
+    this.assertJwtCanInitiatePayAtPickup(
+      order,
+      await this.hasuraUserService.getUser()
+    );
+    return order;
+  }
+
   /**
-   * Pay-at-pickup: business triggers mobile payment when order is ready for pickup.
+   * Pay-at-pickup: client (or store fallback) triggers mobile payment when ready.
    */
   async initiatePayAtPickupPayment(
     orderId: string,
     phoneNumberOverride?: string,
     actor?: AuthorizedBusinessActor
   ) {
-    const userId = await this.requireBusinessOrderAccess(
-      orderId,
-      'Only business users can initiate pickup payments',
-      'You are not authorized to initiate payment for this order',
-      actor
-    );
-    const user = actor
-      ? ({ id: userId, business: { id: actor.businessId } } as any)
-      : await this.hasuraUserService.getUser();
-    if (!actor) {
-      this.requireBusinessRecord(user);
-    }
-
-    const order = await this.getOrderDetails(orderId);
-    if (!order) {
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    }
+    const order = await this.loadOrderForPayAtPickup(orderId, actor);
 
     const paymentTiming = (order as any).payment_timing as
       | 'pay_now'

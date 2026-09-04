@@ -422,7 +422,7 @@ const OrderConfirmationPage: React.FC = () => {
             <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
               {t(
                 'orders.pickup.clientPaymentHint',
-                'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
               )}
             </Typography>
           </CardContent>
@@ -761,7 +761,7 @@ const OrderConfirmationPage: React.FC = () => {
                 <Typography variant="body1">
                   {t(
                     'orders.pickup.clientPaymentHint',
-                    'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                    'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
                   )}
                 </Typography>
               </Box>

@@ -3699,6 +3699,8 @@
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
       "pendingNotice": "Vous serez notifié une fois que le magasin confirmera votre commande de {{orderTotal}} (ils disposent de jusqu'à 45 minutes).",
+      "storeReadyPayAtPickup": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "storeReadySendPin": "Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait et envoyez votre code PIN pour que le vendeur confirme.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
       "refundedNotice": "💰 Votre remboursement de {{orderTotal}} a été traité et devrait apparaître dans votre compte dans les 3 à 5 jours ouvrables. Merci pour votre patience.",
       "subtitle": "Suivez le statut et l'historique de vos commandes",
@@ -4319,11 +4321,11 @@
     "pickup": {
       "confirmationCardTitle": "Paiement au retrait",
       "storePickupTitle": "Retrait au magasin (sans frais de livraison)",
-      "payAtPickupHint": "Vous paierez sur place ; le commerce vous enverra une demande de paiement sur votre téléphone.",
-      "clientPaymentHint": "Le magasin vous enverra une demande de paiement mobile lorsque votre commande sera prête au retrait. Veuillez la valider pour finaliser la commande.",
+      "payAtPickupHint": "Vous paierez à l’arrivée. Appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone.",
+      "clientPaymentHint": "Payez au magasin lors du retrait. Quand la commande est prête, appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
       "requestPaymentTitle": "Demander le paiement au retrait",
       "notEligibleForPaymentRequest": "Cette commande n’est pas configurée pour le paiement au retrait.",
-      "businessInitiateHelp": "Envoyez une demande de paiement mobile au client. Une fois qu’il l’aura acceptée, la commande se terminera automatiquement.",
+      "businessInitiateHelp": "Si le client a besoin d’aide, envoyez une demande de paiement mobile. Une fois approuvée, la commande se termine automatiquement.",
       "payAtPickupShort": "Paiement au retrait",
       "businessInitiateSubtitle": "Le paiement est encaissé lorsque le client retire sa commande.",
       "paymentRequestSent": "Demande de paiement envoyée au client.",
@@ -4333,6 +4335,14 @@
       "confirmPickupBodyPaid": "Confirmez que le client a retiré cette commande. La commande sera marquée comme terminée.",
       "confirmPickupSuccess": "Retrait confirmé. La commande est terminée.",
       "confirmPickupError": "Impossible de confirmer le retrait"
+    },
+    "payAtPickup": {
+      "title": "Payer au retrait",
+      "hint": "Nous enverrons une demande de paiement mobile à ce numéro. Approuvez-la sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "cta": "Payer maintenant",
+      "sent": "Approuvez la demande de paiement sur votre téléphone. Le magasin la verra dès qu’elle réussit.",
+      "error": "Impossible de démarrer le paiement",
+      "phoneLabel": "Téléphone de paiement"
     },
     "trackInMyOrders": "Suivez l’avancement dans Mes commandes",
     "actions": {
@@ -4555,6 +4565,13 @@
     },
     "contact": {
       "unavailable": "Contact indisponible"
+    },
+    "pickupLocator": {
+      "address": "Adresse du magasin",
+      "contact": "Contact du magasin",
+      "openInMaps": "Ouvrir dans Maps",
+      "openInMapsA11y": "Ouvrir l’adresse du magasin dans Maps",
+      "callStoreA11y": "Appeler le magasin"
     },
     "timeline": {
       "title": "Historique",
@@ -5151,7 +5168,9 @@
       "prepareClient": "Le commerçant prépare votre commande.",
       "prepareBusiness": "Marquez la commande prête lorsqu’elle est emballée.",
       "readyPickupClient": "Votre commande est prête à être retirée en magasin.",
-      "readyPickupBusiness": "Encaissez ou confirmez le retrait à l’arrivée du client.",
+      "readyPickupPayAtPickupClient": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "readyPickupWaitClientPayBusiness": "Le client paiera dans l’application à son arrivée. Vous pouvez toujours envoyer une demande de paiement s’il a besoin d’aide.",
+      "readyPickupBusiness": "Demandez le PIN de retrait du client à son arrivée. Le paiement est capturé lorsque vous confirmez le retrait.",
       "readyDeliveryClient": "En attente qu’un livreur prenne votre commande.",
       "readyDeliveryBusiness": "En attente qu’un agent prenne cette livraison.",
       "readyAgent": "Prenez cette commande pour démarrer la livraison.",

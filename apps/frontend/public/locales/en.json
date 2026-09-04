@@ -3962,6 +3962,8 @@
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
       "pendingNotice": "You'll be notified once the store confirms your {{orderTotal}} order (they have up to 45 minutes).",
+      "storeReadyPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+      "storeReadySendPin": "Your order is ready at the store. Come during your pickup slot and send your PIN so the seller can confirm pickup.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
       "refundedNotice": "💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
       "subtitle": "Track your order status and history",
@@ -4583,11 +4585,11 @@
     "pickup": {
       "confirmationCardTitle": "Pay when you pick up",
       "storePickupTitle": "Pick up at the store (no delivery fee)",
-      "payAtPickupHint": "You will pay when you arrive; the business will send a payment request to your phone.",
-      "clientPaymentHint": "The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.",
+      "payAtPickupHint": "You will pay when you arrive. Tap Pay in the app and approve the request on your phone.",
+      "clientPaymentHint": "Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.",
       "requestPaymentTitle": "Request pickup payment",
       "notEligibleForPaymentRequest": "This order is not configured for pay at pickup.",
-      "businessInitiateHelp": "Send a mobile payment request to the client. When they approve it, the order will complete automatically.",
+      "businessInitiateHelp": "If the client needs help, send a mobile payment request. When they approve it, the order will complete automatically.",
       "payAtPickupShort": "Pay at pickup",
       "businessInitiateSubtitle": "Payment is collected when the customer picks up the order.",
       "paymentRequestSent": "Payment request sent to the client.",
@@ -4597,6 +4599,14 @@
       "confirmPickupBodyPaid": "Confirm the client collected this order. The order will be marked complete.",
       "confirmPickupSuccess": "Pickup confirmed. The order is complete.",
       "confirmPickupError": "Failed to confirm pickup"
+    },
+    "payAtPickup": {
+      "title": "Pay at pickup",
+      "hint": "We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.",
+      "cta": "Pay now",
+      "sent": "Approve the payment request on your phone. The store will see it once it succeeds.",
+      "error": "Failed to start payment",
+      "phoneLabel": "Payment phone"
     },
     "trackInMyOrders": "Track progress in My Orders",
     "actions": {
@@ -4819,6 +4829,13 @@
     },
     "contact": {
       "unavailable": "Contact unavailable"
+    },
+    "pickupLocator": {
+      "address": "Store address",
+      "contact": "Store contact",
+      "openInMaps": "Open in Maps",
+      "openInMapsA11y": "Open store address in Maps",
+      "callStoreA11y": "Call the store"
     },
     "timeline": {
       "title": "Timeline",
@@ -5418,7 +5435,9 @@
       "prepareClient": "The business is preparing your order.",
       "prepareBusiness": "Mark the order ready when it is packed.",
       "readyPickupClient": "Your order is ready for pickup at the store.",
-      "readyPickupBusiness": "Collect payment or confirm pickup when the client arrives.",
+      "readyPickupPayAtPickupClient": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+      "readyPickupWaitClientPayBusiness": "The client will pay in the app when they arrive. You can still request a payment if they need help.",
+      "readyPickupBusiness": "Ask for the client’s pickup PIN when they arrive. Payment is captured when you confirm pickup.",
       "readyDeliveryClient": "Waiting for a delivery agent to claim your order.",
       "readyDeliveryBusiness": "Waiting for an agent to claim this delivery.",
       "readyAgent": "Claim this order to start the delivery.",
