@@ -77,10 +77,20 @@ export class WhatsAppInboundService {
         (entry as { changes?: Array<{ value?: WhatsAppChangeValue }> })
           ?.changes ?? [];
       for (const change of changes) {
-        await this.processValue(change.value);
+        await this.safeProcessValue(change.value);
       }
     }
     return { received: true };
+  }
+
+  private async safeProcessValue(value?: WhatsAppChangeValue): Promise<void> {
+    try {
+      await this.processValue(value);
+    } catch (error: any) {
+      this.logger.warn(
+        `WhatsApp webhook processing failed: ${error?.message ?? String(error)}`
+      );
+    }
   }
 
   private async processValue(value?: WhatsAppChangeValue): Promise<void> {
