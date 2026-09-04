@@ -3543,15 +3543,19 @@ export class OrdersService {
     };
   }
 
+  private idsMatch(left: unknown, right: unknown): boolean {
+    if (left == null || right == null) return false;
+    return String(left) === String(right);
+  }
+
+  private userOwnsOrderAsClient(order: Orders, user: any): boolean {
+    if (this.idsMatch(order.client?.user_id, user?.id)) return true;
+    if (this.idsMatch((order.client as any)?.user?.id, user?.id)) return true;
+    return this.idsMatch(order.client_id, user?.client?.id);
+  }
+
   private assertJwtCanInitiatePayAtPickup(order: Orders, user: any): void {
-    if (order.client?.user_id === user.id) {
-      this.requireActivePersona(
-        user,
-        'client',
-        'Switch to your customer profile to pay for this pickup'
-      );
-      return;
-    }
+    if (this.userOwnsOrderAsClient(order, user)) return;
     this.requireActivePersona(
       user,
       'business',
@@ -6399,6 +6403,7 @@ export class OrdersService {
           client {
             user_id
             user {
+              id
               timezone
               first_name
               last_name

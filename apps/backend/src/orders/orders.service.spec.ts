@@ -2246,4 +2246,77 @@ describe('OrdersService', () => {
       expect(getAddressesByIds).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('initiatePayAtPickupPayment', () => {
+    const papOrder = {
+      id: 'order-123',
+      order_number: 'ORD-PAP',
+      current_status: 'ready_for_pickup',
+      payment_timing: 'pay_at_pickup',
+      payment_status: 'pending',
+      total_amount: 5000,
+      currency: 'XAF',
+      client_id: 'client-123',
+      client: {
+        user_id: 'client-456',
+        user: { id: 'client-456', phone_number: '+237670000000' },
+      },
+      business: { user_id: 'user-123' },
+    };
+
+    function stubPendingPickupTx() {
+      (service as any).mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber =
+        jest.fn().mockResolvedValue({
+          id: 'tx-1',
+          reference: 'ref-1',
+          status: 'pending',
+          transaction_id: 'tid-1',
+        });
+    }
+
+    it('lets the customer start pickup payment', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(papOrder);
+      stubPendingPickupTx();
+
+      const result = await service.initiatePayAtPickupPayment('order-123');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Payment request already pending');
+    });
+
+    it('lets the customer start pickup payment when only client_id matches', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+        ...papOrder,
+        client: { user: { phone_number: '+237670000000' } },
+      });
+      stubPendingPickupTx();
+
+      const result = await service.initiatePayAtPickupPayment('order-123');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects another customer', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockClientUser,
+        id: 'other-user',
+        client: { id: 'other-client', user_id: 'other-user' },
+      });
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+        activePersona: 'client',
+      });
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(papOrder);
+
+      await expect(
+        service.initiatePayAtPickupPayment('order-123')
+      ).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+        message: 'Only the store or customer can initiate pickup payment',
+      });
+    });
+  });
 });
