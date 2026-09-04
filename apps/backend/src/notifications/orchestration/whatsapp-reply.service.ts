@@ -53,6 +53,8 @@ export class WhatsAppReplyService {
     string,
     { text: string; messageId?: string; userId: string | null }
   >();
+  /** Phones that opted out / cancelled while a turn was running. */
+  private readonly assistantCancelled = new Set<string>();
 
   constructor(
     private readonly prefs: NotificationPreferenceService,
@@ -201,6 +203,7 @@ export class WhatsAppReplyService {
     userId: string | null;
   }): void {
     const phoneKey = params.fromPhone.replace(/^\+/, '');
+    this.assistantCancelled.delete(phoneKey);
     if (this.assistantInFlight.has(phoneKey)) {
       this.assistantPending.set(phoneKey, {
         text: params.text,
@@ -219,6 +222,11 @@ export class WhatsAppReplyService {
       })
       .finally(() => {
         this.assistantInFlight.delete(phoneKey);
+        if (this.assistantCancelled.has(phoneKey)) {
+          this.assistantCancelled.delete(phoneKey);
+          this.assistantPending.delete(phoneKey);
+          return;
+        }
         const pending = this.assistantPending.get(phoneKey);
         if (!pending) return;
         this.assistantPending.delete(phoneKey);
@@ -231,6 +239,12 @@ export class WhatsAppReplyService {
       });
   }
 
+  private cancelAssistantForPhone(fromPhone: string): void {
+    const phoneKey = fromPhone.replace(/^\+/, '');
+    this.assistantCancelled.add(phoneKey);
+    this.assistantPending.delete(phoneKey);
+  }
+
   private async tryAssistantReply(params: {
     fromPhone: string;
     text: string;
@@ -239,14 +253,18 @@ export class WhatsAppReplyService {
   }): Promise<boolean> {
     if (!this.assistant?.isWhatsAppRepliesEnabled()) return false;
     if (!this.identityService || !this.whatsapp?.isConfigured()) return false;
+    const phoneKey = params.fromPhone.replace(/^\+/, '');
+    if (this.assistantCancelled.has(phoneKey)) return false;
     const fallbackLocale = this.assistant.detectLocaleFromText(params.text);
     try {
       const result = await this.runAssistantTurn(params.fromPhone, params.text);
+      if (this.assistantCancelled.has(phoneKey)) return false;
       await this.sendAssistantReply(params.fromPhone, result.reply);
       await this.trackAssistantReply(params, result);
       return true;
     } catch (error: any) {
       this.logger.warn(`WhatsApp assistant failed: ${error?.message ?? error}`);
+      if (this.assistantCancelled.has(phoneKey)) return false;
       await this.sendAssistantReply(
         params.fromPhone,
         this.assistant.fallbackTechnical(fallbackLocale)
@@ -287,10 +305,18 @@ export class WhatsAppReplyService {
           : ('assistant' as const),
       content: message.body,
     }));
-    const last = messages[messages.length - 1];
-    if (last?.role !== 'user' || last.content.trim() !== inboundText.trim()) {
-      messages.push({ role: 'user', content: inboundText });
+    const target = inboundText.trim();
+    let endIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user' && messages[i].content.trim() === target) {
+        endIdx = i;
+        break;
+      }
     }
+    if (endIdx >= 0) {
+      return messages.slice(0, endIdx + 1);
+    }
+    messages.push({ role: 'user', content: inboundText });
     return messages;
   }
 
@@ -393,6 +419,7 @@ export class WhatsAppReplyService {
     messageId: string | undefined,
     command: WhatsAppCommand
   ) {
+    this.cancelAssistantForPhone(fromPhone);
     if (!userId) {
       this.logger.warn(`WhatsApp STOP from unknown phone ${fromPhone}`);
       return { handled: false, command };
