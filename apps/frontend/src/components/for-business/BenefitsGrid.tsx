@@ -11,7 +11,7 @@ import { Box, Card, CardContent, Grid, Typography, alpha } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const BenefitsGrid: React.FC = () => {
   const { t } = useTranslation();
@@ -44,7 +44,7 @@ const BenefitsGrid: React.FC = () => {
                 border: '1.5px solid',
                 borderColor: 'divider',
                 borderRadius: 3,
-                '&:hover': { borderColor: FB_GREEN },
+                '&:hover': { borderColor: FB_ACCENT },
               }}
             >
               <CardContent sx={{ p: 2.5 }}>
@@ -56,8 +56,8 @@ const BenefitsGrid: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    bgcolor: alpha(FB_GREEN, 0.1),
-                    color: FB_GREEN,
+                    bgcolor: alpha(FB_ACCENT, 0.1),
+                    color: FB_ACCENT,
                     mb: 1.5,
                   }}
                   aria-hidden

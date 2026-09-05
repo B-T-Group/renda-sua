@@ -106,6 +106,18 @@ export interface BusinessRentalBookingRequestEmailPayload {
   clientName: string;
 }
 
+export interface BusinessProductInterestNotificationPayload {
+  businessUserId: string;
+  requestId: string;
+  itemName: string;
+  locationName: string;
+  clientName: string;
+  clientEmail?: string | null;
+  clientPhone?: string | null;
+  clientNote?: string | null;
+  inventoryId: string;
+}
+
 export interface ClientRentalRequestAcceptedEmailPayload {
   clientUserId: string;
   requestId: string;

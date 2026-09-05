@@ -73,6 +73,7 @@ const OrderMessagesPageContent: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const [searchParams] = useSearchParams();
   const highlight = searchParams.get('highlight');
+  const draft = searchParams.get('draft');
   const { profile, userType: activePersona, isDelegationContext } =
     useUserProfileContext();
   const persona = isDelegationContext ? 'business' : activePersona;
@@ -156,6 +157,7 @@ const OrderMessagesPageContent: React.FC = () => {
             entityId={order.id}
             variant="page"
             highlightMessageId={highlight}
+            initialDraft={draft}
             emptyPrompt={emptyPromptForPersona(t, persona)}
           />
         </Box>

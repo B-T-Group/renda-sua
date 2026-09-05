@@ -413,6 +413,7 @@ const CartPage: React.FC = () => {
 
             <Button
               variant="contained"
+              color="cta"
               fullWidth
               size="large"
               onClick={handleProceedToCheckout}

@@ -35,6 +35,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useAuth0 } from '@auth0/auth0-react';
+import { useSnackbar } from 'notistack';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
@@ -42,6 +43,9 @@ import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { useProductInterest } from '../../hooks/useProductInterest';
+import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import { useListingVariantSelection } from '../../hooks/useListingVariantSelection';
 import { toCartVariantId } from '../../utils/shopperVariantSelection';
 import { useMetaPixel } from '../../hooks/useMetaPixel';
@@ -325,6 +329,7 @@ function ItemDetailMobileOrderBar({
           </Box>
           <Button
             variant="contained"
+            color="cta"
             size="medium"
             startIcon={<MobileMoneyOrderIcon />}
             onClick={onOrder}
@@ -340,20 +345,20 @@ function ItemDetailMobileOrderBar({
               textTransform: 'none',
               letterSpacing: 0.02,
               borderRadius: 2.5,
-              boxShadow: `0 4px 18px ${alpha(theme.palette.primary.main, 0.45)}`,
-              background: `linear-gradient(160deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 45%, ${theme.palette.primary.dark} 100%)`,
+              boxShadow: `0 4px 18px ${alpha(theme.palette.cta.main, 0.45)}`,
+              background: `linear-gradient(160deg, ${theme.palette.cta.light} 0%, ${theme.palette.cta.main} 45%, ${theme.palette.cta.dark} 100%)`,
               transition: theme.transitions.create(
                 ['box-shadow', 'transform', 'background-color'],
                 { duration: 200 }
               ),
               '&:hover': {
-                boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.55)}`,
-                background: `linear-gradient(160deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                boxShadow: `0 6px 24px ${alpha(theme.palette.cta.main, 0.55)}`,
+                background: `linear-gradient(160deg, ${theme.palette.cta.main} 0%, ${theme.palette.cta.dark} 100%)`,
                 transform: 'translateY(-2px)',
               },
               '&:active': {
                 transform: 'translateY(0)',
-                boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
+                boxShadow: `0 2px 12px ${alpha(theme.palette.cta.main, 0.4)}`,
               },
               ...(shouldPulse
                 ? { animation: 'rendaCtaPulse 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 1' }
@@ -411,16 +416,21 @@ export default function ItemDetailPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated, loginWithRedirect } = useAuth0();
   const { profile } = useUserProfileContext();
   const { addToCart, getLineQuantityInCart, getListingQuantityInCart } = useCart();
   const { trackViewContent } = useMetaPixel();
   const trackAddToCart = useMetaAddToCartTrack();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = React.useState(false);
+  const [interestOpen, setInterestOpen] = React.useState(false);
+  const [interestSubmitting, setInterestSubmitting] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
+  const { enqueueSnackbar } = useSnackbar();
+  const { submitInterest } = useProductInterest();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
+  const { isStripeRail } = useIsStripeRail();
   const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
   const variantSel = useListingVariantSelection(
     inventoryItem,
@@ -820,10 +830,19 @@ export default function ItemDetailPage() {
   const hasDeal = lp.hasDeal;
   const checkoutUnitPrice = lp.unit;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
+  const interestOnly = item.interest_only === true;
+  const displayPriceText = interestOnly
+    ? t('productInterest.priceNotApplicable', 'Price on request')
+    : checkoutPriceText;
   const showMobileStickyOrderBar =
-    isMobile && hasStock && merchantCanAcceptOrders && paymentsEnabled;
+    isMobile &&
+    hasStock &&
+    merchantCanAcceptOrders &&
+    paymentsEnabled &&
+    !interestOnly;
   const showInlineOrderNow = !showMobileStickyOrderBar;
   const showOrderCtaStack =
+    interestOnly ||
     !hasStock ||
     !paymentsEnabled ||
     !merchantCanAcceptOrders ||
@@ -842,19 +861,9 @@ export default function ItemDetailPage() {
       ? `★ ${ratingAvg.toFixed(1)} · ${ratingCount}`
       : null;
 
-  const hourNow = new Date().getHours();
-  const cutoff = t('items.detail.stickyBar.cutoffTime', '2:00 PM');
-  const stickyDeliveryHint =
-    hourNow < 14
-      ? t(
-          'items.detail.stickyBar.orderBeforeCutoff',
-          'Order before {{cutoff}} for the same-day delivery window.',
-          { cutoff }
-        )
-      : t(
-          'items.detail.stickyBarDeliveryHint',
-          'Get your item delivered in less than 24 hours.'
-        );
+  const stickyCheckoutHint = isStripeRail
+    ? t('items.detail.checkoutHintCard', 'Card at checkout')
+    : t('items.detail.checkoutHint', 'MoMo at checkout');
 
   const dealDiscountPct =
     lp.hasDeal && lp.strikeOriginal != null && lp.strikeOriginal > 0
@@ -1174,7 +1183,11 @@ export default function ItemDetailPage() {
                 })}
               >
                 <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
-                  {hasDeal ? (
+                  {interestOnly ? (
+                    <Typography variant="h6" color="primary.main" fontWeight={700}>
+                      {t('productInterest.priceNotApplicable', 'Price on request')}
+                    </Typography>
+                  ) : hasDeal ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                       <Typography
                         component="span"
@@ -1253,7 +1266,10 @@ export default function ItemDetailPage() {
 
             <ItemDetailScarcityBadge quantity={inventoryItem.computed_available_quantity} />
 
-            <ItemDetailTrustStrip isVerifiedSeller={Boolean(business?.is_verified)} />
+            <ItemDetailTrustStrip
+              isVerifiedSeller={Boolean(business?.is_verified)}
+              isStripeRail={isStripeRail}
+            />
 
             {location && business && (
               <Box>
@@ -1323,7 +1339,7 @@ export default function ItemDetailPage() {
                   fontStyle: 'italic',
                 })}
               >
-                {stickyDeliveryHint}
+                {stickyCheckoutHint}
               </Typography>
             ) : null}
 
@@ -1389,7 +1405,24 @@ export default function ItemDetailPage() {
             {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
             {showOrderCtaStack ? (
               <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
-                {!hasStock ? (
+                {interestOnly ? (
+                  <Button
+                    variant="contained"
+                    size="medium"
+                    fullWidth
+                    onClick={() => {
+                      if (!isAuthenticated) {
+                        void loginWithRedirect({
+                          appState: { returnTo: window.location.pathname },
+                        });
+                        return;
+                      }
+                      setInterestOpen(true);
+                    }}
+                  >
+                    {t('productInterest.cta', 'I’m interested')}
+                  </Button>
+                ) : !hasStock ? (
                   <Button variant="outlined" disabled size="medium">
                     {isFoodClosed
                       ? foodStatus === 'sold_out'
@@ -1440,6 +1473,7 @@ export default function ItemDetailPage() {
                     {showInlineOrderNow ? (
                       <Button
                         variant="contained"
+                        color="cta"
                         startIcon={<MobileMoneyOrderIcon />}
                         onClick={handleOrderClick}
                         size="medium"
@@ -1450,11 +1484,11 @@ export default function ItemDetailPage() {
                           fontWeight: 800,
                           textTransform: 'none',
                           borderRadius: 2.5,
-                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.primary.main, 0.45)}`,
-                          background: `linear-gradient(160deg, ${btnTheme.palette.primary.light} 0%, ${btnTheme.palette.primary.main} 45%, ${btnTheme.palette.primary.dark} 100%)`,
+                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.cta.main, 0.45)}`,
+                          background: `linear-gradient(160deg, ${btnTheme.palette.cta.light} 0%, ${btnTheme.palette.cta.main} 45%, ${btnTheme.palette.cta.dark} 100%)`,
                           '&:hover': {
-                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.primary.main, 0.55)}`,
-                            background: `linear-gradient(160deg, ${btnTheme.palette.primary.main} 0%, ${btnTheme.palette.primary.dark} 100%)`,
+                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.cta.main, 0.55)}`,
+                            background: `linear-gradient(160deg, ${btnTheme.palette.cta.main} 0%, ${btnTheme.palette.cta.dark} 100%)`,
                           },
                         })}
                       >
@@ -1794,6 +1828,34 @@ export default function ItemDetailPage() {
         }
         onOrder={handleOrderClick}
       />
+      <ProductInterestDialog
+        open={interestOpen}
+        itemName={item.name}
+        submitting={interestSubmitting}
+        onClose={() => setInterestOpen(false)}
+        onSubmit={async (note) => {
+          setInterestSubmitting(true);
+          try {
+            await submitInterest(inventoryItem.id, note);
+            setInterestOpen(false);
+            enqueueSnackbar(
+              t(
+                'productInterest.success',
+                'Interest sent. The seller will contact you.'
+              ),
+              { variant: 'success' }
+            );
+          } catch (e: any) {
+            enqueueSnackbar(
+              e?.response?.data?.message ||
+                t('productInterest.error', 'Could not send interest'),
+              { variant: 'error' }
+            );
+          } finally {
+            setInterestSubmitting(false);
+          }
+        }}
+      />
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventoryItem.id}
@@ -1801,7 +1863,7 @@ export default function ItemDetailPage() {
         item={{
           title: item.name,
           imageUrl: primaryImage,
-          priceText: checkoutPriceText,
+          priceText: displayPriceText,
           quantity: 1,
         }}
         variantSlot={

@@ -1,0 +1,212 @@
+{
+  "info": {
+    "name": "Rendasua",
+    "description": "Admin APIs for the Rendasua backend.\n\nSet `baseUrl` and paste a superuser (or ops user_messages) JWT into `adminToken`.\n\n- Local: `http://localhost:3000/api`\n- Dev: `https://dev.api.rendasua.com/api`\n- Prod: `https://prod.api.rendasua.com/api`\n\n`templateId` may be the internal key (e.g. `order_created_business`) or the Meta name (e.g. `rs_order_created`). Templates with a dynamic URL button also need `entityId` (or a full `ctaUrl`).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "toPhone",
+      "value": "+15145550123"
+    },
+    {
+      "key": "entityId",
+      "value": "11111111-2222-4333-8555-666666666666"
+    }
+  ],
+  "item": [
+    {
+      "name": "Admin WhatsApp Templates",
+      "item": [
+        {
+          "name": "List utility templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/whatsapp/templates?category=UTILITY",
+            "description": "Returns required body variables, whether a dynamic CTA is needed, and accepted template ids."
+          }
+        },
+        {
+          "name": "List all templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/whatsapp/templates"
+          }
+        },
+        {
+          "name": "Test rs_order_created",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_order_created\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"orderNumber\": \"20123398\",\n    \"customerName\": \"Ada\",\n    \"pickupWindow\": \"15 min\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_order_status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_order_status\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"orderNumber\": \"20123398\",\n    \"statusLabel\": \"Confirmed\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_order_ready",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_order_ready\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"orderNumber\": \"20123398\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_rental_request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_rental_request\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"itemName\": \"Canon EOS R5\",\n    \"dates\": \"12–14 Sep\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_verification\",\n  \"locale\": \"en\",\n  \"variables\": {\n    \"reason\": \"Upload a clearer ID photo\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_pickup_reminder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_pickup_reminder\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"orderNumber\": \"20123398\",\n    \"window\": \"today 2–4pm\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_payment_failed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_payment_failed\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"orderNumber\": \"20123398\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_ai_proposal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_ai_proposal\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"itemName\": \"Wireless earbuds\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        },
+        {
+          "name": "Test rs_admin_order_risk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{toPhone}}\",\n  \"templateId\": \"rs_admin_order_risk\",\n  \"locale\": \"en\",\n  \"entityId\": \"{{entityId}}\",\n  \"variables\": {\n    \"orderNumber\": \"20123398\",\n    \"riskLabel\": \"High\",\n    \"reason\": \"Payment mismatch\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/admin/whatsapp/templates/test"
+          }
+        }
+      ]
+    }
+  ]
+}

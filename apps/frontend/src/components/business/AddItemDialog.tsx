@@ -98,6 +98,7 @@ export default function AddItemDialog({
     is_active: true,
     // MM markets default on once rail resolves; Stripe stays off.
     pay_on_delivery_enabled: false,
+    interest_only: false,
     pay_at_pickup_enabled: true,
     min_order_quantity: 1,
     max_order_quantity: 1,
@@ -922,7 +923,24 @@ export default function AddItemDialog({
                 }
                 label={t(
                   'business.inventory.payAtPickupEnabled',
-                  'Allow store pickup (pay at pickup)'
+                  'Allow payment at pickup'
+                )}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newItemData.interest_only ?? false}
+                    onChange={(e) =>
+                      setNewItemData({
+                        ...newItemData,
+                        interest_only: e.target.checked,
+                      })
+                    }
+                  />
+                }
+                label={t(
+                  'productInterest.merchantToggle',
+                  'Pricing not applicable (interest only)'
                 )}
               />
             </Stack>
@@ -957,7 +975,7 @@ export default function AddItemDialog({
               !businessId ||
               !newItemData.name ||
               !newItemData.item_sub_category_id ||
-              !newItemData.price
+              (!(newItemData.interest_only ?? false) && !newItemData.price)
             }
           >
             {t('business.inventory.createItem')}

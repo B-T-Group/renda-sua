@@ -118,6 +118,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
     name: '',
     address_id: '',
     phone: '',
+    order_alert_phone: '',
     mobile_payment_phone_id: null as string | null,
     email: '',
     location_type: 'store',
@@ -150,6 +151,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         name: location.name,
         address_id: location.address.id,
         phone: location.phone || '',
+        order_alert_phone: location.order_alert_phone || '',
         mobile_payment_phone_id:
           location.mobile_payment_phone_id ??
           location.mobile_payment_phone?.id ??
@@ -184,6 +186,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         name: '',
         address_id: '',
         phone: '',
+        order_alert_phone: '',
         mobile_payment_phone_id: null,
         email: '',
         location_type: 'store',
@@ -264,6 +267,9 @@ const LocationModal: React.FC<LocationModalProps> = ({
 
     const payload = {
       ...formData,
+      order_alert_phone: formData.order_alert_phone?.trim()
+        ? formData.order_alert_phone.trim()
+        : null,
       logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
       operating_hours: editorValueToOperatingHours(operatingHours),
     };
@@ -576,6 +582,25 @@ const LocationModal: React.FC<LocationModalProps> = ({
                 sx={{ flex: 1, minWidth: 200 }}
               />
             </Box>
+
+            <TextField
+              label={t(
+                'business.locations.orderAlertPhone',
+                'Order alert phone'
+              )}
+              value={formData.order_alert_phone || ''}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  order_alert_phone: e.target.value,
+                }))
+              }
+              fullWidth
+              helperText={t(
+                'business.locations.orderAlertPhoneHint',
+                'Kitchen WhatsApp / till phone for new-order alerts'
+              )}
+            />
 
             {!isStripeRail && (
               <>
