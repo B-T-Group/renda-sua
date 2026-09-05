@@ -28,6 +28,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { resolveOrderNotificationAddress } from './order-notification-address.util';
+import { resetOrderPaymentFailure as writePaymentFailureReset } from './reset-order-payment-failure.util';
 import {
   MobilePaymentsDatabaseService,
   type MobilePaymentTransaction,
@@ -4043,32 +4044,7 @@ export class OrdersService {
   }
 
   private async resetOrderPaymentFailure(orderId: string): Promise<void> {
-    const at = new Date().toISOString();
-    const mutation = `
-      mutation ResetPaymentFailure(
-        $orderId: uuid!
-        $paymentStatus: String!
-        $at: timestamptz!
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            payment_status: $paymentStatus
-            payment_failed_at: null
-            payment_failure_message: null
-            updated_at: $at
-          }
-        ) {
-          id
-          payment_status
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      paymentStatus: 'pending',
-      at,
-    });
+    await writePaymentFailureReset(this.hasuraSystemService, orderId);
   }
 
   private buildOrderPaymentAttemptReference(orderNumber: string): string {

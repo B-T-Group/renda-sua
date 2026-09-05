@@ -2977,12 +2977,14 @@ describe('OrdersService', () => {
         ([mutation]) => String(mutation).includes('ResetPaymentFailure')
       );
       expect(resetCall).toBeDefined();
+      expect(String(resetCall?.[0])).toContain('payment_status: { _nin: $blockedStatuses }');
       expect(String(resetCall?.[0])).toContain('payment_failed_at: null');
       expect(String(resetCall?.[0])).toContain('payment_failure_message: null');
       expect(resetCall?.[1]).toEqual(
         expect.objectContaining({
           orderId: 'order-123',
           paymentStatus: 'pending',
+          blockedStatuses: expect.arrayContaining(['paid', 'authorized']),
         })
       );
     });
