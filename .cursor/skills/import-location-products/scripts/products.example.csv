@@ -1,0 +1,4 @@
+name,description,price,selling_price,quantity,unit_cost,sku,brand,category,subcategory,image_url,color,weight,weight_unit
+Sample Phone Case,Clear protective case for smartphones,2500,2500,15,1000,CASE-001,Generic,Electronics,Phone Accessories,https://example.com/images/case.jpg,Clear,0.05,kg
+Cotton T-Shirt,Soft cotton tee everyday wear,5000,5000,20,2000,,Local Brand,Fashion,Tops,,,Blue,0.2,kg
+Kitchen Bowl Set,,3500,3500,8,,,,,,https://example.com/images/bowls.jpg,,

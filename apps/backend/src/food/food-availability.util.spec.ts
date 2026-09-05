@@ -211,6 +211,52 @@ describe('resolveFoodAvailability', () => {
       expect(actual.isMarkedUnavailableToday).toBe(false);
       expect(actual.isAvailableNow).toBe(true);
     });
+
+    it('does not pin an after-midnight sold-out stamp to the new calendar day', () => {
+      const saturdayNight: FoodAvailabilitySlot = {
+        day_of_week: 6,
+        start_time: '20:00:00',
+        end_time: '02:00:00',
+      };
+      const saturdayLunch: FoodAvailabilitySlot = {
+        day_of_week: 6,
+        start_time: '12:00:00',
+        end_time: '15:00:00',
+      };
+
+      const lunch = resolveFoodAvailability({
+        slots: [FRIDAY_NIGHT, saturdayLunch],
+        markedUnavailableAt: douala('2026-08-29T01:30:00').toISOString(),
+        now: douala('2026-08-29T13:00:00'),
+        timezone: TIMEZONE,
+      });
+      expect(lunch.isOpenNow).toBe(true);
+      expect(lunch.isMarkedUnavailableToday).toBe(false);
+      expect(lunch.isAvailableNow).toBe(true);
+
+      const evening = resolveFoodAvailability({
+        slots: [FRIDAY_NIGHT, saturdayNight],
+        markedUnavailableAt: douala('2026-08-29T01:30:00').toISOString(),
+        now: douala('2026-08-29T20:30:00'),
+        timezone: TIMEZONE,
+      });
+      expect(evening.isOpenNow).toBe(true);
+      expect(evening.isMarkedUnavailableToday).toBe(false);
+      expect(evening.isAvailableNow).toBe(true);
+    });
+
+    it('keeps an after-midnight sold-out stamp while the overnight tail is open', () => {
+      const actual = resolveFoodAvailability({
+        slots: [FRIDAY_NIGHT],
+        markedUnavailableAt: douala('2026-08-29T01:30:00').toISOString(),
+        now: douala('2026-08-29T01:45:00'),
+        timezone: TIMEZONE,
+      });
+
+      expect(actual.isOpenNow).toBe(true);
+      expect(actual.isMarkedUnavailableToday).toBe(true);
+      expect(actual.isAvailableNow).toBe(false);
+    });
   });
 
   describe('timezone handling', () => {

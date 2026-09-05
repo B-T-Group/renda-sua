@@ -1,4 +1,5 @@
 import type { ChipProps } from '@mui/material';
+import { brandTokens } from '../../../theme/brandTokens';
 
 export type OrderStatusChipColor = NonNullable<ChipProps['color']>;
 
@@ -27,27 +28,24 @@ const STATUS_CHIP_COLORS: Record<string, OrderStatusChipColor> = {
   refund_failed: 'error',
 };
 
-export const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
-  pending: '#fff3e0',
-  pending_payment: '#fff8e1',
-  confirmed: '#e3f2fd',
-  preparing: '#e3f2fd',
-  ready_for_pickup: '#e8eaf6',
-  assigned_to_agent: '#e8eaf6',
-  picked_up: '#e1f5fe',
-  in_transit: '#e1f5fe',
-  out_for_delivery: '#e0f7fa',
-  delivered: '#e8f5e9',
-  complete: '#e8f5e9',
-  completed: '#e8f5e9',
-  cancelled: '#ffebee',
-  failed: '#ffebee',
+/** Soft surface tint matching each chip colour, so cards and chips agree. */
+const CHIP_COLOR_TINTS: Partial<Record<OrderStatusChipColor, string>> = {
+  primary: brandTokens.tint.primary,
+  secondary: brandTokens.tint.secondary,
+  info: brandTokens.info.soft,
+  success: brandTokens.success.soft,
+  warning: brandTokens.warning.soft,
+  error: brandTokens.error.soft,
 };
+
+const NEUTRAL_STATUS_TINT = brandTokens.surface.subtle;
 
 export function getStatusChipColor(status: string): OrderStatusChipColor {
   return STATUS_CHIP_COLORS[status] ?? 'default';
 }
 
 export function getOrderStatusBoxColor(status: string): string {
-  return ORDER_STATUS_BOX_COLORS[status] ?? '#f5f5f5';
+  return (
+    CHIP_COLOR_TINTS[getStatusChipColor(status)] ?? NEUTRAL_STATUS_TINT
+  );
 }

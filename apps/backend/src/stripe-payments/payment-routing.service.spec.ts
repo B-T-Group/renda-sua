@@ -53,6 +53,18 @@ describe('PaymentRoutingService', () => {
     await expect(service.resolveRailForCountry('GA')).resolves.toBe(
       'mobile_money'
     );
+    await expect(service.resolveRailForCountry('TG')).resolves.toBe(
+      'mobile_money'
+    );
+    await expect(service.resolveRailForCountry('bj')).resolves.toBe(
+      'mobile_money'
+    );
+    await expect(service.resolveRailForCountry('CI')).resolves.toBe(
+      'mobile_money'
+    );
+    await expect(service.resolveRailForCountry('CG')).resolves.toBe(
+      'mobile_money'
+    );
 
     expect(hasuraService.executeQuery).not.toHaveBeenCalled();
   });
@@ -167,5 +179,90 @@ describe('PaymentRoutingService', () => {
     await expect(service.resolveRailForBusiness('biz-1')).resolves.toBe(
       'stripe'
     );
+  });
+
+  describe('resolveOrderRail (diaspora checkout)', () => {
+    it('keeps the seller rail when the seller is already on Stripe', async () => {
+      await expect(
+        service.resolveOrderRail({ sellerCountry: 'CA', payerCountry: 'US' })
+      ).resolves.toEqual({
+        rail: 'stripe',
+        source: 'seller',
+        isDiaspora: false,
+      });
+    });
+
+    it('puts a mobile-money merchant on Stripe for a payer billing from CA', async () => {
+      await expect(
+        service.resolveOrderRail({ sellerCountry: 'GA', payerCountry: 'CA' })
+      ).resolves.toEqual({ rail: 'stripe', source: 'payer', isDiaspora: true });
+    });
+
+    it('stays on mobile money when both sides are mobile-money countries', async () => {
+      await expect(
+        service.resolveOrderRail({ sellerCountry: 'GA', payerCountry: 'CM' })
+      ).resolves.toEqual({
+        rail: 'mobile_money',
+        source: 'seller',
+        isDiaspora: false,
+      });
+      expect(hasuraService.executeQuery).not.toHaveBeenCalled();
+    });
+
+    it('stays on mobile money when the payer country is unknown', async () => {
+      await expect(
+        service.resolveOrderRail({ sellerCountry: 'CM', payerCountry: null })
+      ).resolves.toEqual({
+        rail: 'mobile_money',
+        source: 'seller',
+        isDiaspora: false,
+      });
+    });
+
+    it('stays on mobile money when diaspora checkout is disabled', async () => {
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'stripe') return { enabledCountries: ['US', 'CA'] };
+        if (key === 'diaspora') return { enabled: false, payerCountries: [] };
+        return undefined;
+      });
+
+      await expect(
+        service.resolveOrderRail({ sellerCountry: 'GA', payerCountry: 'CA' })
+      ).resolves.toEqual({
+        rail: 'mobile_money',
+        source: 'seller',
+        isDiaspora: false,
+      });
+    });
+
+    it('honours an explicit payer country allowlist that excludes the payer', async () => {
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'stripe') return { enabledCountries: ['US', 'CA'] };
+        if (key === 'diaspora') return { enabled: true, payerCountries: ['US'] };
+        return undefined;
+      });
+
+      await expect(
+        service.resolveOrderRail({ sellerCountry: 'GA', payerCountry: 'CA' })
+      ).resolves.toEqual({
+        rail: 'mobile_money',
+        source: 'seller',
+        isDiaspora: false,
+      });
+    });
+
+    it('stays on mobile money when the payer country has no active Stripe row', async () => {
+      hasuraService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [],
+      });
+
+      await expect(
+        service.resolveOrderRail({ sellerCountry: 'GA', payerCountry: 'CA' })
+      ).resolves.toEqual({
+        rail: 'mobile_money',
+        source: 'seller',
+        isDiaspora: false,
+      });
+    });
   });
 });

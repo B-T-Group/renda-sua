@@ -1,11 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as libphonenumber from 'google-libphonenumber';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
 import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 import type { OrangeCollectionRequest } from '../orange-momo/orange-momo.types';
 import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { mapCountryToMobileMoneyProvider } from './item-country.util';
+import {
+  detectCameroonPhone,
+  removeCountryCode,
+  resolveWalletPhoneRegion,
+  validatePhoneNumber,
+} from './phone-validation.util';
 import {
   FreemopayPaymentRequest,
   FreemopayPaymentResponse,
@@ -17,147 +23,7 @@ import {
   MyPVitService,
 } from './providers/mypvit.service';
 
-type CameroonCarrier = "mtn" | "orange";
-
-interface CameroonPhoneResult {
-  carrier: CameroonCarrier;
-  phone: string; // 9 digits, no country code
-}
-
-const MTN_PREFIXES = new Set([
-  "650","651","652","653","654",
-  "670","671","672","673","674",
-  "675","676","677","678","679",
-  "680","681","682","683","684","685","686","687","688","689"
-]);
-
-const ORANGE_PREFIXES = new Set([
-  "655","656","657","658","659",
-  "690","691","692","693","694","695","696","697","698","699"
-]);
-
-function normalizeCameroonPhone(phone: string): string | null {
-  // Remove everything except digits
-  let digits = phone.replace(/\D/g, "");
-
-  // Remove country code if present
-  if (digits.startsWith("237")) {
-    digits = digits.slice(3);
-  }
-
-  // Cameroon mobile numbers: 9 digits, start with 6
-  if (digits.length !== 9 || !digits.startsWith("6")) {
-    return null;
-  }
-
-  return digits;
-}
-
-export function detectCameroonPhone(
-  phone: string
-): CameroonPhoneResult | null {
-  const normalized = normalizeCameroonPhone(phone);
-
-  // Not a Cameroonian mobile number
-  if (!normalized) return null;
-
-  const prefix = normalized.slice(0, 3);
-
-  if (MTN_PREFIXES.has(prefix)) {
-    return { carrier: "mtn", phone: normalized };
-  }
-
-  if (ORANGE_PREFIXES.has(prefix)) {
-    return { carrier: "orange", phone: normalized };
-  }
-
-  // Cameroon number but not MTN or Orange
-  return null;
-}
-
-
-/**
- * Remove country code from phone number using Google's libphonenumber
- * @param phoneNumber - Phone number with or without country code
- * @param defaultRegion - Default region code (e.g., 'GA' for Gabon)
- * @returns Phone number without country code
- *
- * Examples:
- * removeCountryCode('+241123456789') -> '123456789'
- * removeCountryCode('+33123456789') -> '123456789'
- * removeCountryCode('123456789', 'GA') -> '123456789'
- * removeCountryCode('') -> ''
- */
-function removeCountryCode(phoneNumber: string, defaultRegion = 'GA'): string {
-  if (!phoneNumber) return '';
-
-  try {
-    // Get an instance of PhoneNumberUtil
-    const phoneUtil = libphonenumber.PhoneNumberUtil.getInstance();
-
-    // Parse the phone number
-    const parsedNumber = phoneUtil.parse(phoneNumber, defaultRegion);
-
-    // Get the national number (without country code)
-    const nationalNumber = parsedNumber.getNationalNumber();
-
-    // Return the national number as string
-    return nationalNumber ? nationalNumber.toString() : phoneNumber;
-  } catch {
-    // If parsing fails, return the original number
-    // This handles cases where the number format is not recognized
-    return phoneNumber;
-  }
-}
-
-/**
- * Validate phone number using Google's libphonenumber
- * @param phoneNumber - Phone number to validate
- * @param defaultRegion - Default region code (e.g., 'GA' for Gabon)
- * @returns Object with validation results
- */
-function validatePhoneNumber(
-  phoneNumber: string,
-  defaultRegion = 'GA'
-): {
-  isValid: boolean;
-  isPossible: boolean;
-  countryCode: string;
-  nationalNumber: string;
-  regionCode: string;
-} {
-  if (!phoneNumber) {
-    return {
-      isValid: false,
-      isPossible: false,
-      countryCode: '',
-      nationalNumber: '',
-      regionCode: '',
-    };
-  }
-
-
-  try {
-    const phoneUtil = libphonenumber.PhoneNumberUtil.getInstance();
-    const parsedNumber = phoneUtil.parse(phoneNumber, defaultRegion);
-
-    return {
-      isValid: phoneUtil.isValidNumber(parsedNumber),
-      isPossible: phoneUtil.isPossibleNumber(parsedNumber),
-      countryCode: parsedNumber.getCountryCode()?.toString() || '',
-      nationalNumber: parsedNumber.getNationalNumber()?.toString() || '',
-      regionCode: phoneUtil.getRegionCodeForNumber(parsedNumber) || '',
-    };
-  } catch {
-    return {
-      isValid: false,
-      isPossible: false,
-      countryCode: '',
-      nationalNumber: '',
-      regionCode: '',
-    };
-  }
-}
+export { detectCameroonPhone };
 
 function pickPrimaryOrOnlyAddressCountry(
   rows: Array<{ address?: { country?: string | null; is_primary?: boolean | null } | null }>
@@ -179,6 +45,8 @@ export interface MobilePaymentRequest {
   currency: string;
   description: string;
   customerPhone?: string;
+  /** Catalog item location country (ISO alpha-2). Wins over phone digits for provider + parse region. */
+  itemCountry?: string;
   customerEmail?: string;
   ownerCharge?: 'MERCHANT' | 'CUSTOMER';
   callbackUrl?: string;
@@ -248,6 +116,11 @@ export class MobilePaymentsService {
       return 'freemopay';
     }
     return 'mypvit';
+  }
+
+  /** Catalog MoMo integration from the item/listing country, not the payer phone. */
+  getProviderForCountry(country?: string | null): MobilePaymentIntegrationProvider {
+    return mapCountryToMobileMoneyProvider(country);
   }
 
   /** National MSISDN digits for synthetic MyPVit callbacks (admin replay). */
@@ -395,7 +268,11 @@ export class MobilePaymentsService {
     userId?: string
   ): Promise<MobilePaymentResponse> {
     try {
-      const phoneRegion = await this.resolvePhoneDefaultRegion(userId);
+      const phoneRegion = await this.resolvePhoneDefaultRegion(
+        userId,
+        paymentRequest.customerPhone,
+        paymentRequest.itemCountry
+      );
 
       // Validate phone number if provided
       if (paymentRequest.customerPhone) {
@@ -434,7 +311,8 @@ export class MobilePaymentsService {
       const providerRequest = this.convertToProviderRequest(
         paymentRequest as MobilePaymentRequest & CollectionRequest,
         provider,
-        reference
+        reference,
+        phoneRegion
       );
 
       let response: MobilePaymentResponse;
@@ -933,49 +811,39 @@ export class MobilePaymentsService {
   }
 
   /**
-   * Resolved integration for DB / public responses: always freemopay or mypvit.
+   * Catalog: item country first. Wallet: explicit provider, then phone digits.
    */
   resolveProviderFromRequest(
+    request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider' | 'itemCountry'>
+  ): MobilePaymentIntegrationProvider {
+    if (request.provider === 'mtn' || request.provider === 'orange') {
+      return request.provider;
+    }
+    if (request.itemCountry?.trim()) {
+      return this.getProviderForCountry(request.itemCountry);
+    }
+    return this.providerFromHintOrPhone(request);
+  }
+
+  private providerFromHintOrPhone(
     request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider'>
   ): MobilePaymentIntegrationProvider {
-    if (request.provider === 'mtn') {
-      return 'mtn';
+    if (request.provider === 'freemopay') return 'freemopay';
+    if (
+      request.provider === 'mypvit' ||
+      request.provider === 'airtel' ||
+      request.provider === 'moov'
+    ) {
+      return 'mypvit';
     }
-    if (request.provider === 'orange') {
-      return 'orange';
-    }
-    if (request.customerPhone) {
-      const res = detectCameroonPhone(request.customerPhone);
-      if (res) {
-        return 'freemopay';
-      }
-    }
-    if (request.provider === 'freemopay') {
+    if (request.customerPhone && detectCameroonPhone(request.customerPhone)) {
       return 'freemopay';
     }
     return 'mypvit';
   }
 
-  /**
-   * Route to the correct SDK: CM -> freemopay; explicit mtn -> MTN MoMo; else MyPVit (airtel/moov/mypvit/…).
-   */
   private selectProvider(request: MobilePaymentRequest): string {
-    if (request.provider === 'mtn') {
-      return 'mtn';
-    }
-    if (request.provider === 'orange') {
-      return 'orange';
-    }
-    if (request.customerPhone) {
-      const res = detectCameroonPhone(request.customerPhone);
-      if (res) {
-        return 'freemopay';
-      }
-    }
-    if (request.provider === 'freemopay') {
-      return 'freemopay';
-    }
-    return 'mypvit';
+    return this.resolveProviderFromRequest(request);
   }
 
   /**
@@ -984,14 +852,18 @@ export class MobilePaymentsService {
   private convertToProviderRequest(
     request: MobilePaymentRequest & CollectionRequest,
     provider: string,
-    reference?: string
+    reference?: string,
+    phoneRegion = 'GA'
   ):
     | CollectionRequest
     | OrangeCollectionRequest
     | MyPVitPaymentRequest
     | FreemopayPaymentRequest
     | FreemopayWithdrawalRequest {
-    const phoneNumber = removeCountryCode(request.customerPhone || '');
+    const phoneNumber = removeCountryCode(
+      request.customerPhone || '',
+      phoneRegion
+    );
     const amount: number = request.amount;
 
     switch (provider) {
@@ -1102,20 +974,40 @@ export class MobilePaymentsService {
   }
 
   /**
-   * Resolve libphonenumber default region from the user's primary/only address.
-   * Falls back to GA when the user or country cannot be resolved.
+   * Catalog item country wins. Wallet uses users.country, then address, then CM phone digits.
    */
-  private async resolvePhoneDefaultRegion(userId?: string): Promise<string> {
-    if (!userId) return 'GA';
+  private async resolvePhoneDefaultRegion(
+    userId?: string,
+    phone?: string,
+    itemCountry?: string
+  ): Promise<string> {
+    const fromItem = itemCountry?.trim().toUpperCase();
+    if (fromItem) return fromItem;
+    const fromUser = userId ? await this.getUserCountryOrAddress(userId) : null;
+    return resolveWalletPhoneRegion({ phone, userCountry: fromUser });
+  }
+
+  private async getUserCountryOrAddress(userId: string): Promise<string | null> {
     try {
-      const country = await this.getUserPrimaryAddressCountry(userId);
-      return country || 'GA';
+      const profileCountry = await this.getUserProfileCountry(userId);
+      if (profileCountry) return profileCountry;
+      return await this.getUserPrimaryAddressCountry(userId);
     } catch (error: any) {
       this.logger.warn(
         `Could not resolve phone region for user ${userId}: ${error?.message ?? error}`
       );
-      return 'GA';
+      return null;
     }
+  }
+
+  private async getUserProfileCountry(userId: string): Promise<string | null> {
+    const query = `
+      query GetUserCountryForPhone($userId: uuid!) {
+        users_by_pk(id: $userId) { country }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, { userId });
+    return result.users_by_pk?.country?.trim().toUpperCase() || null;
   }
 
   private async getUserPrimaryAddressCountry(

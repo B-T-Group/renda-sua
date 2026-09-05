@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from './public.decorator';
 import { LoginService } from './login.service';
 
@@ -11,12 +12,14 @@ export class LoginController {
   @Public()
   @Post('login/start-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 8, ttl: 60000 } })
   @ApiOperation({
     summary: 'Send a login OTP to an existing user (email or phone)',
   })
   @ApiResponse({ status: 200, description: 'OTP started successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid or ambiguous identifier' })
+  @ApiResponse({ status: 400, description: 'Invalid identifier or Auth0 rejected OTP start' })
   @ApiResponse({ status: 404, description: 'User not found for email or phone' })
+  @ApiResponse({ status: 429, description: 'Too many OTP start attempts' })
   async startOtp(
     @Body() body: { email?: string; phone_number?: string }
   ): Promise<{ success: boolean }> {
@@ -27,11 +30,12 @@ export class LoginController {
   @Public()
   @Post('login/verify-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 15, ttl: 60000 } })
   @ApiOperation({
     summary: 'Verify login OTP and return Auth0 tokens (email or phone)',
   })
   @ApiResponse({ status: 200, description: 'OTP verified successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 400, description: 'Invalid request body or OTP' })
   @ApiResponse({ status: 404, description: 'User not found for email or phone' })
   @ApiResponse({ status: 409, description: 'Auth0 identity mismatch for email' })
   async verifyOtp(
@@ -41,4 +45,3 @@ export class LoginController {
     return { success: true, verified: true, ...tokenData };
   }
 }
-

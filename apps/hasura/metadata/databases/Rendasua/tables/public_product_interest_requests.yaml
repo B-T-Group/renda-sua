@@ -1,0 +1,56 @@
+table:
+  name: product_interest_requests
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: business_inventory
+    using:
+      foreign_key_constraint_on: business_inventory_id
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+  - name: client_user
+    using:
+      foreign_key_constraint_on: client_user_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - client_user_id
+        - item_id
+        - business_inventory_id
+        - business_id
+        - business_location_id
+        - client_note
+        - status
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: client
+    permission:
+      columns:
+        - id
+        - client_user_id
+        - item_id
+        - business_inventory_id
+        - business_id
+        - business_location_id
+        - client_note
+        - status
+        - created_at
+        - updated_at
+      filter:
+        client_user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true

@@ -1,0 +1,10 @@
+table:
+  name: whatsapp_messages
+  schema: public
+object_relationships:
+  - name: conversation
+    using:
+      foreign_key_constraint_on: conversation_id
+  - name: sender_user
+    using:
+      foreign_key_constraint_on: sender_user_id

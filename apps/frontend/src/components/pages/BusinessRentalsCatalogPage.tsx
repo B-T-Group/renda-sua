@@ -16,9 +16,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import {
@@ -37,6 +37,8 @@ import LoadingPage from '../common/LoadingPage';
 const BusinessRentalsCatalogPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const moderationFilter = searchParams.get('moderation');
   const { profile } = useUserProfileContext();
   const businessId = profile?.business?.id;
   const { locations } = useBusinessLocations(businessId);
@@ -82,6 +84,15 @@ const BusinessRentalsCatalogPage: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [businessId, loadItems]);
+
+  const visibleItems = useMemo(() => {
+    if (moderationFilter !== 'rejected') return items;
+    return items.filter((it) =>
+      (it.rental_location_listings ?? []).some(
+        (l) => !l.deleted_at && l.moderation_status === 'rejected'
+      )
+    );
+  }, [items, moderationFilter]);
 
   const saveListing = async () => {
     if (!selItem || !selLoc) return;
@@ -168,7 +179,7 @@ const BusinessRentalsCatalogPage: React.FC = () => {
             {t('business.rentals.addListing', 'Add location listing')}
           </Button>
         </Stack>
-        {items.length === 0 && (
+        {visibleItems.length === 0 && (
           <Paper
             elevation={0}
             sx={{
@@ -181,17 +192,27 @@ const BusinessRentalsCatalogPage: React.FC = () => {
             }}
           >
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              {t('business.rentals.emptyCatalogTitle', 'No rental items yet')}
+              {moderationFilter === 'rejected'
+                ? t(
+                    'business.rentals.emptyRejectedTitle',
+                    'No rejected listings'
+                  )
+                : t('business.rentals.emptyCatalogTitle', 'No rental items yet')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-              {t(
-                'business.rentals.emptyCatalogBody',
-                'Start by adding your first rental item, then create a listing for a location.'
-              )}
+              {moderationFilter === 'rejected'
+                ? t(
+                    'business.rentals.emptyRejectedBody',
+                    'None of your rental listings are currently rejected.'
+                  )
+                : t(
+                    'business.rentals.emptyCatalogBody',
+                    'Start by adding your first rental item, then create a listing for a location.'
+                  )}
             </Typography>
           </Paper>
         )}
-        {items.map((it) => {
+        {visibleItems.map((it) => {
           const thumb = it.rental_item_images?.[0]?.image_url;
           const draftCount =
             it.rental_location_listings?.filter(

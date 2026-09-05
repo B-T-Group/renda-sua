@@ -51,6 +51,30 @@ describe('buildOrderRiskRecipients', () => {
     ]);
   });
 
+  it('pages only one random staff member when singleStaffRecipient is set', () => {
+    const recipients = buildOrderRiskRecipients({
+      staff: STAFF,
+      roleKeys: ROLE_KEYS,
+      orderCountryCode: 'CM',
+      singleStaffRecipient: true,
+      random: () => 0.9,
+    });
+    expect(recipients.map((r) => r.userId)).toEqual(['super-global']);
+  });
+
+  it('keeps the referring agent alongside the single chosen staff admin', () => {
+    const recipients = buildOrderRiskRecipients({
+      staff: STAFF,
+      roleKeys: ROLE_KEYS,
+      orderCountryCode: 'CM',
+      referringAgentUserId: 'agent-9',
+      referringAgentLanguage: 'fr',
+      singleStaffRecipient: true,
+      random: () => 0,
+    });
+    expect(recipients.map((r) => r.userId)).toEqual(['super-1', 'agent-9']);
+  });
+
   it('keeps same-country staff and always includes null-country global ops', () => {
     const recipients = buildOrderRiskRecipients({
       staff: STAFF,
