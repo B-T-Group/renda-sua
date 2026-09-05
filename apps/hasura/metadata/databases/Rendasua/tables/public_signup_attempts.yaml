@@ -1,0 +1,3 @@
+table:
+  name: signup_attempts
+  schema: public

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { clearSignupDraft } from '../signup/wizard/useSignupDraft';
 import Logo from '../common/Logo';
 
 const OtpAuthPage: React.FC = () => {
@@ -14,33 +15,41 @@ const OtpAuthPage: React.FC = () => {
   const [search] = useSearchParams();
   const flow = search.get('flow') || 'login';
   const emailFromQuery = search.get('email') || '';
+  const isSignup = flow === 'signup';
   const initialEmail = useMemo(() => {
     if (emailFromQuery) {
       sessionStorage.setItem('pendingLoginEmail', emailFromQuery);
       return emailFromQuery;
     }
-    const key = flow === 'signup' ? 'pendingSignupEmail' : 'pendingLoginEmail';
+    const key = isSignup ? 'pendingSignupEmail' : 'pendingLoginEmail';
     return sessionStorage.getItem(key) || '';
-  }, [flow, emailFromQuery]);
+  }, [isSignup, emailFromQuery]);
   const [email, setEmail] = useState(initialEmail);
   const [digits, setDigits] = useState<string[]>(Array.from({ length: 6 }, () => ''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingMs, setRemainingMs] = useState<number>(() => {
-    const key =
-      flow === 'signup'
-        ? 'pendingSignupOtpExpiresAtMs'
-        : 'pendingLoginOtpExpiresAtMs';
+    const key = isSignup
+      ? 'pendingSignupOtpExpiresAtMs'
+      : 'pendingLoginOtpExpiresAtMs';
     const stored = sessionStorage.getItem(key);
     const expiresAt = stored ? Number(stored) : Date.now() + 5 * 60 * 1000;
     return Math.max(0, expiresAt - Date.now());
   });
+  const [resendRemainingMs, setResendRemainingMs] = useState<number>(() => {
+    if (!isSignup) return 0;
+    const stored = sessionStorage.getItem('pendingSignupOtpResendAtMs');
+    if (!stored) return 0;
+    return Math.max(0, Number(stored) - Date.now());
+  });
+  const [resendBusy, setResendBusy] = useState(false);
 
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setRemainingMs((ms) => Math.max(0, ms - 1000));
+      setResendRemainingMs((ms) => Math.max(0, ms - 1000));
     }, 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -93,13 +102,51 @@ const OtpAuthPage: React.FC = () => {
     inputRefs.current[nextIndex]?.focus();
   };
 
+  const clearSignupSessionKeys = () => {
+    sessionStorage.removeItem('pendingSignupAttemptId');
+    sessionStorage.removeItem('pendingSignupEmail');
+    sessionStorage.removeItem('pendingSignupPhone');
+    sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
+    sessionStorage.removeItem('pendingSignupOtpResendAtMs');
+    sessionStorage.removeItem('pendingSignupUserId');
+    sessionStorage.removeItem('pendingSignupLaunchPromo');
+  };
+
   const handleVerify = async () => {
     setLoading(true);
     setError(null);
     try {
-      if (flow === 'signup') {
-        const userId = sessionStorage.getItem('pendingSignupUserId') || undefined;
-        await apiClient.post('/auth/signup/verify-otp', { email, otp, userId });
+      if (isSignup) {
+        const attemptId = sessionStorage.getItem('pendingSignupAttemptId');
+        if (!attemptId) {
+          setError(
+            t(
+              'auth.otp.attemptMissing',
+              'Verification session expired. Please start signup again.'
+            )
+          );
+          return;
+        }
+        const res = await apiClient.post('/auth/signup/verify-otp', {
+          attemptId,
+          otp,
+        });
+        const tokens = res.data?.tokens || res.data;
+        const launchPromo = res.data?.launchPromo;
+        setPasswordlessSession(tokens);
+        clearSignupDraft();
+        clearSignupSessionKeys();
+        if (launchPromo) {
+          try {
+            sessionStorage.setItem(
+              'pendingSignupLaunchPromo',
+              JSON.stringify(launchPromo)
+            );
+          } catch {
+            // ignore
+          }
+        }
+        await apiClient.get('/users/me');
         navigate('/app');
         return;
       }
@@ -119,18 +166,79 @@ const OtpAuthPage: React.FC = () => {
     }
   };
 
+  const handleResend = async () => {
+    if (resendBusy || (isSignup ? resendRemainingMs > 0 : !isExpired)) return;
+    setResendBusy(true);
+    setError(null);
+    try {
+      if (isSignup) {
+        const attemptId = sessionStorage.getItem('pendingSignupAttemptId');
+        if (!attemptId) {
+          setError(
+            t(
+              'auth.otp.attemptMissing',
+              'Verification session expired. Please start signup again.'
+            )
+          );
+          return;
+        }
+        const res = await apiClient.post('/auth/signup/resend-otp', {
+          attemptId,
+        });
+        const expiresAt = res.data?.expiresAt
+          ? Date.parse(res.data.expiresAt)
+          : Date.now() + 15 * 60 * 1000;
+        const resendAt = res.data?.resendAvailableAt
+          ? Date.parse(res.data.resendAvailableAt)
+          : Date.now() + 2 * 60 * 1000;
+        sessionStorage.setItem(
+          'pendingSignupOtpExpiresAtMs',
+          String(expiresAt)
+        );
+        sessionStorage.setItem(
+          'pendingSignupOtpResendAtMs',
+          String(resendAt)
+        );
+        setRemainingMs(Math.max(0, expiresAt - Date.now()));
+        setResendRemainingMs(Math.max(0, resendAt - Date.now()));
+      } else {
+        await apiClient.post('/auth/login/start-otp', { email });
+        const expiresAt = Date.now() + 5 * 60 * 1000;
+        sessionStorage.setItem(
+          'pendingLoginOtpExpiresAtMs',
+          String(expiresAt)
+        );
+        setRemainingMs(5 * 60 * 1000);
+      }
+      setDigits(Array.from({ length: 6 }, () => ''));
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.error ||
+          err?.message ||
+          t('auth.otp.resendFailed', 'Could not resend code.')
+      );
+    } finally {
+      setResendBusy(false);
+    }
+  };
+
   return (
     <Container maxWidth="sm" sx={{ py: 5 }}>
       <Paper sx={{ p: 4, borderRadius: 3 }}>
         <Stack spacing={2.5}>
           <Logo variant="default" size="medium" />
           <Typography variant="h4">
-            {flow === 'signup'
-              ? t('auth.otpSignup.title', 'Verify your account')
+            {isSignup
+              ? t('auth.otp.verifyContactTitle', 'Verify your contact')
               : t('auth.otpLogin.titleShort', 'Log in with OTP')}
           </Typography>
           <Typography color="text.secondary">
-            {t('auth.otp.enterCode', 'Enter the OTP sent to your email.')}
+            {isSignup
+              ? t(
+                  'auth.otp.verifyContactSubtitle',
+                  'Enter the code we sent to confirm your contact before your account is created.'
+                )
+              : t('auth.otp.enterCode', 'Enter the OTP sent to your email.')}
           </Typography>
           <Box
             sx={{
@@ -154,12 +262,13 @@ const OtpAuthPage: React.FC = () => {
             ) : null}
           </Box>
           {error && <Alert severity="error">{error}</Alert>}
-          <TextField
-            label={t('auth.emailAddressLabel', 'Email address')}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={flow !== 'signup'}
-          />
+          {!isSignup ? (
+            <TextField
+              label={t('auth.emailAddressLabel', 'Email address')}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          ) : null}
           <Box
             onPaste={handlePaste}
             sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}
@@ -178,24 +287,29 @@ const OtpAuthPage: React.FC = () => {
                   maxLength: 1,
                   style: { textAlign: 'center', fontSize: 20, fontWeight: 700 },
                 }}
-                sx={{ width: 52 }}
+                sx={{ width: 48 }}
               />
             ))}
           </Box>
           <Button
             variant="contained"
-            size="large"
-            onClick={handleVerify}
-            disabled={loading || !email.trim() || otp.length !== 6 || isExpired}
-            startIcon={loading ? <CircularProgress size={18} /> : undefined}
+            disabled={loading || otp.length < 6}
+            onClick={() => void handleVerify()}
           >
-            {loading
-              ? t('auth.otp.verifying', 'Verifying...')
-              : t('auth.otp.verify', 'Verify OTP')}
+            {loading ? <CircularProgress size={22} /> : t('auth.otp.verify', 'Verify')}
           </Button>
-          <Button onClick={() => navigate('/')}>
-            {t('auth.otp.backToHome', 'Back to home')}
+          <Button
+            variant="text"
+            disabled={resendBusy || (isSignup ? resendRemainingMs > 0 || remainingMs <= 0 : !isExpired)}
+            onClick={() => void handleResend()}
+          >
+            {t('auth.otp.resend', 'Resend code')}
           </Button>
+          {isSignup ? (
+            <Button color="inherit" onClick={() => navigate('/signup')}>
+              {t('auth.otp.changeEmail', 'Change email')}
+            </Button>
+          ) : null}
         </Stack>
       </Paper>
     </Container>

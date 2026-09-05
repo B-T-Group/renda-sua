@@ -11,16 +11,31 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { RENDASUA_PLATFORM_HEADER } from '../agents/agent-location-claim.util';
 import { resolveMetaActionSource } from '../meta-conversions/resolve-meta-action-source.util';
-import { CurrentUser } from './user.decorator';
 import { Public } from './public.decorator';
-import { SignupCreatedUser, SignupService } from './signup.service';
 import { SignupStartDto } from './dto/signup-start.dto';
+import {
+  SignupResendOtpDto,
+  SignupVerifyOtpDto,
+} from './dto/signup-verify-otp.dto';
+import {
+  SignupService,
+  type SignupStartAttemptResult,
+} from './signup.service';
+import type { SignupCompletionResult } from './signup-attempt.types';
 
 @ApiTags('auth')
 @Controller('auth')
+@Throttle({ short: { limit: 20, ttl: 60000 } })
 export class SignupController {
   constructor(private readonly signupService: SignupService) {}
 
@@ -29,7 +44,9 @@ export class SignupController {
   @ApiOperation({ summary: 'Check if email is already taken' })
   @ApiQuery({ name: 'email', required: true, type: String })
   @ApiResponse({ status: 200, description: 'Email availability status' })
-  async emailAvailability(@Query('email') email: string): Promise<{ taken: boolean }> {
+  async emailAvailability(
+    @Query('email') email: string
+  ): Promise<{ taken: boolean }> {
     if (!email || !email.trim()) {
       return { taken: false };
     }
@@ -55,26 +72,21 @@ export class SignupController {
   @Public()
   @Post('signup/start')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ short: { limit: 8, ttl: 60000 } })
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  @ApiOperation({ summary: 'Create pending signup user' })
+  @ApiOperation({
+    summary:
+      'Start signup: validate details, create an expiring attempt, and send OTP (no user row yet)',
+  })
   @ApiBody({ type: SignupStartDto })
-  @ApiResponse({ status: 201, description: 'User created' })
-  @ApiResponse({ status: 400, description: 'Invalid referral code' })
+  @ApiResponse({ status: 201, description: 'Signup attempt created and OTP sent' })
+  @ApiResponse({ status: 400, description: 'Invalid referral code or payload' })
+  @ApiResponse({ status: 409, description: 'Email or phone already taken' })
   async signupStart(
     @Body() body: SignupStartDto,
     @Request() req: { ip?: string; headers?: Record<string, unknown> },
     @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
-  ): Promise<{
-    success: boolean;
-    user: SignupCreatedUser;
-    launchPromo: {
-      status: string;
-      ordersRemaining: number;
-      businessLimit: number | null;
-      zeroCommissionOrders: number | null;
-      identificationWindowDays: number | null;
-    } | null;
-  }> {
+  ): Promise<{ success: boolean } & SignupStartAttemptResult> {
     const ua = req.headers?.['user-agent'];
     const result = await this.signupService.startSignup({
       ...body,
@@ -82,70 +94,62 @@ export class SignupController {
       clientIpAddress: req.ip,
       clientUserAgent: typeof ua === 'string' ? ua : undefined,
     });
+    return { success: true, ...result };
+  }
+
+  @Public()
+  @Post('signup/resend-otp')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({ summary: 'Resend OTP for an active signup attempt' })
+  @ApiBody({ type: SignupResendOtpDto })
+  async signupResendOtp(
+    @Body() body: SignupResendOtpDto
+  ): Promise<{ success: boolean } & SignupStartAttemptResult> {
+    const result = await this.signupService.resendSignupOtp(body.attemptId);
+    return { success: true, ...result };
+  }
+
+  @Public()
+  @Post('signup/verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 10, ttl: 60000 } })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary:
+      'Verify signup OTP, create the user account, and return Auth0 tokens',
+  })
+  @ApiBody({ type: SignupVerifyOtpDto })
+  async verifyOtp(
+    @Body() body: SignupVerifyOtpDto
+  ): Promise<{ success: boolean; verified: true } & SignupCompletionResult> {
+    const result = await this.signupService.verifySignupOtp(body);
     return {
       success: true,
-      user: result.user,
-      launchPromo: result.launchPromo,
+      verified: true,
+      ...result,
     };
   }
 
   @Public()
   @Post('signup/update-contact')
+  @HttpCode(HttpStatus.GONE)
   @ApiOperation({
-    summary: 'Update email/phone of an unverified pending signup user',
+    summary: 'Retired — restart signup to change contact before OTP',
+    deprecated: true,
   })
-  @ApiResponse({ status: 201, description: 'Contact updated' })
-  @ApiResponse({ status: 404, description: 'Signup user not found' })
-  @ApiResponse({
-    status: 409,
-    description: 'Account already verified or contact already taken',
-  })
-  async signupUpdateContact(
-    @Body()
-    body: {
-      user_id: string;
-      first_name?: string;
-      last_name?: string;
-      email?: string | null;
-      phone_number?: string | null;
-    }
-  ): Promise<{ success: boolean; user: SignupCreatedUser }> {
-    const result = await this.signupService.updateContact(body);
-    return {
-      success: true,
-      user: result.user,
-    };
-  }
-
-  @Public()
-  @Post('signup/verify-otp')
-  @ApiOperation({ summary: 'Verify signup OTP via Auth0 (email or phone)' })
-  async verifyOtp(
-    @Body()
-    body: {
-      email?: string;
-      phone_number?: string;
-      otp: string;
-      userId: string;
-    }
-  ) {
-    const tokenData = await this.signupService.verifyOtp(body);
-    return {
-      success: true,
-      verified: true,
-      userId: body.userId,
-      ...tokenData,
-    };
+  async signupUpdateContact(): Promise<never> {
+    return this.signupService.updateContact({});
   }
 
   @Post('signup/complete')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Complete signup after email verification' })
-  async signupComplete(
-    @Body() body: { userId: string },
-    @CurrentUser() auth0User: any
-  ) {
-    const result = await this.signupService.completeSignup(body.userId, auth0User);
-    return { success: true, user: result.user };
+  @HttpCode(HttpStatus.GONE)
+  @ApiOperation({
+    summary: 'Retired — completion is part of signup/verify-otp',
+    deprecated: true,
+  })
+  async signupComplete(): Promise<never> {
+    return this.signupService.completeSignup('', null);
   }
 }

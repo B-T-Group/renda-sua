@@ -1530,7 +1530,14 @@
       "expiresIn": "Expire dans",
       "expired": "Code expiré",
       "verify": "Vérifier le code",
-      "verifying": "Vérification..."
+      "verifying": "Vérification...",
+      "createAccountError": "Impossible de démarrer la vérification. Veuillez réessayer.",
+      "attemptMissing": "Votre session de vérification a expiré. Revenez en arrière et soumettez à nouveau.",
+      "attemptExpired": "Ce code de vérification a expiré. Demandez-en un nouveau.",
+      "attemptBusy": "La création du compte est encore en cours. Patientez un instant puis réessayez.",
+      "tooManyAttempts": "Trop de codes incorrects. Demandez un nouveau code de vérification.",
+      "verifyContactTitle": "Vérifiez votre contact",
+      "verifyContactSubtitle": "Saisissez le code envoyé pour confirmer votre contact avant la création du compte."
     },
     "otpLogin": {
       "continue": "Continuer avec OTP",
@@ -1543,7 +1550,8 @@
       "userNotFound": "Aucun compte trouvé pour cet e-mail."
     },
     "otpSignup": {
-      "title": "Vérifiez votre compte"
+      "title": "Vérifiez votre contact",
+      "subtitle": "Saisissez le code envoyé. Votre compte n’est créé qu’après cette étape."
     },
     "profile": "Profil",
     "signIn": "Se connecter",
@@ -1650,7 +1658,7 @@
     "updateContact": "Mettre à jour le contact",
     "verifyEmailToContinue": "Vérifier mon e-mail pour continuer",
     "alreadyHaveAccount": "Vous avez déjà un compte ? Se connecter",
-    "createAccountError": "Impossible de créer le compte pour le moment.",
+    "createAccountError": "Impossible de démarrer la vérification pour le moment.",
     "goalSectionHintMulti": "Choisissez comment commencer. Vous pourrez ajouter d'autres modes plus tard.",
     "primaryBusinessFocus": "Activité principale",
     "trustContact": "Nous utilisons ces informations uniquement pour vérifier votre compte et vous envoyer les mises à jour de commande.",
