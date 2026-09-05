@@ -219,6 +219,45 @@ describe('OrderStatusService', () => {
     });
   });
 
+  describe('updateOrderStatus viaSystem admin cancel', () => {
+    it('rejects system cancel without the dedicated cancel flag', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'assigned_to_agent',
+          assigned_agent_id: 'agent-1',
+          assigned_agent: { user_id: 'user-agent-1' },
+        },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'cancelled', { viaSystem: true })
+      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
+      expect(hasuraUserService.getUser).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('allows system cancel from the dedicated admin cancel path', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'assigned_to_agent',
+          assigned_agent_id: 'agent-1',
+          assigned_agent: { user_id: 'user-agent-1' },
+        },
+      });
+      mockSuccessfulUpdate('cancelled');
+
+      const result = await service.updateOrderStatus('order-123', 'cancelled', {
+        viaCancelEndpoint: true,
+        viaSystem: true,
+      });
+
+      expect(result.current_status).toBe('cancelled');
+      expect(hasuraUserService.getUser).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateOrderStatus after delivery completion', () => {
     it('credits the agent referral after PIN completion', async () => {
       hasuraUserService.getUser.mockResolvedValue(agentUser as any);
