@@ -20,6 +20,8 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
@@ -229,6 +231,19 @@ describe('OrdersService', () => {
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
         } },
         { provide: NotificationsService, useValue: {} },
+        {
+          provide: OrderRecipientNotificationsService,
+          useValue: {
+            notifyStatusChange: jest.fn().mockResolvedValue(undefined),
+            notifyDeliveryPin: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: FxEstimateService,
+          useValue: {
+            estimateFx: jest.fn().mockResolvedValue({ rate: 1.0, fee: 0 }),
+          },
+        },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
         { provide: CommissionsService, useValue: {

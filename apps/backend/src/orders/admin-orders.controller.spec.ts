@@ -31,12 +31,16 @@ describe('AdminOrdersController.updateStatus', () => {
     };
     const controller = new AdminOrdersController(
       ordersService as any,
-      {} as any,
-      {} as any,
+      {} as any, // adminOrdersService
+      {} as any, // orderReassignmentService
       orderEventsService as any,
+      {} as any, // riskIncidentsService
+      {} as any, // riskMonitorService
       hasuraSystemService as any,
-      {} as any,
-      {} as any
+      {} as any, // hasuraUserService
+      {} as any, // notificationsService
+      {} as any, // adminOrderContactService
+      {} as any  // creditsService
     );
     return { controller, ordersService, hasuraSystemService, orderEventsService };
   }
