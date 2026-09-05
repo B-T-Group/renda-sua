@@ -186,4 +186,121 @@ describe('WhatsAppOrderActionService', () => {
     expect(result.message).toMatch(/ORD-NEW/);
     expect(result.message).toMatch(/no longer awaiting/i);
   });
+
+  it('confirms the bound order when a multi-location delegate matches that store', async () => {
+    const manage = (locationId: string) => ({
+      business_location_id: locationId,
+      business_location: { business_id: 'b1' },
+      role: {
+        role_permissions: [{ permission: { key: 'delegation.orders.manage' } }],
+      },
+    });
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'o-store-b' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o-store-b',
+          order_number: 'ORD-B',
+          current_status: 'pending',
+          acceptance_state: 'awaiting_acceptance',
+          business_id: 'b1',
+          business_location_id: 'loc-b',
+          fulfillment_timing: 'asap',
+          fulfillment_method: 'pickup',
+          delivery_time_windows: [],
+          business_location: {
+            id: 'loc-b',
+            business_id: 'b1',
+            order_alert_phone: null,
+            business: { user_id: 'owner-1' },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        users: [
+          {
+            id: 'delegate-1',
+            business: null,
+            location_delegations: [manage('loc-a'), manage('loc-b')],
+          },
+        ],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.out.store-b',
+    });
+    expect(orders.confirmOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-store-b' }),
+      expect.objectContaining({
+        userId: 'delegate-1',
+        businessId: 'b1',
+        locationId: 'loc-b',
+      })
+    );
+    expect(result.message).toMatch(/ORD-B/);
+  });
+
+  it('confirms as a delegate when the same phone also owns a different business', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'o-other' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o-other',
+          order_number: 'ORD-OTHER',
+          current_status: 'pending',
+          acceptance_state: 'awaiting_acceptance',
+          business_id: 'b-other',
+          business_location_id: 'loc-other',
+          fulfillment_timing: 'asap',
+          fulfillment_method: 'pickup',
+          delivery_time_windows: [],
+          business_location: {
+            id: 'loc-other',
+            business_id: 'b-other',
+            order_alert_phone: null,
+            business: { user_id: 'owner-other' },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        users: [
+          {
+            id: 'u-both',
+            business: { id: 'b-own' },
+            location_delegations: [
+              {
+                business_location_id: 'loc-other',
+                business_location: { business_id: 'b-other' },
+                role: {
+                  role_permissions: [
+                    { permission: { key: 'delegation.orders.manage' } },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+      contextMessageId: 'wamid.out.other',
+    });
+    expect(orders.confirmOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-other' }),
+      expect.objectContaining({
+        userId: 'u-both',
+        businessId: 'b-other',
+        locationId: 'loc-other',
+      })
+    );
+    expect(result.message).toMatch(/ORD-OTHER/);
+  });
 });
