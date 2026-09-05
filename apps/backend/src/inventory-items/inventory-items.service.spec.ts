@@ -303,3 +303,24 @@ describe('InventoryItemsService food catalog helpers', () => {
     ]);
   });
 });
+
+describe('InventoryItemsService.clampInventoryListLimit', () => {
+  it('defaults and caps public catalog page size', () => {
+    const service = new InventoryItemsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+    const clamp = (limit?: number) =>
+      (service as any).clampInventoryListLimit(limit);
+
+    expect(clamp(undefined)).toBe(20);
+    expect(clamp(0)).toBe(20);
+    expect(clamp(12)).toBe(12);
+    expect(clamp(200)).toBe(50);
+  });
+});

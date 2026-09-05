@@ -550,6 +550,36 @@
       "messageUnavailable": "La messagerie intégrée nécessite un compte lié.",
       "noEmail": "Ce participant n'a pas d'email enregistré.",
       "noPhone": "Ce participant n'a pas de téléphone enregistré.",
+      "escalationReplies": {
+        "business": {
+          "confirm": {
+            "label": "Confirmer la commande",
+            "body": "Nous avons remarqué que vous avez une commande en attente. Veuillez la confirmer bientôt dans l'application pour protéger la réputation de votre magasin et éviter une annulation."
+          },
+          "window": {
+            "label": "Délai bientôt écoulé",
+            "body": "Votre délai de confirmation est presque écoulé. Veuillez répondre maintenant, sinon cette commande risque d'être annulée et le client remboursé."
+          },
+          "support": {
+            "label": "Suivi support",
+            "body": "Le support Rendasua fait le point sur cette commande. Veuillez confirmer ou refuser afin que nous puissions aider votre client."
+          }
+        },
+        "client": {
+          "patience": {
+            "label": "On s'en occupe",
+            "body": "Nous contactons le magasin au sujet de votre commande et vous tiendrons informé sous peu. Merci de votre patience."
+          },
+          "followup": {
+            "label": "Relance en cours",
+            "body": "Désolé pour le retard — notre équipe relance actuellement le commerçant concernant votre commande."
+          },
+          "processing": {
+            "label": "Toujours en cours",
+            "body": "Votre commande est toujours en cours de traitement. Nous vous préviendrons dès que le magasin confirmera."
+          }
+        }
+      },
       "inApp": "Application",
       "intervene": "Intervenir",
       "correctStatus": "Corriger le statut (dernier recours)",
@@ -664,6 +694,9 @@
         "businessName": "Entreprise",
         "projectedPayout": "Paiement est.",
         "projectedPayoutTooltip": "Bonus d’onboarding estimé : entreprises parrainées approuvées, non payées, avec 10+ articles × le montant configuré par marché. Une vente admissible est également requise pour le déclenchement du paiement.",
+        "earned": "Gagné",
+        "earnedTooltip": "Compensation représentative créditée sur cette période (bonus 10 articles et 1 % des ventes). « À venir » est le bonus d’onboarding estimé restant.",
+        "upcomingPayout": "À venir {{amount}}",
         "itemsQualified": "10+ articles",
         "qualifiedYes": "Qualifié",
         "qualifiedNo": "Pas encore"
@@ -1197,6 +1230,119 @@
       "resume": "Reprendre",
       "pause": "Pause",
       "empty": "Aucune commande assignée surveillée actuellement."
+    },
+    "credits": {
+      "pageTitle": "Suivis ops",
+      "pageDescription": "Escalades, retours d’appel et progression des suivis",
+      "resolveTitle": "Enregistrer comment vous avez traité ceci",
+      "contactChannel": "Comment vous les avez joints",
+      "orderResult": "Ce qui s’est passé",
+      "comments": "Commentaires",
+      "resolveSubmit": "Résoudre",
+      "resolveAction": "Résoudre",
+      "resolveSuccess": "Escalade résolue",
+      "loadFailed": "Impossible de charger les suivis",
+      "actionFailed": "Action échouée",
+      "feedbackSaved": "Retour enregistré",
+      "markedTest": "Marqué comme commande test (pas de points)",
+      "markedInternal": "Marqué comme commande interne (pas de points)",
+      "selfAwardBlocked": "Vous ne pouvez pas enregistrer des points de suivi sur votre propre commande",
+      "cancelledFeedbackTitle": "Retour commande annulée",
+      "firstOrderFeedbackTitle": "Retour première commande",
+      "feedbackNotes": "Notes de retour",
+      "feedbackHint": "Appelez le client et notez ce qu’il a partagé.",
+      "skipCreditHint": "Expliquez pourquoi ce n’est pas un vrai suivi. Aucun point ne sera attribué.",
+      "actionTaken": "Action effectuée",
+      "saveFeedback": "Enregistrer le retour",
+      "recordFeedback": "Enregistrer un retour",
+      "openOrder": "Ouvrir la commande",
+      "emptyEscalations": "Aucune escalade ouverte",
+      "emptyCancelled": "Aucune annulation en attente",
+      "emptyFirstOrder": "Aucun premier appel en attente",
+      "emptyProgress": "Aucun suivi enregistré",
+      "action": {
+        "calledClient": "Appelé le client",
+        "calledBusiness": "Appelé le commerce",
+        "emailedClient": "Envoyé un e-mail au client",
+        "spokeInPerson": "Parlé en personne",
+        "testOrder": "Commande test",
+        "internalOrder": "Commande interne"
+      },
+      "filterCountry": "Pays",
+      "allCountries": "Tous les pays",
+      "countries": {
+        "CM": "Cameroun",
+        "GA": "Gabon",
+        "CA": "Canada",
+        "US": "États-Unis"
+      },
+      "quickCall": "Appeler",
+      "quickEmail": "E-mail",
+      "cancelledFeedbackHint": "Appelez le client ou le commerce (selon qui a annulé) et notez ce qu’ils ont partagé.",
+      "fulfillment": {
+        "pickup": "Retrait",
+        "delivery": "Livraison",
+        "shipping": "Expédition",
+        "unknown": "Mode de livraison inconnu"
+      },
+      "briefing": {
+        "title": "Client et commande",
+        "titleCancelled": "Qui contacter",
+        "client": "Client",
+        "business": "Commerce",
+        "country": "Pays",
+        "phone": "Téléphone",
+        "email": "E-mail",
+        "order": "Commande",
+        "fulfillment": "Mode de livraison",
+        "cancelledAt": "Annulée",
+        "completedAt": "Terminée",
+        "cancelledByClient": "Annulée par le client",
+        "cancelledByBusiness": "Annulée par le commerce",
+        "cancelledBySystem": "Annulée par le système",
+        "cancelNotes": "Notes d’annulation",
+        "items": "Articles"
+      },
+      "channel": {
+        "call": "Appel",
+        "inApp": "Message in-app",
+        "email": "E-mail",
+        "inPerson": "En personne"
+      },
+      "result": {
+        "confirmed": "Confirmée",
+        "cancelled": "Commande annulée",
+        "systemCancelled": "Annulée par le système"
+      },
+      "tabs": {
+        "escalations": "Escalades",
+        "cancelled": "Retours annulation",
+        "firstOrder": "Retours 1ère commande",
+        "progress": "Progression"
+      },
+      "events": {
+        "escalation": "Escalade résolue",
+        "businessReferred": "Commerce parrainé",
+        "agentReferred": "Agent parrainé",
+        "cancelledFeedback": "Retour annulation",
+        "firstOrderFeedback": "Retour 1ère commande",
+        "firstPurchase": "Premier achat"
+      },
+      "col": {
+        "order": "Commande",
+        "risk": "Risque",
+        "severity": "Gravité",
+        "client": "Client",
+        "country": "Pays",
+        "phone": "Téléphone",
+        "business": "Commerce",
+        "when": "Quand",
+        "items": "Articles",
+        "user": "Utilisateur",
+        "roles": "Rôles",
+        "weight": "Poids",
+        "count": "Actions"
+      }
     }
   },
   "referrals": {
@@ -1384,7 +1530,14 @@
       "expiresIn": "Expire dans",
       "expired": "Code expiré",
       "verify": "Vérifier le code",
-      "verifying": "Vérification..."
+      "verifying": "Vérification...",
+      "createAccountError": "Impossible de démarrer la vérification. Veuillez réessayer.",
+      "attemptMissing": "Votre session de vérification a expiré. Revenez en arrière et soumettez à nouveau.",
+      "attemptExpired": "Ce code de vérification a expiré. Demandez-en un nouveau.",
+      "attemptBusy": "La création du compte est encore en cours. Patientez un instant puis réessayez.",
+      "tooManyAttempts": "Trop de codes incorrects. Demandez un nouveau code de vérification.",
+      "verifyContactTitle": "Vérifiez votre contact",
+      "verifyContactSubtitle": "Saisissez le code envoyé pour confirmer votre contact avant la création du compte."
     },
     "otpLogin": {
       "continue": "Continuer avec OTP",
@@ -1397,7 +1550,8 @@
       "userNotFound": "Aucun compte trouvé pour cet e-mail."
     },
     "otpSignup": {
-      "title": "Vérifiez votre compte"
+      "title": "Vérifiez votre contact",
+      "subtitle": "Saisissez le code envoyé. Votre compte n’est créé qu’après cette étape."
     },
     "profile": "Profil",
     "signIn": "Se connecter",
@@ -1504,7 +1658,7 @@
     "updateContact": "Mettre à jour le contact",
     "verifyEmailToContinue": "Vérifier mon e-mail pour continuer",
     "alreadyHaveAccount": "Vous avez déjà un compte ? Se connecter",
-    "createAccountError": "Impossible de créer le compte pour le moment.",
+    "createAccountError": "Impossible de démarrer la vérification pour le moment.",
     "goalSectionHintMulti": "Choisissez comment commencer. Vous pourrez ajouter d'autres modes plus tard.",
     "primaryBusinessFocus": "Activité principale",
     "trustContact": "Nous utilisons ces informations uniquement pour vérifier votre compte et vous envoyer les mises à jour de commande.",
@@ -1673,6 +1827,65 @@
     "successMessage": "Votre profil a été créé avec succès. Redirection vers votre tableau de bord…"
   },
   "business": {
+    "quietHome": {
+      "reach": {
+        "title": "Portée de la boutique",
+        "shareCta": "Partager la boutique",
+        "zeroViewsHint": "Partagez votre boutique pour que les clients vous trouvent."
+      },
+      "catalog": {
+        "title": "Santé du catalogue",
+        "progressBody": "{{approved}} sur {{target}} produits en ligne. Un catalogue plus riche attire plus de clients.",
+        "healthyBody": "{{count}} produits en ligne.",
+        "rejectedBody": "Corrigez les articles rejetés pour qu'ils soient visibles.",
+        "restockBody": "Un article populaire est en rupture. Réapprovisionnez-le tant que l'intérêt est fort.",
+        "manageCta": "Gérer les articles",
+        "pendingMeta": "{{count}} en attente",
+        "rejectedMeta": "{{count}} rejetés",
+        "emptyArt": "Catalogue vide"
+      },
+      "next": {
+        "label": "Prochaine étape",
+        "cannotAcceptTitle": "Terminez la configuration pour accepter des commandes",
+        "cannotAcceptMessage": "Votre boutique ne peut pas encore accepter de commandes. Complétez les étapes de vérification.",
+        "cannotAcceptCta": "Continuer la configuration",
+        "idReviewTitle": "Pièce d'identité en cours d'examen",
+        "idReviewMessage": "Nous examinons votre pièce d'identité. Vous pouvez vérifier le statut ou en téléverser une plus claire.",
+        "idReviewCta": "Voir le statut",
+        "mmPhoneTitle": "Confirmer le numéro Mobile Money",
+        "mmPhoneMessage": "Liez un numéro Mobile Money vérifié pour recevoir vos paiements.",
+        "mmPhoneCta": "Confirmer le numéro",
+        "offerRentalsTitle": "Proposer aussi des locations ?",
+        "offerRentalsMessage": "Vous pouvez ajouter des articles à louer à tout moment — ils coexistent avec votre catalogue de vente.",
+        "offerRentalsCta": "Ouvrir les locations",
+        "offerSaleItemsTitle": "Vendre aussi des produits ?",
+        "offerSaleItemsMessage": "Vous pouvez ajouter des articles à vendre à tout moment — ils coexistent avec votre catalogue de location.",
+        "offerSaleItemsCta": "Ouvrir les articles"
+      }
+    },
+    "tips": {
+      "rejectedTitle": "Astuce : corriger un produit rejeté",
+      "rejectedMessage": "Un ou plusieurs produits ont été rejetés. Mettez-les à jour et renvoyez-les.",
+      "rejectedCta": "Voir les articles",
+      "restockTitle": "Astuce : réapprovisionner un article populaire",
+      "restockMessage": "Des acheteurs consultent un article en rupture. Réapprovisionnez-le.",
+      "restockCta": "Gérer le stock",
+      "pendingTitle": "Astuce : articles en revue",
+      "pendingMessage": "{{count}} article(s) attendent une approbation.",
+      "pendingCta": "Voir les articles",
+      "catalogGoalTitle": "Astuce : atteindre 10 produits",
+      "catalogGoalMessage": "Un catalogue plus riche attire plus de clients. Ajoutez-en {{remaining}} pour atteindre 10.",
+      "catalogGoalCta": "Ajouter un produit",
+      "shareTitle": "Astuce : partagez votre boutique",
+      "shareMessage": "Partagez le lien de votre boutique pour que les clients commandent.",
+      "shareCta": "Partager",
+      "logoTitle": "Astuce : ajoutez votre logo",
+      "logoMessage": "Un logo aide les clients à reconnaître votre boutique.",
+      "logoCta": "Ajouter un logo",
+      "hoursTitle": "Astuce : définissez vos horaires",
+      "hoursMessage": "Les horaires indiquent quand vous êtes ouvert.",
+      "hoursCta": "Définir les horaires"
+    },
     "accountType": {
       "sectionTitle": "Compte & Forfait",
       "pageTitle": "Compte & Forfait",
@@ -1824,7 +2037,14 @@
       "ctaViewItems": "Voir les articles",
       "ctaViewRentals": "Voir les locations",
       "stepPreview": "Prévisualiser votre boutique",
-      "stepPreviewDesc": "Voyez comment les clients découvriront vos produits."
+      "stepPreviewDesc": "Voyez comment les clients découvriront vos produits.",
+      "stepReachabilityDesc": "Gardez au moins un canal d’alerte rapide pour que la cuisine voie les nouvelles commandes.",
+      "stepReachabilityMissingBoth": "Activez les notifications push ou WhatsApp pour ne pas manquer de commandes.",
+      "stepReachabilityMissingPush": "Autorisez les notifications navigateur sur cet appareil pour les alertes instantanées.",
+      "stepReachabilityMissingWhatsapp": "Activez les mises à jour WhatsApp comme canal de secours.",
+      "stepReachabilityMissingLocationPhone": "Ajoutez un téléphone cuisine/caisse sur un emplacement pour les alertes WhatsApp.",
+      "stepReachability": "Alertes commande",
+      "ctaReachability": "Configurer les alertes"
     },
     "verification": {
       "noticeTitle": "Vérification du compte requise",
@@ -2057,7 +2277,16 @@
       "orderOperations": "Opérations des commandes",
       "orderOperationsDescription": "Intervenir sur les commandes à risque, contacter chaque participant et redispatcher",
       "pickupOps": "Santé des ramassages",
-      "pickupOpsDescription": "Tableau SLA en direct des commandes en attente de ramassage"
+      "pickupOpsDescription": "Tableau SLA en direct des commandes en attente de ramassage",
+      "creditsModule": "Suivis ops",
+      "creditsModuleDescription": "Escalades, retours d’appel et progression des suivis",
+      "reachability": {
+        "missingBoth": "De nouvelles commandes peuvent être manquées sur cet appareil car les notifications navigateur et WhatsApp ne sont pas prêtes.",
+        "missingPush": "Les notifications navigateur ne sont pas prêtes sur cet appareil. Gardez WhatsApp activé pour les interruptions de commande.",
+        "missingWhatsapp": "Les alertes WhatsApp ne sont pas prêtes. Activez-les comme secours si le navigateur rate une notification.",
+        "openNotifications": "Paramètres de notification",
+        "openLocations": "Emplacements"
+      }
     },
     "clientCities": {
       "seoTitle": "D'où viennent vos clients",
@@ -2921,6 +3150,15 @@
       "createNewBrand": "Créer une nouvelle marque",
       "cardsView": "Vue cartes",
       "category": "Catégorie",
+      "selectCategory": "Choisir une catégorie",
+      "selectSubCategory": "Choisir une sous-catégorie",
+      "selectCategoryFirst": "Choisissez d'abord une catégorie",
+      "selectSubCategoryToSave": "Choisissez une sous-catégorie pour enregistrer",
+      "categoryUpdated": "Catégorie mise à jour",
+      "categoryUpdateFailed": "Impossible de mettre à jour la catégorie",
+      "createCategoryError": "Échec de la création de la catégorie",
+      "createSubCategoryError": "Échec de la création de la sous-catégorie",
+      "addNamedOption": "Ajouter « {{name}} »",
       "color": "Couleur",
       "colorHelper": "Only specify if color is a key differentiator for this product",
       "confirmDelete": "Confirmer la suppression",
@@ -3194,6 +3432,9 @@
       "noImage": "Pas d’image",
       "stepImages": "Images",
       "stepDetails": "Détails",
+      "aiAnalyzing": "Analyse de la photo de variante…",
+      "aiFilledBanner": "Rempli à partir de la photo de variante — modifiez librement",
+      "uploadError": "Impossible de téléverser les photos",
       "saveFailed": "Échec de l’enregistrement de la variante",
       "deleteTitle": "Supprimer la variante ?",
       "deleteMessage": "Cette action est irréversible. Les commandes qui référencent cette variante conservent leur instantané.",
@@ -3239,6 +3480,8 @@
       "noLocations": "Aucun emplacement trouvé",
       "noLocationsMessage": "Ajoutez votre premier emplacement commercial pour commencer à gérer l'inventaire et les livraisons",
       "phone": "Téléphone",
+      "orderAlertPhone": "Téléphone d'alerte commande",
+      "orderAlertPhoneHint": "WhatsApp cuisine / téléphone de caisse pour les alertes de nouvelles commandes",
       "primary": "Principal",
       "primaryLocationWarning": "Ceci est votre emplacement principal. Vous ne pouvez pas le supprimer.",
       "refresh": "Actualiser",
@@ -3417,6 +3660,8 @@
       "addWindow": "Ajouter des heures",
       "removeWindow": "Supprimer les heures",
       "notServed": "Non servi",
+      "notAvailable": "Non disponible",
+      "extraWindowsWillBeDropped": "Ce plat avait plus d'une plage horaire certains jours. L'enregistrement conserve une plage par jour.",
       "from": "De",
       "to": "À",
       "nextDay": "jour suivant",
@@ -3461,11 +3706,26 @@
       "deliveredNotice": "🎉 Livré ! Votre commande de {{orderTotal}} est arrivée en toute sécurité. Nous espérons que vous l'aimerez ! Merci d'avoir choisi notre service.",
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
-      "pendingNotice": "⏳ Votre commande de {{orderTotal}} attend la confirmation de l'entreprise. Ils répondent généralement dans les 10 à 15 minutes. Vous serez notifié une fois confirmé !",
+      "pendingNotice": "Vous serez notifié une fois que le magasin confirmera votre commande de {{orderTotal}} (ils disposent de jusqu'à 45 minutes).",
+      "payAtDelivery": {
+        "pendingInfo": "Vous avez choisi de payer à la livraison. Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone.",
+        "outForDeliveryPaymentPending": "L’agent enverra une demande de paiement à son arrivée. Gardez votre téléphone à portée de main pour l’approuver."
+      },
+      "storeReadyPayAtPickup": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "storeReadySendPin": "Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait et envoyez votre code PIN pour que le vendeur confirme.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
       "refundedNotice": "💰 Votre remboursement de {{orderTotal}} a été traité et devrait apparaître dans votre compte dans les 3 à 5 jours ouvrables. Merci pour votre patience.",
       "subtitle": "Suivez le statut et l'historique de vos commandes",
       "title": "Mes commandes"
+    },
+    "home": {
+      "liveOrders": {
+        "title": "En cours",
+        "seeAll": "Voir les {{count}} commandes",
+        "ctaTrack": "Suivre la commande",
+        "ctaView": "Voir la commande",
+        "openDetail": "Ouvrez la commande pour plus de détails."
+      }
     }
   },
   "collections": {
@@ -3918,6 +4178,10 @@
     "orderDropError": "Échec de l'abandon de la commande",
     "orderDropSuccess": "Order ${result.order_number} dropped successfully",
     "orderMessages": "Messages de Commande",
+    "orderMessagesPageTitle": "Messages · Commande #{{orderNumber}}",
+    "emptyPromptClient": "Écrivez au magasin ou à l'agent de livraison concernant cette commande.",
+    "emptyPromptBusiness": "Écrivez au client ou à l'agent de livraison concernant cette commande.",
+    "emptyPromptAgent": "Écrivez au client ou au magasin concernant cette livraison.",
     "orderPickupError": "Échec de la récupération de la commande",
     "orderPickupSuccess": "Order ${result.order_number} picked up successfully",
     "orderRefundError": "Failed to refund order",
@@ -4057,23 +4321,24 @@
     "selectCountry": "Sélectionnez un pays.",
     "payAtDelivery": {
       "confirmationTitle": "Paiement à la livraison",
-      "confirmationMessage": "Vous avez choisi de payer à la livraison. Vous terminerez le paiement dans l’app lorsque l’agent arrive.",
+      "confirmationMessage": "Vous avez choisi de payer à la livraison. Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone.",
+      "info": "Lorsque l’agent arrive, il enverra une demande de paiement mobile. Gardez votre téléphone à portée de main pour l’approuver.",
       "agentInitiateHelp": "Envoyez une demande de paiement mobile au client. Une fois validée, la commande se terminera automatiquement.",
       "agentInitiateSubtitle": "Le paiement est demandé au moment de la livraison.",
       "clientPhoneHint": "C’est le numéro de téléphone du client sur la commande.",
       "notEligible": "Cette commande n’est pas configurée pour le paiement à la livraison.",
       "step1": "Votre commande a été transmise au commerçant.",
-      "step2": "Lorsque l’agent arrive, vous recevrez une demande de paiement mobile dans l’app.",
+      "step2": "Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone.",
       "step3": "Vous recevrez des mises à jour par e-mail et notifications dans l’app. Suivez l’avancement dans Mes commandes."
     },
     "pickup": {
       "confirmationCardTitle": "Paiement au retrait",
       "storePickupTitle": "Retrait au magasin (sans frais de livraison)",
-      "payAtPickupHint": "Vous paierez sur place ; le commerce vous enverra une demande de paiement sur votre téléphone.",
-      "clientPaymentHint": "Le magasin vous enverra une demande de paiement mobile lorsque votre commande sera prête au retrait. Veuillez la valider pour finaliser la commande.",
+      "payAtPickupHint": "Vous paierez à l’arrivée. Appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone.",
+      "clientPaymentHint": "Payez au magasin lors du retrait. Quand la commande est prête, appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
       "requestPaymentTitle": "Demander le paiement au retrait",
       "notEligibleForPaymentRequest": "Cette commande n’est pas configurée pour le paiement au retrait.",
-      "businessInitiateHelp": "Envoyez une demande de paiement mobile au client. Une fois qu’il l’aura acceptée, la commande se terminera automatiquement.",
+      "businessInitiateHelp": "Si le client a besoin d’aide, envoyez une demande de paiement mobile. Une fois approuvée, la commande se termine automatiquement.",
       "payAtPickupShort": "Paiement au retrait",
       "businessInitiateSubtitle": "Le paiement est encaissé lorsque le client retire sa commande.",
       "paymentRequestSent": "Demande de paiement envoyée au client.",
@@ -4083,6 +4348,32 @@
       "confirmPickupBodyPaid": "Confirmez que le client a retiré cette commande. La commande sera marquée comme terminée.",
       "confirmPickupSuccess": "Retrait confirmé. La commande est terminée.",
       "confirmPickupError": "Impossible de confirmer le retrait"
+    },
+    "payAtPickup": {
+      "title": "Payer au retrait",
+      "hint": "Nous enverrons une demande de paiement mobile à ce numéro. Approuvez-la sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "cta": "Payer maintenant",
+      "sent": "Approuvez la demande de paiement sur votre téléphone. Le magasin la verra dès qu’elle réussit.",
+      "error": "Impossible de démarrer le paiement",
+      "phoneLabel": "Téléphone de paiement"
+    },
+    "momoAwaiting": {
+      "navTitle": "Approuver le paiement",
+      "waitingTitle": "Approuvez sur votre téléphone",
+      "waitingBody": "Une demande de paiement a été envoyée au {{phone}}. Ouvrez l’invite sur ce téléphone et approuvez avec votre code PIN.",
+      "waitingHint": "En attente de la confirmation du paiement…",
+      "paidTitle": "Paiement confirmé",
+      "paidBodyCheckout": "Votre paiement a réussi. Le commerçant confirmera ensuite votre commande.",
+      "paidBodyPickup": "Votre paiement a réussi. Vous pouvez récupérer votre commande au magasin.",
+      "failedTitle": "Paiement échoué",
+      "failedBody": "La demande de paiement mobile n’a pas abouti. Vous pouvez réessayer ou revenir à votre commande.",
+      "timeoutTitle": "Toujours en attente",
+      "timeoutBody": "Nous n’avons pas encore vu le paiement. Vous pouvez partir — nous mettrons la commande à jour dès qu’il arrivera. Gardez votre téléphone à portée si vous devez encore approuver.",
+      "retry": "Réessayer",
+      "retryError": "Impossible d’envoyer une nouvelle demande de paiement.",
+      "back": "Retour à la commande",
+      "viewOrder": "Voir la commande",
+      "continue": "Continuer"
     },
     "trackInMyOrders": "Suivez l’avancement dans Mes commandes",
     "actions": {
@@ -4115,6 +4406,7 @@
       "openRefunds": "Gérer le remboursement",
       "generateOverwrite": "Générer un code de remplacement",
       "reconcileCash": "Réconcilier le cash",
+      "message": "Message",
       "none": ""
     },
     "addAddress": "Ajouter une Adresse de Livraison",
@@ -4305,6 +4597,13 @@
     "contact": {
       "unavailable": "Contact indisponible"
     },
+    "pickupLocator": {
+      "address": "Adresse du magasin",
+      "contact": "Contact du magasin",
+      "openInMaps": "Ouvrir dans Maps",
+      "openInMapsA11y": "Ouvrir l’adresse du magasin dans Maps",
+      "callStoreA11y": "Appeler le magasin"
+    },
     "timeline": {
       "title": "Historique",
       "empty": "Aucun historique"
@@ -4343,8 +4642,8 @@
       "payNowShort": "Validez la demande de paiement immédiatement.",
       "payNowDescription": "Nous enverrons une demande de paiement sur votre téléphone maintenant. Validez-la pour passer la commande.",
       "payAtDelivery": "Payer à la livraison",
-      "payAtDeliveryShort": "Payez dans l’app lorsque l’agent arrive.",
-      "payAtDeliveryDescription": "Vous passez la commande maintenant et vous payez à la livraison dans l’app lorsque l’agent arrive."
+      "payAtDeliveryShort": "L’agent enverra une demande de paiement à son arrivée.",
+      "payAtDeliveryDescription": "Vous passez la commande maintenant. Lorsque l’agent arrive, il enverra une demande de paiement mobile. Approuvez-la sur votre téléphone."
     },
     "buy": "Acheter",
     "confirmOrderCompletion": "Confirmer l'achèvement de la commande",
@@ -4900,7 +5199,9 @@
       "prepareClient": "Le commerçant prépare votre commande.",
       "prepareBusiness": "Marquez la commande prête lorsqu’elle est emballée.",
       "readyPickupClient": "Votre commande est prête à être retirée en magasin.",
-      "readyPickupBusiness": "Encaissez ou confirmez le retrait à l’arrivée du client.",
+      "readyPickupPayAtPickupClient": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "readyPickupWaitClientPayBusiness": "Le client paiera dans l’application à son arrivée. Vous pouvez toujours envoyer une demande de paiement s’il a besoin d’aide.",
+      "readyPickupBusiness": "Demandez le PIN de retrait du client à son arrivée. Le paiement est capturé lorsque vous confirmez le retrait.",
       "readyDeliveryClient": "En attente qu’un livreur prenne votre commande.",
       "readyDeliveryBusiness": "En attente qu’un agent prenne cette livraison.",
       "readyAgent": "Prenez cette commande pour démarrer la livraison.",
@@ -4933,7 +5234,19 @@
       "dueAt": "Collecte prévue avant {{time}}",
       "needMoreTime": "Besoin de plus de temps",
       "timeline": "Chronologie opérationnelle"
-    }
+    },
+    "storePickupReminder": {
+      "title": "Votre commande vous attend",
+      "body": "Cette commande à retirer en magasin est toujours prête. Écrivez au commerce pour confirmer votre venue, ou annulez si vous ne pouvez plus la récupérer.",
+      "messageBusiness": "Écrire au commerce",
+      "cancelOrder": "Annuler la commande",
+      "draftMessage": "Bonjour ! Je confirme que je viens toujours récupérer la commande {{orderNumber}}. À bientôt."
+    },
+    "outForRecipient": "Pour {{name}}",
+    "recipientNotifiedNotice": "{{name}} reçoit le suivi et le code de livraison par SMS. Aucune connexion de votre part n'est nécessaire.",
+    "deliveryContactRecipient": "Destinataire",
+    "orderedBy": "Commandé par {{name}}",
+    "earningsPendingRelease": "Gains en attente · Versés quand le livreur confirme le retrait"
   },
   "items": {
     "brand": "Marque",
@@ -5035,7 +5348,7 @@
       },
       "trustStrip": {
         "mobileMoney": "MoMo sécurisé",
-        "delivery": "Livraison 6–24 h",
+        "cardSecure": "Carte sécurisée",
         "verified": "Vendeur vérifié",
         "support": "Aide en cas de problème"
       },
@@ -6147,7 +6460,31 @@
     "fulfillmentDelivery": "Livraison",
     "fulfillmentPickup": "Retrait en magasin",
     "pickupNotice": "Pas de frais de livraison. Récupérez votre commande dans chaque magasin dès qu'elle est prête.",
-    "pickupNoFee": "Offert (retrait en magasin)"
+    "pickupNoFee": "Offert (retrait en magasin)",
+    "diaspora": {
+      "title": "Envoyer une commande au pays",
+      "payingFrom": "Paiement depuis {{country}}",
+      "deliveringTo": "Livraison vers {{country}}",
+      "sendingToSomeoneElse": "Une autre personne reçoit cette commande",
+      "sendingToSomeoneElseHelp": "Nous demandons son nom et son numéro pour qu'elle suive la livraison elle-même.",
+      "payerCharge": "Vous paierez ≈ {{amount}}",
+      "merchantPrice": "Prix du vendeur {{amount}}",
+      "fxDisclaimer": "Estimation seulement. Votre carte est débitée dans la devise du vendeur et votre banque fixe le taux final.",
+      "heldForRecipient": "Payé · Retenu jusqu'à la réception par {{name}}",
+      "heldUntilHandover": "Payé · Retenu jusqu'à la livraison ou le retrait"
+    },
+    "recipient": {
+      "title": "Qui reçoit cette commande ?",
+      "subtitle": "Cette personne reçoit le suivi et le code de livraison par SMS — aucun compte Rendasua requis.",
+      "name": "Nom complet du destinataire",
+      "nameRequired": "Le livreur a besoin d'un nom pour remettre la commande.",
+      "phone": "Numéro du destinataire",
+      "phoneRequired": "Un numéro local du pays de livraison est requis.",
+      "phoneHelp": "Le suivi et le code de livraison sont envoyés à ce numéro.",
+      "whatsapp": "Envoyer ses notifications sur WhatsApp",
+      "whatsappHelp": "Nous basculons sur SMS si WhatsApp échoue.",
+      "pinNotice": "Le destinataire reçoit son propre code de livraison et le donne au livreur à la remise. Vous le voyez aussi dans votre commande."
+    }
   },
   "agentOnboarding": {
     "title": "Comment Fonctionnent les Livraisons",
@@ -6916,6 +7253,7 @@
   "deepLink": {
     "openingApp": "Ouverture de Rendasua…",
     "helper": "Si l’application ne s’ouvre pas, téléchargez-la ou continuez dans le navigateur.",
+    "inAppHelper": "Appuyez sur Ouvrir l’application. Sur iPhone, si rien ne se passe, appuyez sur ⋯ puis Ouvrir dans Safari.",
     "openApp": "Ouvrir l’application",
     "continueWeb": "Continuer dans le navigateur"
   },
@@ -7017,5 +7355,83 @@
       "title": "Commandez des repas dans les restaurants près de vous",
       "description": "Parcourez les plats préparés par les restaurants près de vous et commandez pendant les heures de service."
     }
+  },
+  "productInterest": {
+    "cta": "Je suis intéressé(e)",
+    "dialogTitle": "Je suis intéressé(e)",
+    "noteLabel": "Message (optionnel)",
+    "noteHelp": "Parlez au vendeur de {{name}}. Il vous contactera en dehors de l’application.",
+    "submit": "Envoyer mon intérêt",
+    "success": "Intérêt envoyé. Le vendeur vous contactera.",
+    "error": "Impossible d’envoyer l’intérêt",
+    "priceNotApplicable": "Prix sur demande",
+    "clientTitle": "Mes demandes d’intérêt",
+    "businessTitle": "Intérêt produit",
+    "businessHelp": "Des clients souhaitent être contactés pour ces articles. Suivez par téléphone ou e-mail hors application.",
+    "emptyClient": "Aucune demande d’intérêt pour le moment.",
+    "emptyBusiness": "Aucun lead d’intérêt pour le moment.",
+    "loadError": "Impossible de charger les demandes",
+    "viewItem": "Voir l’article",
+    "clientLabel": "Client",
+    "unknownItem": "Article",
+    "merchantToggle": "Prix non applicable (intérêt uniquement)"
+  },
+  "incomingOrder": {
+    "awaitingAction": "En attente d’action",
+    "timeLeft": "{{m}} min {{s}} s pour accepter",
+    "secondsLeft": "{{seconds}} s pour accepter",
+    "title": "Nouvelle commande en attente",
+    "confirm": "Confirmer",
+    "needMoreTime": "Besoin de plus de temps",
+    "decline": "Refuser",
+    "startKitchenMode": "Démarrer le mode cuisine",
+    "kitchenTitle": "Mode cuisine",
+    "kitchenHint": "Gardez cet onglet ouvert. Le son démarre après « Démarrer le mode cuisine ».",
+    "armed": "Mode cuisine activé",
+    "kitchenAlert": "Alerte nouvelle commande",
+    "orderNumber": "Commande {{number}}"
+  },
+  "kitchenMode": {
+    "title": "Mode cuisine",
+    "subtitle": "Gardez cet écran ouvert sur une tablette cuisine pour entendre et traiter les nouvelles commandes rapidement.",
+    "start": "Démarrer le mode cuisine",
+    "soundReady": "Son activé",
+    "soundHint": "Appuyez une fois sur « Démarrer le mode cuisine » pour autoriser l’alarme dans ce navigateur.",
+    "waitingTitle": "En attente de la prochaine commande",
+    "waitingBody": "Lorsqu’une nouvelle commande nécessite une confirmation, elle apparaîtra ici immédiatement."
+  },
+  "assistant": {
+    "title": "Assistant Rendasua",
+    "subtitle": "Posez vos questions sur la livraison, les paiements, etc.",
+    "open": "Discuter avec nous",
+    "close": "Fermer le chat",
+    "send": "Envoyer",
+    "placeholder": "Tapez votre question…",
+    "empty": "Demandez où nous sommes situés, comment fonctionnent les paiements ou si le retrait est disponible.",
+    "emptyIllustration": "Discuter avec Rendasua",
+    "typing": "L'assistant écrit…",
+    "handoff": "Nous vous mettons en relation avec notre équipe. Vous pouvez aussi nous joindre sur WhatsApp.",
+    "thinking": "Réflexion en cours…",
+    "emptyTitle": "Comment puis-je vous aider ?",
+    "emptySubtitle": "Posez des questions sur nos services, la livraison, les paiements ou les points de retrait.",
+    "handoffTitle": "Mise en relation avec notre équipe",
+    "handoffBody": "Notre équipe de support vous contactera sous peu.",
+    "errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
+    "clear": "Effacer la conversation",
+    "whatsappCta": "Discuter sur WhatsApp",
+    "supportCta": "Consulter notre assistant IA",
+    "ctaTitle": "Consulter notre assistant IA",
+    "ctaBody": "Obtenez des réponses instantanées sur la livraison, les paiements, le retrait et plus encore — 24h/24, 7j/7.",
+    "statusOnline": "En ligne · Propulsé par l'IA",
+    "statusThinking": "Génération de la réponse",
+    "suggestion": {
+      "location": "Où êtes-vous situés ?",
+      "payDelivery": "Acceptez-vous le paiement à la livraison ?",
+      "pickup": "Proposez-vous le retrait en magasin ?",
+      "mobilePay": "Acceptez-vous le mobile money ?"
+    },
+    "homeEntryTitle": "Demandez à l'assistant IA",
+    "homeEntryBody": "Obtenez des réponses rapides sur la livraison, les paiements, le retrait et votre compte.",
+    "homeEntryCta": "Ouvrir l'assistant"
   }
 }

@@ -26,6 +26,14 @@ export class DeepLinkService {
     return this.build(`admin/orders/${orderId}`, `/admin/orders/${orderId}`);
   }
 
+  /** WhatsApp support inbox conversation (mobile admin shell). */
+  whatsAppInbox(conversationId: string): DeepLinkPair {
+    return this.build(
+      `admin/whatsapp/${conversationId}`,
+      `/admin/whatsapp/${conversationId}`
+    );
+  }
+
   delivery(offerOrDeliveryId: string): DeepLinkPair {
     return this.build(
       `deliveries/${offerOrDeliveryId}`,
@@ -36,7 +44,7 @@ export class DeepLinkService {
   chat(threadOrOrderId: string): DeepLinkPair {
     return this.build(
       `chat/${threadOrOrderId}`,
-      `/orders/${threadOrOrderId}?messages=1`
+      `/orders/${threadOrOrderId}/messages`
     );
   }
 
@@ -55,6 +63,13 @@ export class DeepLinkService {
     return this.build(
       `rentals/requests/${requestId}`,
       `/business/rentals/requests`
+    );
+  }
+
+  productInterest(): DeepLinkPair {
+    return this.build(
+      'business/product-interest',
+      '/business/product-interest'
     );
   }
 

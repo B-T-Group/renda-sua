@@ -13,6 +13,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   FormControl,
   InputLabel,
   MenuItem,
@@ -37,6 +38,10 @@ import {
   type AdminOrderDetail,
   type OrderContactRole,
 } from '../../../hooks/useAdminOrders';
+import {
+  escalationRepliesForRole,
+  type EscalationReplyTemplate,
+} from '../../../utils/adminOrderEscalationReplies';
 
 const CORRECTABLE_STATUSES = [
   'pending',
@@ -141,6 +146,17 @@ export const OrderInterventionPanel: React.FC<OrderInterventionPanelProps> = ({
   };
 
   const selectedContact = order.contacts.find((c) => c.role === recipient);
+  const replies = escalationRepliesForRole(recipient);
+
+  const applyReply = (reply: EscalationReplyTemplate) => {
+    const body = t(reply.bodyKey, reply.bodyDefault);
+    if (channel === 0) setMessage(body);
+    else if (channel === 1) setEmailBody(body);
+    else setSms(body);
+  };
+
+  const activeBody =
+    channel === 0 ? message : channel === 1 ? emailBody : sms;
 
   return (
     <Card>
@@ -174,6 +190,30 @@ export const OrderInterventionPanel: React.FC<OrderInterventionPanelProps> = ({
           <Tab icon={<EmailIcon />} label={t('admin.orders.email', 'Email')} />
           <Tab icon={<SmsIcon />} label={t('admin.orders.sms', 'SMS')} />
         </Tabs>
+
+        {replies.length > 0 ? (
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            useFlexGap
+            spacing={1}
+            sx={{ pt: 2, pb: 0.5 }}
+          >
+            {replies.map((reply) => {
+              const body = t(reply.bodyKey, reply.bodyDefault);
+              return (
+                <Chip
+                  key={reply.id}
+                  label={t(reply.labelKey, reply.labelDefault)}
+                  variant={activeBody === body ? 'filled' : 'outlined'}
+                  color={activeBody === body ? 'primary' : 'default'}
+                  onClick={() => applyReply(reply)}
+                  size="small"
+                />
+              );
+            })}
+          </Stack>
+        ) : null}
 
         <Box sx={{ py: 2 }} hidden={channel !== 0}>
           {!selectedContact?.can_message && (

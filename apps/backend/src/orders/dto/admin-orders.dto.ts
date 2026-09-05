@@ -156,6 +156,22 @@ export class AcknowledgeRiskIncidentDto {
   @IsOptional()
   @IsBoolean()
   resolve?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['in_app_message', 'call', 'email'],
+    description: 'How ops contacted participants (required for credit)',
+  })
+  @IsOptional()
+  @IsIn(['in_app_message', 'call', 'email'])
+  contact_channel?: 'in_app_message' | 'call' | 'email';
+
+  @ApiPropertyOptional({
+    enum: ['order_cancelled', 'confirmed', 'system_cancelled'],
+    description: 'Recorded outcome (required for credit)',
+  })
+  @IsOptional()
+  @IsIn(['order_cancelled', 'confirmed', 'system_cancelled'])
+  order_result?: 'order_cancelled' | 'confirmed' | 'system_cancelled';
 }
 
 export const ORDER_CONTACT_RECIPIENT_TYPES = [

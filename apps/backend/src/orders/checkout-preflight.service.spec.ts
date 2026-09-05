@@ -806,3 +806,182 @@ describe('CheckoutPreflightService', () => {
     });
   });
 });
+  // -------------------------------------------------------------------------
+  // Diaspora checkout: payer abroad, recipient local
+  // -------------------------------------------------------------------------
+  describe('diaspora checkout', () => {
+    function mockDiasporaRail() {
+      (paymentRoutingService.resolveOrderRail as jest.Mock).mockResolvedValue({
+        rail: 'stripe',
+        source: 'payer',
+        isDiaspora: true,
+      });
+    }
+
+    it('routes a CA payer buying from a Gabonese merchant onto Stripe', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'GA' })], {
+        addressCountry: 'GA',
+      });
+      mockDiasporaRail();
+      (fxEstimateService.estimate as jest.Mock).mockReturnValue({
+        currency: 'CAD',
+        amount: 32.48,
+        rate: 0.00224,
+        source: 'indicative_config',
+      });
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          sending_to_someone_else: true,
+          recipient: { name: 'Awa Ndong', phone: '077123456' },
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.checkout_method).toBe(CheckoutMethod.STRIPE);
+      expect(result.diaspora).toEqual(
+        expect.objectContaining({
+          is_diaspora: true,
+          payer_country: 'CA',
+          fulfillment_country: 'GA',
+          rail_source: 'payer',
+          requires_recipient_contact: true,
+          payer_charge_estimate: expect.objectContaining({ currency: 'CAD' }),
+        })
+      );
+    });
+
+    it('omits the diaspora block for a purely local order', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'CM' })], {
+        addressCountry: 'CM',
+      });
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-cm',
+          payer_country: 'CM',
+        },
+        false
+      );
+
+      expect(result.diaspora).toBeNull();
+    });
+
+    it('blocks checkout when the recipient toggle has no contact details', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'GA' })], {
+        addressCountry: 'GA',
+      });
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          sending_to_someone_else: true,
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'RECIPIENT_CONTACT_REQUIRED'
+        )
+      ).toBe(true);
+    });
+
+    it('blocks a recipient phone that is invalid for the delivery country', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'GA' })], {
+        addressCountry: 'GA',
+      });
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          sending_to_someone_else: true,
+          recipient: { name: 'Awa Ndong', phone: '12' },
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'RECIPIENT_PHONE_INVALID_FOR_COUNTRY'
+        )
+      ).toBe(true);
+    });
+
+    it('blocks pay at delivery for a payer abroad', async () => {
+      mockInventory(
+        [makeInventoryRow({ sellerCountry: 'GA', payOnDelivery: true })],
+        { addressCountry: 'GA' }
+      );
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          payment_timing: 'pay_at_delivery',
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'DIASPORA_REQUIRES_PAY_NOW'
+        )
+      ).toBe(true);
+    });
+
+    it('ignores a spoofed local payer_country when the profile is abroad', async () => {
+      mockInventory(
+        [makeInventoryRow({ sellerCountry: 'GA', payOnDelivery: true })],
+        { addressCountry: 'GA' }
+      );
+      hasuraUserService.getUser.mockResolvedValue({ id: 'user-ca' } as any);
+      paymentRoutingService.getUserCountryCode.mockResolvedValue('CA');
+      paymentRoutingService.resolveTrustedPayerCountry.mockResolvedValue('CA');
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'GA',
+          payment_timing: 'pay_at_delivery',
+        },
+        true
+      );
+
+      expect(paymentRoutingService.resolveTrustedPayerCountry).toHaveBeenCalledWith(
+        {
+          profileCountry: 'CA',
+          requestedCountry: 'GA',
+        }
+      );
+      expect(paymentRoutingService.resolveOrderRail).toHaveBeenCalledWith({
+        sellerCountry: 'GA',
+        payerCountry: 'CA',
+      });
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'DIASPORA_REQUIRES_PAY_NOW'
+        )
+      ).toBe(true);
+    });
+  });
+});

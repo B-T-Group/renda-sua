@@ -220,6 +220,28 @@ export function buildOrderAcceptanceEscalationPushMessage(params: {
   };
 }
 
+export function buildOrderAcceptanceReminderPushMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+  remainingSeconds: number;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const windowLabel = formatAcceptWindow(
+    Math.max(1, params.remainingSeconds),
+    locale
+  );
+  if (locale === 'fr') {
+    return {
+      title: 'Toujours en attente',
+      body: `Confirmez la commande ${params.orderNumber} — il vous reste ${windowLabel}`,
+    };
+  }
+  return {
+    title: 'Still waiting',
+    body: `Confirm order ${params.orderNumber} — ${windowLabel} left`,
+  };
+}
+
 /**
  * `statusLabel` for the rs_order_status WhatsApp template when a merchant has
  * blown the confirm deadline. Carries the remaining grace so the merchant knows

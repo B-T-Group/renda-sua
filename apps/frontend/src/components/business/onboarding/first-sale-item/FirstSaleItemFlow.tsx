@@ -303,6 +303,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
           <FirstSaleItemProcessingStep
             files={files}
             merchantHint={merchantHint}
+            isFoodItem={isFoodItem}
             asyncCleanupRequested={asyncCleanupRequested}
             initialImageIds={imageIds}
             initialItemId={itemId}

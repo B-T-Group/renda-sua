@@ -4,6 +4,7 @@ import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { brandTokens } from '../../theme/brandTokens';
 
 interface LanguageSwitcherProps {
   /** Use light colors for use on a dark header */
@@ -62,8 +63,12 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ inverted }) => {
         onClick={handleClick}
         startIcon={<Language />}
         sx={{
-          color: inverted ? '#ffffff' : '#1e40af',
+          color: inverted
+            ? brandTokens.primary.contrastText
+            : brandTokens.primary.main,
           textTransform: 'none',
+          px: 1.5,
+          minWidth: 0,
           '&:hover': {
             backgroundColor: inverted ? 'rgba(255, 255, 255, 0.08)' : 'rgba(30, 64, 175, 0.1)',
           },
@@ -72,7 +77,9 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ inverted }) => {
         <Typography
           variant="body2"
           sx={{
-            color: inverted ? '#ffffff' : '#1e40af',
+            color: inverted
+            ? brandTokens.primary.contrastText
+            : brandTokens.primary.main,
             fontWeight: 500,
           }}
         >

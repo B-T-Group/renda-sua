@@ -14,6 +14,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { environment } from '../../config/environment';
+import { isAfricanMarketCountry } from '../../constants/marketCountries';
 import { useCurrentLocation } from '../../hooks/useCurrentLocation';
 import { getCountryStateCity } from '../../utils/countryStateCityLoader';
 import { useGooglePlacesAutocomplete } from '../../hooks/useGooglePlacesAutocomplete';
@@ -175,6 +176,7 @@ const AddressForm: React.FC<AddressFormProps> = ({
       liberia: 'LR',
       'ivory coast': 'CI',
       "cote d'ivoire": 'CI',
+      "cote d'ivoire (ivory coast)": 'CI',
       benin: 'BJ',
       togo: 'TG',
       cameroon: 'CM',
@@ -182,6 +184,10 @@ const AddressForm: React.FC<AddressFormProps> = ({
       'equatorial guinea': 'GQ',
       gabon: 'GA',
       congo: 'CG',
+      'congo-brazzaville': 'CG',
+      'congo brazzaville': 'CG',
+      'republic of the congo': 'CG',
+      'republic of congo': 'CG',
       'democratic republic of the congo': 'CD',
       'democratic republic of congo': 'CD',
       drc: 'CD',
@@ -660,7 +666,7 @@ const AddressForm: React.FC<AddressFormProps> = ({
 
         {(() => {
           const effectiveCountry = (readOnlyCountry ?? addressData?.country ?? '').trim();
-          const hideForCountry = effectiveCountry === 'CM' || effectiveCountry === 'GA';
+          const hideForCountry = isAfricanMarketCountry(effectiveCountry);
           if (hidePostalCode || hideForCountry) return null;
           return (
           <TextField

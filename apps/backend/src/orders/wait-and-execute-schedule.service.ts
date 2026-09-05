@@ -46,7 +46,11 @@ export class WaitAndExecuteScheduleService {
    * On failure, logs only; does not throw.
    */
   async schedulePaymentTimeout(
-    eventType: 'order.created' | 'order.claim_initiated' | 'order.payment_failed',
+    eventType:
+      | 'order.created'
+      | 'order.claim_initiated'
+      | 'order.payment_failed'
+      | 'order.pending_payment_timeout',
     payload: WaitExecutePayload,
     waitMinutes?: number
   ): Promise<void> {
@@ -61,7 +65,8 @@ export class WaitAndExecuteScheduleService {
     eventType:
       | 'order.acceptance_deadline'
       | 'order.acceptance_grace_deadline'
-      | 'order.acceptance_activate',
+      | 'order.acceptance_activate'
+      | 'order.acceptance_reminder',
     payload: WaitExecutePayload,
     waitSeconds: number
   ): Promise<void> {

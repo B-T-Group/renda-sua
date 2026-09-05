@@ -35,7 +35,7 @@ export function mapAppPathToWeb(path: string): string {
   if (path.startsWith('/verification')) return '/documents';
   if (path.startsWith('/chat/')) {
     const id = path.replace('/chat/', '').split(/[?#]/)[0];
-    return `/orders/${id}?messages=1`;
+    return `/orders/${id}/messages`;
   }
   if (path.startsWith('/deliveries/')) {
     const id = path.replace('/deliveries/', '').split(/[?#]/)[0];
@@ -62,10 +62,45 @@ export function isSafeSameOriginPath(path: string): boolean {
   return SAFE_PATH_SEGMENT.test(pathOnly);
 }
 
+export const ANDROID_APP_PACKAGE = 'com.rendasua.agent';
+
+const NAMED_IN_APP_UA =
+  /WhatsApp|FBAN|FBAV|Instagram|Line\/|Twitter|FB_IAB|FBIOS/i;
+
+export function isAndroidUserAgent(userAgent: string): boolean {
+  return /Android/i.test(userAgent);
+}
+
+/** WhatsApp / Instagram / Facebook in-app browsers block most custom-scheme redirects. */
+export function isInAppBrowser(userAgent: string): boolean {
+  if (NAMED_IN_APP_UA.test(userAgent)) return true;
+  if (/iPhone|iPad|iPod/i.test(userAgent) && !/Safari/i.test(userAgent)) {
+    return true;
+  }
+  return /Android/i.test(userAgent) && /; wv\)/i.test(userAgent);
+}
+
 export function toAppSchemeUrl(appRelative: string): string {
   const cleaned = appRelative.replace(/^\/+/, '');
   if (!cleaned || ABSOLUTE_OR_SCHEME.test(cleaned) || cleaned.includes('\\')) {
     return 'rendasua://';
   }
   return `rendasua://${cleaned}`;
+}
+
+/** Android Intent URL so WhatsApp's WebView can hand off to the installed app. */
+export function toAndroidIntentUrl(appRelative: string): string {
+  const path = appRelative.replace(/^\/+/, '');
+  const hostAndPath = path || 'orders';
+  return `intent://${hostAndPath}#Intent;scheme=rendasua;package=${ANDROID_APP_PACKAGE};end`;
+}
+
+export function openAppHref(appRelative: string, userAgent: string): string {
+  if (isAndroidUserAgent(userAgent)) return toAndroidIntentUrl(appRelative);
+  return toAppSchemeUrl(appRelative);
+}
+
+/** Auto-bounce only in a real browser — in-app WebViews swallow custom schemes. */
+export function shouldAutoOpenApp(userAgent: string): boolean {
+  return !isInAppBrowser(userAgent);
 }

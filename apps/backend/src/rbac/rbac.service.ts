@@ -14,6 +14,8 @@ export interface PlatformRoleUser {
   lastName: string | null;
   /** Raw `users.preferred_language`; normalize before using it as a locale. */
   preferredLanguage: string | null;
+  /** ISO alpha-2 from `users.country`; null means global / unset. */
+  country: string | null;
   roles: string[];
 }
 
@@ -225,6 +227,7 @@ export class RbacService {
             first_name
             last_name
             preferred_language
+            country
           }
         }
       }
@@ -241,6 +244,7 @@ export class RbacService {
           firstName: row.user?.first_name ?? null,
           lastName: row.user?.last_name ?? null,
           preferredLanguage: row.user?.preferred_language ?? null,
+          country: normalizeStaffCountry(row.user?.country),
           roles: roleKey ? [roleKey] : [],
         });
       } else if (roleKey && !existing.roles.includes(roleKey)) {
@@ -251,4 +255,10 @@ export class RbacService {
       (a.email ?? '').localeCompare(b.email ?? '')
     );
   }
+}
+
+function normalizeStaffCountry(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toUpperCase();
+  return trimmed || null;
 }

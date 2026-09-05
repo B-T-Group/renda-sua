@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../../../config/configuration';
 import { WhatsAppService } from '../../../whatsapp/whatsapp.service';
-import type { ChannelAttemptResult, WhatsAppChannelPayload } from '../notification.types';
+import type {
+  ChannelAttemptResult,
+  WhatsAppChannelPayload,
+} from '../notification.types';
 import { WhatsAppTemplateService } from '../whatsapp-template.service';
 
 @Injectable()
@@ -35,14 +38,13 @@ export class WhatsAppChannel {
     to: string;
     locale?: string;
     payload: WhatsAppChannelPayload;
+    entityId?: string;
+    entityType?: string;
+    /** Admin/ops test sends skip the product WHATSAPP_NOTIFICATIONS_ENABLED flag. */
+    ignoreFeatureFlag?: boolean;
   }): Promise<ChannelAttemptResult> {
-    if (!this.featureEnabled()) {
-      return {
-        channel: 'whatsapp',
-        status: 'skipped',
-        skippedReason: 'whatsapp_disabled_or_not_configured',
-      };
-    }
+    const skipped = this.skipReason(params.ignoreFeatureFlag);
+    if (skipped) return skipped;
     const templateName = this.templateService.resolveMetaName(
       params.payload.templateKey,
       params.locale
@@ -54,22 +56,63 @@ export class WhatsAppChannel {
         error: `Unknown template key: ${params.payload.templateKey}`,
       };
     }
+    return this.deliverTemplate(params, templateName);
+  }
+
+  private skipReason(ignoreFeatureFlag?: boolean): ChannelAttemptResult | null {
+    if (!ignoreFeatureFlag && !this.featureEnabled()) {
+      return {
+        channel: 'whatsapp',
+        status: 'skipped',
+        skippedReason: 'whatsapp_disabled_or_not_configured',
+      };
+    }
+    if (!this.isConfigured()) {
+      return {
+        channel: 'whatsapp',
+        status: 'skipped',
+        skippedReason: 'whatsapp_not_configured',
+      };
+    }
+    return null;
+  }
+
+  private async deliverTemplate(
+    params: {
+      to: string;
+      locale?: string;
+      payload: WhatsAppChannelPayload;
+      entityId?: string;
+      entityType?: string;
+    },
+    templateName: string
+  ): Promise<ChannelAttemptResult> {
+    const languageCode = this.templateService.languageCode(params.locale);
+    const components = this.templateService.buildComponents(params.payload);
     try {
       const result = await this.whatsAppService.sendTemplateMessage({
         to: params.to,
         templateName,
-        languageCode: this.templateService.languageCode(params.locale),
-        components: this.templateService.buildComponents(params.payload),
+        languageCode,
+        components,
         category: this.templateService.category(params.payload.templateKey),
       });
-      const messageId = result.messages[0]?.id;
+      const providerMessageId = result.messages[0]?.id;
       return {
         channel: 'whatsapp',
         status: 'sent',
-        providerMessageId: messageId,
+        providerMessageId,
       };
     } catch (error: any) {
-      this.logger.warn(`WhatsApp send failed: ${error?.message ?? String(error)}`);
+      this.logger.warn(
+        `WhatsApp send failed: ${error?.message ?? String(error)}`,
+        {
+          templateName,
+          templateKey: params.payload.templateKey,
+          languageCode,
+          components,
+        }
+      );
       return {
         channel: 'whatsapp',
         status: 'failed',

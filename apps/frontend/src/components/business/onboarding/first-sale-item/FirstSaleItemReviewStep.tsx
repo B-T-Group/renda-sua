@@ -22,7 +22,8 @@ import { useNavigate } from 'react-router-dom';
 import { useBusinessLockedCurrency } from '../../../../hooks/useBusinessLockedCurrency';
 import { useUserProfileContext } from '../../../../contexts/UserProfileContext';
 import type { ImageItemSuggestions } from '../../../../hooks/useImageItemSuggestions';
-import { FOOD_CATEGORY_NAME } from '../../../../constants/food';
+import { FOOD_CATEGORY_NAME, FOOD_SUB_CATEGORY_NAME } from '../../../../constants/food';
+import ItemCategoryNamePickers from '../../ItemCategoryNamePickers';
 
 export interface ReviewFormValues {
   name: string;
@@ -100,7 +101,11 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
     setCategoryName(
       isFoodItem ? FOOD_CATEGORY_NAME : suggestions?.categoryName?.trim() || ''
     );
-    setSubCategoryName(suggestions?.subCategoryName?.trim() || '');
+    setSubCategoryName(
+      isFoodItem
+        ? FOOD_SUB_CATEGORY_NAME
+        : suggestions?.subCategoryName?.trim() || ''
+    );
     setBrandName(suggestions?.brandName?.trim() || '');
     setIsUsed(suggestions?.isUsed === true);
     setDimensions(suggestions?.dimensions?.trim() || '');
@@ -248,20 +253,11 @@ const FirstSaleItemReviewStep: React.FC<FirstSaleItemReviewStepProps> = ({
           inputProps={{ min: 0, max: 1440, step: 5 }}
         />
       )}
-      <TextField
-        label={t('business.onboarding.firstSale.create.category', 'Category')}
-        value={categoryName}
-        onChange={(e) => setCategoryName(e.target.value)}
-        fullWidth
-      />
-      <TextField
-        label={t(
-          'business.onboarding.firstSale.create.subCategory',
-          'Subcategory'
-        )}
-        value={subCategoryName}
-        onChange={(e) => setSubCategoryName(e.target.value)}
-        fullWidth
+      <ItemCategoryNamePickers
+        categoryName={categoryName}
+        subCategoryName={subCategoryName}
+        onCategoryNameChange={setCategoryName}
+        onSubCategoryNameChange={setSubCategoryName}
       />
       <TextField
         label={t('business.onboarding.firstSale.create.brand', 'Brand')}

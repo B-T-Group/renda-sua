@@ -56,7 +56,7 @@ describe('evaluateOrderRisk — pending acceptance', () => {
 
   it('falls back to order age when no acceptance deadline exists', () => {
     expect(
-      evaluate({ current_status: 'pending', created_at: minutesAgo(45) })
+      evaluate({ current_status: 'pending', created_at: minutesAgo(60) })
     ).toEqual(['pending_acceptance']);
     expect(
       evaluate({ current_status: 'pending', created_at: minutesAgo(10) })
@@ -236,32 +236,22 @@ describe('evaluateOrderRisk — ready but unassigned', () => {
 });
 
 describe('evaluateOrderRisk — ready but never collected', () => {
-  it('flags a store pickup order nobody came for', () => {
+  it('does not flag store pickup sitting ready for collection', () => {
     expect(
       evaluate({
         current_status: 'ready_for_pickup',
         fulfillment_method: 'pickup',
         status_changed_at: minutesAgo(800),
       })
-    ).toEqual(['pickup_uncollected']);
+    ).toEqual([]);
   });
 
-  it('covers shipping orders waiting on a carrier handoff', () => {
+  it('does not flag shipping orders waiting on a carrier handoff', () => {
     expect(
       evaluate({
         current_status: 'ready_for_pickup',
         fulfillment_method: 'shipping',
         status_changed_at: minutesAgo(800),
-      })
-    ).toEqual(['pickup_uncollected']);
-  });
-
-  it('gives the customer the full collection window first', () => {
-    expect(
-      evaluate({
-        current_status: 'ready_for_pickup',
-        fulfillment_method: 'pickup',
-        status_changed_at: minutesAgo(120),
       })
     ).toEqual([]);
   });

@@ -41,3 +41,16 @@ export interface WhatsAppGraphMessagesResponse {
   messages?: Array<{ id?: string; message_status?: string }>;
   error?: { message?: string; type?: string; code?: number };
 }
+
+export interface WhatsAppGraphMediaMeta {
+  url?: string;
+  mime_type?: string;
+  sha256?: string;
+  file_size?: number;
+  id?: string;
+}
+
+export interface WhatsAppDownloadedMedia {
+  buffer: Buffer;
+  mimeType: string;
+}

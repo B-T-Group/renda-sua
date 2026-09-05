@@ -99,6 +99,20 @@ export interface Order {
   agent_hold_amount?: number; // Amount required by agent to claim this order
   /** Approximate km from agent GPS to pickup (open orders). */
   pickup_distance_km?: number | null;
+  /** Local recipient when the payer bought for someone else. */
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  is_third_party_recipient?: boolean | null;
+  is_diaspora_order?: boolean | null;
+  /**
+   * Who to contact at handover. The backend swaps in the recipient and hides
+   * the payer's phone when the two are different people.
+   */
+  delivery_contact?: {
+    name: string;
+    phone: string | null;
+    is_recipient: boolean;
+  } | null;
   client: Client;
   business: Business;
   business_location: BusinessLocation;

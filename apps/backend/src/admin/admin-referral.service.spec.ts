@@ -12,6 +12,11 @@ describe('AdminReferralService', () => {
     creditAfterFirstDelivery: jest.Mock;
   };
   let paymentRouting: { getUserCountryCode: jest.Mock };
+  let credits: {
+    resolveReferrerUserId: jest.Mock;
+    awardBusinessReferred: jest.Mock;
+    awardAgentReferred: jest.Mock;
+  };
 
   const resolved = {
     kind: 'agent' as const,
@@ -32,11 +37,17 @@ describe('AdminReferralService', () => {
       creditAfterFirstDelivery: jest.fn().mockResolvedValue(undefined),
     };
     paymentRouting = { getUserCountryCode: jest.fn().mockResolvedValue('CM') };
+    credits = {
+      resolveReferrerUserId: jest.fn().mockResolvedValue('ref-user'),
+      awardBusinessReferred: jest.fn().mockResolvedValue(null),
+      awardAgentReferred: jest.fn().mockResolvedValue(null),
+    };
     service = new AdminReferralService(
       hasura as any,
       businessReferrals as any,
       agentReferrals as any,
-      paymentRouting as any
+      paymentRouting as any,
+      credits as any
     );
   });
 
@@ -64,6 +75,15 @@ describe('AdminReferralService', () => {
       'ag1',
       'CM'
     );
+    expect(credits.resolveReferrerUserId).toHaveBeenCalledWith({
+      kind: 'agent',
+      agentId: 'ref-agent',
+      businessUserId: undefined,
+    });
+    expect(credits.awardAgentReferred).toHaveBeenCalledWith({
+      referrerUserId: 'ref-user',
+      agentId: 'ag1',
+    });
     expect(
       businessReferrals.notifyReferrerOfBusinessReferral
     ).not.toHaveBeenCalled();
@@ -87,6 +107,10 @@ describe('AdminReferralService', () => {
       success: true,
     });
     expect(agentReferrals.creditAfterFirstDelivery).not.toHaveBeenCalled();
+    expect(credits.awardBusinessReferred).toHaveBeenCalledWith({
+      referrerUserId: 'ref-user',
+      businessId: 'b1',
+    });
     expect(
       businessReferrals.notifyReferrerOfBusinessReferral
     ).toHaveBeenCalledWith(

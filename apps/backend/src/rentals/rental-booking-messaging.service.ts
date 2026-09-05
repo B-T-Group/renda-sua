@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { requireUuid } from '../common/uuid.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -114,17 +115,17 @@ export class RentalBookingMessagingService {
     bookingId: string,
     lastReadMessageId: string
   ): Promise<void> {
+    const lastId = requireUuid(lastReadMessageId, 'lastReadMessageId');
     const user = await this.hasuraUserService.getUser();
     const booking = await this.loadBooking(bookingId);
     this.assertAccess(user, booking);
-    if (!lastReadMessageId) return;
     const last = await this.hasuraSystemService.executeQuery<{
       user_messages: Array<{ created_at: string }>;
     }>(
       `query LastMsg($id: uuid!) {
         user_messages(where: { id: { _eq: $id } }, limit: 1) { created_at }
       }`,
-      { id: lastReadMessageId }
+      { id: lastId }
     );
     const upTo = last.user_messages?.[0]?.created_at;
     if (!upTo) return;

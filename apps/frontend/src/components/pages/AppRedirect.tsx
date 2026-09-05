@@ -6,10 +6,14 @@ const AppRedirect: React.FC = () => {
   const { isCheckingProfile } = useAuthFlow();
 
   useEffect(() => {
-    const pendingSignupUserId = sessionStorage.getItem('pendingSignupUserId');
-    if (!pendingSignupUserId) return;
-    sessionStorage.removeItem('pendingSignupUserId');
+    const pendingSignupAttemptId = sessionStorage.getItem('pendingSignupAttemptId');
+    if (!pendingSignupAttemptId) return;
+    sessionStorage.removeItem('pendingSignupAttemptId');
     sessionStorage.removeItem('pendingSignupEmail');
+    sessionStorage.removeItem('pendingSignupPhone');
+    sessionStorage.removeItem('pendingSignupOtpChannel');
+    sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
+    sessionStorage.removeItem('pendingSignupUserId');
   }, []);
 
   return (

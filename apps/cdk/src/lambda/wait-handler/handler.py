@@ -2,24 +2,19 @@
 Wait-handler Lambda: generic handler invoked by Step Functions after a wait.
 
 Receives { event_type, payload, run_at }. Implements payment-timeout logic for
-order.created and order.claim_initiated, merchant acceptance SLA callbacks,
-and agent-dispatch round escalation/exhaustion callbacks.
+order.created, order.pending_payment_timeout, and order.payment_failed,
+merchant acceptance SLA callbacks, and agent-dispatch round escalation/exhaustion.
 """
 import json
 import os
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import boto3
 from rendasua_core_packages.hasura_client.mobile_payment_transactions_service import (
     get_transaction_by_id,
     update_transaction_status,
-)
-from rendasua_core_packages.hasura_client.orders_service import (
-    cancel_order,
-    get_order_payment_failure_state,
 )
 from rendasua_core_packages.secrets_manager import get_hasura_admin_secret
 
@@ -46,130 +41,142 @@ def _get_hasura_config(environment: str) -> tuple[str, str]:
     return endpoint, secret
 
 
-def _send_order_cancelled_sqs(
-    order_id: str,
-    queue_url: str,
-) -> bool:
-    """Send order.cancelled message to SQS. cancelledBy=system, previousStatus=pending_payment."""
-    msg = {
-        "eventType": "order.cancelled",
-        "orderId": order_id,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        "cancelledBy": "system",
-        "previousStatus": "pending_payment",
-        "orderStatus": "cancelled",
-    }
+def _call_backend_internal(
+    path: str,
+    body: Dict[str, Any],
+    log_label: str,
+) -> Dict[str, Any]:
+    """POST a Nest internal orders endpoint."""
+    base = (os.environ.get("BACKEND_INTERNAL_API_BASE_URL") or "").rstrip("/")
+    key = os.environ.get("NOTIFICATIONS_INTERNAL_API_KEY") or ""
+    if not base or not key:
+        log_error("BACKEND_INTERNAL_API_BASE_URL or NOTIFICATIONS_INTERNAL_API_KEY missing")
+        return {"success": False, "error": "backend internal API not configured"}
+    url = f"{base}/api/orders/internal/{path}"
+    payload = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-rendasua-internal-key": key,
+        },
+    )
     try:
-        sqs = boto3.client("sqs")
-        sqs.send_message(
-            QueueUrl=queue_url,
-            MessageBody=json.dumps(msg),
-            MessageGroupId=order_id,
-        )
-        log_info("Sent order.cancelled to SQS", order_id=order_id)
-        return True
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8")
+            log_info(f"{log_label} OK", path=path, status=resp.status)
+            try:
+                return json.loads(raw) if raw else {"success": True}
+            except json.JSONDecodeError:
+                return {"success": True}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8") if e.fp else ""
+        log_error(f"{log_label} HTTP error", error=e, path=path, body=err_body)
+        return {"success": False, "error": f"HTTP {e.code}"}
     except Exception as e:
-        log_error("Failed to send order.cancelled to SQS", error=e, order_id=order_id)
-        return False
+        log_error(f"{log_label} failed", error=e, path=path)
+        return {"success": False, "error": str(e)}
 
 
-def _handle_order_created(
-    payload: Dict[str, Any],
-    hasura_endpoint: str,
-    hasura_admin_secret: str,
-    queue_url: Optional[str],
+def _call_backend_cancel_unpaid(
     order_id: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """POST Nest cancel-unpaid (CAS + Stripe release + inventory restore)."""
+    return _call_backend_internal(
+        "cancel-unpaid",
+        {"orderId": order_id, "reason": reason},
+        "Cancel unpaid",
+    )
+
+
+def _cancel_momo_tx_if_pending(
     transaction_id: str,
-) -> Dict[str, Any]:
-    """Cancel order (mirror cancelOrder): cancel_order + SQS."""
-    log_info("Processing order.created timeout", order_id=order_id, transaction_id=transaction_id)
-    result = cancel_order(
-        order_id,
-        "Order cancelled due to payment timeout",
-        hasura_endpoint,
-        hasura_admin_secret,
-    )
-    if not result.get("success"):
-        return {"success": False, "error": result.get("error", "Failed to cancel order")}
-    if queue_url:
-        _send_order_cancelled_sqs(order_id, queue_url)
-    else:
-        log_info("ORDER_STATUS_QUEUE_URL not set, skipping SQS", order_id=order_id)
-    return {"success": True, "event_type": "order.created", "order_id": order_id}
-
-
-def _handle_order_payment_failed(
-    payload: Dict[str, Any],
     hasura_endpoint: str,
     hasura_admin_secret: str,
-    queue_url: Optional[str],
+) -> None:
+    """Mark mobile_payment_transactions row cancelled when still pending."""
+    tx = get_transaction_by_id(
+        transaction_id, hasura_endpoint, hasura_admin_secret
+    )
+    if not tx:
+        log_error("Transaction not found for MoMo cancel", transaction_id=transaction_id)
+        return
+    status = tx.get("status")
+    if status != "pending":
+        log_info(
+            "MoMo tx not pending; skip provider cancel",
+            transaction_id=transaction_id,
+            status=status,
+        )
+        return
+    log_info("Cancelling pending MoMo transaction", transaction_id=transaction_id)
+    update_transaction_status(
+        transaction_id, "cancelled", hasura_endpoint, hasura_admin_secret
+    )
+
+
+def _handle_unpaid_order_timeout(
     order_id: str,
+    reason: str,
+    transaction_id: Optional[str],
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    event_type: str,
 ) -> Dict[str, Any]:
     """
-    Cancel order only after the 3h grace period anchored on orders.payment_failed_at.
-    Skips if:
-      - order not found
-      - payment is already paid
-      - payment_failed_at missing
-      - less than 3h have elapsed since payment_failed_at
+    Nest cancel first; only cancel MoMo tx when Nest reports cancelled.
+    If Nest skipped (already paid / no longer pending_payment), leave tx alone.
     """
-    state = get_order_payment_failure_state(order_id, hasura_endpoint, hasura_admin_secret)
-    if not state:
-        log_error("Order not found for payment_failed handler", order_id=order_id)
-        return {"success": False, "error": "Order not found"}
-
-    if (state.get("payment_status") or "").lower() == "paid":
-        log_info("Order already paid, skipping grace cancel", order_id=order_id)
-        return {"success": True, "skipped": True, "reason": "already_paid"}
-
-    failed_at_raw = state.get("payment_failed_at")
-    if not failed_at_raw:
-        log_info("payment_failed_at missing, skipping grace cancel", order_id=order_id)
-        return {"success": True, "skipped": True, "reason": "missing_payment_failed_at"}
-
-    try:
-        # Hasura timestamptz is ISO string
-        failed_at = datetime.fromisoformat(str(failed_at_raw).replace("Z", "+00:00"))
-        now = datetime.now(tz=timezone.utc)
-        elapsed_seconds = (now - failed_at).total_seconds()
-        if elapsed_seconds < 3 * 60 * 60:
-            log_info(
-                "Grace period not yet elapsed, skipping cancel",
-                order_id=order_id,
-                payment_failed_at=failed_at_raw,
-                elapsed_seconds=elapsed_seconds,
-            )
-            return {"success": True, "skipped": True, "reason": "grace_not_elapsed"}
-    except Exception as e:
-        log_error("Failed to parse payment_failed_at", error=e, order_id=order_id, payment_failed_at=failed_at_raw)
-        return {"success": False, "error": "Invalid payment_failed_at"}
-
-    log_info("Grace period elapsed, cancelling order", order_id=order_id)
-    result = cancel_order(
-        order_id,
-        "Order cancelled due to payment failure (grace period elapsed)",
-        hasura_endpoint,
-        hasura_admin_secret,
+    log_info(
+        "Processing unpaid order timeout via Nest",
+        order_id=order_id,
+        reason=reason,
+        event_type=event_type,
     )
+    result = _call_backend_cancel_unpaid(order_id, reason)
     if not result.get("success"):
-        return {"success": False, "error": result.get("error", "Failed to cancel order")}
-    if queue_url:
-        _send_order_cancelled_sqs(order_id, queue_url)
-    else:
-        log_info("ORDER_STATUS_QUEUE_URL not set, skipping SQS", order_id=order_id)
-    return {"success": True, "event_type": "order.payment_failed", "order_id": order_id}
+        return {
+            "success": False,
+            "error": result.get("error", "Nest cancel-unpaid failed"),
+        }
+    if result.get("cancelled"):
+        if transaction_id:
+            _cancel_momo_tx_if_pending(
+                transaction_id, hasura_endpoint, hasura_admin_secret
+            )
+        return {
+            "success": True,
+            "event_type": event_type,
+            "order_id": order_id,
+            "cancelled": True,
+        }
+    return {
+        "success": True,
+        "event_type": event_type,
+        "order_id": order_id,
+        "skipped": True,
+        "reason": result.get("reason", "not_cancelled"),
+    }
 
 
 def _handle_order_claim_initiated(
     payload: Dict[str, Any],
     order_id: str,
     transaction_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
 ) -> Dict[str, Any]:
-    """Only cancel transaction; no order changes, no SQS."""
+    """Only cancel transaction; no order changes."""
     log_info(
         "Claim timeout: transaction cancelled only",
         order_id=order_id,
         transaction_id=transaction_id,
+    )
+    _cancel_momo_tx_if_pending(
+        transaction_id, hasura_endpoint, hasura_admin_secret
     )
     return {
         "success": True,
@@ -177,87 +184,6 @@ def _handle_order_claim_initiated(
         "order_id": order_id,
         "transaction_id": transaction_id,
     }
-
-
-def _call_backend_acceptance(path: str, order_id: str) -> Dict[str, Any]:
-    """POST Nest internal acceptance endpoints."""
-    base = (os.environ.get("BACKEND_INTERNAL_API_BASE_URL") or "").rstrip("/")
-    key = os.environ.get("NOTIFICATIONS_INTERNAL_API_KEY") or ""
-    if not base or not key:
-        log_error("BACKEND_INTERNAL_API_BASE_URL or NOTIFICATIONS_INTERNAL_API_KEY missing")
-        return {"success": False, "error": "backend internal API not configured"}
-    url = f"{base}/api/orders/internal/{path}"
-    body = json.dumps({"orderId": order_id}).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "x-rendasua-internal-key": key,
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            raw = resp.read().decode("utf-8")
-            log_info("Acceptance callback OK", path=path, order_id=order_id, status=resp.status)
-            try:
-                return json.loads(raw) if raw else {"success": True}
-            except json.JSONDecodeError:
-                return {"success": True}
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8") if e.fp else ""
-        log_error("Acceptance callback HTTP error", error=e, path=path, body=err_body)
-        return {"success": False, "error": f"HTTP {e.code}"}
-    except Exception as e:
-        log_error("Acceptance callback failed", error=e, path=path)
-        return {"success": False, "error": str(e)}
-
-
-def _call_backend_dispatch_round(order_id: str, round_number: Any) -> Dict[str, Any]:
-    """POST the Nest internal agent-dispatch-round endpoint."""
-    base = (os.environ.get("BACKEND_INTERNAL_API_BASE_URL") or "").rstrip("/")
-    key = os.environ.get("NOTIFICATIONS_INTERNAL_API_KEY") or ""
-    if not base or not key:
-        log_error("BACKEND_INTERNAL_API_BASE_URL or NOTIFICATIONS_INTERNAL_API_KEY missing")
-        return {"success": False, "error": "backend internal API not configured"}
-    url = f"{base}/api/orders/internal/dispatch-round"
-    body = json.dumps({"orderId": order_id, "round": round_number}).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "x-rendasua-internal-key": key,
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            raw = resp.read().decode("utf-8")
-            log_info(
-                "Dispatch round callback OK",
-                order_id=order_id,
-                round=round_number,
-                status=resp.status,
-            )
-            try:
-                return json.loads(raw) if raw else {"success": True}
-            except json.JSONDecodeError:
-                return {"success": True}
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8") if e.fp else ""
-        log_error(
-            "Dispatch round callback HTTP error",
-            error=e,
-            order_id=order_id,
-            round=round_number,
-            body=err_body,
-        )
-        return {"success": False, "error": f"HTTP {e.code}"}
-    except Exception as e:
-        log_error("Dispatch round callback failed", error=e, order_id=order_id)
-        return {"success": False, "error": str(e)}
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -274,7 +200,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         event_type = event.get("event_type")
         payload = event.get("payload") or {}
-        run_at = event.get("run_at")
 
         if not event_type or not payload:
             log_error("Missing event_type or payload", event_type=event_type)
@@ -288,71 +213,85 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         environment = os.environ.get("ENVIRONMENT", "development")
         hasura_endpoint, hasura_admin_secret = _get_hasura_config(environment)
-        queue_url = os.environ.get("ORDER_STATUS_QUEUE_URL")
-
-        if event_type == "order.payment_failed":
-            return _handle_order_payment_failed(
-                payload,
-                hasura_endpoint,
-                hasura_admin_secret,
-                queue_url,
-                order_id,
-            )
 
         if event_type == "order.acceptance_activate":
-            return _call_backend_acceptance("acceptance-activate", order_id)
+            return _call_backend_internal(
+                "acceptance-activate",
+                {"orderId": order_id},
+                "Acceptance activate",
+            )
 
         if event_type == "order.acceptance_deadline":
-            return _call_backend_acceptance("acceptance-deadline", order_id)
+            return _call_backend_internal(
+                "acceptance-deadline",
+                {"orderId": order_id},
+                "Acceptance deadline",
+            )
+
+        if event_type == "order.acceptance_reminder":
+            return _call_backend_internal(
+                "acceptance-reminder",
+                {"orderId": order_id},
+                "Acceptance reminder",
+            )
 
         if event_type == "order.acceptance_grace_deadline":
-            return _call_backend_acceptance("acceptance-grace-deadline", order_id)
+            return _call_backend_internal(
+                "acceptance-grace-deadline",
+                {"orderId": order_id},
+                "Acceptance grace deadline",
+            )
 
         if event_type == "order.dispatch_round":
-            return _call_backend_dispatch_round(order_id, payload.get("round"))
-
-        if not transaction_id:
-            log_error("Missing transaction_id in payload", payload=payload)
-            return {"success": False, "error": "Missing transaction_id"}
-
-        tx = get_transaction_by_id(
-            transaction_id, hasura_endpoint, hasura_admin_secret
-        )
-        if not tx:
-            log_error("Transaction not found", transaction_id=transaction_id)
-            return {"success": False, "error": "Transaction not found"}
-
-        status = tx.get("status")
-        log_info(
-            "Fetched transaction",
-            transaction_id=transaction_id,
-            status=status,
-        )
-        if status != "pending":
-            log_info(
-                "Transaction no longer pending, skipping",
-                transaction_id=transaction_id,
-                status=status,
+            return _call_backend_internal(
+                "dispatch-round",
+                {"orderId": order_id, "round": payload.get("round")},
+                "Dispatch round",
             )
-            return {"success": True, "skipped": True, "status": status}
 
-        log_info("Cancelling pending transaction", transaction_id=transaction_id)
-        update_transaction_status(
-            transaction_id, "cancelled", hasura_endpoint, hasura_admin_secret
-        )
-
-        if event_type == "order.created":
-            return _handle_order_created(
-                payload,
+        if event_type == "order.payment_failed":
+            return _handle_unpaid_order_timeout(
+                order_id,
+                "payment_failed_grace",
+                transaction_id,
                 hasura_endpoint,
                 hasura_admin_secret,
-                queue_url,
+                event_type,
+            )
+
+        if event_type == "order.pending_payment_timeout":
+            return _handle_unpaid_order_timeout(
+                order_id,
+                "timeout",
+                None,
+                hasura_endpoint,
+                hasura_admin_secret,
+                event_type,
+            )
+
+        if event_type == "order.created":
+            if not transaction_id:
+                log_error("Missing transaction_id for order.created", payload=payload)
+                return {"success": False, "error": "Missing transaction_id"}
+            return _handle_unpaid_order_timeout(
+                order_id,
+                "timeout",
+                transaction_id,
+                hasura_endpoint,
+                hasura_admin_secret,
+                event_type,
+            )
+
+        if event_type == "order.claim_initiated":
+            if not transaction_id:
+                log_error("Missing transaction_id for claim", payload=payload)
+                return {"success": False, "error": "Missing transaction_id"}
+            return _handle_order_claim_initiated(
+                payload,
                 order_id,
                 transaction_id,
-            )
-        if event_type == "order.claim_initiated":
-            return _handle_order_claim_initiated(
-                payload, order_id, transaction_id
+                hasura_endpoint,
+                hasura_admin_secret,
             )
 
         log_error("Unknown event_type", event_type=event_type)

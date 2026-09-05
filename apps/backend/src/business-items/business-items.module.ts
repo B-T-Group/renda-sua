@@ -17,11 +17,13 @@ import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { BusinessAccountTypeService } from './business-account-type.service';
 import { FoodModule } from '../food/food.module';
+import { CategoriesModule } from '../categories/categories.module';
 
 @Module({
   imports: [
     AuthModule,
     FoodModule,
+    CategoriesModule,
     BusinessContractsModule,
     BusinessImagesModule,
     ImageThumbnailsModule,

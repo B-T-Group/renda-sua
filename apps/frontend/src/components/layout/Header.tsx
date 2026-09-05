@@ -4,11 +4,14 @@ import {
     Dashboard,
     Description,
     FavoriteBorder,
+    Handshake,
+    InfoOutlined,
     Logout,
     Menu,
     MoreVert,
     Person,
     RestaurantMenu,
+    ShoppingBag,
     ShoppingCart,
     SwapHoriz,
 } from '@mui/icons-material';
@@ -57,7 +60,25 @@ import MobileBalanceChip from '../common/MobileBalanceChip';
 import PersonaSwitchOverlay from '../common/PersonaSwitchOverlay';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 import UserRatingSummary from '../common/UserRatingSummary';
+import { MarketSelector } from '../market/MarketSelector';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
+import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
+import { brandTokens } from '../../theme/brandTokens';
+
+function catalogContextFromPath(pathname: string): MarketStatesCatalog {
+  if (pathname.startsWith('/rentals')) return 'rentals';
+  if (
+    pathname.startsWith('/items') ||
+    pathname.startsWith('/foods') ||
+    pathname.startsWith('/stores') ||
+    pathname.startsWith('/collections') ||
+    pathname.startsWith('/store') ||
+    pathname.startsWith('/deals')
+  ) {
+    return 'inventory';
+  }
+  return 'all';
+}
 
 const Header: React.FC = () => {
   const { isLoading } = useAuth0();
@@ -94,23 +115,25 @@ const Header: React.FC = () => {
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  // Guest nav has 5 items with long labels — needs more space, so collapse at lg (1200px).
+  // Guest desktop is two rows, but the top row still has long utility labels
+  // plus market/auth controls, so collapse to the drawer below lg (1200px).
   // Authenticated nav has 2–3 short items — md (900px) is fine.
   const guestMobileBreakpoint = theme.breakpoints.down('lg');
   const authMobileBreakpoint = theme.breakpoints.down('md');
   const isMobile = useMediaQuery(isAuthenticated ? authMobileBreakpoint : guestMobileBreakpoint);
+  const marketCatalogContext = catalogContextFromPath(location.pathname);
 
   const personaHeader = useMemo(() => {
     if (isAuthenticated && isDelegationContext) {
       return {
-        backgroundColor: '#0f766e',
-        navActiveUnderline: '#99f6e4',
+        backgroundColor: brandTokens.secondary.main,
+        navActiveUnderline: brandTokens.tint.secondaryStrong,
       };
     }
     if (!isAuthenticated || userType == null) {
       return {
         backgroundColor: theme.palette.primary.dark,
-        navActiveUnderline: '#93c5fd',
+        navActiveUnderline: brandTokens.tint.primaryStrong,
       };
     }
     switch (userType) {
@@ -126,7 +149,7 @@ const Header: React.FC = () => {
       default:
         return {
           backgroundColor: theme.palette.primary.dark,
-          navActiveUnderline: '#93c5fd',
+          navActiveUnderline: brandTokens.tint.primaryStrong,
         };
     }
   }, [isAuthenticated, userType, theme.palette.primary.dark, isDelegationContext]);
@@ -211,16 +234,21 @@ const Header: React.FC = () => {
     return location.pathname === path;
   };
 
+  const getGuestBrowseItems = () => [
+    { label: t('common.store', 'Store'), path: '/items', icon: <ShoppingBag /> },
+    { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Handshake /> },
+    { label: t('foods.title', 'Food'), path: '/foods', icon: <RestaurantMenu /> },
+  ];
+
+  const getGuestUtilityItems = () => [
+    { label: t('nav.forBusiness', 'For Business'), path: '/for-business', icon: <Dashboard /> },
+    { label: t('nav.becomeAgent', 'Become an Agent'), path: '/become-a-delivery-agent', icon: <Assignment /> },
+    { label: t('footer.about', 'About Us'), path: '/about', icon: <InfoOutlined /> },
+  ];
+
   const getMainNavigationItems = () => {
     if (!isAuthenticated) {
-      return [
-        { label: t('common.store', 'Store'), path: '/items', icon: <Assignment /> },
-        { label: t('rentals.title', 'Rentals'), path: '/rentals', icon: <Assignment /> },
-        { label: t('foods.title', 'Food'), path: '/foods', icon: <RestaurantMenu /> },
-        { label: t('nav.forBusiness', 'For Business'), path: '/for-business', icon: <Dashboard /> },
-        { label: t('nav.becomeAgent', 'Become an Agent'), path: '/become-a-delivery-agent', icon: <Assignment /> },
-        { label: t('footer.about', 'About'), path: '/about', icon: <Assignment /> },
-      ];
+      return [...getGuestBrowseItems(), ...getGuestUtilityItems()];
     }
 
     if (isDelegationContext) {
@@ -308,6 +336,11 @@ const Header: React.FC = () => {
           path: '/rentals/requests',
           icon: <Assignment />,
         },
+        {
+          label: t('productInterest.clientTitle', 'My interest requests'),
+          path: '/product-interest',
+          icon: <Assignment />,
+        },
         { label: t('common.documents', 'Documents'), path: '/documents', icon: <Description /> },
         { label: t('common.messages', 'Messages'), path: '/messages', icon: <Assignment /> }
       );
@@ -356,15 +389,47 @@ const Header: React.FC = () => {
     );
   };
 
+  type NavItem = { label: string; path: string; icon: React.ReactElement };
+
+  const DrawerNavItem = ({ item }: { item: NavItem }) => (
+    <ListItem disablePadding>
+      <ListItemButton
+        component={RouterLink}
+        to={item.path}
+        onClick={handleDrawerToggle}
+        selected={isActiveRoute(item.path)}
+        sx={{
+          borderRadius: 1,
+          mx: 1,
+          mb: 0.5,
+          '&.Mui-selected': {
+            backgroundColor: alpha(personaHeader.backgroundColor, 0.92),
+            color: 'white',
+            '&:hover': {
+              backgroundColor: alpha(personaHeader.backgroundColor, 1),
+            },
+          },
+        }}
+      >
+        <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
+          {item.icon}
+        </ListItemIcon>
+        <ListItemText primary={item.label} />
+      </ListItemButton>
+    </ListItem>
+  );
+
   const NavigationButton = ({
     item,
+    showIcon = true,
   }: {
-    item: { label: string; path: string; icon: React.ReactElement };
+    item: NavItem;
+    showIcon?: boolean;
   }) => (
     <Button
       component={RouterLink}
       to={item.path}
-      startIcon={item.icon}
+      startIcon={showIcon ? item.icon : undefined}
       sx={{
         color: '#ffffff',
         textTransform: 'none',
@@ -385,7 +450,7 @@ const Header: React.FC = () => {
         '&:after': {
           content: '""',
           position: 'absolute',
-          bottom: -8,
+          bottom: 0,
           left: '50%',
           transform: 'translateX(-50%)',
           width: isActiveRoute(item.path) ? '100%' : '0%',
@@ -426,38 +491,20 @@ const Header: React.FC = () => {
       </Box>
 
       <List sx={{ pt: 1 }}>
-        {getAllNavigationItems().map((item) => (
-          <ListItem key={item.path} disablePadding>
-            <ListItemButton
-              component={RouterLink}
-              to={item.path}
-              onClick={handleDrawerToggle}
-              selected={isActiveRoute(item.path)}
-              sx={{
-                borderRadius: 1,
-                mx: 1,
-                mb: 0.5,
-                '&.Mui-selected': {
-                  backgroundColor: alpha(personaHeader.backgroundColor, 0.92),
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: alpha(personaHeader.backgroundColor, 1),
-                  },
-                },
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  color: 'inherit',
-                  minWidth: 40,
-                }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          </ListItem>
+        {(isAuthenticated
+          ? getAllNavigationItems()
+          : getGuestBrowseItems()
+        ).map((item) => (
+          <DrawerNavItem key={item.path} item={item} />
         ))}
+        {!isAuthenticated && (
+          <>
+            <Divider sx={{ my: 1.5 }} />
+            {getGuestUtilityItems().map((item) => (
+              <DrawerNavItem key={item.path} item={item} />
+            ))}
+          </>
+        )}
 
         <Divider sx={{ my: 2 }} />
 
@@ -540,6 +587,12 @@ const Header: React.FC = () => {
           </>
         )}
 
+        <ListItem>
+          <MarketSelector
+            catalogContext={marketCatalogContext}
+            onSelected={handleDrawerToggle}
+          />
+        </ListItem>
         <ListItem>
           <LanguageSwitcher />
         </ListItem>
@@ -655,8 +708,9 @@ const Header: React.FC = () => {
           <Toolbar
             disableGutters
             sx={{
-              minHeight: { xs: 48, md: 48 },
+              minHeight: { xs: 52, md: 56 },
               px: { xs: 2, md: 4 },
+              py: 0.75,
               display: 'flex',
               alignItems: 'center',
             }}
@@ -668,8 +722,21 @@ const Header: React.FC = () => {
               </RouterLink>
             </Box>
 
-            {/* Desktop Navigation — flex-centered, no absolute positioning */}
-            {!isMobile && (
+            {/* Guest desktop: utility links sit beside the logo (browse is the row below). */}
+            {!isMobile && !isAuthenticated && (
+              <Stack
+                direction="row"
+                spacing={0}
+                sx={{ ml: 2, overflow: 'hidden' }}
+              >
+                {getGuestUtilityItems().map((item) => (
+                  <NavigationButton key={item.path} item={item} showIcon={false} />
+                ))}
+              </Stack>
+            )}
+
+            {/* Authenticated desktop: role nav stays centered on a single row. */}
+            {!isMobile && isAuthenticated && (
               <Stack
                 direction="row"
                 spacing={0}
@@ -714,7 +781,12 @@ const Header: React.FC = () => {
             )}
 
             {/* Right Section */}
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, ml: isMobile ? 'auto' : 0 }}>
+            <Stack
+              direction="row"
+              spacing={isMobile ? 1 : 2}
+              alignItems="center"
+              sx={{ flexShrink: 0, ml: 'auto', pl: { xs: 1, md: 2 } }}
+            >
               {/* XAF balance (view transactions, withdraw) - client/agent only; mobile + desktop */}
               {isAuthenticated &&
                 (userType === 'client' || userType === 'agent') && (
@@ -728,6 +800,12 @@ const Header: React.FC = () => {
                     <UserBalanceSummary compact={true} showIcon={false} inverted />
                   </Box>
                 )}
+
+              <MarketSelector
+                catalogContext={marketCatalogContext}
+                inverted
+                compact={isMobile}
+              />
 
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
               {!isMobile && <LanguageSwitcher inverted />}
@@ -1004,7 +1082,7 @@ const Header: React.FC = () => {
               ) : (
                 <Stack
                   direction="row"
-                  spacing={isMobile ? 0.5 : 1}
+                  spacing={isMobile ? 1 : 1.5}
                   alignItems="center"
                   sx={{ flexShrink: 0 }}
                 >
@@ -1022,8 +1100,8 @@ const Header: React.FC = () => {
                         borderRadius: 2,
                         fontWeight: 600,
                         fontSize: '0.78rem',
-                        px: 1.5,
-                        py: 0.5,
+                        px: 2,
+                        py: 0.75,
                         textTransform: 'none',
                         '&:hover': { bgcolor: 'rgba(255,255,255,0.22)' },
                       }}
@@ -1054,6 +1132,26 @@ const Header: React.FC = () => {
               )}
             </Stack>
           </Toolbar>
+          {!isMobile && !isAuthenticated && (
+            <Toolbar
+              disableGutters
+              sx={{
+                minHeight: { xs: 40, md: 42 },
+                px: { xs: 2, md: 4 },
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderTop: '1px solid rgba(255, 255, 255, 0.12)',
+                backgroundColor: 'rgba(0, 0, 0, 0.15)',
+              }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                {getGuestBrowseItems().map((item) => (
+                  <NavigationButton key={item.path} item={item} />
+                ))}
+              </Stack>
+            </Toolbar>
+          )}
         </Container>
       </AppBar>
 

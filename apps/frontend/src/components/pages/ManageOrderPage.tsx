@@ -1,10 +1,8 @@
-import { ArrowBack as ArrowBackIcon, History as HistoryIcon, Star, Support as SupportIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, History as HistoryIcon, Message as MessageIcon, Star, Support as SupportIcon } from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Container,
   IconButton,
@@ -32,7 +30,6 @@ import { useStripeConnect } from '../../hooks/useStripeConnect';
 import ConfirmationModal from '../common/ConfirmationModal';
 import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
-import UserMessagesComponent from '../common/UserMessagesComponent';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
 import { OrderEventsTimeline } from '../orders/OrderEventsTimeline';
 import RatingDialog, { type RatingDialogMode } from '../dialogs/RatingDialog';
@@ -52,11 +49,11 @@ import {
   RefundProgressCard,
 } from '../orders/RefundProgressCard';
 import {
-  messagesDefaultExpandedForOrder,
   ORDER_PRIMARY_ACTION_LABEL,
   orderToPhaseInput,
   resolveOrderPhase,
 } from '../../utils/orderPhase';
+import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import SEOHead from '../seo/SEOHead';
 
 const CLIENT_TRACKING_STATUSES = ['picked_up', 'in_transit', 'out_for_delivery'];
@@ -170,6 +167,17 @@ const ManageOrderPageContent: React.FC = () => {
     setSearchParams(searchParams, { replace: true });
   }, [eligibility, searchParams, setSearchParams]);
 
+  // Legacy deep links: /orders/:id?messages=1 → dedicated messages page
+  useEffect(() => {
+    if (!orderId || searchParams.get('messages') !== '1') return;
+    const highlight = searchParams.get('highlight');
+    const base = isDelegationContext
+      ? `/delegate/orders/${orderId}/messages`
+      : `/orders/${orderId}/messages`;
+    const qs = highlight ? `?highlight=${encodeURIComponent(highlight)}` : '';
+    navigate(`${base}${qs}`, { replace: true });
+  }, [orderId, searchParams, isDelegationContext, navigate]);
+
   useEffect(() => {
     if (!order || !isRefundOrderStatus(order.current_status)) {
       setRefundDetail(null);
@@ -237,14 +245,21 @@ const ManageOrderPageContent: React.FC = () => {
         window.location.assign(result.checkout_url);
         return;
       }
+      if (!isStripeOrder) {
+        navigate(
+          buildMomoAwaitingPaymentTo({
+            orderIds: [order.id],
+            phoneE164: order.client?.user?.phone_number?.trim() || '',
+            source: 'retry',
+            orderNumbers: [order.order_number],
+          })
+        );
+        return;
+      }
       enqueueSnackbar(
         t(
-          isStripeOrder
-            ? 'orders.retryPayment.successStripe'
-            : 'orders.retryPayment.success',
-          isStripeOrder
-            ? 'Opening secure card payment…'
-            : 'Payment retry started. Please check your phone to approve.'
+          'orders.retryPayment.successStripe',
+          'Opening secure card payment…'
         ),
         { variant: 'success' }
       );
@@ -273,22 +288,40 @@ const ManageOrderPageContent: React.FC = () => {
     phaseInfo.primaryActionId === 'pay' &&
     order.payment_timing === 'pay_now' &&
     order.payment_status !== 'paid';
-  const showRateCta = phaseInfo.primaryActionId === 'rate';
+  const canShowRatePrimary = !!(
+    eligibility?.canRateAgent ||
+    eligibility?.canRateItem ||
+    eligibility?.canRateClient
+  );
+  const showRateCta =
+    phaseInfo.primaryActionId === 'rate' && canShowRatePrimary;
+  const itemRatingLocked =
+    !!eligibility &&
+    !eligibility.canRateItem &&
+    !!eligibility.itemRatingUnlocksAt &&
+    new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
+    eligibility.items.some((i) => !i.rated) &&
+    !eligibility.canRateAgent &&
+    !eligibility.canRateClient;
   const phaseBannerAction =
-    persona === 'client' && (showPayCta || showRateCta) ? (
-      <Button
-        variant="contained"
-        fullWidth
-        onClick={handlePrimaryPhaseAction}
-        disabled={
-          showRateCta &&
-          !eligibility?.canRateAgent &&
-          !eligibility?.canRateItem &&
-          !eligibility?.canRateClient
-        }
-      >
+    persona === 'client' && showPayCta ? (
+      <Button variant="contained" fullWidth onClick={handlePrimaryPhaseAction}>
         {t(primaryLabelKey, primaryLabelDefault)}
       </Button>
+    ) : persona === 'client' && showRateCta ? (
+      <Button variant="contained" fullWidth onClick={handlePrimaryPhaseAction}>
+        {t(primaryLabelKey, primaryLabelDefault)}
+      </Button>
+    ) : persona === 'client' &&
+      phaseInfo.primaryActionId === 'rate' &&
+      itemRatingLocked &&
+      eligibility?.itemRatingUnlocksAt ? (
+      <Typography variant="body2" color="text.secondary">
+        {t('orders.itemRatingUnlocksOn', {
+          defaultValue: 'You can rate your items from {{date}}',
+          date: new Date(eligibility.itemRatingUnlocksAt).toLocaleDateString(),
+        })}
+      </Typography>
     ) : null;
 
   const handleCancelOrder = () => {
@@ -362,6 +395,32 @@ const ManageOrderPageContent: React.FC = () => {
     (Boolean(profile?.agent?.id) &&
       order.assigned_agent_id === profile?.agent?.id);
 
+  const messagesPath = isDelegationContext
+    ? `/delegate/orders/${order.id}/messages`
+    : `/orders/${order.id}/messages`;
+
+  const headerTrailing = canSeeMessages ? (
+    <Button
+      variant="contained"
+      size="small"
+      startIcon={<MessageIcon />}
+      onClick={() => navigate(messagesPath)}
+      sx={{
+        fontWeight: 700,
+        '@keyframes messagePulse': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.04)' },
+        },
+        animation: 'messagePulse 1.8s ease-in-out infinite',
+        '@media (prefers-reduced-motion: reduce)': {
+          animation: 'none',
+        },
+      }}
+    >
+      {t('orders.actions.message', 'Message')}
+    </Button>
+  ) : null;
+
   const tracking =
     persona === 'client' &&
     CLIENT_TRACKING_STATUSES.includes(order.current_status) ? (
@@ -414,21 +473,6 @@ const ManageOrderPageContent: React.FC = () => {
       )}
     </>
   );
-
-  const messages = canSeeMessages ? (
-    <Card sx={{ mb: 2 }}>
-      <CardContent>
-        <UserMessagesComponent
-          entityType="order"
-          entityId={order.id}
-          title={t('messages.orderMessages', 'Order Messages')}
-          defaultExpanded={messagesDefaultExpandedForOrder(order.current_status)}
-          maxVisibleMessages={10}
-          compact={false}
-        />
-      </CardContent>
-    </Card>
-  ) : null;
 
   const extras = (
     <Stack spacing={2} sx={{ mt: 2 }}>
@@ -535,9 +579,9 @@ const ManageOrderPageContent: React.FC = () => {
             live={orderSubscriptionActive}
             onRefresh={refetch}
             alerts={alerts}
-            messages={messages}
             tracking={tracking}
             extras={extras}
+            headerTrailing={headerTrailing}
             hideActions={isMobile}
             onActionComplete={() => refetch()}
             onShowNotification={handleShowNotification}

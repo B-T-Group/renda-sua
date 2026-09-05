@@ -15,13 +15,15 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { Item } from '../../../hooks/useItems';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { businessItemsApiParams } from '../../../utils/businessItemsApiParams';
+import { isFoodCatalogItem } from '../../../constants/food';
 import ConfirmationModal from '../../common/ConfirmationModal';
+import FoodAvailabilitySection from '../food/FoodAvailabilitySection';
 import {
   AnyInventory,
   formatItemCurrency,
@@ -41,8 +43,10 @@ interface ItemInventoryTabProps {
 
 interface LocationCardProps {
   inventory: ItemBusinessInventory;
+  itemId: string;
   currency: string;
   canSuperUserActions: boolean;
+  showFoodHours?: boolean;
   onUpdateInventory: (inventory: AnyInventory) => void;
   onManageDeals: (inventory: AnyInventory) => void;
   onRemove: (inventory: ItemBusinessInventory) => void;
@@ -50,8 +54,10 @@ interface LocationCardProps {
 
 const LocationCard: React.FC<LocationCardProps> = ({
   inventory,
+  itemId,
   currency,
   canSuperUserActions,
+  showFoodHours = false,
   onUpdateInventory,
   onManageDeals,
   onRemove,
@@ -150,6 +156,15 @@ const LocationCard: React.FC<LocationCardProps> = ({
           </Box>
         </Stack>
 
+        {showFoodHours && inventory.business_location_id ? (
+          <Box sx={{ mb: 2 }}>
+            <FoodAvailabilitySection
+              itemId={itemId}
+              businessLocationId={inventory.business_location_id}
+            />
+          </Box>
+        ) : null}
+
         <Stack spacing={1} sx={{ mt: 1 }}>
           <Stack direction="row" spacing={1}>
             <Button
@@ -202,6 +217,19 @@ const ItemInventoryTab: React.FC<ItemInventoryTabProps> = ({
   const { enqueueSnackbar } = useSnackbar();
   const apiClient = useApiClient();
   const inventories = item.business_inventories ?? [];
+  const isFood = isFoodCatalogItem(item);
+  const foodHoursInventoryIds = useMemo(() => {
+    if (!isFood) return new Set<string>();
+    const seen = new Set<string>();
+    const ids = new Set<string>();
+    for (const row of inventories) {
+      const locationId = row.business_location_id ?? row.business_location?.id;
+      if (!locationId || seen.has(locationId)) continue;
+      seen.add(locationId);
+      ids.add(row.id);
+    }
+    return ids;
+  }, [inventories, isFood]);
   const [toRemove, setToRemove] = useState<ItemBusinessInventory | null>(null);
   const [removing, setRemoving] = useState(false);
 
@@ -273,11 +301,16 @@ const ItemInventoryTab: React.FC<ItemInventoryTabProps> = ({
         {inventories.length > 0 ? (
           <Grid container spacing={2}>
             {inventories.map((inventory) => (
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={inventory.id}>
+              <Grid
+                size={{ xs: 12, sm: isFood ? 12 : 6, lg: isFood ? 6 : 4 }}
+                key={inventory.id}
+              >
                 <LocationCard
                   inventory={inventory}
+                  itemId={item.id}
                   currency={item.currency}
                   canSuperUserActions={canSuperUserActions}
+                  showFoodHours={foodHoursInventoryIds.has(inventory.id)}
                   onUpdateInventory={onUpdateInventory}
                   onManageDeals={onManageDeals}
                   onRemove={setToRemove}

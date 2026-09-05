@@ -42,6 +42,7 @@ import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useDocumentManagement } from '../../hooks/useDocumentManagement';
 import { useDocumentUpload } from '../../hooks/useDocumentUpload';
 import { useUserTypes } from '../../hooks/useUserTypes';
+import { SIGNUP_COUNTRY_CODES } from '../../constants/marketCountries';
 import Logo from '../common/Logo';
 import ReferralCodeEntryButton from '../common/ReferralCodeEntryButton';
 import PhoneInput from '../common/PhoneInput';
@@ -52,8 +53,6 @@ import {
 
 const PROFILE_PICTURE_ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp';
 const PROFILE_PICTURE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
-
-const SIGNUP_COUNTRY_CODES = ['CM', 'GA', 'US', 'CA'] as const;
 
 type PersonaKind = 'client' | 'business' | 'agent';
 
@@ -754,9 +753,9 @@ const CompleteProfile: React.FC = () => {
                 const descKey = `completeProfile.signupGoals.${goalId}.description`;
                 const colors: Record<SignupGoalId, string> = {
                   browse_buy: theme.palette.primary.main,
-                  rent_and_earn: '#00897b',
-                  sell_items: '#f57c00',
-                  delivery_agent: '#388e3c',
+                  rent_and_earn: theme.palette.secondary.main,
+                  sell_items: theme.palette.cta.main,
+                  delivery_agent: theme.palette.secondary.dark,
                 };
                 const accent = colors[goalId];
                 const selected = profileData.signup_goal_ids.includes(goalId);

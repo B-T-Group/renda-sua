@@ -115,6 +115,7 @@ export interface InventoryItem {
     min_order_quantity: number;
     max_order_quantity: number;
     is_active: boolean;
+    interest_only?: boolean;
     created_at: string;
     updated_at: string;
     item_sub_category: {
@@ -294,6 +295,8 @@ export interface PaginatedInventoryItems {
 }
 
 const INVENTORY_DISTANCE_CACHE_TTL = 7776000; // 3 months in seconds
+const INVENTORY_LIST_DEFAULT_LIMIT = 20;
+const INVENTORY_LIST_MAX_LIMIT = 50;
 /** Cap rows scanned to rank locations by item count (avoids unbounded reads). */
 const TOP_LOCATIONS_INVENTORY_SCAN_LIMIT = 20000;
 /** Max listing rows to load when de-duplicating by catalog `item_id` (safety cap). */
@@ -329,6 +332,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
         name
         description
         pay_on_delivery_enabled
+        interest_only
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
@@ -1501,7 +1505,6 @@ export class InventoryItemsService {
   ): Promise<PaginatedInventoryItems> {
     const {
       page = 1,
-      limit = 20,
       search,
       category,
       subcategory,
@@ -1520,6 +1523,7 @@ export class InventoryItemsService {
       food_only = false,
       owner_preview: ownerPreviewRequested = false,
     } = query;
+    const limit = this.clampInventoryListLimit(query.limit);
 
     const { country_code, state, clientId } =
       await this.resolveInventoryListGeo(query);
@@ -2336,6 +2340,7 @@ export class InventoryItemsService {
             name
             description
             pay_on_delivery_enabled
+            interest_only
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -3060,6 +3065,13 @@ export class InventoryItemsService {
     ]
       .filter(Boolean)
       .join(', ');
+  }
+
+  private clampInventoryListLimit(limit?: number): number {
+    if (limit == null || !Number.isFinite(limit) || limit < 1) {
+      return INVENTORY_LIST_DEFAULT_LIMIT;
+    }
+    return Math.min(Math.trunc(limit), INVENTORY_LIST_MAX_LIMIT);
   }
 
   /**

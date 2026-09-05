@@ -16,6 +16,8 @@ import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
 import type { CsvItemRowDto, CsvUploadResultDto } from './dto/csv-upload.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateItemPromotionDto } from './dto/update-item-promotion.dto';
+import { CategoriesService } from '../categories/categories.service';
+import { matchItemCategoryNames } from '../categories/match-item-category';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.constants';
 import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
@@ -36,6 +38,7 @@ const GET_ITEMS = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
+      interest_only
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -253,6 +256,7 @@ const GET_BUSINESS_LOCATIONS = `
       id
       name
       phone
+      order_alert_phone
       mobile_payment_phone_id
       email
       operating_hours
@@ -291,6 +295,7 @@ const GET_SINGLE_ITEM = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
+      interest_only
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -527,6 +532,7 @@ const GET_AVAILABLE_ITEMS = `
       name
       description
       pay_on_delivery_enabled
+      interest_only
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -653,30 +659,6 @@ const GET_ITEM_SUB_CATEGORY_IDS = `
   }
 `;
 
-const FIND_CATEGORY_AND_SUBCATEGORY_BY_NAME = `
-  query FindCategoryAndSubcategory(
-    $categoryName: String!,
-    $subCategoryName: String!
-  ) {
-    item_sub_categories(
-      where: {
-        name: { _eq: $subCategoryName },
-        item_category: {
-          name: { _eq: $categoryName }
-        }
-      },
-      limit: 1
-    ) {
-      id
-      item_category_id
-      item_category {
-        id
-        name
-      }
-    }
-  }
-`;
-
 const DEFAULT_DRAFT_CATEGORY_NAME = 'Other';
 const DEFAULT_DRAFT_SUB_CATEGORY_NAME = 'Other';
 
@@ -753,6 +735,7 @@ const GET_ITEM_BY_ID = `
       description
       sku
       price
+      interest_only
       moderation_status
       item_sub_category {
         item_category {
@@ -839,7 +822,8 @@ export class BusinessItemsService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly stripeTaxCodesService: StripeTaxCodesService,
-    private readonly imageThumbnailsService: ImageThumbnailsService
+    private readonly imageThumbnailsService: ImageThumbnailsService,
+    private readonly categoriesService: CategoriesService
   ) {}
 
   private triggerLifecycleRecompute(businessId: string): void {
@@ -964,6 +948,7 @@ export class BusinessItemsService {
       };
       address_id?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -1061,7 +1046,7 @@ export class BusinessItemsService {
       data.phone
     );
     const locationMutation = `
-      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $mobilePaymentPhoneId: uuid, $email: String, $autoWithdraw: Boolean!, $logoUrl: String) {
+      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $orderAlertPhone: String, $mobilePaymentPhoneId: uuid, $email: String, $autoWithdraw: Boolean!, $logoUrl: String) {
         insert_business_locations_one(object: {
           business_id: $businessId,
           address_id: $addressId,
@@ -1069,6 +1054,7 @@ export class BusinessItemsService {
           location_type: $locationType,
           is_primary: $isPrimary,
           phone: $phone,
+          order_alert_phone: $orderAlertPhone,
           mobile_payment_phone_id: $mobilePaymentPhoneId,
           email: $email,
           auto_withdraw_commissions: $autoWithdraw,
@@ -1078,6 +1064,7 @@ export class BusinessItemsService {
           id
           name
           phone
+          order_alert_phone
           mobile_payment_phone_id
           email
           location_type
@@ -1099,6 +1086,7 @@ export class BusinessItemsService {
       locationType: data.location_type ?? 'store',
       isPrimary: data.is_primary ?? false,
       phone: phoneFields.phone,
+      orderAlertPhone: data.order_alert_phone?.trim() || null,
       mobilePaymentPhoneId: phoneFields.mobilePaymentPhoneId,
       email: data.email ?? null,
       autoWithdraw: data.auto_withdraw_commissions ?? true,
@@ -1128,6 +1116,7 @@ export class BusinessItemsService {
     data: {
       name?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -1156,6 +1145,9 @@ export class BusinessItemsService {
       );
     }
     const setInput: Record<string, unknown> = { ...data };
+    if (typeof setInput.order_alert_phone === 'string') {
+      setInput.order_alert_phone = setInput.order_alert_phone.trim() || null;
+    }
     if (setInput.logo_url === '') {
       setInput.logo_url = null;
     }
@@ -1179,6 +1171,7 @@ export class BusinessItemsService {
           id
           name
           phone
+          order_alert_phone
           mobile_payment_phone_id
           email
           auto_withdraw_commissions
@@ -2097,7 +2090,12 @@ export class BusinessItemsService {
     itemId: string
   ): Promise<void> {
     const itemRow = await this.hasuraSystemService.executeQuery<{
-      items_by_pk: { id: string; business_id: string; price: number | null } | null;
+      items_by_pk: {
+        id: string;
+        business_id: string;
+        price: number | null;
+        interest_only?: boolean;
+      } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = itemRow.items_by_pk;
     if (!item || item.business_id !== businessId) {
@@ -2106,7 +2104,10 @@ export class BusinessItemsService {
         HttpStatus.NOT_FOUND
       );
     }
-    if (item.price == null || Number.isNaN(item.price) || item.price <= 0) {
+    if (
+      !item.interest_only &&
+      (item.price == null || Number.isNaN(item.price) || item.price <= 0)
+    ) {
       throw new HttpException(
         {
           success: false,
@@ -2138,6 +2139,7 @@ export class BusinessItemsService {
         id: string;
         business_id: string;
         price: number | null;
+        interest_only?: boolean;
         moderation_status: string;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
@@ -2166,7 +2168,10 @@ export class BusinessItemsService {
       input.sellingPrice != null && !Number.isNaN(input.sellingPrice)
         ? input.sellingPrice
         : item.price;
-    if (sellingPrice == null || Number.isNaN(sellingPrice) || sellingPrice <= 0) {
+    if (
+      !item.interest_only &&
+      (sellingPrice == null || Number.isNaN(sellingPrice) || sellingPrice <= 0)
+    ) {
       throw new HttpException(
         {
           success: false,
@@ -2193,7 +2198,7 @@ export class BusinessItemsService {
       itemId,
       input.locationId,
       quantity,
-      sellingPrice,
+      sellingPrice ?? 0,
       item.moderation_status
     );
 
@@ -3055,35 +3060,35 @@ export class BusinessItemsService {
     categoryName: string,
     subCategoryName: string
   ): Promise<number> {
-    const existingSub =
-      await this.hasuraSystemService.executeQuery<{
-        item_sub_categories: {
-          id: number;
-          item_category_id: number;
-        }[];
-      }>(FIND_CATEGORY_AND_SUBCATEGORY_BY_NAME, {
-        categoryName,
-        subCategoryName,
-      });
-    const existing = existingSub.item_sub_categories?.[0];
-    if (existing) {
-      return existing.id;
+    const tree = await this.categoriesService.listCategoryTree();
+    const match = matchItemCategoryNames(tree, categoryName, subCategoryName, {
+      allowGlobalSubMatch: false,
+    });
+    if (match.subCategoryId != null) {
+      return match.subCategoryId;
     }
 
+    const categoryId =
+      match.categoryId ?? (await this.ensureCategoryId(match.categoryName));
+    return this.insertSubCategory(categoryId, match.subCategoryName);
+  }
+
+  private async ensureCategoryId(categoryName: string): Promise<number> {
     const categoryLookup =
       await this.hasuraSystemService.executeQuery<{
         item_categories: { id: number }[];
       }>(FIND_CATEGORY_BY_NAME, { categoryName });
     const existingCategory = categoryLookup.item_categories?.[0];
+    if (existingCategory?.id != null) {
+      return existingCategory.id;
+    }
 
-    let categoryId = existingCategory?.id ?? null;
-    if (categoryId == null) {
-      try {
-        const categoryResult =
-          await this.hasuraSystemService.executeMutation<{
-            insert_item_categories_one: { id: number };
-          }>(
-            `
+    try {
+      const categoryResult =
+        await this.hasuraSystemService.executeMutation<{
+          insert_item_categories_one: { id: number };
+        }>(
+          `
             mutation InsertCategory($categoryName: String!) {
               insert_item_categories_one(
                 object: { name: $categoryName, status: active }
@@ -3092,30 +3097,39 @@ export class BusinessItemsService {
               }
             }
           `,
-            { categoryName }
-          );
-        categoryId = categoryResult.insert_item_categories_one?.id ?? null;
-      } catch (error: any) {
-        const message: string =
-          error?.response?.errors?.[0]?.message || String(error?.message || '');
-        const isConstraintViolation = message.includes('constraint-violation');
-        if (!isConstraintViolation) {
-          throw error;
-        }
-        const retryLookup =
-          await this.hasuraSystemService.executeQuery<{
-            item_categories: { id: number }[];
-          }>(FIND_CATEGORY_BY_NAME, { categoryName });
-        categoryId = retryLookup.item_categories?.[0]?.id ?? null;
+          { categoryName }
+        );
+      const categoryId = categoryResult.insert_item_categories_one?.id ?? null;
+      if (categoryId != null) {
+        return categoryId;
+      }
+    } catch (error: any) {
+      const message: string =
+        error?.response?.errors?.[0]?.message || String(error?.message || '');
+      const isConstraintViolation = message.includes('constraint-violation');
+      if (!isConstraintViolation) {
+        throw error;
       }
     }
+
+    const retryLookup =
+      await this.hasuraSystemService.executeQuery<{
+        item_categories: { id: number }[];
+      }>(FIND_CATEGORY_BY_NAME, { categoryName });
+    const categoryId = retryLookup.item_categories?.[0]?.id ?? null;
     if (categoryId == null) {
       throw new HttpException(
         { success: false, error: 'Failed to ensure item category' },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+    return categoryId;
+  }
 
+  private async insertSubCategory(
+    categoryId: number,
+    subCategoryName: string
+  ): Promise<number> {
     const subResult =
       await this.hasuraSystemService.executeMutation<{
         insert_item_sub_categories_one: { id: number };

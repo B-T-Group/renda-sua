@@ -2,7 +2,7 @@ import { Box, Container, Typography, alpha } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionCTA from './SectionCTA';
-import { FB_GREEN, SIGNUP_RENT } from './forBusinessTheme';
+import { FB_ACCENT, SIGNUP_RENT } from './forBusinessTheme';
 
 const FinalCTA: React.FC = () => {
   const { t } = useTranslation();
@@ -10,7 +10,7 @@ const FinalCTA: React.FC = () => {
   return (
     <Box
       component="section"
-      sx={{ py: { xs: 8, md: 12 }, bgcolor: alpha(FB_GREEN, 0.06) }}
+      sx={{ py: { xs: 8, md: 12 }, bgcolor: alpha(FB_ACCENT, 0.06) }}
     >
       <Container maxWidth="md">
         <Box sx={{ textAlign: 'center' }}>
