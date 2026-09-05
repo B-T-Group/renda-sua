@@ -95,11 +95,11 @@ export function buildReadyNextStepHtml(
   if (isPayAtPickup) {
     return locale === 'fr'
       ? asap
-        ? `<p>Votre commande est prête au magasin. Venez dès qu'elle est prête. Le vendeur vous enverra une demande de paiement mobile money lors du retrait.</p>`
-        : `<p>Votre commande est prête au magasin. Rendez-vous sur place pendant le créneau prévu. Le vendeur vous enverra une demande de paiement mobile money lors du retrait.</p>`
+        ? `<p>Votre commande est prête au magasin. Venez dès qu'elle est prête. À votre arrivée, appuyez sur Payer dans l'application et approuvez la demande de paiement mobile sur votre téléphone. Une fois payée, vous pouvez récupérer votre commande.</p>`
+        : `<p>Votre commande est prête au magasin. Rendez-vous pendant le créneau prévu. À votre arrivée, appuyez sur Payer dans l'application et approuvez la demande de paiement mobile sur votre téléphone. Une fois payée, vous pouvez récupérer votre commande.</p>`
       : asap
-        ? `<p>Your order is ready at the store. Come as soon as it is ready. The seller will send a mobile money payment request when you pick up.</p>`
-        : `<p>Your order is ready at the store. Come during your pickup slot. The seller will send a mobile money payment request when you pick up.</p>`;
+        ? `<p>Your order is ready at the store. Come as soon as it is ready. When you arrive, tap Pay in the app and approve the mobile money request on your phone. Once paid, you can collect your order.</p>`
+        : `<p>Your order is ready at the store. Come during your pickup slot. When you arrive, tap Pay in the app and approve the mobile money request on your phone. Once paid, you can collect your order.</p>`;
   }
   return locale === 'fr'
     ? asap

@@ -2,7 +2,7 @@ import { ArrowForward } from '@mui/icons-material';
 import { Button, Stack } from '@mui/material';
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { FB_GREEN, FB_GREEN_DARK, SIGNUP_SELL } from './forBusinessTheme';
+import { FB_ACCENT, FB_ACCENT_DARK, SIGNUP_SELL } from './forBusinessTheme';
 
 interface SectionCTAProps {
   primaryLabel: string;
@@ -33,10 +33,10 @@ const SectionCTA: React.FC<SectionCTAProps> = ({
       size={compact ? 'medium' : 'large'}
       endIcon={<ArrowForward />}
       sx={{
-        bgcolor: FB_GREEN,
+        bgcolor: FB_ACCENT,
         fontWeight: 700,
         px: compact ? 3 : 4,
-        '&:hover': { bgcolor: FB_GREEN_DARK },
+        '&:hover': { bgcolor: FB_ACCENT_DARK },
       }}
     >
       {primaryLabel}
@@ -48,11 +48,11 @@ const SectionCTA: React.FC<SectionCTAProps> = ({
         variant="outlined"
         size={compact ? 'medium' : 'large'}
         sx={{
-          borderColor: FB_GREEN,
-          color: FB_GREEN,
+          borderColor: FB_ACCENT,
+          color: FB_ACCENT,
           fontWeight: 600,
           borderWidth: 2,
-          '&:hover': { borderWidth: 2, borderColor: FB_GREEN_DARK },
+          '&:hover': { borderWidth: 2, borderColor: FB_ACCENT_DARK },
         }}
       >
         {secondaryLabel}

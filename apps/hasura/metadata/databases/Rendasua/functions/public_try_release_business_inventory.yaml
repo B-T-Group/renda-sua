@@ -1,0 +1,3 @@
+function:
+  name: try_release_business_inventory
+  schema: public

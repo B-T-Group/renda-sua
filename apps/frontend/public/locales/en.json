@@ -1787,7 +1787,14 @@
       "expiresIn": "Expires in",
       "expired": "Code expired",
       "verify": "Verify OTP",
-      "verifying": "Verifying..."
+      "verifying": "Verifying...",
+      "createAccountError": "Could not start verification. Please try again.",
+      "attemptMissing": "Your verification session expired. Please go back and submit again.",
+      "attemptExpired": "This verification code expired. Please request a new one.",
+      "attemptBusy": "Account setup is still finishing. Please wait a moment and try again.",
+      "tooManyAttempts": "Too many incorrect codes. Please request a new verification code.",
+      "verifyContactTitle": "Verify your contact",
+      "verifyContactSubtitle": "Enter the code we sent to confirm your contact before your account is created."
     },
     "otpLogin": {
       "continue": "Continue with OTP",
@@ -1800,7 +1807,8 @@
       "userNotFound": "No account found for this email."
     },
     "otpSignup": {
-      "title": "Verify your account"
+      "title": "Verify your contact",
+      "subtitle": "Enter the code we sent. Your account is created only after this step."
     },
     "profile": "Profile",
     "signIn": "Sign In",
@@ -1907,7 +1915,7 @@
     "updateContact": "Update contact",
     "verifyEmailToContinue": "Verify your email to continue",
     "alreadyHaveAccount": "Already have an account? Log in",
-    "createAccountError": "Unable to create account at this time.",
+    "createAccountError": "Unable to start verification at this time.",
     "goalSectionHintMulti": "Choose how you want to start. You can add other modes later.",
     "primaryBusinessFocus": "Primary business focus",
     "trustContact": "We'll only use this to verify your account and send order updates.",
@@ -2081,6 +2089,65 @@
     "successMessage": "Your profile was created successfully. Redirecting to your dashboard…"
   },
   "business": {
+    "quietHome": {
+      "reach": {
+        "title": "Store reach",
+        "shareCta": "Share store",
+        "zeroViewsHint": "Share your shop so customers can find you."
+      },
+      "catalog": {
+        "title": "Catalog health",
+        "progressBody": "{{approved}} of {{target}} products live. Fuller catalogs get more discovery.",
+        "healthyBody": "{{count}} products live.",
+        "rejectedBody": "Fix rejected items so they can go live for customers.",
+        "restockBody": "A popular item is out of stock. Restock it while interest is high.",
+        "manageCta": "Manage items",
+        "pendingMeta": "{{count}} pending",
+        "rejectedMeta": "{{count}} rejected",
+        "emptyArt": "Empty catalog"
+      },
+      "next": {
+        "label": "Next step",
+        "cannotAcceptTitle": "Finish setup to accept orders",
+        "cannotAcceptMessage": "Your store is not yet able to accept orders. Complete the remaining verification steps.",
+        "cannotAcceptCta": "Continue setup",
+        "idReviewTitle": "ID under review",
+        "idReviewMessage": "We are reviewing your ID. You can check status or upload a clearer document.",
+        "idReviewCta": "View ID status",
+        "mmPhoneTitle": "Confirm mobile money number",
+        "mmPhoneMessage": "Link a verified mobile money number so payouts reach you when orders come in.",
+        "mmPhoneCta": "Confirm number",
+        "offerRentalsTitle": "Also offer rentals?",
+        "offerRentalsMessage": "You can add rental items anytime — they live alongside your sale catalog.",
+        "offerRentalsCta": "Open rentals",
+        "offerSaleItemsTitle": "Also sell products?",
+        "offerSaleItemsMessage": "You can add sale items anytime — they live alongside your rental catalog.",
+        "offerSaleItemsCta": "Open items"
+      }
+    },
+    "tips": {
+      "rejectedTitle": "Tip: fix a rejected product",
+      "rejectedMessage": "One or more products were rejected. Update them and resubmit so they can go live.",
+      "rejectedCta": "Review items",
+      "restockTitle": "Tip: restock a popular item",
+      "restockMessage": "Buyers are viewing an item that is out of stock. Restock it while interest is high.",
+      "restockCta": "Manage inventory",
+      "pendingTitle": "Tip: items under review",
+      "pendingMessage": "{{count}} item(s) are waiting for approval. We will notify you when they are live.",
+      "pendingCta": "View items",
+      "catalogGoalTitle": "Tip: reach your first 10 products",
+      "catalogGoalMessage": "Stores with a fuller catalog get more discovery. Add {{remaining}} more to hit 10.",
+      "catalogGoalCta": "Add a product",
+      "shareTitle": "Tip: share your storefront",
+      "shareMessage": "Share your shop link so customers outside the app can browse and order.",
+      "shareCta": "Share store",
+      "logoTitle": "Tip: add your business logo",
+      "logoMessage": "A logo helps buyers recognize your store in search and on your storefront.",
+      "logoCta": "Add logo",
+      "hoursTitle": "Tip: set your business hours",
+      "hoursMessage": "Hours tell customers when you are open and improve delivery-slot matching.",
+      "hoursCta": "Set hours"
+    },
     "accountType": {
       "sectionTitle": "Account & Plan",
       "pageTitle": "Account & Plan",
@@ -2232,7 +2299,14 @@
       "ctaViewItems": "View items",
       "ctaViewRentals": "View rentals",
       "stepPreview": "Preview your store",
-      "stepPreviewDesc": "See how customers will discover your products."
+      "stepPreviewDesc": "See how customers will discover your products.",
+      "stepReachabilityDesc": "Keep at least one fast alert channel on so your kitchen notices new orders.",
+      "stepReachabilityMissingBoth": "Turn on push notifications or WhatsApp alerts so you do not miss new orders.",
+      "stepReachabilityMissingPush": "Allow browser notifications on this device for instant order alerts.",
+      "stepReachabilityMissingWhatsapp": "Turn on WhatsApp order updates so your team has a backup alert channel.",
+      "stepReachabilityMissingLocationPhone": "Add a kitchen or till phone on a location so WhatsApp reminders reach the right device.",
+      "stepReachability": "Order alerts",
+      "ctaReachability": "Set up alerts"
     },
     "verification": {
       "noticeTitle": "Account verification required",
@@ -2467,7 +2541,14 @@
       "pickupOps": "Pickup health",
       "pickupOpsDescription": "Live pickup SLA board for orders waiting on agent collection",
       "creditsModule": "Ops follow-ups",
-      "creditsModuleDescription": "Escalations, call-backs, and follow-up progress"
+      "creditsModuleDescription": "Escalations, call-backs, and follow-up progress",
+      "reachability": {
+        "missingBoth": "New orders can be missed on this device because both browser push and WhatsApp order alerts are not ready.",
+        "missingPush": "Browser push notifications are not ready on this device. Keep WhatsApp alerts on so your team still gets order interrupts.",
+        "missingWhatsapp": "WhatsApp order alerts are not ready. Turn them on so your kitchen has a backup when browser push is missed.",
+        "openNotifications": "Notification settings",
+        "openLocations": "Locations"
+      }
     },
     "clientCities": {
       "seoTitle": "Where your clients are from",
@@ -3690,6 +3771,8 @@
       "noLocations": "No locations found",
       "noLocationsMessage": "Add your first business location to start managing inventory and deliveries",
       "phone": "Phone",
+      "orderAlertPhone": "Order alert phone",
+      "orderAlertPhoneHint": "Kitchen WhatsApp / till phone for new-order alerts",
       "primary": "Primary",
       "primaryLocationWarning": "This is your primary location. You cannot delete it.",
       "refresh": "Refresh",
@@ -3887,6 +3970,12 @@
       "outForDeliveryNotice": "🚪 Almost there! Your order is out for delivery. Please be available at your delivery address - our agent will arrive soon!",
       "paymentPendingNotice": "Payment is still pending for this order. Please ensure payment is completed.",
       "pendingNotice": "You'll be notified once the store confirms your {{orderTotal}} order (they have up to 45 minutes).",
+      "payAtDelivery": {
+        "pendingInfo": "You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.",
+        "outForDeliveryPaymentPending": "The agent will send a payment request when they arrive. Keep your phone nearby to approve it."
+      },
+      "storeReadyPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+      "storeReadySendPin": "Your order is ready at the store. Come during your pickup slot and send your PIN so the seller can confirm pickup.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
       "refundedNotice": "💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
       "subtitle": "Track your order status and history",
@@ -4496,23 +4585,24 @@
     "selectCountry": "Select a country.",
     "payAtDelivery": {
       "confirmationTitle": "Payment at delivery",
-      "confirmationMessage": "You chose pay at delivery. You will complete payment in the app when the agent arrives.",
+      "confirmationMessage": "You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.",
+      "info": "When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.",
       "agentInitiateHelp": "Send a mobile payment request to the client. Once they approve it, the order will complete automatically.",
       "agentInitiateSubtitle": "Payment is requested at the doorstep.",
       "clientPhoneHint": "This is the client phone number on the order.",
       "notEligible": "This order is not configured for pay at delivery.",
       "step1": "Your order has been sent to the merchant.",
-      "step2": "When the agent arrives, you will receive a mobile payment request in the app.",
+      "step2": "When the agent arrives, they will send a mobile payment request. Approve it on your phone.",
       "step3": "You will receive updates on your order status via email and in-app notifications. Track progress in My Orders."
     },
     "pickup": {
       "confirmationCardTitle": "Pay when you pick up",
       "storePickupTitle": "Pick up at the store (no delivery fee)",
-      "payAtPickupHint": "You will pay when you arrive; the business will send a payment request to your phone.",
-      "clientPaymentHint": "The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.",
+      "payAtPickupHint": "You will pay when you arrive. Tap Pay in the app and approve the request on your phone.",
+      "clientPaymentHint": "Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.",
       "requestPaymentTitle": "Request pickup payment",
       "notEligibleForPaymentRequest": "This order is not configured for pay at pickup.",
-      "businessInitiateHelp": "Send a mobile payment request to the client. When they approve it, the order will complete automatically.",
+      "businessInitiateHelp": "If the client needs help, send a mobile payment request. When they approve it, the order will complete automatically.",
       "payAtPickupShort": "Pay at pickup",
       "businessInitiateSubtitle": "Payment is collected when the customer picks up the order.",
       "paymentRequestSent": "Payment request sent to the client.",
@@ -4522,6 +4612,32 @@
       "confirmPickupBodyPaid": "Confirm the client collected this order. The order will be marked complete.",
       "confirmPickupSuccess": "Pickup confirmed. The order is complete.",
       "confirmPickupError": "Failed to confirm pickup"
+    },
+    "payAtPickup": {
+      "title": "Pay at pickup",
+      "hint": "We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.",
+      "cta": "Pay now",
+      "sent": "Approve the payment request on your phone. The store will see it once it succeeds.",
+      "error": "Failed to start payment",
+      "phoneLabel": "Payment phone"
+    },
+    "momoAwaiting": {
+      "navTitle": "Approve payment",
+      "waitingTitle": "Approve on your phone",
+      "waitingBody": "A payment request was sent to {{phone}}. Open the prompt on that phone and approve it with your PIN.",
+      "waitingHint": "Waiting for payment to complete…",
+      "paidTitle": "Payment confirmed",
+      "paidBodyCheckout": "Your payment went through. The merchant will confirm your order next.",
+      "paidBodyPickup": "Your payment went through. You can collect your order at the store.",
+      "failedTitle": "Payment failed",
+      "failedBody": "The mobile money request did not succeed. You can try again or go back to your order.",
+      "timeoutTitle": "Still waiting",
+      "timeoutBody": "We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.",
+      "retry": "Try again",
+      "retryError": "Could not send another payment request.",
+      "back": "Back to order",
+      "viewOrder": "View order",
+      "continue": "Continue"
     },
     "trackInMyOrders": "Track progress in My Orders",
     "actions": {
@@ -4745,6 +4861,13 @@
     "contact": {
       "unavailable": "Contact unavailable"
     },
+    "pickupLocator": {
+      "address": "Store address",
+      "contact": "Store contact",
+      "openInMaps": "Open in Maps",
+      "openInMapsA11y": "Open store address in Maps",
+      "callStoreA11y": "Call the store"
+    },
     "timeline": {
       "title": "Timeline",
       "empty": "No history yet"
@@ -4782,8 +4905,8 @@
       "payNowShort": "Approve the payment request right away.",
       "payNowDescription": "We’ll send a payment request to your phone now. Approve it to place your order.",
       "payAtDelivery": "Pay at delivery",
-      "payAtDeliveryShort": "Pay in the app when the agent arrives.",
-      "payAtDeliveryDescription": "You will place the order now and pay at delivery in the app when the agent arrives."
+      "payAtDeliveryShort": "The agent will send a payment request when they arrive.",
+      "payAtDeliveryDescription": "You will place the order now. When the agent arrives, they will send a mobile payment request. Approve it on your phone."
     },
     "buy": "Buy",
     "confirmOrderCompletion": "Confirm Order Completion",
@@ -5343,7 +5466,9 @@
       "prepareClient": "The business is preparing your order.",
       "prepareBusiness": "Mark the order ready when it is packed.",
       "readyPickupClient": "Your order is ready for pickup at the store.",
-      "readyPickupBusiness": "Collect payment or confirm pickup when the client arrives.",
+      "readyPickupPayAtPickupClient": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+      "readyPickupWaitClientPayBusiness": "The client will pay in the app when they arrive. You can still request a payment if they need help.",
+      "readyPickupBusiness": "Ask for the client’s pickup PIN when they arrive. Payment is captured when you confirm pickup.",
       "readyDeliveryClient": "Waiting for a delivery agent to claim your order.",
       "readyDeliveryBusiness": "Waiting for an agent to claim this delivery.",
       "readyAgent": "Claim this order to start the delivery.",
@@ -5376,7 +5501,19 @@
       "dueAt": "Pickup due by {{time}}",
       "needMoreTime": "Need more time",
       "timeline": "Operational timeline"
-    }
+    },
+    "storePickupReminder": {
+      "title": "Your order is waiting",
+      "body": "This store pickup order is still ready. Message the business to let them know you are coming, or cancel if you can no longer collect it.",
+      "messageBusiness": "Message the business",
+      "cancelOrder": "Cancel order",
+      "draftMessage": "Hi! Just confirming I'm still coming to pick up order {{orderNumber}}. See you soon."
+    },
+    "outForRecipient": "Out for {{name}}",
+    "recipientNotifiedNotice": "{{name}} gets tracking updates and the delivery code by text. They do not need your login.",
+    "deliveryContactRecipient": "Recipient",
+    "orderedBy": "Ordered by {{name}}",
+    "earningsPendingRelease": "Earnings pending · Releases when agent confirms pickup"
   },
   "items": {
     "brand": "Brand",
@@ -5478,7 +5615,7 @@
       },
       "trustStrip": {
         "mobileMoney": "MoMo secure",
-        "delivery": "6–24h delivery",
+        "cardSecure": "Card secure",
         "verified": "Verified seller",
         "support": "Help if something goes wrong"
       },
@@ -6590,7 +6727,31 @@
     "fulfillmentDelivery": "Delivery",
     "fulfillmentPickup": "Store pickup",
     "pickupNotice": "No delivery fee. Collect your order at each store once it is ready.",
-    "pickupNoFee": "Waived (store pickup)"
+    "pickupNoFee": "Waived (store pickup)",
+    "diaspora": {
+      "title": "Sending an order home",
+      "payingFrom": "Paying from {{country}}",
+      "deliveringTo": "Delivering to {{country}}",
+      "sendingToSomeoneElse": "Someone else is receiving this order",
+      "sendingToSomeoneElseHelp": "We will collect their name and phone so they can follow the delivery themselves.",
+      "payerCharge": "You'll pay ≈ {{amount}}",
+      "merchantPrice": "Merchant price {{amount}}",
+      "fxDisclaimer": "Estimate only. Your card is charged in the merchant currency and your bank sets the final rate.",
+      "heldForRecipient": "Paid · Held until {{name}} receives the order",
+      "heldUntilHandover": "Paid · Held until delivery or pickup"
+    },
+    "recipient": {
+      "title": "Who is receiving this order?",
+      "subtitle": "They get tracking updates and the delivery code by text — no Rendasua account needed.",
+      "name": "Recipient full name",
+      "nameRequired": "The agent needs a name to hand the order to.",
+      "phone": "Recipient phone number",
+      "phoneRequired": "A local number in the delivery country is required.",
+      "phoneHelp": "Updates and the delivery code are sent to this number.",
+      "whatsapp": "Send their updates on WhatsApp",
+      "whatsappHelp": "We fall back to SMS if WhatsApp cannot be delivered.",
+      "pinNotice": "The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order."
+    }
   },
   "agentOnboarding": {
     "title": "How Deliveries Work",
@@ -7178,5 +7339,83 @@
       "title": "Order food from local restaurants",
       "description": "Browse cooked meals from restaurants near you and order while the kitchen is open."
     }
+  },
+  "productInterest": {
+    "cta": "I'm interested",
+    "dialogTitle": "I'm interested",
+    "noteLabel": "Message (optional)",
+    "noteHelp": "Tell the seller about {{name}}. They will contact you outside the app.",
+    "submit": "Send interest",
+    "success": "Interest sent. The seller will contact you.",
+    "error": "Could not send interest",
+    "priceNotApplicable": "Price on request",
+    "clientTitle": "My interest requests",
+    "businessTitle": "Product interest",
+    "businessHelp": "Clients asked to be contacted about these items. Follow up by phone or email outside the app.",
+    "emptyClient": "No interest submissions yet.",
+    "emptyBusiness": "No interest leads yet.",
+    "loadError": "Could not load interest submissions",
+    "viewItem": "View item",
+    "clientLabel": "Client",
+    "unknownItem": "Item",
+    "merchantToggle": "Pricing not applicable (interest only)"
+  },
+  "incomingOrder": {
+    "awaitingAction": "Awaiting action",
+    "timeLeft": "{{m}}m {{s}}s to accept",
+    "secondsLeft": "{{seconds}}s to accept",
+    "title": "New order waiting",
+    "confirm": "Confirm",
+    "needMoreTime": "Need more time",
+    "decline": "Decline",
+    "startKitchenMode": "Start kitchen mode",
+    "kitchenTitle": "Kitchen mode",
+    "kitchenHint": "Keep this tab open. Sound starts after you tap Start kitchen mode.",
+    "armed": "Kitchen mode is on",
+    "kitchenAlert": "New order alert",
+    "orderNumber": "Order {{number}}"
+  },
+  "kitchenMode": {
+    "title": "Kitchen mode",
+    "subtitle": "Keep this screen open on a kitchen tablet to hear and handle new orders quickly.",
+    "start": "Start kitchen mode",
+    "soundReady": "Sound is enabled",
+    "soundHint": "Tap Start kitchen mode once to allow alarm sound in this browser.",
+    "waitingTitle": "Waiting for the next order",
+    "waitingBody": "When a new order needs confirmation, it will appear here immediately."
+  },
+  "assistant": {
+    "title": "Rendasua Assistant",
+    "subtitle": "Ask about delivery, payments, and more",
+    "open": "Chat with us",
+    "close": "Close chat",
+    "send": "Send",
+    "placeholder": "Type your question…",
+    "empty": "Ask where we are located, how payments work, or whether pickup is available.",
+    "emptyIllustration": "Chat with Rendasua",
+    "typing": "Assistant is typing…",
+    "handoff": "We are connecting you with our team. You can also reach us on WhatsApp.",
+    "thinking": "Thinking…",
+    "emptyTitle": "What can I help you with?",
+    "emptySubtitle": "Ask about our services, delivery, payments, or pickup locations.",
+    "handoffTitle": "Connecting you with our team",
+    "handoffBody": "Our support team will follow up with you shortly.",
+    "errorGeneric": "Something went wrong. Please try again.",
+    "clear": "Clear chat",
+    "whatsappCta": "Chat on WhatsApp",
+    "supportCta": "Ask our AI assistant",
+    "ctaTitle": "Ask our AI assistant",
+    "ctaBody": "Get instant answers about delivery, payments, pickup, and more — 24/7.",
+    "statusOnline": "Online · AI powered",
+    "statusThinking": "Generating response",
+    "suggestion": {
+      "location": "Where are you located?",
+      "payDelivery": "Do you support payment at delivery?",
+      "pickup": "Do you support in-store pickup?",
+      "mobilePay": "Do you support mobile payments?"
+    },
+    "homeEntryTitle": "Ask the AI assistant",
+    "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
+    "homeEntryCta": "Open assistant"
   }
 }

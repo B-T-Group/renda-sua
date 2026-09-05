@@ -239,6 +239,7 @@ select_permissions:
         - cancellation_notes
         - dispatch_ready_at
         - pickup_by
+        - pickup_reminder_last_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by
@@ -255,6 +256,11 @@ select_permissions:
         - pickup_pause_reason
         - reassignment_count
         - agent_arrived_pickup_at
+        - recipient_name
+        - recipient_phone
+        - is_third_party_recipient
+        - is_diaspora_order
+        - fulfillment_country
       filter:
         assigned_agent:
           user:
@@ -326,6 +332,7 @@ select_permissions:
         - estimated_prep_minutes
         - dispatch_ready_at
         - pickup_by
+        - pickup_reminder_last_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by
@@ -342,6 +349,11 @@ select_permissions:
         - pickup_pause_reason
         - reassignment_count
         - agent_arrived_pickup_at
+        - recipient_name
+        - recipient_phone
+        - is_third_party_recipient
+        - is_diaspora_order
+        - fulfillment_country
       filter:
         business:
           user:
@@ -412,6 +424,7 @@ select_permissions:
         - estimated_prep_minutes
         - dispatch_ready_at
         - pickup_by
+        - pickup_reminder_last_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by
@@ -421,6 +434,22 @@ select_permissions:
         - pickup_due_at
         - pickup_state
         - reassignment_count
+        - recipient_name
+        - recipient_phone
+        - recipient_email
+        - recipient_notify_whatsapp
+        - is_third_party_recipient
+        - payer_name
+        - payer_phone
+        - payer_email
+        - payer_country
+        - payer_payment_rail
+        - fulfillment_country
+        - is_diaspora_order
+        - presentment_currency
+        - presentment_amount
+        - presentment_fx_rate
+        - presentment_fx_source
       filter:
         client:
           user:

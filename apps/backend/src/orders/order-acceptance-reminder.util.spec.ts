@@ -10,11 +10,33 @@ import {
 describe('order-acceptance-reminder.util', () => {
   const now = Date.parse('2026-08-28T12:00:00.000Z');
 
-  it('schedules the first reminder only when the window is longer than 15 min', () => {
+  it('schedules the first reminder only when the window is longer than the cadence', () => {
     expect(firstReminderWaitSeconds(900)).toBeNull();
     expect(firstReminderWaitSeconds(2700)).toBe(
       ACCEPTANCE_REMINDER_INTERVAL_SECONDS
     );
+    expect(firstReminderWaitSeconds(1800, true)).toBe(150);
+    expect(firstReminderWaitSeconds(200, true)).toBeNull();
+  });
+
+  it('uses a 5-minute food reminder chain', () => {
+    expect(
+      planAcceptanceReminder({
+        currentStatus: 'pending',
+        acceptanceState: 'awaiting_acceptance',
+        acceptanceDeadlineAt: '2026-08-28T12:30:00.000Z',
+        busyExtraPrepMinutes: 0,
+        updatedAt: null,
+        snoozeMinutes: 15,
+        lastReminderAt: null,
+        nowMs: now,
+        containsCookedFood: true,
+      })
+    ).toEqual({
+      action: 'send',
+      remainingSeconds: 30 * 60,
+      nextWaitSeconds: 5 * 60,
+    });
   });
 
   it('detects an active Busy snooze', () => {

@@ -1,9 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { StripeConfig } from '../config/configuration';
+import { DiasporaConfig, StripeConfig } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export type PaymentRail = 'stripe' | 'mobile_money';
+
+/**
+ * Which side of the order decided the rail. `seller` is the long-standing
+ * behavior; `payer` means a diaspora payer's card country unlocked Stripe for a
+ * merchant who is otherwise on mobile money.
+ */
+export type PaymentRailSource = 'seller' | 'payer';
+
+export interface OrderRailResolution {
+  rail: PaymentRail;
+  source: PaymentRailSource;
+  /** True when the payer's country, not the seller's, put this order on Stripe. */
+  isDiaspora: boolean;
+}
 
 @Injectable()
 export class PaymentRoutingService {
@@ -57,6 +71,55 @@ export class PaymentRoutingService {
       );
       return 'mobile_money';
     }
+  }
+
+  private get diasporaConfig(): DiasporaConfig | undefined {
+    return this.configService.get<DiasporaConfig>('diaspora');
+  }
+
+  /**
+   * Payer countries allowed to fund a mobile-money merchant by card. Defaults
+   * to the Stripe country list so there is only one list to keep current.
+   */
+  private get diasporaPayerCountries(): string[] {
+    const configured = this.diasporaConfig?.payerCountries ?? [];
+    return configured.length > 0 ? configured : this.enabledCountries;
+  }
+
+  /**
+   * Resolve the rail for a whole order. The seller's country decides first, so
+   * every existing order routes exactly as before. Only when the seller is on
+   * mobile money and the payer is billing from an allowed Stripe country does
+   * the payer's country take over — that is the diaspora path, and the money
+   * still lands on the platform Stripe balance rather than the merchant's bank.
+   */
+  async resolveOrderRail(params: {
+    sellerCountry?: string | null;
+    payerCountry?: string | null;
+  }): Promise<OrderRailResolution> {
+    const sellerRail = await this.resolveRailForCountry(
+      params.sellerCountry ?? undefined
+    );
+    if (sellerRail === 'stripe') {
+      return { rail: 'stripe', source: 'seller', isDiaspora: false };
+    }
+    if (!(await this.isDiasporaPayer(params.payerCountry))) {
+      return { rail: sellerRail, source: 'seller', isDiaspora: false };
+    }
+    return { rail: 'stripe', source: 'payer', isDiaspora: true };
+  }
+
+  /**
+   * True when this payer country may fund a mobile-money merchant by card.
+   * Requires the feature flag, the country allowlist, and an active `stripe`
+   * row in `supported_payment_systems` for that country.
+   */
+  async isDiasporaPayer(payerCountry?: string | null): Promise<boolean> {
+    if (this.diasporaConfig?.enabled === false) return false;
+    const code = payerCountry?.trim().toUpperCase();
+    if (!code || code.length !== 2) return false;
+    if (!this.diasporaPayerCountries.includes(code)) return false;
+    return (await this.resolveRailForCountry(code)) === 'stripe';
   }
 
   /** Resolve the rail for a user based on their country. */

@@ -3,7 +3,7 @@ import { Box, Grid, Typography, alpha } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const SuccessStory: React.FC = () => {
   const { t } = useTranslation();
@@ -58,17 +58,17 @@ const SuccessStory: React.FC = () => {
               p: 3,
               borderRadius: 3,
               height: '100%',
-              bgcolor: alpha(FB_GREEN, 0.06),
+              bgcolor: alpha(FB_ACCENT, 0.06),
               border: '1.5px solid',
-              borderColor: alpha(FB_GREEN, 0.25),
+              borderColor: alpha(FB_ACCENT, 0.25),
             }}
           >
-            <Typography variant="h6" sx={{ fontWeight: 800, mb: 2, color: FB_GREEN }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 2, color: FB_ACCENT }}>
               {t('forBusiness.success.after.title', 'After')}
             </Typography>
             {after.map((line) => (
               <Box key={line} sx={{ display: 'flex', gap: 1, mb: 1.25, alignItems: 'flex-start' }}>
-                <CheckCircle sx={{ color: FB_GREEN, fontSize: 20, mt: 0.2 }} aria-hidden />
+                <CheckCircle sx={{ color: FB_ACCENT, fontSize: 20, mt: 0.2 }} aria-hidden />
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   {line}
                 </Typography>

@@ -14,6 +14,7 @@ import {
   Timeline,
 } from '../shared';
 import ClientOrderActions from './ClientOrderActions';
+import { PickupStoreLocator } from './PickupStoreLocator';
 
 export interface ClientOrderDetailsProps {
   order: OrderData;
@@ -87,6 +88,16 @@ export const ClientOrderDetails: React.FC<ClientOrderDetailsProps> = ({
       </HeroActionCard>
 
       {alerts}
+
+      {order.current_status === 'ready_for_pickup' &&
+      (order.fulfillment_method === 'pickup' ||
+        order.payment_timing === 'pay_at_pickup') ? (
+        <PickupStoreLocator
+          address={order.business_location?.address}
+          storeName={order.business_location?.name}
+          contact={vm.contacts.business}
+        />
+      ) : null}
 
       <ProgressIndicator
         status={vm.status}

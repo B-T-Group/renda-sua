@@ -33,6 +33,10 @@ import {
   UPDATE_AGENT_LOCATION_CONSENT_IOS,
   UPDATE_AGENT_LOCATION_CONSENT_WEB,
 } from './hasura.queries';
+import {
+  mapExhaustedHasuraQueryError,
+  requestHasuraWithRetry,
+} from './hasura-request.util';
 import type { LocationConsentPlatform } from '../agents/dto/update-location-tracking-consent.dto';
 import { isUuid } from '../common/uuid.util';
 
@@ -84,7 +88,14 @@ export class HasuraSystemService {
    * Execute a GraphQL query with admin privileges
    */
   async executeQuery<T = any>(query: string, variables?: any): Promise<T> {
-    return this.client.request<T>(query, variables);
+    try {
+      return await requestHasuraWithRetry(
+        () => this.client.request<T>(query, variables),
+        this.logger
+      );
+    } catch (error: any) {
+      mapExhaustedHasuraQueryError(error);
+    }
   }
 
   /**
