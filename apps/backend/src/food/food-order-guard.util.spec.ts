@@ -81,6 +81,22 @@ describe('checkFoodOrderable', () => {
     expect(actual?.message).toBe('Pizza is sold out for today.');
   });
 
+  it('does not treat an overnight sold-out stamp as Saturday lunch sold-out', () => {
+    const actual = checkFoodOrderable(
+      pizzaRow({
+        slots: [
+          { day_of_week: 5, start_time: '20:00:00', end_time: '02:00:00' },
+          { day_of_week: 6, start_time: '12:00:00', end_time: '15:00:00' },
+        ],
+        // Saturday 01:30 Douala — Friday night tail
+        marked_unavailable_at: '2026-08-29T00:30:00.000Z',
+      }),
+      new Date('2026-08-29T12:00:00.000Z') // Saturday 13:00 Douala
+    );
+
+    expect(actual).toBeNull();
+  });
+
   it('omits the next opening hint when the schedule has no upcoming window', () => {
     const actual = checkFoodOrderable(
       pizzaRow({ slots: [{ day_of_week: 9, start_time: 'x', end_time: 'y' }] }),
