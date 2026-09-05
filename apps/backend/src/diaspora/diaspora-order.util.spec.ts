@@ -6,6 +6,7 @@ import {
   normalizeRecipientPhone,
   resolveOrderPayer,
   resolveOrderRecipient,
+  trustedPayerCountry,
 } from './diaspora-order.util';
 
 describe('normalizeCountryCode', () => {
@@ -109,6 +110,49 @@ describe('resolveOrderRecipient', () => {
         DIASPORA_ERROR_CODES.recipientPhoneInvalid
       );
     }
+  });
+});
+
+describe('trustedPayerCountry', () => {
+  it('refuses a local spoof when the profile is already diaspora', () => {
+    expect(
+      trustedPayerCountry({
+        profileCountry: 'CA',
+        requestedCountry: 'GA',
+        profileIsDiaspora: true,
+        requestedIsDiaspora: false,
+      })
+    ).toBe('CA');
+  });
+
+  it('lets a traveller upgrade from a local profile to a card-billing country', () => {
+    expect(
+      trustedPayerCountry({
+        profileCountry: 'GA',
+        requestedCountry: 'CA',
+        profileIsDiaspora: false,
+        requestedIsDiaspora: true,
+      })
+    ).toBe('CA');
+  });
+
+  it('keeps an honest diaspora request and falls back to the profile', () => {
+    expect(
+      trustedPayerCountry({
+        profileCountry: 'CA',
+        requestedCountry: 'CA',
+        profileIsDiaspora: true,
+        requestedIsDiaspora: true,
+      })
+    ).toBe('CA');
+    expect(
+      trustedPayerCountry({
+        profileCountry: 'GA',
+        requestedCountry: null,
+        profileIsDiaspora: false,
+        requestedIsDiaspora: false,
+      })
+    ).toBe('GA');
   });
 });
 

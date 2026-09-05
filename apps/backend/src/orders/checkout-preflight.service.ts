@@ -835,17 +835,20 @@ export class CheckoutPreflightService {
     isAuthenticated: boolean
   ): Promise<string | null> {
     const requested = normalizeCountryCode(dto.payer_country);
-    if (requested) return requested;
-    if (!isAuthenticated) return null;
+    if (!isAuthenticated) return requested;
     try {
       const user = await this.hasuraUserService.getUser();
-      if (!user?.id) return null;
-      return normalizeCountryCode(
+      if (!user?.id) return requested;
+      const profile = normalizeCountryCode(
         await this.paymentRoutingService.getUserCountryCode(user.id)
       );
+      return this.paymentRoutingService.resolveTrustedPayerCountry({
+        profileCountry: profile,
+        requestedCountry: requested,
+      });
     } catch (err: any) {
       this.logger.warn('Preflight payer country lookup failed', err?.message);
-      return null;
+      return requested;
     }
   }
 

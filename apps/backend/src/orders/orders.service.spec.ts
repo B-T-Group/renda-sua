@@ -298,6 +298,16 @@ describe('OrdersService', () => {
               source: 'seller',
               isDiaspora: false,
             }),
+            isDiasporaPayer: jest.fn().mockResolvedValue(false),
+            resolveTrustedPayerCountry: jest.fn(
+              async ({
+                profileCountry,
+                requestedCountry,
+              }: {
+                profileCountry?: string | null;
+                requestedCountry?: string | null;
+              }) => requestedCountry || profileCountry || null
+            ),
           },
         },
         { provide: StripeCheckoutService, useValue: {} },
@@ -514,6 +524,22 @@ describe('OrdersService', () => {
         const routing = (service as any).paymentRoutingService;
         routing.getUserCountryCode.mockResolvedValue('CA');
         routing.getBusinessCountryCode = jest.fn().mockResolvedValue('GA');
+        routing.isDiasporaPayer.mockImplementation(
+          async (country?: string | null) =>
+            String(country || '').toUpperCase() === 'CA'
+        );
+        routing.resolveTrustedPayerCountry.mockImplementation(
+          async ({
+            profileCountry,
+            requestedCountry,
+          }: {
+            profileCountry?: string | null;
+            requestedCountry?: string | null;
+          }) =>
+            String(profileCountry || '').toUpperCase() === 'CA'
+              ? 'CA'
+              : requestedCountry || profileCountry || null
+        );
         routing.resolveOrderRail.mockResolvedValue({
           rail: 'stripe',
           source: 'payer',
@@ -669,6 +695,40 @@ describe('OrdersService', () => {
         ).rejects.toMatchObject({
           response: { error: 'DIASPORA_REQUIRES_PAY_NOW' },
         });
+        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      });
+
+      it('rejects a spoofed local payer_country that would skip diaspora pay-now', async () => {
+        arrangeDiasporaOrder();
+        const routing = (service as any).paymentRoutingService;
+        jest
+          .spyOn(service as any, 'assertDeliveryAvailable')
+          .mockResolvedValue(undefined);
+        jest.spyOn(service, 'calculateItemDeliveryFee').mockResolvedValue({
+          deliveryFee: 1000,
+          baseDeliveryFee: 1000,
+          perKmDeliveryFee: 0,
+          firstOrderDeliveryFeePromo: false,
+          firstOrderBaseDeliveryDiscountAmount: 0,
+        } as any);
+
+        await expect(
+          service.createOrder({
+            ...diasporaRequest,
+            payer_country: 'GA',
+            fulfillment_method: 'delivery',
+            payment_timing: 'pay_at_delivery',
+          })
+        ).rejects.toMatchObject({
+          response: { error: 'DIASPORA_REQUIRES_PAY_NOW' },
+        });
+        expect(routing.resolveTrustedPayerCountry).toHaveBeenCalledWith({
+          profileCountry: 'CA',
+          requestedCountry: 'GA',
+        });
+        expect(routing.resolveOrderRail).toHaveBeenCalledWith(
+          expect.objectContaining({ payerCountry: 'CA' })
+        );
         expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
       });
 

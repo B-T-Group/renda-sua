@@ -134,6 +134,15 @@ describe('CheckoutPreflightService', () => {
             resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
             resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
             getUserCountryCode: jest.fn().mockResolvedValue(null),
+            resolveTrustedPayerCountry: jest.fn(
+              async ({
+                profileCountry,
+                requestedCountry,
+              }: {
+                profileCountry?: string | null;
+                requestedCountry?: string | null;
+              }) => requestedCountry || profileCountry || null
+            ),
             resolveOrderRail: jest.fn(
               async ({ sellerCountry }: { sellerCountry?: string | null }) => {
                 const rail =
@@ -917,6 +926,44 @@ describe('CheckoutPreflightService', () => {
         false
       );
 
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'DIASPORA_REQUIRES_PAY_NOW'
+        )
+      ).toBe(true);
+    });
+
+    it('ignores a spoofed local payer_country when the profile is abroad', async () => {
+      mockInventory(
+        [makeInventoryRow({ sellerCountry: 'GA', payOnDelivery: true })],
+        { addressCountry: 'GA' }
+      );
+      hasuraUserService.getUser.mockResolvedValue({ id: 'user-ca' } as any);
+      paymentRoutingService.getUserCountryCode.mockResolvedValue('CA');
+      paymentRoutingService.resolveTrustedPayerCountry.mockResolvedValue('CA');
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'GA',
+          payment_timing: 'pay_at_delivery',
+        },
+        true
+      );
+
+      expect(paymentRoutingService.resolveTrustedPayerCountry).toHaveBeenCalledWith(
+        {
+          profileCountry: 'CA',
+          requestedCountry: 'GA',
+        }
+      );
+      expect(paymentRoutingService.resolveOrderRail).toHaveBeenCalledWith({
+        sellerCountry: 'GA',
+        payerCountry: 'CA',
+      });
       expect(result.can_proceed).toBe(false);
       expect(
         result.blocking_errors.some(
