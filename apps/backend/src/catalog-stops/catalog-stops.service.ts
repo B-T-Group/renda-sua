@@ -91,8 +91,8 @@ export class CatalogStopsService {
             business_location: {
               is_active: { _eq: true }
               storefront_visible: { _eq: true }
-              ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-              ${state ? 'state: { _eq: $state }' : ''}
+              ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
+              ${state ? 'address: { state: { _eq: $state } }' : ''}
             }
           }
           limit: $limit
@@ -141,7 +141,7 @@ export class CatalogStopsService {
           }
           business_location {
             id
-            location_name
+            name
             business {
               id
               business_name
@@ -212,8 +212,8 @@ export class CatalogStopsService {
               business_location: {
                 is_active: { _eq: true }
                 storefront_visible: { _eq: true }
-                ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-                ${state ? 'state: { _eq: $state }' : ''}
+                ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
+                ${state ? 'address: { state: { _eq: $state } }' : ''}
               }
             }
           }
@@ -270,7 +270,7 @@ export class CatalogStopsService {
             }
             business_location {
               id
-              location_name
+              name
               business {
                 id
                 business_name
@@ -400,8 +400,8 @@ export class CatalogStopsService {
           where: {
             is_active: { _eq: true }
             storefront_visible: { _eq: true }
-            ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-            ${state ? 'state: { _eq: $state }' : ''}
+            ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
+            ${state ? 'address: { state: { _eq: $state } }' : ''}
             business: { is_active: { _eq: true } }
             business_inventory_aggregate: {
               count: { predicate: { _gt: 0 } }
@@ -411,11 +411,13 @@ export class CatalogStopsService {
           order_by: { created_at: desc }
         ) {
           id
-          location_name
+          name
           logo_url
-          country_code
-          state
-          city
+          address {
+            country
+            state
+            city
+          }
           business {
             id
             business_name
@@ -443,11 +445,13 @@ export class CatalogStopsService {
     const result = await this.hasuraSystemService.executeQuery(query, variables);
     const locations = (result.business_locations || []) as Array<{
       id: string;
-      location_name: string;
+      name: string;
       logo_url?: string | null;
-      country_code: string;
-      state?: string | null;
-      city?: string | null;
+      address: {
+        country: string;
+        state?: string | null;
+        city?: string | null;
+      };
       business: {
         id: string;
         business_name: string;
@@ -461,8 +465,8 @@ export class CatalogStopsService {
     const stores = locations.map((loc) => ({
       business_id: loc.business.id,
       business_location_id: loc.id,
-      name: loc.location_name,
-      city: loc.city || null,
+      name: loc.name,
+      city: loc.address?.city || null,
       logo_url: loc.logo_url || null,
       item_count: loc.business_inventory_aggregate.aggregate.count,
       is_verified: false,
@@ -539,8 +543,8 @@ export class CatalogStopsService {
             business_location: {
               is_active: { _eq: true }
               storefront_visible: { _eq: true }
-              ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-              ${state ? 'state: { _eq: $state }' : ''}
+              ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
+              ${state ? 'address: { state: { _eq: $state } }' : ''}
             }
           }
           limit: $limit
@@ -589,7 +593,7 @@ export class CatalogStopsService {
           }
           business_location {
             id
-            location_name
+            name
             business {
               id
               business_name

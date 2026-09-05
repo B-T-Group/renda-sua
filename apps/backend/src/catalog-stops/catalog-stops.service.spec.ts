@@ -232,9 +232,13 @@ describe('CatalogStopsService', () => {
       const mockLocations = [
         {
           id: 'loc-1',
-          location_name: 'Test Store',
+          name: 'Test Store',
           logo_url: 'https://...',
-          country_code: 'GA',
+          address: {
+            country: 'GA',
+            state: null,
+            city: 'Libreville',
+          },
           business: {
             id: 'biz-1',
             business_name: 'Test Business',
