@@ -71,6 +71,19 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   const { profile } = useUserProfileContext();
   const { startOnboarding, loading: connectLoading } = useStripeConnect();
 
+  const isAssignedToMe = Boolean(
+    profile?.agent?.id &&
+      order.assigned_agent_id &&
+      order.assigned_agent_id === profile.agent.id
+  );
+  // On a diaspora order the payer is abroad, so the number to call at handover
+  // is the recipient's. The backend already redacts the payer's phone.
+  const deliveryContactPhone =
+    order.delivery_contact?.phone ??
+    order.recipient_phone ??
+    order.client?.user?.phone_number ??
+    null;
+
   // Claim dialog state
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
@@ -483,13 +496,21 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               >
                 <strong>{t('orders.deliveryAddress', 'Deliver')}:</strong>{' '}
                 {formatAddress(order.delivery_address)}
-                {profile?.agent?.id &&
-                  order.assigned_agent_id &&
-                  order.assigned_agent_id === profile.agent.id &&
-                  order.client?.user?.phone_number && (
-                    <> • 📞 {order.client.user.phone_number}</>
-                  )}
+                {isAssignedToMe && deliveryContactPhone && (
+                  <> • 📞 {deliveryContactPhone}</>
+                )}
               </Typography>
+              {order.is_third_party_recipient && order.recipient_name && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ fontSize: '0.65rem', lineHeight: 1.3, mt: 0.25 }}
+                >
+                  {t('orders.deliveryContactRecipient', 'Recipient')}:{' '}
+                  {order.recipient_name}
+                </Typography>
+              )}
               {order.delivery_address?.instructions && (
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.65rem', lineHeight: 1.3, mt: 0.25 }}>
                   {t('addresses.howToFind', 'How to find')}: {order.delivery_address.instructions}
