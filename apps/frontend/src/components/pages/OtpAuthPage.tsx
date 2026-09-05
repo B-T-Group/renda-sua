@@ -36,6 +36,12 @@ const OtpAuthPage: React.FC = () => {
     const expiresAt = stored ? Number(stored) : Date.now() + 5 * 60 * 1000;
     return Math.max(0, expiresAt - Date.now());
   });
+  const [resendRemainingMs, setResendRemainingMs] = useState<number>(() => {
+    if (!isSignup) return 0;
+    const stored = sessionStorage.getItem('pendingSignupOtpResendAtMs');
+    if (!stored) return 0;
+    return Math.max(0, Number(stored) - Date.now());
+  });
   const [resendBusy, setResendBusy] = useState(false);
 
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -43,6 +49,7 @@ const OtpAuthPage: React.FC = () => {
   useEffect(() => {
     const interval = window.setInterval(() => {
       setRemainingMs((ms) => Math.max(0, ms - 1000));
+      setResendRemainingMs((ms) => Math.max(0, ms - 1000));
     }, 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -100,6 +107,7 @@ const OtpAuthPage: React.FC = () => {
     sessionStorage.removeItem('pendingSignupEmail');
     sessionStorage.removeItem('pendingSignupPhone');
     sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
+    sessionStorage.removeItem('pendingSignupOtpResendAtMs');
     sessionStorage.removeItem('pendingSignupUserId');
     sessionStorage.removeItem('pendingSignupLaunchPromo');
   };
@@ -159,7 +167,7 @@ const OtpAuthPage: React.FC = () => {
   };
 
   const handleResend = async () => {
-    if (resendBusy || !isExpired) return;
+    if (resendBusy || (isSignup ? resendRemainingMs > 0 : !isExpired)) return;
     setResendBusy(true);
     setError(null);
     try {
@@ -180,11 +188,19 @@ const OtpAuthPage: React.FC = () => {
         const expiresAt = res.data?.expiresAt
           ? Date.parse(res.data.expiresAt)
           : Date.now() + 15 * 60 * 1000;
+        const resendAt = res.data?.resendAvailableAt
+          ? Date.parse(res.data.resendAvailableAt)
+          : Date.now() + 2 * 60 * 1000;
         sessionStorage.setItem(
           'pendingSignupOtpExpiresAtMs',
           String(expiresAt)
         );
+        sessionStorage.setItem(
+          'pendingSignupOtpResendAtMs',
+          String(resendAt)
+        );
         setRemainingMs(Math.max(0, expiresAt - Date.now()));
+        setResendRemainingMs(Math.max(0, resendAt - Date.now()));
       } else {
         await apiClient.post('/auth/login/start-otp', { email });
         const expiresAt = Date.now() + 5 * 60 * 1000;
@@ -284,7 +300,7 @@ const OtpAuthPage: React.FC = () => {
           </Button>
           <Button
             variant="text"
-            disabled={resendBusy || (!isExpired && remainingMs > 0)}
+            disabled={resendBusy || (isSignup ? resendRemainingMs > 0 || remainingMs <= 0 : !isExpired)}
             onClick={() => void handleResend()}
           >
             {t('auth.otp.resend', 'Resend code')}

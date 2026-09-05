@@ -95,6 +95,10 @@ export const SignupWizard: React.FC = () => {
     sessionStorage.setItem('pendingSignupAttemptId', attempt.attemptId);
     sessionStorage.setItem('pendingSignupEmail', emailNormalized);
     sessionStorage.setItem('pendingSignupOtpExpiresAtMs', String(Date.parse(attempt.expiresAt) || Date.now() + 15 * 60 * 1000));
+    sessionStorage.setItem(
+      'pendingSignupOtpResendAtMs',
+      String(Date.parse(attempt.resendAvailableAt) || Date.now() + 2 * 60 * 1000)
+    );
     if (attempt.channel === 'phone' && phoneNormalized) {
       sessionStorage.setItem('pendingSignupPhone', phoneNormalized);
     } else {

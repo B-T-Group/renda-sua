@@ -194,7 +194,7 @@ export class SignupAttemptStore {
         update_signup_attempts(
           where: {
             id: { _eq: $id }
-            status: { _in: ["pending", "verifying", "verified_pending_provision"] }
+            status: { _in: ["pending", "verified_pending_provision"] }
           }
           _set: { status: "verifying", updated_at: $now }
         ) {

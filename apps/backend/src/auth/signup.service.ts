@@ -172,6 +172,35 @@ export class SignupService {
     attempt: SignupAttemptRow,
     otp: string
   ): Promise<SignupCompletionResult> {
+    const tokens = await this.resolveAttemptTokens(attempt, otp);
+    try {
+      const completion = await this.provisionFromAttempt(
+        { ...attempt, auth0_verified_at: attempt.auth0_verified_at || new Date().toISOString() },
+        tokens
+      );
+      await this.attemptStore.updateStatus(attempt.id, 'completed', {
+        completedUserId: completion.user.id,
+        completionResult: completion,
+      });
+      return completion;
+    } catch (error: any) {
+      await this.attemptStore.updateStatus(attempt.id, 'verified_pending_provision', {
+        completionResult: attempt.completion_result?.tokens
+          ? attempt.completion_result
+          : ({ tokens } as SignupCompletionResult),
+      });
+      throw error;
+    }
+  }
+
+  private async resolveAttemptTokens(
+    attempt: SignupAttemptRow,
+    otp: string
+  ): Promise<Auth0TokenResponse> {
+    const cached = attempt.completion_result?.tokens;
+    if (attempt.auth0_verified_at && cached) {
+      return cached;
+    }
     const count = await this.attemptStore.bumpVerifyCount(attempt.id);
     if (count > SIGNUP_MAX_VERIFY_ATTEMPTS) {
       await this.attemptStore.updateStatus(attempt.id, 'failed');
@@ -181,23 +210,14 @@ export class SignupService {
       );
     }
     const tokens = await this.exchangeOtpForTokens(attempt, otp);
+    const interim = { tokens } as SignupCompletionResult;
     await this.attemptStore.updateStatus(attempt.id, 'verifying', {
       auth0VerifiedAt: new Date().toISOString(),
+      completionResult: interim,
     });
-    try {
-      const completion = await this.provisionFromAttempt(attempt, tokens);
-      await this.attemptStore.updateStatus(attempt.id, 'completed', {
-        completedUserId: completion.user.id,
-        completionResult: completion,
-      });
-      return completion;
-    } catch (error: any) {
-      await this.attemptStore.updateStatus(
-        attempt.id,
-        'verified_pending_provision'
-      );
-      throw error;
-    }
+    attempt.auth0_verified_at = new Date().toISOString();
+    attempt.completion_result = interim;
+    return tokens;
   }
 
   private async exchangeOtpForTokens(
@@ -257,7 +277,23 @@ export class SignupService {
     tokens: Auth0TokenResponse
   ): Promise<SignupCompletionResult> {
     const payload = attempt.payload;
-    await this.assertContactsStillAvailable(payload);
+    if (attempt.completed_user_id) {
+      const existing = await this.findUserById(attempt.completed_user_id);
+      if (existing) {
+        return { tokens, user: existing, launchPromo: null };
+      }
+    }
+    try {
+      await this.assertContactsStillAvailable(payload);
+    } catch (error: any) {
+      if (!attempt.auth0_verified_at) throw error;
+      const existing = await this.findUserByPayloadContacts(payload);
+      if (!existing) throw error;
+      await this.attemptStore.updateStatus(attempt.id, 'verifying', {
+        completedUserId: existing.id,
+      });
+      return { tokens, user: existing, launchPromo: null };
+    }
     const personas = payload.personas;
     const normalizedAddress = normalizeSignupAddress({
       country: payload.country,
@@ -301,6 +337,10 @@ export class SignupService {
         ),
         storeAddress: nestStoreAddress,
       });
+    await this.attemptStore.updateStatus(attempt.id, 'verifying', {
+      completedUserId: user.id,
+    });
+    attempt.completed_user_id = user.id;
     if (normalizedAddress) {
       await this.seedLegacyAddresses(
         user.id,
@@ -540,6 +580,68 @@ export class SignupService {
         HttpStatus.TOO_MANY_REQUESTS
       );
     }
+  }
+
+
+  private async findUserById(
+    userId: string
+  ): Promise<SignupCreatedUser | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: SignupCreatedUser | null;
+    }>(
+      `
+      query SignupAttemptUser($id: uuid!) {
+        users_by_pk(id: $id) {
+          id
+          email
+          first_name
+          last_name
+          user_type_id
+          phone_number
+          email_verified
+        }
+      }
+    `,
+      { id: userId }
+    );
+    return result.users_by_pk;
+  }
+
+  private async findUserByPayloadContacts(
+    payload: SignupAttemptPayload
+  ): Promise<SignupCreatedUser | null> {
+    const email = payload.email ? this.normalizeEmail(payload.email) : null;
+    const phone = payload.phone_number
+      ? this.normalizePhone(payload.phone_number)
+      : null;
+    if (!email && !phone) return null;
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: SignupCreatedUser[];
+    }>(
+      `
+      query SignupAttemptUserByContact($email: String, $phone: String) {
+        users(
+          where: {
+            _or: [
+              { email: { _eq: $email } }
+              { phone_number: { _eq: $phone } }
+            ]
+          }
+          limit: 1
+        ) {
+          id
+          email
+          first_name
+          last_name
+          user_type_id
+          phone_number
+          email_verified
+        }
+      }
+    `,
+      { email, phone }
+    );
+    return result.users?.[0] ?? null;
   }
 
   private async assertContactsStillAvailable(

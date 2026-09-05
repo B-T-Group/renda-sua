@@ -276,6 +276,12 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
                 'pendingSignupOtpExpiresAtMs',
                 String(Date.parse(res.data.expiresAt))
               );
+              if (res.data?.resendAvailableAt) {
+                sessionStorage.setItem(
+                  'pendingSignupOtpResendAtMs',
+                  String(Date.parse(res.data.resendAvailableAt))
+                );
+              }
             }
           }
         });
@@ -315,6 +321,12 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
             'pendingSignupOtpExpiresAtMs',
             String(Date.parse(startRes.data.expiresAt))
           );
+          if (startRes.data?.resendAvailableAt) {
+            sessionStorage.setItem(
+              'pendingSignupOtpResendAtMs',
+              String(Date.parse(startRes.data.resendAvailableAt))
+            );
+          }
         }
       }
       navigate('/auth/otp?flow=signup');

@@ -344,6 +344,47 @@ describe('SignupService (deferred OTP)', () => {
       );
       expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
     });
+
+    it('retries provisioning without re-exchanging OTP after Auth0 success', async () => {
+      const tokens = auth0Token;
+      const pending = baseAttempt({
+        status: 'verified_pending_provision',
+        auth0_verified_at: new Date().toISOString(),
+        completion_result: { tokens } as any,
+      });
+      attemptStore.findById.mockResolvedValue(pending);
+      attemptStore.claimForVerify.mockResolvedValue(pending);
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [{ id: 'client-1', type: 'client' }],
+      });
+      attemptStore.updateStatus.mockResolvedValue(
+        baseAttempt({ status: 'completed' })
+      );
+
+      const result = await service.verifySignupOtp({
+        attemptId: 'attempt-1',
+        otp: '123456',
+      });
+
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
+      expect(attemptStore.bumpVerifyCount).not.toHaveBeenCalled();
+      expect(userProvisioning.createPendingUser).toHaveBeenCalled();
+      expect(result.tokens.access_token).toBe('token');
+    });
+
+    it('returns conflict when another verify claim is in flight', async () => {
+      const pending = baseAttempt();
+      attemptStore.findById
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValueOnce(pending);
+      attemptStore.claimForVerify.mockResolvedValue(null);
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-1', otp: '123456' })
+      ).rejects.toMatchObject({ status: 409 });
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
   });
 
   describe('retired endpoints', () => {

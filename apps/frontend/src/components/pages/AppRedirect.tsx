@@ -14,6 +14,7 @@ const AppRedirect: React.FC = () => {
     sessionStorage.removeItem('pendingSignupEmail');
     sessionStorage.removeItem('pendingSignupPhone');
     sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
+    sessionStorage.removeItem('pendingSignupOtpResendAtMs');
     sessionStorage.removeItem('pendingSignupLaunchPromo');
   }, []);
 
