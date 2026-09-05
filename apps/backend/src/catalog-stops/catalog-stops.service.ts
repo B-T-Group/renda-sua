@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import type { RequestContext } from '../auth/request-context';
 import type { InventoryItem } from '../inventory-items/inventory-items.service';
 import type { CollectionSummary } from '../collections/collections.service';
 import type { TopInventoryStoreRow } from '../inventory-items/inventory-items.service';
@@ -43,44 +42,98 @@ interface BagComplementsOptions extends StopQueryOptions {
   inventory_item_ids: string[];
 }
 
+interface FeaturedLocationRow {
+  id: string;
+  name: string;
+  logo_url?: string | null;
+  business: {
+    id: string;
+    name: string;
+    is_verified?: boolean | null;
+    can_accept_orders?: boolean | null;
+    is_storefront_visible?: boolean | null;
+  };
+  address?: { city?: string | null } | null;
+  business_inventory_aggregate: {
+    aggregate: { count: number };
+  };
+}
+
+const INVENTORY_ITEM_SELECTION = `
+  id
+  selling_price
+  computed_available_quantity
+  is_active
+  business_location_id
+  item_id
+  promotion
+  variant_price_overrides
+  item {
+    id
+    name
+    description
+    price
+    currency
+    weight
+    weight_unit
+    dimensions
+    item_sub_category_id
+    is_active
+    brand
+    condition
+    sku
+    item_sub_category {
+      id
+      name
+      item_category {
+        id
+        name
+      }
+    }
+    item_images(order_by: { created_at: asc }, limit: 5) {
+      id
+      image_url
+    }
+    item_variants(
+      where: { is_active: { _eq: true } }
+      order_by: { sort_order: asc }
+    ) {
+      id
+      name
+      sku
+      price
+      is_active
+    }
+  }
+  business_location {
+    id
+    name
+    business {
+      id
+      name
+    }
+  }
+`;
+
 @Injectable()
 export class CatalogStopsService {
-  constructor(
-    private readonly hasuraSystemService: HasuraSystemService
-  ) {}
+  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
   /**
    * Get top items in category (reuses inventory item shape from GET /inventory-items).
    */
   async getTopInCategory(
-    options: TopInCategoryOptions,
-    ctx?: RequestContext
+    options: TopInCategoryOptions
   ): Promise<TopInCategoryResponse> {
     const limit = Math.min(options.limit ?? 8, 20);
-    const { country_code, state, category, subcategory } = options;
-
-    // Note: User address resolution and distance calculation omitted for v1 (simplified)
-    // Future: resolve user primary address and calculate distance
-
-    // Build where clause for category/subcategory
-    const itemWhere: Record<string, unknown> = {
-      is_active: { _eq: true },
-    };
-
-    if (subcategory?.trim()) {
-      itemWhere.item_sub_category = { name: { _eq: subcategory.trim() } };
-    } else if (category?.trim()) {
-      // When only category is specified, match on category name
-      itemWhere.item_sub_category = {
-        item_category: { name: { _ilike: `%${category.trim()}%` } },
-      };
-    }
+    const { category, subcategory } = options;
+    const itemWhere = this.buildItemWhere(category, subcategory);
+    const locationWhere = this.buildLocationWhere(options);
 
     const query = `
       query GetTopInCategory(
-        $countryCode: String
-        $state: String
         $itemWhere: items_bool_exp!
+        $locationWhere: business_locations_bool_exp!
         $limit: Int!
       ) {
         business_inventory(
@@ -88,93 +141,28 @@ export class CatalogStopsService {
             is_active: { _eq: true }
             computed_available_quantity: { _gt: 0 }
             item: $itemWhere
-            business_location: {
-              is_active: { _eq: true }
-              storefront_visible: { _eq: true }
-              ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-              ${state ? 'state: { _eq: $state }' : ''}
-            }
+            business_location: $locationWhere
           }
           limit: $limit
         ) {
-          id
-          selling_price
-          computed_available_quantity
-          is_active
-          business_location_id
-          item_id
-          promotion
-          variant_price_overrides
-          item {
-            id
-            name
-            description
-            price
-            currency
-            weight
-            weight_unit
-            dimensions
-            item_sub_category_id
-            is_active
-            brand
-            condition
-            sku
-            item_sub_category {
-              id
-              name
-              item_category {
-                id
-                name
-              }
-            }
-            item_images(order_by: { created_at: asc }, limit: 5) {
-              id
-              image_url
-            }
-            item_variants {
-              id
-              variant_name
-              variant_type
-              additional_price
-              is_available
-            }
-          }
-          business_location {
-            id
-            location_name
-            business {
-              id
-              business_name
-            }
-          }
+          ${INVENTORY_ITEM_SELECTION}
         }
       }
     `;
 
-    const variables: Record<string, unknown> = {
+    const result = await this.hasuraSystemService.executeQuery(query, {
       limit,
       itemWhere,
-    };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
-
-    const result = await this.hasuraSystemService.executeQuery(query, variables);
-    const listings = (result.business_inventory || []) as InventoryItem[];
-
-    // Get category name from first item or use provided category
-    const categoryName = 
-      listings[0]?.item?.item_sub_category?.item_category?.name ||
-      category ||
-      subcategory ||
-      'All';
-
-    // Enrich with ratings and sort by relevance/top_rated
-    const enriched = await this.enrichWithRatings(listings);
-    enriched.sort((a, b) => {
-      const ratingDiff = (b.avg_rating || 0) - (a.avg_rating || 0);
-      if (ratingDiff !== 0) return ratingDiff;
-      return (b.viewsCount || 0) - (a.viewsCount || 0);
+      locationWhere,
     });
+    const listings = (result.business_inventory || []) as InventoryItem[];
+    const categoryName = this.resolveCategoryName(
+      listings,
+      category,
+      subcategory
+    );
+    const enriched = await this.enrichWithRatings(listings);
+    this.sortByRatingThenViews(enriched);
 
     return {
       category_name: categoryName,
@@ -185,19 +173,15 @@ export class CatalogStopsService {
   /**
    * Get deals (only deal-active rows, same inventory item shape).
    */
-  async getDeals(
-    options: StopQueryOptions,
-    ctx?: RequestContext
-  ): Promise<DealsResponse> {
+  async getDeals(options: StopQueryOptions): Promise<DealsResponse> {
     const limit = Math.min(options.limit ?? 8, 20);
-    const { country_code, state } = options;
-
     const now = new Date().toISOString();
+    const locationWhere = this.buildLocationWhere(options);
+
     const query = `
       query GetActiveDeals(
         $now: timestamptz!
-        $countryCode: String
-        $state: String
+        $locationWhere: business_locations_bool_exp!
         $limit: Int!
       ) {
         item_deals(
@@ -209,12 +193,7 @@ export class CatalogStopsService {
               is_active: { _eq: true }
               computed_available_quantity: { _gt: 0 }
               item: { is_active: { _eq: true } }
-              business_location: {
-                is_active: { _eq: true }
-                storefront_visible: { _eq: true }
-                ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-                ${state ? 'state: { _eq: $state }' : ''}
-              }
+              business_location: $locationWhere
             }
           }
           limit: $limit
@@ -226,117 +205,39 @@ export class CatalogStopsService {
           start_at
           end_at
           business_inventory {
-            id
-            selling_price
-            computed_available_quantity
-            is_active
-            business_location_id
-            item_id
-            promotion
-            variant_price_overrides
-            item {
-              id
-              name
-              description
-              price
-              currency
-              weight
-              weight_unit
-              dimensions
-              item_sub_category_id
-              is_active
-              brand
-              condition
-              sku
-              item_sub_category {
-                id
-                name
-                item_category {
-                  id
-                  name
-                }
-              }
-              item_images(order_by: { created_at: asc }, limit: 5) {
-                id
-                image_url
-              }
-              item_variants {
-                id
-                variant_name
-                variant_type
-                additional_price
-                is_available
-              }
-            }
-            business_location {
-              id
-              location_name
-              business {
-                id
-                business_name
-              }
-            }
+            ${INVENTORY_ITEM_SELECTION}
           }
         }
       }
     `;
 
-    const variables: Record<string, unknown> = {
+    const result = await this.hasuraSystemService.executeQuery(query, {
       now,
       limit,
-    };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
-
-    const result = await this.hasuraSystemService.executeQuery(query, variables);
+      locationWhere,
+    });
     const deals = (result.item_deals || []) as Array<{
-      id: string;
       discount_type: 'percentage' | 'fixed';
       discount_value: number;
-      start_at: string;
       end_at: string;
       business_inventory: InventoryItem;
     }>;
 
-    // Enrich inventory items with deal info
-    const items: InventoryItem[] = deals.map((deal) => {
-      const inv = deal.business_inventory;
-      const original = inv.selling_price;
-      let discounted = original;
-      if (deal.discount_type === 'percentage') {
-        discounted = original * (1 - deal.discount_value / 100);
-      } else {
-        discounted = Math.max(0, original - deal.discount_value);
-      }
-
-      return {
-        ...inv,
-        hasActiveDeal: true,
-        original_price: original,
-        discounted_price: discounted,
-        deal_discount_type: deal.discount_type,
-        deal_discount_value: deal.discount_value,
-        deal_end_at: deal.end_at,
-      };
-    });
-
-    return { items };
+    return { items: deals.map((deal) => this.mapDealItem(deal)) };
   }
 
   /**
    * Get essentials/featured collections.
    */
-  async getEssentials(
-    options: StopQueryOptions
-  ): Promise<EssentialsResponse> {
+  async getEssentials(options: StopQueryOptions): Promise<EssentialsResponse> {
     const limit = Math.min(options.limit ?? 8, 20);
 
     const query = `
-      query GetFeaturedCollections {
+      query GetFeaturedCollections($limit: Int!) {
         collections(
           where: { is_featured: { _eq: true } }
           order_by: { sort_order: asc }
-          limit: ${limit}
+          limit: $limit
         ) {
           id
           slug
@@ -351,7 +252,9 @@ export class CatalogStopsService {
       }
     `;
 
-    const result = await this.hasuraSystemService.executeQuery(query, {});
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      limit,
+    });
     const collections = (result.collections || []) as Array<{
       id: string;
       slug: string;
@@ -364,7 +267,6 @@ export class CatalogStopsService {
       sort_order: number;
     }>;
 
-    // Transform to CollectionSummary shape
     const summaries: CollectionSummary[] = collections.map((c) => ({
       id: c.id,
       slug: c.slug,
@@ -374,7 +276,7 @@ export class CatalogStopsService {
       preview_image_urls: c.image_url ? [c.image_url] : [],
       is_featured: c.is_featured,
       sort_order: c.sort_order,
-      listing_count: 0, // Would need separate query to count
+      listing_count: 0,
     }));
 
     return { collections: summaries };
@@ -384,41 +286,37 @@ export class CatalogStopsService {
    * Get featured stores (catalog store shape).
    */
   async getFeaturedStore(
-    options: StopQueryOptions,
-    ctx?: RequestContext
+    options: StopQueryOptions
   ): Promise<FeaturedStoreResponse> {
     const limit = Math.min(options.limit ?? 1, 5);
-    const { country_code, state } = options;
+    const locationWhere = this.buildLocationWhere(options, {
+      business_inventory_aggregate: {
+        count: { predicate: { _gt: 0 } },
+      },
+    });
 
     const query = `
       query GetFeaturedStores(
-        $countryCode: String
-        $state: String
+        $locationWhere: business_locations_bool_exp!
         $limit: Int!
       ) {
         business_locations(
-          where: {
-            is_active: { _eq: true }
-            storefront_visible: { _eq: true }
-            ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-            ${state ? 'state: { _eq: $state }' : ''}
-            business: { is_active: { _eq: true } }
-            business_inventory_aggregate: {
-              count: { predicate: { _gt: 0 } }
-            }
-          }
+          where: $locationWhere
           limit: $limit
           order_by: { created_at: desc }
         ) {
           id
-          location_name
+          name
           logo_url
-          country_code
-          state
-          city
           business {
             id
-            business_name
+            name
+            is_verified
+            can_accept_orders
+            is_storefront_visible
+          }
+          address {
+            city
           }
           business_inventory_aggregate(
             where: {
@@ -434,43 +332,12 @@ export class CatalogStopsService {
       }
     `;
 
-    const variables: Record<string, unknown> = {
+    const result = await this.hasuraSystemService.executeQuery(query, {
       limit,
-    };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
-
-    const result = await this.hasuraSystemService.executeQuery(query, variables);
-    const locations = (result.business_locations || []) as Array<{
-      id: string;
-      location_name: string;
-      logo_url?: string | null;
-      country_code: string;
-      state?: string | null;
-      city?: string | null;
-      business: {
-        id: string;
-        business_name: string;
-      };
-      business_inventory_aggregate: {
-        aggregate: { count: number };
-      };
-    }>;
-
-    // Transform to TopInventoryStoreRow shape
-    const stores = locations.map((loc) => ({
-      business_id: loc.business.id,
-      business_location_id: loc.id,
-      name: loc.location_name,
-      city: loc.city || null,
-      logo_url: loc.logo_url || null,
-      item_count: loc.business_inventory_aggregate.aggregate.count,
-      is_verified: false,
-      can_accept_orders: true,
-      is_storefront_visible: true,
-    })) as TopInventoryStoreRow[];
-
-    return { stores };
+      locationWhere,
+    });
+    const locations = (result.business_locations || []) as FeaturedLocationRow[];
+    return { stores: locations.map((loc) => this.mapFeaturedStore(loc)) };
   }
 
   /**
@@ -484,45 +351,19 @@ export class CatalogStopsService {
     }
 
     const limit = Math.min(options.limit ?? 6, 12);
-    const { country_code, state, inventory_item_ids } = options;
-
-    // Get categories of items in cart
-    const cartQuery = `
-      query GetCartItemCategories($itemIds: [uuid!]!) {
-        business_inventory(where: { id: { _in: $itemIds } }) {
-          item {
-            item_sub_category {
-              item_category_id
-            }
-          }
-        }
-      }
-    `;
-
-    const cartResult = await this.hasuraSystemService.executeQuery(cartQuery, {
-      itemIds: inventory_item_ids,
-    });
-    const cartItems = (cartResult.business_inventory || []) as Array<{
-      item: {
-        item_sub_category: { item_category_id: number };
-      };
-    }>;
-
-    const categoryIds = [
-      ...new Set(cartItems.map((i) => i.item.item_sub_category.item_category_id)),
-    ];
-
+    const categoryIds = await this.getCartCategoryIds(
+      options.inventory_item_ids
+    );
     if (!categoryIds.length) {
       return { items: [] };
     }
 
-    // Find items in related categories not in cart
+    const locationWhere = this.buildLocationWhere(options);
     const complementQuery = `
       query GetComplementItems(
         $categoryIds: [Int!]!
         $excludeIds: [uuid!]!
-        $countryCode: String
-        $state: String
+        $locationWhere: business_locations_bool_exp!
         $limit: Int!
       ) {
         business_inventory(
@@ -536,84 +377,25 @@ export class CatalogStopsService {
                 item_category_id: { _in: $categoryIds }
               }
             }
-            business_location: {
-              is_active: { _eq: true }
-              storefront_visible: { _eq: true }
-              ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-              ${state ? 'state: { _eq: $state }' : ''}
-            }
+            business_location: $locationWhere
           }
           limit: $limit
         ) {
-          id
-          selling_price
-          computed_available_quantity
-          is_active
-          business_location_id
-          item_id
-          promotion
-          variant_price_overrides
-          item {
-            id
-            name
-            description
-            price
-            currency
-            weight
-            weight_unit
-            dimensions
-            item_sub_category_id
-            is_active
-            brand
-            condition
-            sku
-            item_sub_category {
-              id
-              name
-              item_category {
-                id
-                name
-              }
-            }
-            item_images(order_by: { created_at: asc }, limit: 5) {
-              id
-              image_url
-            }
-            item_variants {
-              id
-              variant_name
-              variant_type
-              additional_price
-              is_available
-            }
-          }
-          business_location {
-            id
-            location_name
-            business {
-              id
-              business_name
-            }
-          }
+          ${INVENTORY_ITEM_SELECTION}
         }
       }
     `;
 
-    const variables: Record<string, unknown> = {
-      categoryIds,
-      excludeIds: inventory_item_ids,
-      limit,
-    };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
-
     const result = await this.hasuraSystemService.executeQuery(
       complementQuery,
-      variables
+      {
+        categoryIds,
+        excludeIds: options.inventory_item_ids,
+        locationWhere,
+        limit,
+      }
     );
     const listings = (result.business_inventory || []) as InventoryItem[];
-
-    // Add reason labels (simple category-based for v1)
     const items = listings.map((item) => ({
       ...item,
       reason_label: 'Popular in same category',
@@ -622,9 +404,130 @@ export class CatalogStopsService {
     return { items };
   }
 
-  // -------------------------
-  // Private helper methods
-  // -------------------------
+  private buildItemWhere(
+    category?: string,
+    subcategory?: string
+  ): Record<string, unknown> {
+    const itemWhere: Record<string, unknown> = {
+      is_active: { _eq: true },
+    };
+    if (subcategory?.trim()) {
+      itemWhere.item_sub_category = { name: { _eq: subcategory.trim() } };
+    } else if (category?.trim()) {
+      itemWhere.item_sub_category = {
+        item_category: { name: { _ilike: `%${category.trim()}%` } },
+      };
+    }
+    return itemWhere;
+  }
+
+  /**
+   * Country/state live on addresses, storefront visibility on businesses.
+   * business_locations has neither country_code nor storefront_visible.
+   */
+  private buildLocationWhere(
+    options: StopQueryOptions,
+    extras: Record<string, unknown> = {}
+  ): Record<string, unknown> {
+    const country = options.country_code?.trim();
+    const state = options.state?.trim();
+    const address: Record<string, unknown> = {
+      country: country ? { _eq: country } : { _is_null: false },
+    };
+    if (state) {
+      address.state = { _eq: state };
+    }
+    return {
+      is_active: { _eq: true },
+      business: { is_storefront_visible: { _eq: true } },
+      address,
+      ...extras,
+    };
+  }
+
+  private resolveCategoryName(
+    listings: InventoryItem[],
+    category?: string,
+    subcategory?: string
+  ): string {
+    return (
+      listings[0]?.item?.item_sub_category?.item_category?.name ||
+      category ||
+      subcategory ||
+      'All'
+    );
+  }
+
+  private sortByRatingThenViews(items: InventoryItem[]): void {
+    items.sort((a, b) => {
+      const ratingDiff = (b.avg_rating || 0) - (a.avg_rating || 0);
+      if (ratingDiff !== 0) return ratingDiff;
+      return (b.viewsCount || 0) - (a.viewsCount || 0);
+    });
+  }
+
+  private mapDealItem(deal: {
+    discount_type: 'percentage' | 'fixed';
+    discount_value: number;
+    end_at: string;
+    business_inventory: InventoryItem;
+  }): InventoryItem {
+    const original = deal.business_inventory.selling_price;
+    const discounted =
+      deal.discount_type === 'percentage'
+        ? original * (1 - deal.discount_value / 100)
+        : Math.max(0, original - deal.discount_value);
+    return {
+      ...deal.business_inventory,
+      hasActiveDeal: true,
+      original_price: original,
+      discounted_price: discounted,
+      deal_discount_type: deal.discount_type,
+      deal_discount_value: deal.discount_value,
+      deal_end_at: deal.end_at,
+    };
+  }
+
+  private mapFeaturedStore(loc: FeaturedLocationRow): TopInventoryStoreRow {
+    return {
+      business_id: loc.business.id,
+      business_location_id: loc.id,
+      name: loc.name,
+      city: loc.address?.city || null,
+      logo_url: loc.logo_url || null,
+      item_count: loc.business_inventory_aggregate.aggregate.count,
+      is_verified: loc.business.is_verified === true,
+      can_accept_orders: loc.business.can_accept_orders === true,
+      is_storefront_visible: loc.business.is_storefront_visible === true,
+    };
+  }
+
+  private async getCartCategoryIds(inventoryItemIds: string[]): Promise<number[]> {
+    const cartQuery = `
+      query GetCartItemCategories($itemIds: [uuid!]!) {
+        business_inventory(where: { id: { _in: $itemIds } }) {
+          item {
+            item_sub_category {
+              item_category_id
+            }
+          }
+        }
+      }
+    `;
+    const cartResult = await this.hasuraSystemService.executeQuery(cartQuery, {
+      itemIds: inventoryItemIds,
+    });
+    const cartItems = (cartResult.business_inventory || []) as Array<{
+      item?: { item_sub_category?: { item_category_id?: number } | null } | null;
+    }>;
+    return [
+      ...new Set(
+        cartItems
+          .map((row) => row.item?.item_sub_category?.item_category_id)
+          .filter((id): id is number => typeof id === 'number')
+      ),
+    ];
+  }
 
   private async enrichWithRatings(
     listings: InventoryItem[]
@@ -650,13 +553,11 @@ export class CatalogStopsService {
     const statsResult = await this.hasuraSystemService.executeQuery(statsQuery, {
       itemIds,
     });
-
     const ratings = (statsResult.rating_aggregates || []) as Array<{
       entity_id: string;
       average_rating: number;
       total_ratings: number;
     }>;
-
     const ratingMap = new Map(ratings.map((r) => [r.entity_id, r]));
 
     return listings.map((inv) => {

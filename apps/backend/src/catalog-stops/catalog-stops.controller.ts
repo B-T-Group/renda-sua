@@ -15,8 +15,6 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
-import { ReqContext } from '../auth/req-context.decorator';
-import type { RequestContext } from '../auth/request-context';
 import {
   CatalogStopsService,
   type TopInCategoryResponse,
@@ -117,8 +115,7 @@ export class CatalogStopsController {
     },
   })
   async getTopInCategory(
-    @Query() query: TopInCategoryQueryParams,
-    @ReqContext() ctx?: RequestContext
+    @Query() query: TopInCategoryQueryParams
   ): Promise<{
     success: boolean;
     data: TopInCategoryResponse;
@@ -133,18 +130,15 @@ export class CatalogStopsController {
         : undefined;
       const limit = query.limit ? Number(query.limit) : undefined;
 
-      const data = await this.catalogStopsService.getTopInCategory(
-        {
-          category: query.category,
-          subcategory: query.subcategory,
-          country_code: query.country_code,
-          state: query.state,
-          origin_lat: Number.isFinite(oLat) ? oLat : undefined,
-          origin_lng: Number.isFinite(oLng) ? oLng : undefined,
-          limit,
-        },
-        ctx
-      );
+      const data = await this.catalogStopsService.getTopInCategory({
+        category: query.category,
+        subcategory: query.subcategory,
+        country_code: query.country_code,
+        state: query.state,
+        origin_lat: Number.isFinite(oLat) ? oLat : undefined,
+        origin_lng: Number.isFinite(oLng) ? oLng : undefined,
+        limit,
+      });
 
       return {
         success: true,
@@ -215,8 +209,7 @@ export class CatalogStopsController {
     },
   })
   async getDeals(
-    @Query() query: StopQueryParams,
-    @ReqContext() ctx?: RequestContext
+    @Query() query: StopQueryParams
   ): Promise<{
     success: boolean;
     data: DealsResponse;
@@ -231,16 +224,13 @@ export class CatalogStopsController {
         : undefined;
       const limit = query.limit ? Number(query.limit) : undefined;
 
-      const data = await this.catalogStopsService.getDeals(
-        {
-          country_code: query.country_code,
-          state: query.state,
-          origin_lat: Number.isFinite(oLat) ? oLat : undefined,
-          origin_lng: Number.isFinite(oLng) ? oLng : undefined,
-          limit,
-        },
-        ctx
-      );
+      const data = await this.catalogStopsService.getDeals({
+        country_code: query.country_code,
+        state: query.state,
+        origin_lat: Number.isFinite(oLat) ? oLat : undefined,
+        origin_lng: Number.isFinite(oLng) ? oLng : undefined,
+        limit,
+      });
 
       return {
         success: true,
@@ -367,8 +357,7 @@ export class CatalogStopsController {
     },
   })
   async getFeaturedStore(
-    @Query() query: StopQueryParams,
-    @ReqContext() ctx?: RequestContext
+    @Query() query: StopQueryParams
   ): Promise<{
     success: boolean;
     data: FeaturedStoreResponse;
@@ -377,14 +366,11 @@ export class CatalogStopsController {
     try {
       const limit = query.limit ? Number(query.limit) : undefined;
 
-      const data = await this.catalogStopsService.getFeaturedStore(
-        {
-          country_code: query.country_code,
-          state: query.state,
-          limit,
-        },
-        ctx
-      );
+      const data = await this.catalogStopsService.getFeaturedStore({
+        country_code: query.country_code,
+        state: query.state,
+        limit,
+      });
 
       return {
         success: true,

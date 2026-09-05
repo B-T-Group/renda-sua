@@ -55,8 +55,11 @@ describe('CatalogStopsService', () => {
         country_code: 'GA',
       });
 
-      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.any(String),
+      const [query, variables] = hasuraSystemService.executeQuery.mock.calls[0];
+      expect(query).toContain('$locationWhere: business_locations_bool_exp!');
+      expect(query).not.toContain('country_code:');
+      expect(query).not.toContain('storefront_visible:');
+      expect(variables).toEqual(
         expect.objectContaining({
           itemWhere: expect.objectContaining({
             item_sub_category: expect.objectContaining({
@@ -66,6 +69,51 @@ describe('CatalogStopsService', () => {
                 }),
               }),
             }),
+          }),
+          locationWhere: expect.objectContaining({
+            is_active: { _eq: true },
+            business: { is_storefront_visible: { _eq: true } },
+            address: { country: { _eq: 'GA' } },
+          }),
+        })
+      );
+    });
+
+    it('should scope by address.state when state is provided', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_inventory: [],
+      });
+
+      await service.getTopInCategory({
+        country_code: 'CM',
+        state: 'Centre',
+      });
+
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          locationWhere: expect.objectContaining({
+            address: {
+              country: { _eq: 'CM' },
+              state: { _eq: 'Centre' },
+            },
+          }),
+        })
+      );
+    });
+
+    it('should require a non-null address.country when country is omitted', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_inventory: [],
+      });
+
+      await service.getTopInCategory({});
+
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          locationWhere: expect.objectContaining({
+            address: { country: { _is_null: false } },
           }),
         })
       );
@@ -154,6 +202,14 @@ describe('CatalogStopsService', () => {
       const result = await service.getDeals({ country_code: 'GA' });
 
       expect(result.items).toEqual([]);
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('$locationWhere: business_locations_bool_exp!'),
+        expect.objectContaining({
+          locationWhere: expect.objectContaining({
+            address: { country: { _eq: 'GA' } },
+          }),
+        })
+      );
     });
 
     it('should calculate discount prices correctly', async () => {
@@ -232,13 +288,16 @@ describe('CatalogStopsService', () => {
       const mockLocations = [
         {
           id: 'loc-1',
-          location_name: 'Test Store',
-          logo_url: 'https://...',
-          country_code: 'GA',
+          name: 'Test Store',
+          logo_url: 'https://example.test/logo.png',
           business: {
             id: 'biz-1',
-            business_name: 'Test Business',
+            name: 'Test Business',
+            is_verified: true,
+            can_accept_orders: true,
+            is_storefront_visible: true,
           },
+          address: { city: 'Libreville' },
           business_inventory_aggregate: {
             aggregate: { count: 50 },
           },
@@ -251,8 +310,19 @@ describe('CatalogStopsService', () => {
 
       const result = await service.getFeaturedStore({ country_code: 'GA' });
 
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('$locationWhere: business_locations_bool_exp!'),
+        expect.objectContaining({
+          locationWhere: expect.objectContaining({
+            address: { country: { _eq: 'GA' } },
+            business: { is_storefront_visible: { _eq: true } },
+          }),
+        })
+      );
       expect(result.stores.length).toBe(1);
       expect(result.stores[0].business_location_id).toBe('loc-1');
+      expect(result.stores[0].name).toBe('Test Store');
+      expect(result.stores[0].city).toBe('Libreville');
       expect(result.stores[0].item_count).toBe(50);
     });
   });
