@@ -636,11 +636,11 @@ export class CatalogStopsService {
       query GetItemStats($itemIds: [uuid!]!) {
         rating_aggregates(
           where: {
-            rated_entity_type: { _eq: "item" }
-            rated_entity_id: { _in: $itemIds }
+            entity_type: { _eq: "item" }
+            entity_id: { _in: $itemIds }
           }
         ) {
-          entity_id: rated_entity_id
+          entity_id
           average_rating
           total_ratings
         }
