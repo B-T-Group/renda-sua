@@ -152,6 +152,9 @@ export class WhatsAppOrderActionService {
     if (!actor) {
       return { handled: false, message: this.msgUnknown(params.preferredLanguage) };
     }
+    if (actor.kind === 'ambiguous') {
+      return { handled: true, message: this.msgAmbiguous(params.preferredLanguage) };
+    }
     return {
       handled: true,
       message: await this.runAction(
