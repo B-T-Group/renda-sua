@@ -404,6 +404,7 @@ const RentalBookingDetailPage: React.FC = () => {
                     </Typography>
                     <Button
                       variant="contained"
+                      color="cta"
                       disabled={retryingPayment}
                       onClick={() => void handleRetryPayment()}
                     >
@@ -866,6 +867,7 @@ const RentalBookingDetailPage: React.FC = () => {
             <Button
               fullWidth
               variant="contained"
+              color="cta"
               disabled={retryingPayment}
               onClick={() => void handleRetryPayment()}
             >

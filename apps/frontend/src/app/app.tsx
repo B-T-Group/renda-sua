@@ -25,6 +25,8 @@ import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
 import StickyDownloadBar from '../components/common/StickyDownloadBar';
+import IncomingOrderOverlay from '../components/incoming-order/IncomingOrderOverlay';
+import StorePickupReminderOverlay from '../components/orders/StorePickupReminderOverlay';
 import SmartBatchOrders from '../components/routing/SmartBatchOrders';
 import SmartDashboard from '../components/routing/SmartDashboard';
 import SmartHome from '../components/routing/SmartHome';
@@ -34,6 +36,8 @@ import { useAgentLocationConsent } from '../hooks/useAgentLocationConsent';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { useFlushPendingLike } from '../hooks/useFlushPendingLike';
+import { IncomingOrderInterruptProvider } from '../hooks/useIncomingOrderInterrupt';
+import { StorePickupReminderProvider } from '../hooks/useStorePickupReminder';
 import { useMetaPixelAdvancedMatching } from '../hooks/useMetaPixelAdvancedMatching';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePushSubscription } from '../hooks/usePushSubscription';
@@ -181,46 +185,47 @@ function App() {
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Header />
-
+    <IncomingOrderInterruptProvider>
+      <StorePickupReminderProvider>
       <Box
         sx={{
-          flex: 1,
-          py: isHomePage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
-          // Add bottom padding when any bottom nav is visible to prevent content overlap
-          paddingBottom:
-            showAgentBottomNav || showClientBottomNav || showGuestBottomNav
-              ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
-              : isHomePage
-                ? 0
-                : isBusinessItemsCatalog
-                  ? { xs: 1, sm: 1.5 }
-                  : 4,
+          minHeight: '100vh',
+          bgcolor: 'background.default',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Container
-          maxWidth={isHomePage ? false : 'xl'}
-          disableGutters={isHomePage}
+        <Header />
+
+        <Box
           sx={{
-            px: isHomePage
-              ? 0
-              : location.pathname === '/items' ||
-                location.pathname.startsWith('/items/') ||
-                isBusinessItemsCatalog
-                ? { xs: 0.5, sm: 1 }
-                : { xs: 1.5, sm: 2, md: 3 },
+            flex: 1,
+            py: isHomePage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
+            paddingBottom:
+              showAgentBottomNav || showClientBottomNav || showGuestBottomNav
+                ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
+                : isHomePage
+                  ? 0
+                  : isBusinessItemsCatalog
+                    ? { xs: 1, sm: 1.5 }
+                    : 4,
           }}
         >
-          <Suspense fallback={<RouteSuspenseFallback />}>
-            <Routes>
+          <Container
+            maxWidth={isHomePage ? false : 'xl'}
+            disableGutters={isHomePage}
+            sx={{
+              px: isHomePage
+                ? 0
+                : location.pathname === '/items' ||
+                  location.pathname.startsWith('/items/') ||
+                  isBusinessItemsCatalog
+                  ? { xs: 0.5, sm: 1 }
+                  : { xs: 1.5, sm: 2, md: 3 },
+            }}
+          >
+            <Suspense fallback={<RouteSuspenseFallback />}>
+              <Routes>
             <Route path="/" element={<SmartHome />} />
             {/* Legacy marketing page — redirect to homepage */}
             <Route path="/who-we-are" element={<Navigate to="/" replace />} />
@@ -243,6 +248,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.ClientRentalRequestsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/product-interest"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.ClientProductInterestPage />
                 </ProtectedRoute>
               }
             />
@@ -282,6 +295,7 @@ function App() {
             <Route path="/collections" element={<LazyPages.CollectionsIndexPage />} />
             <Route path="/collections/:slug" element={<LazyPages.CollectionLandingPage />} />
             <Route path="/deals" element={<LazyPages.DealsPage />} />
+            <Route path="/assistant" element={<LazyPages.AssistantPage />} />
             <Route path="/support" element={<LazyPages.SupportPage />} />
             <Route path="/about" element={<LazyPages.AboutUsPage />} />
             <Route
@@ -380,6 +394,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/orders/awaiting-payment"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.MobileMoneyAwaitingPaymentPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* App route - redirects to appropriate dashboard based on auth flow */}
             <Route
@@ -400,6 +422,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.NotificationPreferencesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/kitchen"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.KitchenModePage />
                 </ProtectedRoute>
               }
             />
@@ -910,6 +940,14 @@ function App() {
               }
             />
             <Route
+              path="/business/product-interest"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessProductInterestPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/rentals/schedule"
               element={
                 <ProtectedRoute>
@@ -1055,43 +1093,47 @@ function App() {
 
             {/* Unknown paths: same persona rules as home */}
             <Route path="*" element={<SmartHome />} />
-          </Routes>
-          </Suspense>
-        </Container>
+              </Routes>
+            </Suspense>
+          </Container>
+        </Box>
+
+        <Footer />
+
+        {/* Agent Bottom Navigation - Only visible for agents on mobile */}
+        <AgentBottomNav />
+
+        {/* Client Bottom Navigation - Only visible for clients on mobile */}
+        <ClientBottomNav />
+
+        {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
+        <GuestBottomNav />
+
+        <DeferredFloatingWhatsApp
+          whatsappBottomOffset={whatsappBottomOffset}
+          hidden={shouldHideWhatsappWidget}
+        />
+
+        {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
+        <AgentOnboardingModal
+          open={agentNeedsOnboarding}
+          onComplete={handleOnboardingComplete}
+          loading={onboardingLoading}
+        />
+
+        <AgentLocationDisclosureModal
+          open={showLocationDisclosure}
+          saving={webLocationConsentSaving}
+          onAccept={() => void setWebLocationConsent('accepted')}
+          onDefer={() => void setWebLocationConsent('deferred')}
+        />
+
+        <IncomingOrderOverlay />
+        <StorePickupReminderOverlay />
+        <StickyDownloadBar />
       </Box>
-
-      <Footer />
-
-      {/* Agent Bottom Navigation - Only visible for agents on mobile */}
-      <AgentBottomNav />
-
-      {/* Client Bottom Navigation - Only visible for clients on mobile */}
-      <ClientBottomNav />
-
-      {/* Guest Bottom Navigation - Only visible for unauthenticated users on mobile */}
-      <GuestBottomNav />
-
-      <DeferredFloatingWhatsApp
-        whatsappBottomOffset={whatsappBottomOffset}
-        hidden={shouldHideWhatsappWidget}
-      />
-
-      {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
-      <AgentOnboardingModal
-        open={agentNeedsOnboarding}
-        onComplete={handleOnboardingComplete}
-        loading={onboardingLoading}
-      />
-
-      <AgentLocationDisclosureModal
-        open={showLocationDisclosure}
-        saving={webLocationConsentSaving}
-        onAccept={() => void setWebLocationConsent('accepted')}
-        onDefer={() => void setWebLocationConsent('deferred')}
-      />
-
-      <StickyDownloadBar />
-    </Box>
+      </StorePickupReminderProvider>
+    </IncomingOrderInterruptProvider>
   );
 }
 

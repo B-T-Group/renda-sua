@@ -78,6 +78,13 @@ export class CreateItemDto {
   pay_on_delivery_enabled?: boolean;
 
   @ApiPropertyOptional({
+    description:
+      'When true, shoppers cannot buy; they submit interest and the business follows up externally.',
+    default: false,
+  })
+  interest_only?: boolean;
+
+  @ApiPropertyOptional({
     description: 'When true, this item can be shipped via carrier. Default false.',
     default: false,
   })

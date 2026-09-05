@@ -1,0 +1,40 @@
+---
+description: Keep the AI assistant static knowledge base in sync when business rules or public support facts change
+alwaysApply: true
+---
+
+# Assistant knowledge base must stay accurate
+
+The conversational assistant (WhatsApp + `/assistant` + mobile chat) answers from static bilingual content under:
+
+`apps/backend/src/assistant/knowledge/`
+
+Topics: `company_locations`, `markets`, `payments`, `delivery`, `pickup`, `support_contact` (see `knowledge/index.ts` and `assistant.types.ts`).
+
+## When to update (same PR / same change)
+
+Update the matching knowledge file(s) in **both `en` and `fr`** whenever you change customer-facing business rules or facts, including:
+
+| Change area | Knowledge file(s) |
+|-------------|-------------------|
+| Markets served, launch status, Stripe vs MoMo countries | `markets.ts`, often `payments.ts` |
+| Payment rails, pay-at-delivery / pay-at-pickup, card vs MoMo | `payments.ts` |
+| Delivery SLAs, fees, tracking, how delivery works | `delivery.ts` |
+| In-store pickup / fulfillment pickup | `pickup.ts` |
+| Offices, company story, Groupe BT presence | `company.ts` |
+| Support phone, email, hours, escalation copy | `support.ts` |
+| About Us / Support / FAQ public copy that the assistant should reflect | matching topic above |
+
+Also update if you change related **config or product behavior** that customers ask about (e.g. `STRIPE_ENABLED_COUNTRIES`, checkout payment-timing rules, country delivery configs) so the assistant does not contradict the app.
+
+## Rules
+
+- Prefer short, factual sentences the model can quote; no internal implementation details.
+- Keep en/fr content aligned (same facts, same structure).
+- If a new topic is needed, add it to `KnowledgeTopic`, `getKnowledgeSection`, the `get_knowledge` tool enum, and a new knowledge module.
+- Do **not** invent markets, payment methods, or SLAs — if unsure, omit or escalate via `request_human_support` copy in the system prompt (do not soft-lie in the KB).
+
+## Out of scope
+
+- Per-user data (orders, addresses, profile) — those are tools, not the static KB.
+- Purely internal refactors with no customer-visible rule change.

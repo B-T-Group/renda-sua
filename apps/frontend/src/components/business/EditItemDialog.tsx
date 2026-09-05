@@ -105,6 +105,7 @@ export default function EditItemDialog({
         max_order_quantity: item.max_order_quantity,
         is_active: item.is_active,
         pay_on_delivery_enabled: item.pay_on_delivery_enabled ?? false,
+        interest_only: item.interest_only ?? false,
         pay_at_pickup_enabled: item.pay_at_pickup_enabled ?? false,
       });
     }
@@ -130,7 +131,7 @@ export default function EditItemDialog({
       errors.category = t('business.inventory.categoryRequired');
     }
 
-    if (!formData.price || formData.price <= 0) {
+    if (!formData.interest_only && (!formData.price || formData.price <= 0)) {
       errors.price = t('business.inventory.priceRequired');
     }
 
@@ -654,6 +655,20 @@ export default function EditItemDialog({
                       'Allow payment at delivery'
                     )}
                   />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.interest_only ?? false}
+                      onChange={(e) =>
+                        handleInputChange('interest_only', e.target.checked)
+                      }
+                    />
+                  }
+                  label={t(
+                    'productInterest.merchantToggle',
+                    'Pricing not applicable (interest only)'
+                  )}
+                />
                   <FormControlLabel
                     control={
                       <Switch

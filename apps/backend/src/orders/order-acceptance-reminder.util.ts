@@ -1,8 +1,17 @@
 /** Mid-window nudge interval while the merchant confirm SLA is active. */
 export const ACCEPTANCE_REMINDER_INTERVAL_SECONDS = 15 * 60;
 
+/** Cooked-food first nudge (~2.5 min). */
+export const FOOD_ACCEPTANCE_REMINDER_FIRST_SECONDS = 150;
+
+/** Cooked-food repeat interval (5 min). */
+export const FOOD_ACCEPTANCE_REMINDER_INTERVAL_SECONDS = 5 * 60;
+
 /** Skip a send when a reminder was already recorded this recently (Busy overlaps). */
 export const ACCEPTANCE_REMINDER_DEBOUNCE_MINUTES = 12;
+
+/** Food reminders debounce more tightly so 5-minute cadence works. */
+export const FOOD_ACCEPTANCE_REMINDER_DEBOUNCE_MINUTES = 4;
 
 /** Do not remind when the acceptance deadline is this close — deadline owns escalation. */
 export const ACCEPTANCE_REMINDER_IMMINENT_SECONDS = 60;
@@ -16,9 +25,34 @@ export type ReminderPlan =
       nextWaitSeconds: number | null;
     };
 
-export function firstReminderWaitSeconds(timeoutSec: number): number | null {
-  if (timeoutSec <= ACCEPTANCE_REMINDER_INTERVAL_SECONDS) return null;
-  return ACCEPTANCE_REMINDER_INTERVAL_SECONDS;
+export function reminderCadence(containsCookedFood?: boolean): {
+  firstWaitSeconds: number;
+  intervalSeconds: number;
+  debounceMinutes: number;
+} {
+  if (containsCookedFood) {
+    return {
+      firstWaitSeconds: FOOD_ACCEPTANCE_REMINDER_FIRST_SECONDS,
+      intervalSeconds: FOOD_ACCEPTANCE_REMINDER_INTERVAL_SECONDS,
+      debounceMinutes: FOOD_ACCEPTANCE_REMINDER_DEBOUNCE_MINUTES,
+    };
+  }
+  return {
+    firstWaitSeconds: ACCEPTANCE_REMINDER_INTERVAL_SECONDS,
+    intervalSeconds: ACCEPTANCE_REMINDER_INTERVAL_SECONDS,
+    debounceMinutes: ACCEPTANCE_REMINDER_DEBOUNCE_MINUTES,
+  };
+}
+
+export function firstReminderWaitSeconds(
+  timeoutSec: number,
+  containsCookedFood?: boolean
+): number | null {
+  const { firstWaitSeconds } = reminderCadence(containsCookedFood);
+  if (timeoutSec <= firstWaitSeconds + ACCEPTANCE_REMINDER_IMMINENT_SECONDS) {
+    return null;
+  }
+  return firstWaitSeconds;
 }
 
 export function isBusySnoozeActive(params: {
@@ -80,8 +114,10 @@ export function planAcceptanceReminder(params: {
   snoozeMinutes: number;
   lastReminderAt: string | null | undefined;
   nowMs?: number;
+  containsCookedFood?: boolean;
 }): ReminderPlan {
   const nowMs = params.nowMs ?? Date.now();
+  const cadence = reminderCadence(params.containsCookedFood);
   if (params.currentStatus !== 'pending') {
     return { action: 'skip', reason: 'not_pending' };
   }
@@ -118,8 +154,17 @@ export function planAcceptanceReminder(params: {
   if (remainingSeconds <= ACCEPTANCE_REMINDER_IMMINENT_SECONDS) {
     return { action: 'skip', reason: 'deadline_imminent' };
   }
-  if (isReminderDebounced({ lastReminderAt: params.lastReminderAt, nowMs })) {
-    const nextWaitSeconds = nextReminderWaitSeconds(remainingSeconds);
+  if (
+    isReminderDebounced({
+      lastReminderAt: params.lastReminderAt,
+      debounceMinutes: cadence.debounceMinutes,
+      nowMs,
+    })
+  ) {
+    const nextWaitSeconds = nextReminderWaitSeconds(
+      remainingSeconds,
+      cadence.intervalSeconds
+    );
     if (nextWaitSeconds == null) {
       return { action: 'skip', reason: 'debounced_no_next' };
     }
@@ -132,6 +177,9 @@ export function planAcceptanceReminder(params: {
   return {
     action: 'send',
     remainingSeconds,
-    nextWaitSeconds: nextReminderWaitSeconds(remainingSeconds),
+    nextWaitSeconds: nextReminderWaitSeconds(
+      remainingSeconds,
+      cadence.intervalSeconds
+    ),
   };
 }

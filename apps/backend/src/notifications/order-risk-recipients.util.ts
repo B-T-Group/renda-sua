@@ -23,6 +23,10 @@ export interface OrderRiskRecipient {
  * country = global ops) are included. Staff in a different country are never
  * paged. When the order has no country, all matching roles stay (legacy).
  *
+ * When `singleStaffRecipient` is true (order-risk escalations), at most one
+ * matching staff member is kept — chosen at random — so we do not page every
+ * superuser/order manager. The referring agent is still appended when distinct.
+ *
  * The referring agent deliberately gets no email. The alert email points at the
  * admin panel they cannot open, so their actionable channels are push and
  * WhatsApp. A referrer who is also staff keeps their staff email and is only
@@ -34,9 +38,13 @@ export function buildOrderRiskRecipients(params: {
   orderCountryCode?: string | null;
   referringAgentUserId?: string | null;
   referringAgentLanguage?: string | null;
+  /** When true, page one random matching staff member instead of all of them. */
+  singleStaffRecipient?: boolean;
+  /** Test seam for deterministic staff selection (0 <= n < 1). */
+  random?: () => number;
 }): OrderRiskRecipient[] {
   const orderCountry = normalizeCountry(params.orderCountryCode);
-  const recipients = params.staff
+  let recipients = params.staff
     .filter((user) => user.roles.some((role) => params.roleKeys.includes(role)))
     .filter((user) => staffMatchesOrderCountry(user.country, orderCountry))
     .map((user) => ({
@@ -44,6 +52,10 @@ export function buildOrderRiskRecipients(params: {
       email: user.email,
       preferredLanguage: user.preferredLanguage ?? null,
     }));
+
+  if (params.singleStaffRecipient && recipients.length > 1) {
+    recipients = [pickRandomRecipient(recipients, params.random)];
+  }
 
   const agentUserId = params.referringAgentUserId?.trim();
   if (!agentUserId || recipients.some((r) => r.userId === agentUserId)) {
@@ -57,6 +69,14 @@ export function buildOrderRiskRecipients(params: {
       preferredLanguage: params.referringAgentLanguage ?? null,
     },
   ];
+}
+
+function pickRandomRecipient(
+  recipients: OrderRiskRecipient[],
+  random: () => number = Math.random
+): OrderRiskRecipient {
+  const index = Math.floor(random() * recipients.length);
+  return recipients[Math.min(Math.max(index, 0), recipients.length - 1)];
 }
 
 export function staffMatchesOrderCountry(

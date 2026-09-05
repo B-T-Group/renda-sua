@@ -3,7 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMarketplacePublicStats } from '../../hooks/useMarketplacePublicStats';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const MerchantLogos: React.FC = () => {
   const { t } = useTranslation();
@@ -51,7 +51,7 @@ const MerchantLogos: React.FC = () => {
                   borderRadius: 2,
                   border: '1.5px solid',
                   borderColor: 'divider',
-                  bgcolor: alpha(FB_GREEN, 0.03),
+                  bgcolor: alpha(FB_ACCENT, 0.03),
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

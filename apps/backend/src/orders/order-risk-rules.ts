@@ -21,7 +21,6 @@ export function evaluateOrderRisk(
     pendingAcceptanceRisk(order, config, now),
     prepOverdueRisk(order, config, now),
     readyUnassignedRisk(order, config, now),
-    pickupUncollectedRisk(order, config, now),
     pickupOverdueRisk(order, config, now),
     deliveryDelayedRisk(order, config, now),
   ];
@@ -192,29 +191,17 @@ export function readyUnassignedRisk(
   };
 }
 
-/** Store pickup or shipping order is ready but nobody has collected it. */
+/**
+ * Pickup/shipping sitting in ready_for_pickup is intentionally not escalated.
+ * Only delivery ready_unassigned (no agent) raises risk for that status.
+ * Kept as a no-op so callers/tests do not reintroduce the old rule by accident.
+ */
 export function pickupUncollectedRisk(
-  order: RiskEvaluableOrder,
-  config: OrderRiskConfig,
-  now: DateTime
+  _order: RiskEvaluableOrder,
+  _config: OrderRiskConfig,
+  _now: DateTime
 ): OrderRiskFinding | null {
-  if (order.current_status !== 'ready_for_pickup') return null;
-  if (isDeliveryOrder(order)) return null;
-  const readySince = statusSince(order);
-  if (!readySince) return null;
-
-  const dueAt = readySince.plus({ minutes: config.pickupUncollectedMinutes });
-  const overdueMinutes = minutesBetween(dueAt, now);
-  if (overdueMinutes <= 0) return null;
-  return {
-    riskType: 'pickup_uncollected',
-    severity: severityFor(overdueMinutes, config.criticalAfterMinutes),
-    overdueMinutes,
-    dueAt: dueAt.toISO(),
-    reason: `Waiting to be collected for ${formatMinutes(
-      overdueMinutes + config.pickupUncollectedMinutes
-    )}`,
-  };
+  return null;
 }
 
 /** An agent accepted the delivery but has not collected the parcel. */

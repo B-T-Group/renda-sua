@@ -34,6 +34,10 @@ import {
   formatCatalogForVisionPrompt,
   remapImageItemSuggestionCategories,
 } from '../categories/match-item-category';
+import {
+  buildVariantParentSnapshot,
+  sanitizeVariantImageIds,
+} from './variant-parent-snapshot.util';
 
 @ApiTags('ai')
 @Controller('ai')
@@ -457,9 +461,7 @@ export class AiController {
       );
     }
 
-    const imageIds = [
-      ...new Set((body.imageIds ?? []).filter(Boolean)),
-    ].slice(0, 8);
+    const imageIds = sanitizeVariantImageIds(body.imageIds);
     if (!imageIds.length) {
       throw new HttpException(
         {
@@ -508,7 +510,7 @@ export class AiController {
       );
     }
 
-    const parentSnapshot = this.buildVariantParentSnapshot(
+    const parentSnapshot = buildVariantParentSnapshot(
       item as Record<string, unknown>
     );
     const suggestion = await this.aiService.generateVariantSuggestions({
@@ -529,42 +531,6 @@ export class AiController {
         weightUnit: suggestion.weightUnit ?? item.weight_unit ?? undefined,
         dimensions: suggestion.dimensions ?? item.dimensions ?? undefined,
       },
-    };
-  }
-
-  private buildVariantParentSnapshot(
-    item: Record<string, unknown>
-  ): Record<string, unknown> {
-    const row = item as {
-      name?: string;
-      description?: string;
-      sku?: string;
-      color?: string;
-      weight?: number | null;
-      weight_unit?: string | null;
-      dimensions?: string | null;
-      price?: number;
-      currency?: string;
-      brand?: { name?: string } | null;
-      item_variants?: Array<{ name?: string; sku?: string | null }>;
-    };
-    return {
-      locked_price: row.price,
-      locked_currency: row.currency,
-      name: row.name,
-      description: row.description,
-      sku: row.sku,
-      color: row.color,
-      weight: row.weight,
-      weight_unit: row.weight_unit,
-      dimensions: row.dimensions,
-      brand: row.brand?.name ?? null,
-      existing_variant_names: (row.item_variants ?? [])
-        .map((v) => v.name)
-        .filter((n): n is string => typeof n === 'string' && !!n.trim()),
-      existing_variant_skus: (row.item_variants ?? [])
-        .map((v) => v.sku)
-        .filter((s): s is string => typeof s === 'string' && !!s.trim()),
     };
   }
 

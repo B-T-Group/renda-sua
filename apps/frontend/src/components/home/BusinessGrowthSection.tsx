@@ -4,13 +4,14 @@ import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
+import { HOME_ACCENTS } from './homeTheme';
 
 const businessFeatures = [
-  { icon: <Inventory sx={{ fontSize: 22, color: '#16a34a' }} />, key: 'home.businessGrowth.features.inventory', defaultLabel: 'Inventory management across locations' },
-  { icon: <AutoAwesome sx={{ fontSize: 22, color: '#f59e0b' }} />, key: 'home.businessGrowth.features.ai', defaultLabel: 'AI-assisted product descriptions' },
-  { icon: <LocalShipping sx={{ fontSize: 22, color: '#1e40af' }} />, key: 'home.businessGrowth.features.delivery', defaultLabel: 'Order & delivery management' },
-  { icon: <People sx={{ fontSize: 22, color: '#0891b2' }} />, key: 'home.businessGrowth.features.messaging', defaultLabel: 'In-app customer messaging' },
-  { icon: <BarChart sx={{ fontSize: 22, color: '#8b5cf6' }} />, key: 'home.businessGrowth.features.analytics', defaultLabel: 'Business analytics & growth' },
+  { icon: <Inventory sx={{ fontSize: 22, color: HOME_ACCENTS.business }} />, key: 'home.businessGrowth.features.inventory', defaultLabel: 'Inventory management across locations' },
+  { icon: <AutoAwesome sx={{ fontSize: 22, color: HOME_ACCENTS.warning }} />, key: 'home.businessGrowth.features.ai', defaultLabel: 'AI-assisted product descriptions' },
+  { icon: <LocalShipping sx={{ fontSize: 22, color: HOME_ACCENTS.primary }} />, key: 'home.businessGrowth.features.delivery', defaultLabel: 'Order & delivery management' },
+  { icon: <People sx={{ fontSize: 22, color: HOME_ACCENTS.delivery }} />, key: 'home.businessGrowth.features.messaging', defaultLabel: 'In-app customer messaging' },
+  { icon: <BarChart sx={{ fontSize: 22, color: HOME_ACCENTS.info }} />, key: 'home.businessGrowth.features.analytics', defaultLabel: 'Business analytics & growth' },
 ];
 
 const BusinessGrowthSection: React.FC = () => {
@@ -36,19 +37,19 @@ const BusinessGrowthSection: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                 <svg viewBox="0 0 320 280" style={{ width: '100%', maxWidth: 300 }} aria-hidden="true">
                   {/* Store */}
-                  <rect x="40" y="80" width="240" height="160" rx="14" fill={alpha('#16a34a', 0.07)} stroke={alpha('#16a34a', 0.2)} strokeWidth="1.5" />
-                  <rect x="40" y="56" width="240" height="24" rx="0" fill="#16a34a" />
-                  <rect x="40" y="56" width="240" height="12" rx="14" fill="#16a34a" />
+                  <rect x="40" y="80" width="240" height="160" rx="14" fill={alpha(HOME_ACCENTS.business, 0.07)} stroke={alpha(HOME_ACCENTS.business, 0.2)} strokeWidth="1.5" />
+                  <rect x="40" y="56" width="240" height="24" rx="0" fill={HOME_ACCENTS.business} />
+                  <rect x="40" y="56" width="240" height="12" rx="14" fill={HOME_ACCENTS.business} />
                   <text x="160" y="73" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">Your Business</text>
                   {/* Revenue bar chart */}
                   {[60, 80, 50, 90, 70, 100].map((h, i) => (
-                    <rect key={i} x={55 + i * 34} y={240 - h} width="22" height={h} rx="4" fill={alpha('#16a34a', 0.2 + i * 0.1)} />
+                    <rect key={i} x={55 + i * 34} y={240 - h} width="22" height={h} rx="4" fill={alpha(HOME_ACCENTS.business, 0.2 + i * 0.1)} />
                   ))}
                   {/* Growth arrow */}
-                  <path d="M 55 200 Q 160 160 265 100" stroke="#16a34a" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeDasharray="0" />
-                  <path d="M 255 95 L 265 100 L 260 110" stroke="#16a34a" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                  <path d="M 55 200 Q 160 160 265 100" stroke={HOME_ACCENTS.business} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeDasharray="0" />
+                  <path d="M 255 95 L 265 100 L 260 110" stroke={HOME_ACCENTS.business} strokeWidth="2.5" fill="none" strokeLinecap="round" />
                   {/* AI badge */}
-                  <rect x="188" y="95" width="80" height="28" rx="8" fill="#f59e0b" />
+                  <rect x="188" y="95" width="80" height="28" rx="8" fill={HOME_ACCENTS.warning} />
                   <text x="228" y="113" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">✨ AI powered</text>
                 </svg>
               </Box>
@@ -65,7 +66,7 @@ const BusinessGrowthSection: React.FC = () => {
             >
               <Typography
                 variant="overline"
-                sx={{ color: '#16a34a', fontWeight: 700, letterSpacing: '0.12em', mb: 2, display: 'block' }}
+                sx={{ color: HOME_ACCENTS.business, fontWeight: 700, letterSpacing: '0.12em', mb: 2, display: 'block' }}
               >
                 {t('home.businessGrowth.eyebrow', 'For businesses')}
               </Typography>
@@ -93,7 +94,7 @@ const BusinessGrowthSection: React.FC = () => {
               <Stack spacing={1.5} sx={{ mb: 4 }}>
                 {businessFeatures.map((f) => (
                   <Stack key={f.key} direction="row" spacing={1.5} alignItems="center">
-                    <Box sx={{ width: 36, height: 36, borderRadius: 1.5, bgcolor: alpha('#16a34a', 0.08), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Box sx={{ width: 36, height: 36, borderRadius: 1.5, bgcolor: alpha(HOME_ACCENTS.business, 0.08), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       {f.icon}
                     </Box>
                     <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>
@@ -111,7 +112,7 @@ const BusinessGrowthSection: React.FC = () => {
                   variant="contained"
                   size="large"
                   endIcon={<ArrowForward />}
-                  sx={{ bgcolor: '#16a34a', fontWeight: 700, px: 3, '&:hover': { bgcolor: '#15803d' } }}
+                  sx={{ bgcolor: HOME_ACCENTS.business, fontWeight: 700, px: 3, '&:hover': { bgcolor: HOME_ACCENTS.businessDark } }}
                 >
                   {t('home.businessGrowth.cta', 'Create Business Account')}
                 </Button>
@@ -120,7 +121,7 @@ const BusinessGrowthSection: React.FC = () => {
                   to="/for-business"
                   variant="outlined"
                   size="large"
-                  sx={{ borderColor: '#16a34a', color: '#16a34a', fontWeight: 600, borderWidth: 2, '&:hover': { borderWidth: 2 } }}
+                  sx={{ borderColor: HOME_ACCENTS.business, color: HOME_ACCENTS.business, fontWeight: 600, borderWidth: 2, '&:hover': { borderWidth: 2 } }}
                 >
                   {t('home.businessGrowth.secondaryCta', 'Learn more')}
                 </Button>
