@@ -69,6 +69,19 @@ describe('CatalogStopsService', () => {
           }),
         })
       );
+      
+      // Explicitly verify SINGLE nested address object (not sibling keys)
+      const locationWhere = variables.locationWhere;
+      expect(locationWhere.address).toBeDefined();
+      expect(locationWhere.address.country).toEqual({ _eq: 'CM' });
+      expect(locationWhere.address.state).toEqual({ _eq: 'Centre' });
+      expect(locationWhere.country).toBeUndefined(); // No sibling country key
+      expect(locationWhere.state).toBeUndefined(); // No sibling state key
+      
+      // Verify business.is_storefront_visible (not location.storefront_visible)
+      expect(locationWhere.business).toEqual({ is_storefront_visible: { _eq: true } });
+      expect(locationWhere.storefront_visible).toBeUndefined();
+      expect(locationWhere.is_storefront_visible).toBeUndefined();
     });
 
     it('should apply category filter to itemWhere variable', async () => {
@@ -261,6 +274,18 @@ describe('CatalogStopsService', () => {
           }),
         })
       );
+      
+      // Explicitly verify SINGLE nested address object (not sibling keys)
+      const locationWhere = variables.locationWhere;
+      expect(locationWhere.address).toBeDefined();
+      expect(locationWhere.address.country).toEqual({ _eq: 'CM' });
+      expect(locationWhere.address.state).toEqual({ _eq: 'Centre' });
+      expect(locationWhere.country).toBeUndefined(); // No sibling country key
+      expect(locationWhere.state).toBeUndefined(); // No sibling state key
+      
+      // Verify business.is_storefront_visible
+      expect(locationWhere.business).toEqual({ is_storefront_visible: { _eq: true } });
+      expect(locationWhere.storefront_visible).toBeUndefined();
     });
 
     it('should calculate discount prices correctly', async () => {
@@ -358,6 +383,18 @@ describe('CatalogStopsService', () => {
           }),
         })
       );
+      
+      // Explicitly verify SINGLE nested address object (not sibling keys)
+      const locationWhere = variables.locationWhere;
+      expect(locationWhere.address).toBeDefined();
+      expect(locationWhere.address.country).toEqual({ _eq: 'CM' });
+      expect(locationWhere.address.state).toEqual({ _eq: 'Centre' });
+      expect(locationWhere.country).toBeUndefined(); // No sibling country key
+      expect(locationWhere.state).toBeUndefined(); // No sibling state key
+      
+      // Verify business.is_storefront_visible
+      expect(locationWhere.business).toEqual({ is_storefront_visible: { _eq: true } });
+      expect(locationWhere.storefront_visible).toBeUndefined();
     });
 
     it('should transform locations to TopInventoryStoreRow shape', async () => {
@@ -445,6 +482,18 @@ describe('CatalogStopsService', () => {
           }),
         })
       );
+      
+      // Explicitly verify SINGLE nested address object (not sibling keys)
+      const locationWhere = variables.locationWhere;
+      expect(locationWhere.address).toBeDefined();
+      expect(locationWhere.address.country).toEqual({ _eq: 'CM' });
+      expect(locationWhere.address.state).toEqual({ _eq: 'Centre' });
+      expect(locationWhere.country).toBeUndefined(); // No sibling country key
+      expect(locationWhere.state).toBeUndefined(); // No sibling state key
+      
+      // Verify business.is_storefront_visible
+      expect(locationWhere.business).toEqual({ is_storefront_visible: { _eq: true } });
+      expect(locationWhere.storefront_visible).toBeUndefined();
     });
 
     it('should return empty array when cart items have no categories', async () => {
