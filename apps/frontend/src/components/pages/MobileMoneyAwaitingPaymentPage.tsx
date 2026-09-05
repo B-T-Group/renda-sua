@@ -326,8 +326,6 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
               </Box>
             </Stack>
 
-            </Stack>
-
             {/* Refund guarantee */}
             <Box
               sx={{
