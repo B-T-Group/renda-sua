@@ -13,6 +13,7 @@ import {
     RestaurantMenu,
     ShoppingBag,
     ShoppingCart,
+    SmartToy,
     SwapHoriz,
 } from '@mui/icons-material';
 import {
@@ -806,6 +807,28 @@ const Header: React.FC = () => {
                 inverted
                 compact={isMobile}
               />
+
+              {/* AI Assistant */}
+              <IconButton
+                component={RouterLink}
+                to="/assistant"
+                size="small"
+                aria-label={t('assistant.headerLabel', 'Ask Rendasua assistant')}
+                sx={{
+                  color: '#ffffff',
+                  padding: '10px',
+                  minWidth: 44,
+                  minHeight: 44,
+                  borderRadius: '50%',
+                  border: '1.5px solid rgba(255, 255, 255, 0.3)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    borderColor: 'rgba(255, 255, 255, 0.5)',
+                  },
+                }}
+              >
+                <SmartToy fontSize="small" />
+              </IconButton>
 
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
               {!isMobile && <LanguageSwitcher inverted />}

@@ -7465,6 +7465,7 @@
     },
     "homeEntryTitle": "Demandez à l'assistant IA",
     "homeEntryBody": "Obtenez des réponses rapides sur la livraison, les paiements, le retrait et votre compte.",
-    "homeEntryCta": "Ouvrir l'assistant"
+    "homeEntryCta": "Ouvrir l'assistant",
+    "headerLabel": "Demandez à l'assistant Rendasua"
   }
 }

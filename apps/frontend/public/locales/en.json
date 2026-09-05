@@ -7449,6 +7449,7 @@
     },
     "homeEntryTitle": "Ask the AI assistant",
     "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
-    "homeEntryCta": "Open assistant"
+    "homeEntryCta": "Open assistant",
+    "headerLabel": "Ask Rendasua assistant"
   }
 }
