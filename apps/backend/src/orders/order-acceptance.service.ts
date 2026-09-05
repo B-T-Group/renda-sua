@@ -48,28 +48,6 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { FoodOrdersService } from '../food/food-orders.service';
 import { capAcceptanceTimeoutForFood } from '../food/food-acceptance-timeout.util';
 
-const PENDING_ACCEPTANCE_QUERY = `
-  query PendingAcceptance($bid: uuid!) {
-    orders(
-      where: {
-        business_id: { _eq: $bid }
-        current_status: { _eq: pending }
-        acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
-      }
-      order_by: { created_at: asc }
-      limit: 20
-    ) {
-      id order_number current_status acceptance_state
-      acceptance_deadline_at grace_deadline_at
-      busy_extra_prep_minutes estimated_prep_minutes
-      created_at updated_at total_amount currency fulfillment_method
-      fulfillment_timing promised_ready_at promised_fulfill_by business_id
-      client { user { first_name last_name } }
-      order_items { item_name quantity }
-    }
-  }
-`;
-
 interface SlaOrder {
   id: string;
   order_number: string;
@@ -516,9 +494,6 @@ export class OrderAcceptanceService {
   async getPendingAcceptanceForBusiness(
     businessId: string
   ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
-  async getPendingAcceptanceForBusiness(
-    businessId: string
-  ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
     return this.queryPendingAcceptance({ businessId });
   }
 
@@ -602,18 +577,6 @@ export class OrderAcceptanceService {
     );
     const order = res.orders?.[0] ?? null;
     return { active: !!order, order };
-  }
-
-    return { active: !!order, order };
-  }
-
-  private async fetchPendingAcceptanceOrders(
-    businessId: string
-  ): Promise<PendingAcceptanceOrder[]> {
-    const res = await this.hasura.executeQuery(PENDING_ACCEPTANCE_QUERY, {
-      bid: businessId,
-    });
-    return res.orders ?? [];
   }
 
   async recordMerchantCancelOfPending(businessId: string): Promise<void> {
