@@ -23,6 +23,10 @@ import {
   readStoredMarket,
   writeStoredMarket,
 } from '../utils/marketStorage';
+import {
+  applyAutoDetectedCountry,
+  buildSelectedMarket,
+} from '../utils/marketSelection';
 import { useSupportedCountries } from '../hooks/useSupportedCountries';
 
 export interface UseMarketResult {
@@ -34,46 +38,6 @@ export interface UseMarketResult {
 }
 
 const MarketContext = createContext<UseMarketResult | null>(null);
-
-function buildSelectedMarket(
-  markets: Market[],
-  countryCode: string,
-  stateCode: string | null
-): Market {
-  const country = markets.find((m) => m.countryCode === countryCode);
-  const base =
-    country ??
-    ({
-      id: countryCode,
-      code: countryCode,
-      countryCode,
-      stateCode: null,
-      stateName: null,
-      name: countryCode,
-      currency: '',
-      flag: countryCode,
-      isEnabled: true,
-    } as Market);
-  return {
-    ...base,
-    stateCode,
-    stateName: stateCode,
-    id: stateCode ? `${countryCode}:${stateCode}` : countryCode,
-  };
-}
-
-function applyAutoDetectedCountry(
-  raw: string | null | undefined,
-  supportedIsos: string[],
-  setCountryCode: (code: string) => void,
-  setStateCode: (state: string | null) => void
-): void {
-  const code = raw?.toUpperCase();
-  if (!code || !supportedIsos.includes(code)) return;
-  setCountryCode(code);
-  setStateCode(null);
-  writeStoredMarket({ countryCode: code, stateCode: null, mode: 'AUTO' });
-}
 
 export function MarketProvider({ children }: { children: ReactNode }) {
   const { countries, supportedIsos, loading: countriesLoading } =
