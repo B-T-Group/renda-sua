@@ -1,7 +1,7 @@
 -- Deferred signup: hold validated signup payload until OTP verification.
 -- Accessible only via Hasura admin / Nest HasuraSystemService (no public role perms).
 
-CREATE TABLE public.signup_attempts (
+CREATE TABLE IF NOT EXISTS public.signup_attempts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   channel text NOT NULL CHECK (channel IN ('email', 'sms')),
   email text,
@@ -22,15 +22,15 @@ CREATE TABLE public.signup_attempts (
   )
 );
 
-CREATE INDEX signup_attempts_expires_at_idx
+CREATE INDEX IF NOT EXISTS signup_attempts_expires_at_idx
   ON public.signup_attempts (expires_at)
   WHERE status IN ('pending', 'otp_verified');
 
-CREATE INDEX signup_attempts_email_pending_idx
+CREATE INDEX IF NOT EXISTS signup_attempts_email_pending_idx
   ON public.signup_attempts (email)
   WHERE email IS NOT NULL AND status IN ('pending', 'otp_verified');
 
-CREATE INDEX signup_attempts_phone_pending_idx
+CREATE INDEX IF NOT EXISTS signup_attempts_phone_pending_idx
   ON public.signup_attempts (phone_number)
   WHERE phone_number IS NOT NULL AND status IN ('pending', 'otp_verified');
 
