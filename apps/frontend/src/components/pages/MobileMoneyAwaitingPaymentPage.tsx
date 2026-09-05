@@ -1,5 +1,4 @@
 import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline';
-import Edit from '@mui/icons-material/Edit';
 import ErrorOutline from '@mui/icons-material/ErrorOutline';
 import Lock from '@mui/icons-material/Lock';
 import PhoneAndroid from '@mui/icons-material/PhoneAndroid';
@@ -11,16 +10,10 @@ import {
   Button,
   CircularProgress,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Paper,
   Stack,
   Typography,
 } from '@mui/material';
-import PhoneInput from '../common/PhoneInput';
-import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -56,8 +49,6 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
   const { state, error, stop, restart } = useMobileMoneyPaymentPoll(orderIds);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
-  const [editPhoneOpen, setEditPhoneOpen] = useState(false);
-  const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const masked = useMemo(() => maskPhoneE164(phoneE164), [phoneE164]);
 
   const leaveToOrder = () => {
@@ -101,18 +92,6 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
     } finally {
       setRetrying(false);
     }
-  };
-
-  const handleEditPhone = () => {
-    setNewPhoneNumber(phoneE164);
-    setEditPhoneOpen(true);
-  };
-
-  const handleSavePhone = () => {
-    // In a real implementation, this would update the phone and retry
-    // For now, just close the dialog
-    setEditPhoneOpen(false);
-    // TODO: Implement phone number update and retry logic
   };
 
   if (!orderIds.length) {
@@ -246,26 +225,28 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
         )}
 
         {phase === 'waiting' ? (
-          <Box sx={{ mt: 3 }}>
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                bgcolor: 'action.hover',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 1,
-                mb: 3,
-              }}
-            >
-              <CircularProgress size={28} />
-              <Typography variant="body2" color="text.secondary">
-                {t('orders.momoAwaiting.waitingHint', 'Waiting for payment to complete…')}
-              </Typography>
-            </Box>
+          <Box
+            sx={{
+              mt: 3,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'action.hover',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 1,
+            }}
+          >
+            <CircularProgress size={28} />
+            <Typography variant="body2" color="text.secondary">
+              {t('orders.momoAwaiting.waitingHint', 'Waiting for payment to complete…')}
+            </Typography>
+          </Box>
+        ) : null}
 
-            {/* Post-payment next steps */}
+        {/* Post-payment next steps - only show on paid phase */}
+        {phase === 'paid' && (
+          <Box sx={{ mt: 3 }}>
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
                 <Box
@@ -345,6 +326,8 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
               </Box>
             </Stack>
 
+            </Stack>
+
             {/* Refund guarantee */}
             <Box
               sx={{
@@ -365,7 +348,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
               </Typography>
             </Box>
           </Box>
-        ) : null}
+        )}
 
         {(error || retryError) && (
           <Typography variant="body2" color="error" sx={{ mt: 2 }}>
@@ -382,26 +365,16 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
             </Button>
           ) : null}
           {phase === 'failed' ? (
-            <>
-              <Button
-                variant="contained"
-                color="cta"
-                size="large"
-                disabled={retrying}
-                startIcon={<Refresh />}
-                onClick={() => void onRetry()}
-              >
-                {t('orders.momoAwaiting.retry', 'Try again')}
-              </Button>
-              <Button
-                variant="outlined"
-                size="large"
-                startIcon={<Edit />}
-                onClick={handleEditPhone}
-              >
-                {t('orders.momoAwaiting.editPhone', 'Edit phone number')}
-              </Button>
-            </>
+            <Button
+              variant="contained"
+              color="cta"
+              size="large"
+              disabled={retrying}
+              startIcon={<Refresh />}
+              onClick={() => void onRetry()}
+            >
+              {t('orders.momoAwaiting.retry', 'Try again')}
+            </Button>
           ) : null}
           {phase !== 'paid' ? (
             <Button variant="text" onClick={leaveToOrder}>
@@ -437,31 +410,6 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
           </Box>
         )}
       </Paper>
-
-      {/* Edit Phone Dialog */}
-      <Dialog open={editPhoneOpen} onClose={() => setEditPhoneOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('orders.momoAwaiting.editPhoneTitle', 'Edit phone number')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('orders.momoAwaiting.editPhoneDesc', 'Make sure this matches your MoMo number')}
-          </Typography>
-          <PhoneInput
-            value={newPhoneNumber}
-            onChange={(value) => setNewPhoneNumber(value || '')}
-            label={t('orders.momoAwaiting.phoneLabel', 'Phone number')}
-            defaultCountry={pickMobileMoneyDefaultCountry()}
-            onlyCountries={['CM', 'GA']}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditPhoneOpen(false)}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button variant="contained" onClick={handleSavePhone}>
-            {t('common.save', 'Save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };
