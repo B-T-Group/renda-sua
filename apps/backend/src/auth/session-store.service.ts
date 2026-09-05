@@ -27,12 +27,31 @@ export class SessionStoreService implements OnModuleDestroy {
   private readonly ALGORITHM = 'aes-256-gcm';
 
   constructor(private readonly configService: ConfigService<Configuration>) {
-    const encryptionKey = process.env.SESSION_ENCRYPTION_KEY || process.env.JWT_SECRET;
-    if (!encryptionKey) {
-      throw new Error('SESSION_ENCRYPTION_KEY or JWT_SECRET required for session encryption');
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const encryptionKey = process.env.SESSION_ENCRYPTION_KEY;
+    
+    if (nodeEnv === 'production') {
+      // In production, SESSION_ENCRYPTION_KEY is required and must be exactly 32 bytes
+      if (!encryptionKey) {
+        throw new Error(
+          'SESSION_ENCRYPTION_KEY is required in production. Generate a 32-byte key and add it to Secrets Manager.'
+        );
+      }
+      if (encryptionKey.length !== 32) {
+        throw new Error(
+          `SESSION_ENCRYPTION_KEY must be exactly 32 bytes in production (got ${encryptionKey.length}). Generate with: openssl rand -base64 32`
+        );
+      }
+      this.encryptionKey = Buffer.from(encryptionKey);
+    } else {
+      // In development, fall back to JWT_SECRET or pad if needed
+      const key = encryptionKey || process.env.JWT_SECRET;
+      if (!key) {
+        throw new Error('SESSION_ENCRYPTION_KEY or JWT_SECRET required for session encryption');
+      }
+      this.encryptionKey = Buffer.from(key.padEnd(32, '0').slice(0, 32));
     }
-    // Use first 32 bytes of the key (or pad if shorter)
-    this.encryptionKey = Buffer.from(encryptionKey.padEnd(32, '0').slice(0, 32));
+    
     this.initializeRedis().catch((err) =>
       this.logger.warn('Redis unavailable, using in-memory session store', err)
     );

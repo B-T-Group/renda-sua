@@ -24,6 +24,8 @@ import {
   getDefaultLoginMethod,
   LoginIdentifierMode,
 } from '../../utils/authDefaults';
+import { nationalDigitsToE164 } from '../../utils/phoneUtils';
+import { validateReturnTo } from '../../utils/returnToValidator';
 import Logo from '../common/Logo';
 
 export interface LoginMethodDialogProps {
@@ -34,10 +36,10 @@ export interface LoginMethodDialogProps {
 }
 
 function resolveReturnTo(returnTo?: string): string {
-  if (returnTo) return returnTo;
+  if (returnTo) return validateReturnTo(returnTo);
   if (typeof window === 'undefined') return '/app';
   const path = `${window.location.pathname}${window.location.search}`;
-  return path || '/app';
+  return validateReturnTo(path) || '/app';
 }
 
 const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
@@ -82,9 +84,11 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
           String(Date.now() + 15 * 60 * 1000)
         );
         sessionStorage.setItem('pendingLoginDestination', destination);
-        sessionStorage.setItem('pendingLoginReturnTo', resolvedReturnTo);
+        // Validate returnTo before storing
+        const validatedReturnTo = validateReturnTo(resolvedReturnTo);
+        sessionStorage.setItem('pendingLoginReturnTo', validatedReturnTo);
 
-        navigate(`/otp-auth?flow=login`);
+        navigate(`/auth/otp?flow=login`);
         onClose();
       } catch (err: any) {
         setSubmitting(false);
@@ -105,7 +109,12 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
         setError(t('auth.phoneRequired', 'Please enter your phone number'));
         return;
       }
-      void startLogin({ phone_number: trimmed });
+      try {
+        const e164Phone = nationalDigitsToE164(trimmed, browserCountry);
+        void startLogin({ phone_number: e164Phone });
+      } catch (err: any) {
+        setError(err.message || t('auth.phoneInvalid', 'Invalid phone number'));
+      }
     } else {
       const trimmed = emailValue.trim().toLowerCase();
       if (!trimmed) {
@@ -118,7 +127,7 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
       }
       void startLogin({ email: trimmed });
     }
-  }, [identifierMode, phoneValue, emailValue, startLogin, t]);
+  }, [identifierMode, phoneValue, emailValue, browserCountry, startLogin, t]);
 
   const switchToEmail = useCallback(() => {
     setIdentifierMode('email');
@@ -280,9 +289,11 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
               <TextField
                 fullWidth
                 placeholder={
-                  browserCountry === 'CM' || browserCountry === 'GA'
-                    ? '+237 6 XX XX XX XX'
-                    : t('auth.phonePlaceholder', 'Phone number')
+                  browserCountry === 'GA'
+                    ? '+241 X XX XX XX'
+                    : browserCountry === 'CM'
+                      ? '+237 6 XX XX XX XX'
+                      : t('auth.phonePlaceholder', 'Phone number')
                 }
                 value={phoneValue}
                 onChange={(e) => setPhoneValue(e.target.value)}

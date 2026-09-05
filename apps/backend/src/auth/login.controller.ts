@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  Header,
+  Headers,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -100,7 +102,7 @@ export class LoginController {
   async refreshSession(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Header('x-requested-with') csrfHeader?: string
+    @Headers('x-requested-with') csrfHeader?: string
   ) {
     // CSRF protection: require X-Requested-With header
     if (csrfHeader !== 'XMLHttpRequest') {
@@ -148,7 +150,7 @@ export class LoginController {
   async logout(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Header('x-requested-with') csrfHeader?: string
+    @Headers('x-requested-with') csrfHeader?: string
   ) {
     // CSRF protection: require X-Requested-With header
     if (csrfHeader !== 'XMLHttpRequest') {

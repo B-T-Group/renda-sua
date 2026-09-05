@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { validateReturnTo } from '../../utils/returnToValidator';
 import LaunchPromoCongrats, {
   LaunchPromoCongratsData,
 } from '../business/LaunchPromoCongrats';
@@ -35,13 +36,15 @@ const OtpAuthPage: React.FC = () => {
     []
   );
   const channel = useMemo(
-    () =>
-      (sessionStorage.getItem('pendingSignupOtpChannel') as
-        | 'email'
-        | 'sms'
-        | null) ||
-      (sessionStorage.getItem('pendingSignupPhone') ? 'sms' : 'email'),
-    []
+    () => {
+      if (isSignup) {
+        return (sessionStorage.getItem('pendingSignupOtpChannel') as 'email' | 'sms' | null) ||
+          (sessionStorage.getItem('pendingSignupPhone') ? 'sms' : 'email');
+      }
+      // Login flow: check for pendingLoginPhone
+      return sessionStorage.getItem('pendingLoginPhone') ? 'sms' : 'email';
+    },
+    [isSignup]
   );
   const initialEmail = useMemo(() => {
     const key = isSignup ? 'pendingSignupEmail' : 'pendingLoginEmail';
@@ -63,7 +66,7 @@ const OtpAuthPage: React.FC = () => {
     return dest;
   }, [initialEmail]);
   const returnTo = useMemo(
-    () => sessionStorage.getItem('pendingLoginReturnTo') || '/app',
+    () => validateReturnTo(sessionStorage.getItem('pendingLoginReturnTo') || '/app'),
     []
   );
   const [email] = useState(initialEmail);
@@ -220,7 +223,9 @@ const OtpAuthPage: React.FC = () => {
       sessionStorage.removeItem('pendingLoginDestination');
       sessionStorage.removeItem('pendingLoginReturnTo');
       sessionStorage.removeItem('pendingLoginOtpExpiresAtMs');
-      navigate(returnTo);
+      // Validate returnTo before navigation
+      const validatedReturnTo = validateReturnTo(returnTo);
+      navigate(validatedReturnTo);
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
