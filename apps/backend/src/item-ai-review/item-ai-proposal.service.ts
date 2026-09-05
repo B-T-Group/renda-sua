@@ -1,4 +1,5 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
@@ -15,7 +16,9 @@ export class ItemAiProposalService {
     private readonly hasuraUser: HasuraUserService,
     private readonly reviewService: ItemAiReviewService,
     private readonly activationValidation: ItemActivationValidationService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    @Optional()
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
 
   async getProposal(itemId: string) {
@@ -44,6 +47,9 @@ export class ItemAiProposalService {
     await this.merchantLifecycleService.recompute(
       businessId,
       'item_ai_proposal_accepted'
+    );
+    void this.representativeCompensationService?.evaluateForBusinessSafe(
+      businessId
     );
     return { success: true };
   }

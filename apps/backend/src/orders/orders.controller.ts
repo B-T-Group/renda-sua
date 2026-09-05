@@ -5,6 +5,7 @@ import {
   Headers,
   HttpException,
   HttpStatus,
+  Logger,
   Param,
   Patch,
   Post,
@@ -58,6 +59,8 @@ export interface UpdateOrderStatusRequest {
 @Controller('orders')
 @Throttle({ short: { limit: 30, ttl: 60000 } })
 export class OrdersController {
+  private readonly logger = new Logger(OrdersController.name);
+
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
@@ -202,6 +205,37 @@ export class OrdersController {
             special_instructions: { type: 'string' },
           },
         },
+        payer_country: {
+          type: 'string',
+          description:
+            'ISO 3166-1 alpha-2 billing country of the payer. When it resolves to a Stripe country and the merchant settles in mobile money, the order is routed as a diaspora card payment and must be pay_now.',
+        },
+        sending_to_someone_else: {
+          type: 'boolean',
+          description:
+            'Set when the recipient is a different person from the paying client.',
+        },
+        recipient_id: {
+          type: 'string',
+          format: 'uuid',
+          description:
+            'UUID of a saved recipient. When provided, overrides inline recipient fields.',
+        },
+        recipient: {
+          type: 'object',
+          description:
+            'Local recipient contact. Stored on the order and used for SMS/WhatsApp updates and the delivery PIN without a payer login.',
+          properties: {
+            name: { type: 'string' },
+            phone: {
+              type: 'string',
+              description:
+                'Local or E.164 phone; normalized against the delivery country.',
+            },
+            email: { type: 'string' },
+            notify_whatsapp: { type: 'boolean' },
+          },
+        },
       },
       required: ['items'],
     },
@@ -306,7 +340,15 @@ export class OrdersController {
     // Never apply cancelled via the generic status path — that skips payment
     // release and inventory restore. Route to the dedicated cancel flow.
     if (updateData.status === 'cancelled') {
-      return this.ordersService.cancelOrder({ orderId });
+      // Legacy PATCH path without collected reason; use "other" as fallback
+      this.logger.warn(
+        `Order ${orderId} cancelled via legacy PATCH without reason - use POST /orders/cancel instead`
+      );
+      return this.ordersService.cancelOrder({
+        orderId,
+        cancellationReasonId: 1, // "other" fallback for legacy path
+        notes: 'Cancelled via legacy PATCH endpoint',
+      });
     }
 
     try {
@@ -389,6 +431,11 @@ export class OrdersController {
   }
 
   @Post('confirm')
+  @ApiOperation({
+    summary: 'Confirm an order (business only)',
+    description:
+      'Optionally accepts food_stock_updates so a kitchen can say how many portions of a dish are left after this order, or flag it as the last one, which takes the dish off the menu for the rest of the day.',
+  })
   async confirmOrder(@Body() request: ConfirmOrderRequest) {
     return this.ordersService.confirmOrder(request);
   }
@@ -590,9 +637,9 @@ export class OrdersController {
 
   @Post(':id/initiate-pay-at-pickup-payment')
   @ApiOperation({
-    summary: 'Initiate pay-at-pickup mobile payment (business only)',
+    summary: 'Initiate pay-at-pickup mobile payment (client or business)',
     description:
-      'For pay-at-pickup orders in ready_for_pickup, the business triggers a mobile payment request to the client. On successful payment callback, the order is settled and marked complete.',
+      'For pay-at-pickup orders in ready_for_pickup, the customer (or the store as fallback) triggers a mobile payment request. On successful payment callback, the order is settled and marked complete.',
   })
   @ApiResponse({ status: 200, description: 'Payment request initiated' })
   @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
@@ -800,7 +847,7 @@ export class OrdersController {
         },
         cancellationReasonId: {
           type: 'number',
-          description: 'ID from order_cancellation_reasons lookup table',
+          description: 'ID from order_cancellation_reasons lookup table (required)',
           example: 1,
         },
         notes: {
@@ -809,7 +856,7 @@ export class OrdersController {
           example: 'Changed my mind after thinking it over',
         },
       },
-      required: ['orderId'],
+      required: ['orderId', 'cancellationReasonId'],
     },
   })
   @ApiResponse({

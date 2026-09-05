@@ -18,6 +18,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: referred_by_business_id
 array_relationships:
+  - name: representative_compensation_events
+    using:
+      foreign_key_constraint_on:
+        column: earner_agent_id
+        table:
+          name: representative_compensation_events
+          schema: public
   - name: agent_addresses
     using:
       manual_configuration:

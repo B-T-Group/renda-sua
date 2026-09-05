@@ -1,9 +1,15 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
 import {
   BusinessReferralsService,
   type ResolvedBusinessReferral,
 } from '../business-referrals/business-referrals.service';
+import { CreditsService } from '../credits/credits.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { hasExistingReferrer } from './admin-referral.util';
@@ -19,11 +25,14 @@ type ReferralTarget = {
 
 @Injectable()
 export class AdminReferralService {
+  private readonly logger = new Logger(AdminReferralService.name);
+
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly businessReferralsService: BusinessReferralsService,
     private readonly agentReferralsService: AgentReferralsService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly creditsService: CreditsService
   ) {}
 
   async applyToAgent(agentId: string, code: string): Promise<{ success: true }> {
@@ -162,6 +171,7 @@ export class AdminReferralService {
   ): Promise<void> {
     const country = await this.requireCountry(agent.user_id);
     await this.updateAgentReferral(agent.id, resolved);
+    await this.awardOpsCredit(resolved, { kind: 'agent', id: agent.id });
     await this.agentReferralsService.creditAfterFirstDelivery(
       agent.id,
       country
@@ -196,6 +206,38 @@ export class AdminReferralService {
       },
       resolved
     );
+    await this.awardOpsCredit(resolved, {
+      kind: 'business',
+      id: business.id,
+    });
+  }
+
+  private async awardOpsCredit(
+    resolved: ResolvedBusinessReferral,
+    target: { kind: 'business' | 'agent'; id: string }
+  ): Promise<void> {
+    try {
+      const referrerUserId = await this.creditsService.resolveReferrerUserId({
+        kind: resolved.kind,
+        agentId: resolved.kind === 'agent' ? resolved.agentId : undefined,
+        businessUserId:
+          resolved.kind === 'business' ? resolved.userId : undefined,
+      });
+      if (!referrerUserId) return;
+      if (target.kind === 'business') {
+        await this.creditsService.awardBusinessReferred({
+          referrerUserId,
+          businessId: target.id,
+        });
+        return;
+      }
+      await this.creditsService.awardAgentReferred({
+        referrerUserId,
+        agentId: target.id,
+      });
+    } catch (error: any) {
+      this.logger.warn(`Referral credit award failed: ${error?.message}`);
+    }
   }
 
   private throwNotFound(message: string): never {

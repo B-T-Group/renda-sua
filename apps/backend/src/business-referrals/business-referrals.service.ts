@@ -5,9 +5,11 @@ import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ConfigurationsService } from '../admin/configurations.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { ONBOARDING_10_MIN_SALE_TOTAL_KEY } from '../representative-compensation/compensation-rules';
 import {
-  mapReferredBusinessRow,
+  mapReferredBusinesses,
   REFERRED_BUSINESSES_LIST_SELECTION,
   type ReferredBusinessFollowUp,
   type ReferredBusinessRow,
@@ -60,7 +62,8 @@ export class BusinessReferralsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly notificationsService: NotificationsService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    private readonly configurationsService: ConfigurationsService
   ) {}
 
   normalizeReferralCode(code: string): string | null {
@@ -438,7 +441,11 @@ export class BusinessReferralsService {
     const result = await this.hasuraSystemService.executeQuery<{
       businesses: ReferredBusinessRow[];
     }>(query, { businessId });
-    return (result?.businesses ?? []).map(mapReferredBusinessRow);
+    return mapReferredBusinesses(
+      result?.businesses ?? [],
+      'business',
+      (country) => this.readOnboardingMinSaleTotal(country)
+    );
   }
 
   async listReferredBusinessesForUser(params: {
@@ -464,7 +471,26 @@ export class BusinessReferralsService {
     const result = await this.hasuraSystemService.executeQuery<{
       businesses: ReferredBusinessRow[];
     }>(query, { where: { _or: orFilters } });
-    return (result?.businesses ?? []).map(mapReferredBusinessRow);
+    return mapReferredBusinesses(
+      result?.businesses ?? [],
+      undefined,
+      (country) => this.readOnboardingMinSaleTotal(country)
+    );
+  }
+
+  private async readOnboardingMinSaleTotal(
+    country: string
+  ): Promise<number | null> {
+    try {
+      const config = await this.configurationsService.getConfigurationByKey(
+        ONBOARDING_10_MIN_SALE_TOTAL_KEY,
+        country
+      );
+      const value = Number(config?.number_value);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    } catch {
+      return null;
+    }
   }
 
   async getUserReferralsSummary(params: {

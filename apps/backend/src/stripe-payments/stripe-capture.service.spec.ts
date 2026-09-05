@@ -12,6 +12,7 @@ describe('StripeCaptureService', () => {
     capturePaymentIntent: jest.Mock;
     cancelPaymentIntent: jest.Mock;
     retrievePaymentIntent: jest.Mock;
+    expireCheckoutSession: jest.Mock;
   };
   let databaseService: {
     getTransactionByEntityId: jest.Mock;
@@ -29,6 +30,7 @@ describe('StripeCaptureService', () => {
       capturePaymentIntent: jest.fn(),
       cancelPaymentIntent: jest.fn(),
       retrievePaymentIntent: jest.fn(),
+      expireCheckoutSession: jest.fn(),
     };
     databaseService = {
       getTransactionByEntityId: jest.fn(),
@@ -121,6 +123,10 @@ describe('StripeCaptureService', () => {
 
   it('persists partial captureAmount so wallet credit matches Stripe charge', async () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'requires_capture',
+      amount: 12500,
+    });
     stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
 
     await expect(
@@ -198,6 +204,62 @@ describe('StripeCaptureService', () => {
       status: 'success',
       captured_at: now.toISOString(),
     });
+  });
+
+  it('scales a pre-tax captureAmount when Stripe Tax increased the authorization', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'requires_capture',
+      amount: 14125,
+    });
+    stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 125,
+      })
+    ).resolves.toEqual({ success: true, captured: true });
+
+    expect(stripeService.capturePaymentIntent).toHaveBeenCalledWith(
+      'pi_123',
+      'capture_order-id-123',
+      { amount: 141.25, currency: 'CAD' }
+    );
+    expect(databaseService.updateTransaction).toHaveBeenNthCalledWith(
+      1,
+      'tx-123',
+      { status: 'capture_pending', amount: 125 }
+    );
+  });
+
+  it('scales a waived-fee captureAmount to keep tax on the remaining goods', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'requires_capture',
+      amount: 14125,
+    });
+    stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 100,
+      })
+    ).resolves.toEqual({ success: true, captured: true });
+
+    expect(stripeService.capturePaymentIntent).toHaveBeenCalledWith(
+      'pi_123',
+      'capture_order-id-123',
+      { amount: 113, currency: 'CAD' }
+    );
+    expect(databaseService.updateTransaction).toHaveBeenNthCalledWith(
+      2,
+      'tx-123',
+      { status: 'success', captured_at: now.toISOString(), amount: 100 }
+    );
   });
 
   it('credits wallet using the persisted (possibly partial) transaction amount', async () => {
@@ -302,5 +364,27 @@ describe('StripeCaptureService', () => {
 
     expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('expires an open checkout session when the PaymentIntent does not exist yet', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(
+      makeTransaction({
+        status: 'pending',
+        stripe_payment_intent_id: undefined,
+        stripe_session_id: 'cs_123',
+      })
+    );
+    stripeService.expireCheckoutSession.mockResolvedValue({ id: 'cs_123' });
+
+    await expect(
+      service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })
+    ).resolves.toEqual({ success: true });
+
+    expect(stripeService.expireCheckoutSession).toHaveBeenCalledWith('cs_123');
+    expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', {
+      status: 'cancelled',
+      error_message: 'Checkout session expired on order cancellation',
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { CommerceIntegrationsModule } from '../commerce-integrations/commerce-integrations.module';
@@ -12,9 +12,12 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
+import { CreditsModule } from '../credits/credits.module';
+import { FoodModule } from '../food/food.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { RbacModule } from '../rbac/rbac.module';
+import { RecipientsModule } from '../recipients/recipients.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { StripeAuthReconcilerService } from '../stripe-payments/stripe-auth-reconciler.service';
@@ -25,6 +28,7 @@ import { FailedDeliveriesService } from './failed-deliveries.service';
 import { BusinessAvailabilityController } from './business-availability.controller';
 import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderDispatchInternalController } from './order-dispatch-internal.controller';
 import { OrderEventsService } from './order-events.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
@@ -38,20 +42,32 @@ import { OrderStatusService } from './order-status.service';
 import { OrderCleanupCronService } from './order-cleanup-cron.service';
 import { OrderCleanupInternalController } from './order-cleanup-internal.controller';
 import { OrderCleanupService } from './order-cleanup.service';
+import { StorePickupReminderCronService } from './store-pickup-reminder-cron.service';
+import { StorePickupReminderService } from './store-pickup-reminder.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { AdminOrdersController } from './admin-orders.controller';
+import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
+import { OrderRiskAlertService } from './order-risk-alert.service';
+import { OrderRiskConfigService } from './order-risk-config.service';
+import { OrderRiskContextService } from './order-risk-context.service';
+import { OrderRiskIncidentsService } from './order-risk-incidents.service';
+import { OrderRiskMonitorService } from './order-risk-monitor.service';
 import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
 
 @Module({
   imports: [
-    NotificationsModule,
+    // Lazy require avoids TDZ with OrdersModule <-> NotificationsModule cycle.
+    forwardRef(
+      () => require('../notifications/notifications.module').NotificationsModule
+    ),
     MessagingModule,
     LoyaltyModule,
     AdminModule,
@@ -67,9 +83,13 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     LocationsModule,
     GoogleModule,
     RbacModule,
+    RecipientsModule,
     CommerceIntegrationsModule,
     MetaConversionsModule,
     MerchantLifecycleModule,
+    RepresentativeCompensationModule,
+    CreditsModule,
+    FoodModule,
   ],
   controllers: [
     OrdersController,
@@ -86,6 +106,11 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrdersService,
     OrderStatusService,
     OrderRiskService,
+    OrderRiskConfigService,
+    OrderRiskContextService,
+    OrderRiskIncidentsService,
+    OrderRiskAlertService,
+    OrderRiskMonitorService,
     OrderQueueService,
     OrderOffersService,
     WaitAndExecuteScheduleService,
@@ -95,8 +120,11 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     CancellationPolicyService,
     OrderCleanupService,
     OrderCleanupCronService,
+    StorePickupReminderService,
+    StorePickupReminderCronService,
     OrderSystemJobsService,
     OrderAcceptanceService,
+    FulfillmentPromiseService,
     OrderEventsService,
     PickupProgressService,
     OrderReassignmentService,
@@ -104,6 +132,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderPickupAnalyticsService,
     StripeAuthReconcilerService,
     AdminOrderContactService,
+    AdminOrdersService,
+    WhatsAppOrderActionService,
   ],
   exports: [
     OrdersService,
@@ -114,11 +144,15 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderCleanupService,
     OrderSystemJobsService,
     OrderAcceptanceService,
+    FulfillmentPromiseService,
     OrderEventsService,
     OrderPickupMonitorService,
     OrderReassignmentService,
     OrderPickupAnalyticsService,
+    OrderRiskIncidentsService,
+    OrderRiskMonitorService,
     FailedDeliveriesService,
+    WhatsAppOrderActionService,
   ],
 })
 export class OrdersModule {}

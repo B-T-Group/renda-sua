@@ -22,6 +22,8 @@ import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useBusinessLocations } from '../../hooks/useBusinessLocations';
 import { useItemVariants } from '../../hooks/useItemVariants';
 import { Item } from '../../hooks/useItems';
+import { isFoodCategoryName } from '../../constants/food';
+import FoodAvailabilitySection from './food/FoodAvailabilitySection';
 import type { ItemVariant } from '../../types/itemVariant';
 
 interface UpdateInventoryDialogProps {
@@ -57,6 +59,9 @@ export default function UpdateInventoryDialog({
   } = useBusinessLocations(catalogBusinessId);
   const { listVariants, setVariantPriceOverrides } = useItemVariants(
     item?.id ?? ''
+  );
+  const isFoodItem = isFoodCategoryName(
+    item?.item_sub_category?.item_category?.name
   );
 
   const [formData, setFormData] = useState({
@@ -588,6 +593,13 @@ export default function UpdateInventoryDialog({
                 </Stack>
               </Collapse>
             </Stack>
+          )}
+
+          {isFoodItem && formData.business_location_id && (
+            <FoodAvailabilitySection
+              itemId={item.id}
+              businessLocationId={formData.business_location_id}
+            />
           )}
         </Stack>
       </DialogContent>

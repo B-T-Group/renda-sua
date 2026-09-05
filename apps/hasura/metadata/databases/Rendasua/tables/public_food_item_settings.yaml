@@ -1,0 +1,120 @@
+table:
+  name: food_item_settings
+  schema: public
+object_relationships:
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+array_relationships:
+  - name: availability_slots
+    using:
+      foreign_key_constraint_on:
+        column: food_item_settings_id
+        table:
+          name: food_availability_slots
+          schema: public
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+      columns:
+        - business_location_id
+        - item_id
+        - marked_unavailable_at
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - marked_unavailable_at
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          is_active:
+            _eq: true
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - marked_unavailable_at
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          is_active:
+            _eq: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - marked_unavailable_at
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - marked_unavailable_at
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          is_active:
+            _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - item_id
+        - marked_unavailable_at
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          is_active:
+            _eq: true
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - marked_unavailable_at
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

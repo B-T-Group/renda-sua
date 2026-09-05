@@ -27,7 +27,14 @@ import {
 import { isPersonaId, type PersonaId } from '../users/persona.types';
 import { normalizeAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
 import type { AgentLocationTrackingConsent } from '../agents/dto/update-location-tracking-consent.dto';
+import { requireAuthUserUuid } from '../common/uuid.util';
 import { HasuraSystemService } from './hasura-system.service';
+import {
+  formatHasuraNetworkError,
+  isTransientHasuraNetworkError,
+  mapExhaustedHasuraQueryError,
+  requestHasuraWithRetry,
+} from './hasura-request.util';
 
 export type MeAgent = Agents & {
   location_tracking_consent_ios: AgentLocationTrackingConsent;
@@ -65,6 +72,23 @@ export interface CreateOrderRequest {
     slot_id: string;
     preferred_date: string;
     special_instructions?: string;
+  };
+  fulfillment_timing?: 'asap' | 'scheduled';
+  /**
+   * ISO 3166-1 alpha-2 billing country of the payer. Kept separate from the
+   * fulfillment country so a payer abroad can fund a local delivery.
+   */
+  payer_country?: string;
+  /** Explicit opt-in to the recipient block, even when contact fields are blank. */
+  sending_to_someone_else?: boolean;
+  /** UUID of a saved recipient to use for this order. When provided, overrides inline recipient fields. */
+  recipient_id?: string;
+  /** Person receiving the order locally, when that is not the paying client. */
+  recipient?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    notify_whatsapp?: boolean;
   };
 }
 
@@ -114,7 +138,7 @@ export class HasuraUserService {
 
   /** DB `users.id` from JWT claims (CLS / explicit ctx). */
   get user_id(): string {
-    return this.resolveContext().userId;
+    return this.getUserId();
   }
 
   resolveContext(ctx?: RequestContext): RequestContext {
@@ -180,7 +204,14 @@ export class HasuraUserService {
     variables?: any,
     ctx?: RequestContext
   ): Promise<T> {
-    return this.createGraphQLClient(ctx).request<T>(query, variables);
+    try {
+      return await requestHasuraWithRetry(
+        () => this.createGraphQLClient(ctx).request<T>(query, variables),
+        this.logger
+      );
+    } catch (error: any) {
+      mapExhaustedHasuraQueryError(error);
+    }
   }
 
   /**
@@ -586,9 +617,15 @@ export class HasuraUserService {
 
   /**
    * Same as `user_id` (from Hasura JWT claims); use for permission-aligned lookups.
+   * Authenticated ids must be DB UUIDs — Auth0 `sub` values (`auth0|…`, `email|…`)
+   * are rejected so they never reach `$userId: uuid!` Hasura operations.
    */
   getUserId(ctx?: RequestContext): string {
-    return this.resolveContext(ctx).userId;
+    const userId = this.resolveContext(ctx).userId;
+    if (!userId || userId === 'anonymous') {
+      return userId || 'anonymous';
+    }
+    return requireAuthUserUuid(userId);
   }
 
   getActivePersonaHeader(ctx?: RequestContext): string | undefined {
@@ -746,6 +783,19 @@ export class HasuraUserService {
     };
   }
 
+  /** JWT Hasura user id must be a DB UUID, not an Auth0 `sub` (`email|…`). */
+  private requireAuthenticatedDbUserId(ctx?: RequestContext): RequestContext {
+    const resolved = this.resolveContext(ctx);
+    const userId = resolved.userId;
+    if (!userId || userId === 'anonymous') {
+      throw new Error(
+        'No authenticated user. Please provide a valid authentication token.'
+      );
+    }
+    requireAuthUserUuid(userId);
+    return resolved;
+  }
+
   /**
    * Load users + persona relations without resolving a session persona.
    * Safe for delegate-only accounts. Existing controllers must keep using getUser().
@@ -758,13 +808,8 @@ export class HasuraUserService {
       personas?: PersonaId[];
     }
   > {
-    const resolved = this.resolveContext(ctx);
+    const resolved = this.requireAuthenticatedDbUserId(ctx);
     const userId = resolved.userId;
-    if (!userId || userId === 'anonymous') {
-      throw new Error(
-        'No authenticated user. Please provide a valid authentication token.'
-      );
-    }
     const userData = await this.hasuraSystemService.getUserByIdWithRelations(
       userId
     );
@@ -804,13 +849,8 @@ export class HasuraUserService {
       active_persona?: PersonaId;
     }
   > {
-    const resolved = this.resolveContext(ctx);
+    const resolved = this.requireAuthenticatedDbUserId(ctx);
     const userId = resolved.userId;
-    if (!userId || userId === 'anonymous') {
-      throw new Error(
-        'No authenticated user. Please provide a valid authentication token.'
-      );
-    }
 
     try {
       const userData = await this.hasuraSystemService.getUserByIdWithRelations(
@@ -868,23 +908,41 @@ export class HasuraUserService {
 
       return user;
     } catch (error: any) {
-      this.logger.error('Error in getUser()', {
-        userId,
-        error: error.message,
-        stack: error.stack,
-      });
+      this.rethrowGetUserFailure(error, userId);
+    }
+  }
 
-      if (error instanceof HttpException) {
-        throw error;
-      }
+  private rethrowGetUserFailure(error: any, userId: string): never {
+    this.logger.error('Error in getUser()', {
+      userId,
+      error: formatHasuraNetworkError(error),
+      stack: error.stack,
+    });
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    if (error.message?.includes('User not found')) {
+      throw error;
+    }
+    throw this.toGetUserFailure(error);
+  }
 
-      if (error.message?.includes('User not found')) {
-        throw error;
-      }
-      throw new Error(
-        `Failed to get user by id: ${error.message || 'Unknown error'}`
+  private toGetUserFailure(error: any): Error {
+    if (isTransientHasuraNetworkError(error)) {
+      return new HttpException(
+        {
+          success: false,
+          error: 'Temporarily unable to load user profile',
+          message: 'Temporarily unable to load user profile',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+        { cause: error instanceof Error ? error : undefined }
       );
     }
+    return new Error(
+      `Failed to get user by id: ${formatHasuraNetworkError(error)}`,
+      { cause: error instanceof Error ? error : undefined }
+    );
   }
 
   /** Ensures `/users/me` always exposes platform-specific location consent fields. */

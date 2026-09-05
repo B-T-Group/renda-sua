@@ -10,6 +10,7 @@ import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import type { Configuration } from '../config/configuration';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderStatusService } from './order-status.service';
 
@@ -18,6 +19,7 @@ import { OrderStatusService } from './order-status.service';
 export class OrderNotificationsInternalController {
   constructor(
     private readonly notificationsService: NotificationsService,
+    private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
     private readonly orderStatusService: OrderStatusService,
     private readonly orderOffersService: OrderOffersService,
     private readonly configService: ConfigService<Configuration>
@@ -85,6 +87,13 @@ export class OrderNotificationsInternalController {
         orderDetails,
         previousStatus,
         { actorUserId: body.actorUserId }
+      );
+
+      // A diaspora recipient has no account, so they are reached directly on
+      // their phone rather than through the user-keyed fan-out above.
+      await this.orderRecipientNotifications.notifyStatusChange(
+        orderId,
+        orderDetails.orderStatus
       );
 
       // When an order becomes claimable, fan out a high-priority delivery

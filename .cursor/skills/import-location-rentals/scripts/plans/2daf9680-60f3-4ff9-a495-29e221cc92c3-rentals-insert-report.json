@@ -1,0 +1,2638 @@
+{
+  "env": "prod",
+  "host": "renda-prod-instance-1.clzhhf1nifju.ca-central-1.rds.amazonaws.com",
+  "business_location_id": "2daf9680-60f3-4ff9-a495-29e221cc92c3",
+  "business_id": "64d7c474-9347-47a1-89ed-6d623766f3e1",
+  "summary": {
+    "blocked_ambiguous": 64,
+    "created": 198
+  },
+  "results": [
+    {
+      "source_file": "accessoires_beton.csv",
+      "source_row": 2,
+      "name": "Adaptateur boyau d'arrosage",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 2,
+      "name": "Barrure pour support à forme",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 3,
+      "name": "Bétonnière 3′ – 4′ cube 120v",
+      "action": "created",
+      "rental_item_id": "488d7870-92f0-4d16-a382-46bf4b499034",
+      "listing_id": "f3248933-5fb2-4500-ba13-a38bc205fad1",
+      "hourly": 6.13,
+      "day": 49.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 4,
+      "name": "Malaxeur mortier 7′-9′ cube carb.",
+      "action": "created",
+      "rental_item_id": "7716856c-d4c6-40f8-8b5b-b21b939e0a08",
+      "listing_id": "9809228e-beba-451f-ac68-13ddb1555bc8",
+      "hourly": 11.25,
+      "day": 90.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 5,
+      "name": "Support à forme 10'6″ à 15'6″ (bleu)",
+      "action": "created",
+      "rental_item_id": "02e52626-f0ea-49df-bd94-28057fdb6f19",
+      "listing_id": "cd3426bc-27bf-4c5f-9e96-ab181b6b2ba2",
+      "hourly": 1.0,
+      "day": 8.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 6,
+      "name": "Support à forme 11′ à 16′ (noir)",
+      "action": "created",
+      "rental_item_id": "08d7064a-753e-416e-8403-9055155aee6d",
+      "listing_id": "a759163d-8431-4b43-9ec5-3cb4d6bf74ab",
+      "hourly": 1.0,
+      "day": 8.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 7,
+      "name": "Support à forme 3'6″ à 6′ (mauve)",
+      "action": "created",
+      "rental_item_id": "7618a3ca-f4c5-4f2f-ad23-6f8fd85f9527",
+      "listing_id": "08239c8d-ee85-4977-9508-0f96963998a4",
+      "hourly": 0.75,
+      "day": 6.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 8,
+      "name": "Support à forme 5'9″ à 10'6″ (vert)",
+      "action": "created",
+      "rental_item_id": "7148dd55-4cb1-452f-aa6f-6b84d0a27165",
+      "listing_id": "fc88cc3c-a24d-4944-bee0-5436f4b6a5d1",
+      "hourly": 0.88,
+      "day": 7.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 9,
+      "name": "Support à forme 6'6″ à 11′ (orange)",
+      "action": "created",
+      "rental_item_id": "288d23d9-190c-49b8-8e38-0f8c9f63aada",
+      "listing_id": "9ca039c9-fd82-4d8a-ac40-d775315d6296",
+      "hourly": 0.88,
+      "day": 7.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 10,
+      "name": "Support à forme 6'9″ à 11′",
+      "action": "created",
+      "rental_item_id": "c940254d-f7ee-4611-be0b-abebe6fc1e46",
+      "listing_id": "21bd5280-f036-44a5-b908-a319409481cc",
+      "hourly": 0.88,
+      "day": 7.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 11,
+      "name": "Support à forme 6'9″ à 11'4″",
+      "action": "created",
+      "rental_item_id": "440a7cf7-592e-47d8-bbd1-b8652bfcfb7d",
+      "listing_id": "2e9d3827-2e3d-40b2-b590-ce1bbe71e87a",
+      "hourly": 0.88,
+      "day": 7.0,
+      "images": 1
+    },
+    {
+      "source_file": "coulage_produits.csv",
+      "source_row": 12,
+      "name": "Support à forme 8'6″ à 13″ (rouge)",
+      "action": "created",
+      "rental_item_id": "82495224-b843-4141-8b96-8bcdcd63bfca",
+      "listing_id": "51e5eeab-4952-42bb-b243-3e2b5c95ce93",
+      "hourly": 1.0,
+      "day": 8.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 2,
+      "name": "Boucharde sds-max",
+      "action": "created",
+      "rental_item_id": "9455be17-332b-4086-bcf3-e56d5bd15ff4",
+      "listing_id": "2b65f308-3be4-4caf-9862-fe20f8918057",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 3,
+      "name": "Chariot outil marteau piqueur",
+      "action": "created",
+      "rental_item_id": "9eef87d2-b361-492e-9a55-57b89fa0d8fd",
+      "listing_id": "321aaee4-cb8b-40ab-b46e-f20652e33a0c",
+      "hourly": 4.38,
+      "day": 35.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 4,
+      "name": "Clé de scie à béton",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 5,
+      "name": "Marteau piqueur 10-14 lb 120v",
+      "action": "created",
+      "rental_item_id": "1e9d3072-ada0-45a8-bf81-71e7445ba7a6",
+      "listing_id": "495e94e9-d552-4892-8943-011909fa6c69",
+      "hourly": 5.88,
+      "day": 47.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 6,
+      "name": "Marteau piqueur 15-19 lb 120v",
+      "action": "created",
+      "rental_item_id": "3ea44085-6db2-4aee-8452-c35c9789af2f",
+      "listing_id": "c3eb2b22-fefd-488e-902e-d548f89223fb",
+      "hourly": 5.88,
+      "day": 47.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 7,
+      "name": "Marteau piqueur 20-24 lb 120v",
+      "action": "created",
+      "rental_item_id": "9ab13f20-af3a-42be-9c1c-376fd23997e5",
+      "listing_id": "51a7c20f-81e0-442d-bd93-c9c36038c0c6",
+      "hourly": 6.63,
+      "day": 53.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 8,
+      "name": "Marteau piqueur 25-29 lb 120v",
+      "action": "created",
+      "rental_item_id": "67546bec-f511-4d91-bc84-328d2ea57927",
+      "listing_id": "143005f3-e620-4753-915c-ce5029b4af4a",
+      "hourly": 6.63,
+      "day": 53.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 9,
+      "name": "Marteau piqueur 30-34 lb 120v",
+      "action": "created",
+      "rental_item_id": "7eafe16b-e6c8-453e-8ec8-2d6bda036736",
+      "listing_id": "0a6c16a2-b247-4223-9492-a71c3cb01146",
+      "hourly": 7.25,
+      "day": 58.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 10,
+      "name": "Marteau piqueur 30/34 lb batterie",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 11,
+      "name": "Marteau piqueur 35-39 lb 120v",
+      "action": "created",
+      "rental_item_id": "a7a5797d-11f2-4590-86df-e7d106e6f2aa",
+      "listing_id": "088ca6d7-40bb-4e55-a812-a1c2e1ac6a22",
+      "hourly": 7.25,
+      "day": 58.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 12,
+      "name": "Marteau piqueur 55-64 lb 120v",
+      "action": "created",
+      "rental_item_id": "e4c27275-ca0a-4742-8f69-cd7185fc64f0",
+      "listing_id": "5004d144-c0fc-4b23-889f-a4a1d64badb1",
+      "hourly": 8.5,
+      "day": 68.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 13,
+      "name": "Marteau piqueur 60-65 lb batterie",
+      "action": "created",
+      "rental_item_id": "1085e4ab-f3c4-4e25-99de-f20146038ae7",
+      "listing_id": "73133efa-2224-43bf-8843-dcf15376032c",
+      "hourly": 10.0,
+      "day": 80.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 14,
+      "name": "Marteau piqueur 65-70 lb 120v",
+      "action": "created",
+      "rental_item_id": "a6ef7fdc-1ee7-4ce6-903d-5104f029921d",
+      "listing_id": "dfc60365-cd8e-4ec1-9050-1bb90d8a71c8",
+      "hourly": 10.75,
+      "day": 86.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 15,
+      "name": "Marteau rotatif 1″ à 2½″ 120v",
+      "action": "created",
+      "rental_item_id": "206bb732-4d83-427e-b894-35d01010055d",
+      "listing_id": "08f995e5-387a-4e3d-9e91-979304e3b580",
+      "hourly": 5.88,
+      "day": 47.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 16,
+      "name": "Marteau rotatif 23/32-1-9/16″ batterie",
+      "action": "created",
+      "rental_item_id": "3a7f4b95-914d-47b0-ab7b-3fa3adf8ba63",
+      "listing_id": "b6eb079e-5f15-4b63-b21a-3d51092f497b",
+      "hourly": 7.25,
+      "day": 58.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 17,
+      "name": "Marteau rotatif 2½″ à 6″ 120v",
+      "action": "created",
+      "rental_item_id": "0daf63ac-a1e5-4d2a-aeca-2dc53f8198fb",
+      "listing_id": "3bd233ad-d73b-4db9-b327-b154f340b3f6",
+      "hourly": 5.88,
+      "day": 47.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 18,
+      "name": "Marteau rotatif 3/16-1″ batterie",
+      "action": "created",
+      "rental_item_id": "35d00659-2c3b-4404-88f9-bc6f3e810fb0",
+      "listing_id": "412a82f4-5011-4112-80f2-ef23af27c380",
+      "hourly": 5.88,
+      "day": 47.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 19,
+      "name": "Marteau rotatif 3/16″-1″ 120v",
+      "action": "created",
+      "rental_item_id": "200816a0-a1f5-4911-ac49-eaf66e3f5262",
+      "listing_id": "4db9f68a-c988-4038-babb-641e66b4c094",
+      "hourly": 3.63,
+      "day": 29.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 20,
+      "name": "Mèche à béton sds-max 1″",
+      "action": "created",
+      "rental_item_id": "5c3c1f2b-94ec-4600-8693-fd054fb1dba5",
+      "listing_id": "33828ef4-a46a-45e6-895e-ce006ce1a5f9",
+      "hourly": 1.63,
+      "day": 13.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 21,
+      "name": "Mèche à béton sds-max 2″",
+      "action": "created",
+      "rental_item_id": "45477751-a8a2-41b9-8045-0b8869e1d746",
+      "listing_id": "744142cb-8651-4bbe-94a2-d3583433945e",
+      "hourly": 3.13,
+      "day": 25.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 22,
+      "name": "Mèche à béton sds-max 5/8″",
+      "action": "created",
+      "rental_item_id": "e7ddaf0b-5e0e-4e1a-a664-cde1a8dd45eb",
+      "listing_id": "8adfe66e-ad7a-4d14-bbf8-390a05459698",
+      "hourly": 1.13,
+      "day": 9.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 23,
+      "name": "Mèche à béton sds-max 7/8″",
+      "action": "created",
+      "rental_item_id": "bee09396-aa55-4146-9f83-ccf43815fa47",
+      "listing_id": "a61fca51-0313-4df7-8c51-b2ba4639ca40",
+      "hourly": 1.38,
+      "day": 11.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 24,
+      "name": "Mèche à béton sds-max ½″",
+      "action": "created",
+      "rental_item_id": "6f9d2ade-ee77-42bf-bede-b6a3b93e36e3",
+      "listing_id": "c60816eb-dc9c-4992-9858-c3657c3523be",
+      "hourly": 1.13,
+      "day": 9.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 25,
+      "name": "Mèche à béton sds-max ¾″",
+      "action": "created",
+      "rental_item_id": "0e3f9bff-2649-4226-997c-df9ae69b147d",
+      "listing_id": "9627b254-37c1-4588-a391-be046d9e4519",
+      "hourly": 1.38,
+      "day": 11.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 26,
+      "name": "Mèche de centre pour couronne",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 27,
+      "name": "Poids pour polisseuse",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 28,
+      "name": "Pointe (autre)",
+      "action": "created",
+      "rental_item_id": "7caa4ed8-5702-4c69-80b5-7213dd60a628",
+      "listing_id": "959a647e-9fcc-4a54-9005-bd69abecb878",
+      "hourly": 0.88,
+      "day": 7.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 29,
+      "name": "Pointe marteau air",
+      "action": "created",
+      "rental_item_id": "bfc3a7fb-ec62-4741-b3fa-58ab9a7ff598",
+      "listing_id": "2712fef2-497f-40fc-acde-83591539833e",
+      "hourly": 1.38,
+      "day": 11.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 30,
+      "name": "Pointe sds plus",
+      "action": "created",
+      "rental_item_id": "f57e7dba-dd91-4c3a-8ddf-7d0ebc55ba54",
+      "listing_id": "e03c4439-8197-4bc3-8f73-081235a5fccf",
+      "hourly": 0.75,
+      "day": 6.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 31,
+      "name": "Pointe sds-max 18″",
+      "action": "created",
+      "rental_item_id": "2620bffa-ab9f-4c7a-8134-71395985bc7e",
+      "listing_id": "d34657d5-11b5-4e6f-8758-83ca1c440b87",
+      "hourly": 0.63,
+      "day": 5.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 32,
+      "name": "Pointe te-s",
+      "action": "created",
+      "rental_item_id": "358671cb-2414-4c00-b8f5-c63f0df1809a",
+      "listing_id": "cc4737a0-7d28-4130-ab4c-8967d4fb8c69",
+      "hourly": 1.0,
+      "day": 8.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 33,
+      "name": "Réducteur mèche diam 1¼″ à 5/8″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 34,
+      "name": "Support bétonnière élec 3′-4′",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 35,
+      "name": "Tranche 1″ (autre)",
+      "action": "created",
+      "rental_item_id": "a310c7f2-5eb5-4a6d-9546-896df60605a2",
+      "listing_id": "9a7bd896-a137-45db-82ac-26ceb044a7f9",
+      "hourly": 0.88,
+      "day": 7.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 36,
+      "name": "Tranche 3″ (autre)",
+      "action": "created",
+      "rental_item_id": "04dbef2a-2db4-4432-a1d5-d0c289618f1e",
+      "listing_id": "745398de-5e29-47f3-86f0-09cd7ac6b99c",
+      "hourly": 1.88,
+      "day": 15.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 37,
+      "name": "Tranche 4″ – marteau 60 lb",
+      "action": "created",
+      "rental_item_id": "b9221d46-fc20-4624-a179-763e3e4edb48",
+      "listing_id": "eb22628e-e96d-4432-ab5c-935712922891",
+      "hourly": 0.63,
+      "day": 5.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 38,
+      "name": "Tranche céramique 4″",
+      "action": "created",
+      "rental_item_id": "d9b75504-300e-4383-848d-31d032ed82a1",
+      "listing_id": "20771bbd-92aa-435d-a651-6f42f4b2876b",
+      "hourly": 3.0,
+      "day": 24.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 39,
+      "name": "Tranche céramique sds-max 6″",
+      "action": "created",
+      "rental_item_id": "01fd822a-4eba-4ee8-a281-0a36e979fb7d",
+      "listing_id": "931cf3cc-5f6b-499d-a901-82b932d8ba84",
+      "hourly": 4.38,
+      "day": 35.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 40,
+      "name": "Tranche marteau air 1″",
+      "action": "created",
+      "rental_item_id": "605c044b-62d9-4ccf-ae36-0d4116b96acb",
+      "listing_id": "1e5d99b4-7dfd-4a92-b447-ca834c8b6f8f",
+      "hourly": 1.38,
+      "day": 11.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 41,
+      "name": "Tranche marteau air 3″",
+      "action": "created",
+      "rental_item_id": "2baaa421-5e92-4521-a7f0-4a69daba78b3",
+      "listing_id": "a14b0fff-d1ce-4c04-a5e3-477f21572eec",
+      "hourly": 2.5,
+      "day": 20.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 42,
+      "name": "Tranche sds-max 2″",
+      "action": "created",
+      "rental_item_id": "5cf20d26-765d-489c-bf51-56d049f3a219",
+      "listing_id": "affe3ee0-1510-46a0-b7a6-640dce5b4957",
+      "hourly": 1.38,
+      "day": 11.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 43,
+      "name": "Tranche sds-plus ¾″",
+      "action": "created",
+      "rental_item_id": "945569c6-aeff-492a-b32f-3b8df8a0d3a2",
+      "listing_id": "de5bb707-f5b0-46d3-aa8c-be17efde911d",
+      "hourly": 0.75,
+      "day": 6.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 44,
+      "name": "Tranche TE-S 2″",
+      "action": "created",
+      "rental_item_id": "a05f26d3-8ac7-411a-b033-1cdfb5393980",
+      "listing_id": "09dfdeba-9884-41e8-9e5c-377044e8b127",
+      "hourly": 1.63,
+      "day": 13.0,
+      "images": 1
+    },
+    {
+      "source_file": "demolition_beton.csv",
+      "source_row": 45,
+      "name": "Tranche te-s 3″",
+      "action": "created",
+      "rental_item_id": "292e441d-8aff-4c30-9403-0f514e093420",
+      "listing_id": "565c6e07-9938-42eb-8736-84dd33423bbc",
+      "hourly": 2.25,
+      "day": 18.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 2,
+      "name": "Disque adaptateur -dent carbure",
+      "action": "created",
+      "rental_item_id": "4745c9c9-a076-41ac-adf7-5c9aa84bda21",
+      "listing_id": "5731b856-7285-404f-8ea2-e5bbde3ed417",
+      "hourly": 14.5,
+      "day": 116.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 3,
+      "name": "Disque adaptateur -papier sablé",
+      "action": "created",
+      "rental_item_id": "6bd04669-2865-49b4-93e8-92b81d2ab419",
+      "listing_id": "71c365a4-0bb7-4f26-bb06-85da075ac54f",
+      "hourly": 1.88,
+      "day": 15.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 4,
+      "name": "Disque adaptateur -tampon",
+      "action": "created",
+      "rental_item_id": "4a1c0c1a-c76f-44ae-b829-f4f567334931",
+      "listing_id": "ba48d04c-577f-4ff9-97f1-911de740757b",
+      "hourly": 1.13,
+      "day": 9.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 5,
+      "name": "Disque polisseuse -spiro-disque",
+      "action": "created",
+      "rental_item_id": "8df1c090-e404-4aaf-bd0c-44293c338e87",
+      "listing_id": "e7ce6aca-9f5e-42a3-b225-60a1d672488d",
+      "hourly": 8.0,
+      "day": 64.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 6,
+      "name": "Disque polisseuse carbure 16″",
+      "action": "created",
+      "rental_item_id": "e26260d9-9f4a-48cd-9f2b-2e842a7d57d8",
+      "listing_id": "39b3b353-495b-443c-9540-e9c976fa1d3f",
+      "hourly": 5.75,
+      "day": 46.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 7,
+      "name": "Disque polisseuse diamant lames",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 8,
+      "name": "Disque polisseuse-diamant hex",
+      "action": "created",
+      "rental_item_id": "42b3a6dc-b12a-4d47-9bdb-d06660445e3b",
+      "listing_id": "d4b1004c-d17d-452d-93c7-f194339a72a5",
+      "hourly": 14.5,
+      "day": 116.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 9,
+      "name": "Ensemble 6 diamants durs 30-40 husq",
+      "action": "created",
+      "rental_item_id": "42ca16a6-7c81-48d3-9ee0-e944803d3065",
+      "listing_id": "d8df32a4-e304-4fbb-a243-50f75810292c",
+      "hourly": 15.75,
+      "day": 126.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 10,
+      "name": "Manche pour truelle manuelle",
+      "action": "created",
+      "rental_item_id": "d3e6ddfb-56c1-4840-9eaa-2c04574e5e8d",
+      "listing_id": "c60ba427-67e3-406e-bf85-828519b9ea49",
+      "hourly": 0.5,
+      "day": 4.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 11,
+      "name": "Meule diamant 4½″",
+      "action": "created",
+      "rental_item_id": "58a97b59-84dd-49fb-9f4a-57ae78a4037a",
+      "listing_id": "19e706f8-1aff-4b53-b87e-1ee2523fa564",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 12,
+      "name": "Meule diamant 5″",
+      "action": "created",
+      "rental_item_id": "27061d03-76a8-4c41-99c2-d0ac8ab7267c",
+      "listing_id": "154e2fe5-3270-4083-a39f-b929ebea7c60",
+      "hourly": 3.25,
+      "day": 26.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 13,
+      "name": "Meule diamant 7″",
+      "action": "created",
+      "rental_item_id": "3f304da2-f16d-46ed-a290-cb55bb52fe01",
+      "listing_id": "e9c26c5b-c638-4794-8ae6-f17a5a52ffcd",
+      "hourly": 4.38,
+      "day": 35.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 14,
+      "name": "Meuleuse béton 20″ 240v vitesse variable",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 15,
+      "name": "Meuleuse plancher 10″ – 120v – 15a",
+      "action": "created",
+      "rental_item_id": "ba4342eb-19ff-43f3-bf40-4292071adc75",
+      "listing_id": "1ba420b2-8e09-4d47-93ab-05d6aaeaee91",
+      "hourly": 15.75,
+      "day": 126.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 16,
+      "name": "Meuleuse plancher 11″ – 120v – 20a",
+      "action": "created",
+      "rental_item_id": "a9f6c709-560f-4f68-a583-fa0c7e92e2a7",
+      "listing_id": "39f48600-6fca-42ec-9719-87f8bc03b46c",
+      "hourly": 19.0,
+      "day": 152.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 17,
+      "name": "Meuleuse plancher 6 têtes 120v",
+      "action": "blocked_ambiguous",
+      "reason": "unparseable_price_format"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 18,
+      "name": "Meuleuse plancher 6 têtes 220v",
+      "action": "blocked_ambiguous",
+      "reason": "unparseable_price_format"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 19,
+      "name": "Palette départ pour truelle",
+      "action": "blocked_ambiguous",
+      "reason": "unparseable_price_format"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 20,
+      "name": "Palette finition pour truelle",
+      "action": "blocked_ambiguous",
+      "reason": "unparseable_price_format"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 21,
+      "name": "Polisseuse béton 17″ 120v + poids",
+      "action": "created",
+      "rental_item_id": "c5c494f5-2d95-4f34-9d3a-0afdc688b3ec",
+      "listing_id": "b3780abd-ceaa-4854-9b17-897cdea8908a",
+      "hourly": 5.88,
+      "day": 47.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 22,
+      "name": "Règle vibrante béton 10′ ess",
+      "action": "blocked_ambiguous",
+      "reason": "unparseable_price_format"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 23,
+      "name": "Règle vibrante béton 8′ ess",
+      "action": "blocked_ambiguous",
+      "reason": "unparseable_price_format"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 24,
+      "name": "Tete a 3 segments carbure",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 25,
+      "name": "Tete a 3 segments diamanté",
+      "action": "created",
+      "rental_item_id": "c6939588-e9cb-43bf-9f24-fd08d5ffaad0",
+      "listing_id": "8fcd84e0-dbce-409d-8295-eb0d66b582bb",
+      "hourly": 3.5,
+      "day": 28.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 26,
+      "name": "Tête meulage 10 segments 10″",
+      "action": "created",
+      "rental_item_id": "d50a480c-fa3c-4484-9a42-65f8d67ea4d5",
+      "listing_id": "525ed3e1-a78a-4bc5-8d14-2e043c11d193",
+      "hourly": 12.63,
+      "day": 101.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 27,
+      "name": "Truelle béton 36″ essence",
+      "action": "created",
+      "rental_item_id": "17674a17-1c20-4cf5-8326-e988b485cd2d",
+      "listing_id": "5ae53329-bcd2-4cb7-a19d-68a2b29a3496",
+      "hourly": 11.25,
+      "day": 90.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 28,
+      "name": "Truelle béton 36″ manuelle",
+      "action": "created",
+      "rental_item_id": "37520fed-80e6-4824-bf90-3f1d649af33c",
+      "listing_id": "439274ba-4cbd-482b-8d55-de3c715556fe",
+      "hourly": 5.25,
+      "day": 42.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 29,
+      "name": "Truelle béton 48″ manuelle",
+      "action": "created",
+      "rental_item_id": "1c8646ae-00a8-40e3-9b4d-ebeb0f6ee6b3",
+      "listing_id": "bef61797-de57-4b38-8712-c2e063271d1a",
+      "hourly": 6.0,
+      "day": 48.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 30,
+      "name": "Vibrateur béton 1″ x 10′ 120v",
+      "action": "created",
+      "rental_item_id": "9986a4fa-8255-4bce-86b6-6b8f93de57b1",
+      "listing_id": "6ea0cf57-7c55-4b4c-a5fd-0eb087653158",
+      "hourly": 4.5,
+      "day": 36.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 31,
+      "name": "Vibrateur béton 1½″ x 15′ 120v",
+      "action": "created",
+      "rental_item_id": "c46f22f9-aa6e-4bf8-88d8-b0cf55953cc9",
+      "listing_id": "c9488164-e55a-4e9b-80e4-986e4b956476",
+      "hourly": 4.88,
+      "day": 39.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 32,
+      "name": "Vibrateur béton 2″ x 10′ 120v",
+      "action": "created",
+      "rental_item_id": "6b21c8dc-26ea-4705-a040-dbfc2499e48d",
+      "listing_id": "013054ab-3406-4392-a339-1471f3a7f02e",
+      "hourly": 4.88,
+      "day": 39.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 33,
+      "name": "Vibrateur béton ¾″ x 10′ 120v",
+      "action": "created",
+      "rental_item_id": "63c8f572-c63d-4124-8bd5-67e5436ca87b",
+      "listing_id": "c6562b15-b30b-418f-8f0a-cb2e58b947f0",
+      "hourly": 4.5,
+      "day": 36.0,
+      "images": 1
+    },
+    {
+      "source_file": "finition_produits.csv",
+      "source_row": 34,
+      "name": "Vibrateur béton 1-3/8″ x 10′ 120v",
+      "action": "created",
+      "rental_item_id": "e3c72164-608e-4b64-9eed-61e5f0a2b91b",
+      "listing_id": "76f49cbb-4c4a-4e17-b15d-22cd20d62551",
+      "hourly": 4.5,
+      "day": 36.0,
+      "images": 1
+    },
+    {
+      "source_file": "fixation_beton.csv",
+      "source_row": 2,
+      "name": "Pistolet fixation 10 coups",
+      "action": "created",
+      "rental_item_id": "a4511761-cf7d-4c64-8feb-47adb1a44e8b",
+      "listing_id": "28230f23-9d07-4b14-b3e3-dd8a30e7d06d",
+      "hourly": 4.38,
+      "day": 35.0,
+      "images": 1
+    },
+    {
+      "source_file": "fixation_beton.csv",
+      "source_row": 3,
+      "name": "Pistolet fixation à gaz",
+      "action": "created",
+      "rental_item_id": "18f76ba1-b0d8-4fdf-9eae-7913e58601c3",
+      "listing_id": "757e1191-4b8e-47d2-b416-0159c1afc570",
+      "hourly": 6.0,
+      "day": 48.0,
+      "images": 1
+    },
+    {
+      "source_file": "fixation_beton.csv",
+      "source_row": 4,
+      "name": "Pistolet fixations",
+      "action": "created",
+      "rental_item_id": "289ad883-abb9-4b30-9a72-a88fb2997785",
+      "listing_id": "3c46cea4-090b-42b0-b504-885a4ebcfb7c",
+      "hourly": 4.5,
+      "day": 36.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 2,
+      "name": "Adaptateur mèche diamant",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 3,
+      "name": "Anneau de mèche diamant",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 4,
+      "name": "Colonne de foreuse",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 5,
+      "name": "Foreuse béton colonne batterie",
+      "action": "created",
+      "rental_item_id": "72c052d2-fce8-42a3-b847-40482920e7ca",
+      "listing_id": "f5fa0ebf-6937-4c7a-a5f4-5d8c586c4a27",
+      "hourly": 9.88,
+      "day": 79.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 6,
+      "name": "Foreuse béton portative 120v",
+      "action": "created",
+      "rental_item_id": "780a4705-648e-4e23-816d-07a5aec86a62",
+      "listing_id": "01b1d5e1-cda1-4fe9-8145-9ba0d1b50ad4",
+      "hourly": 9.25,
+      "day": 74.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 7,
+      "name": "Foreuse béton portative carb.",
+      "action": "created",
+      "rental_item_id": "b2c8b043-12e2-4bc7-8dd1-48ea1b9e1de6",
+      "listing_id": "bda7c995-d119-4fef-8ecd-ad9b51c14ee2",
+      "hourly": 9.25,
+      "day": 74.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 8,
+      "name": "Foreuse béton sur colonne 120v",
+      "action": "created",
+      "rental_item_id": "33b25acb-c0a8-4e43-82ca-a54975007503",
+      "listing_id": "c59477af-d178-442f-90a1-01bd39a7fbdb",
+      "hourly": 9.88,
+      "day": 79.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 9,
+      "name": "Mèche couronne carbure 2″",
+      "action": "created",
+      "rental_item_id": "afbc2110-60a9-45cd-af7c-0fc8bb8c413f",
+      "listing_id": "e2e64199-e160-4d21-a90c-73a2f3046367",
+      "hourly": 3.0,
+      "day": 24.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 10,
+      "name": "Mèche couronne carbure 2-1/4″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 11,
+      "name": "Mèche couronne carbure 2½″",
+      "action": "created",
+      "rental_item_id": "3ce5d276-4168-47b4-9fa6-42968f72f7df",
+      "listing_id": "421b3387-8872-4dd1-9765-4658d60df172",
+      "hourly": 3.25,
+      "day": 26.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 12,
+      "name": "Mèche couronne carbure 2¾″",
+      "action": "created",
+      "rental_item_id": "5806b459-8899-46bc-a55c-8a72ef0f5e2f",
+      "listing_id": "16214c75-8af4-469d-8282-ba1cee5b4b04",
+      "hourly": 3.38,
+      "day": 27.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 13,
+      "name": "Mèche couronne carbure 3″",
+      "action": "created",
+      "rental_item_id": "6deb0bba-e95b-402c-adcd-502e01e075c2",
+      "listing_id": "62df0ecf-284e-48b9-ac75-c56dcb3b3e94",
+      "hourly": 3.63,
+      "day": 29.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 14,
+      "name": "Mèche couronne carbure 3-1/4″",
+      "action": "created",
+      "rental_item_id": "b5a98434-fc7a-4fa3-afe0-a7bd63a052de",
+      "listing_id": "24625658-7262-4138-bbb6-b5a70fe98383",
+      "hourly": 2.88,
+      "day": 23.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 15,
+      "name": "Mèche couronne carbure 3½″",
+      "action": "created",
+      "rental_item_id": "e41dfb06-e9e6-470d-ae14-3db1c3488987",
+      "listing_id": "96fcf04c-3f0f-4aeb-ab42-1589516808cd",
+      "hourly": 4.0,
+      "day": 32.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 16,
+      "name": "Mèche couronne carbure 4″",
+      "action": "created",
+      "rental_item_id": "4c41b08b-df6d-4be8-98a1-7d84f810fb5e",
+      "listing_id": "2a1668ca-1956-4c1e-b04b-41c7723bbec5",
+      "hourly": 4.25,
+      "day": 34.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 17,
+      "name": "Mèche couronne carbure 4½″",
+      "action": "created",
+      "rental_item_id": "b8149971-1be5-4599-9621-6d79cc199483",
+      "listing_id": "1b14fe93-3a3f-47ee-8aa6-fe40d1324f45",
+      "hourly": 4.5,
+      "day": 36.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 18,
+      "name": "Mèche couronne carbure 5″",
+      "action": "created",
+      "rental_item_id": "3cbd7ee8-a226-4445-b10d-2de51f7b481f",
+      "listing_id": "7454d414-3e14-4dcf-830a-6e714b98139c",
+      "hourly": 4.75,
+      "day": 38.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 19,
+      "name": "Mèche couronne carbure 5½″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 20,
+      "name": "Mèche couronne carbure 6″",
+      "action": "created",
+      "rental_item_id": "3bf6168a-3197-4f0a-9e19-df4944b99605",
+      "listing_id": "70fc3222-12ae-450c-83d7-efb1144b87ac",
+      "hourly": 5.63,
+      "day": 45.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 21,
+      "name": "Mèche couronne diamant 1″",
+      "action": "created",
+      "rental_item_id": "7973ee6d-1e8a-4760-ae57-40a766beb4bf",
+      "listing_id": "12e3cd60-2083-44c0-815f-b84b4245ebb4",
+      "hourly": 3.25,
+      "day": 26.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 22,
+      "name": "Mèche couronne diamant 10″",
+      "action": "created",
+      "rental_item_id": "71c3a7cf-d482-4d0d-8fef-61dbf469b9d4",
+      "listing_id": "d99e6f99-35a0-48fc-afde-113ffe8651f8",
+      "hourly": 15.63,
+      "day": 125.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 23,
+      "name": "Mèche couronne diamant 12″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 24,
+      "name": "Mèche couronne diamant 14″",
+      "action": "created",
+      "rental_item_id": "2921998a-3ca4-442c-a5f2-a28d87a02c8c",
+      "listing_id": "e78a9e3c-b5d4-40fc-b0cd-b53325c5bb58",
+      "hourly": 21.88,
+      "day": 175.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 25,
+      "name": "Mèche couronne diamant 1¼″",
+      "action": "created",
+      "rental_item_id": "92275660-5cc9-43de-b1b6-8117af7e5d08",
+      "listing_id": "dcbb497e-3344-4b74-9eb5-6631e6c290cc",
+      "hourly": 3.25,
+      "day": 26.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 26,
+      "name": "Mèche couronne diamant 2″",
+      "action": "created",
+      "rental_item_id": "821129bf-7d3a-4429-be75-f4943d167449",
+      "listing_id": "f4733607-48c1-4f5e-aac2-7ea851988b93",
+      "hourly": 4.5,
+      "day": 36.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 27,
+      "name": "Mèche couronne diamant 2½″",
+      "action": "created",
+      "rental_item_id": "f1d21c4e-af60-41ad-9f5d-9d91ca2e0892",
+      "listing_id": "c8d48d26-e0af-4eed-a0cb-1be7988bd8eb",
+      "hourly": 4.5,
+      "day": 36.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 28,
+      "name": "Mèche couronne diamant 3″",
+      "action": "created",
+      "rental_item_id": "9d6d3556-3746-4270-bd14-91e6a3bf2411",
+      "listing_id": "83ce3846-e5e7-4714-af4d-b9fe21b48650",
+      "hourly": 5.25,
+      "day": 42.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 29,
+      "name": "Mèche couronne diamant 3½″",
+      "action": "created",
+      "rental_item_id": "f7673d70-0e7f-4f9f-98a9-f00d83be7fd9",
+      "listing_id": "8288d3bc-a27d-4c08-958a-b2160aa476dd",
+      "hourly": 5.25,
+      "day": 42.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 30,
+      "name": "Mèche couronne diamant 4″",
+      "action": "created",
+      "rental_item_id": "122a9039-d573-48cf-b277-85aa7b4f5b3d",
+      "listing_id": "ae855868-f4f4-4876-9b0a-b0ed2312041b",
+      "hourly": 6.25,
+      "day": 50.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 31,
+      "name": "Mèche couronne diamant 4¼″",
+      "action": "created",
+      "rental_item_id": "aa857407-1576-4ec1-95db-2726bec765ee",
+      "listing_id": "3762292f-8667-4653-80bd-997bad618a7a",
+      "hourly": 6.75,
+      "day": 54.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 32,
+      "name": "Mèche couronne diamant 4½″",
+      "action": "created",
+      "rental_item_id": "396d0ab2-2501-4f75-84bc-4f4aac93d4ba",
+      "listing_id": "612c695c-f914-4de3-a395-062319201d8c",
+      "hourly": 7.13,
+      "day": 57.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 33,
+      "name": "Mèche couronne diamant 5″",
+      "action": "created",
+      "rental_item_id": "b5fc7001-e19f-4975-b7e4-a1e8cd8815ea",
+      "listing_id": "a3e19a3c-55c2-4044-98c0-41228abec5fa",
+      "hourly": 8.0,
+      "day": 64.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 34,
+      "name": "Mèche couronne diamant 5½″",
+      "action": "created",
+      "rental_item_id": "901f8fba-b0b1-4a39-9071-3dcf711e85f5",
+      "listing_id": "944051b4-0a33-404b-830f-b691c4cb7ad1",
+      "hourly": 8.63,
+      "day": 69.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 35,
+      "name": "Mèche couronne diamant 6″",
+      "action": "created",
+      "rental_item_id": "aa24feba-04dd-4a82-afa0-31c697a32806",
+      "listing_id": "05339d9e-4178-429f-9015-1bef33587a56",
+      "hourly": 9.5,
+      "day": 76.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 36,
+      "name": "Mèche couronne diamant 6½″",
+      "action": "created",
+      "rental_item_id": "2a9cbaed-5d61-42c7-b6b7-f20208034e97",
+      "listing_id": "1c108a19-e705-438e-990f-811a624a3b90",
+      "hourly": 10.25,
+      "day": 82.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 37,
+      "name": "Mèche couronne diamant 7″",
+      "action": "created",
+      "rental_item_id": "3876c725-5e23-468b-8521-088c07f43bed",
+      "listing_id": "7dbbdd57-b1af-481b-9283-d7d785407a3f",
+      "hourly": 11.0,
+      "day": 88.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 38,
+      "name": "Mèche couronne diamant 8″",
+      "action": "created",
+      "rental_item_id": "d96866b9-b3eb-4a3d-b4d1-daafddc74aac",
+      "listing_id": "cb8fce7f-8e75-4245-8a9b-610b852807c4",
+      "hourly": 12.5,
+      "day": 100.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 39,
+      "name": "Mèche couronne diamant 9″",
+      "action": "created",
+      "rental_item_id": "a5f83315-56cf-4bd3-82b2-1e717dc8dcd1",
+      "listing_id": "64d29156-5d97-4dfd-b121-dcd79816fcc5",
+      "hourly": 14.0,
+      "day": 112.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 40,
+      "name": "Mèche couronne diamant ½″",
+      "action": "created",
+      "rental_item_id": "ceee4248-6b47-45e6-ac37-f67c1506ce7f",
+      "listing_id": "97496df8-76e3-471e-9484-5fc8d3cfba37",
+      "hourly": 3.25,
+      "day": 26.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 41,
+      "name": "Mèche couronne diamant ¾″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 42,
+      "name": "Mèche diamant céramique 1″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 43,
+      "name": "Mèche diamant céramique 1-3/8″",
+      "action": "created",
+      "rental_item_id": "0a5806cc-4238-4bc1-bac2-d6e57b95569b",
+      "listing_id": "52bf4eb7-8fcb-4eda-8135-9dd099310758",
+      "hourly": 2.38,
+      "day": 19.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 44,
+      "name": "Mèche diamant céramique 1¾″",
+      "action": "created",
+      "rental_item_id": "693f7a80-deaf-496c-be55-7e6e04e3b5aa",
+      "listing_id": "5b1c0ca9-6b57-421a-afb8-7d245d9d6a41",
+      "hourly": 2.75,
+      "day": 22.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 45,
+      "name": "Mèche diamant céramique 2″",
+      "action": "created",
+      "rental_item_id": "175489b8-0581-4e3f-b091-70a86f0e1501",
+      "listing_id": "be6a4703-c670-447a-a23c-d3792c63a342",
+      "hourly": 2.88,
+      "day": 23.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 46,
+      "name": "Mèche diamant céramique 2-11/16″",
+      "action": "created",
+      "rental_item_id": "225d893e-a36f-44b2-9953-e28e08b82046",
+      "listing_id": "da8512c2-d309-4573-82b3-7fe8fd0640b1",
+      "hourly": 2.5,
+      "day": 20.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 47,
+      "name": "Mèche diamant céramique 2½″",
+      "action": "created",
+      "rental_item_id": "4a40a9c3-f35d-44c8-affe-d8f9c953cc1b",
+      "listing_id": "578617f4-6975-428b-aa5e-03c44ec5f991",
+      "hourly": 2.5,
+      "day": 20.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 48,
+      "name": "Mèche diamant céramique ¾″",
+      "action": "created",
+      "rental_item_id": "38f90ae8-9846-4142-9cbb-065580fc1857",
+      "listing_id": "a29db849-413a-4571-bfdb-06d2999770d8",
+      "hourly": 1.63,
+      "day": 13.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 49,
+      "name": "Perceuse à percussion batterie",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 50,
+      "name": "Perceuse percussion SDS 120v",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 51,
+      "name": "Perceuse percussion ½″ 120v",
+      "action": "created",
+      "rental_item_id": "f3c942f8-b4d0-44a4-a1b0-1aaa4ec0f49d",
+      "listing_id": "1dd18da6-44be-48d2-9e4c-9a899034f7c7",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 52,
+      "name": "Pompe à vide pour foreuse",
+      "action": "created",
+      "rental_item_id": "c6b304c6-d884-40fc-b31f-709a73359279",
+      "listing_id": "7d192cda-dfed-4a9a-be5b-5dadc91a14ba",
+      "hourly": 3.38,
+      "day": 27.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 53,
+      "name": "Rallonge mèche carbure 12-24″",
+      "action": "created",
+      "rental_item_id": "26b731ba-d678-4eaf-b980-951b70b832c2",
+      "listing_id": "8b7245d9-40ef-4e3b-b360-5aa8b2ec66eb",
+      "hourly": 2.88,
+      "day": 23.0,
+      "images": 1
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 54,
+      "name": "Rallonge mèche diamant 1¼ x 12″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "percage_beton.csv",
+      "source_row": 55,
+      "name": "Réservoir d'eau sous pression",
+      "action": "created",
+      "rental_item_id": "a0cb32e8-26b6-48b4-ac7a-0997f97c9dba",
+      "listing_id": "9e69303c-2d76-4716-af07-ba1a4ce4b842",
+      "hourly": 2.0,
+      "day": 16.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 2,
+      "name": "Chariot pour scie à béton",
+      "action": "created",
+      "rental_item_id": "e83043fe-e8ba-4127-bab6-fe7aa66262ca",
+      "listing_id": "9003636b-2397-40c9-ae02-d63d629d1d0a",
+      "hourly": 4.25,
+      "day": 34.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 3,
+      "name": "Chariot pour scie béton 14-16″",
+      "action": "created",
+      "rental_item_id": "02d270bf-6a71-4cdd-a9da-89a91d002135",
+      "listing_id": "b5b801b1-84ec-41ce-bc94-3cf807d7b51d",
+      "hourly": 4.25,
+      "day": 34.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 4,
+      "name": "Couteau à pavé uni manuel",
+      "action": "created",
+      "rental_item_id": "fcba6339-aba8-4f4f-b020-aad75bc54110",
+      "listing_id": "53c72b3e-120e-47cd-9607-b7c7864d9793",
+      "hourly": 4.63,
+      "day": 37.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 5,
+      "name": "Lame démolition 12″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 6,
+      "name": "Lame démolition 14″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 7,
+      "name": "Lame diamant béton/asph. 14″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 8,
+      "name": "Lame diamant asphalte 14″",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 9,
+      "name": "Lame diamant béton 12″",
+      "action": "created",
+      "rental_item_id": "728fc319-b114-4c80-a12c-a60bc136ba76",
+      "listing_id": "c20aadc3-e2f8-448c-8005-c45707339ac1",
+      "hourly": 4.0,
+      "day": 32.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 10,
+      "name": "Lame diamant béton 14″",
+      "action": "created",
+      "rental_item_id": "7bd65d9e-22d0-4af2-a1b2-ac429c2f104d",
+      "listing_id": "ee0ce8bc-d923-4f06-8c38-8fd49b569cd3",
+      "hourly": 4.75,
+      "day": 38.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 11,
+      "name": "Lame diamant béton 16″",
+      "action": "created",
+      "rental_item_id": "62cf63b8-89c6-4f59-a36f-5babd54a186c",
+      "listing_id": "51136a35-907c-485f-a023-a9f5f5f92b16",
+      "hourly": 6.25,
+      "day": 50.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 12,
+      "name": "Lame diamant céramique 7″-8″",
+      "action": "created",
+      "rental_item_id": "a5d489cd-1f20-47e8-bfad-b0d14b2ccd49",
+      "listing_id": "7d97fa35-584c-4804-b355-8937e91d8642",
+      "hourly": 2.88,
+      "day": 23.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 13,
+      "name": "Mèche béton 1″-2″ x 18″+",
+      "action": "created",
+      "rental_item_id": "d57b14d1-5e2c-4773-aaed-98500428f659",
+      "listing_id": "5bb3b290-200d-4fd5-86af-f95fcefa03ae",
+      "hourly": 3.13,
+      "day": 25.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 14,
+      "name": "Mèche béton ½″-1″",
+      "action": "created",
+      "rental_item_id": "c52b546f-bcf6-4b6b-9147-e16dd364223c",
+      "listing_id": "bcea5cef-4a0a-4a29-bd73-a81dd70f6c4f",
+      "hourly": 1.88,
+      "day": 15.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 15,
+      "name": "Mèche béton ½″-1″ x 36″+",
+      "action": "created",
+      "rental_item_id": "4283ec08-1313-49ed-adb1-25f94ec16e28",
+      "listing_id": "b6cabe12-30e0-4aa3-9bcc-aaf94a66e493",
+      "hourly": 2.5,
+      "day": 20.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 16,
+      "name": "Mèche béton ½″-1″ x 18″-36″",
+      "action": "created",
+      "rental_item_id": "349c6727-1b84-4a8a-af9a-7534f4dca634",
+      "listing_id": "952229ff-a57c-491f-8253-d3ac5f419674",
+      "hourly": 2.5,
+      "day": 20.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 17,
+      "name": "Mèche béton 1″-2″ x 4″ à 18″",
+      "action": "created",
+      "rental_item_id": "a4cbd9b4-4e0d-44fe-91db-3f291de22fd1",
+      "listing_id": "b769c65a-5998-4550-b077-f7dfcce1c0ef",
+      "hourly": 1.88,
+      "day": 15.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 18,
+      "name": "Mèche béton 1/8″-½″",
+      "action": "created",
+      "rental_item_id": "a8affaef-479b-4367-a13e-4ea329b5a8cf",
+      "listing_id": "3f2e8960-2759-4689-8418-6d64439654a3",
+      "hourly": 1.0,
+      "day": 8.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 19,
+      "name": "Scie à béton 12″ 120v",
+      "action": "created",
+      "rental_item_id": "15f50901-cad6-48d0-896c-ffe8a7d4490e",
+      "listing_id": "c367b790-28fc-4eb0-a4a9-6a930dae7364",
+      "hourly": 6.63,
+      "day": 53.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 20,
+      "name": "Scie à béton 12″ batterie",
+      "action": "created",
+      "rental_item_id": "cb653c24-b7ff-4320-98d5-d6a4221e4f27",
+      "listing_id": "dd74d556-8ded-4669-8094-b1fb6fcfc3d6",
+      "hourly": 13.0,
+      "day": 104.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 21,
+      "name": "Scie à béton 12″ carb.",
+      "action": "created",
+      "rental_item_id": "a0d5c10e-d68a-47e2-bfd4-35e20fdea0de",
+      "listing_id": "28140974-7edd-4879-b4b3-3f190de4a990",
+      "hourly": 6.63,
+      "day": 53.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 22,
+      "name": "Scie à béton 14″ 120v",
+      "action": "created",
+      "rental_item_id": "f6932748-09b0-4cb0-96f0-33bb3a79afa9",
+      "listing_id": "0e296067-cb9e-4dde-b5fc-4c74c442a7ad",
+      "hourly": 9.0,
+      "day": 72.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 23,
+      "name": "Scie à béton 14″ batterie",
+      "action": "created",
+      "rental_item_id": "65502087-b663-4ebd-85ae-1760f9436e0a",
+      "listing_id": "6c272e2e-dc7c-46db-a995-37a5836cfa35",
+      "hourly": 17.38,
+      "day": 139.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 24,
+      "name": "Scie à béton 14″ carb.",
+      "action": "created",
+      "rental_item_id": "613358da-f957-42b1-a057-cfa8ae19ae3b",
+      "listing_id": "b956e756-baa4-465a-8cb6-76c1952c6981",
+      "hourly": 9.0,
+      "day": 72.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 25,
+      "name": "Scie à béton 14″ pneumatique",
+      "action": "created",
+      "rental_item_id": "a6a39d39-4d8f-4f1c-a4e3-7e0e011a32b8",
+      "listing_id": "06d608f0-7ea2-4920-842e-b7605695e831",
+      "hourly": 9.0,
+      "day": 72.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 26,
+      "name": "Scie à béton 16″ carb.",
+      "action": "created",
+      "rental_item_id": "8d3ed6d4-71e5-4f5b-bfdf-af0b711aa948",
+      "listing_id": "4bcd261e-7e7e-4da2-92d6-39bb59a0d96a",
+      "hourly": 9.0,
+      "day": 72.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 27,
+      "name": "Scie à béton cut & break carb.",
+      "action": "created",
+      "rental_item_id": "9cd49447-c0fb-4abf-9ce3-24671d7b0026",
+      "listing_id": "5e5243d0-aa63-40f8-a014-f842b4bf5f6f",
+      "hourly": 16.13,
+      "day": 129.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 28,
+      "name": "Scie à maçonnerie 10″ 120v",
+      "action": "created",
+      "rental_item_id": "ab6ab473-30a6-4c02-96ed-8eeecfd3d763",
+      "listing_id": "d80927c2-ada3-4a8a-95de-ad3fe91137a1",
+      "hourly": 8.5,
+      "day": 68.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 29,
+      "name": "Scie à maçonnerie 14″ 120v",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 30,
+      "name": "Scie à plancher 14″ carb.",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 31,
+      "name": "Scie à plancher 16″ carb.",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 32,
+      "name": "Scie à plancher 18″ carb.",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 33,
+      "name": "Scie à plancher 20″ propane",
+      "action": "created",
+      "rental_item_id": "0cb63dfb-4500-42af-aec3-6bc9946b8bf7",
+      "listing_id": "29537088-458e-4251-b6be-7a660cf67c59",
+      "hourly": 18.13,
+      "day": 145.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 34,
+      "name": "Scie béton avec eau 14″ 120v",
+      "action": "created",
+      "rental_item_id": "6f026e0a-ab9e-463b-b70f-ea352b9b6a49",
+      "listing_id": "bf4de1d3-f17c-4c56-a742-0e3d56060724",
+      "hourly": 9.0,
+      "day": 72.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 35,
+      "name": "Support pour scie maçonnerie",
+      "action": "created",
+      "rental_item_id": "9e242ada-7968-44c5-863b-7f960e483f3c",
+      "listing_id": "bef2fad7-4558-49b1-9c15-4bc84e49f147",
+      "hourly": 1.88,
+      "day": 15.0,
+      "images": 1
+    },
+    {
+      "source_file": "sciage_beton.csv",
+      "source_row": 36,
+      "name": "Trousse d'eau scie maçonnerie",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_autres.csv",
+      "source_row": 2,
+      "name": "Boyau gaz nat/prop ½ » x 50′",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_autres.csv",
+      "source_row": 3,
+      "name": "Détecteur d'humidité",
+      "action": "created",
+      "rental_item_id": "4141d4bd-d356-4913-a548-5b48ed71ece1",
+      "listing_id": "543f79cb-023a-44a1-a22e-09a0a82d48f7",
+      "hourly": 4.25,
+      "day": 34.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 2,
+      "name": "Boyau chaufferette 1/2″ x 50′",
+      "action": "created",
+      "rental_item_id": "a32ee35b-6c46-4dec-8417-c6ca492a02ed",
+      "listing_id": "39134a61-328d-4de4-b18f-e8f38f50aa5f",
+      "hourly": 2.0,
+      "day": 16.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 3,
+      "name": "Boyau chaufferette 3/4″ x 50′",
+      "action": "created",
+      "rental_item_id": "86ef19f8-4b06-45cb-896e-7039ac0fe22d",
+      "listing_id": "8e8e1b97-7bba-4f99-9d43-e9134c4287d8",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 4,
+      "name": "Boyau gaz nat/prop 1¼ » x 15′",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 5,
+      "name": "Boyau gaz nat/prop 1¼ » x 50′",
+      "action": "created",
+      "rental_item_id": "4ed4321a-e130-4b53-9d76-1056ee91a51d",
+      "listing_id": "c5987af4-91b7-434b-98c5-68b02bc7783d",
+      "hourly": 5.13,
+      "day": 41.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 6,
+      "name": "Boyau gaz nat/prop ¾ » x 10′",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 7,
+      "name": "Boyau gaz nat/prop ¾ » x 15′",
+      "action": "created",
+      "rental_item_id": "c88d9e2e-686a-4872-b20a-1f8539207f07",
+      "listing_id": "deb53ac9-e523-4b53-97b9-64854e4d96ac",
+      "hourly": 1.63,
+      "day": 13.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 8,
+      "name": "Boyau gaz nat/prop ¾ » x 50′",
+      "action": "created",
+      "rental_item_id": "6cdccaa5-0283-4f58-83c3-65297c960f24",
+      "listing_id": "d187d249-6f4c-4202-b486-090de8324863",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 9,
+      "name": "Chaufferette 1000 w – 120v",
+      "action": "created",
+      "rental_item_id": "279c6d2f-a9df-49a7-b591-65a4b093dd40",
+      "listing_id": "063ca4d3-1f4b-4c2d-b485-988a74aab450",
+      "hourly": 1.38,
+      "day": 11.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 10,
+      "name": "Chaufferette 10000 w – 240v",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 11,
+      "name": "Chaufferette 115-135k btu kérosène",
+      "action": "created",
+      "rental_item_id": "91b039c4-db98-4bf7-ac1f-314aa5ccc175",
+      "listing_id": "0d6359bf-45cc-43e0-93e0-9781a756e54b",
+      "hourly": 5.0,
+      "day": 40.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 12,
+      "name": "Chaufferette 140-190k btu kérosène",
+      "action": "created",
+      "rental_item_id": "841e5bcd-f71a-4bd9-8e80-9511ab79d8bd",
+      "listing_id": "6abee005-8f35-4a86-83eb-9857180132b3",
+      "hourly": 6.0,
+      "day": 48.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 13,
+      "name": "Chaufferette 1500 w – 120v",
+      "action": "created",
+      "rental_item_id": "7d06e267-a90d-4965-999a-ce1ea4be9aef",
+      "listing_id": "bcdfb3f0-4495-4d8e-93fd-8af12c6d178d",
+      "hourly": 2.0,
+      "day": 16.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 14,
+      "name": "Chaufferette 16-32-40 kw-600v",
+      "action": "created",
+      "rental_item_id": "3429992c-f43f-4b8d-a75c-7d40d4f41834",
+      "listing_id": "47d80975-2ad6-49ee-8d49-4fb1a2c4226e",
+      "hourly": 7.88,
+      "day": 63.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 15,
+      "name": "Chaufferette 170-175k btu feu direct",
+      "action": "created",
+      "rental_item_id": "bfb76326-5016-400f-a5a9-9bf22b901d14",
+      "listing_id": "b6a2150e-a0c1-403a-928d-2c2da5f8bc3f",
+      "hourly": 11.13,
+      "day": 89.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 16,
+      "name": "Chaufferette 200-220k btu – huile",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 17,
+      "name": "Chaufferette 20000w -600v",
+      "action": "blocked_ambiguous",
+      "reason": "unavailable_no_price_no_desc"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 18,
+      "name": "Chaufferette 210k btu kérosène",
+      "action": "created",
+      "rental_item_id": "8f88fbcf-af26-44f2-b986-284efbee8045",
+      "listing_id": "e8c2e34d-1a8f-468b-8a00-c1b3196bc4e9",
+      "hourly": 7.88,
+      "day": 63.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 19,
+      "name": "Chaufferette 30000w -600v",
+      "action": "created",
+      "rental_item_id": "d2152aa3-69c3-48a1-984c-55388897f517",
+      "listing_id": "b74bc9fe-289d-471b-8839-39a7cccb4ca5",
+      "hourly": 7.25,
+      "day": 58.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 20,
+      "name": "Chaufferette 330-350k btu feu direct",
+      "action": "blocked_ambiguous",
+      "reason": "unavailable_no_price_no_desc"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 21,
+      "name": "Chaufferette 350k btu – ventilateur",
+      "action": "created",
+      "rental_item_id": "09bd4dec-a227-4687-afa6-d97cec54b6c6",
+      "listing_id": "061a900d-f6e8-4d96-910a-b91b80efb46a",
+      "hourly": 14.5,
+      "day": 116.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 22,
+      "name": "Chaufferette 5000 w – 600v",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 23,
+      "name": "Chaufferette 6000 w – 240v",
+      "action": "created",
+      "rental_item_id": "a3617982-2edc-46a2-9c95-fcf37694697c",
+      "listing_id": "27c42730-8f66-4c20-b05a-1e94d0a422f2",
+      "hourly": 3.13,
+      "day": 25.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 24,
+      "name": "Chaufferette 70-80k btu kérosène",
+      "action": "created",
+      "rental_item_id": "df0eaaf2-d4f4-41d1-ae77-913270b03d8b",
+      "listing_id": "8feb8bcc-f535-48ee-b6e1-8ad8d88f400a",
+      "hourly": 4.0,
+      "day": 32.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 25,
+      "name": "Chaufferette 9000 w – 240v",
+      "action": "created",
+      "rental_item_id": "848e0f30-be00-44eb-8763-cab82d51ab0b",
+      "listing_id": "7afcf895-907d-4584-bee4-3862840754fc",
+      "hourly": 3.25,
+      "day": 26.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 26,
+      "name": "Chaufferette camping 10 à 20k btu",
+      "action": "created",
+      "rental_item_id": "acad3633-f0f6-4edd-8d96-e60a2aea2a8b",
+      "listing_id": "7509ae27-ddf9-462b-8619-9c3da4ecdd54",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 27,
+      "name": "Chaufferette convection 200k btu propane",
+      "action": "created",
+      "rental_item_id": "2e14c482-4391-46ba-bdb7-e2340da5d254",
+      "listing_id": "78a49525-f4fd-48af-984f-3e698277ea36",
+      "hourly": 4.88,
+      "day": 39.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 28,
+      "name": "Chaufferette f.ouvert 1.5m btu",
+      "action": "created",
+      "rental_item_id": "07cf4e10-a47c-4c5d-994e-4006d99744d2",
+      "listing_id": "02d4d902-4285-4199-83e6-05b9b80bf6c0",
+      "hourly": 11.63,
+      "day": 93.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 29,
+      "name": "Chaufferette f.ouvert 150k btu",
+      "action": "created",
+      "rental_item_id": "1707df60-10b1-4a0a-92f4-19af23f4fd29",
+      "listing_id": "ed3b80b6-b265-427e-8965-3ae0b125fff5",
+      "hourly": 4.63,
+      "day": 37.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 30,
+      "name": "Chaufferette f.ouvert 1m btu",
+      "action": "created",
+      "rental_item_id": "f29fc2f9-d9cd-4aac-ab51-03861e21056c",
+      "listing_id": "8a1b9f48-596f-4440-aa8b-1df79c23282d",
+      "hourly": 11.38,
+      "day": 91.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 31,
+      "name": "Chaufferette f.ouvert 300k btu",
+      "action": "created",
+      "rental_item_id": "f44e5cc0-8b93-4f45-bfc5-8bd79f80800c",
+      "listing_id": "0be1efab-81f5-4079-9322-39e384d17809",
+      "hourly": 5.75,
+      "day": 46.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 32,
+      "name": "Chaufferette f.ouvert 35k btu",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 33,
+      "name": "Chaufferette f.ouvert 375k btu",
+      "action": "created",
+      "rental_item_id": "f5911384-7076-4972-8475-5815ac254822",
+      "listing_id": "11d3ae34-420e-41fe-a1a0-8b054075479e",
+      "hourly": 7.88,
+      "day": 63.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 34,
+      "name": "Chaufferette f.ouvert 400k btu",
+      "action": "created",
+      "rental_item_id": "3d58eb06-406d-4507-8a8f-06f4cfdb22c1",
+      "listing_id": "1a85a7b0-0a0c-4cdf-8e10-0b552d3033da",
+      "hourly": 8.5,
+      "day": 68.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 35,
+      "name": "Chaufferette ind 350-400k btu huile",
+      "action": "created",
+      "rental_item_id": "b2a3a4bb-af1c-4668-ace8-18dcb0d894e4",
+      "listing_id": "c9e1a9af-6ba6-4060-88e1-698be57368c0",
+      "hourly": 22.38,
+      "day": 179.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 36,
+      "name": "Chaufferette ind 390-400k btu propane/na",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 37,
+      "name": "Chaufferette ind 80k btu-huile",
+      "action": "created",
+      "rental_item_id": "d474fa42-e1c5-416f-b52e-d722b7d62301",
+      "listing_id": "aa817b75-c6ea-4ff0-ab0a-271271f0a20d",
+      "hourly": 4.75,
+      "day": 38.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 38,
+      "name": "Chaufferette ind 85k btu",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 39,
+      "name": "Chaufferette ir 10 à 20k btu",
+      "action": "created",
+      "rental_item_id": "db49805e-f292-4d81-bbee-0c6a84b68c45",
+      "listing_id": "ca7d9e15-e925-4210-8d1f-03272a416908",
+      "hourly": 4.0,
+      "day": 32.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 40,
+      "name": "Chaufferette ir 111k btu",
+      "action": "created",
+      "rental_item_id": "1ba65258-ede6-4e0b-a038-9a6c25db99cd",
+      "listing_id": "8e442442-d621-4281-89ae-b98f55c6e49a",
+      "hourly": 4.38,
+      "day": 35.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 41,
+      "name": "Chaufferette ir 12 à 15k btu",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 42,
+      "name": "Chaufferette ir 30k-35k btu",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 43,
+      "name": "Chaufferette ir 60k btu",
+      "action": "created",
+      "rental_item_id": "7823c8bf-b6fa-4c30-bd30-01bc0d8cf679",
+      "listing_id": "cbbb42b2-be04-4784-ac39-4420d956cd6d",
+      "hourly": 2.75,
+      "day": 22.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 44,
+      "name": "Chaufferette radiant 100k btu",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 45,
+      "name": "Chaufferette radiant 115k btu – propane",
+      "action": "created",
+      "rental_item_id": "39590a00-d10f-4ceb-abe6-9972824e1d46",
+      "listing_id": "7ea2222f-fd47-49a6-a16c-40a2f99a0e1e",
+      "hourly": 5.75,
+      "day": 46.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 46,
+      "name": "Cheminée de chaufferette",
+      "action": "created",
+      "rental_item_id": "57496a8e-5188-43d2-982d-50facac76a0b",
+      "listing_id": "4a261cd4-a44d-4220-a755-f8f197322f83",
+      "hourly": 0.75,
+      "day": 6.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 47,
+      "name": "Conduit chauffage 12″ x 12′",
+      "action": "created",
+      "rental_item_id": "8d4ecf5c-7f0e-443b-8a0b-34ec4f361576",
+      "listing_id": "04601491-e9e7-4423-867d-015214145cfd",
+      "hourly": 2.38,
+      "day": 19.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 48,
+      "name": "Conduit chauffage 24″x25′",
+      "action": "created",
+      "rental_item_id": "5d5c5b23-164f-4e18-9012-a46eec068a3f",
+      "listing_id": "7db9944a-d966-42ea-9b4e-3f0b0c92ead1",
+      "hourly": 5.25,
+      "day": 42.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 49,
+      "name": "Conduit de canevas 12″ x 25′",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 50,
+      "name": "Conduit de canevas 18″ x 12′",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 51,
+      "name": "Conduit ventilation 12″x12′ -(pvc-jaune)",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 52,
+      "name": "Conduit ventilation 12″x25′ -(pvc-jaune)",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 53,
+      "name": "Conduit ventilation 8″ x 15′ -(pvc-plas)",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 54,
+      "name": "Lance-flammes – propane",
+      "action": "blocked_ambiguous",
+      "reason": "empty_tarif_journalier"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 55,
+      "name": "Queue cochon pour réservoir",
+      "action": "created",
+      "rental_item_id": "8b1b6919-d223-441d-a34d-c0cc4d4a52e2",
+      "listing_id": "0b987f46-1729-4f88-bad4-a52d648430d9",
+      "hourly": 1.0,
+      "day": 8.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 56,
+      "name": "Régulateur gaz naturel ou propane",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 57,
+      "name": "Régulateur maxitrol ¾ » 5 lb sans event",
+      "action": "created",
+      "rental_item_id": "8fb2a855-ba20-4049-8eac-7d67fb031dc3",
+      "listing_id": "dc365a50-eabc-4e1d-af5d-45c21e529a33",
+      "hourly": 10.38,
+      "day": 83.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_chaufferette.csv",
+      "source_row": 58,
+      "name": "Thermostat pour chaufferette",
+      "action": "created",
+      "rental_item_id": "ada91d87-6d6f-4b6e-8a34-fe83e656a561",
+      "listing_id": "3f4384c6-066d-4e8f-8f4b-896a3ce3327a",
+      "hourly": 1.63,
+      "day": 13.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_climatiseur.csv",
+      "source_row": 2,
+      "name": "Refroidisseur d'air portable 120v",
+      "action": "created",
+      "rental_item_id": "aa69a491-1a9a-49fa-9ce3-fd60140feccb",
+      "listing_id": "4082907d-91e3-4219-ab37-d803100bd31b",
+      "hourly": 3.75,
+      "day": 30.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_deshumidificateur.csv",
+      "source_row": 2,
+      "name": "Déshumidificateur domestique",
+      "action": "blocked_ambiguous",
+      "reason": "unavailable_no_price_no_desc"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_deshumidificateur.csv",
+      "source_row": 3,
+      "name": "Déshumidificateur ind. 38-45l",
+      "action": "blocked_ambiguous",
+      "reason": "unavailable_no_price_no_desc"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_deshumidificateur.csv",
+      "source_row": 4,
+      "name": "Déshumidificateur lgr 63-67l",
+      "action": "blocked_ambiguous",
+      "reason": "unavailable_no_price_no_desc"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_deshumidificateur.csv",
+      "source_row": 5,
+      "name": "Déshumidificateur lgr 66l portatif",
+      "action": "blocked_ambiguous",
+      "reason": "unavailable_no_price_no_desc"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_deshumidificateur.csv",
+      "source_row": 6,
+      "name": "Déshumidificateur lgr 94-96l",
+      "action": "blocked_ambiguous",
+      "reason": "unavailable_no_price_no_desc"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_reservoir.csv",
+      "source_row": 2,
+      "name": "Cage réservoir propane 6x33lb",
+      "action": "created",
+      "rental_item_id": "fda33894-d897-4428-8b36-513872763069",
+      "listing_id": "838993ce-97c6-49c9-ae5f-e135ae1d691f",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_reservoir.csv",
+      "source_row": 3,
+      "name": "Réservoir de propane 100 lb",
+      "action": "created",
+      "rental_item_id": "50976eb0-60e8-4f1c-8984-b52103389251",
+      "listing_id": "22aeaeb3-d3c6-4691-8bf4-26893186d7ab",
+      "hourly": 0.5,
+      "day": 4.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_reservoir.csv",
+      "source_row": 4,
+      "name": "Réservoir de propane 20 lb",
+      "action": "created",
+      "rental_item_id": "634e80f1-710d-4441-a157-1eec256ca0c2",
+      "listing_id": "497383a8-ccde-4899-8921-7e488a1c1a67",
+      "hourly": 0.5,
+      "day": 4.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_reservoir.csv",
+      "source_row": 5,
+      "name": "Réservoir de propane 30 lb",
+      "action": "blocked_ambiguous",
+      "reason": "sur_demande_or_empty"
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_reservoir.csv",
+      "source_row": 6,
+      "name": "Réservoir de propane 33 lb",
+      "action": "created",
+      "rental_item_id": "569e3c74-ec99-4c78-b2a7-aa52fa16ec4d",
+      "listing_id": "dfa1c7bc-6f18-434a-b4a0-e12cae94fa83",
+      "hourly": 0.5,
+      "day": 4.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 2,
+      "name": "Ventilateur à plancher",
+      "action": "created",
+      "rental_item_id": "09a6aa8d-0385-4b1c-b377-4887cd34efb6",
+      "listing_id": "0bf2a9a4-9284-45dc-91b3-e4dcd3e23c2a",
+      "hourly": 3.63,
+      "day": 29.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 3,
+      "name": "Ventilateur hepa 24″x24″",
+      "action": "created",
+      "rental_item_id": "8310b6b0-dfa7-45dd-bbf6-abd8e9397e7c",
+      "listing_id": "e1625205-52b7-4b2a-aef9-c01ab1c1b498",
+      "hourly": 6.63,
+      "day": 53.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 4,
+      "name": "Ventilateur hepa portatif",
+      "action": "created",
+      "rental_item_id": "cd0a3b1d-a3ae-4cbc-8d3e-e6af7cba777c",
+      "listing_id": "84ebbf37-29ff-4d75-86f9-28102672ef79",
+      "hourly": 5.5,
+      "day": 44.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 5,
+      "name": "Ventilateur ind type baril 36″",
+      "action": "created",
+      "rental_item_id": "9cf8baa7-35cd-4f74-9466-a8fdc6b844da",
+      "listing_id": "fcca6d49-838d-4ec4-a6a2-29ce5141e484",
+      "hourly": 5.13,
+      "day": 41.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 6,
+      "name": "Ventilateur ind type baril 42″",
+      "action": "created",
+      "rental_item_id": "a6a13f6b-513f-408d-aaf2-11ca7481a3fd",
+      "listing_id": "4dbcabf0-77f8-4232-b064-5605fcc832cd",
+      "hourly": 5.75,
+      "day": 46.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 7,
+      "name": "Ventilateur portatif 24″",
+      "action": "created",
+      "rental_item_id": "51ad3122-b57d-4c59-b0fc-36fbd0086548",
+      "listing_id": "46675ff6-a6b6-46be-ae05-a21fd63a696b",
+      "hourly": 2.0,
+      "day": 16.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 8,
+      "name": "Ventilateur pour conduit 12″",
+      "action": "created",
+      "rental_item_id": "c854dd76-8ec8-4b94-8527-9be569146829",
+      "listing_id": "576d5954-4a6a-4fa6-a0f7-c6c5ec87017d",
+      "hourly": 4.88,
+      "day": 39.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 9,
+      "name": "Ventilateur pour conduit 8″",
+      "action": "created",
+      "rental_item_id": "71b7aa4a-9bc5-429b-bdf8-e3d2d44bd9f7",
+      "listing_id": "e7f93bc0-2276-4731-aa68-39168c9b1579",
+      "hourly": 4.88,
+      "day": 39.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 10,
+      "name": "Ventilateur sur pied 30″",
+      "action": "created",
+      "rental_item_id": "d670ae42-61c1-4876-9a75-926125bee1fe",
+      "listing_id": "898094d0-002e-44ef-9fb6-7528cc91cc6d",
+      "hourly": 2.63,
+      "day": 21.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 11,
+      "name": "Ventilateur type baril 20″",
+      "action": "created",
+      "rental_item_id": "dd539f71-eab8-4f0b-8f95-e30b3a5ee8cd",
+      "listing_id": "400fe151-7f51-4b65-b809-61935573778b",
+      "hourly": 4.0,
+      "day": 32.0,
+      "images": 1
+    },
+    {
+      "source_file": "solutionsmultiequipements_chauffage_ventilateur.csv",
+      "source_row": 12,
+      "name": "Ventilateur type baril 42″",
+      "action": "created",
+      "rental_item_id": "a3634e0d-4b06-4912-82b6-84de12a52adb",
+      "listing_id": "7eedba3c-bf7e-4c57-ae81-ad9ba8a00dba",
+      "hourly": 5.75,
+      "day": 46.0,
+      "images": 1
+    }
+  ]
+}

@@ -49,6 +49,17 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       resolveRailForBusiness: jest.fn().mockResolvedValue('stripe'),
     };
     const merchantLifecycleService = { recompute: jest.fn() };
+    const categoriesService = {
+      listCategoryTree: jest.fn().mockResolvedValue([
+        {
+          id: 7,
+          name: 'Other',
+          item_sub_categories: [
+            { id: 99, name: 'Other', item_category_id: 7 },
+          ],
+        },
+      ]),
+    };
 
     const service = new BusinessItemsService(
       hasuraUserService as any,
@@ -60,7 +71,8 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       paymentRoutingService as any,
       merchantLifecycleService as any,
       {} as any,
-      {} as any
+      {} as any,
+      categoriesService as any
     );
 
     return {
@@ -71,6 +83,7 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       aiService,
       itemsService,
       itemAiReviewService,
+      categoriesService,
     };
   };
 
@@ -94,11 +107,6 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
         if (query.includes('CheckItemSkus')) {
           return Promise.resolve({ items: [] });
         }
-        if (query.includes('FindCategoryAndSubcategory')) {
-          return Promise.resolve({
-            item_sub_categories: [{ id: 99, item_category_id: 7 }],
-          });
-        }
         return Promise.resolve({});
       });
       itemsService.createItem.mockResolvedValue({
@@ -117,9 +125,9 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
         name: 'Untitled product',
         sku: 'UNTITLED-PRO',
       });
-      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalledWith(
         expect.stringContaining('FindCategoryAndSubcategory'),
-        { categoryName: 'Other', subCategoryName: 'Other' }
+        expect.anything()
       );
       expect(itemsService.createItem).toHaveBeenCalledWith(
         businessId,
@@ -136,6 +144,49 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       expect(
         businessImagesService.linkLibraryImageToNewItem
       ).toHaveBeenCalledWith(businessId, imageId, itemId);
+    });
+
+    it('persists shopper-facing dimensions on insert', async () => {
+      const {
+        service,
+        businessImagesService,
+        hasuraSystemService,
+        itemsService,
+      } = createService();
+
+      businessImagesService.getImageForBusiness.mockResolvedValue({
+        id: imageId,
+        image_url: 'https://cdn.example/img.jpg',
+        caption: null,
+        alt_text: null,
+        item_id: null,
+      });
+      hasuraSystemService.executeQuery.mockImplementation((query: string) => {
+        if (query.includes('CheckItemSkus')) {
+          return Promise.resolve({ items: [] });
+        }
+        return Promise.resolve({});
+      });
+      itemsService.createItem.mockResolvedValue({
+        id: itemId,
+        name: 'Eau de parfum',
+        sku: 'EAU-DE-PARF',
+      });
+
+      await service.createItemFromImage(businessId, {
+        imageId,
+        name: 'Eau de parfum',
+        description: 'Ready for review',
+        dimensions: '  50ml  ',
+      });
+
+      expect(itemsService.createItem).toHaveBeenCalledWith(
+        businessId,
+        expect.objectContaining({
+          name: 'Eau de parfum',
+          dimensions: '50ml',
+        })
+      );
     });
 
     it('resumes an existing draft linked to the image without creating another item', async () => {
@@ -277,6 +328,63 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       });
       expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
       expect(itemAiReviewService.requestReview).not.toHaveBeenCalled();
+    });
+
+    it('allows publishing interest-only drafts without a shopper price', async () => {
+      const { service, hasuraSystemService, itemAiReviewService } =
+        createService();
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        items_by_pk: {
+          id: itemId,
+          business_id: businessId,
+          moderation_status: 'draft',
+          name: 'Quote part',
+          description: null,
+          status: 'active',
+          price: null,
+          interest_only: true,
+        },
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_items: {
+          affected_rows: 1,
+          returning: [{ id: itemId, moderation_status: 'pending' }],
+        },
+      });
+
+      await expect(
+        service.publishBusinessItem(businessId, itemId)
+      ).resolves.toEqual({
+        id: itemId,
+        moderation_status: 'pending',
+      });
+      expect(itemAiReviewService.requestReview).toHaveBeenCalledWith(itemId);
+    });
+
+    it('rejects publishing a regular draft without a valid price', async () => {
+      const { service, hasuraSystemService } = createService();
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        items_by_pk: {
+          id: itemId,
+          business_id: businessId,
+          moderation_status: 'draft',
+          name: 'Priced item',
+          description: null,
+          status: 'active',
+          price: null,
+          interest_only: false,
+        },
+      });
+
+      await expect(
+        service.publishBusinessItem(businessId, itemId)
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { error: 'PRICE_REQUIRED' },
+      });
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     });
 
     it('rejects quick-publish when price is missing', async () => {

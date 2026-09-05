@@ -34,6 +34,34 @@ export class CheckoutPreflightItemDto {
   item_variant_id?: string;
 }
 
+export class CheckoutRecipientDto {
+  @ApiPropertyOptional({ description: 'Name of the person receiving the order.' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Recipient phone. Accepts a local number when the delivery country is known; normalized to E.164.',
+  })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ description: 'Optional recipient email.' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Send recipient updates over WhatsApp instead of SMS.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  notify_whatsapp?: boolean;
+}
+
 export class CheckoutPreflightDto {
   @ApiProperty({ type: [CheckoutPreflightItemDto] })
   @IsArray()
@@ -130,6 +158,28 @@ export class CheckoutPreflightDto {
   @IsOptional()
   @IsBoolean()
   verified_agent_delivery?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'ISO 3166-1 alpha-2 billing country of the payer. Drives diaspora rail selection and FX presentment; independent of the delivery country.',
+  })
+  @IsOptional()
+  @IsISO31661Alpha2()
+  payer_country?: string;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Set when the shopper is buying for a different recipient.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  sending_to_someone_else?: boolean;
+
+  @ApiPropertyOptional({ type: CheckoutRecipientDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CheckoutRecipientDto)
+  recipient?: CheckoutRecipientDto;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +330,86 @@ export class CheckoutGroupDto {
 
   @ApiProperty({ type: [CheckoutItemLineDto] })
   items!: CheckoutItemLineDto[];
+
+  @ApiPropertyOptional({
+    description: 'True when this seller can fulfill as soon as possible right now.',
+  })
+  asap_available?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['merchant_closed', 'too_close_to_close', 'merchant_paused'],
+  })
+  asap_disabled_reason?: 'merchant_closed' | 'too_close_to_close' | 'merchant_paused';
+
+  @ApiPropertyOptional({ description: 'ISO timestamp when the store next opens.' })
+  opens_at?: string | null;
+
+  @ApiPropertyOptional()
+  estimated_prep_minutes?: number;
+
+  @ApiPropertyOptional()
+  estimated_ready_at?: string;
+
+  @ApiPropertyOptional()
+  estimated_fulfill_by?: string;
+
+  @ApiProperty({
+    description: 'True when the client must pick a future slot (store closed or closing soon).',
+  })
+  schedule_required?: boolean;
+}
+
+export class PayerChargeEstimateDto {
+  @ApiProperty({ description: 'Payer presentment currency, e.g. CAD.' })
+  currency!: string;
+
+  @ApiProperty({ description: 'Indicative amount in the payer currency.' })
+  amount!: number;
+
+  @ApiProperty({ description: '1 unit of the merchant currency in payer currency.' })
+  rate!: number;
+
+  @ApiProperty({
+    enum: ['indicative_config'],
+    description:
+      'Provenance of the rate. Indicative only — Stripe charges the merchant currency and the card issuer sets the final rate.',
+  })
+  source!: 'indicative_config';
+}
+
+export class CheckoutDiasporaDto {
+  @ApiProperty({
+    description:
+      'True when the payer is billing from a Stripe country while the merchant settles in a mobile-money country.',
+  })
+  is_diaspora!: boolean;
+
+  @ApiPropertyOptional({ description: 'Resolved payer billing country.' })
+  payer_country?: string | null;
+
+  @ApiPropertyOptional({ description: 'Country where the order is fulfilled.' })
+  fulfillment_country?: string | null;
+
+  @ApiProperty({
+    enum: ['seller', 'payer'],
+    description:
+      'Which side unlocked the rail. `payer` means diaspora routing put a mobile-money merchant on Stripe.',
+  })
+  rail_source!: 'seller' | 'payer';
+
+  @ApiPropertyOptional({
+    type: PayerChargeEstimateDto,
+    nullable: true,
+    description:
+      'Indicative payer-currency total for the checkout FX line. Null when no rate is configured.',
+  })
+  payer_charge_estimate?: PayerChargeEstimateDto | null;
+
+  @ApiProperty({
+    description:
+      'True when the shopper must supply recipient name and phone before paying.',
+  })
+  requires_recipient_contact!: boolean;
 }
 
 export class CheckoutDiscountPreviewDto {
@@ -396,4 +526,39 @@ export class CheckoutPreflightResponseDto {
     nullable: true,
   })
   delivery_availability?: DeliveryAvailabilityDto | null;
+
+  @ApiPropertyOptional({
+    description: 'True when every seller group can fulfill ASAP right now.',
+  })
+  asap_available?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['merchant_closed', 'too_close_to_close', 'merchant_paused'],
+  })
+  asap_disabled_reason?: 'merchant_closed' | 'too_close_to_close' | 'merchant_paused';
+
+  @ApiPropertyOptional()
+  opens_at?: string | null;
+
+  @ApiPropertyOptional()
+  estimated_prep_minutes?: number;
+
+  @ApiPropertyOptional()
+  estimated_ready_at?: string;
+
+  @ApiPropertyOptional()
+  estimated_fulfill_by?: string;
+
+  @ApiPropertyOptional({
+    description: 'True when checkout must collect a future slot.',
+  })
+  schedule_required?: boolean;
+
+  @ApiPropertyOptional({
+    type: CheckoutDiasporaDto,
+    nullable: true,
+    description:
+      'Payer-vs-recipient context for diaspora checkout. Null when the payer and the fulfillment market resolve to the same rail.',
+  })
+  diaspora?: CheckoutDiasporaDto | null;
 }

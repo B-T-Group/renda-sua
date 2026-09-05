@@ -22,17 +22,24 @@ function toRad(value: number): number {
 
 /**
  * Region values come from several sources (profile addresses, reverse
- * geocoding, business addresses) with inconsistent casing/whitespace, so
- * comparisons must be trim + case insensitive.
+ * geocoding, business addresses) with inconsistent casing/whitespace and
+ * accents (Google returns "Québec" while addresses store "Quebec"), so
+ * comparisons must be trim + case + diacritic insensitive.
  */
+function normalizeRegionValue(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 function sameRegionValue(
   a: string | null | undefined,
   b: string | null | undefined
 ): boolean {
-  return (
-    (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase() &&
-    (a ?? '').trim() !== ''
-  );
+  const normA = normalizeRegionValue(a);
+  return normA !== '' && normA === normalizeRegionValue(b);
 }
 
 /** Haversine distance in kilometers. */

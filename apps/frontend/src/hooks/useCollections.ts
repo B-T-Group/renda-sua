@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from './useApiClient';
-import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
-import { useSupportedCountries } from './useSupportedCountries';
 import { useAuth0 } from '@auth0/auth0-react';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 import { enrichCollectionsWithPreviewImages } from '../utils/collectionPreviewImages';
+import {
+  catalogGeoQueryParams,
+  useCatalogGeoParams,
+} from './useCatalogGeoParams';
 
 export interface CollectionSummary {
   id: string;
@@ -29,27 +31,22 @@ export interface UseCollectionsOptions {
 export function useCollections(options: UseCollectionsOptions = {}) {
   const { i18n } = useTranslation();
   const { isAuthenticated } = useAuth0();
-  const { supportedIsos } = useSupportedCountries();
+  const catalogGeo = useCatalogGeoParams();
   const apiClient = useApiClient();
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const enabled = options.enabled !== false;
 
   const fetchCollections = useCallback(async () => {
-    if (options.enabled === false) return;
+    if (!enabled) return;
+    if (!catalogGeo.ready) {
+      setLoading(true);
+      return;
+    }
     setLoading(true);
     setError(null);
-    let country_code: string | undefined;
-    if (!isAuthenticated) {
-      const detected =
-        typeof window !== 'undefined'
-          ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-          : null;
-      const code = detected?.toUpperCase();
-      if (code && supportedIsos.includes(code)) {
-        country_code = code;
-      }
-    }
+    const geoParams = catalogGeoQueryParams(catalogGeo);
     try {
       const response = await apiClient.get<{
         success: boolean;
@@ -59,7 +56,7 @@ export function useCollections(options: UseCollectionsOptions = {}) {
         params: {
           ...(options.featured && { featured: true }),
           ...(options.search?.trim() && { search: options.search.trim() }),
-          ...(country_code && { country_code }),
+          ...geoParams,
           lang: i18n.language?.startsWith('fr') ? 'fr' : 'en',
           ...(!isAuthenticated &&
             options.anonymousOrigin && {
@@ -77,7 +74,8 @@ export function useCollections(options: UseCollectionsOptions = {}) {
           {
             isAuthenticated,
             anonymousOrigin: options.anonymousOrigin,
-            supportedIsos,
+            country_code: geoParams.country_code,
+            state: geoParams.state,
           }
         );
         setCollections(withPreviews);
@@ -96,9 +94,11 @@ export function useCollections(options: UseCollectionsOptions = {}) {
     apiClient,
     i18n.language,
     isAuthenticated,
-    supportedIsos,
+    enabled,
+    catalogGeo.ready,
+    catalogGeo.country_code,
+    catalogGeo.state,
     options.anonymousOrigin,
-    options.enabled,
     options.featured,
     options.search,
   ]);

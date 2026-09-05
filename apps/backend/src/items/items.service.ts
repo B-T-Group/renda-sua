@@ -5,6 +5,10 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { UpdateItemDto } from '../business-items/dto/update-item.dto';
+import {
+  assertItemDecimalField,
+  rethrowNumericOverflow,
+} from './item-numeric-fields';
 
 /** Payload for `items` insert; `business_id` is set by the service. */
 export type ItemsInsertInput = Record<string, unknown>;
@@ -28,10 +32,12 @@ const MUTABLE_ITEM_FIELDS = [
   'requires_special_handling',
   'max_delivery_distance',
   'estimated_delivery_time',
+  'preparation_minutes',
   'min_order_quantity',
   'max_order_quantity',
   'is_active',
   'pay_on_delivery_enabled',
+  'interest_only',
   'pay_at_pickup_enabled',
   'shipping_enabled',
   'shipping_price',
@@ -50,6 +56,8 @@ const GET_ITEM_BY_ID = `
       moderation_status
       shipping_enabled
       shipping_price
+      price
+      interest_only
     }
   }
 `;
@@ -95,6 +103,7 @@ const UPDATE_ITEM = `
       requires_special_handling
       max_delivery_distance
       estimated_delivery_time
+      preparation_minutes
       min_order_quantity
       max_order_quantity
       is_active
@@ -156,7 +165,7 @@ export class ItemsService {
       moderation_status: 'draft',
     };
     this.assertShippingFields(itemData);
-    const result = await this.hasuraSystemService.executeMutation<{
+    const result = await this.mutateItem<{
       insert_items_one: {
         id: string;
         name: string;
@@ -201,13 +210,16 @@ export class ItemsService {
       moderation_status: string;
       shipping_enabled?: boolean | null;
       shipping_price?: number | null;
+      price?: number | null;
+      interest_only?: boolean | null;
     },
     updates: UpdateItemDto | Record<string, unknown>
   ): Promise<Record<string, unknown> | null> {
     const itemData = this.normalizeUpdatePayload(updates);
     this.assertShippingFields(itemData, item);
+    this.assertInterestOnlyClearRequiresPrice(itemData, item);
     await this.assertActivationAllowed(item, itemData, itemId);
-    const result = await this.hasuraSystemService.executeMutation<{
+    const result = await this.mutateItem<{
       update_items_by_pk: Record<string, unknown> | null;
     }>(UPDATE_ITEM, { id: itemId, itemData });
     const updated = result?.update_items_by_pk;
@@ -222,6 +234,31 @@ export class ItemsService {
       previousDescription: item.description ?? '',
     });
     return updated;
+  }
+
+  private assertInterestOnlyClearRequiresPrice(
+    itemData: Record<string, unknown>,
+    existing: { price?: number | null; interest_only?: boolean | null }
+  ): void {
+    if (itemData.interest_only !== false) return;
+    const nextPrice =
+      itemData.price !== undefined ? itemData.price : existing.price;
+    if (
+      typeof nextPrice === 'number' &&
+      !Number.isNaN(nextPrice) &&
+      nextPrice > 0
+    ) {
+      return;
+    }
+    throw new HttpException(
+      {
+        success: false,
+        error: 'PRICE_REQUIRED',
+        message:
+          'A valid price is required before turning off interest-only mode',
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   private async assertActivationAllowed(
@@ -253,6 +290,8 @@ export class ItemsService {
     moderation_status: string;
     shipping_enabled?: boolean | null;
     shipping_price?: number | null;
+    price?: number | null;
+    interest_only?: boolean | null;
   }> {
     const result = await this.hasuraUserService.executeQuery<{
       items_by_pk: {
@@ -263,6 +302,8 @@ export class ItemsService {
         moderation_status: string;
         shipping_enabled?: boolean | null;
         shipping_price?: number | null;
+        price?: number | null;
+        interest_only?: boolean | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
@@ -281,6 +322,8 @@ export class ItemsService {
     moderation_status: string;
     shipping_enabled?: boolean | null;
     shipping_price?: number | null;
+    price?: number | null;
+    interest_only?: boolean | null;
   }> {
     const result = await this.hasuraSystemService.executeQuery<{
       items_by_pk: {
@@ -290,6 +333,8 @@ export class ItemsService {
         moderation_status: string;
         shipping_enabled?: boolean | null;
         shipping_price?: number | null;
+        price?: number | null;
+        interest_only?: boolean | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
@@ -327,6 +372,7 @@ export class ItemsService {
         if (field === 'weight_unit') {
           return [field, this.resolveWeightUnit(value)];
         }
+        assertItemDecimalField(field, value);
         return [field, value];
       })
     );
@@ -357,6 +403,21 @@ export class ItemsService {
         },
         HttpStatus.BAD_REQUEST
       );
+    }
+  }
+
+  private async mutateItem<T>(
+    mutation: string,
+    variables: Record<string, unknown>
+  ): Promise<T> {
+    try {
+      return await this.hasuraSystemService.executeMutation<T>(
+        mutation,
+        variables
+      );
+    } catch (error: any) {
+      rethrowNumericOverflow(error);
+      throw error;
     }
   }
 

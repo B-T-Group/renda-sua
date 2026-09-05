@@ -3,15 +3,23 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import type { NotificationData } from '../notifications/notification-types';
 import { OrderQueueService } from './order-queue.service';
+import { resolveOrderNotificationAddress } from './order-notification-address.util';
 import { isActivePersona } from '../users/persona.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
+
+export type OrderStatusUpdateOptions = {
+  viaCancelEndpoint?: boolean;
+  viaSystem?: boolean;
+};
 
 @Injectable()
 export class OrderStatusService {
@@ -22,7 +30,9 @@ export class OrderStatusService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly orderQueueService: OrderQueueService,
     private readonly agentReferralsService: AgentReferralsService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    @Optional()
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
 
   /**
@@ -33,22 +43,14 @@ export class OrderStatusService {
   async updateOrderStatus(
     orderId: string,
     newStatus: string,
-    actorOrOptions?: AuthorizedBusinessActor | { viaCancelEndpoint?: boolean },
-    explicitOptions?: { viaCancelEndpoint?: boolean }
+    actorOrOptions?: AuthorizedBusinessActor | OrderStatusUpdateOptions,
+    explicitOptions?: OrderStatusUpdateOptions
   ): Promise<any> {
-    const actor = this.isAuthorizedBusinessActor(actorOrOptions)
-      ? actorOrOptions
-      : undefined;
-    const options: { viaCancelEndpoint?: boolean } | undefined =
-      explicitOptions ??
-      (actor ? undefined : (actorOrOptions as { viaCancelEndpoint?: boolean }));
-    const user = actor
-      ? ({
-          id: actor.userId,
-          business: { id: actor.businessId },
-          active_persona: 'business',
-        } as any)
-      : await this.hasuraUserService.getUser();
+    const { actor, options } = this.parseStatusUpdateArgs(
+      actorOrOptions,
+      explicitOptions
+    );
+    const user = await this.resolveStatusUser(actor, options);
 
     // Get the order to validate ownership and current status
     const getOrderQuery = `
@@ -104,7 +106,12 @@ export class OrderStatusService {
       isAnyAgent
     ) {
       // This is allowed - agent is assigning order to themselves
-    } else if (!isBusinessOwner && !isAssignedAgent && !isClient) {
+    } else if (
+      !options?.viaSystem &&
+      !isBusinessOwner &&
+      !isAssignedAgent &&
+      !isClient
+    ) {
       throw new Error('Unauthorized to update this order');
     }
 
@@ -205,14 +212,50 @@ export class OrderStatusService {
     }
   }
 
+  private parseStatusUpdateArgs(
+    actorOrOptions?: AuthorizedBusinessActor | OrderStatusUpdateOptions,
+    explicitOptions?: OrderStatusUpdateOptions
+  ): {
+    actor?: AuthorizedBusinessActor;
+    options?: OrderStatusUpdateOptions;
+  } {
+    const actor = this.isAuthorizedBusinessActor(actorOrOptions)
+      ? actorOrOptions
+      : undefined;
+    const options =
+      explicitOptions ??
+      (actor ? undefined : (actorOrOptions as OrderStatusUpdateOptions));
+    return { actor, options };
+  }
+
+  private async resolveStatusUser(
+    actor?: AuthorizedBusinessActor,
+    options?: OrderStatusUpdateOptions
+  ): Promise<any> {
+    if (options?.viaSystem) return { id: 'system' };
+    if (actor) {
+      return {
+        id: actor.userId,
+        business: { id: actor.businessId },
+        active_persona: 'business',
+      };
+    }
+    return this.hasuraUserService.getUser();
+  }
+
   private isAuthorizedBusinessActor(
-    value: AuthorizedBusinessActor | { viaCancelEndpoint?: boolean } | undefined
+    value: AuthorizedBusinessActor | OrderStatusUpdateOptions | undefined
   ): value is AuthorizedBusinessActor {
     return !!value && 'businessId' in value && 'userId' in value;
   }
 
   private async maybeCreditAgentReferralAfterDelivery(
-    order: { assigned_agent_id?: string; assigned_agent?: { user_id?: string } },
+    order: {
+      id?: string;
+      business_id?: string;
+      assigned_agent_id?: string;
+      assigned_agent?: { user_id?: string };
+    },
     newStatus: string
   ): Promise<void> {
     if (newStatus !== 'complete' && newStatus !== 'delivered') return;
@@ -220,6 +263,12 @@ export class OrderStatusService {
       order.assigned_agent_id,
       order.assigned_agent?.user_id
     );
+    if (order.id && order.business_id) {
+      void this.representativeCompensationService?.evaluateForOrderSafe(
+        order.id,
+        order.business_id
+      );
+    }
   }
 
   private buildConditionalStatusMutation(
@@ -422,6 +471,17 @@ export class OrderStatusService {
                 preferred_language
               }
             }
+            business_location {
+              address {
+                address_line_1
+                address_line_2
+                city
+                state
+                postal_code
+                country
+                instructions
+              }
+            }
             delivery_address {
               address_line_1
               address_line_2
@@ -551,11 +611,14 @@ export class OrderStatusService {
         taxAmount: order.tax_amount || 0,
         totalAmount: order.total_amount || 0,
         currency: order.currency || 'USD',
-        deliveryAddress: this.formatAddress(order.delivery_address),
+        deliveryAddress: this.formatAddress(
+          resolveOrderNotificationAddress(order)
+        ),
         estimatedDeliveryTime:
           deliveryTimeWindow || order.estimated_delivery_time,
         specialInstructions: order.special_instructions,
         fulfillmentMethod: (order as any).fulfillment_method ?? 'delivery',
+        fulfillmentTiming: (order as any).fulfillment_timing ?? null,
         paymentTiming: (order as any).payment_timing ?? null,
       };
     } catch (error: any) {

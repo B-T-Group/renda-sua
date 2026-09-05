@@ -52,6 +52,8 @@ export interface ReferredBusinessSummary {
   payoutReviewStatus?: 'pending' | 'approved' | 'rejected';
   payoutReviewRejectionReason?: string | null;
   isPaid?: boolean;
+  /** Credited compensation for this shop in the selected window. */
+  earnedAmount?: number;
 }
 
 export interface TopAgentEntry {
@@ -67,8 +69,12 @@ export interface TopAgentEntry {
   /** sum(itemCount + 1) over referred businesses. */
   score?: number;
   referredBusinesses?: ReferredBusinessSummary[];
+  /** Pending representative_compensation_events waiting for Saturday credit. */
   projectedPayoutAmount?: number;
   projectedPayoutCurrency?: string;
+  /** Credited representative compensation in the selected window. */
+  earnedAmount?: number;
+  earnedCurrency?: string;
   isInternal?: boolean;
 }
 
@@ -110,6 +116,17 @@ export interface PayoutPreviewRow {
     name: string;
   } | null;
   beneficiaries: PayoutPreviewBeneficiary[];
+}
+
+export interface CompensationEventRow {
+  id: string;
+  rule_code: string;
+  amount: number;
+  currency: string;
+  country_code: string;
+  status: string;
+  created_at: string;
+  business?: { id: string; name: string } | null;
 }
 
 export interface WeeklyPayoutPreview {
@@ -265,11 +282,30 @@ export function useAdminPerformance() {
     [apiClient]
   );
 
+  const fetchCompensationEvents = useCallback(
+    async (countryCode: string): Promise<CompensationEventRow[] | null> => {
+      if (!apiClient) return null;
+      try {
+        const params = new URLSearchParams();
+        if (countryCode) params.set('countryCode', countryCode);
+        const qs = params.toString();
+        const { data } = await apiClient.get<{ events: CompensationEventRow[] }>(
+          `/admin/performance/compensation-events${qs ? `?${qs}` : ''}`
+        );
+        return data.events;
+      } catch {
+        return null;
+      }
+    },
+    [apiClient]
+  );
+
   return {
     fetchMarkets,
     fetchSummary,
     fetchTopAgents,
     fetchPayoutPreview,
+    fetchCompensationEvents,
     error,
   };
 }

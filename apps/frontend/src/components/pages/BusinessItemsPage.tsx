@@ -209,6 +209,7 @@ const BusinessItemsPage: React.FC = () => {
   } = useBusinessCatalogScope();
   const [searchParams] = useSearchParams();
   const locationFilterId = searchParams.get('location') || undefined;
+  const moderationFilter = searchParams.get('moderation');
   const [showUpdateInventoryDialog, setShowUpdateInventoryDialog] =
     useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -647,6 +648,10 @@ const BusinessItemsPage: React.FC = () => {
         (filters.favoritesFilter === 'favorites' && fav) ||
         (filters.favoritesFilter === 'not_favorites' && !fav);
 
+      const matchesModeration =
+        !moderationFilter ||
+        item.moderation_status === moderationFilter;
+
       return (
         matchesLocation &&
         matchesSearch &&
@@ -655,7 +660,8 @@ const BusinessItemsPage: React.FC = () => {
         matchesBrand &&
         matchesStock &&
         matchesSpotlight &&
-        matchesFavorites
+        matchesFavorites &&
+        matchesModeration
       );
     }) || [];
 

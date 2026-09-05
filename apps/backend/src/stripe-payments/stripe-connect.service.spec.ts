@@ -36,6 +36,7 @@ describe('StripeConnectService', () => {
   it('creates a Connect account with user profile prefill and persists status', async () => {
     hasuraService.executeQuery
       .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
       .mockResolvedValueOnce({
         users_by_pk: {
           email: 'owner@example.com',
@@ -70,7 +71,7 @@ describe('StripeConnectService', () => {
       businessName: 'Ada Rentals',
     });
     expect(hasuraService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('insert_stripe_connect_accounts_one'),
+      expect.stringContaining('stripe_connect_accounts_user_id_key'),
       {
         data: expect.objectContaining({
           user_id: 'user-123',
@@ -94,5 +95,92 @@ describe('StripeConnectService', () => {
     }
     expect(stripeService.createExpressAccount).not.toHaveBeenCalled();
     expect(hasuraService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('coalesces concurrent ensureAccount calls for the same user', async () => {
+    let releaseLookup: (value: unknown) => void;
+    hasuraService.executeQuery.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseLookup = resolve;
+        })
+    );
+
+    const first = service.ensureAccount('user-123');
+    const second = service.ensureAccount('user-123');
+    expect(hasuraService.executeQuery).toHaveBeenCalledTimes(1);
+
+    releaseLookup!({ stripe_connect_accounts: [{ id: 'row-1' }] });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { id: 'row-1' },
+      { id: 'row-1' },
+    ]);
+    expect(stripeService.createExpressAccount).not.toHaveBeenCalled();
+  });
+
+  it('returns the existing row when a concurrent insert hits a unique constraint', async () => {
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: { email: 'owner@example.com' } })
+      .mockResolvedValueOnce({
+        stripe_connect_accounts: [{ id: 'row-existing' }],
+      });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockResolvedValue({
+      id: 'acct_123',
+      default_currency: 'cad',
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+    });
+    hasuraService.executeMutation.mockRejectedValue(
+      new Error('Uniqueness violation on stripe_connect_accounts_user_id_key')
+    );
+
+    await expect(service.ensureAccount('user-123')).resolves.toEqual({
+      id: 'row-existing',
+    });
+  });
+
+  it('returns the existing row when Hasura on_conflict yields null', async () => {
+    const existingRow = { id: 'row-existing', stripe_account_id: 'acct_123' };
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: null })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [existingRow] });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockResolvedValue({
+      id: 'acct_123',
+      default_currency: 'cad',
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+    });
+    hasuraService.executeMutation.mockResolvedValue({
+      insert_stripe_connect_accounts_one: null,
+    });
+
+    await expect(service.ensureAccount('user-123')).resolves.toEqual(existingRow);
+  });
+
+  it('maps exhausted Stripe idempotency conflicts to HTTP 409', async () => {
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: { email: 'owner@example.com' } });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockRejectedValue({
+      message:
+        'There is currently another in-progress request using this Idempotent Key: connect_account_user-123',
+    });
+
+    try {
+      await service.ensureAccount('user-123');
+      fail('Expected ensureAccount to reject in-progress onboarding');
+    } catch (error: any) {
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+    }
   });
 });

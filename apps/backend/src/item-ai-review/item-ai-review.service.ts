@@ -1,4 +1,5 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
 import {
@@ -33,7 +34,9 @@ export class ItemAiReviewService {
     private readonly notifications: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly activationValidation: ItemActivationValidationService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    @Optional()
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
 
   isEnabled(): boolean {
@@ -453,6 +456,9 @@ export class ItemAiReviewService {
     await this.merchantLifecycleService.recompute(
       item.business_id,
       'item_ai_approved'
+    );
+    void this.representativeCompensationService?.evaluateForBusinessSafe(
+      item.business_id
     );
   }
 

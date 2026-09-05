@@ -18,6 +18,23 @@ export interface AssignableRole {
   is_assignable: boolean;
 }
 
+type DelegationRolesQueryResult = {
+  location_delegation_roles?: AssignableRole[];
+  data?: { location_delegation_roles?: AssignableRole[] };
+};
+
+const DELEGATION_ROLES_QUERY = `
+  query DelegationRoles {
+    location_delegation_roles(order_by: { name: asc }) {
+      id
+      key
+      name
+      description
+      is_assignable
+    }
+  }
+`;
+
 @Injectable()
 export class BusinessDelegationsService {
   constructor(
@@ -27,29 +44,30 @@ export class BusinessDelegationsService {
   ) {}
 
   async listAssignableRoles() {
-    const result = await this.hasura.executeQuery<{
-      location_delegation_roles: AssignableRole[];
-    }>(
-      `
-      query AssignableRoles {
-        location_delegation_roles(
-          where: { is_assignable: { _eq: true } }
-          order_by: { name: asc }
-        ) {
-          id key name description is_assignable
-        }
-      }
-    `
+    const rows = this.roleRows(
+      await this.hasura.executeQuery<DelegationRolesQueryResult>(
+        DELEGATION_ROLES_QUERY
+      )
     );
-    return result.location_delegation_roles ?? [];
+    const assignable = rows.filter((role) => role.is_assignable);
+    return assignable.length ? assignable : rows;
   }
 
   async listTeam(businessId: string) {
-    const [members, invites] = await Promise.all([
+    const [members, invites, roles] = await Promise.all([
       this.listMembers(businessId),
       this.listPendingInvites(businessId),
+      this.listAssignableRoles(),
     ]);
-    return { members, invites };
+    return { members, invites, roles };
+  }
+
+  private roleRows(result: DelegationRolesQueryResult): AssignableRole[] {
+    return (
+      result.location_delegation_roles ??
+      result.data?.location_delegation_roles ??
+      []
+    );
   }
 
   async createInvite(

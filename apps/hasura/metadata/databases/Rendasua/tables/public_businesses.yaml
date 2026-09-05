@@ -66,6 +66,13 @@ array_relationships:
         table:
           name: business_referral_reviews
           schema: public
+  - name: representative_compensation_events
+    using:
+      foreign_key_constraint_on:
+        column: business_id
+        table:
+          name: representative_compensation_events
+          schema: public
   - name: business_locations
     using:
       manual_configuration:

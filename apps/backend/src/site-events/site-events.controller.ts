@@ -24,7 +24,8 @@ import { SiteEventsService } from './site-events.service';
 
 @ApiTags('site-events')
 @Controller()
-@Throttle({ short: { limit: 45, ttl: 60000 } })
+/** High ceiling: catalog + FTUE carousels fire many append-only events; 45/min 429s dropped them. */
+@Throttle({ short: { limit: 200, ttl: 60000 } })
 @UsePipes(
   new ValidationPipe({
     transform: true,

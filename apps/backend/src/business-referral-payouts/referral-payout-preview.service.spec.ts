@@ -15,6 +15,9 @@ describe('ReferralPayoutPreviewService', () => {
     getPyramidPercents: jest.fn(),
     previewBonusShares: jest.fn(),
   };
+  const representativeCompensationService = {
+    previewPending: jest.fn(),
+  };
 
   let service: ReferralPayoutPreviewService;
 
@@ -22,10 +25,12 @@ describe('ReferralPayoutPreviewService', () => {
     jest.clearAllMocks();
     service = new ReferralPayoutPreviewService(
       payoutsService as never,
-      referralPyramidService as never
+      referralPyramidService as never,
+      representativeCompensationService as never
     );
     payoutsService.isPayoutFeatureEnabled.mockResolvedValue(true);
     payoutsService.listIncompleteClaimsForPreview.mockResolvedValue([]);
+    representativeCompensationService.previewPending.mockResolvedValue([]);
     referralPyramidService.getPyramidPercents.mockResolvedValue({
       gen1: 5,
       gen2: 3,
@@ -34,18 +39,20 @@ describe('ReferralPayoutPreviewService', () => {
   });
 
   it('builds one payable row with pyramid beneficiaries', async () => {
-    payoutsService.listEligibleForPreview.mockResolvedValue([
+    representativeCompensationService.previewPending.mockResolvedValue([
       {
-        kind: 'agent',
-        id: 'biz-1',
-        name: 'Shop One',
+        businessId: 'biz-1',
+        businessName: 'Shop One',
+        ruleCode: 'onboarding_10_first_sale',
+        amount: 7500,
+        currency: 'XAF',
+        countryCode: 'CM',
         itemCount: 12,
-        earner: {
-          kind: 'agent',
-          id: 'agent-1',
-          userId: 'user-1',
-          name: 'Ada Agent',
-        },
+        orderId: 'order-1',
+        earnerKind: 'agent',
+        earnerId: 'agent-1',
+        earnerUserId: 'user-1',
+        earnerName: 'Ada Agent',
       },
     ]);
     payoutsService.previewGrossForUser.mockResolvedValue({
@@ -87,23 +94,25 @@ describe('ReferralPayoutPreviewService', () => {
     expect(result.rows[0].referredBusinessName).toBe('Shop One');
     expect(result.rows[0].beneficiaries).toHaveLength(2);
     expect(result.totalsByCurrency).toEqual([
-      { currency: 'XAF', count: 1, gross: 5000 },
+      { currency: 'XAF', count: 1, gross: 7500 },
     ]);
   });
 
   it('marks missing earner wallet as skipped', async () => {
-    payoutsService.listEligibleForPreview.mockResolvedValue([
+    representativeCompensationService.previewPending.mockResolvedValue([
       {
-        kind: 'business',
-        id: 'biz-2',
-        name: 'Shop Two',
+        businessId: 'biz-2',
+        businessName: 'Shop Two',
+        ruleCode: 'business_referral_10_items',
+        amount: 2000,
+        currency: 'XAF',
+        countryCode: 'CM',
         itemCount: 10,
-        earner: {
-          kind: 'business',
-          id: 'biz-ref',
-          userId: 'user-2',
-          name: 'Ref Co',
-        },
+        orderId: null,
+        earnerKind: 'business',
+        earnerId: 'biz-ref',
+        earnerUserId: 'user-2',
+        earnerName: 'Ref Co',
       },
     ]);
     payoutsService.previewGrossForUser.mockResolvedValue({
@@ -136,7 +145,7 @@ describe('ReferralPayoutPreviewService', () => {
   });
 
   it('includes incomplete claim retries in the preview', async () => {
-    payoutsService.listEligibleForPreview.mockResolvedValue([]);
+    representativeCompensationService.previewPending.mockResolvedValue([]);
     payoutsService.listIncompleteClaimsForPreview.mockResolvedValue([
       {
         referredBusinessId: 'biz-pending',
@@ -182,18 +191,20 @@ describe('ReferralPayoutPreviewService', () => {
   });
 
   it('keeps skipped rows when filtering by market', async () => {
-    payoutsService.listEligibleForPreview.mockResolvedValue([
+    representativeCompensationService.previewPending.mockResolvedValue([
       {
-        kind: 'agent',
-        id: 'biz-skip',
-        name: 'Empty Config Shop',
+        businessId: 'biz-skip',
+        businessName: 'Empty Config Shop',
+        ruleCode: 'onboarding_10_first_sale',
+        amount: 0,
+        currency: 'XAF',
+        countryCode: 'CM',
         itemCount: 10,
-        earner: {
-          kind: 'agent',
-          id: 'agent-1',
-          userId: 'user-1',
-          name: 'Ada Agent',
-        },
+        orderId: null,
+        earnerKind: 'agent',
+        earnerId: 'agent-1',
+        earnerUserId: 'user-1',
+        earnerName: 'Ada Agent',
       },
     ]);
     payoutsService.previewGrossForUser.mockResolvedValue({

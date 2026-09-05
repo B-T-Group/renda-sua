@@ -1,7 +1,11 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import type { DistanceMatrixResponse } from './distance-matrix.types';
+import type {
+  DistanceMatrixElement,
+  DistanceMatrixResponse,
+} from './distance-matrix.types';
+import type { CachedDistanceElement } from './google-cache.service';
 import { GoogleCacheService } from './google-cache.service';
 
 export interface GeocodingResult {
@@ -19,6 +23,19 @@ export interface PlacePrediction {
   description: string;
 }
 
+/** Google Distance Matrix legacy API: max 25 origins or destinations per request. */
+export const DISTANCE_MATRIX_MAX_DESTINATIONS = 25;
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type DestinationAddress = { id: string; formatted: string };
+
+type ElementMaps = {
+  elements: Map<string, DistanceMatrixElement>;
+  addresses: Map<string, string>;
+};
+
 @Injectable()
 export class GoogleDistanceService {
   private readonly logger = new Logger(GoogleDistanceService.name);
@@ -33,67 +50,33 @@ export class GoogleDistanceService {
     this.apiKey = this.configService.get('GOOGLE_MAPS_API_KEY');
     this.cacheEnabled = this.configService.get('GOOGLE_CACHE_ENABLED', true);
     this.cacheTTL = this.configService.get('GOOGLE_CACHE_TTL', 86400); // 1 day
-   
   }
 
   /**
    * Get distance matrix with caching based on address IDs.
-   * @param options.ttlSeconds - Override cache TTL in seconds (e.g. 7776000 for 3 months)
+   * Fetches only cache misses, in chunks of 25 destinations.
    */
   async getDistanceMatrixWithCaching(
     originAddressId: string,
     originAddressFormatted: string,
-    destinationAddresses: Array<{
-      id: string;
-      formatted: string;
-    }>,
+    destinationAddresses: DestinationAddress[],
     options?: { ttlSeconds?: number }
   ): Promise<DistanceMatrixResponse> {
     const ttl = options?.ttlSeconds ?? this.cacheTTL;
     try {
-      const destinationIds = destinationAddresses.map((dest) => dest.id);
-
-      // Check cache first if enabled
-      if (this.cacheEnabled) {
-        const cachedResult = await this.cacheService.getCachedDistanceMatrix(
-          originAddressId,
-          destinationIds
-        );
-
-        if (cachedResult) {
-          return cachedResult;
-        }
-      }
-      this.logger.log('Not all destination pairs cached, calling Google API', destinationIds);
-      // Not all destinations are cached, call Google API
-
-      const destinationStrs = destinationAddresses.map((dest) => dest.formatted);
-      const googleResponse = await this.callGoogleDistanceMatrix(
-        [originAddressFormatted],
-        destinationStrs
+      const maps = await this.resolveDistanceElements(
+        originAddressId,
+        originAddressFormatted,
+        destinationAddresses,
+        ttl
       );
-
-      this.logger.log('Google API response:', googleResponse);
-
-      // Cache the results if enabled
-      if (this.cacheEnabled) {
-        await this.cacheService.cacheDistanceMatrixResults(
-          originAddressId,
-          originAddressFormatted,
-          destinationAddresses,
-          googleResponse,
-          ttl
-        );
-      }
-
-      return googleResponse;
+      return this.buildDistanceMatrix(
+        originAddressFormatted,
+        destinationAddresses,
+        maps
+      );
     } catch (error) {
-      this.logger.error(
-        `getDistanceMatrixWithCaching failed: origin=${originAddressId}, destinations=${destinationAddresses.map((d) => d.id).join(',')}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        error instanceof Error ? error.stack : undefined
-      );
+      this.logDistanceMatrixFailure(originAddressId, destinationAddresses, error);
       throw error;
     }
   }
@@ -105,7 +88,190 @@ export class GoogleDistanceService {
     origins: string[],
     destinations: string[]
   ): Promise<DistanceMatrixResponse> {
+    if (origins.length === 1 && destinations.length > DISTANCE_MATRIX_MAX_DESTINATIONS) {
+      return this.callGoogleDistanceMatrixChunked(origins[0], destinations);
+    }
     return this.callGoogleDistanceMatrix(origins, destinations);
+  }
+
+  private async resolveDistanceElements(
+    originId: string,
+    originFormatted: string,
+    destinations: DestinationAddress[],
+    ttl: number
+  ): Promise<ElementMaps> {
+    if (destinations.length === 0) {
+      return { elements: new Map(), addresses: new Map() };
+    }
+    const cached = await this.loadCachedElements(originId, destinations);
+    const missing = destinations.filter((d) => !cached.elements.has(d.id));
+    if (missing.length === 0) return cached;
+    this.logger.log(
+      `Distance matrix cache: ${cached.elements.size} hit, ${missing.length} miss`
+    );
+    const fetched = await this.fetchMissingInChunks(
+      originId,
+      originFormatted,
+      missing,
+      ttl
+    );
+    return this.mergeElementMaps(cached, fetched);
+  }
+
+  private async loadCachedElements(
+    originId: string,
+    destinations: DestinationAddress[]
+  ): Promise<ElementMaps> {
+    const empty: ElementMaps = { elements: new Map(), addresses: new Map() };
+    if (!this.cacheEnabled || !UUID_PATTERN.test(originId)) return empty;
+    const entries = await this.cacheService.getValidCachedDistanceElements(
+      originId,
+      destinations.map((d) => d.id)
+    );
+    return this.mapsFromCachedEntries(entries);
+  }
+
+  private async fetchMissingInChunks(
+    originId: string,
+    originFormatted: string,
+    missing: DestinationAddress[],
+    ttl: number
+  ): Promise<ElementMaps> {
+    const maps: ElementMaps = { elements: new Map(), addresses: new Map() };
+    for (const chunk of this.chunkDestinations(missing)) {
+      const response = await this.callGoogleDistanceMatrix(
+        [originFormatted],
+        chunk.map((d) => d.formatted)
+      );
+      this.applyChunkResponse(chunk, response, maps);
+      await this.cacheChunkIfEnabled(
+        originId,
+        originFormatted,
+        chunk,
+        response,
+        ttl
+      );
+    }
+    return maps;
+  }
+
+  private async cacheChunkIfEnabled(
+    originId: string,
+    originFormatted: string,
+    chunk: DestinationAddress[],
+    response: DistanceMatrixResponse,
+    ttl: number
+  ): Promise<void> {
+    if (!this.cacheEnabled || !UUID_PATTERN.test(originId)) return;
+    await this.cacheService.cacheDistanceMatrixResults(
+      originId,
+      originFormatted,
+      chunk,
+      response,
+      ttl
+    );
+  }
+
+  private async callGoogleDistanceMatrixChunked(
+    origin: string,
+    destinations: string[]
+  ): Promise<DistanceMatrixResponse> {
+    const destObjs = destinations.map((formatted, i) => ({
+      id: String(i),
+      formatted,
+    }));
+    const maps: ElementMaps = { elements: new Map(), addresses: new Map() };
+    for (const chunk of this.chunkDestinations(destObjs)) {
+      const response = await this.callGoogleDistanceMatrix(
+        [origin],
+        chunk.map((d) => d.formatted)
+      );
+      this.applyChunkResponse(chunk, response, maps);
+    }
+    return this.buildDistanceMatrix(origin, destObjs, maps);
+  }
+
+  private chunkDestinations(destinations: DestinationAddress[]): DestinationAddress[][] {
+    const chunks: DestinationAddress[][] = [];
+    for (let i = 0; i < destinations.length; i += DISTANCE_MATRIX_MAX_DESTINATIONS) {
+      chunks.push(
+        destinations.slice(i, i + DISTANCE_MATRIX_MAX_DESTINATIONS)
+      );
+    }
+    return chunks;
+  }
+
+  private applyChunkResponse(
+    chunk: DestinationAddress[],
+    response: DistanceMatrixResponse,
+    maps: ElementMaps
+  ): void {
+    const row = response.rows?.[0]?.elements ?? [];
+    chunk.forEach((dest, i) => {
+      maps.elements.set(dest.id, row[i] ?? { status: 'NOT_FOUND' });
+      maps.addresses.set(
+        dest.id,
+        response.destination_addresses?.[i] ?? dest.formatted
+      );
+    });
+  }
+
+  private mapsFromCachedEntries(entries: CachedDistanceElement[]): ElementMaps {
+    const maps: ElementMaps = { elements: new Map(), addresses: new Map() };
+    for (const entry of entries) {
+      maps.elements.set(entry.destination_address_id, {
+        status: entry.status,
+        ...(entry.distance ? { distance: entry.distance } : {}),
+        ...(entry.duration ? { duration: entry.duration } : {}),
+      });
+      maps.addresses.set(
+        entry.destination_address_id,
+        entry.destination_address_formatted
+      );
+    }
+    return maps;
+  }
+
+  private mergeElementMaps(cached: ElementMaps, fetched: ElementMaps): ElementMaps {
+    const elements = new Map(cached.elements);
+    const addresses = new Map(cached.addresses);
+    for (const [id, el] of fetched.elements) elements.set(id, el);
+    for (const [id, addr] of fetched.addresses) addresses.set(id, addr);
+    return { elements, addresses };
+  }
+
+  private buildDistanceMatrix(
+    originFormatted: string,
+    destinations: DestinationAddress[],
+    maps: ElementMaps
+  ): DistanceMatrixResponse {
+    return {
+      origin_addresses: [originFormatted],
+      destination_addresses: destinations.map(
+        (d) => maps.addresses.get(d.id) ?? d.formatted
+      ),
+      rows: [
+        {
+          elements: destinations.map(
+            (d) => maps.elements.get(d.id) ?? { status: 'NOT_FOUND' }
+          ),
+        },
+      ],
+      status: 'OK',
+    };
+  }
+
+  private logDistanceMatrixFailure(
+    originAddressId: string,
+    destinationAddresses: DestinationAddress[],
+    error: unknown
+  ): void {
+    const destIds = destinationAddresses.map((d) => d.id).join(',');
+    const message = error instanceof Error ? error.message : String(error);
+    this.logger.error(
+      `getDistanceMatrixWithCaching failed: origin=${originAddressId}, destinations=${destIds}: ${message}`,
+      error instanceof Error ? error.stack : undefined
+    );
   }
 
   /**
@@ -115,26 +281,34 @@ export class GoogleDistanceService {
     origins: string[],
     destinations: string[]
   ): Promise<DistanceMatrixResponse> {
-
     const url = 'https://maps.googleapis.com/maps/api/distancematrix/json';
     const params = {
       origins: origins.join('|'),
       destinations: destinations.join('|'),
       key: this.apiKey,
     };
-
     try {
       const response = await axios.get(url, { params });
-      if (response.data.status !== 'OK') {
-        throw new HttpException(
-          response.data.error_message || 'Google API error',
-          HttpStatus.BAD_REQUEST
-        );
-      }
+      this.assertGoogleMatrixOk(response.data);
       return response.data as DistanceMatrixResponse;
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  private assertGoogleMatrixOk(data: {
+    status?: string;
+    error_message?: string;
+  }): void {
+    if (data?.status === 'OK') return;
+    const status = data?.status || 'UNKNOWN';
+    const detail = data?.error_message || 'Google API error';
+    this.logger.error(`Distance Matrix failed: status=${status}, detail=${detail}`);
+    throw new HttpException(
+      `Google Distance Matrix ${status}: ${detail}`,
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   /**
@@ -188,6 +362,12 @@ export class GoogleDistanceService {
         'administrative_area_level_1',
       ]);
       const country = this.getAddressComponent(addressComponents, ['country']);
+      // ISO-2 code (e.g. "CA") — profile/business addresses store codes, not names.
+      const countryCode = this.getAddressComponent(
+        addressComponents,
+        ['country'],
+        true
+      );
       const postalCode = this.getAddressComponent(addressComponents, [
         'postal_code',
       ]);
@@ -197,6 +377,7 @@ export class GoogleDistanceService {
         city: city || '',
         state: state || '',
         country: country || '',
+        country_code: countryCode || '',
         postal_code: postalCode || '',
       };
 

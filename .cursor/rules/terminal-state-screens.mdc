@@ -1,0 +1,19 @@
+---
+description: Terminal success screens must offer Return to dashboard and hide the header back button
+globs: apps/frontend/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# Terminal-state screens (no back, return to dashboard)
+
+A **terminal state** is a screen/dialog reached after a completed flow where going “back” into the wizard/checkout would be confusing — e.g. request submitted, order placed, setup success.
+
+## Required UX
+
+1. **No browser/app back affordance as the only exit** — do not rely on a top-left back chevron into the prior step.
+2. **Primary CTA: “Return to dashboard”** (or role-equivalent home) — always visible; pin outside scroll when content is long.
+3. **Optional secondary** — links to related lists (“My orders”, etc.) are fine; they must not replace the dashboard CTA.
+
+## Mobile parity
+
+Match `mobile-rendasua` rule `terminal-state-screens.mdc` and screens such as rental request submitted / order placed success.

@@ -69,15 +69,22 @@ export class NotificationPreferenceService {
   }
 
   async disableWhatsApp(userId: string): Promise<void> {
-    await this.ensurePrefsRow(userId);
+    const at = new Date().toISOString();
     await this.hasura.executeMutation(
       `mutation D($userId: uuid!, $at: timestamptz!) {
-        update_user_notification_preferences_by_pk(
-          pk_columns: { user_id: $userId },
-          _set: { whatsapp_enabled: false, updated_at: $at }
+        insert_user_notification_preferences_one(
+          object: {
+            user_id: $userId
+            whatsapp_enabled: false
+            whatsapp_opted_in_at: $at
+          }
+          on_conflict: {
+            constraint: user_notification_preferences_pkey
+            update_columns: [whatsapp_enabled, whatsapp_opted_in_at, updated_at]
+          }
         ) { user_id }
       }`,
-      { userId, at: new Date().toISOString() }
+      { userId, at }
     );
   }
 
@@ -98,11 +105,7 @@ export class NotificationPreferenceService {
   }
 
   isWhatsAppEligible(prefs: UserNotificationPreferences): boolean {
-    return (
-      prefs.whatsappEnabled &&
-      prefs.phoneNumberVerified &&
-      !!prefs.phoneNumber?.trim()
-    );
+    return prefs.whatsappEnabled && !!prefs.phoneNumber?.trim();
   }
 
   isCategoryEnabled(
@@ -115,9 +118,9 @@ export class NotificationPreferenceService {
 
   private async assertWhatsAppOptInAllowed(userId: string): Promise<void> {
     const user = await this.fetchUserPhone(userId);
-    if (!user?.phone_number?.trim() || user.phone_number_verified !== true) {
+    if (!user?.phone_number?.trim()) {
       throw new BadRequestException(
-        'Verify your phone number before enabling WhatsApp notifications'
+        'Add a phone number before enabling WhatsApp notifications'
       );
     }
   }
@@ -150,16 +153,30 @@ export class NotificationPreferenceService {
 
   private async ensurePrefsRow(userId: string): Promise<PrefRow> {
     const existing = await this.fetchPrefs(userId);
-    if (existing) return existing;
+    if (existing) return this.maybeDefaultWhatsAppOn(userId, existing);
+    const user = await this.fetchUserPhone(userId);
+    const hasPhone = !!user?.phone_number?.trim();
     try {
       await this.hasura.executeMutation(
-        `mutation I($userId: uuid!) {
+        `mutation I(
+          $userId: uuid!
+          $whatsappEnabled: Boolean!
+          $optedInAt: timestamptz
+        ) {
           insert_user_notification_preferences_one(
-            object: { user_id: $userId }
+            object: {
+              user_id: $userId
+              whatsapp_enabled: $whatsappEnabled
+              whatsapp_opted_in_at: $optedInAt
+            }
             on_conflict: { constraint: user_notification_preferences_pkey, update_columns: [] }
           ) { user_id }
         }`,
-        { userId }
+        {
+          userId,
+          whatsappEnabled: hasPhone,
+          optedInAt: hasPhone ? new Date().toISOString() : null,
+        }
       );
     } catch (error: any) {
       this.logger.warn(
@@ -168,9 +185,35 @@ export class NotificationPreferenceService {
     }
     const row = await this.fetchPrefs(userId);
     if (!row) {
-      return this.defaultPrefs(userId);
+      return this.defaultPrefs(userId, hasPhone);
     }
     return row;
+  }
+
+  private async maybeDefaultWhatsAppOn(
+    userId: string,
+    existing: PrefRow
+  ): Promise<PrefRow> {
+    if (existing.whatsapp_enabled || existing.whatsapp_opted_in_at) {
+      return existing;
+    }
+    const user = await this.fetchUserPhone(userId);
+    if (!user?.phone_number?.trim()) return existing;
+    const at = new Date().toISOString();
+    await this.hasura.executeMutation(
+      `mutation E($userId: uuid!, $at: timestamptz!) {
+        update_user_notification_preferences_by_pk(
+          pk_columns: { user_id: $userId },
+          _set: { whatsapp_enabled: true, whatsapp_opted_in_at: $at, updated_at: $at }
+        ) { user_id }
+      }`,
+      { userId, at }
+    );
+    return (await this.fetchPrefs(userId)) ?? {
+      ...existing,
+      whatsapp_enabled: true,
+      whatsapp_opted_in_at: at,
+    };
   }
 
   private async fetchPrefs(userId: string): Promise<PrefRow | null> {
@@ -199,14 +242,14 @@ export class NotificationPreferenceService {
     return res.users_by_pk ?? null;
   }
 
-  private defaultPrefs(userId: string): PrefRow {
+  private defaultPrefs(userId: string, hasPhone = false): PrefRow {
     return {
       user_id: userId,
       push_enabled: true,
       email_enabled: true,
       sms_enabled: true,
-      whatsapp_enabled: false,
-      whatsapp_opted_in_at: null,
+      whatsapp_enabled: hasPhone,
+      whatsapp_opted_in_at: hasPhone ? new Date().toISOString() : null,
       whatsapp_informational_enabled: false,
       marketing_enabled: false,
       order_updates: true,

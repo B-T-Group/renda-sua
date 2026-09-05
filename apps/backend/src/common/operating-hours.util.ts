@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon';
+
 export type DayName =
   | 'sunday'
   | 'monday'
@@ -182,4 +184,65 @@ export function isSlotFullyWithinHours(
   const end = parseTimeToMinutes(slotEndTime);
   if (start == null || end == null) return false;
   return start >= open && end <= close;
+}
+
+function jsWeekdayFromLuxon(local: DateTime): number {
+  return local.weekday === 7 ? 0 : local.weekday;
+}
+
+function localMinutes(local: DateTime): number {
+  return local.hour * 60 + local.minute;
+}
+
+/** Minutes until close in `timezone`. Null = hours unknown (treat as always open). 0 = closed now. */
+export function minutesUntilClose(
+  hours: unknown,
+  now: Date,
+  timezone: string
+): number | null {
+  const normalized = normalizeOperatingHours(hours);
+  if (!normalized) return null;
+  const local = DateTime.fromJSDate(now, { zone: timezone });
+  if (!local.isValid) return null;
+  const dayHours = getDayHours(
+    normalized,
+    getDayNameForIndex(jsWeekdayFromLuxon(local))
+  );
+  if (!dayHours || dayHours.closed) return 0;
+  const openMins = parseTimeToMinutes(dayHours.open);
+  const closeMins = parseTimeToMinutes(dayHours.close);
+  if (openMins == null || closeMins == null) return null;
+  const nowMins = localMinutes(local);
+  if (!isTimeOfDayWithinHours(dayHours, nowMins)) return 0;
+  if (closeMins < openMins) {
+    if (nowMins >= openMins) return 24 * 60 - nowMins + closeMins;
+    return closeMins - nowMins;
+  }
+  return Math.max(0, closeMins - nowMins);
+}
+
+/** Next local open instant, or null when hours are unknown. */
+export function nextOpenAt(
+  hours: unknown,
+  now: Date,
+  timezone: string
+): Date | null {
+  const normalized = normalizeOperatingHours(hours);
+  if (!normalized) return null;
+  const start = DateTime.fromJSDate(now, { zone: timezone });
+  if (!start.isValid) return null;
+  for (let offset = 0; offset < 8; offset += 1) {
+    const day = start.plus({ days: offset });
+    const dayHours = getDayHours(
+      normalized,
+      getDayNameForIndex(jsWeekdayFromLuxon(day))
+    );
+    if (!dayHours || dayHours.closed) continue;
+    const openMins = parseTimeToMinutes(dayHours.open);
+    if (openMins == null) continue;
+    const open = day.startOf('day').plus({ minutes: openMins });
+    if (offset === 0 && open <= start) continue;
+    return open.toUTC().toJSDate();
+  }
+  return null;
 }

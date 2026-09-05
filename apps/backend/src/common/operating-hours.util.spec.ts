@@ -4,6 +4,8 @@ import {
   getDayNameForIndex,
   isSlotFullyWithinHours,
   isTimeOfDayWithinHours,
+  minutesUntilClose,
+  nextOpenAt,
   normalizeOperatingHours,
   parseTimeToMinutes,
 } from './operating-hours.util';
@@ -154,6 +156,41 @@ describe('operating-hours.util', () => {
       expect(isSlotFullyWithinHours(openDay, '16:00:00', '20:00:00')).toBe(
         true
       );
+    });
+  });
+
+  describe('minutesUntilClose', () => {
+    const hours = {
+      friday: { closed: false, open: '08:00', close: '20:00' },
+      saturday: { closed: true },
+    };
+
+    it('returns 0 when the day is closed', () => {
+      expect(
+        minutesUntilClose(hours, new Date('2026-08-22T12:00:00.000Z'), 'UTC')
+      ).toBe(0);
+    });
+
+    it('returns remaining minutes while open', () => {
+      expect(
+        minutesUntilClose(hours, new Date('2026-08-21T18:00:00.000Z'), 'UTC')
+      ).toBe(120);
+    });
+  });
+
+  describe('nextOpenAt', () => {
+    it('returns the next weekday open time after Saturday', () => {
+      const hours = {
+        monday: { closed: false, open: '08:00', close: '20:00' },
+        saturday: { closed: true },
+        sunday: { closed: true },
+      };
+      const next = nextOpenAt(
+        hours,
+        new Date('2026-08-22T12:00:00.000Z'),
+        'UTC'
+      );
+      expect(next?.toISOString()).toBe('2026-08-24T08:00:00.000Z');
     });
   });
 });

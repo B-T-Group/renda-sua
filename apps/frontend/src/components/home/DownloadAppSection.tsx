@@ -5,6 +5,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import AppStoreBadges from '../common/AppStoreBadges';
 import { marketingGradients } from '../../theme/themeUtils';
+import { HOME_ACCENTS } from './homeTheme';
 
 const downloadBenefits = [
   { key: 'home.download.benefits.tracking', defaultLabel: 'Real-time order tracking on a live map' },
@@ -47,7 +48,7 @@ const DownloadAppSection: React.FC = () => {
             >
               <Typography
                 variant="overline"
-                sx={{ color: '#60a5fa', fontWeight: 700, letterSpacing: '0.12em', mb: 2, display: 'block' }}
+                sx={{ color: HOME_ACCENTS.onDark, fontWeight: 700, letterSpacing: '0.12em', mb: 2, display: 'block' }}
               >
                 {t('home.download.eyebrow', 'Available now')}
               </Typography>
@@ -72,7 +73,7 @@ const DownloadAppSection: React.FC = () => {
               <Stack spacing={1.5} sx={{ mb: 5 }}>
                 {downloadBenefits.map((b) => (
                   <Stack key={b.key} direction="row" spacing={1.5} alignItems="center">
-                    <CheckCircle sx={{ fontSize: 18, color: '#60a5fa', flexShrink: 0 }} />
+                    <CheckCircle sx={{ fontSize: 18, color: HOME_ACCENTS.onDark, flexShrink: 0 }} />
                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.82)', fontWeight: 500 }}>
                       {t(b.key, b.defaultLabel)}
                     </Typography>
@@ -100,37 +101,37 @@ const DownloadAppSection: React.FC = () => {
                   <rect x="8" y="0" width="244" height="500" rx="34" fill="#0f172a" />
                   <rect x="16" y="8" width="228" height="484" rx="28" fill="#1e293b" />
                   <rect x="16" y="8" width="228" height="484" rx="28" fill="#f8fafc" />
-                  <rect x="16" y="8" width="228" height="44" rx="28" fill="#1e40af" />
-                  <rect x="16" y="36" width="228" height="16" fill="#1e40af" />
+                  <rect x="16" y="8" width="228" height="44" rx="28" fill={HOME_ACCENTS.primary} />
+                  <rect x="16" y="36" width="228" height="16" fill={HOME_ACCENTS.primary} />
                   <rect x="88" y="8" width="84" height="24" rx="12" fill="#0f172a" />
-                  <rect x="16" y="52" width="228" height="40" fill="#1e40af" />
+                  <rect x="16" y="52" width="228" height="40" fill={HOME_ACCENTS.primary} />
                   <text x="35" y="77" fill="white" fontSize="13" fontWeight="bold">Rendasua</text>
                   {/* Order tracking map */}
                   <rect x="16" y="92" width="228" height="160" fill="#e2e8f0" />
                   <line x1="80" y1="92" x2="80" y2="252" stroke="white" strokeWidth="7" />
                   <line x1="16" y1="172" x2="244" y2="172" stroke="white" strokeWidth="7" />
-                  <path d="M 50 220 Q 100 180 160 170 Q 200 165 220 130" stroke="#1e40af" strokeWidth="2.5" fill="none" />
-                  <circle cx="50" cy="220" r="12" fill="#1e40af" />
+                  <path d="M 50 220 Q 100 180 160 170 Q 200 165 220 130" stroke={HOME_ACCENTS.primary} strokeWidth="2.5" fill="none" />
+                  <circle cx="50" cy="220" r="12" fill={HOME_ACCENTS.primary} />
                   <text x="43" y="225" fill="white" fontSize="10">🛵</text>
-                  <circle cx="220" cy="130" r="12" fill="#16a34a" />
+                  <circle cx="220" cy="130" r="12" fill={HOME_ACCENTS.delivery} />
                   <text x="213" y="135" fill="white" fontSize="10">🏠</text>
                   {/* Status card */}
                   <rect x="24" y="260" width="212" height="68" rx="10" fill="white" style={{ filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.06))' }} />
-                  <text x="44" y="282" fill="#1d1d1f" fontSize="10" fontWeight="bold">On the way · ETA 6 min</text>
-                  <text x="44" y="296" fill="#86868b" fontSize="9">Agent Jean is 0.8km away</text>
-                  <rect x="162" y="268" width="60" height="22" rx="6" fill="#1e40af" />
+                  <text x="44" y="282" fill={HOME_ACCENTS.ink} fontSize="10" fontWeight="bold">On the way · ETA 6 min</text>
+                  <text x="44" y="296" fill={HOME_ACCENTS.muted} fontSize="9">Agent Jean is 0.8km away</text>
+                  <rect x="162" y="268" width="60" height="22" rx="6" fill={HOME_ACCENTS.primary} />
                   <text x="192" y="282" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">Track</text>
                   <rect x="44" y="304" width="172" height="16" rx="4" fill="#f1f5f9" />
-                  <rect x="44" y="304" width="110" height="16" rx="4" fill={alpha('#16a34a', 0.3)} />
+                  <rect x="44" y="304" width="110" height="16" rx="4" fill={alpha(HOME_ACCENTS.delivery, 0.3)} />
                   {/* PIN card */}
-                  <rect x="24" y="338" width="100" height="56" rx="10" fill="#1e40af" />
+                  <rect x="24" y="338" width="100" height="56" rx="10" fill={HOME_ACCENTS.primary} />
                   <text x="74" y="358" textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize="9">Delivery PIN</text>
                   <text x="74" y="378" textAnchor="middle" fill="white" fontSize="16" fontWeight="bold">4279</text>
                   {/* Chat card */}
                   <rect x="136" y="338" width="100" height="56" rx="10" fill="white" style={{ filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.06))' }} />
-                  <text x="152" y="358" fill="#86868b" fontSize="8">Jean (Agent)</text>
+                  <text x="152" y="358" fill={HOME_ACCENTS.muted} fontSize="8">Jean (Agent)</text>
                   <rect x="148" y="364" width="76" height="20" rx="6" fill="#f1f5f9" />
-                  <text x="156" y="377" fill="#1d1d1f" fontSize="8">Almost there! 🎉</text>
+                  <text x="156" y="377" fill={HOME_ACCENTS.ink} fontSize="8">Almost there! 🎉</text>
                   {/* Bottom nav */}
                   <rect x="16" y="460" width="228" height="36" fill="white" />
                   <rect x="16" y="460" width="228" height="1.5" fill="#e2e8f0" />
@@ -138,6 +139,18 @@ const DownloadAppSection: React.FC = () => {
                     <text key={i} x={38 + i * 56} y="484" fontSize="14" textAnchor="middle">{icon}</text>
                   ))}
                 </svg>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    textAlign: 'center',
+                    color: 'rgba(255,255,255,0.55)',
+                    mt: 1.5,
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {t('home.download.mockupCaption', 'Example while out for delivery')}
+                </Typography>
               </motion.div>
             </motion.div>
           </Grid>

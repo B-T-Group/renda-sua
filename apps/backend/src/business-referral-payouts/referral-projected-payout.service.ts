@@ -3,6 +3,7 @@ import { ConfigurationsService } from '../admin/configurations.service';
 import { businessReferralPayoutConfigKeyFromUser } from '../admin/business-referral-payout-config.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import {
   BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
   BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
@@ -34,24 +35,31 @@ export class ReferralProjectedPayoutService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly configurationsService: ConfigurationsService
+    private readonly configurationsService: ConfigurationsService,
+    private readonly representativeCompensationService: RepresentativeCompensationService
   ) {}
 
   async forAgent(
     agentId: string,
     userId: string
   ): Promise<ReferralProjectedPayout> {
-    return this.project('referred_by_agent_id', agentId, userId, false);
+    return this.representativeCompensationService.previewForReferrer({
+      agentId,
+      userId,
+    });
   }
 
   async forBusiness(
     businessId: string,
     userId: string
   ): Promise<ReferralProjectedPayout> {
-    return this.project('referred_by_business_id', businessId, userId, true);
+    return this.representativeCompensationService.previewForReferrer({
+      businessId,
+      userId,
+    });
   }
 
-  private async project(
+  async project(
     referrerField: 'referred_by_agent_id' | 'referred_by_business_id',
     referrerId: string,
     userId: string,

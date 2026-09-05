@@ -24,11 +24,13 @@ export type NotificationType =
   | 'order.no_agent'
   | 'order.acceptance.activate'
   | 'order.acceptance.escalation'
+  | 'order.acceptance.reminder'
   | 'order.busy'
   | 'order.missed'
   | 'order.auto_declined'
   | 'order.payment_failed'
   | 'order.pickup.reminder'
+  | 'order.store_pickup.reminder'
   | 'order.pickup.at_risk'
   | 'order.pickup.overdue'
   | 'order.pickup.reassigned'
@@ -36,6 +38,7 @@ export type NotificationType =
   | 'rental.request'
   | 'rental.request.accepted'
   | 'rental.request.rejected'
+  | 'product.interest'
   | 'rental.booking.reserved'
   | 'rental.booking.confirmed'
   | 'rental.booking.cancelled'
@@ -51,7 +54,8 @@ export type NotificationType =
   | 'chat.message'
   | 'merchant.digest'
   | 'merchant.tip'
-  | 'admin.broadcast';
+  | 'admin.broadcast'
+  | 'admin.order_risk';
 
 export type NotificationPreferenceCategory =
   | 'order_updates'
@@ -64,7 +68,7 @@ export interface PushChannelPayload {
   title: string;
   body: string;
   data?: Record<string, unknown>;
-  /** High-priority Expo options for interruptible offers */
+  /** High-priority Expo options (sound + heads-up) for incoming-order interrupts */
   interruptible?: boolean;
 }
 

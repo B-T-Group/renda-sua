@@ -95,6 +95,9 @@ describe('BusinessItemsService CSV upload', () => {
       resolveRailForBusiness: jest.fn().mockResolvedValue('mobile_money'),
     };
     const merchantLifecycleService = { recompute: jest.fn() };
+    const categoriesService = {
+      listCategoryTree: jest.fn().mockResolvedValue([]),
+    };
 
     const service = new BusinessItemsService(
       hasuraUserService as any,
@@ -106,7 +109,8 @@ describe('BusinessItemsService CSV upload', () => {
       paymentRoutingService as any,
       merchantLifecycleService as any,
       {} as any,
-      {} as any
+      {} as any,
+      categoriesService as any
     );
 
     return {
@@ -196,7 +200,8 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
       {} as any,
       { recompute: jest.fn() } as any,
       {} as any,
-      {} as any
+      {} as any,
+      { listCategoryTree: jest.fn().mockResolvedValue([]) } as any
     );
     (service as any).updateInventoryItem = updateInventoryItem;
     (service as any).createInventoryItem = createInventoryItem;
@@ -265,6 +270,67 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
       unit_cost: 20,
       selling_price: 20,
       is_active: true,
+    });
+    expect(createInventoryItem).not.toHaveBeenCalled();
+  });
+
+  it('allows interest-only quick-publish without a shopper price', async () => {
+    const { service, createInventoryItem } =
+      createQuickPublishService('draft');
+    const hasuraUserService = (service as any).hasuraUserService;
+    hasuraUserService.executeQuery.mockResolvedValue({
+      business_inventory: [],
+    });
+    const hasuraSystemService = (service as any).hasuraSystemService;
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      items_by_pk: {
+        id: itemId,
+        business_id: businessId,
+        price: null,
+        interest_only: true,
+        moderation_status: 'draft',
+        name: 'Quote part',
+        description: null,
+        status: 'active',
+      },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_items: {
+        affected_rows: 1,
+        returning: [{ id: itemId, moderation_status: 'pending' }],
+      },
+    });
+
+    const result = await service.quickPublishBusinessItem(businessId, itemId, {
+      locationId,
+    });
+
+    expect(result.inventory.id).toBe('inv-new');
+    expect(createInventoryItem).toHaveBeenCalled();
+  });
+
+  it('rejects zero-price quick-publish unless the item is interest-only', async () => {
+    const { service, createInventoryItem } =
+      createQuickPublishService('draft');
+    const hasuraSystemService = (service as any).hasuraSystemService;
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      items_by_pk: {
+        id: itemId,
+        business_id: businessId,
+        price: 0,
+        interest_only: false,
+        moderation_status: 'draft',
+        name: 'Priced item',
+        description: null,
+        status: 'active',
+      },
+    });
+
+    await expect(
+      service.quickPublishBusinessItem(businessId, itemId, { locationId })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'PRICE_REQUIRED' },
     });
     expect(createInventoryItem).not.toHaveBeenCalled();
   });

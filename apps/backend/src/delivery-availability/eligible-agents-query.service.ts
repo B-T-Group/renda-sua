@@ -124,7 +124,8 @@ export class EligibleAgentsQueryService {
         targetState: params.targetState,
         reverseGeocode: async (lat, lng) => {
           const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
-          return { country: geo.country, state: geo.state };
+          // Prefer the ISO-2 code — addresses store "CA"/"CM", not "Canada".
+          return { country: geo.country_code || geo.country, state: geo.state };
         },
       });
       if (!matches) continue;

@@ -29,10 +29,24 @@ export const GET_ORDERS = gql`
       payment_timing
       reconciliation_status
       fulfillment_method
+      fulfillment_timing
+      promised_ready_at
+      promised_fulfill_by
       shipping_tracking_number
       shipping_carrier
       shipped_at
       received_at
+      recipient_name
+      recipient_phone
+      recipient_notify_whatsapp
+      is_third_party_recipient
+      payer_name
+      payer_country
+      payer_payment_rail
+      fulfillment_country
+      is_diaspora_order
+      presentment_currency
+      presentment_amount
       created_at
       updated_at
       client {
@@ -94,6 +108,7 @@ export const GET_ORDERS = gql`
         item {
           sku
           currency
+          preparation_minutes
           model
           color
           weight
@@ -203,10 +218,24 @@ export const GET_ORDER_BY_ID = gql`
       payment_status
       verified_agent_delivery
       fulfillment_method
+      fulfillment_timing
+      promised_ready_at
+      promised_fulfill_by
       shipping_tracking_number
       shipping_carrier
       shipped_at
       received_at
+      recipient_name
+      recipient_phone
+      recipient_notify_whatsapp
+      is_third_party_recipient
+      payer_name
+      payer_country
+      payer_payment_rail
+      fulfillment_country
+      is_diaspora_order
+      presentment_currency
+      presentment_amount
       created_at
       updated_at
       client {
@@ -294,6 +323,7 @@ export const GET_ORDER_BY_ID = gql`
           name
           description
           currency
+          preparation_minutes
           model
           color
           weight
@@ -427,6 +457,7 @@ export const GET_ORDER_BY_NUMBER = gql`
       business_id
       client_id
       delivery_address_id
+      fulfillment_method
       requires_fast_delivery
       client {
         user_id
@@ -484,6 +515,7 @@ export const GET_ORDER_BY_NUMBER = gql`
           name
           description
           currency
+          preparation_minutes
           model
           color
           weight
@@ -638,6 +670,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
           name
           description
           currency
+          preparation_minutes
           model
           color
           weight
@@ -676,6 +709,11 @@ export const GET_OPEN_ORDERS = gql`
     ) {
       id
       order_number
+      recipient_name
+      recipient_phone
+      is_third_party_recipient
+      is_diaspora_order
+      fulfillment_country
       business {
         name
       }
@@ -721,6 +759,7 @@ export const GET_OPEN_ORDERS = gql`
         item {
           sku
           currency
+          preparation_minutes
           model
           color
           weight
