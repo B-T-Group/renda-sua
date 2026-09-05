@@ -3,7 +3,7 @@ import { Box, Grid, Typography, alpha } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const LocalContext: React.FC = () => {
   const { t } = useTranslation();
@@ -46,8 +46,8 @@ const LocalContext: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  bgcolor: alpha(FB_GREEN, 0.1),
-                  color: FB_GREEN,
+                  bgcolor: alpha(FB_ACCENT, 0.1),
+                  color: FB_ACCENT,
                 }}
                 aria-hidden
               >
