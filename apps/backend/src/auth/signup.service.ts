@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -10,24 +10,20 @@ import { MetaConversionsService } from '../meta-conversions/meta-conversions.ser
 import type { MetaActionSource } from '../meta-conversions/meta-conversions.types';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
-import { Auth0Service, type Auth0TokenResponse } from './auth0.service';
+import { Auth0Service, Auth0TokenResponse } from './auth0.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
 import { normalizeSignupAddress } from './provisioning/signup-address.normalize';
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
-import { SignupAttemptStore } from './signup-attempt.store';
 import {
-  SIGNUP_MAX_VERIFY_ATTEMPTS,
-  SIGNUP_OTP_RESEND_COOLDOWN_MS,
-  type SignupAttemptChannel,
-  type SignupAttemptPayload,
-  type SignupAttemptRow,
-  type SignupCompletionResult,
-  type SignupCreatedUser,
-  type SignupLaunchPromoResult,
-  type SignupStartAttemptResult,
-} from './signup-attempt.types';
-import { isAfricanMarketCountry } from './signup-market.util';
+  resolveSignupOtpChannel,
+  type SignupOtpChannel,
+} from './signup-channel.util';
+
+const ATTEMPT_TTL_MS = 15 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 120 * 1000;
+const MAX_VERIFY_ATTEMPTS = 5;
+const COMPLETION_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 interface SignupStartPayload {
   first_name: string;
@@ -36,11 +32,32 @@ interface SignupStartPayload {
   phone_number?: string | null;
   user_type_id?: 'client' | 'agent' | 'business';
   personas?: PersonaId[];
-  profile: SignupAttemptPayload['profile'];
+  profile: {
+    vehicle_type_id?: string;
+    name?: string;
+    main_interest?: 'sell_items' | 'rent_items';
+    agent_focus?: 'delivery' | 'commercial' | 'both';
+  };
   country?: string;
-  store_location?: SignupAttemptPayload['store_location'];
-  address?: SignupAttemptPayload['address'];
+  store_location?: {
+    street: string;
+    city: string;
+    region: string;
+    postal_code?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  address?: {
+    address_line_1: string;
+    country: string;
+    city: string;
+    state: string;
+    postal_code?: string;
+    latitude?: number;
+    longitude?: number;
+  };
   referral_agent_code?: string;
+  verification_channel?: SignupOtpChannel;
   fbc?: string | null;
   fbp?: string | null;
   eventSourceUrl?: string;
@@ -49,16 +66,63 @@ interface SignupStartPayload {
   clientUserAgent?: string | null;
 }
 
+export interface SignupCreatedUser {
+  id: string;
+  email: string | null;
+  first_name: string;
+  last_name: string;
+  user_type_id: string;
+  phone_number: string | null;
+  email_verified: boolean;
+}
+
+export interface SignupLaunchPromoResult {
+  status: string;
+  ordersRemaining: number;
+  businessLimit: number | null;
+  zeroCommissionOrders: number | null;
+  identificationWindowDays: number | null;
+}
+
+export interface SignupAttemptStartResult {
+  attemptId: string;
+  channel: SignupOtpChannel;
+  expiresAt: string;
+  resendAvailableAt: string;
+}
+
+interface SignupAttemptRow {
+  id: string;
+  channel: SignupOtpChannel;
+  email: string | null;
+  phone_number: string | null;
+  payload: SignupStartPayload;
+  status: 'pending' | 'otp_verified' | 'provisioning' | 'completed' | 'expired' | 'failed';
+  verify_attempts: number;
+  last_otp_sent_at: string;
+  expires_at: string;
+  completed_user_id: string | null;
+  completion_result: SignupCompletionSnapshot | null;
+}
+
+interface SignupCompletionSnapshot {
+  user: SignupCreatedUser;
+  launchPromo: SignupLaunchPromoResult | null;
+  tokens: Auth0TokenResponse;
+  completedAt: string;
+}
+
 interface Auth0IdTokenClaims {
   sub?: string;
   email?: string;
   phone_number?: string;
+  email_verified?: boolean;
 }
-
-export type { SignupCreatedUser, SignupStartAttemptResult };
 
 @Injectable()
 export class SignupService {
+  private readonly logger = new Logger(SignupService.name);
+
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
@@ -66,8 +130,7 @@ export class SignupService {
     private readonly userProvisioning: UserProvisioningService,
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly referralProvisioning: ReferralProvisioningService,
-    private readonly metaConversionsService: MetaConversionsService,
-    private readonly attemptStore: SignupAttemptStore
+    private readonly metaConversionsService: MetaConversionsService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -109,44 +172,56 @@ export class SignupService {
     return (result.users?.length || 0) > 0;
   }
 
-  /**
-   * Validate signup input, create a short-lived attempt, and send OTP.
-   * Does not create a users row.
-   */
   async startSignup(
     payload: SignupStartPayload
-  ): Promise<SignupStartAttemptResult> {
-    const prepared = await this.prepareSignupAttempt(payload);
-    await this.attemptStore.supersedePendingForContact(prepared.contactValue);
-    const attempt = await this.attemptStore.insertPending({
-      channel: prepared.channel,
-      contactValue: prepared.contactValue,
-      payload: prepared.attemptPayload,
+  ): Promise<SignupAttemptStartResult> {
+    void this.cleanupExpiredAttempts();
+    const email = this.normalizeEmail(payload.email);
+    const phoneNumber = this.normalizePhone(payload.phone_number);
+    this.assertHasContact(email, phoneNumber);
+    await this.assertContactsAvailable(email, phoneNumber);
+    const personas = this.normalizeSignupPersonas(payload);
+    this.assertStoreLocationCountry(payload);
+    const channel = this.resolveChannel(payload, email, phoneNumber);
+    const expiresAt = new Date(Date.now() + ATTEMPT_TTL_MS).toISOString();
+    const attempt = await this.insertAttempt({
+      channel,
+      email: email || null,
+      phone_number: phoneNumber || null,
+      payload: { ...payload, email: email || null, phone_number: phoneNumber || null, personas },
+      expires_at: expiresAt,
     });
-    try {
-      await this.sendAttemptOtp(attempt);
-    } catch (error) {
-      await this.attemptStore.updateStatus(attempt.id, 'failed');
-      throw error;
-    }
+    await this.sendOtpForAttempt(attempt);
     return this.toStartResult(attempt);
   }
 
-  async resendSignupOtp(attemptId: string): Promise<SignupStartAttemptResult> {
-    const attempt = await this.requireActiveAttempt(attemptId);
-    this.assertResendAllowed(attempt);
-    await this.sendAttemptOtp(attempt);
-    const refreshed = await this.attemptStore.markOtpSent(attempt.id);
-    return this.toStartResult(refreshed || attempt);
+  async resendSignupOtp(attemptId: string): Promise<SignupAttemptStartResult> {
+    const attempt = await this.loadAttempt(attemptId);
+    this.assertAttemptResendable(attempt);
+    const cooldownEnds = this.resendAvailableAt(attempt.last_otp_sent_at);
+    if (Date.now() < cooldownEnds.getTime()) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Please wait before requesting another code',
+          resendAvailableAt: cooldownEnds.toISOString(),
+        },
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+    await this.sendOtpForAttempt(attempt);
+    const updated = await this.touchOtpSent(attempt.id);
+    return this.toStartResult(updated);
   }
 
-  /**
-   * Verify OTP for an attempt, then provision the durable user + side effects.
-   */
   async verifySignupOtp(body: {
     attemptId: string;
     otp: string;
-  }): Promise<SignupCompletionResult> {
+  }): Promise<{
+    tokens: Auth0TokenResponse;
+    user: SignupCreatedUser;
+    launchPromo: SignupLaunchPromoResult | null;
+  }> {
     const otp = String(body.otp || '').trim();
     if (!otp) {
       throw new HttpException(
@@ -154,273 +229,80 @@ export class SignupService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const existing = await this.requireAttempt(body.attemptId);
-    if (existing.status === 'completed' && existing.completion_result) {
-      return existing.completion_result;
+    const attempt = await this.loadAttempt(body.attemptId);
+    if (attempt.status === 'completed' && attempt.completion_result) {
+      return this.replayCompletion(attempt.completion_result);
     }
-    this.assertAttemptVerifiable(existing);
-    const claimed = await this.attemptStore.claimForVerify(existing.id);
-    if (!claimed) {
-      const latest = await this.requireAttempt(existing.id);
-      if (latest.status === 'completed' && latest.completion_result) {
-        return latest.completion_result;
-      }
-      throw new HttpException(
-        { success: false, error: 'Signup attempt is busy. Please retry.' },
-        HttpStatus.CONFLICT
-      );
+    this.assertAttemptVerifiable(attempt);
+    if (attempt.status === 'otp_verified' || attempt.status === 'provisioning') {
+      return this.provisionFromVerifiedAttempt(attempt);
     }
-    return this.verifyAndProvision(claimed, otp);
-  }
-
-  private async verifyAndProvision(
-    attempt: SignupAttemptRow,
-    otp: string
-  ): Promise<SignupCompletionResult> {
-    const tokens = await this.resolveAttemptTokens(attempt, otp);
+    let tokens: Auth0TokenResponse;
     try {
-      const completion = await this.provisionFromAttempt(
-        { ...attempt, auth0_verified_at: attempt.auth0_verified_at || new Date().toISOString() },
-        tokens
-      );
-      await this.attemptStore.updateStatus(attempt.id, 'completed', {
-        completedUserId: completion.user.id,
-        completionResult: completion,
-      });
-      return completion;
+      tokens = await this.verifyOtpAgainstAuth0(attempt, otp);
     } catch (error: any) {
-      await this.attemptStore.updateStatus(attempt.id, 'verified_pending_provision', {
-        completionResult: attempt.completion_result?.tokens
-          ? attempt.completion_result
-          : ({ tokens } as SignupCompletionResult),
-      });
+      await this.incrementVerifyAttempts(attempt);
       throw error;
     }
+    this.assertTokenMatchesAttempt(tokens, attempt);
+    await this.markOtpVerified(attempt.id, tokens);
+    const verified: SignupAttemptRow = {
+      ...attempt,
+      status: 'otp_verified',
+      completion_result: {
+        user: {
+          id: '',
+          email: attempt.email,
+          first_name: attempt.payload.first_name,
+          last_name: attempt.payload.last_name,
+          user_type_id: 'client',
+          phone_number: attempt.phone_number,
+          email_verified: false,
+        },
+        launchPromo: null,
+        tokens,
+        completedAt: new Date().toISOString(),
+      },
+    };
+    return this.provisionFromVerifiedAttempt(verified, tokens);
   }
 
-  private async resolveAttemptTokens(
-    attempt: SignupAttemptRow,
-    otp: string
-  ): Promise<Auth0TokenResponse> {
-    const cached = attempt.completion_result?.tokens;
-    if (attempt.auth0_verified_at && cached) {
-      return cached;
-    }
-    const count = await this.attemptStore.bumpVerifyCount(attempt.id);
-    if (count > SIGNUP_MAX_VERIFY_ATTEMPTS) {
-      await this.attemptStore.updateStatus(attempt.id, 'failed');
-      throw new HttpException(
-        { success: false, error: 'Too many verification attempts' },
-        HttpStatus.TOO_MANY_REQUESTS
-      );
-    }
-    try {
-      const tokens = await this.exchangeOtpForTokens(attempt, otp);
-      // Persist tokens before provisioning so retries can skip Auth0 re-exchange.
-      const interim = { tokens } as SignupCompletionResult;
-      await this.attemptStore.updateStatus(attempt.id, 'verifying', {
-        auth0VerifiedAt: new Date().toISOString(),
-        completionResult: interim,
-      });
-      attempt.auth0_verified_at = new Date().toISOString();
-      attempt.completion_result = interim;
-      return tokens;
-    } catch (error) {
-      // Release the verify claim so the client can retry with a new OTP.
-      await this.attemptStore.updateStatus(attempt.id, 'pending');
-      throw error;
-    }
-  }
-
-  private async exchangeOtpForTokens(
-    attempt: SignupAttemptRow,
-    otp: string
-  ): Promise<Auth0TokenResponse> {
-    const isPhone = attempt.channel === 'phone';
-    const tokens = await (this.isTestUser(attempt.contact_value, isPhone)
-      ? isPhone
-        ? this.auth0Service.verifyTestUserPhone(attempt.contact_value)
-        : this.auth0Service.verifyTestUserEmail(attempt.contact_value)
-      : isPhone
-        ? this.auth0Service.verifySmsOtp(attempt.contact_value, otp)
-        : this.auth0Service.verifyEmailOtp(attempt.contact_value, otp));
-    this.assertTokenMatchesAttempt(attempt, tokens);
-    return tokens;
-  }
-
-  private assertTokenMatchesAttempt(
-    attempt: SignupAttemptRow,
-    tokens: Auth0TokenResponse
-  ): void {
-    if (!tokens?.id_token) {
-      throw new HttpException(
-        { success: false, error: 'Auth0 did not return an id_token' },
-        HttpStatus.BAD_GATEWAY
-      );
-    }
-    const claims = jwt.decode(tokens.id_token) as Auth0IdTokenClaims | null;
-    if (!claims?.sub) {
-      throw new HttpException(
-        { success: false, error: 'Invalid id_token returned by Auth0' },
-        HttpStatus.BAD_GATEWAY
-      );
-    }
-    if (attempt.channel === 'email') {
-      const email = this.normalizeEmail(claims.email);
-      if (!email || email !== attempt.contact_value) {
-        throw new HttpException(
-          { success: false, error: 'Verified identity does not match signup' },
-          HttpStatus.CONFLICT
-        );
-      }
-      return;
-    }
-    const phone = this.normalizePhone(claims.phone_number);
-    if (!phone || phone !== attempt.contact_value) {
-      throw new HttpException(
-        { success: false, error: 'Verified identity does not match signup' },
-        HttpStatus.CONFLICT
-      );
-    }
-  }
-
-  private async provisionFromAttempt(
-    attempt: SignupAttemptRow,
-    tokens: Auth0TokenResponse
-  ): Promise<SignupCompletionResult> {
-    const payload = attempt.payload;
-    if (attempt.completed_user_id) {
-      const existing = await this.findUserById(attempt.completed_user_id);
-      if (existing) {
-        return { tokens, user: existing, launchPromo: null };
-      }
-    }
-    try {
-      await this.assertContactsStillAvailable(payload);
-    } catch (error: any) {
-      if (!attempt.auth0_verified_at) throw error;
-      const existing = await this.findUserByPayloadContacts(payload);
-      if (!existing) throw error;
-      await this.attemptStore.updateStatus(attempt.id, 'verifying', {
-        completedUserId: existing.id,
-      });
-      return { tokens, user: existing, launchPromo: null };
-    }
-    const personas = payload.personas;
-    const normalizedAddress = normalizeSignupAddress({
-      country: payload.country,
-      store_location: payload.store_location,
-      address: payload.address,
-    });
-    const signupReferral =
-      await this.referralProvisioning.resolveSignupReferral(
-        personas,
-        payload.referral_agent_code
-      );
-    const businessName =
-      payload.profile?.name?.trim() || `${payload.first_name}'s Business`;
-    const nestStoreAddress =
-      personas.includes('business') &&
-      normalizedAddress &&
-      !normalizedAddress.countryOnly
-        ? normalizedAddress
-        : undefined;
-    const emailVerified = attempt.channel === 'email';
-    const phoneVerified = attempt.channel === 'phone';
-    const { user, entities, businessLocation } =
-      await this.userProvisioning.createPendingUser({
-        email: payload.email,
-        first_name: payload.first_name,
-        last_name: payload.last_name,
-        phone_number: payload.phone_number,
-        email_verified: emailVerified,
-        phone_number_verified: phoneVerified,
-        country: normalizedAddress?.country ?? null,
-        personas,
-        vehicle_type_id: payload.profile?.vehicle_type_id,
-        agent_focus: payload.profile?.agent_focus,
-        business_name: businessName,
-        main_interest: payload.profile?.main_interest ?? 'sell_items',
-        ...this.referralProvisioning.getBusinessInsertReferralFields(
-          signupReferral
-        ),
-        ...this.referralProvisioning.getAgentInsertReferralFields(
-          signupReferral
-        ),
-        storeAddress: nestStoreAddress,
-      });
-    await this.attemptStore.updateStatus(attempt.id, 'verifying', {
-      completedUserId: user.id,
-    });
-    attempt.completed_user_id = user.id;
-    if (normalizedAddress) {
-      await this.seedLegacyAddresses(
-        user.id,
-        entities,
-        normalizedAddress,
-        Boolean(businessLocation)
-      );
-    }
-    const { launchPromo } = await this.businessProvisioning.runPostCommitEffects(
+  /** @deprecated Pending-user contact updates are no longer supported. */
+  async updateContact(): Promise<never> {
+    throw new HttpException(
       {
-        userId: user.id,
-        entities,
-        businessLocation,
-        storeAddress: nestStoreAddress ?? normalizedAddress,
-        phoneNumber: payload.phone_number,
-        businessName,
-        countryCode: normalizedAddress?.country,
-      }
+        success: false,
+        error:
+          'Contact updates for pending signups are no longer supported. Restart signup with corrected details.',
+      },
+      HttpStatus.GONE
     );
-    await this.referralProvisioning.runPostCommitEffects({
-      entities,
-      referral: signupReferral,
-      referralAgentCode: payload.referral_agent_code,
-      country: normalizedAddress?.country,
-      businessName,
-      ownerName: `${payload.first_name} ${payload.last_name}`.trim(),
-    });
-    await this.businessProvisioning.scheduleEnsureContractForUser(user.id);
-    this.emitCompleteRegistration(user, payload);
-    return {
-      tokens,
-      user,
-      launchPromo: this.mapLaunchPromo(launchPromo),
-    };
   }
 
-  private mapLaunchPromo(
-    launchPromo: {
-      status: string;
-      ordersRemaining: number;
-      businessLimit: number | null;
-      zeroCommissionOrders: number | null;
-      identificationWindowDays: number | null;
-    } | null
-  ): SignupLaunchPromoResult | null {
-    if (!launchPromo) return null;
-    return {
-      status: launchPromo.status,
-      ordersRemaining: launchPromo.ordersRemaining,
-      businessLimit: launchPromo.businessLimit,
-      zeroCommissionOrders: launchPromo.zeroCommissionOrders,
-      identificationWindowDays: launchPromo.identificationWindowDays,
-    };
+  /** @deprecated Completion is now part of verify-otp. */
+  async completeSignup(): Promise<never> {
+    throw new HttpException(
+      {
+        success: false,
+        error: 'Use /auth/signup/verify-otp to complete signup',
+      },
+      HttpStatus.GONE
+    );
   }
 
-  private async prepareSignupAttempt(payload: SignupStartPayload): Promise<{
-    channel: SignupAttemptChannel;
-    contactValue: string;
-    attemptPayload: SignupAttemptPayload;
-  }> {
-    const email = this.normalizeEmail(payload.email);
-    const phoneNumber = this.normalizePhone(payload.phone_number);
+  private assertHasContact(email: string, phoneNumber: string): void {
     if (!email && !phoneNumber) {
       throw new HttpException(
         { success: false, error: 'Email or phone number is required' },
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  private async assertContactsAvailable(
+    email: string,
+    phoneNumber: string
+  ): Promise<void> {
     if (email && (await this.isEmailTaken(email))) {
       throw new HttpException(
         { success: false, error: 'Email is already taken' },
@@ -433,6 +315,9 @@ export class SignupService {
         HttpStatus.CONFLICT
       );
     }
+  }
+
+  private assertStoreLocationCountry(payload: SignupStartPayload): void {
     if (
       payload.store_location &&
       !payload.country?.trim() &&
@@ -446,105 +331,119 @@ export class SignupService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const personas = this.normalizeSignupPersonas(payload);
-    await this.referralProvisioning.resolveSignupReferral(
-      personas,
-      payload.referral_agent_code
-    );
-    const country =
-      payload.country?.trim().toUpperCase() ||
-      payload.address?.country?.trim().toUpperCase() ||
-      '';
-    const channel = this.resolveChannel(email, phoneNumber, country);
-    const contactValue = channel === 'phone' ? phoneNumber : email;
-    if (!contactValue) {
+  }
+
+  private resolveChannel(
+    payload: SignupStartPayload,
+    email: string,
+    phoneNumber: string
+  ): SignupOtpChannel {
+    try {
+      return resolveSignupOtpChannel({
+        email,
+        phoneNumber,
+        country: payload.country || payload.address?.country,
+        preferred: payload.verification_channel,
+      });
+    } catch {
       throw new HttpException(
         { success: false, error: 'Email or phone number is required' },
         HttpStatus.BAD_REQUEST
       );
     }
-    return {
-      channel,
-      contactValue,
-      attemptPayload: {
-        first_name: payload.first_name.trim(),
-        last_name: payload.last_name.trim(),
-        email: email || null,
-        phone_number: phoneNumber || null,
-        personas,
-        profile: payload.profile || {},
-        country: payload.country,
-        store_location: payload.store_location,
-        address: payload.address,
-        referral_agent_code: payload.referral_agent_code,
-        fbc: payload.fbc,
-        fbp: payload.fbp,
-        eventSourceUrl: payload.eventSourceUrl,
-        actionSource: payload.actionSource,
-        clientIpAddress: payload.clientIpAddress,
-        clientUserAgent: payload.clientUserAgent,
-      },
-    };
   }
 
-  private resolveChannel(
-    email: string,
-    phoneNumber: string,
-    country: string
-  ): SignupAttemptChannel {
-    if (phoneNumber && isAfricanMarketCountry(country)) return 'phone';
-    if (email) return 'email';
-    if (phoneNumber) return 'phone';
-    return 'email';
-  }
-
-  private async sendAttemptOtp(attempt: SignupAttemptRow): Promise<void> {
-    if (this.isTestUser(attempt.contact_value, attempt.channel === 'phone')) {
-      return;
-    }
-    if (attempt.channel === 'phone') {
-      await this.auth0Service.startSmsOtp(attempt.contact_value);
-      return;
-    }
-    await this.auth0Service.startEmailOtp(attempt.contact_value);
-  }
-
-  private toStartResult(attempt: SignupAttemptRow): SignupStartAttemptResult {
-    const sentAt = new Date(attempt.last_otp_sent_at).getTime();
+  private toStartResult(attempt: SignupAttemptRow): SignupAttemptStartResult {
     return {
       attemptId: attempt.id,
       channel: attempt.channel,
-      contactHint: this.maskContact(attempt.channel, attempt.contact_value),
       expiresAt: attempt.expires_at,
-      resendAvailableAt: new Date(
-        sentAt + SIGNUP_OTP_RESEND_COOLDOWN_MS
+      resendAvailableAt: this.resendAvailableAt(
+        attempt.last_otp_sent_at
       ).toISOString(),
     };
   }
 
-  private maskContact(
-    channel: SignupAttemptChannel,
-    value: string
-  ): string {
-    if (channel === 'email') {
-      const [local, domain] = value.split('@');
-      if (!domain) return '***';
-      const visible = local.slice(0, Math.min(2, local.length));
-      return `${visible}***@${domain}`;
-    }
-    if (value.length <= 4) return '***';
-    return `${value.slice(0, 3)}***${value.slice(-2)}`;
+  private resendAvailableAt(lastSentAt: string): Date {
+    return new Date(new Date(lastSentAt).getTime() + RESEND_COOLDOWN_MS);
   }
 
-  private async requireAttempt(id: string): Promise<SignupAttemptRow> {
-    const attemptId = String(id || '').trim();
-    if (!attemptId) {
+  private async insertAttempt(input: {
+    channel: SignupOtpChannel;
+    email: string | null;
+    phone_number: string | null;
+    payload: SignupStartPayload;
+    expires_at: string;
+  }): Promise<SignupAttemptRow> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      insert_signup_attempts_one: SignupAttemptRow;
+    }>(
+      `
+      mutation InsertSignupAttempt(
+        $channel: String!
+        $email: String
+        $phone_number: String
+        $payload: jsonb!
+        $expires_at: timestamptz!
+      ) {
+        insert_signup_attempts_one(object: {
+          channel: $channel
+          email: $email
+          phone_number: $phone_number
+          payload: $payload
+          expires_at: $expires_at
+          status: "pending"
+        }) {
+          id
+          channel
+          email
+          phone_number
+          payload
+          status
+          verify_attempts
+          last_otp_sent_at
+          expires_at
+          completed_user_id
+          completion_result
+        }
+      }
+    `,
+      input
+    );
+    return result.insert_signup_attempts_one;
+  }
+
+  private async loadAttempt(attemptId: string): Promise<SignupAttemptRow> {
+    const id = String(attemptId || '').trim();
+    if (!id) {
       throw new HttpException(
         { success: false, error: 'attemptId is required' },
         HttpStatus.BAD_REQUEST
       );
     }
-    const attempt = await this.attemptStore.findById(attemptId);
+    const result = await this.hasuraSystemService.executeQuery<{
+      signup_attempts_by_pk: SignupAttemptRow | null;
+    }>(
+      `
+      query SignupAttempt($id: uuid!) {
+        signup_attempts_by_pk(id: $id) {
+          id
+          channel
+          email
+          phone_number
+          payload
+          status
+          verify_attempts
+          last_otp_sent_at
+          expires_at
+          completed_user_id
+          completion_result
+        }
+      }
+    `,
+      { id }
+    );
+    const attempt = result.signup_attempts_by_pk;
     if (!attempt) {
       throw new HttpException(
         { success: false, error: 'Signup attempt not found' },
@@ -554,55 +453,643 @@ export class SignupService {
     return attempt;
   }
 
-  private async requireActiveAttempt(
-    id: string
-  ): Promise<SignupAttemptRow> {
-    const attempt = await this.requireAttempt(id);
-    this.assertAttemptVerifiable(attempt);
-    return attempt;
+  private assertAttemptResendable(attempt: SignupAttemptRow): void {
+    if (attempt.status === 'completed') {
+      throw new HttpException(
+        { success: false, error: 'Signup already completed' },
+        HttpStatus.CONFLICT
+      );
+    }
+    if (attempt.status === 'failed' || this.isExpired(attempt)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Signup attempt expired. Please start again.',
+        },
+        HttpStatus.GONE
+      );
+    }
   }
 
   private assertAttemptVerifiable(attempt: SignupAttemptRow): void {
-    if (new Date(attempt.expires_at).getTime() <= Date.now()) {
-      void this.attemptStore.updateStatus(attempt.id, 'expired');
+    if (attempt.status === 'failed' || attempt.status === 'expired') {
       throw new HttpException(
-        { success: false, error: 'Signup attempt expired' },
+        {
+          success: false,
+          error: 'Signup attempt expired. Please start again.',
+        },
+        HttpStatus.GONE
+      );
+    }
+    // OTP TTL only applies before Auth0 verification; post-OTP provision can retry.
+    if (attempt.status === 'pending' && this.isExpired(attempt)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Signup attempt expired. Please start again.',
+        },
         HttpStatus.GONE
       );
     }
     if (
-      attempt.status === 'superseded' ||
-      attempt.status === 'failed' ||
-      attempt.status === 'expired'
+      attempt.status === 'pending' &&
+      attempt.verify_attempts >= MAX_VERIFY_ATTEMPTS
     ) {
+      void this.markAttemptFailed(attempt.id);
       throw new HttpException(
-        { success: false, error: 'Signup attempt is no longer valid' },
-        HttpStatus.CONFLICT
-      );
-    }
-    if (attempt.status === 'completed') return;
-  }
-
-  private assertResendAllowed(attempt: SignupAttemptRow): void {
-    const elapsed =
-      Date.now() - new Date(attempt.last_otp_sent_at).getTime();
-    if (elapsed < SIGNUP_OTP_RESEND_COOLDOWN_MS) {
-      throw new HttpException(
-        { success: false, error: 'Please wait before requesting another code' },
+        {
+          success: false,
+          error: 'Too many invalid codes. Please start signup again.',
+        },
         HttpStatus.TOO_MANY_REQUESTS
       );
     }
   }
 
+  private isExpired(attempt: SignupAttemptRow): boolean {
+    return (
+      attempt.status === 'expired' ||
+      new Date(attempt.expires_at).getTime() <= Date.now()
+    );
+  }
 
-  private async findUserById(
-    userId: string
-  ): Promise<SignupCreatedUser | null> {
-    const result = await this.hasuraSystemService.executeQuery<{
-      users_by_pk: SignupCreatedUser | null;
+  private async sendOtpForAttempt(attempt: SignupAttemptRow): Promise<void> {
+    if (attempt.channel === 'email') {
+      const email = this.normalizeEmail(attempt.email);
+      if (this.isTestUser(email, false)) return;
+      await this.auth0Service.startEmailOtp(email);
+      return;
+    }
+    const phone = this.normalizePhone(attempt.phone_number);
+    if (this.isTestUser(phone, true)) return;
+    await this.auth0Service.startSmsOtp(phone);
+  }
+
+  private async touchOtpSent(attemptId: string): Promise<SignupAttemptRow> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_signup_attempts_by_pk: SignupAttemptRow;
     }>(
       `
-      query SignupAttemptUser($id: uuid!) {
+      mutation TouchSignupOtp($id: uuid!, $sentAt: timestamptz!) {
+        update_signup_attempts_by_pk(
+          pk_columns: { id: $id }
+          _set: { last_otp_sent_at: $sentAt, updated_at: $sentAt }
+        ) {
+          id
+          channel
+          email
+          phone_number
+          payload
+          status
+          verify_attempts
+          last_otp_sent_at
+          expires_at
+          completed_user_id
+          completion_result
+        }
+      }
+    `,
+      { id: attemptId, sentAt: new Date().toISOString() }
+    );
+    return result.update_signup_attempts_by_pk;
+  }
+
+  private async incrementVerifyAttempts(
+    attempt: SignupAttemptRow
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation IncSignupVerifyAttempts($id: uuid!, $n: Int!, $updatedAt: timestamptz!) {
+        update_signup_attempts_by_pk(
+          pk_columns: { id: $id }
+          _set: { verify_attempts: $n, updated_at: $updatedAt }
+        ) { id }
+      }
+    `,
+      {
+        id: attempt.id,
+        n: attempt.verify_attempts + 1,
+        updatedAt: new Date().toISOString(),
+      }
+    );
+  }
+
+  private async markOtpVerified(
+    attemptId: string,
+    tokens: Auth0TokenResponse
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation MarkSignupOtpVerified(
+        $id: uuid!
+        $updatedAt: timestamptz!
+        $result: jsonb!
+      ) {
+        update_signup_attempts_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            status: "otp_verified"
+            updated_at: $updatedAt
+            completion_result: $result
+          }
+        ) { id }
+      }
+    `,
+      {
+        id: attemptId,
+        updatedAt: new Date().toISOString(),
+        result: {
+          tokens,
+          completedAt: new Date().toISOString(),
+          pendingProvision: true,
+        },
+      }
+    );
+  }
+
+  private async markAttemptFailed(attemptId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation FailSignupAttempt($id: uuid!, $updatedAt: timestamptz!) {
+          update_signup_attempts_by_pk(
+            pk_columns: { id: $id }
+            _set: { status: "failed", updated_at: $updatedAt, payload: {}, email: null, phone_number: null }
+          ) { id }
+        }
+      `,
+        { id: attemptId, updatedAt: new Date().toISOString() }
+      );
+    } catch (error: any) {
+      this.logger.warn(`Failed to mark signup attempt failed: ${error?.message}`);
+    }
+  }
+
+  private async verifyOtpAgainstAuth0(
+    attempt: SignupAttemptRow,
+    otp: string
+  ): Promise<Auth0TokenResponse> {
+    if (attempt.channel === 'email') {
+      const email = this.normalizeEmail(attempt.email);
+      if (this.isTestUser(email, false)) {
+        return this.auth0Service.verifyTestUserEmail(email);
+      }
+      return this.auth0Service.verifyEmailOtp(email, otp);
+    }
+    const phone = this.normalizePhone(attempt.phone_number);
+    if (this.isTestUser(phone, true)) {
+      return this.auth0Service.verifyTestUserPhone(phone);
+    }
+    return this.auth0Service.verifySmsOtp(phone, otp);
+  }
+
+  private assertTokenMatchesAttempt(
+    tokens: Auth0TokenResponse,
+    attempt: SignupAttemptRow
+  ): void {
+    if (!tokens?.access_token) {
+      throw new HttpException(
+        { success: false, error: 'Auth0 did not return an access token' },
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    if (!tokens.id_token) return;
+    const claims = jwt.decode(tokens.id_token) as Auth0IdTokenClaims | null;
+    if (!claims?.sub) {
+      throw new HttpException(
+        { success: false, error: 'Invalid id_token returned by Auth0' },
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    if (attempt.channel === 'email') {
+      const claimed = this.normalizeEmail(claims.email);
+      const expected = this.normalizeEmail(attempt.email);
+      if (claimed && expected && claimed !== expected) {
+        throw new HttpException(
+          { success: false, error: 'Verified identity does not match signup' },
+          HttpStatus.CONFLICT
+        );
+      }
+      return;
+    }
+    const claimedPhone = this.normalizePhone(claims.phone_number);
+    const expectedPhone = this.normalizePhone(attempt.phone_number);
+    if (claimedPhone && expectedPhone && claimedPhone !== expectedPhone) {
+      throw new HttpException(
+        { success: false, error: 'Verified identity does not match signup' },
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private replayCompletion(snapshot: SignupCompletionSnapshot): {
+    tokens: Auth0TokenResponse;
+    user: SignupCreatedUser;
+    launchPromo: SignupLaunchPromoResult | null;
+  } {
+    const age = Date.now() - new Date(snapshot.completedAt).getTime();
+    if (age > COMPLETION_TOKEN_TTL_MS || !snapshot.tokens?.access_token) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Signup already completed. Please log in.',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    return {
+      tokens: snapshot.tokens,
+      user: snapshot.user,
+      launchPromo: snapshot.launchPromo,
+    };
+  }
+
+  private async provisionFromVerifiedAttempt(
+    attempt: SignupAttemptRow,
+    tokens?: Auth0TokenResponse
+  ): Promise<{
+    tokens: Auth0TokenResponse;
+    user: SignupCreatedUser;
+    launchPromo: SignupLaunchPromoResult | null;
+  }> {
+    if (attempt.status === 'completed' && attempt.completion_result?.user?.id) {
+      return this.replayCompletion(attempt.completion_result);
+    }
+    const authTokens = tokens || attempt.completion_result?.tokens;
+    if (!authTokens?.access_token) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'Verification succeeded earlier but provisioning is incomplete. Please retry.',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    const claimed = await this.claimAttemptForProvisioning(attempt.id);
+    if (!claimed) {
+      const latest = await this.loadAttempt(attempt.id);
+      if (latest.status === 'completed' && latest.completion_result?.user?.id) {
+        return this.replayCompletion(latest.completion_result);
+      }
+      const staleClaimed = await this.claimStaleProvisioningAttempt(attempt.id);
+      if (!staleClaimed) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Signup is already being completed. Please retry shortly.',
+          },
+          HttpStatus.CONFLICT
+        );
+      }
+    }
+    try {
+      return await this.finishProvisioning(attempt, authTokens);
+    } catch (error: any) {
+      await this.releaseProvisioningClaim(attempt.id, authTokens);
+      throw error;
+    }
+  }
+
+  private async finishProvisioning(
+    attempt: SignupAttemptRow,
+    authTokens: Auth0TokenResponse
+  ): Promise<{
+    tokens: Auth0TokenResponse;
+    user: SignupCreatedUser;
+    launchPromo: SignupLaunchPromoResult | null;
+  }> {
+    const payload = attempt.payload;
+    const email = this.normalizeEmail(payload.email || attempt.email);
+    const phoneNumber = this.normalizePhone(
+      payload.phone_number || attempt.phone_number
+    );
+    const existing = await this.findExistingUserByContacts(email, phoneNumber);
+    const provisioned = existing
+      ? await this.createVerifiedUser({
+          payload,
+          personas: this.normalizeSignupPersonas(payload),
+          email,
+          phoneNumber,
+          channel: attempt.channel,
+          resumeUserId: existing.id,
+        })
+      : await this.createFreshProvisionedUser(
+          attempt,
+          email,
+          phoneNumber,
+          payload
+        );
+    const snapshot: SignupCompletionSnapshot = {
+      user: provisioned.user,
+      launchPromo: provisioned.launchPromo,
+      tokens: authTokens,
+      completedAt: new Date().toISOString(),
+    };
+    await this.markAttemptCompleted(attempt.id, provisioned.user.id, snapshot);
+    return {
+      tokens: authTokens,
+      user: provisioned.user,
+      launchPromo: provisioned.launchPromo,
+    };
+  }
+
+  private async createFreshProvisionedUser(
+    attempt: SignupAttemptRow,
+    email: string,
+    phoneNumber: string,
+    payload: SignupStartPayload
+  ): Promise<{
+    user: SignupCreatedUser;
+    launchPromo: SignupLaunchPromoResult | null;
+  }> {
+    await this.assertContactsAvailable(email, phoneNumber);
+    return this.createVerifiedUser({
+      payload,
+      personas: this.normalizeSignupPersonas(payload),
+      email,
+      phoneNumber,
+      channel: attempt.channel,
+    });
+  }
+
+  private async findExistingUserByContacts(
+    email: string,
+    phoneNumber: string
+  ): Promise<SignupCreatedUser | null> {
+    if (email) {
+      const byEmail = await this.loadUserByContact('email', email);
+      if (byEmail) return byEmail;
+    }
+    if (phoneNumber) {
+      return this.loadUserByContact('phone_number', phoneNumber);
+    }
+    return null;
+  }
+
+  private async loadUserByContact(
+    field: 'email' | 'phone_number',
+    value: string
+  ): Promise<SignupCreatedUser | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users: SignupCreatedUser[];
+    }>(
+      `
+      query LoadSignupUserByContact($value: String!) {
+        users(where: { ${field}: { _eq: $value } }, limit: 1) {
+          id
+          email
+          first_name
+          last_name
+          user_type_id
+          phone_number
+          email_verified
+        }
+      }
+    `,
+      { value }
+    );
+    return result.users?.[0] || null;
+  }
+
+  /**
+   * Atomically claim an attempt for provisioning so concurrent verify calls
+   * cannot create duplicate users.
+   */
+  private async claimAttemptForProvisioning(attemptId: string): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_signup_attempts: { affected_rows: number };
+    }>(
+      `
+      mutation ClaimSignupAttempt($id: uuid!, $updatedAt: timestamptz!) {
+        update_signup_attempts(
+          where: {
+            id: { _eq: $id }
+            status: { _in: ["pending", "otp_verified"] }
+            completed_user_id: { _is_null: true }
+          }
+          _set: { status: "provisioning", updated_at: $updatedAt }
+        ) {
+          affected_rows
+        }
+      }
+    `,
+      { id: attemptId, updatedAt: new Date().toISOString() }
+    );
+    return (result.update_signup_attempts?.affected_rows || 0) === 1;
+  }
+
+  /** Reclaim attempts stuck in provisioning after a crashed worker (2+ minutes). */
+  private async claimStaleProvisioningAttempt(
+    attemptId: string
+  ): Promise<boolean> {
+    const staleBefore = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_signup_attempts: { affected_rows: number };
+    }>(
+      `
+      mutation ClaimStaleSignupProvision(
+        $id: uuid!
+        $updatedAt: timestamptz!
+        $staleBefore: timestamptz!
+      ) {
+        update_signup_attempts(
+          where: {
+            id: { _eq: $id }
+            status: { _eq: "provisioning" }
+            completed_user_id: { _is_null: true }
+            updated_at: { _lt: $staleBefore }
+          }
+          _set: { status: "provisioning", updated_at: $updatedAt }
+        ) {
+          affected_rows
+        }
+      }
+    `,
+      {
+        id: attemptId,
+        updatedAt: new Date().toISOString(),
+        staleBefore,
+      }
+    );
+    return (result.update_signup_attempts?.affected_rows || 0) === 1;
+  }
+
+  private async releaseProvisioningClaim(
+    attemptId: string,
+    tokens: Auth0TokenResponse
+  ): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation ReleaseSignupProvisionClaim(
+          $id: uuid!
+          $updatedAt: timestamptz!
+          $result: jsonb!
+        ) {
+          update_signup_attempts(
+            where: {
+              id: { _eq: $id }
+              status: { _eq: "provisioning" }
+              completed_user_id: { _is_null: true }
+            }
+            _set: {
+              status: "otp_verified"
+              updated_at: $updatedAt
+              completion_result: $result
+            }
+          ) {
+            affected_rows
+          }
+        }
+      `,
+        {
+          id: attemptId,
+          updatedAt: new Date().toISOString(),
+          result: {
+            tokens,
+            completedAt: new Date().toISOString(),
+            pendingProvision: true,
+          },
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to release signup provisioning claim: ${error?.message}`
+      );
+    }
+  }
+
+  private async createVerifiedUser(input: {
+    payload: SignupStartPayload;
+    personas: PersonaId[];
+    email: string;
+    phoneNumber: string;
+    channel: SignupOtpChannel;
+    resumeUserId?: string;
+  }): Promise<{
+    user: SignupCreatedUser;
+    launchPromo: SignupLaunchPromoResult | null;
+  }> {
+    const { payload, personas, email, phoneNumber, channel } = input;
+    const normalizedAddress = normalizeSignupAddress({
+      country: payload.country,
+      store_location: payload.store_location,
+      address: payload.address,
+    });
+    const signupReferral =
+      await this.referralProvisioning.resolveSignupReferral(
+        personas,
+        payload.referral_agent_code
+      );
+    const businessReferralFields =
+      this.referralProvisioning.getBusinessInsertReferralFields(signupReferral);
+    const agentReferralFields =
+      this.referralProvisioning.getAgentInsertReferralFields(signupReferral);
+    const businessName =
+      payload.profile?.name?.trim() || `${payload.first_name}'s Business`;
+    const nestStoreAddress =
+      personas.includes('business') &&
+      normalizedAddress &&
+      !normalizedAddress.countryOnly
+        ? normalizedAddress
+        : undefined;
+    const { user, entities, businessLocation } = input.resumeUserId
+      ? await this.loadProvisionedUserContext(input.resumeUserId)
+      : await this.userProvisioning.createPendingUser({
+          email: email || null,
+          first_name: payload.first_name,
+          last_name: payload.last_name,
+          phone_number: phoneNumber || null,
+          email_verified: channel === 'email',
+          country: normalizedAddress?.country ?? null,
+          personas,
+          vehicle_type_id: payload.profile?.vehicle_type_id,
+          agent_focus: payload.profile?.agent_focus,
+          business_name: businessName,
+          main_interest: payload.profile?.main_interest ?? 'sell_items',
+          ...businessReferralFields,
+          ...agentReferralFields,
+          storeAddress: nestStoreAddress,
+        });
+    await this.markPhoneVerifiedIfNeeded(user.id, channel === 'sms');
+    if (normalizedAddress && !input.resumeUserId) {
+      await this.seedLegacyAddresses(
+        user.id,
+        entities,
+        normalizedAddress,
+        Boolean(businessLocation)
+      );
+    }
+    const { launchPromo } = await this.businessProvisioning.runPostCommitEffects({
+      userId: user.id,
+      entities,
+      businessLocation,
+      storeAddress: nestStoreAddress ?? normalizedAddress,
+      phoneNumber: phoneNumber || payload.phone_number,
+      businessName,
+      countryCode: normalizedAddress?.country,
+    });
+    await this.referralProvisioning.runPostCommitEffects({
+      entities,
+      referral: signupReferral,
+      referralAgentCode: payload.referral_agent_code,
+      country: normalizedAddress?.country,
+      businessName,
+      ownerName: `${payload.first_name} ${payload.last_name}`.trim(),
+    });
+    await this.businessProvisioning.scheduleEnsureContractForUser(user.id);
+    this.emitCompleteRegistration(user, payload);
+    return {
+      user: {
+        ...user,
+        email_verified: channel === 'email' ? true : user.email_verified,
+      },
+      launchPromo: launchPromo
+        ? {
+            status: launchPromo.status,
+            ordersRemaining: launchPromo.ordersRemaining,
+            businessLimit: launchPromo.businessLimit,
+            zeroCommissionOrders: launchPromo.zeroCommissionOrders,
+            identificationWindowDays: launchPromo.identificationWindowDays,
+          }
+        : null,
+    };
+  }
+
+  private async loadProvisionedUserContext(userId: string): Promise<{
+    user: SignupCreatedUser;
+    entities: Array<{ id: string; type: PersonaId }>;
+    businessLocation?: {
+      id: string;
+      addressId: string;
+      country: string;
+      city: string;
+    };
+  }> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: {
+        id: string;
+        email: string | null;
+        first_name: string;
+        last_name: string;
+        user_type_id: string;
+        phone_number: string | null;
+        email_verified: boolean;
+        client?: { id: string } | null;
+        agent?: { id: string } | null;
+        business?: {
+          id: string;
+          business_locations?: Array<{
+            id: string;
+            address_id: string;
+            address?: { country: string; city: string };
+          }>;
+        } | null;
+      } | null;
+    }>(
+      `
+      query LoadProvisionedSignupUser($id: uuid!) {
         users_by_pk(id: $id) {
           id
           email
@@ -611,74 +1098,114 @@ export class SignupService {
           user_type_id
           phone_number
           email_verified
+          client { id }
+          agent { id }
+          business {
+            id
+            business_locations(limit: 1) {
+              id
+              address_id
+              address { country city }
+            }
+          }
         }
       }
     `,
       { id: userId }
     );
-    return result.users_by_pk;
+    const row = result.users_by_pk;
+    if (!row) {
+      throw new HttpException(
+        { success: false, error: 'Signup user not found for resume' },
+        HttpStatus.CONFLICT
+      );
+    }
+    const entities: Array<{ id: string; type: PersonaId }> = [];
+    if (row.client?.id) entities.push({ id: row.client.id, type: 'client' });
+    if (row.agent?.id) entities.push({ id: row.agent.id, type: 'agent' });
+    if (row.business?.id) {
+      entities.push({ id: row.business.id, type: 'business' });
+    }
+    const loc = row.business?.business_locations?.[0];
+    return {
+      user: {
+        id: row.id,
+        email: row.email,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        user_type_id: row.user_type_id,
+        phone_number: row.phone_number,
+        email_verified: row.email_verified,
+      },
+      entities,
+      businessLocation: loc?.id
+        ? {
+            id: loc.id,
+            addressId: loc.address_id,
+            country: loc.address?.country ?? '',
+            city: loc.address?.city ?? '',
+          }
+        : undefined,
+    };
   }
 
-  private async findUserByPayloadContacts(
-    payload: SignupAttemptPayload
-  ): Promise<SignupCreatedUser | null> {
-    const email = payload.email ? this.normalizeEmail(payload.email) : null;
-    const phone = payload.phone_number
-      ? this.normalizePhone(payload.phone_number)
-      : null;
-    if (!email && !phone) return null;
-    const result = await this.hasuraSystemService.executeQuery<{
-      users: SignupCreatedUser[];
-    }>(
+  private async markPhoneVerifiedIfNeeded(
+    userId: string,
+    shouldVerify: boolean
+  ): Promise<void> {
+    if (!shouldVerify) return;
+    await this.hasuraSystemService.executeMutation(
       `
-      query SignupAttemptUserByContact($email: String, $phone: String) {
-        users(
-          where: {
-            _or: [
-              { email: { _eq: $email } }
-              { phone_number: { _eq: $phone } }
-            ]
-          }
-          limit: 1
-        ) {
-          id
-          email
-          first_name
-          last_name
-          user_type_id
-          phone_number
-          email_verified
-        }
+      mutation MarkSignupPhoneVerified($id: uuid!) {
+        update_users_by_pk(
+          pk_columns: { id: $id }
+          _set: { phone_number_verified: true }
+        ) { id }
       }
     `,
-      { email, phone }
+      { id: userId }
     );
-    return result.users?.[0] ?? null;
   }
 
-  private async assertContactsStillAvailable(
-    payload: SignupAttemptPayload
+  private async markAttemptCompleted(
+    attemptId: string,
+    userId: string,
+    snapshot: SignupCompletionSnapshot
   ): Promise<void> {
-    if (payload.email && (await this.isEmailTaken(payload.email))) {
-      throw new HttpException(
-        { success: false, error: 'Email is already taken' },
-        HttpStatus.CONFLICT
-      );
-    }
-    if (
-      payload.phone_number &&
-      (await this.isPhoneTaken(payload.phone_number))
-    ) {
-      throw new HttpException(
-        { success: false, error: 'Phone number is already taken' },
-        HttpStatus.CONFLICT
-      );
-    }
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation CompleteSignupAttempt(
+        $id: uuid!
+        $userId: uuid!
+        $result: jsonb!
+        $updatedAt: timestamptz!
+      ) {
+        update_signup_attempts_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            status: "completed"
+            completed_user_id: $userId
+            completion_result: $result
+            updated_at: $updatedAt
+            payload: {}
+            email: null
+            phone_number: null
+          }
+        ) { id }
+      }
+    `,
+      {
+        id: attemptId,
+        userId,
+        result: snapshot,
+        updatedAt: new Date().toISOString(),
+      }
+    );
   }
 
   private emitCompleteRegistration(
     user: SignupCreatedUser,
-    payload: SignupAttemptPayload
+    payload: SignupStartPayload
   ): void {
     void this.metaConversionsService.trackCompleteRegistrationSafe({
       eventId: metaRegistrationEventId(user.id),
@@ -725,6 +1252,33 @@ export class SignupService {
     }
   }
 
+  private async cleanupExpiredAttempts(): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation CleanupExpiredSignupAttempts($now: timestamptz!) {
+          update_signup_attempts(
+            where: {
+              status: { _eq: "pending" }
+              expires_at: { _lt: $now }
+            }
+            _set: {
+              status: "expired"
+              payload: {}
+              email: null
+              phone_number: null
+              updated_at: $now
+            }
+          ) { affected_rows }
+        }
+      `,
+        { now: new Date().toISOString() }
+      );
+    } catch (error: any) {
+      this.logger.warn(`Signup attempt cleanup failed: ${error?.message}`);
+    }
+  }
+
   private isTestUser(identifier: string, isPhone: boolean): boolean {
     if (!this.auth0Service.isTestUsersEnabled()) return false;
     return isPhone
@@ -750,54 +1304,5 @@ export class SignupService {
       { success: false, error: 'personas or user_type_id is required' },
       HttpStatus.BAD_REQUEST
     );
-  }
-
-  /** @deprecated Pending-user contact updates are retired; restart signup. */
-  async updateContact(_body: unknown): Promise<never> {
-    throw new HttpException(
-      {
-        success: false,
-        error: 'Contact updates require restarting signup verification',
-      },
-      HttpStatus.GONE
-    );
-  }
-
-  /** @deprecated Completion is now part of verify-otp. */
-  async completeSignup(_userId: string, _auth0User: unknown): Promise<never> {
-    throw new HttpException(
-      {
-        success: false,
-        error: 'Signup completion is handled by OTP verification',
-      },
-      HttpStatus.GONE
-    );
-  }
-
-  /** Legacy path retained for older clients; prefer verifySignupOtp. */
-  async verifyOtp(body: {
-    email?: string;
-    phone_number?: string;
-    otp: string;
-    userId?: string;
-    attemptId?: string;
-  }): Promise<Auth0TokenResponse | SignupCompletionResult> {
-    if (body.attemptId) {
-      return this.verifySignupOtp({
-        attemptId: body.attemptId,
-        otp: body.otp,
-      });
-    }
-    throw new HttpException(
-      {
-        success: false,
-        error: 'attemptId is required for signup OTP verification',
-      },
-      HttpStatus.BAD_REQUEST
-    );
-  }
-
-  async purgeExpiredAttempts(): Promise<number> {
-    return this.attemptStore.purgeExpired();
   }
 }

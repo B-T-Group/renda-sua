@@ -9,6 +9,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { isValidPhoneNumber } from 'libphonenumber-js';
 import React, { useMemo, useState } from 'react';
 import { FormProvider } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +17,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { useAgentReferralLookup } from '../../../hooks/useAgentReferralLookup';
 import { useSupportedCountries } from '../../../hooks/useSupportedCountries';
-import { isSignupCountryCode } from '../../../constants/marketCountries';
+import {
+  isAfricanMarketCountry,
+  isSignupCountryCode,
+} from '../../../constants/marketCountries';
 import { getMetaBrowserContext } from '../../../utils/metaBrowserIds';
 import LoginMethodDialog from '../../auth/LoginMethodDialog';
 import Logo from '../../common/Logo';
@@ -27,12 +31,32 @@ import type { CountryOnboardingUi } from './types';
 import { useSignupWizard } from './useSignupWizard';
 import { WizardChrome } from './WizardChrome';
 
-interface SignupStartAttempt {
+interface SignupAttemptStartResponse {
+  success: boolean;
   attemptId: string;
-  channel: 'email' | 'phone';
-  contactHint: string;
+  channel: 'email' | 'sms';
   expiresAt: string;
   resendAvailableAt: string;
+}
+
+function persistSignupAttemptSession(input: {
+  attemptId: string;
+  channel: 'email' | 'sms';
+  email: string;
+  phone: string | null;
+  expiresAt: string;
+}): void {
+  sessionStorage.setItem('pendingSignupAttemptId', input.attemptId);
+  sessionStorage.setItem('pendingSignupEmail', input.email);
+  sessionStorage.setItem('pendingSignupOtpChannel', input.channel);
+  sessionStorage.setItem('pendingSignupOtpExpiresAtMs', String(Date.parse(input.expiresAt) || Date.now() + 15 * 60 * 1000));
+  if (input.channel === 'sms' && input.phone) {
+    sessionStorage.setItem('pendingSignupPhone', input.phone);
+  } else {
+    sessionStorage.removeItem('pendingSignupPhone');
+  }
+  sessionStorage.removeItem('pendingSignupUserId');
+  sessionStorage.removeItem('pendingSignupLaunchPromo');
 }
 
 export const SignupWizard: React.FC = () => {
@@ -83,45 +107,9 @@ export const SignupWizard: React.FC = () => {
     error: referralLookupError,
   } = useAgentReferralLookup(referralCode);
 
-  const contactEmailTaken =
-    wizard.activeStepId === 'contact' && emailTaken;
-
-  const persistSignupAttempt = (
-    attempt: SignupStartAttempt,
-    values: ReturnType<typeof wizard.form.getValues>
-  ) => {
-    const emailNormalized = (values.contact.email || '').trim().toLowerCase();
-    const phoneNormalized = (values.contact.phone || '').trim();
-    sessionStorage.setItem('pendingSignupAttemptId', attempt.attemptId);
-    sessionStorage.setItem('pendingSignupEmail', emailNormalized);
-    sessionStorage.setItem('pendingSignupOtpExpiresAtMs', String(Date.parse(attempt.expiresAt) || Date.now() + 15 * 60 * 1000));
-    sessionStorage.setItem(
-      'pendingSignupOtpResendAtMs',
-      String(Date.parse(attempt.resendAvailableAt) || Date.now() + 2 * 60 * 1000)
-    );
-    if (attempt.channel === 'phone' && phoneNormalized) {
-      sessionStorage.setItem('pendingSignupPhone', phoneNormalized);
-    } else {
-      sessionStorage.removeItem('pendingSignupPhone');
-    }
-    sessionStorage.removeItem('pendingSignupUserId');
-    sessionStorage.removeItem('pendingSignupLaunchPromo');
-  };
-
-  const startSignupAttempt = async (
-    values: ReturnType<typeof wizard.form.getValues>
-  ) => {
-    const payload = buildSignupPayload(values);
-    const { data } = await apiClient.post<
-      { success: boolean } & SignupStartAttempt
-    >('/auth/signup/start', {
-      ...payload,
-      ...getMetaBrowserContext(),
-      eventSourceUrl:
-        typeof window !== 'undefined' ? window.location.href : undefined,
-    });
-    return data;
-  };
+  const contactEmail =
+    (wizard.form.watch('contact.email') || '').trim().toLowerCase();
+  const contactEmailTaken = wizard.activeStepId === 'contact' && emailTaken;
 
   const handleWizardNext = async () => {
     if (wizard.activeStepId === 'contact' && emailTaken) return;
@@ -194,15 +182,41 @@ export const SignupWizard: React.FC = () => {
         return;
       }
 
-      const attempt = await startSignupAttempt(values);
-      persistSignupAttempt(attempt, values);
-      // Keep draft until OTP succeeds so contact corrections can restart cleanly.
+      const payload = buildSignupPayload(values);
+      const emailNormalized = (payload.email || '').trim().toLowerCase();
+      const phoneNormalized = (payload.phone_number || '').trim();
+      const useSms =
+        Boolean(phoneNormalized) &&
+        isValidPhoneNumber(phoneNormalized) &&
+        isAfricanMarketCountry(values.country);
+
+      const { data } = await apiClient.post<SignupAttemptStartResponse>(
+        '/auth/signup/start',
+        {
+          ...payload,
+          verification_channel: useSms ? 'sms' : 'email',
+          ...getMetaBrowserContext(),
+          eventSourceUrl:
+            typeof window !== 'undefined' ? window.location.href : undefined,
+        }
+      );
+
+      persistSignupAttemptSession({
+        attemptId: data.attemptId,
+        channel: data.channel,
+        email: emailNormalized,
+        phone: useSms ? phoneNormalized : null,
+        expiresAt: data.expiresAt,
+      });
       navigate('/auth/otp?flow=signup');
     } catch (err: any) {
       const apiError =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
-        t('signupPage.createAccountError', 'Unable to start verification at this time.');
+        t(
+          'signupPage.createAccountError',
+          'Unable to start verification at this time.'
+        );
       if (
         err?.response?.status === 409 ||
         String(apiError).toLowerCase().includes('already taken')
@@ -222,7 +236,10 @@ export const SignupWizard: React.FC = () => {
     }
   };
 
-  const subtitle = t(wizard.activeStep.subtitleKey, wizard.activeStep.subtitleDefault);
+  const subtitle = t(
+    wizard.activeStep.subtitleKey,
+    wizard.activeStep.subtitleDefault
+  );
 
   return (
     <>
@@ -298,7 +315,7 @@ export const SignupWizard: React.FC = () => {
                 onLoginInstead: () => setLoginDialogOpen(true),
                 emailTaken,
                 setEmailTaken,
-                ownSignupEmail: null,
+                ownSignupEmail: contactEmail || null,
               }}
             >
               <FormProvider {...wizard.form}>
@@ -343,4 +360,3 @@ export const SignupWizard: React.FC = () => {
     </>
   );
 };
-

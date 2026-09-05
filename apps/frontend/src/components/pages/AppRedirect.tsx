@@ -7,15 +7,13 @@ const AppRedirect: React.FC = () => {
 
   useEffect(() => {
     const pendingSignupAttemptId = sessionStorage.getItem('pendingSignupAttemptId');
-    const pendingSignupUserId = sessionStorage.getItem('pendingSignupUserId');
-    if (!pendingSignupAttemptId && !pendingSignupUserId) return;
+    if (!pendingSignupAttemptId) return;
     sessionStorage.removeItem('pendingSignupAttemptId');
-    sessionStorage.removeItem('pendingSignupUserId');
     sessionStorage.removeItem('pendingSignupEmail');
     sessionStorage.removeItem('pendingSignupPhone');
+    sessionStorage.removeItem('pendingSignupOtpChannel');
     sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
-    sessionStorage.removeItem('pendingSignupOtpResendAtMs');
-    sessionStorage.removeItem('pendingSignupLaunchPromo');
+    sessionStorage.removeItem('pendingSignupUserId');
   }, []);
 
   return (

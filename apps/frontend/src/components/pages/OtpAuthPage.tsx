@@ -1,9 +1,22 @@
-import { Alert, Box, Button, CircularProgress, Container, Paper, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import LaunchPromoCongrats, {
+  LaunchPromoCongratsData,
+} from '../business/LaunchPromoCongrats';
 import { clearSignupDraft } from '../signup/wizard/useSignupDraft';
 import Logo from '../common/Logo';
 
@@ -16,6 +29,19 @@ const OtpAuthPage: React.FC = () => {
   const flow = search.get('flow') || 'login';
   const emailFromQuery = search.get('email') || '';
   const isSignup = flow === 'signup';
+  const attemptId = useMemo(
+    () => sessionStorage.getItem('pendingSignupAttemptId') || '',
+    []
+  );
+  const channel = useMemo(
+    () =>
+      (sessionStorage.getItem('pendingSignupOtpChannel') as
+        | 'email'
+        | 'sms'
+        | null) ||
+      (sessionStorage.getItem('pendingSignupPhone') ? 'sms' : 'email'),
+    []
+  );
   const initialEmail = useMemo(() => {
     if (emailFromQuery) {
       sessionStorage.setItem('pendingLoginEmail', emailFromQuery);
@@ -23,33 +49,34 @@ const OtpAuthPage: React.FC = () => {
     }
     const key = isSignup ? 'pendingSignupEmail' : 'pendingLoginEmail';
     return sessionStorage.getItem(key) || '';
-  }, [isSignup, emailFromQuery]);
+  }, [emailFromQuery, isSignup]);
+  const initialPhone = useMemo(
+    () => (isSignup ? sessionStorage.getItem('pendingSignupPhone') || '' : ''),
+    [isSignup]
+  );
   const [email, setEmail] = useState(initialEmail);
-  const [digits, setDigits] = useState<string[]>(Array.from({ length: 6 }, () => ''));
+  const [digits, setDigits] = useState<string[]>(
+    Array.from({ length: 6 }, () => '')
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [launchPromo, setLaunchPromo] =
+    useState<LaunchPromoCongratsData | null>(null);
   const [remainingMs, setRemainingMs] = useState<number>(() => {
     const key = isSignup
       ? 'pendingSignupOtpExpiresAtMs'
       : 'pendingLoginOtpExpiresAtMs';
     const stored = sessionStorage.getItem(key);
-    const expiresAt = stored ? Number(stored) : Date.now() + 5 * 60 * 1000;
+    const expiresAt = stored ? Number(stored) : Date.now() + 15 * 60 * 1000;
     return Math.max(0, expiresAt - Date.now());
   });
-  const [resendRemainingMs, setResendRemainingMs] = useState<number>(() => {
-    if (!isSignup) return 0;
-    const stored = sessionStorage.getItem('pendingSignupOtpResendAtMs');
-    if (!stored) return 0;
-    return Math.max(0, Number(stored) - Date.now());
-  });
-  const [resendBusy, setResendBusy] = useState(false);
 
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setRemainingMs((ms) => Math.max(0, ms - 1000));
-      setResendRemainingMs((ms) => Math.max(0, ms - 1000));
     }, 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -102,14 +129,18 @@ const OtpAuthPage: React.FC = () => {
     inputRefs.current[nextIndex]?.focus();
   };
 
-  const clearSignupSessionKeys = () => {
+  const clearSignupSession = () => {
     sessionStorage.removeItem('pendingSignupAttemptId');
     sessionStorage.removeItem('pendingSignupEmail');
     sessionStorage.removeItem('pendingSignupPhone');
+    sessionStorage.removeItem('pendingSignupOtpChannel');
     sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
-    sessionStorage.removeItem('pendingSignupOtpResendAtMs');
     sessionStorage.removeItem('pendingSignupUserId');
+  };
+
+  const goToApp = () => {
     sessionStorage.removeItem('pendingSignupLaunchPromo');
+    navigate('/app');
   };
 
   const handleVerify = async () => {
@@ -117,11 +148,10 @@ const OtpAuthPage: React.FC = () => {
     setError(null);
     try {
       if (isSignup) {
-        const attemptId = sessionStorage.getItem('pendingSignupAttemptId');
         if (!attemptId) {
           setError(
             t(
-              'auth.otp.attemptMissing',
+              'auth.signupFlow.attemptMissing',
               'Verification session expired. Please start signup again.'
             )
           );
@@ -131,22 +161,23 @@ const OtpAuthPage: React.FC = () => {
           attemptId,
           otp,
         });
-        const tokens = res.data?.tokens || res.data;
-        const launchPromo = res.data?.launchPromo;
-        setPasswordlessSession(tokens);
+        setPasswordlessSession(res.data);
         clearSignupDraft();
-        clearSignupSessionKeys();
-        if (launchPromo) {
+        clearSignupSession();
+        await apiClient.get('/users/me');
+        const promo = res.data?.launchPromo as LaunchPromoCongratsData | null;
+        if (promo) {
+          setLaunchPromo(promo);
           try {
             sessionStorage.setItem(
               'pendingSignupLaunchPromo',
-              JSON.stringify(launchPromo)
+              JSON.stringify(promo)
             );
           } catch {
             // ignore
           }
+          return;
         }
-        await apiClient.get('/users/me');
         navigate('/app');
         return;
       }
@@ -167,16 +198,15 @@ const OtpAuthPage: React.FC = () => {
   };
 
   const handleResend = async () => {
-    if (resendBusy || (isSignup ? resendRemainingMs > 0 : !isExpired)) return;
+    if (resendBusy || isExpired) return;
     setResendBusy(true);
     setError(null);
     try {
       if (isSignup) {
-        const attemptId = sessionStorage.getItem('pendingSignupAttemptId');
         if (!attemptId) {
           setError(
             t(
-              'auth.otp.attemptMissing',
+              'auth.signupFlow.attemptMissing',
               'Verification session expired. Please start signup again.'
             )
           );
@@ -185,42 +215,56 @@ const OtpAuthPage: React.FC = () => {
         const res = await apiClient.post('/auth/signup/resend-otp', {
           attemptId,
         });
-        const expiresAt = res.data?.expiresAt
-          ? Date.parse(res.data.expiresAt)
-          : Date.now() + 15 * 60 * 1000;
-        const resendAt = res.data?.resendAvailableAt
-          ? Date.parse(res.data.resendAvailableAt)
-          : Date.now() + 2 * 60 * 1000;
-        sessionStorage.setItem(
-          'pendingSignupOtpExpiresAtMs',
-          String(expiresAt)
-        );
-        sessionStorage.setItem(
-          'pendingSignupOtpResendAtMs',
-          String(resendAt)
-        );
-        setRemainingMs(Math.max(0, expiresAt - Date.now()));
-        setResendRemainingMs(Math.max(0, resendAt - Date.now()));
-      } else {
-        await apiClient.post('/auth/login/start-otp', { email });
-        const expiresAt = Date.now() + 5 * 60 * 1000;
-        sessionStorage.setItem(
-          'pendingLoginOtpExpiresAtMs',
-          String(expiresAt)
-        );
-        setRemainingMs(5 * 60 * 1000);
+        if (res.data?.expiresAt) {
+          sessionStorage.setItem(
+            'pendingSignupOtpExpiresAtMs',
+            String(
+              Date.parse(res.data.expiresAt) || Date.now() + 15 * 60 * 1000
+            )
+          );
+          setRemainingMs(
+            Math.max(0, Date.parse(res.data.expiresAt) - Date.now())
+          );
+        }
+        setDigits(Array.from({ length: 6 }, () => ''));
+        return;
       }
+      await apiClient.post('/auth/login/start-otp', { email });
       setDigits(Array.from({ length: 6 }, () => ''));
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
           err?.message ||
-          t('auth.otp.resendFailed', 'Could not resend code.')
+          t('auth.otp.resendFailed', 'Could not resend code. Please try again.')
       );
     } finally {
       setResendBusy(false);
     }
   };
+
+  const contactLabel =
+    channel === 'sms' && initialPhone
+      ? initialPhone
+      : email || t('auth.emailAddressLabel', 'Email address');
+
+  if (launchPromo) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 5 }}>
+        <Paper sx={{ p: 4, borderRadius: 3 }}>
+          <Stack spacing={2.5}>
+            <Logo variant="default" size="medium" />
+            <Typography variant="h4">
+              {t('auth.otpSignup.successTitle', 'Account verified')}
+            </Typography>
+            <LaunchPromoCongrats promo={launchPromo} />
+            <Button variant="contained" size="large" onClick={goToApp}>
+              {t('common.continue', 'Continue')}
+            </Button>
+          </Stack>
+        </Paper>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="sm" sx={{ py: 5 }}>
@@ -229,15 +273,14 @@ const OtpAuthPage: React.FC = () => {
           <Logo variant="default" size="medium" />
           <Typography variant="h4">
             {isSignup
-              ? t('auth.otp.verifyContactTitle', 'Verify your contact')
+              ? t('auth.otpSignup.title', 'Verify your contact')
               : t('auth.otpLogin.titleShort', 'Log in with OTP')}
           </Typography>
           <Typography color="text.secondary">
-            {isSignup
-              ? t(
-                  'auth.otp.verifyContactSubtitle',
-                  'Enter the code we sent to confirm your contact before your account is created.'
-                )
+            {channel === 'sms'
+              ? t('auth.otp.enterCodeSms', 'Enter the OTP sent to {{phone}}.', {
+                  phone: contactLabel,
+                })
               : t('auth.otp.enterCode', 'Enter the OTP sent to your email.')}
           </Typography>
           <Box
@@ -262,11 +305,12 @@ const OtpAuthPage: React.FC = () => {
             ) : null}
           </Box>
           {error && <Alert severity="error">{error}</Alert>}
-          {!isSignup ? (
+          {!isSignup || channel === 'email' ? (
             <TextField
               label={t('auth.emailAddressLabel', 'Email address')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={isSignup}
             />
           ) : null}
           <Box
@@ -293,21 +337,30 @@ const OtpAuthPage: React.FC = () => {
           </Box>
           <Button
             variant="contained"
-            disabled={loading || otp.length < 6}
+            size="large"
+            disabled={loading || otp.length < 6 || isExpired}
             onClick={() => void handleVerify()}
           >
-            {loading ? <CircularProgress size={22} /> : t('auth.otp.verify', 'Verify')}
+            {loading ? (
+              <CircularProgress size={22} color="inherit" />
+            ) : (
+              t('common.verify', 'Verify')
+            )}
           </Button>
           <Button
-            variant="text"
-            disabled={resendBusy || (isSignup ? resendRemainingMs > 0 || remainingMs <= 0 : !isExpired)}
+            color="inherit"
+            disabled={resendBusy || isExpired}
             onClick={() => void handleResend()}
           >
-            {t('auth.otp.resend', 'Resend code')}
+            {resendBusy
+              ? t('common.loading', 'Loading…')
+              : t('auth.otp.resend', 'Resend code')}
           </Button>
           {isSignup ? (
             <Button color="inherit" onClick={() => navigate('/signup')}>
-              {t('auth.otp.changeEmail', 'Change email')}
+              {channel === 'sms'
+                ? t('auth.otp.changeNumber', 'Change phone number')
+                : t('auth.otp.changeEmail', 'Change email')}
             </Button>
           ) : null}
         </Stack>
