@@ -22,6 +22,7 @@ import AgentEarningsWidget from '../common/AgentEarningsWidget';
 import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
 import AgentQuickStats from '../common/AgentQuickStats';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
+import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import { ReferredBusinessesList } from '../referrals/ReferredBusinessesList';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
@@ -105,6 +106,7 @@ const AgentDashboard: React.FC = () => {
           </Alert>
         ) : null}
         <ReferralPayoutSnapshot source="agent" walletPath="/profile" />
+        <AssistantHomeEntry />
         <Grid container spacing={1.5} sx={{ width: '100%' }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <AgentEarningsWidget summary={summary} loading={loading} error={error} />

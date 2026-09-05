@@ -4,11 +4,17 @@ import { WhatsAppInboundService } from './whatsapp-inbound.service';
 
 describe('WhatsAppInboundService', () => {
   const inbox = {
-    persistInbound: jest.fn().mockResolvedValue('msg-1'),
+    persistInbound: jest.fn().mockResolvedValue({
+      messageId: 'msg-1',
+      conversationId: 'conv-1',
+    }),
     markByWamid: jest.fn().mockResolvedValue(undefined),
   };
   const replyService = { handleInboundText: jest.fn() };
   const analytics = { markByProviderMessageId: jest.fn() };
+  const notifications = {
+    notifyWhatsAppInboxInbound: jest.fn().mockResolvedValue(undefined),
+  };
 
   function buildService(appSecret = 'secret') {
     const configService = {
@@ -18,7 +24,8 @@ describe('WhatsAppInboundService', () => {
       configService,
       analytics as any,
       replyService as any,
-      inbox as any
+      inbox as any,
+      notifications as any
     );
   }
 
@@ -70,6 +77,37 @@ describe('WhatsAppInboundService', () => {
       text: 'STOP',
       messageId: 'wamid.in.1',
     });
+    expect(notifications.notifyWhatsAppInboxInbound).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      preview: 'STOP',
+      customerPhone: '15557654321',
+    });
+  });
+
+  it('does not push staff when the inbound message is a duplicate wamid', async () => {
+    inbox.persistInbound.mockResolvedValueOnce(null);
+    const service = buildService();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.dup',
+                    type: 'text',
+                    text: { body: 'hello' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(notifications.notifyWhatsAppInboxInbound).not.toHaveBeenCalled();
   });
 
   it('stores delivery status in analytics and inbox', async () => {
@@ -134,6 +172,36 @@ describe('WhatsAppInboundService', () => {
       })
     );
     expect(replyService.handleInboundText).not.toHaveBeenCalled();
+  });
+
+  it('stores image captions as the inbox preview', async () => {
+    const service = buildService();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.img.cap',
+                    type: 'image',
+                    image: { id: 'media-2', caption: 'Storefront' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(inbox.persistInbound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'image',
+        body: 'Storefront',
+      })
+    );
   });
 
   it('routes interactive button replies', async () => {
@@ -210,5 +278,44 @@ describe('WhatsAppInboundService', () => {
       })
     ).resolves.toEqual({ received: true });
     expect(replyService.handleInboundText).toHaveBeenCalled();
+  });
+
+  it('routes template quick-reply button taps', async () => {
+    const service = buildService();
+    replyService.handleInteractiveReply = jest.fn();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.tpl.btn',
+                    type: 'button',
+                    button: { text: 'Confirmer', payload: 'Confirmer' },
+                    context: { id: 'wamid.out.order-c' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(inbox.persistInbound).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'interactive',
+        body: 'Confirmer',
+      })
+    );
+    expect(replyService.handleInteractiveReply).toHaveBeenCalledWith({
+      fromPhone: '15557654321',
+      buttonId: 'Confirmer',
+      buttonTitle: 'Confirmer',
+      messageId: 'wamid.tpl.btn',
+      contextMessageId: 'wamid.out.order-c',
+    });
   });
 });

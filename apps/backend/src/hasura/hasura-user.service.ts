@@ -73,6 +73,20 @@ export interface CreateOrderRequest {
     special_instructions?: string;
   };
   fulfillment_timing?: 'asap' | 'scheduled';
+  /**
+   * ISO 3166-1 alpha-2 billing country of the payer. Kept separate from the
+   * fulfillment country so a payer abroad can fund a local delivery.
+   */
+  payer_country?: string;
+  /** Explicit opt-in to the recipient block, even when contact fields are blank. */
+  sending_to_someone_else?: boolean;
+  /** Person receiving the order locally, when that is not the paying client. */
+  recipient?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    notify_whatsapp?: boolean;
+  };
 }
 
 export interface Item {
