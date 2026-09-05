@@ -51,6 +51,7 @@ function makeInventoryRow(overrides: {
   itemName?: string;
   canAcceptOrders?: boolean;
   phoneVerified?: boolean;
+  interestOnly?: boolean;
 } = {}) {
   const sellerCountry = overrides.sellerCountry ?? 'CM';
   const isStripeCountry = sellerCountry === 'CA';
@@ -89,6 +90,7 @@ function makeInventoryRow(overrides: {
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
       shipping_enabled: overrides.shippingEnabled ?? false,
       shipping_price: overrides.shippingPrice ?? null,
+      interest_only: overrides.interestOnly ?? false,
       item_variants: [],
     },
   };
@@ -712,6 +714,58 @@ describe('CheckoutPreflightService', () => {
     expect(
       result.blocking_errors.some((e) => e.code === 'DELIVERY_COUNTRY_MISMATCH')
     ).toBe(true);
+  });
+
+  it('blocks checkout for interest-only listings', async () => {
+    mockInventory([
+      makeInventoryRow({ itemName: 'Quote Part', interestOnly: true }),
+    ]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    expect(result.blocking_errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'INTEREST_ONLY_ITEM',
+          message: expect.stringContaining('Quote Part'),
+        }),
+      ])
+    );
+  });
+
+  it('blocks only the interest-only line in a mixed cart', async () => {
+    mockInventory([
+      makeInventoryRow({ id: 'inv-buy', itemName: 'Buyable' }),
+      makeInventoryRow({
+        id: 'inv-quote',
+        itemName: 'Quote Part',
+        interestOnly: true,
+      }),
+    ]);
+
+    const dto: CheckoutPreflightDto = {
+      items: [
+        { business_inventory_id: 'inv-buy', quantity: 1 },
+        { business_inventory_id: 'inv-quote', quantity: 1 },
+      ],
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(result.can_proceed).toBe(false);
+    expect(
+      result.blocking_errors.filter((e) => e.code === 'INTEREST_ONLY_ITEM')
+    ).toHaveLength(1);
+    expect(
+      result.blocking_errors.some((e) => e.message.includes('Buyable'))
+    ).toBe(false);
   });
 
   it('blocks checkout when merchant cannot accept orders', async () => {

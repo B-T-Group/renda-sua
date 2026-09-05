@@ -765,6 +765,53 @@ describe('OrdersService', () => {
       );
     });
 
+    it('rejects interest-only listings instead of creating a purchase', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraUserService.getUserAddressById.mockResolvedValue({
+        id: 'address-123',
+        address_line_1: '123 Main St',
+        city: 'Toronto',
+        state: 'ON',
+        postal_code: 'M5V 1A1',
+        country: 'CA',
+      } as any);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 100,
+      } as any);
+      (service as any).paymentRoutingService.resolveRailForUser.mockResolvedValue(
+        'mobile_money'
+      );
+
+      const inventory = shippingInventoryFixture();
+      inventory.item = { ...inventory.item, interest_only: true };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [inventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+
+      await expect(
+        service.createOrder({
+          delivery_address_id: 'address-123',
+          fulfillment_method: 'shipping',
+          payment_timing: 'pay_now',
+          phone_number: '+14165550123',
+          items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
+        })
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { error: 'INTEREST_ONLY_ITEM' },
+      });
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
     it('inserts wallet pay_now orders as pending_payment before finalizing payment', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.sessionPersonaContext.mockReturnValue({
