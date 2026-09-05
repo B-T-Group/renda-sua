@@ -58,7 +58,7 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
-  cancellationReasonId?: number; // Required for cancel endpoint
+  cancellationReasonId: number; // Required for cancel endpoint
 }
 
 export interface CompleteDeliveryRequest {
