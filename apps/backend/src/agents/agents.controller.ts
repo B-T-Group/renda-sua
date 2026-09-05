@@ -411,7 +411,7 @@ export class AgentsController {
   @ApiOperation({
     summary: 'List businesses referred by the current agent',
     description:
-      'Follow-up list with owner contact, lifecycle, payment-setup status, and item counts.',
+      'Follow-up list with owner contact, lifecycle, payment-setup status, item counts, and one-time commission progress.',
   })
   @ApiResponse({ status: 200, description: 'Referred businesses list' })
   @ApiResponse({ status: 403, description: 'User is not an agent' })

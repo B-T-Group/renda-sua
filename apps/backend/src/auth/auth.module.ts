@@ -5,6 +5,7 @@ import { AddressesModule } from '../addresses/addresses.module';
 import { AgentsModule } from '../agents/agents.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
+import { CreditsModule } from '../credits/credits.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
@@ -17,6 +18,7 @@ import { LoginService } from './login.service';
 import { PermissionService } from './permission.service';
 import { SignupController } from './signup.controller';
 import { SignupService } from './signup.service';
+import { SignupAttemptCleanupService } from './signup-attempt-cleanup.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
@@ -29,6 +31,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     AddressesModule,
     AgentsModule,
     BusinessReferralsModule,
+    CreditsModule,
     BusinessContractsModule,
     LaunchPromoModule,
     MobilePaymentPhoneSeedModule,
@@ -41,6 +44,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     LoginService,
     PermissionService,
     SignupService,
+    SignupAttemptCleanupService,
     UserProvisioningService,
     BusinessProvisioningService,
     ReferralProvisioningService,

@@ -18,6 +18,15 @@ describe('DeepLinkService', () => {
     expect(links.path).toBe('/orders/abc-123');
   });
 
+  it('builds product interest inbox links', () => {
+    const links = service.productInterest();
+    expect(links.app).toBe('rendasua://business/product-interest');
+    expect(links.universal).toBe(
+      'https://rendasua.com/app/business/product-interest'
+    );
+    expect(links.path).toBe('/business/product-interest');
+  });
+
   it('builds wallet links', () => {
     const links = service.wallet();
     expect(links.app).toBe('rendasua://wallet');
@@ -29,6 +38,15 @@ describe('DeepLinkService', () => {
     const links = service.verification();
     expect(links.universal).toBe('https://rendasua.com/app/verification');
     expect(links.path).toBe('/documents');
+  });
+
+  it('builds WhatsApp inbox links', () => {
+    const links = service.whatsAppInbox('conv-1');
+    expect(links.app).toBe('rendasua://admin/whatsapp/conv-1');
+    expect(links.universal).toBe(
+      'https://rendasua.com/app/admin/whatsapp/conv-1'
+    );
+    expect(links.path).toBe('/admin/whatsapp/conv-1');
   });
 
   it('strips trailing slash from public web origin', () => {

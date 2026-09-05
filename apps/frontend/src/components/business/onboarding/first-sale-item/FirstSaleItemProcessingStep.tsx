@@ -44,6 +44,7 @@ export interface ProcessingCompletePayload {
 export interface FirstSaleItemProcessingStepProps {
   files: File[];
   merchantHint: string;
+  isFoodItem?: boolean;
   asyncCleanupRequested: boolean;
   initialImageIds?: string[];
   initialItemId?: string | null;
@@ -112,6 +113,7 @@ const FirstSaleItemProcessingStep: React.FC<
 > = ({
   files,
   merchantHint,
+  isFoodItem = false,
   asyncCleanupRequested,
   initialImageIds = [],
   initialItemId = null,
@@ -209,13 +211,14 @@ const FirstSaleItemProcessingStep: React.FC<
       }>('/ai/image-item-suggestions', {
         imageIds: ids,
         ...(merchantHint.trim() ? { hint: merchantHint.trim() } : {}),
+        ...(isFoodItem ? { isFoodItem: true } : {}),
       });
       if (response.data.success && response.data.data) {
         return response.data.data;
       }
       throw new Error(response.data.error || 'Could not analyze photos');
     },
-    [apiClient, merchantHint]
+    [apiClient, isFoodItem, merchantHint]
   );
 
   const runPipeline = useCallback(async () => {

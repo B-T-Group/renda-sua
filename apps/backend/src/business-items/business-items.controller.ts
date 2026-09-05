@@ -48,6 +48,9 @@ import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { BusinessAccountTypeService } from './business-account-type.service';
 import { ChangeAccountTypeDto } from './dto/change-account-type.dto';
+import { FoodService } from '../food/food.service';
+import { UpdateFoodSettingsDto } from '../food/dto/update-food-settings.dto';
+import { SetFoodAvailabilityDto } from '../food/dto/set-food-availability.dto';
 
 const CSV_UPLOAD_ROW_LIMIT = 500;
 
@@ -62,7 +65,8 @@ export class BusinessItemsController {
     private readonly itemDealsService: ItemDealsService,
     private readonly accessService: BusinessItemsAccessService,
     private readonly transferService: BusinessLocationTransferService,
-    private readonly businessAccountTypeService: BusinessAccountTypeService
+    private readonly businessAccountTypeService: BusinessAccountTypeService,
+    private readonly foodService: FoodService
   ) {}
 
   @Get('business/account-type')
@@ -149,6 +153,7 @@ export class BusinessItemsController {
       properties: {
         name: { type: 'string' },
         phone: { type: 'string' },
+        order_alert_phone: { type: 'string', nullable: true },
         mobile_payment_phone_id: {
           type: 'string',
           format: 'uuid',
@@ -181,6 +186,7 @@ export class BusinessItemsController {
     body: {
       name?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -472,6 +478,7 @@ export class BusinessItemsController {
           },
         },
         phone: { type: 'string' },
+        order_alert_phone: { type: 'string', nullable: true },
         mobile_payment_phone_id: {
           type: 'string',
           format: 'uuid',
@@ -509,6 +516,7 @@ export class BusinessItemsController {
       };
       address_id?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -712,6 +720,94 @@ export class BusinessItemsController {
         HttpStatus.NOT_FOUND
       );
     }
+  }
+
+  @Get('items/:itemId/locations/:locationId/food-settings')
+  @ApiOperation({
+    summary: 'Get the serving schedule for a food item at one location',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiParam({ name: 'itemId', description: 'Item UUID' })
+  @ApiParam({ name: 'locationId', description: 'Business location UUID' })
+  @ApiResponse({ status: 200, description: 'Food settings retrieved' })
+  @ApiResponse({ status: 400, description: 'Item is not a food item' })
+  @ApiResponse({ status: 404, description: 'Item or location not found' })
+  async getFoodSettings(
+    @Param('itemId') itemId: string,
+    @Param('locationId') locationId: string,
+    @Query('businessId') businessId?: string
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const data = await this.foodService.getSettings(
+      ctx.targetBusinessId,
+      itemId,
+      locationId
+    );
+    return { success: true, data };
+  }
+
+  @Put('items/:itemId/locations/:locationId/food-settings')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary: 'Replace the weekly serving schedule for a food item at one location',
+    description:
+      'Sends the complete schedule. An empty slots array clears it, which makes the dish available at all times. A window whose end_time is earlier than its start_time runs past midnight.',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiParam({ name: 'itemId', description: 'Item UUID' })
+  @ApiParam({ name: 'locationId', description: 'Business location UUID' })
+  @ApiResponse({ status: 200, description: 'Schedule updated' })
+  @ApiResponse({
+    status: 400,
+    description: 'Item is not a food item, or windows are invalid or overlapping',
+  })
+  @ApiResponse({ status: 404, description: 'Item or location not found' })
+  @ApiBody({ type: UpdateFoodSettingsDto })
+  async updateFoodSettings(
+    @Param('itemId') itemId: string,
+    @Param('locationId') locationId: string,
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: UpdateFoodSettingsDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const data = await this.foodService.replaceAvailabilitySlots(
+      ctx.targetBusinessId,
+      itemId,
+      locationId,
+      body.slots ?? []
+    );
+    return { success: true, data };
+  }
+
+  @Post('items/:itemId/locations/:locationId/food-availability')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary: 'Mark a food item sold out for today, or put it back on the menu',
+    description:
+      'The sold-out flag lasts for the rest of the local day at that location and clears itself on the next day the dish is served.',
+  })
+  @ApiQuery({ name: 'businessId', required: false })
+  @ApiParam({ name: 'itemId', description: 'Item UUID' })
+  @ApiParam({ name: 'locationId', description: 'Business location UUID' })
+  @ApiResponse({ status: 200, description: 'Availability updated' })
+  @ApiResponse({ status: 400, description: 'Item is not a food item' })
+  @ApiResponse({ status: 404, description: 'Item or location not found' })
+  @ApiBody({ type: SetFoodAvailabilityDto })
+  async setFoodAvailability(
+    @Param('itemId') itemId: string,
+    @Param('locationId') locationId: string,
+    @Query('businessId') businessId: string | undefined,
+    @Body() body: SetFoodAvailabilityDto
+  ) {
+    const ctx = await this.accessService.resolveAccess(businessId);
+    const data = await this.foodService.setAvailableToday(
+      ctx.targetBusinessId,
+      itemId,
+      locationId,
+      body.available
+    );
+    return { success: true, data };
   }
 
   @Patch('items/:itemId/promotion')

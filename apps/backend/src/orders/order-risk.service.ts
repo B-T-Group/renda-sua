@@ -79,6 +79,8 @@ export class OrderRiskService {
     now: DateTime
   ): RiskFactor[] {
     if (order.current_status !== 'pending' || !order.created_at) return [];
+    // The real acceptance SLA wins when it exists; age alone is only a fallback.
+    if (order.acceptance_deadline_at) return [];
     const minutes = now.diff(DateTime.fromISO(order.created_at), 'minutes')
       .minutes;
     if (minutes <= 30) return [];

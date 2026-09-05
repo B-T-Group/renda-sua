@@ -6,10 +6,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { requireUuid } from '../common/uuid.util';
+import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import type { Configuration } from '../config/configuration';
 import { NotificationsService } from '../notifications/notifications.service';
+import type { AuthorizedBusinessActor } from '../orders/authorized-business-actor';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import type { PersonaId } from '../users/persona.types';
@@ -22,10 +24,45 @@ import type {
   OrderMessage,
 } from './messaging.types';
 import { OrderParticipantsService } from './order-participants.service';
-import type { AuthorizedBusinessActor } from '../orders/authorized-business-actor';
 import { RecipientResolutionService } from './recipient-resolution.service';
 import { StructuredMessageTypeRegistry } from './structured/structured-message.registry';
 import type { MessageType } from './structured/structured-message.types';
+
+export const GET_LAST_MESSAGE_CREATED_AT = `
+  query GetLastMessageCreatedAt($lastId: uuid!) {
+    last_message: user_messages(
+      where: { id: { _eq: $lastId } }
+      limit: 1
+    ) {
+      created_at
+    }
+  }
+`;
+
+export const GET_MESSAGES_TO_MARK_READ = `
+  query GetMessagesToMark($orderId: uuid!, $entityType: entity_types_enum!, $upTo: timestamptz!) {
+    user_messages(
+      where: {
+        entity_id: { _eq: $orderId }
+        entity_type: { _eq: $entityType }
+        created_at: { _lte: $upTo }
+      }
+    ) {
+      id
+    }
+  }
+`;
+
+export const MARK_MESSAGES_READ = `
+  mutation MarkMessagesRead($objects: [message_reads_insert_input!]!) {
+    insert_message_reads(
+      objects: $objects
+      on_conflict: { constraint: uq_message_reads_message_user, update_columns: [] }
+    ) {
+      affected_rows
+    }
+  }
+`;
 
 @Injectable()
 export class MessagingService {
@@ -431,75 +468,49 @@ export class MessagingService {
     orderId: string,
     lastReadMessageId: string
   ): Promise<void> {
+    const lastId = requireUuid(lastReadMessageId, 'lastReadMessageId');
     const user = await this.hasuraUserService.getUser();
     const order = await this.loadOrderForMessaging(orderId);
     await this.assertMessagingAccess(user, order);
+    const upTo = await this.fetchLastMessageCreatedAt(lastId);
+    if (!upTo) return;
+    const messageIds = await this.fetchMessageIdsToMark(orderId, upTo);
+    if (messageIds.length === 0) return;
+    await this.upsertMessageReads(user.id, messageIds);
+  }
 
-    const getMessagesQuery = `
-      query GetMessagesUpTo($orderId: uuid!, $entityType: entity_types_enum!, $lastId: uuid!) {
-        last_message: user_messages(
-          where: { id: { _eq: $lastId } }
-          limit: 1
-        ) {
-          created_at
-        }
-      }
-    `;
-
-    const lastMessageResult = await this.hasuraSystemService.executeQuery<{
+  private async fetchLastMessageCreatedAt(
+    lastId: string
+  ): Promise<string | null> {
+    const result = await this.hasuraSystemService.executeQuery<{
       last_message: Array<{ created_at: string }>;
-    }>(getMessagesQuery, {
-      orderId,
-      entityType: 'order',
-      lastId: lastReadMessageId,
-    });
+    }>(GET_LAST_MESSAGE_CREATED_AT, { lastId });
+    return result.last_message?.[0]?.created_at ?? null;
+  }
 
-    const lastCreatedAt = lastMessageResult.last_message?.[0]?.created_at;
-    if (!lastCreatedAt) return;
-
-    const getMessagesToMarkQuery = `
-      query GetMessagesToMark($orderId: uuid!, $entityType: entity_types_enum!, $upTo: timestamptz!) {
-        user_messages(
-          where: {
-            entity_id: { _eq: $orderId }
-            entity_type: { _eq: $entityType }
-            created_at: { _lte: $upTo }
-          }
-        ) {
-          id
-        }
-      }
-    `;
-
+  private async fetchMessageIdsToMark(
+    orderId: string,
+    upTo: string
+  ): Promise<string[]> {
     const result = await this.hasuraSystemService.executeQuery<{
       user_messages: Array<{ id: string }>;
-    }>(getMessagesToMarkQuery, {
+    }>(GET_MESSAGES_TO_MARK_READ, {
       orderId,
       entityType: 'order',
-      upTo: lastCreatedAt,
+      upTo,
     });
+    return (result.user_messages ?? []).map((m) => m.id);
+  }
 
-    const messageIds = (result.user_messages ?? []).map((m) => m.id);
-    if (messageIds.length === 0) return;
-
-    const readObjects = messageIds.map((messageId) => ({
-      message_id: messageId,
-      user_id: user.id,
-    }));
-
-    const upsertMutation = `
-      mutation MarkMessagesRead($objects: [message_reads_insert_input!]!) {
-        insert_message_reads(
-          objects: $objects
-          on_conflict: { constraint: uq_message_reads_message_user, update_columns: [] }
-        ) {
-          affected_rows
-        }
-      }
-    `;
-
-    await this.hasuraSystemService.executeMutation(upsertMutation, {
-      objects: readObjects,
+  private async upsertMessageReads(
+    userId: string,
+    messageIds: string[]
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(MARK_MESSAGES_READ, {
+      objects: messageIds.map((messageId) => ({
+        message_id: messageId,
+        user_id: userId,
+      })),
     });
   }
 

@@ -38,7 +38,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
           message: t('client.orders.pendingNotice', {
             orderTotal: formatCurrency(orderTotal),
             defaultValue:
-              '⏳ Your {{orderTotal}} order is awaiting business confirmation. They typically respond within 10-15 minutes. You\'ll be notified once confirmed!',
+              "You'll be notified once the store confirms your {{orderTotal}} order (they have up to 45 minutes).",
           }),
         });
         if (isPayAtDelivery) {
@@ -46,7 +46,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
             severity: 'info' as const,
             message: t(
               'client.orders.payAtDelivery.pendingInfo',
-              'You chose pay at delivery. You will complete payment in the app when the agent arrives.'
+              'You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
             ),
           });
         }
@@ -79,7 +79,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
               severity: 'success' as const,
               message: t(
                 'client.orders.storeReadyPayAtPickup',
-                'Your order is ready at the store. Come during your pickup slot — the seller will request mobile money payment when you pick up.'
+                'When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.'
               ),
             });
           } else {
@@ -153,7 +153,7 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
             severity: 'warning' as const,
             message: t(
               'client.orders.payAtDelivery.outForDeliveryPaymentPending',
-              'Payment will be requested at delivery. Please keep your phone available to approve the mobile payment.'
+              'The agent will send a payment request when they arrive. Keep your phone nearby to approve it.'
             ),
           });
         }

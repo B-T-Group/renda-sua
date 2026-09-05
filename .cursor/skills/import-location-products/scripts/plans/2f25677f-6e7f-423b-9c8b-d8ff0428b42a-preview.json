@@ -1,0 +1,2613 @@
+{
+  "env": "prod",
+  "business_location_id": "2f25677f-6e7f-423b-9c8b-d8ff0428b42a",
+  "location_name": "Boucherie Zampini_L'Épiphanie",
+  "business_id": "64d7c474-9347-47a1-89ed-6d623766f3e1",
+  "business_name": "Rendasua Canada",
+  "currency": "CAD",
+  "country": "CA",
+  "rows": [
+    {
+      "source_row": 2,
+      "action": "skip_no_price",
+      "csv_category": "Boeuf/Veau",
+      "name": "Fesse de veau de grain (court) - entier",
+      "description": "Produit disponible seulement sur commande. Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Disponible sur commande.",
+      "price": null,
+      "price_unit": null,
+      "price_raw": "",
+      "selling_price": null,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-001",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "made_to_order_no_price",
+        "no_price"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 3,
+      "action": "skip_no_price",
+      "csv_category": "Boeuf/Veau",
+      "name": "Fesse de veau de grain (long) - entier",
+      "description": "Produit disponible seulement sur commande. Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Disponible sur commande.",
+      "price": null,
+      "price_unit": null,
+      "price_raw": "",
+      "selling_price": null,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-002",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "made_to_order_no_price",
+        "no_price"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 4,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Boeuf avec os",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 6,50 $/lb.",
+      "price": 6.5,
+      "price_unit": "lb",
+      "price_raw": "6,50 $/lb",
+      "selling_price": 6.5,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-003",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Roast%20beef.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 5,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Rib steak AA",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 17,00 $/lb.",
+      "price": 17.0,
+      "price_unit": "lb",
+      "price_raw": "17,00 $/lb",
+      "selling_price": 17.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-004",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/RibEyeSteak.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 6,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Côtelette de veau",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 17,00 $/lb.",
+      "price": 17.0,
+      "price_unit": "lb",
+      "price_raw": "17,00 $/lb",
+      "selling_price": 17.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-005",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 7,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Boeuf sans os (fesse - ronde de boeuf)",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 13,00 $/lb.",
+      "price": 13.0,
+      "price_unit": "lb",
+      "price_raw": "13,00 $/lb",
+      "selling_price": 13.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-006",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Roast%20beef.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 8,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Veau sans os",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 15,00 $/lb.",
+      "price": 15.0,
+      "price_unit": "lb",
+      "price_raw": "15,00 $/lb",
+      "selling_price": 15.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-007",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 9,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Veau avec os",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 9,25 $/lb.",
+      "price": 9.25,
+      "price_unit": "lb",
+      "price_raw": "9,25 $/lb",
+      "selling_price": 9.25,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-008",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Veal-shank.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 10,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Boeuf haché (5 lbs)",
+      "description": "Paquet de 5 lbs. Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 30,00 $.",
+      "price": 30.0,
+      "price_unit": "fixed",
+      "price_raw": "30,00 $",
+      "selling_price": 30.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-009",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Ground%20Beef.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 11,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Boeuf haché (1 lb)",
+      "description": "Paquet de 1 lb. Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 6,00 $.",
+      "price": 6.0,
+      "price_unit": "fixed",
+      "price_raw": "6,00 $",
+      "selling_price": 6.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-010",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Ground%20Beef.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 12,
+      "action": "skip_unavailable",
+      "csv_category": "Boeuf/Veau",
+      "name": "Veau haché (4 lbs)",
+      "description": "Pas disponible pour le moment. Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 22,00 $.",
+      "price": 22.0,
+      "price_unit": "fixed",
+      "price_raw": "22,00 $",
+      "selling_price": 22.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-011",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hackfleisch-1.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "marked_unavailable"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 13,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Foie de veau",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 4,00 $/lb.",
+      "price": 4.0,
+      "price_unit": "lb",
+      "price_raw": "4,00 $/lb",
+      "selling_price": 4.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-012",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20veal%20liver,%202010.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 14,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Foie de boeuf",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 4,00 $/lb.",
+      "price": 4.0,
+      "price_unit": "lb",
+      "price_raw": "4,00 $/lb",
+      "selling_price": 4.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-013",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20veal%20liver,%202010.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 15,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Coeur",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 5,00 $/lb.",
+      "price": 5.0,
+      "price_unit": "lb",
+      "price_raw": "5,00 $/lb",
+      "selling_price": 5.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-014",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Cattle%20Heart%20-%20External%20surface%202.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 16,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Tête de veau",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix à l’unité. Affichage catalogue: 30,00 $ chaque.",
+      "price": 30.0,
+      "price_unit": "each",
+      "price_raw": "30,00 $ chaque",
+      "selling_price": 30.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-015",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/A%20calf%27s%20head.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 17,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Rognon",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 3,50 $/lb.",
+      "price": 3.5,
+      "price_unit": "lb",
+      "price_raw": "3,50 $/lb",
+      "selling_price": 3.5,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-016",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig-kidney.JPG"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 18,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Langue de veau",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 9,00 $/lb.",
+      "price": 9.0,
+      "price_unit": "lb",
+      "price_raw": "9,00 $/lb",
+      "selling_price": 9.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-017",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Beef%20tongue%20preparation.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 19,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Queue de boeuf",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au paquet. Affichage catalogue: 20,00 $/paquet.",
+      "price": 20.0,
+      "price_unit": "pack",
+      "price_raw": "20,00 $/paquet",
+      "selling_price": 20.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-018",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Oxtailsoup.JPG"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 20,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Poumon",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 2,00 $/lb.",
+      "price": 2.0,
+      "price_unit": "lb",
+      "price_raw": "2,00 $/lb",
+      "selling_price": 2.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-019",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig%20lungs.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 21,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Estomac",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 4,00 $/lb.",
+      "price": 4.0,
+      "price_unit": "lb",
+      "price_raw": "4,00 $/lb",
+      "selling_price": 4.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-020",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 22,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Os de boeuf",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 1,00 $/lb.",
+      "price": 1.0,
+      "price_unit": "lb",
+      "price_raw": "1,00 $/lb",
+      "selling_price": 1.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-021",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 23,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Rate",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 2,00 $/lb.",
+      "price": 2.0,
+      "price_unit": "lb",
+      "price_raw": "2,00 $/lb",
+      "selling_price": 2.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-022",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 24,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Pied de boeuf",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au paquet. Affichage catalogue: 7,00 $/paquet.",
+      "price": 7.0,
+      "price_unit": "pack",
+      "price_raw": "7,00 $/paquet",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-023",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig%20trotter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 25,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Merguez",
+      "description": "1 lb. Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 8,00 $/lb.",
+      "price": 8.0,
+      "price_unit": "lb",
+      "price_raw": "8,00 $/lb",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-024",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Saucisses"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Huit%20merguez%20et%20trois%20saucisses%20en%20d%C3%A9but%20de%20cuisson%20au%20barbecue%20en%20mars%202020.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 26,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Pied de veau",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au paquet. Affichage catalogue: 7,00 $/paquet.",
+      "price": 7.0,
+      "price_unit": "pack",
+      "price_raw": "7,00 $/paquet",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-025",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig%20trotter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 27,
+      "action": "create",
+      "csv_category": "Boeuf/Veau",
+      "name": "Jarret de boeuf",
+      "description": "Viande fraîche de catégorie « Boeuf/Veau » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 8,00 $/lb.",
+      "price": 8.0,
+      "price_unit": "lb",
+      "price_raw": "8,00 $/lb",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-026",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Boeuf"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Veal-shank.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 28,
+      "action": "create",
+      "csv_category": "Agneau/Mouton",
+      "name": "Agneau (demi ou entier)",
+      "description": "Viande fraîche de catégorie « Agneau/Mouton » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 11,00 $/lb.",
+      "price": 11.0,
+      "price_unit": "lb",
+      "price_raw": "11,00 $/lb",
+      "selling_price": 11.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-027",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Agneau"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Lamb%20carcasses%20Kasap%20Suat%20Kadinlar%20Carsisi%20Fatih%20Istanbul%202026.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 29,
+      "action": "create",
+      "csv_category": "Agneau/Mouton",
+      "name": "Gigot de mouton",
+      "description": "Viande fraîche de catégorie « Agneau/Mouton » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 7,00 $/lb.",
+      "price": 7.0,
+      "price_unit": "lb",
+      "price_raw": "7,00 $/lb",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-028",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Agneau"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Lamb%20meat%20(1).jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 30,
+      "action": "skip_unavailable",
+      "csv_category": "Agneau/Mouton",
+      "name": "Foie d'agneau (au complet)",
+      "description": "Pas disponible pour le moment. Viande fraîche de catégorie « Agneau/Mouton » proposée par la boucherie. Prix à l’unité. Affichage catalogue: 32,00 $ chaque.",
+      "price": 32.0,
+      "price_unit": "each",
+      "price_raw": "32,00 $ chaque",
+      "selling_price": 32.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-029",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Agneau"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20veal%20liver,%202010.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "marked_unavailable"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 31,
+      "action": "create",
+      "csv_category": "Agneau/Mouton",
+      "name": "Tête d'agneau",
+      "description": "Viande fraîche de catégorie « Agneau/Mouton » proposée par la boucherie. Prix à l’unité. Affichage catalogue: 9,00 $ chaque.",
+      "price": 9.0,
+      "price_unit": "each",
+      "price_raw": "9,00 $ chaque",
+      "selling_price": 9.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-030",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Agneau"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/A%20calf%27s%20head.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 32,
+      "action": "create",
+      "csv_category": "Agneau/Mouton",
+      "name": "Gigot d'agneau (entier)",
+      "description": "Viande fraîche de catégorie « Agneau/Mouton » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 13,00 $/lb.",
+      "price": 13.0,
+      "price_unit": "lb",
+      "price_raw": "13,00 $/lb",
+      "selling_price": 13.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-031",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Agneau"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Lamb%20meat%20(1).jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 33,
+      "action": "create",
+      "csv_category": "Agneau/Mouton",
+      "name": "Estomac d'agneau",
+      "description": "Viande fraîche de catégorie « Agneau/Mouton » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 6,00 $/lb.",
+      "price": 6.0,
+      "price_unit": "lb",
+      "price_raw": "6,00 $/lb",
+      "selling_price": 6.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-032",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Agneau"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 34,
+      "action": "create",
+      "csv_category": "Agneau/Mouton",
+      "name": "Pied d'agneau",
+      "description": "Viande fraîche de catégorie « Agneau/Mouton » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 7,00 $/lb.",
+      "price": 7.0,
+      "price_unit": "lb",
+      "price_raw": "7,00 $/lb",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-033",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Agneau"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig%20trotter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 35,
+      "action": "create",
+      "csv_category": "Chèvre",
+      "name": "Chèvre avec peau brûlée",
+      "description": "Paquet de 3 lbs congelé. Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix au paquet. Affichage catalogue: 25,00 $/paquet.",
+      "price": 25.0,
+      "price_unit": "pack",
+      "price_raw": "25,00 $/paquet",
+      "selling_price": 25.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-034",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Frozen%20goat%20meat%20for%20sale%20at%20Lucky.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 36,
+      "action": "create",
+      "csv_category": "Chèvre",
+      "name": "Bouc (chèvre mâle entier seulement)",
+      "description": "Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 11,00 $/lb.",
+      "price": 11.0,
+      "price_unit": "lb",
+      "price_raw": "11,00 $/lb",
+      "selling_price": 11.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-035",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Frozen%20goat%20meat%20for%20sale%20at%20Lucky.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 37,
+      "action": "skip_unavailable",
+      "csv_category": "Chèvre",
+      "name": "Chèvre (femelle adulte)",
+      "description": "Item non disponible pour le moment. Viande fraîche de catégorie « Chèvre » proposée par la boucherie.",
+      "price": null,
+      "price_unit": null,
+      "price_raw": "",
+      "selling_price": null,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-036",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Frozen%20goat%20meat%20for%20sale%20at%20Lucky.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "marked_unavailable",
+        "no_price"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 38,
+      "action": "create",
+      "csv_category": "Chèvre",
+      "name": "Gigot de chèvre adulte",
+      "description": "Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 7,00 $/lb.",
+      "price": 7.0,
+      "price_unit": "lb",
+      "price_raw": "7,00 $/lb",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-037",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Frozen%20goat%20meat%20for%20sale%20at%20Lucky.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 39,
+      "action": "create",
+      "csv_category": "Chèvre",
+      "name": "Chèvre — Estomac",
+      "description": "Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 6,00 $/lb.",
+      "price": 6.0,
+      "price_unit": "lb",
+      "price_raw": "6,00 $/lb",
+      "selling_price": 6.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-038",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 40,
+      "action": "create",
+      "csv_category": "Chèvre",
+      "name": "Chèvre — Tête",
+      "description": "Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix à l’unité. Affichage catalogue: 9,00 $ chaque.",
+      "price": 9.0,
+      "price_unit": "each",
+      "price_raw": "9,00 $ chaque",
+      "selling_price": 9.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-039",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/A%20calf%27s%20head.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 41,
+      "action": "create",
+      "csv_category": "Chèvre",
+      "name": "Chèvre — Tête brûlée",
+      "description": "Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix à l’unité. Affichage catalogue: 15,00 $ chaque.",
+      "price": 15.0,
+      "price_unit": "each",
+      "price_raw": "15,00 $ chaque",
+      "selling_price": 15.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-040",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/A%20calf%27s%20head.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 42,
+      "action": "skip_unavailable",
+      "csv_category": "Chèvre",
+      "name": "Foie (complet)",
+      "description": "Pas disponible pour le moment. Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix à l’unité. Affichage catalogue: 32,00 $ chaque.",
+      "price": 32.0,
+      "price_unit": "each",
+      "price_raw": "32,00 $ chaque",
+      "selling_price": 32.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-041",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20veal%20liver,%202010.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "marked_unavailable"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 43,
+      "action": "create",
+      "csv_category": "Chèvre",
+      "name": "Chèvre — Pied",
+      "description": "Viande fraîche de catégorie « Chèvre » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 7,00 $/lb.",
+      "price": 7.0,
+      "price_unit": "lb",
+      "price_raw": "7,00 $/lb",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-042",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Chèvre"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig%20trotter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 44,
+      "action": "create",
+      "csv_category": "Charcuterie maison",
+      "name": "Bacon",
+      "description": "Ce produit n'est pas toujours disponible. Viande fraîche de catégorie « Charcuterie maison » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 8,00 $/lb.",
+      "price": 8.0,
+      "price_unit": "lb",
+      "price_raw": "8,00 $/lb",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-043",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Bacon%20slices.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 45,
+      "action": "create",
+      "csv_category": "Charcuterie maison",
+      "name": "Saucisse déjeuner (1 lb)",
+      "description": "Viande fraîche de catégorie « Charcuterie maison » proposée par la boucherie. Prix au paquet. Affichage catalogue: 5,00 $/paquet.",
+      "price": 5.0,
+      "price_unit": "pack",
+      "price_raw": "5,00 $/paquet",
+      "selling_price": 5.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-044",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Salsiccia%20Italian%20pork%20sausage.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 46,
+      "action": "create",
+      "csv_category": "Charcuterie maison",
+      "name": "Saucisse italienne - douce",
+      "description": "Paquet de 5 saucisses. Viande fraîche de catégorie « Charcuterie maison » proposée par la boucherie. Prix au paquet. Affichage catalogue: 8,00 $/paquet.",
+      "price": 8.0,
+      "price_unit": "pack",
+      "price_raw": "8,00 $/paquet",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-045",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Salsiccia%20Italian%20pork%20sausage.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 47,
+      "action": "create",
+      "csv_category": "Charcuterie maison",
+      "name": "Saucisse italienne - piquante",
+      "description": "Paquet de 5 saucisses. Viande fraîche de catégorie « Charcuterie maison » proposée par la boucherie. Prix au paquet. Affichage catalogue: 8,00 $/paquet.",
+      "price": 8.0,
+      "price_unit": "pack",
+      "price_raw": "8,00 $/paquet",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-046",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Salsiccia%20Italian%20pork%20sausage.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 48,
+      "action": "create",
+      "csv_category": "Charcuterie maison",
+      "name": "Merguez poulet",
+      "description": "Viande fraîche de catégorie « Charcuterie maison » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 7,00 $/lb.",
+      "price": 7.0,
+      "price_unit": "lb",
+      "price_raw": "7,00 $/lb",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-047",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Huit%20merguez%20et%20trois%20saucisses%20en%20d%C3%A9but%20de%20cuisson%20au%20barbecue%20en%20mars%202020.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 49,
+      "action": "create",
+      "csv_category": "Charcuterie maison",
+      "name": "Merguez de boeuf (1 lb)",
+      "description": "Viande fraîche de catégorie « Charcuterie maison » proposée par la boucherie. Prix au paquet. Affichage catalogue: 8,00 $/paquet.",
+      "price": 8.0,
+      "price_unit": "pack",
+      "price_raw": "8,00 $/paquet",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-048",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Huit%20merguez%20et%20trois%20saucisses%20en%20d%C3%A9but%20de%20cuisson%20au%20barbecue%20en%20mars%202020.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 50,
+      "action": "create",
+      "csv_category": "Divers",
+      "name": "Cheval haché",
+      "description": "Viande fraîche de catégorie « Divers » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 5,00 $/lb.",
+      "price": 5.0,
+      "price_unit": "lb",
+      "price_raw": "5,00 $/lb",
+      "selling_price": 5.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-049",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Cheval"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Horsemeat%20platter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 51,
+      "action": "create",
+      "csv_category": "Divers",
+      "name": "Steak de cheval",
+      "description": "Viande fraîche de catégorie « Divers » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 8,00 $/lb.",
+      "price": 8.0,
+      "price_unit": "lb",
+      "price_raw": "8,00 $/lb",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-050",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Cheval"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Horsemeat%20platter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 52,
+      "action": "create",
+      "csv_category": "Divers",
+      "name": "Cube de cheval",
+      "description": "Viande fraîche de catégorie « Divers » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 7,00 $/lb.",
+      "price": 7.0,
+      "price_unit": "lb",
+      "price_raw": "7,00 $/lb",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-051",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "create",
+        "name": "Cheval"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Horsemeat%20platter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 53,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Poulet de grain",
+      "description": "Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 3,50 $/lb.",
+      "price": 3.5,
+      "price_unit": "lb",
+      "price_raw": "3,50 $/lb",
+      "selling_price": 3.5,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-052",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20chicken.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 54,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Cuisse de poulet",
+      "description": "5 kg, non coupée. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 32,00 $.",
+      "price": 32.0,
+      "price_unit": "fixed",
+      "price_raw": "32,00 $",
+      "selling_price": 32.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-053",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Uncooked%20chicken%20legs.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 55,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Pilon de poulet",
+      "description": "5 kg, non coupé. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 32,00 $.",
+      "price": 32.0,
+      "price_unit": "fixed",
+      "price_raw": "32,00 $",
+      "selling_price": 32.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-054",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Uncooked%20chicken%20legs.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 56,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Aile de poulet",
+      "description": "5 kg. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 45,00 $.",
+      "price": 45.0,
+      "price_unit": "fixed",
+      "price_raw": "45,00 $",
+      "selling_price": 45.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-055",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Chicken%20wings%20as%20food.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 57,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Caille",
+      "description": "Paquet de 6. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 18,00 $.",
+      "price": 18.0,
+      "price_unit": "fixed",
+      "price_raw": "18,00 $",
+      "selling_price": 18.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-056",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Common%20quail%20(Coturnix%20coturnix)%202019.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 58,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Petite poule - pour bouillir",
+      "description": "Paquet de 3. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 18,00 $.",
+      "price": 18.0,
+      "price_unit": "fixed",
+      "price_raw": "18,00 $",
+      "selling_price": 18.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-057",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20chicken.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 59,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Grosse poule/coq - pour bouillir",
+      "description": "Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 3,00 $/lb.",
+      "price": 3.0,
+      "price_unit": "lb",
+      "price_raw": "3,00 $/lb",
+      "selling_price": 3.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-058",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20chicken.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 60,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Caisse de poule - pour bouillir",
+      "description": "Non coupée. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix à la caisse. Affichage catalogue: 50,00 $/caisse.",
+      "price": 50.0,
+      "price_unit": "case",
+      "price_raw": "50,00 $/caisse",
+      "selling_price": 50.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-059",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20chicken.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 61,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Gésier de poulet",
+      "description": "Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 6,00 $/lb.",
+      "price": 6.0,
+      "price_unit": "lb",
+      "price_raw": "6,00 $/lb",
+      "selling_price": 6.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-060",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Gizzard%20of%20Chicken.JPG"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 62,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Pilon de dinde",
+      "description": "5 kg. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 38,00 $.",
+      "price": 38.0,
+      "price_unit": "fixed",
+      "price_raw": "38,00 $",
+      "selling_price": 38.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-061",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Thanksgiving%20Dinner%20Turkey%20Drumstick%20Leg%20On%20Paper%20Plate%20free%20creative%20commons%20(4139402158).jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 63,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Aile de dinde",
+      "description": "5 kg. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 38,00 $.",
+      "price": 38.0,
+      "price_unit": "fixed",
+      "price_raw": "38,00 $",
+      "selling_price": 38.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-062",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Thanksgiving%20Dinner%20Turkey%20Drumstick%20Leg%20On%20Paper%20Plate%20free%20creative%20commons%20(4139402158).jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 64,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Cou de dinde",
+      "description": "5 kg. Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix forfaitaire. Affichage catalogue: 38,00 $.",
+      "price": 38.0,
+      "price_unit": "fixed",
+      "price_raw": "38,00 $",
+      "selling_price": 38.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-063",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Thanksgiving%20Dinner%20Turkey%20Drumstick%20Leg%20On%20Paper%20Plate%20free%20creative%20commons%20(4139402158).jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "dimensions": null
+    },
+    {
+      "source_row": 65,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Poitrine de poulet",
+      "description": "Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 8,00 $/lb.",
+      "price": 8.0,
+      "price_unit": "lb",
+      "price_raw": "8,00 $/lb",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-064",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Kycklingfil%C3%A9.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 66,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Saucisse merguez au poulet",
+      "description": "Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 7,00 $/lb.",
+      "price": 7.0,
+      "price_unit": "lb",
+      "price_raw": "7,00 $/lb",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-065",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Saucisses"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Huit%20merguez%20et%20trois%20saucisses%20en%20d%C3%A9but%20de%20cuisson%20au%20barbecue%20en%20mars%202020.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 67,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Poulet haché",
+      "description": "Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 5,00 $/lb.",
+      "price": 5.0,
+      "price_unit": "lb",
+      "price_raw": "5,00 $/lb",
+      "selling_price": 5.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-066",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hackfleisch-1.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 68,
+      "action": "create",
+      "csv_category": "Volaille",
+      "name": "Pintade",
+      "description": "Viande fraîche de catégorie « Volaille » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 8,00 $/lb.",
+      "price": 8.0,
+      "price_unit": "lb",
+      "price_raw": "8,00 $/lb",
+      "selling_price": 8.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-067",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Volaille"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Guinea%20Fowl%20male.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 69,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Côtelette",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 3,00 $/lb.",
+      "price": 3.0,
+      "price_unit": "lb",
+      "price_raw": "3,00 $/lb",
+      "selling_price": 3.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-068",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Longhorn%20Cowboy%20Pork%20Chops%20.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 70,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Épaule de porc avec os",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 2,00 $/lb.",
+      "price": 2.0,
+      "price_unit": "lb",
+      "price_raw": "2,00 $/lb",
+      "selling_price": 2.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-069",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pork%20Shoulders.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 71,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Fesse de porc avec os",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 2,00 $/lb.",
+      "price": 2.0,
+      "price_unit": "lb",
+      "price_raw": "2,00 $/lb",
+      "selling_price": 2.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-070",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pork%20Shoulders.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 72,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Flanc de porc",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 3,50 $/lb.",
+      "price": 3.5,
+      "price_unit": "lb",
+      "price_raw": "3,50 $/lb",
+      "selling_price": 3.5,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-071",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Samgyeopsal%20(pork%20belly).jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 73,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Côte levée",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 4,00 $/lb.",
+      "price": 4.0,
+      "price_unit": "lb",
+      "price_raw": "4,00 $/lb",
+      "selling_price": 4.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-072",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Rib%20Tips.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 74,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Porc haché",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 2,50 $/lb.",
+      "price": 2.5,
+      "price_unit": "lb",
+      "price_raw": "2,50 $/lb",
+      "selling_price": 2.5,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-073",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hackfleisch-1.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 75,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Langue de porc",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 2,00 $/lb.",
+      "price": 2.0,
+      "price_unit": "lb",
+      "price_raw": "2,00 $/lb",
+      "selling_price": 2.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-074",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Beef%20tongue%20preparation.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 76,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Os de porc",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 1,00 $/lb.",
+      "price": 1.0,
+      "price_unit": "lb",
+      "price_raw": "1,00 $/lb",
+      "selling_price": 1.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-075",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/FoodMeat.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 77,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Pied de porc",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 1,50 $/lb.",
+      "price": 1.5,
+      "price_unit": "lb",
+      "price_raw": "1,50 $/lb",
+      "selling_price": 1.5,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-076",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig%20trotter.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 78,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Tête de porc",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au livre (CAD/lb). Affichage catalogue: 1,00 $/lb.",
+      "price": 1.0,
+      "price_unit": "lb",
+      "price_raw": "1,00 $/lb",
+      "selling_price": 1.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-077",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Porc"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pig%20heads%20in%20a%20market.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [],
+      "weight_unit": "lb",
+      "dimensions": null
+    },
+    {
+      "source_row": 79,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Porc — Saucisse déjeuner (1 lb)",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au paquet. Affichage catalogue: 5,00 $/paquet.",
+      "price": 5.0,
+      "price_unit": "pack",
+      "price_raw": "5,00 $/paquet",
+      "selling_price": 5.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-078",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Salsiccia%20Italian%20pork%20sausage.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 80,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Porc — Saucisse italienne douce",
+      "description": "Paquet de 5. Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au paquet. Affichage catalogue: 7,00 $/paquet.",
+      "price": 7.0,
+      "price_unit": "pack",
+      "price_raw": "7,00 $/paquet",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-079",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Salsiccia%20Italian%20pork%20sausage.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 81,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Porc — Saucisse italienne piquante",
+      "description": "Paquet de 5. Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au paquet. Affichage catalogue: 7,00 $/paquet.",
+      "price": 7.0,
+      "price_unit": "pack",
+      "price_raw": "7,00 $/paquet",
+      "selling_price": 7.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-080",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Salsiccia%20Italian%20pork%20sausage.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "dimensions": null
+    },
+    {
+      "source_row": 82,
+      "action": "create",
+      "csv_category": "Porc",
+      "name": "Porc — Pepperoni (paquet de 1 lb)",
+      "description": "Viande fraîche de catégorie « Porc » proposée par la boucherie. Prix au paquet. Affichage catalogue: 5,00 $/paquet.",
+      "price": 5.0,
+      "price_unit": "pack",
+      "price_raw": "5,00 $/paquet",
+      "selling_price": 5.0,
+      "quantity": 10,
+      "unit_cost": 0,
+      "sku": "ZMP-081",
+      "category": {
+        "mode": "existing",
+        "name": "Viande"
+      },
+      "subcategory": {
+        "mode": "existing",
+        "name": "Charcuterie"
+      },
+      "brand": null,
+      "image": {
+        "mode": "url",
+        "image_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Salami%20pepperoni%20ZIMBO.jpg"
+      },
+      "is_perishable": true,
+      "pay_on_delivery_enabled": false,
+      "notes": [
+        "renamed_for_disambiguation"
+      ],
+      "dimensions": null
+    }
+  ],
+  "summary": {
+    "total": 81,
+    "create": 75,
+    "skip_no_price": 2,
+    "skip_unavailable": 4,
+    "skip_duplicate": 0,
+    "subcategories_to_create": [
+      "Agneau",
+      "Cheval",
+      "Chèvre"
+    ]
+  }
+}

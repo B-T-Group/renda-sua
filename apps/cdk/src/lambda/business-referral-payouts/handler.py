@@ -1,7 +1,8 @@
-"""Thin Lambda: EventBridge Saturday cron → Nest internal compensation sweeper.
+"""Thin Lambda: EventBridge Saturday 19:00 UTC cron → Nest payout sweeper.
 
-Credits pending representative compensation (onboarding milestones, 1% sales,
-B2B 10-item referrals) and retries incomplete legacy business-referral claims.
+Credits pending onboarding_10_first_sale rows (wallet credit) and retries
+incomplete legacy business-referral claims. 1% sale commission is credited
+during the week, not by this job.
 """
 import os
 from typing import Any, Dict

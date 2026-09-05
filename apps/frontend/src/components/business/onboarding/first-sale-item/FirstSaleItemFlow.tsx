@@ -73,6 +73,8 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
   const [merchantHint, setMerchantHint] = useState('');
   const [merchantPrice, setMerchantPrice] = useState('');
+  const [isFoodItem, setIsFoodItem] = useState(false);
+  const [preparationMinutes, setPreparationMinutes] = useState('');
   const [itemId, setItemId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ImageItemSuggestions | null>(
     null
@@ -282,8 +284,12 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             hint={merchantHint}
             price={merchantPrice}
             currency={lockedCurrency || 'XAF'}
+            isFoodItem={isFoodItem}
+            preparationMinutes={preparationMinutes}
             onChange={setMerchantHint}
             onPriceChange={setMerchantPrice}
+            onFoodItemChange={setIsFoodItem}
+            onPreparationMinutesChange={setPreparationMinutes}
             onContinue={() => {
               if (!merchantHint.trim()) return;
               const n = Number.parseFloat(merchantPrice.replace(',', '.'));
@@ -297,6 +303,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
           <FirstSaleItemProcessingStep
             files={files}
             merchantHint={merchantHint}
+            isFoodItem={isFoodItem}
             asyncCleanupRequested={asyncCleanupRequested}
             initialImageIds={imageIds}
             initialItemId={itemId}
@@ -317,6 +324,8 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             imagePreviewUrls={imagePreviewUrls}
             merchantHint={merchantHint}
             merchantPrice={merchantPrice}
+            isFoodItem={isFoodItem}
+            merchantPreparationMinutes={preparationMinutes}
             suggestions={suggestions}
             initialValues={reviewForm}
             onContinue={(values) => {

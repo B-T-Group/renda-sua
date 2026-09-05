@@ -1,4 +1,11 @@
-import { Button, Stack, TextField, Typography } from '@mui/material';
+import {
+  Button,
+  Checkbox,
+  FormControlLabel,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,8 +20,12 @@ export interface FirstSaleItemDescriptionStepProps {
   hint: string;
   price: string;
   currency: string;
+  isFoodItem: boolean;
+  preparationMinutes: string;
   onChange: (hint: string) => void;
   onPriceChange: (price: string) => void;
+  onFoodItemChange: (isFoodItem: boolean) => void;
+  onPreparationMinutesChange: (minutes: string) => void;
   onContinue: () => void;
 }
 
@@ -25,7 +36,18 @@ function isValidPrice(price: string): boolean {
 
 const FirstSaleItemDescriptionStep: React.FC<
   FirstSaleItemDescriptionStepProps
-> = ({ hint, price, currency, onChange, onPriceChange, onContinue }) => {
+> = ({
+  hint,
+  price,
+  currency,
+  isFoodItem,
+  preparationMinutes,
+  onChange,
+  onPriceChange,
+  onFoodItemChange,
+  onPreparationMinutesChange,
+  onContinue,
+}) => {
   const { t } = useTranslation();
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [phKey, phDefault] = PLACEHOLDERS[placeholderIndex];
@@ -97,6 +119,32 @@ const FirstSaleItemDescriptionStep: React.FC<
           if (e.key === 'Enter' && canContinue) onContinue();
         }}
       />
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={isFoodItem}
+            onChange={(e) => onFoodItemChange(e.target.checked)}
+          />
+        }
+        label={t('business.items.isFoodItem', 'This is a cooked food item')}
+      />
+      {isFoodItem && (
+        <TextField
+          fullWidth
+          type="number"
+          value={preparationMinutes}
+          onChange={(e) => onPreparationMinutesChange(e.target.value)}
+          label={t(
+            'business.items.preparationMinutes',
+            'Preparation time (minutes)'
+          )}
+          inputProps={{ min: 0, max: 1440, step: 5 }}
+          helperText={t(
+            'business.items.preparationMinutesHelp',
+            'Roughly how long this dish takes to cook.'
+          )}
+        />
+      )}
       <Button
         variant="contained"
         size="large"

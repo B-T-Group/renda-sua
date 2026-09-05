@@ -12,6 +12,16 @@ object_relationships:
     using:
       foreign_key_constraint_on: item_variant_id
 array_relationships:
+  - name: food_settings
+    using:
+      manual_configuration:
+        column_mapping:
+          business_location_id: business_location_id
+          item_id: item_id
+        insertion_order: null
+        remote_table:
+          name: food_item_settings
+          schema: public
   - name: item_deals
     using:
       manual_configuration:

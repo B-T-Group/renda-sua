@@ -49,6 +49,22 @@ export class NotificationsController {
     private readonly whatsAppTemplateService: WhatsAppTemplateService
   ) {}
 
+  @Get('business-reachability')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Whether this business user can be reached for new orders (push + WhatsApp)',
+  })
+  @ApiResponse({ status: 200, description: 'Reachability flags' })
+  async getBusinessReachability(@ReqContext() ctx: RequestContext) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    if (!userId || userId === 'anonymous') {
+      throw new UnauthorizedException();
+    }
+    return this.notificationsService.getBusinessReachability(userId);
+  }
+
   @Get('preferences')
   @UseGuards(AuthGuard)
   @ApiBearerAuth()

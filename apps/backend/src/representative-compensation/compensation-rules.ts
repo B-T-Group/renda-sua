@@ -17,10 +17,17 @@ export type CompensationRuleCode =
 
 export const ONBOARDING_10_ITEMS = 10;
 export const ONBOARDING_WINDOW_DAYS = 30;
+export const ONBOARDING_10_MIN_SALE_TOTAL_XAF = 2500;
+export const ONBOARDING_10_MIN_SALE_TOTAL_KEY = 'onboarding_10_min_sale_total';
+
+export function defaultOnboardingMinSaleTotal(currency: string): number {
+  return currency === 'XAF' ? ONBOARDING_10_MIN_SALE_TOTAL_XAF : 0;
+}
 
 export interface CompensationMarketConfig {
   currency: string;
   onboarding10FirstSale: number;
+  onboarding10MinSaleTotal: number;
   salePercent: number;
   businessReferral10Items: number;
 }
@@ -60,6 +67,38 @@ export function saleWithinOnboardingWindow(
   if (Number.isNaN(start) || Number.isNaN(completed)) return false;
   const max = start + ONBOARDING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   return completed >= start && completed <= max;
+}
+
+export function onboardingWindowEndsAt(
+  onboardedAt: string | undefined
+): string | null {
+  const start = Date.parse(onboardedAt ?? '');
+  if (Number.isNaN(start)) return null;
+  return new Date(
+    start + ONBOARDING_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+}
+
+/** Sum of in-window completed sales in payout currency, up to `upToSale`. */
+export function inWindowSaleTotal(params: {
+  completedSales: CompletedSale[];
+  payoutCurrency: string;
+  onboardedAt: string | undefined;
+  upToSale?: CompletedSale;
+}): number {
+  const cap = Date.parse(params.upToSale?.completedAt ?? '');
+  return params.completedSales.reduce((sum, sale) => {
+    if (sale.currency !== params.payoutCurrency || sale.subtotal <= 0) {
+      return sum;
+    }
+    if (!saleWithinOnboardingWindow(params.onboardedAt, sale.completedAt)) {
+      return sum;
+    }
+    if (!Number.isNaN(cap) && Date.parse(sale.completedAt ?? '') > cap) {
+      return sum;
+    }
+    return sum + sale.subtotal;
+  }, 0);
 }
 
 export function salePercentAmount(
@@ -142,6 +181,16 @@ function onboardingBonusAction(
   if (params.approvedItemCount < ONBOARDING_10_ITEMS) return null;
   if (!saleWithinOnboardingWindow(params.businessOnboardedAt, sale.completedAt)) {
     return null;
+  }
+  const minTotal = params.config.onboarding10MinSaleTotal;
+  if (minTotal > 0) {
+    const total = inWindowSaleTotal({
+      completedSales: params.completedSales,
+      payoutCurrency: params.payoutCurrency,
+      onboardedAt: params.businessOnboardedAt,
+      upToSale: sale,
+    });
+    if (total < minTotal) return null;
   }
   const amount = roundCompensationAmount(
     params.config.onboarding10FirstSale,

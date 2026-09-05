@@ -18,11 +18,21 @@ describe('DelegateOrdersService location scope', () => {
 
   let hasura: { executeQuery: jest.Mock };
   let orders: { getOrderById: jest.Mock };
+  let acceptance: {
+    markBusy: jest.Mock;
+    getPendingAcceptanceForLocation: jest.Mock;
+  };
   let service: DelegateOrdersService;
 
   beforeEach(() => {
     hasura = { executeQuery: jest.fn() };
     orders = { getOrderById: jest.fn() };
+    acceptance = {
+      markBusy: jest.fn().mockResolvedValue({ success: true }),
+      getPendingAcceptanceForLocation: jest.fn().mockResolvedValue({
+        active: true,
+      }),
+    };
     service = new DelegateOrdersService(
       hasura as any,
       orders as any,
@@ -30,7 +40,8 @@ describe('DelegateOrdersService location scope', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any
+      {} as any,
+      acceptance as any
     );
   });
 
@@ -84,5 +95,47 @@ describe('DelegateOrdersService location scope', () => {
     expect(hasura.executeQuery.mock.calls[1][1]).toEqual({
       filters: { business_location_id: { _eq: 'loc-1' } },
     });
+  });
+
+  it('marks Busy only after the order is in the active location', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      orders_by_pk: {
+        id: 'ord-1',
+        business_id: 'biz-1',
+        business_location_id: 'loc-1',
+      },
+    });
+    await service.markBusy(ctx, 'ord-1');
+    expect(acceptance.markBusy).toHaveBeenCalledWith('ord-1', {
+      userId: 'user-1',
+      asDelegateLocationId: 'loc-1',
+    });
+  });
+
+  it('does not mark Busy for an order at another location', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      orders_by_pk: {
+        id: 'ord-2',
+        business_id: 'biz-1',
+        business_location_id: 'loc-other',
+      },
+    });
+    await expect(service.markBusy(ctx, 'ord-2')).rejects.toMatchObject({
+      status: HttpStatus.FORBIDDEN,
+    });
+    expect(acceptance.markBusy).not.toHaveBeenCalled();
+  });
+
+  it('loads pending acceptance for the delegated location', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      business_locations_by_pk: { id: 'loc-1', business_id: 'biz-1' },
+    });
+    await expect(service.pendingAcceptance(ctx)).resolves.toEqual({
+      active: true,
+    });
+    expect(acceptance.getPendingAcceptanceForLocation).toHaveBeenCalledWith(
+      'biz-1',
+      'loc-1'
+    );
   });
 });

@@ -268,5 +268,14 @@ export const REVIEWS_FOR_BUSINESS_IDS_QUERY = `
     business_referral_payouts(where: { business_id: { _in: $ids } }) {
       business_id
     }
+    representative_compensation_events(
+      where: {
+        business_id: { _in: $ids }
+        rule_code: { _eq: "onboarding_10_first_sale" }
+        status: { _eq: "credited" }
+      }
+    ) {
+      business_id
+    }
   }
 `;

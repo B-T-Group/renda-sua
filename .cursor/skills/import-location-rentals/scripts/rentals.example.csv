@@ -1,0 +1,4 @@
+name,description,rental_category,operation_mode,base_price_per_hour,base_price_per_day,security_deposit_amount,units_available,min_rental_hours,max_rental_hours,image_url,image_url_2,tags,pickup_instructions
+Portable Generator 5kW,Gasoline generator for outdoor events and job sites,Equipment,business_operated,25,150,200,2,2,24,https://example.com/images/gen-1.jpg,https://example.com/images/gen-2.jpg,"generator|power",Pickup at loading dock
+Folding Banquet Tables (set of 5),White plastic banquet tables,Events,take_home,15,80,,10,1,,https://example.com/images/tables.jpg,https://example.com/images/tables-2.jpg,tables,
+Compact Sedan Weekend,Economy sedan for local trips,Vehicles,business_operated,18,99,144,1,4,,https://example.com/images/sedan-1.jpg,https://example.com/images/sedan-2.jpg,car|sedan,Keys at front desk

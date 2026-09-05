@@ -172,6 +172,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
 
       await cancelOrder({
         orderId: order.id,
+        cancellationReasonId: selectedReasonId,
         notes,
       });
 

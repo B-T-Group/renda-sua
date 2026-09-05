@@ -34,7 +34,7 @@ export function ItemDetailFaqAccordion({ onToggle }: ItemDetailFaqAccordionProps
       q: t('items.detail.faq.deliveryQ', 'When will I receive my order?'),
       a: t(
         'items.detail.faq.deliveryA',
-        'Delivery is typically within 6–24 hours depending on when you order and local availability.'
+        'Store products are usually delivered within 24–48 hours after order confirmation. Once an agent is assigned and out for delivery, you can track live location and see minute-level ETA updates on web or in the app.'
       ),
     },
     {

@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "A289B23AXW.com.rendasua.agent",
+        "paths": ["/app/*"]
+      },
+      {
+        "appIDs": ["A289B23AXW.com.rendasua.agent"],
+        "components": [{ "/": "/app/*" }]
+      }
+    ]
+  }
+}

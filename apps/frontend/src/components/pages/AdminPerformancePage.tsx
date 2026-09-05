@@ -1,4 +1,4 @@
-import { CheckCircle, ExpandLess, ExpandMore, Insights } from '@mui/icons-material';
+import { CheckCircle, ExpandLess, ExpandMore, Insights, ShoppingCart } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -45,6 +45,7 @@ import { usePermission } from '../../hooks/usePermissions';
 import LoadingScreen from '../common/LoadingScreen';
 import { AdminPayoutPreviewDialog } from '../admin/AdminPayoutPreviewDialog';
 import { AdminCompensationEventsDialog } from '../admin/AdminCompensationEventsDialog';
+import { formatPayoutMoney } from '../admin/AdminPayoutPreviewTable';
 import SEOHead from '../seo/SEOHead';
 
 const PERIOD_LABELS: Record<PerformancePeriod, [string, string]> = {
@@ -76,6 +77,41 @@ const MetricCard: React.FC<MetricCardProps> = ({ label, value }) => (
 
 function agentDisplayName(agent: TopAgentEntry): string {
   return `${agent.firstName} ${agent.lastName}`.trim() || agent.agentId;
+}
+
+function AgentEarnedCell({ agent }: { agent: TopAgentEntry }) {
+  const { t } = useTranslation();
+  const currency = agent.earnedCurrency ?? agent.projectedPayoutCurrency;
+  if (agent.earnedAmount == null || !currency) {
+    return (
+      <Typography variant="body2" color="text.disabled">
+        {'—'}
+      </Typography>
+    );
+  }
+  const upcoming =
+    agent.projectedPayoutAmount != null &&
+    agent.projectedPayoutAmount > 0 &&
+    agent.projectedPayoutCurrency
+      ? formatPayoutMoney(
+          agent.projectedPayoutAmount,
+          agent.projectedPayoutCurrency
+        )
+      : null;
+  return (
+    <>
+      <Typography variant="body2" fontWeight={700}>
+        {formatPayoutMoney(agent.earnedAmount, currency)}
+      </Typography>
+      {upcoming ? (
+        <Typography variant="caption" color="text.secondary">
+          {t('admin.performance.topAgents.upcomingPayout', 'Upcoming {{amount}}', {
+            amount: upcoming,
+          })}
+        </Typography>
+      ) : null}
+    </>
+  );
 }
 
 interface DeliveriesTableProps {
@@ -202,10 +238,13 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
             {` / ${agent.count}`}
           </Typography>
         </TableCell>
+        <TableCell align="right">
+          <AgentEarnedCell agent={agent} />
+        </TableCell>
       </TableRow>
       <TableRow>
         <TableCell
-          colSpan={9}
+          colSpan={11}
           sx={{ py: 0, borderBottom: open ? undefined : 'none' }}
         >
           <Collapse in={open} timeout="auto" unmountOnExit>
@@ -239,6 +278,15 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
                       <TableCell align="right">
                         {t('admin.performance.topAgents.score', 'Score')}
                       </TableCell>
+                      <TableCell align="center">
+                        {t(
+                          'admin.performance.topAgents.itemsQualified',
+                          '10+ items'
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        {t('admin.performance.topAgents.earned', 'Earned')}
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -247,6 +295,40 @@ const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
                         <TableCell>{biz.businessName || biz.businessId}</TableCell>
                         <TableCell align="right">{biz.itemCount}</TableCell>
                         <TableCell align="right">{biz.score}</TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            size="small"
+                            color={
+                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
+                                ? 'success'
+                                : 'default'
+                            }
+                            variant={
+                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
+                                ? 'filled'
+                                : 'outlined'
+                            }
+                            label={
+                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
+                                ? t(
+                                    'admin.performance.topAgents.qualifiedYes',
+                                    'Qualified'
+                                  )
+                                : t(
+                                    'admin.performance.topAgents.qualifiedNo',
+                                    'Not yet'
+                                  )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          {biz.earnedAmount && agent.earnedCurrency
+                            ? formatPayoutMoney(
+                                biz.earnedAmount,
+                                agent.earnedCurrency
+                              )
+                            : '—'}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -378,6 +460,18 @@ const ReferralsTable: React.FC<ReferralsTableProps> = ({
                           'admin.performance.topAgents.stockedReferrals',
                           'Stocked'
                         )}
+                      </span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip
+                      title={t(
+                        'admin.performance.topAgents.earnedTooltip',
+                        'Credited representative compensation in this period (10-item bonus and 1% of sales). Upcoming is the sum of pending compensation events waiting for Saturday credit.'
+                      )}
+                    >
+                      <span>
+                        {t('admin.performance.topAgents.earned', 'Earned')}
                       </span>
                     </Tooltip>
                   </TableCell>
@@ -626,10 +720,33 @@ const AdminPerformancePage: React.FC = () => {
             <Typography variant="body2" color="text.secondary">
               {t(
                 'admin.performance.golden.description',
-                'Goal: each referred business should reach at least {{n}} sale catalog items on average (items / referral).',
+                'Goal: each referred business should reach at least {{n}} approved sale items on average (items / referral).',
                 { n: GOLDEN_ITEMS_PER_REFERRAL }
               )}
             </Typography>
+            <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap">
+              <Chip
+                size="small"
+                icon={<CheckCircle fontSize="small" />}
+                label={t(
+                  'admin.performance.golden.rule1',
+                  '{{n}}+ approved products',
+                  { n: GOLDEN_ITEMS_PER_REFERRAL }
+                )}
+                color="success"
+                variant="outlined"
+              />
+              <Chip
+                size="small"
+                icon={<ShoppingCart fontSize="small" />}
+                label={t(
+                  'admin.performance.golden.rule2',
+                  'Sale ≥ configured market minimum'
+                )}
+                color="info"
+                variant="outlined"
+              />
+            </Stack>
           </Box>
           <FormControlLabel
             sx={{ m: 0, flexShrink: 0 }}

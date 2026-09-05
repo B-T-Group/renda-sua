@@ -7,8 +7,9 @@ describe('WhatsAppChannel', () => {
   };
   const templateService = {
     resolveMetaName: jest.fn(),
-    languageCode: jest.fn().mockReturnValue('en_US'),
+    languageCode: jest.fn().mockReturnValue('en'),
     buildComponents: jest.fn().mockReturnValue([]),
+    category: jest.fn().mockReturnValue('UTILITY'),
   };
   const configService = {
     get: jest.fn(),
@@ -19,7 +20,7 @@ describe('WhatsAppChannel', () => {
     jest.clearAllMocks();
     whatsAppService.isConfigured.mockReturnValue(true);
     configService.get.mockReturnValue({ notificationsEnabled: true });
-    templateService.resolveMetaName.mockReturnValue('rs_order_new');
+    templateService.resolveMetaName.mockReturnValue('rs_order_created');
     whatsAppService.sendTemplateMessage.mockResolvedValue({
       messages: [{ id: 'wamid.1' }],
     });
@@ -39,6 +40,22 @@ describe('WhatsAppChannel', () => {
     configService.get.mockReturnValue({ notificationsEnabled: true });
     whatsAppService.isConfigured.mockReturnValue(false);
     expect(channel.featureEnabled()).toBe(false);
+  });
+
+  it('sends when notifications are disabled if ignoreFeatureFlag is set', async () => {
+    configService.get.mockReturnValue({ notificationsEnabled: false });
+
+    await expect(
+      channel.send({
+        to: '+237600000001',
+        ignoreFeatureFlag: true,
+        payload: {
+          templateKey: 'order_created_business',
+          variables: { orderNumber: '1' },
+        },
+      })
+    ).resolves.toMatchObject({ status: 'sent', providerMessageId: 'wamid.1' });
+    expect(whatsAppService.sendTemplateMessage).toHaveBeenCalled();
   });
 
   it('skips send when WhatsApp notifications are disabled', async () => {
@@ -96,10 +113,24 @@ describe('WhatsAppChannel', () => {
 
     expect(whatsAppService.sendTemplateMessage).toHaveBeenCalledWith({
       to: '+237600000001',
-      templateName: 'rs_order_new',
-      languageCode: 'en_US',
+      templateName: 'rs_order_created',
+      languageCode: 'en',
       components: [],
+      category: 'UTILITY',
     });
+  });
+
+  it('does not persist product templates into the support inbox', async () => {
+    await channel.send({
+      to: '+237600000001',
+      payload: {
+        templateKey: 'order_action_business',
+        variables: { orderNumber: '42' },
+      },
+      entityType: 'order',
+      entityId: '11111111-1111-1111-1111-111111111111',
+    });
+    expect(whatsAppService.sendTemplateMessage).toHaveBeenCalled();
   });
 
   it('returns failed status when Graph send throws', async () => {

@@ -32,6 +32,7 @@ import type { BusinessDashboardModule } from '../components/business/BusinessDas
 import type { DashboardAggregates } from './useDashboardAggregates';
 import { PlatformPermissions } from '../constants/platformPermissions';
 import { usePermissions } from './usePermissions';
+import { brandTokens } from '../theme/brandTokens';
 
 interface UseBusinessDashboardModulesOptions {
   aggregates: DashboardAggregates | null;
@@ -122,7 +123,7 @@ export function useBusinessDashboardModules({
         description: t('business.dashboard.locationsDescription'),
         icon: <LocationsIcon sx={{ fontSize: 40 }} />,
         count: locationCount,
-        color: '#f57c00',
+        color: brandTokens.info.main,
         path: '/business/locations',
       },
       {
@@ -198,7 +199,7 @@ export function useBusinessDashboardModules({
         ),
         icon: <OrdersIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#1565c0',
+        color: brandTokens.primary.main,
         path: '/orders/batch',
       },
       {
@@ -236,6 +237,17 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#00796b',
         path: '/business/rentals/requests',
+      },
+      {
+        title: t('productInterest.businessTitle', 'Product interest'),
+        description: t(
+          'productInterest.businessHelp',
+          'Clients asked to be contacted about these items. Follow up by phone or email outside the app.'
+        ),
+        icon: <RentalInboxIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#00838f',
+        path: '/business/product-interest',
       },
       {
         title: t('business.dashboard.rentalScheduleModule', 'Rental schedule'),
@@ -289,7 +301,7 @@ export function useBusinessDashboardModules({
                 otherLabel: t('business.dashboard.unverified', 'Unverified'),
               }
             : undefined,
-        color: '#2e7d32',
+        color: brandTokens.secondary.main,
         requiredPermission: PlatformPermissions.MANAGE_AGENTS,
         path: '/admin/agents',
       },
@@ -333,24 +345,33 @@ export function useBusinessDashboardModules({
         ),
         icon: <BizIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#bf360c',
+        color: brandTokens.cta.main,
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
         path: '/admin/business-reliability',
       },
       {
-        title: t(
-          'business.dashboard.orderRiskManagement',
-          'Order Risk Management'
-        ),
+        title: t('business.dashboard.orderOperations', 'Order operations'),
         description: t(
-          'business.dashboard.orderRiskManagementDescription',
-          'Monitor and act on at-risk orders with risk scoring and smart redispatch'
+          'business.dashboard.orderOperationsDescription',
+          'Intervene on at-risk orders, contact every participant, and redispatch'
         ),
         icon: <OrdersIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: '#d32f2f',
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
         path: '/admin/orders',
+      },
+      {
+        title: t('business.dashboard.pickupOps', 'Pickup health'),
+        description: t(
+          'business.dashboard.pickupOpsDescription',
+          'Live pickup SLA board for orders waiting on agent collection'
+        ),
+        icon: <OrdersIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#00695c',
+        requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        path: '/admin/pickup-ops',
       },
       {
         title: t(
@@ -381,7 +402,7 @@ export function useBusinessDashboardModules({
         description: t('business.dashboard.manageCategoriesDescription'),
         icon: <CategoryIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#ff9800',
+        color: brandTokens.secondary.light,
         requiredPermission: PlatformPermissions.CONTENT_TAXONOMY,
         path: '/content-management/categories',
       },
@@ -511,9 +532,21 @@ export function useBusinessDashboardModules({
         ),
         icon: <RechargeIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#1565c0',
+        color: brandTokens.primary.main,
         requiredPermission: PlatformPermissions.RECHARGE_ACCOUNT,
         path: '/admin/account-recharge',
+      },
+      {
+        title: t('business.dashboard.creditsModule', 'Ops follow-ups'),
+        description: t(
+          'business.dashboard.creditsModuleDescription',
+          'Escalations, call-backs, and follow-up progress'
+        ),
+        icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: brandTokens.warning.main,
+        requiredPermission: PlatformPermissions.OPS_CREDITS,
+        path: '/admin/follow-ups',
       },
       {
         title: t('business.dashboard.siteEventsModule', 'Site events'),
