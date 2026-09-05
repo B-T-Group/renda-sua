@@ -13,7 +13,7 @@ export interface OrderData {
   business_location_id: string;
   assigned_agent_id?: string;
   delivery_address_id?: string | null;
-  fulfillment_method?: 'delivery' | 'pickup';
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   fulfillment_timing?: 'asap' | 'scheduled' | null;
   promised_ready_at?: string | null;
   promised_fulfill_by?: string | null;
