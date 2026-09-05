@@ -174,7 +174,7 @@ export class DeliveryEstimateService {
     if (itemInfo.isFood) {
       return {
         label: 'Usually arrives',
-        band: '30–60 minutes',
+        band: '45–75 minutes',
         start: null,
         end: null,
       };

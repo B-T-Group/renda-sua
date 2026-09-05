@@ -91,7 +91,7 @@ describe('DeliveryEstimateService', () => {
       expect(result.fee.confidence).toBe('range');
     });
 
-    it('should return 30-60 minutes window for food category', async () => {
+    it('should return 45-75 minutes window for food category', async () => {
       hasuraService.executeQuery
         .mockResolvedValueOnce({
           markets: [
@@ -112,7 +112,7 @@ describe('DeliveryEstimateService', () => {
         category: 'Food',
       });
 
-      expect(result.window.band).toBe('30–60 minutes');
+      expect(result.window.band).toBe('45–75 minutes');
     });
 
     it('should include serving status for food items with sellerId', async () => {
@@ -186,7 +186,7 @@ describe('DeliveryEstimateService', () => {
         skuId: '123e4567-e89b-12d3-a456-426614174000',
       });
 
-      expect(result.window.band).toBe('30–60 minutes');
+      expect(result.window.band).toBe('45–75 minutes');
     });
 
     it('should throw error when market not found', async () => {
