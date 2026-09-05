@@ -91,8 +91,10 @@ export class CatalogStopsService {
             business_location: {
               is_active: { _eq: true }
               storefront_visible: { _eq: true }
-              ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
-              ${state ? 'address: { state: { _eq: $state } }' : ''}
+              ${country_code || state ? `address: {
+                ${country_code ? 'country: { _eq: $countryCode }' : ''}
+                ${state ? 'state: { _eq: $state }' : ''}
+              }` : ''}
             }
           }
           limit: $limit
@@ -212,8 +214,10 @@ export class CatalogStopsService {
               business_location: {
                 is_active: { _eq: true }
                 storefront_visible: { _eq: true }
-                ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
-                ${state ? 'address: { state: { _eq: $state } }' : ''}
+                ${country_code || state ? `address: {
+                  ${country_code ? 'country: { _eq: $countryCode }' : ''}
+                  ${state ? 'state: { _eq: $state }' : ''}
+                }` : ''}
               }
             }
           }
@@ -400,8 +404,10 @@ export class CatalogStopsService {
           where: {
             is_active: { _eq: true }
             storefront_visible: { _eq: true }
-            ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
-            ${state ? 'address: { state: { _eq: $state } }' : ''}
+            ${country_code || state ? `address: {
+              ${country_code ? 'country: { _eq: $countryCode }' : ''}
+              ${state ? 'state: { _eq: $state }' : ''}
+            }` : ''}
             business: { is_active: { _eq: true } }
             business_inventory_aggregate: {
               count: { predicate: { _gt: 0 } }
@@ -543,8 +549,10 @@ export class CatalogStopsService {
             business_location: {
               is_active: { _eq: true }
               storefront_visible: { _eq: true }
-              ${country_code ? 'address: { country: { _eq: $countryCode } }' : ''}
-              ${state ? 'address: { state: { _eq: $state } }' : ''}
+              ${country_code || state ? `address: {
+                ${country_code ? 'country: { _eq: $countryCode }' : ''}
+                ${state ? 'state: { _eq: $state }' : ''}
+              }` : ''}
             }
           }
           limit: $limit
