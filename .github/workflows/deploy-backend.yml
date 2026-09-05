@@ -92,6 +92,52 @@ jobs:
           echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
+      - name: Smoke test - verify runtime dependencies
+        run: |
+          echo "Running smoke test to verify all runtime dependencies are present..."
+          
+          # Run a quick smoke test inside the built image
+          # This verifies that critical modules (redis, cookie-parser) can be required
+          # and that main.js loads without MODULE_NOT_FOUND errors
+          # AWS/Secrets Manager connection failures are expected and OK
+          
+          timeout 10s docker run --rm \
+            -e NODE_ENV=development \
+            -e DEPLOYMENT_ENV=development \
+            -e ENABLE_CLOUDWATCH=false \
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            node -e "
+              try {
+                console.log('✓ Testing cookie-parser...');
+                require('cookie-parser');
+                console.log('✓ Testing redis...');
+                require('redis');
+                console.log('✓ Testing main application module...');
+                require('./src/main.js');
+                console.log('✓ All critical modules loaded successfully');
+                process.exit(0);
+              } catch (err) {
+                if (err.code === 'MODULE_NOT_FOUND') {
+                  console.error('✗ SMOKE TEST FAILED: Missing runtime dependency');
+                  console.error(err.message);
+                  process.exit(1);
+                }
+                // Other errors (AWS, Secrets Manager, etc.) are OK for smoke test
+                console.log('✓ Module resolution successful (runtime errors are OK for smoke test)');
+                process.exit(0);
+              }
+            " || exit_code=$?
+          
+          if [ "${exit_code:-0}" -eq 124 ] || [ "${exit_code:-0}" -eq 137 ]; then
+            echo "✓ Container started successfully (timeout is OK - main.js is loading)"
+            exit 0
+          elif [ "${exit_code:-0}" -ne 0 ]; then
+            echo "✗ Smoke test failed with exit code $exit_code"
+            exit 1
+          fi
+          
+          echo "✓ Smoke test passed - all runtime dependencies present"
+
       - name: Deploy to Lightsail using ECR image (with retry)
         run: |
           max_attempts=3
@@ -296,6 +342,52 @@ jobs:
           # Store the image URI and tag for deployment
           echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Smoke test - verify runtime dependencies
+        run: |
+          echo "Running smoke test to verify all runtime dependencies are present..."
+          
+          # Run a quick smoke test inside the built image
+          # This verifies that critical modules (redis, cookie-parser) can be required
+          # and that main.js loads without MODULE_NOT_FOUND errors
+          # AWS/Secrets Manager connection failures are expected and OK
+          
+          timeout 10s docker run --rm \
+            -e NODE_ENV=production \
+            -e DEPLOYMENT_ENV=production \
+            -e ENABLE_CLOUDWATCH=false \
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            node -e "
+              try {
+                console.log('✓ Testing cookie-parser...');
+                require('cookie-parser');
+                console.log('✓ Testing redis...');
+                require('redis');
+                console.log('✓ Testing main application module...');
+                require('./src/main.js');
+                console.log('✓ All critical modules loaded successfully');
+                process.exit(0);
+              } catch (err) {
+                if (err.code === 'MODULE_NOT_FOUND') {
+                  console.error('✗ SMOKE TEST FAILED: Missing runtime dependency');
+                  console.error(err.message);
+                  process.exit(1);
+                }
+                // Other errors (AWS, Secrets Manager, etc.) are OK for smoke test
+                console.log('✓ Module resolution successful (runtime errors are OK for smoke test)');
+                process.exit(0);
+              }
+            " || exit_code=$?
+          
+          if [ "${exit_code:-0}" -eq 124 ] || [ "${exit_code:-0}" -eq 137 ]; then
+            echo "✓ Container started successfully (timeout is OK - main.js is loading)"
+            exit 0
+          elif [ "${exit_code:-0}" -ne 0 ]; then
+            echo "✗ Smoke test failed with exit code $exit_code"
+            exit 1
+          fi
+          
+          echo "✓ Smoke test passed - all runtime dependencies present"
 
       - name: Deploy to Lightsail using ECR image (with retry)
         run: |
