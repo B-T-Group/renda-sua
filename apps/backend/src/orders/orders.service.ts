@@ -44,6 +44,7 @@ import {
 } from '../notifications/notifications.service';
 import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import { RecipientsService } from '../recipients/recipients.service';
 import {
   assertDiasporaPaymentTiming,
   normalizeCountryCode,
@@ -433,6 +434,7 @@ export class OrdersService {
     private readonly notificationsService: NotificationsService,
     private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
     private readonly fxEstimateService: FxEstimateService,
+    private readonly recipientsService: RecipientsService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
@@ -8804,8 +8806,29 @@ export class OrdersService {
       user,
       orderData.payer_country
     );
+    
+    // If recipient_id is provided, fetch the saved recipient and use it
+    let recipientData = orderData.recipient;
+    if (orderData.recipient_id) {
+      try {
+        const savedRecipient = await this.recipientsService.getRecipient(
+          { userId: user.id, authToken: '' } as any,
+          orderData.recipient_id
+        );
+        recipientData = {
+          name: savedRecipient.name,
+          phone: savedRecipient.phone,
+          notify_whatsapp: savedRecipient.notify_whatsapp,
+        };
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to fetch saved recipient ${orderData.recipient_id}: ${error.message}`
+        );
+      }
+    }
+    
     const recipient = resolveOrderRecipient({
-      recipient: orderData.recipient,
+      recipient: recipientData,
       sendingToSomeoneElse: orderData.sending_to_someone_else,
       fulfillmentCountry,
     });
