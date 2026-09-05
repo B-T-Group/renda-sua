@@ -1,7 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
-// Avoid loading provisioning deps -> notifications circular graph under Jest.
 jest.mock('../notifications/notifications.service', () => ({
   NotificationsService: class NotificationsService {},
 }));
@@ -25,9 +24,11 @@ import { Auth0Service } from './auth0.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
+import { SignupAttemptStore } from './signup-attempt.store';
 import { SignupService } from './signup.service';
+import type { SignupAttemptRow } from './signup-attempt.types';
 
-describe('SignupService', () => {
+describe('SignupService (deferred OTP)', () => {
   let service: SignupService;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let auth0Service: jest.Mocked<Auth0Service>;
@@ -35,6 +36,7 @@ describe('SignupService', () => {
   let userProvisioning: jest.Mocked<UserProvisioningService>;
   let businessProvisioning: jest.Mocked<BusinessProvisioningService>;
   let referralProvisioning: jest.Mocked<ReferralProvisioningService>;
+  let attemptStore: jest.Mocked<SignupAttemptStore>;
   let metaConversionsService: { trackCompleteRegistrationSafe: jest.Mock };
 
   const insertedUser = {
@@ -44,8 +46,34 @@ describe('SignupService', () => {
     last_name: 'User',
     user_type_id: 'client',
     phone_number: '+237600000001',
-    email_verified: false,
+    email_verified: true,
   };
+
+  const baseAttempt = (
+    overrides: Partial<SignupAttemptRow> = {}
+  ): SignupAttemptRow => ({
+    id: 'attempt-1',
+    channel: 'email',
+    contact_value: 'new@example.com',
+    payload: {
+      first_name: 'New',
+      last_name: 'User',
+      email: 'new@example.com',
+      phone_number: null,
+      personas: ['client'],
+      profile: {},
+    },
+    status: 'pending',
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    last_otp_sent_at: new Date().toISOString(),
+    verify_attempt_count: 0,
+    auth0_verified_at: null,
+    completed_user_id: null,
+    completion_result: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -54,13 +82,15 @@ describe('SignupService', () => {
         {
           provide: HasuraSystemService,
           useValue: {
-            executeQuery: jest.fn().mockResolvedValue({ users_by_pk: null }),
+            executeQuery: jest.fn().mockResolvedValue({ users: [] }),
             executeMutation: jest.fn(),
           },
         },
         {
           provide: Auth0Service,
           useValue: {
+            startEmailOtp: jest.fn().mockResolvedValue(undefined),
+            startSmsOtp: jest.fn().mockResolvedValue(undefined),
             verifyEmailOtp: jest.fn(),
             verifySmsOtp: jest.fn(),
             verifyTestUserEmail: jest.fn(),
@@ -72,15 +102,11 @@ describe('SignupService', () => {
         },
         {
           provide: AddressesService,
-          useValue: {
-            createAddressForSignup: jest.fn(),
-          },
+          useValue: { createAddressForSignup: jest.fn() },
         },
         {
           provide: UserProvisioningService,
-          useValue: {
-            createPendingUser: jest.fn(),
-          },
+          useValue: { createPendingUser: jest.fn() },
         },
         {
           provide: BusinessProvisioningService,
@@ -88,7 +114,6 @@ describe('SignupService', () => {
             runPostCommitEffects: jest
               .fn()
               .mockResolvedValue({ launchPromo: null }),
-            scheduleEnsureContract: jest.fn(),
             scheduleEnsureContractForUser: jest.fn().mockResolvedValue(undefined),
           },
         },
@@ -96,7 +121,6 @@ describe('SignupService', () => {
           provide: ReferralProvisioningService,
           useValue: {
             resolveSignupReferral: jest.fn().mockResolvedValue(null),
-            resolveBusinessReferral: jest.fn().mockResolvedValue(null),
             getBusinessInsertReferralFields: jest.fn().mockReturnValue({}),
             getAgentInsertReferralFields: jest.fn().mockReturnValue({}),
             runPostCommitEffects: jest.fn().mockResolvedValue(undefined),
@@ -108,658 +132,231 @@ describe('SignupService', () => {
             trackCompleteRegistrationSafe: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: SignupAttemptStore,
+          useValue: {
+            insertPending: jest.fn(),
+            findById: jest.fn(),
+            supersedePendingForContact: jest.fn(),
+            markOtpSent: jest.fn(),
+            bumpVerifyCount: jest.fn().mockResolvedValue(1),
+            updateStatus: jest.fn(),
+            claimForVerify: jest.fn(),
+            purgeExpired: jest.fn().mockResolvedValue(0),
+          },
+        },
       ],
     }).compile();
 
-    service = module.get<SignupService>(SignupService);
+    service = module.get(SignupService);
     hasuraSystemService = module.get(HasuraSystemService);
     auth0Service = module.get(Auth0Service);
     addressesService = module.get(AddressesService);
     userProvisioning = module.get(UserProvisioningService);
     businessProvisioning = module.get(BusinessProvisioningService);
     referralProvisioning = module.get(ReferralProvisioningService);
+    attemptStore = module.get(SignupAttemptStore);
     metaConversionsService = module.get(MetaConversionsService);
   });
 
   describe('availability checks', () => {
-    it('normalizes email before checking if it is taken', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [{ id: 'u1' }] });
-
-      const taken = await service.isEmailTaken('  Taken@Example.COM  ');
-
-      expect(taken).toBe(true);
-      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('ContactTaken'),
-        { value: 'taken@example.com' }
-      );
-    });
-
-    it('normalizes phone before checking if it is taken', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-
-      const taken = await service.isPhoneTaken('  +237600000001  ');
-
-      expect(taken).toBe(false);
-      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('ContactTaken'),
-        { value: '+237600000001' }
-      );
-    });
-
-    it('treats any existing holder as taken, including unverified rows', async () => {
+    it('treats any existing holder as taken', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         users: [{ id: 'pending-or-active' }],
       });
       await expect(service.isEmailTaken('pending@example.com')).resolves.toBe(
         true
       );
-      const [query, vars] = hasuraSystemService.executeQuery.mock.calls[0];
-      expect(query).toContain('ContactTaken');
-      expect(query).not.toContain('email_verified');
-      expect(query).not.toContain('phone_number_verified');
-      expect(vars).toEqual({ value: 'pending@example.com' });
-    });
-  });
-
-  describe('contact uniqueness on start', () => {
-    it('does not null out existing holders before creating a pending user', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-      userProvisioning.createPendingUser.mockResolvedValue({
-        user: insertedUser,
-        entities: [{ id: 'client-123', type: 'client' }],
-      });
-
-      await service.startSignup({
-        first_name: 'New',
-        last_name: 'User',
-        email: 'abandoned@example.com',
-        personas: ['client'],
-        profile: {},
-      });
-
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
-        expect.stringContaining('ReleaseUnverifiedContact'),
-        expect.anything()
-      );
-      expect(userProvisioning.createPendingUser).toHaveBeenCalled();
-    });
-
-    it('rejects signup when an unverified holder already owns the email', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        users: [{ id: 'existing-holder' }],
-      });
-
-      await expect(
-        service.startSignup({
-          first_name: 'New',
-          last_name: 'User',
-          email: 'held@example.com',
-          personas: ['client'],
-          profile: {},
-        })
-      ).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Email is already taken' },
-          HttpStatus.CONFLICT
-        )
-      );
-      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     });
   });
 
   describe('startSignup', () => {
-    const basePayload = {
-      first_name: 'New',
-      last_name: 'User',
-      personas: ['client' as const],
-      profile: {},
-    };
+    it('creates an attempt and sends OTP without provisioning a user', async () => {
+      const attempt = baseAttempt();
+      attemptStore.insertPending.mockResolvedValue(attempt);
 
-    it('requires either an email or phone number', async () => {
-      await expect(service.startSignup(basePayload)).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Email or phone number is required' },
-          HttpStatus.BAD_REQUEST
-        )
-      );
-      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
-    });
-
-    it('rejects a taken phone before creating a pending user', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValueOnce({
-        users: [{ id: 'u1' }],
-      });
-
-      await expect(
-        service.startSignup({
-          ...basePayload,
-          phone_number: ' +237600000001 ',
-        })
-      ).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Phone number is already taken' },
-          HttpStatus.CONFLICT
-        )
-      );
-      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
-    });
-
-    it('creates a phone-only pending signup and seeds legacy addresses', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-      userProvisioning.createPendingUser.mockResolvedValue({
-        user: { ...insertedUser, email: null },
-        entities: [
-          { id: 'client-123', type: 'client' },
-          { id: 'agent-123', type: 'agent' },
-        ],
-      });
-
-      const address = {
-        address_line_1: '123 Main St',
-        country: 'CM',
-        city: 'Douala',
-        state: 'Littoral',
-      };
       const result = await service.startSignup({
-        ...basePayload,
-        phone_number: ' +237600000001 ',
-        personas: ['client', 'agent'],
-        profile: { vehicle_type_id: 'bike' },
-        address,
-      });
-
-      expect(result.user.email).toBeNull();
-      expect(userProvisioning.createPendingUser).toHaveBeenCalledWith(
-        expect.objectContaining({
-          email: null,
-          phone_number: '+237600000001',
-          personas: ['client', 'agent'],
-          vehicle_type_id: 'bike',
-        })
-      );
-      expect(addressesService.createAddressForSignup).toHaveBeenCalledTimes(2);
-      expect(businessProvisioning.runPostCommitEffects).toHaveBeenCalled();
-      expect(referralProvisioning.runPostCommitEffects).toHaveBeenCalledWith(
-        expect.objectContaining({
-          country: 'CM',
-        })
-      );
-      expect(
-        metaConversionsService.trackCompleteRegistrationSafe
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventId: 'registration-user-123',
-          userType: 'client',
-          externalId: 'user-123',
-          phone: '+237600000001',
-        })
-      );
-    });
-
-    it('nests store_location for business and skips legacy address seed', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-      userProvisioning.createPendingUser.mockResolvedValue({
-        user: insertedUser,
-        entities: [{ id: 'biz-1', type: 'business' }],
-        businessLocation: {
-          id: 'loc-1',
-          addressId: 'addr-1',
-          country: 'CA',
-          city: 'Montreal',
-        },
-      });
-
-      await service.startSignup({
-        first_name: 'Biz',
-        last_name: 'Owner',
-        email: 'biz@example.com',
-        personas: ['business'],
-        profile: { name: 'Acme', main_interest: 'sell_items' },
-        country: 'CA',
-        store_location: {
-          street: '1 Main',
-          city: 'Montreal',
-          region: 'Quebec',
-          postal_code: 'H2X1Y4',
-        },
-      });
-
-      expect(userProvisioning.createPendingUser).toHaveBeenCalledWith(
-        expect.objectContaining({
-          storeAddress: expect.objectContaining({
-            address_line_1: '1 Main',
-            country: 'CA',
-            postal_code: 'H2X1Y4',
-            countryOnly: false,
-          }),
-        })
-      );
-      expect(addressesService.createAddressForSignup).not.toHaveBeenCalled();
-      expect(businessProvisioning.runPostCommitEffects).toHaveBeenCalledWith(
-        expect.objectContaining({
-          businessLocation: expect.objectContaining({ id: 'loc-1' }),
-        })
-      );
-    });
-
-    it('still seeds client/agent addresses when business location is nested', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-      userProvisioning.createPendingUser.mockResolvedValue({
-        user: insertedUser,
-        entities: [
-          { id: 'client-1', type: 'client' },
-          { id: 'biz-1', type: 'business' },
-        ],
-        businessLocation: {
-          id: 'loc-1',
-          addressId: 'addr-1',
-          country: 'CA',
-          city: 'Montreal',
-        },
-      });
-
-      await service.startSignup({
-        first_name: 'Biz',
-        last_name: 'Owner',
-        email: 'biz@example.com',
-        personas: ['client', 'business'],
-        profile: { name: 'Acme', main_interest: 'sell_items' },
-        country: 'CA',
-        store_location: {
-          street: '1 Main',
-          city: 'Montreal',
-          region: 'Quebec',
-          postal_code: 'H2X1Y4',
-        },
-      });
-
-      expect(addressesService.createAddressForSignup).toHaveBeenCalledTimes(1);
-      expect(addressesService.createAddressForSignup).toHaveBeenCalledWith(
-        'user-123',
-        'client-1',
-        'client',
-        expect.objectContaining({
-          address_line_1: '1 Main',
-          country: 'CA',
-          city: 'Montreal',
-          state: 'Quebec',
-        })
-      );
-    });
-
-    it('accepts guest checkout client-only payload without country', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-      userProvisioning.createPendingUser.mockResolvedValue({
-        user: insertedUser,
-        entities: [{ id: 'client-1', type: 'client' }],
-      });
-
-      await service.startSignup({
-        first_name: 'Guest',
-        last_name: 'Buyer',
-        email: 'guest@example.com',
+        first_name: 'New',
+        last_name: 'User',
+        email: ' New@Example.COM ',
         personas: ['client'],
         profile: {},
       });
 
-      expect(userProvisioning.createPendingUser).toHaveBeenCalledWith(
-        expect.objectContaining({
-          personas: ['client'],
-          storeAddress: undefined,
-        })
-      );
-      expect(addressesService.createAddressForSignup).not.toHaveBeenCalled();
+      expect(result.attemptId).toBe('attempt-1');
+      expect(result.channel).toBe('email');
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+      expect(auth0Service.startEmailOtp).toHaveBeenCalledWith('new@example.com');
+      expect(
+        metaConversionsService.trackCompleteRegistrationSafe
+      ).not.toHaveBeenCalled();
     });
 
-    it('rejects store_location without country', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
-
+    it('rejects a taken email before creating an attempt', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ id: 'existing' }],
+      });
       await expect(
         service.startSignup({
-          first_name: 'Biz',
-          last_name: 'Owner',
-          email: 'biz@example.com',
-          personas: ['business'],
-          profile: { name: 'Acme' },
-          store_location: {
-            street: '1 Main',
-            city: 'Montreal',
-            region: 'Quebec',
-          },
+          first_name: 'New',
+          last_name: 'User',
+          email: 'taken@example.com',
+          personas: ['client'],
+          profile: {},
         })
+      ).rejects.toThrow(HttpException);
+      expect(attemptStore.insertPending).not.toHaveBeenCalled();
+    });
+
+    it('uses SMS channel for African markets with phone', async () => {
+      const attempt = baseAttempt({
+        channel: 'phone',
+        contact_value: '+237600000001',
+        payload: {
+          first_name: 'New',
+          last_name: 'User',
+          email: null,
+          phone_number: '+237600000001',
+          personas: ['client'],
+          profile: {},
+          country: 'CM',
+        },
+      });
+      attemptStore.insertPending.mockResolvedValue(attempt);
+
+      await service.startSignup({
+        first_name: 'New',
+        last_name: 'User',
+        phone_number: '+237600000001',
+        personas: ['client'],
+        profile: {},
+        country: 'CM',
+      });
+
+      expect(attemptStore.insertPending).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: 'phone',
+          contactValue: '+237600000001',
+        })
+      );
+      expect(auth0Service.startSmsOtp).toHaveBeenCalledWith('+237600000001');
+    });
+  });
+
+  describe('verifySignupOtp', () => {
+    const auth0Token = {
+      access_token: 'token',
+      id_token:
+        'eyJhbGciOiJub25lIn0.' +
+        Buffer.from(
+          JSON.stringify({
+            sub: 'email|1',
+            email: 'new@example.com',
+          })
+        ).toString('base64url') +
+        '.',
+      token_type: 'Bearer',
+      expires_in: 3600,
+    };
+
+    it('returns stored completion when attempt already completed', async () => {
+      const completion = {
+        tokens: auth0Token,
+        user: insertedUser,
+        launchPromo: null,
+      };
+      attemptStore.findById.mockResolvedValue(
+        baseAttempt({
+          status: 'completed',
+          completion_result: completion,
+        })
+      );
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-1', otp: '123456' })
+      ).resolves.toEqual(completion);
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
+
+    it('provisions the user only after OTP verification', async () => {
+      const pending = baseAttempt();
+      attemptStore.findById.mockResolvedValue(pending);
+      attemptStore.claimForVerify.mockResolvedValue(pending);
+      auth0Service.verifyEmailOtp.mockResolvedValue(auth0Token);
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [{ id: 'client-1', type: 'client' }],
+      });
+      attemptStore.updateStatus.mockResolvedValue(
+        baseAttempt({ status: 'completed' })
+      );
+
+      const result = await service.verifySignupOtp({
+        attemptId: 'attempt-1',
+        otp: '123456',
+      });
+
+      expect(auth0Service.verifyEmailOtp).toHaveBeenCalledWith(
+        'new@example.com',
+        '123456'
+      );
+      expect(userProvisioning.createPendingUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'new@example.com',
+          email_verified: true,
+          phone_number_verified: false,
+        })
+      );
+      expect(businessProvisioning.runPostCommitEffects).toHaveBeenCalled();
+      expect(
+        metaConversionsService.trackCompleteRegistrationSafe
+      ).toHaveBeenCalled();
+      expect(result.user.id).toBe('user-123');
+      expect(result.tokens.access_token).toBe('token');
+    });
+
+    it('does not provision when OTP verification fails', async () => {
+      const pending = baseAttempt();
+      attemptStore.findById.mockResolvedValue(pending);
+      attemptStore.claimForVerify.mockResolvedValue(pending);
+      auth0Service.verifyEmailOtp.mockRejectedValue(new Error('bad otp'));
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-1', otp: '000000' })
+      ).rejects.toThrow('bad otp');
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects expired attempts without creating a user', async () => {
+      attemptStore.findById.mockResolvedValue(
+        baseAttempt({
+          expires_at: new Date(Date.now() - 1000).toISOString(),
+        })
+      );
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-1', otp: '123456' })
       ).rejects.toThrow(
         new HttpException(
-          {
-            success: false,
-            error: 'country is required when store_location is provided',
-          },
-          HttpStatus.BAD_REQUEST
+          { success: false, error: 'Signup attempt expired' },
+          HttpStatus.GONE
         )
       );
       expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
     });
   });
 
-  describe('completeSignup', () => {
-    it('rejects completion when authenticated email differs from pending signup email', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        users_by_pk: { id: 'user-123', email: 'pending@example.com' },
-      });
-
-      await expect(
-        service.completeSignup('user-123', { email: 'other@example.com' })
-      ).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Email mismatch for signup completion' },
-          HttpStatus.CONFLICT
-        )
-      );
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('normalizes verified Auth0 email before saving completion', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        users_by_pk: { id: 'user-123', email: null },
-      });
-      hasuraSystemService.executeMutation.mockResolvedValue({
-        update_users_by_pk: { ...insertedUser, email_verified: true },
-      });
-
-      const result = await service.completeSignup('user-123', {
-        email: ' New@Example.COM ',
-      });
-
-      expect(result.user.email_verified).toBe(true);
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('CompleteSignup'),
-        { id: 'user-123', email: 'new@example.com' }
-      );
-      expect(
-        businessProvisioning.scheduleEnsureContractForUser
-      ).toHaveBeenCalledWith('user-123');
-    });
-  });
-
-  describe('updateContact', () => {
-    const existingPendingUser = {
-      first_name: 'Pending',
-      last_name: 'Signup',
-      email: 'old@example.com',
-      phone_number: '+237600000001',
-      email_verified: false,
-      phone_number_verified: false,
-    };
-
-    it('requires a pending signup user id before querying Hasura', async () => {
-      await expect(
-        service.updateContact({ user_id: '', email: 'new@example.com' })
-      ).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'user_id is required' },
-          HttpStatus.BAD_REQUEST
-        )
-      );
-      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
-    });
-
-    it('rejects updates that do not include a new email or phone number', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValueOnce({
-        users_by_pk: existingPendingUser,
-      });
-
-      await expect(
-        service.updateContact({ user_id: 'user-123', first_name: 'Updated' })
-      ).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Email or phone number is required' },
-          HttpStatus.BAD_REQUEST
-        )
-      );
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('rejects contact updates for already verified signup users', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValueOnce({
-        users_by_pk: { ...existingPendingUser, email_verified: true },
-      });
-
-      await expect(
-        service.updateContact({ user_id: 'user-123', email: 'new@example.com' })
-      ).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Account already verified' },
-          HttpStatus.CONFLICT
-        )
-      );
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('rejects an email already owned by another user', async () => {
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({ users_by_pk: existingPendingUser })
-        .mockResolvedValueOnce({ users: [{ id: 'other-user' }] });
-
-      await expect(
-        service.updateContact({
-          user_id: 'user-123',
-          email: 'taken@example.com',
-        })
-      ).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Email is already taken' },
-          HttpStatus.CONFLICT
-        )
-      );
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('preserves an omitted phone number when updating only email', async () => {
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('GetSignupUser')) {
-          return { users_by_pk: existingPendingUser };
-        }
-        return { users: [] };
-      });
-      hasuraSystemService.executeMutation.mockImplementation(async (mutation: string) => {
-        if (mutation.includes('UpdateSignupContact')) {
-          return {
-            update_users_by_pk: {
-              ...insertedUser,
-              email: 'new@example.com',
-              phone_number: '+237600000001',
-            },
-          };
-        }
-        return { update_users: { affected_rows: 1 } };
-      });
-
-      const result = await service.updateContact({
-        user_id: ' user-123 ',
-        first_name: ' Renamed ',
-        email: ' New@Example.COM ',
-      });
-
-      expect(result.user.email).toBe('new@example.com');
-      expect(
-        businessProvisioning.scheduleEnsureContractForUser
-      ).not.toHaveBeenCalled();
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
-        expect.stringContaining('ReleaseUnverifiedContact'),
-        expect.anything()
-      );
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('UpdateSignupContact'),
-        {
-          id: 'user-123',
-          email: 'new@example.com',
-          phone_number: '+237600000001',
-          first_name: 'Renamed',
-          last_name: 'Signup',
-        }
-      );
-    });
-
-    it('preserves an omitted email when updating only phone number', async () => {
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('GetSignupUser')) {
-          return { users_by_pk: existingPendingUser };
-        }
-        return { users: [] };
-      });
-      hasuraSystemService.executeMutation.mockImplementation(async (mutation: string) => {
-        if (mutation.includes('UpdateSignupContact')) {
-          return {
-            update_users_by_pk: {
-              ...insertedUser,
-              email: 'old@example.com',
-              phone_number: '+237699999999',
-            },
-          };
-        }
-        return { update_users: { affected_rows: 1 } };
-      });
-
-      await service.updateContact({
-        user_id: 'user-123',
-        phone_number: ' +237699999999 ',
-      });
-
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('UpdateSignupContact'),
-        {
-          id: 'user-123',
-          email: 'old@example.com',
-          phone_number: '+237699999999',
-          first_name: 'Pending',
-          last_name: 'Signup',
-        }
-      );
-    });
-  });
-
-  describe('verifyOtp', () => {
-    it('normalizes email before delegating OTP verification to Auth0', async () => {
-      const auth0Token = {
-        access_token: 'token',
-        token_type: 'Bearer',
-        expires_in: 3600,
-      };
-      auth0Service.verifyEmailOtp.mockResolvedValue(auth0Token);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        users: [{ id: 'user-123' }],
-      });
-
-      await expect(
-        service.verifyOtp({ email: ' New@Example.COM ', otp: '123456' })
-      ).resolves.toEqual(auth0Token);
-      expect(auth0Service.verifyEmailOtp).toHaveBeenCalledWith(
-        'new@example.com',
-        '123456'
-      );
-      expect(
-        businessProvisioning.scheduleEnsureContractForUser
-      ).toHaveBeenCalledWith('user-123');
-    });
-
-    it('schedules merchant contract when userId is provided with OTP', async () => {
-      const auth0Token = {
-        access_token: 'token',
-        token_type: 'Bearer',
-        expires_in: 3600,
-      };
-      auth0Service.verifyEmailOtp.mockResolvedValue(auth0Token);
-
-      await service.verifyOtp({
-        email: 'new@example.com',
-        otp: '123456',
-        userId: 'user-456',
-      });
-
-      expect(
-        businessProvisioning.scheduleEnsureContractForUser
-      ).toHaveBeenCalledWith('user-456');
-    });
-
-    it('delegates phone OTP verification to Auth0 SMS', async () => {
-      const auth0Token = {
-        access_token: 'token',
-        token_type: 'Bearer',
-        expires_in: 3600,
-      };
-      auth0Service.verifySmsOtp.mockResolvedValue(auth0Token);
-
-      await expect(
-        service.verifyOtp({ phone_number: '+237600000001', otp: '123456' })
-      ).resolves.toEqual(auth0Token);
-      expect(auth0Service.verifySmsOtp).toHaveBeenCalledWith(
-        '+237600000001',
-        '123456'
-      );
-    });
-
-    it('rejects when neither email nor phone is provided', async () => {
-      await expect(service.verifyOtp({ otp: '123456' })).rejects.toThrow(
-        HttpException
-      );
-    });
-
-    it('routes test emails to the Test-Users password grant', async () => {
-      const auth0Token = {
-        access_token: 'token',
-        token_type: 'Bearer',
-        expires_in: 3600,
-      };
-      auth0Service.isTestUsersEnabled.mockReturnValue(true);
-      auth0Service.isTestEmail.mockReturnValue(true);
-      auth0Service.verifyTestUserEmail.mockResolvedValue(auth0Token);
-
-      await expect(
-        service.verifyOtp({ email: 'tester@rendasua-test.com', otp: '000000' })
-      ).resolves.toEqual(auth0Token);
-      expect(auth0Service.verifyTestUserEmail).toHaveBeenCalledWith(
-        'tester@rendasua-test.com'
-      );
-      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
-    });
-
-    it('routes test phones to the Test-Users password grant', async () => {
-      const auth0Token = {
-        access_token: 'token',
-        token_type: 'Bearer',
-        expires_in: 3600,
-      };
-      auth0Service.isTestUsersEnabled.mockReturnValue(true);
-      auth0Service.isTestPhone.mockReturnValue(true);
-      auth0Service.verifyTestUserPhone.mockResolvedValue(auth0Token);
-
-      await expect(
-        service.verifyOtp({ phone_number: '+23700000000', otp: '000000' })
-      ).resolves.toEqual(auth0Token);
-      expect(auth0Service.verifyTestUserPhone).toHaveBeenCalledWith(
-        '+23700000000'
-      );
-      expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
-    });
-
-    it('rejects requests that provide both email and phone number', async () => {
-      await expect(
-        service.verifyOtp({
-          email: 'new@example.com',
-          phone_number: '+237600000001',
-          otp: '123456',
-        })
-      ).rejects.toThrow(
+  describe('retired endpoints', () => {
+    it('returns GONE for updateContact', async () => {
+      await expect(service.updateContact({})).rejects.toThrow(
         new HttpException(
           {
             success: false,
-            error: 'Provide exactly one of email or phone_number with otp',
+            error: 'Contact updates require restarting signup verification',
           },
-          HttpStatus.BAD_REQUEST
+          HttpStatus.GONE
         )
       );
-      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
-      expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
     });
   });
 });
