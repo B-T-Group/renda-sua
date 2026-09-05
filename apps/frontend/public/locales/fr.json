@@ -3800,6 +3800,7 @@
     "business": "Entreprise",
     "cancel": "Annuler",
     "category": "Catégorie",
+    "change": "Modifier",
     "clear": "Effacer",
     "clearFilters": "Effacer les filtres",
     "close": "Fermer",
@@ -6486,10 +6487,12 @@
       "whatsappHelp": "Nous basculons sur SMS si WhatsApp échoue.",
       "pinNotice": "Le destinataire reçoit son propre code de livraison et le donne au livreur à la remise. Vous le voyez aussi dans votre commande.",
       "selectSaved": "Sélectionner un destinataire enregistré",
-      "addNew": "Ajouter un nouveau destinataire",
+      "addNew": "Ajouter nouveau",
       "noSaved": "Aucun destinataire enregistré. Ajoutez-en un ci-dessous.",
       "loadError": "Échec du chargement des destinataires",
-      "whatsappEnabled": "WhatsApp"
+      "whatsappEnabled": "WhatsApp",
+      "selectPrompt": "Sélectionnez un destinataire pour cette commande",
+      "selectRequired": "Requis avant de passer votre commande"
     }
   },
   "recipients": {

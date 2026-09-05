@@ -10,7 +10,8 @@ CREATE TABLE public.user_recipients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT user_recipients_country_check CHECK (country ~ '^[A-Z]{2}$'),
   CONSTRAINT user_recipients_name_check CHECK (char_length(trim(name)) >= 1),
-  CONSTRAINT user_recipients_phone_check CHECK (phone ~ '^\+[1-9][0-9]+$')
+  CONSTRAINT user_recipients_phone_check CHECK (phone ~ '^\+[1-9][0-9]+$'),
+  CONSTRAINT user_recipients_user_country_phone_key UNIQUE (user_id, country, phone)
 );
 
 CREATE INDEX user_recipients_user_id_country_idx

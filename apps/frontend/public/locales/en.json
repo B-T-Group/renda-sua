@@ -4065,6 +4065,7 @@
     "business": "Business",
     "cancel": "Cancel",
     "category": "Category",
+    "change": "Change",
     "clear": "Clear",
     "clearFilters": "Clear Filters",
     "close": "Close",
@@ -6754,10 +6755,12 @@
       "whatsappHelp": "We fall back to SMS if WhatsApp cannot be delivered.",
       "pinNotice": "The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order.",
       "selectSaved": "Select saved recipient",
-      "addNew": "Add new recipient",
+      "addNew": "Add new",
       "noSaved": "No saved recipients yet. Add one below.",
       "loadError": "Failed to load saved recipients",
-      "whatsappEnabled": "WhatsApp"
+      "whatsappEnabled": "WhatsApp",
+      "selectPrompt": "Select a recipient for this order",
+      "selectRequired": "Required before you can place your order"
     }
   },
   "recipients": {
