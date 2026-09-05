@@ -183,4 +183,37 @@ describe('StripeConnectService', () => {
       expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
     }
   });
+
+  describe('isPayoutReady', () => {
+    it('is false when the user has no Connect account', async () => {
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [],
+      });
+
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(false);
+    });
+
+    it('requires both charges and payouts to be enabled', async () => {
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [
+          { charges_enabled: true, payouts_enabled: false },
+        ],
+      });
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(false);
+
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [
+          { charges_enabled: false, payouts_enabled: true },
+        ],
+      });
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(false);
+
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [
+          { charges_enabled: true, payouts_enabled: true },
+        ],
+      });
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(true);
+    });
+  });
 });

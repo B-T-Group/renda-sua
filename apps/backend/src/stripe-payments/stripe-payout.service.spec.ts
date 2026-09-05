@@ -79,6 +79,31 @@ describe('StripePayoutService', () => {
     expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
   });
 
+  it('rejects payouts when Connect is not payout-ready', async () => {
+    accountsService.accountBelongsToUser.mockResolvedValue(true);
+    accountsService.getAccountBalance.mockResolvedValue({
+      availableBalance: 100,
+    });
+    connectService.isPayoutReady.mockResolvedValue(false);
+
+    try {
+      await service.executePayout(payoutParams, { throwOnFailure: true });
+      fail('Expected payout to be rejected');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(error.getResponse()).toEqual({
+        success: false,
+        message: 'Stripe Connect account is not payout-ready',
+        error: 'CONNECT_NOT_READY',
+      });
+    }
+
+    expect(databaseService.createTransaction).not.toHaveBeenCalled();
+    expect(connectService.getByUserId).not.toHaveBeenCalled();
+    expect(stripeService.createTransfer).not.toHaveBeenCalled();
+  });
+
   it('does not debit wallet when Stripe transfer fails', async () => {
     accountsService.accountBelongsToUser.mockResolvedValue(true);
     accountsService.getAccountBalance.mockResolvedValue({ availableBalance: 100 });
