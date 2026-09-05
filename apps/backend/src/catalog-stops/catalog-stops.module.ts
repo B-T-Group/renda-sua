@@ -2,8 +2,8 @@ import { Module } from '@nestjs/common';
 import { HasuraModule } from '../hasura/hasura.module';
 import { InventoryItemsModule } from '../inventory-items/inventory-items.module';
 import { CollectionsModule } from '../collections/collections.module';
-import { DiscoveryRailsController } from './discovery-rails.controller';
-import { DiscoveryRailsService } from './discovery-rails.service';
+import { CatalogStopsController } from './catalog-stops.controller';
+import { CatalogStopsService } from './catalog-stops.service';
 
 @Module({
   imports: [
@@ -11,8 +11,8 @@ import { DiscoveryRailsService } from './discovery-rails.service';
     InventoryItemsModule,
     CollectionsModule,
   ],
-  controllers: [DiscoveryRailsController],
-  providers: [DiscoveryRailsService],
-  exports: [DiscoveryRailsService],
+  controllers: [CatalogStopsController],
+  providers: [CatalogStopsService],
+  exports: [CatalogStopsService],
 })
-export class DiscoveryRailsModule {}
+export class CatalogStopsModule {}
