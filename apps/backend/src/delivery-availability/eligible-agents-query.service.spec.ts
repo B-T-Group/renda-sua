@@ -106,6 +106,29 @@ describe('EligibleAgentsQueryService', () => {
     expect(result.map((c) => c.agentId)).toEqual(['internal']);
   });
 
+  it('matches a profile address with accents without calling GPS', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      agent_locations: [
+        agentRow('quebec-agent', 4.01, { country: 'CA', state: 'Québec' }),
+      ],
+    });
+    const reverseGeocode = jest.fn();
+    service = new EligibleAgentsQueryService(
+      hasuraSystemService,
+      { reverseGeocode } as unknown as GoogleDistanceService
+    );
+
+    const result = await service.findEligibleAgents({
+      originLat: 4,
+      originLon: 9,
+      targetCountry: 'CA',
+      targetState: 'Quebec',
+    });
+
+    expect(result.map((c) => c.agentId)).toEqual(['quebec-agent']);
+    expect(reverseGeocode).not.toHaveBeenCalled();
+  });
+
   it('matches via GPS reverse-geocode when the profile address has no state (accents + ISO code)', async () => {
     // Prod repro: address stores country "CA" with an empty state; Google
     // returns "Canada"/"Québec" long names for the agent's GPS position.

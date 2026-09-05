@@ -81,6 +81,8 @@ export interface CreateOrderRequest {
   payer_country?: string;
   /** Explicit opt-in to the recipient block, even when contact fields are blank. */
   sending_to_someone_else?: boolean;
+  /** UUID of a saved recipient to use for this order. When provided, overrides inline recipient fields. */
+  recipient_id?: string;
   /** Person receiving the order locally, when that is not the paying client. */
   recipient?: {
     name?: string;

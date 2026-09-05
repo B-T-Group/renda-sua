@@ -215,6 +215,12 @@ export class OrdersController {
           description:
             'Set when the recipient is a different person from the paying client.',
         },
+        recipient_id: {
+          type: 'string',
+          format: 'uuid',
+          description:
+            'UUID of a saved recipient. When provided, overrides inline recipient fields.',
+        },
         recipient: {
           type: 'object',
           description:

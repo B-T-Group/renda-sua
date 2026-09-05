@@ -1,4 +1,5 @@
 import {
+  addressesMatchRegion,
   agentMatchesRegion,
   countryFromAddresses,
   regionFromAddresses,
@@ -103,5 +104,69 @@ describe('agent-proximity.util', () => {
       reverseGeocode: async () => ({ country: 'CM', state: 'Centre' }),
     });
     expect(matches).toBe(true);
+  });
+
+  it('addressesMatchRegion treats Québec and Quebec as the same state', () => {
+    expect(
+      addressesMatchRegion(
+        [{ address: { country: 'CA', state: 'Québec', is_primary: true } }],
+        'CA',
+        'Quebec'
+      )
+    ).toBe(true);
+  });
+
+  it('addressesMatchRegion ignores case and surrounding whitespace', () => {
+    expect(
+      addressesMatchRegion(
+        [{ address: { country: '  ca ', state: '  QUÉBEC ', is_primary: true } }],
+        'CA',
+        'quebec'
+      )
+    ).toBe(true);
+  });
+
+  it('addressesMatchRegion rejects empty or missing country/state', () => {
+    expect(addressesMatchRegion([], 'CA', 'Quebec')).toBe(false);
+    expect(
+      addressesMatchRegion(
+        [{ address: { country: 'CA', state: '', is_primary: true } }],
+        'CA',
+        'Quebec'
+      )
+    ).toBe(false);
+    expect(
+      addressesMatchRegion(
+        [{ address: { country: 'CA', state: 'Quebec', is_primary: true } }],
+        'CA',
+        ''
+      )
+    ).toBe(false);
+  });
+
+  it('agentMatchesRegion matches profile accents without calling GPS', async () => {
+    const reverseGeocode = jest.fn();
+    const matches = await agentMatchesRegion({
+      agentAddresses: [
+        { address: { country: 'CA', state: 'Québec', is_primary: true } },
+      ],
+      agentLocation: { latitude: 45.5, longitude: -73.6 },
+      targetCountry: 'CA',
+      targetState: 'Quebec',
+      reverseGeocode,
+    });
+    expect(matches).toBe(true);
+    expect(reverseGeocode).not.toHaveBeenCalled();
+  });
+
+  it('agentMatchesRegion does not match a different country', async () => {
+    const matches = await agentMatchesRegion({
+      agentAddresses: [
+        { address: { country: 'CA', state: 'Quebec', is_primary: true } },
+      ],
+      targetCountry: 'CM',
+      targetState: 'Quebec',
+    });
+    expect(matches).toBe(false);
   });
 });

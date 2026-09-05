@@ -3,12 +3,13 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { WinstonModule } from 'nest-winston';
 import { ClsModule } from 'nestjs-cls';
 import { AllExceptionsFilter } from '../common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from '../common/interceptors/logging.interceptor';
+import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
@@ -58,6 +59,7 @@ import { OrangeMomoModule } from '../orange-momo/orange-momo.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
+import { RecipientsModule } from '../recipients/recipients.module';
 import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
@@ -117,7 +119,7 @@ import { AppService } from './app.service';
       {
         name: 'short',
         ttl: 60000,
-        limit: 100,
+        limit: parseInt(process.env.THROTTLE_SHORT_LIMIT || '100', 10),
       },
     ]),
     WinstonModule.forRootAsync({
@@ -157,6 +159,7 @@ import { AppService } from './app.service';
     UsersModule,
     OrdersModule,
     RatingsModule,
+    RecipientsModule,
     RentalsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,
@@ -222,7 +225,7 @@ import { AppService } from './app.service';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: UserThrottlerGuard,
     },
     {
       provide: APP_FILTER,

@@ -13,6 +13,7 @@ import {
   ORDER_RISK_TYPES,
   type OrderRiskType,
 } from '../order-risk.types';
+import { ADMIN_STATUS_OVERRIDE_VALUES } from '../admin-order-status.util';
 
 export enum OrderStatusFilter {
   ALL = 'all',
@@ -126,15 +127,18 @@ export class UnassignRedispatchDto {
 }
 
 export class UpdateOrderStatusDto {
-  @ApiProperty({ description: 'New order status' })
-  @IsString()
+  @ApiProperty({
+    description:
+      'New order status. cancelled runs payment/inventory cancel; settlement statuses are rejected.',
+    enum: ADMIN_STATUS_OVERRIDE_VALUES,
+  })
+  @IsIn(ADMIN_STATUS_OVERRIDE_VALUES)
   status!: string;
 
-  @ApiProperty({
-    description: 'Why the status is being corrected manually (audited)',
-  })
+  @ApiPropertyOptional({ description: 'Admin notes for status change' })
+  @IsOptional()
   @IsString()
-  reason!: string;
+  notes?: string;
 }
 
 export class AddAdminNoteDto {

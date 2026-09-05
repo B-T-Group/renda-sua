@@ -44,6 +44,7 @@ import {
 } from '../notifications/notifications.service';
 import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import { RecipientsService } from '../recipients/recipients.service';
 import {
   assertDiasporaPaymentTiming,
   normalizeCountryCode,
@@ -93,6 +94,7 @@ import {
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
+import { isAdminTerminalStatus } from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
 import {
   withDeliveryContact,
@@ -433,6 +435,7 @@ export class OrdersService {
     private readonly notificationsService: NotificationsService,
     private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
     private readonly fxEstimateService: FxEstimateService,
+    private readonly recipientsService: RecipientsService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
@@ -4768,6 +4771,115 @@ export class OrdersService {
     };
   }
 
+  async cancelOrderAsAdmin(orderId: string, notes?: string) {
+    const order = await this.requireCancellableAdminOrder(orderId);
+    const adminUserId = await this.resolveOptionalUserId();
+    await this.releaseStripeAuthorizationIfNeeded(order);
+    const updatedOrder = await this.markOrderCancelledAsSystem(orderId);
+    await this.finishAdminCancellation(order, adminUserId, notes);
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order cancelled successfully',
+    };
+  }
+
+  private async requireCancellableAdminOrder(orderId: string): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (isAdminTerminalStatus(order.current_status)) {
+      throw new HttpException(
+        `Cannot cancel order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return order;
+  }
+
+  private async resolveOptionalUserId(): Promise<string | null> {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      return user?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async markOrderCancelledAsSystem(orderId: string) {
+    return this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
+      viaCancelEndpoint: true,
+      viaSystem: true,
+    });
+  }
+
+  private async finishAdminCancellation(
+    order: Orders,
+    adminUserId: string | null,
+    notes?: string
+  ): Promise<void> {
+    await this.persistCancellationMetadata(order.id, 'system', notes);
+    if (adminUserId) {
+      await this.createStatusHistoryEntry(
+        order.id,
+        'cancelled',
+        'Order cancelled by admin',
+        'system',
+        adminUserId,
+        notes
+      );
+    }
+    await this.runOrderCancellationSideEffects(
+      order,
+      order.id,
+      order.current_status,
+      'system',
+      notes
+    );
+  }
+
+  private async persistCancellationMetadata(
+    orderId: string,
+    cancelledBy: string,
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation SetCancellationFields(
+          $orderId: uuid!,
+          $cancelledBy: String!,
+          $cancelledAt: timestamptz!,
+          $cancellationReasonId: Int,
+          $cancellationNotes: String
+        ) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId },
+            _set: {
+              cancelled_by: $cancelledBy,
+              cancelled_at: $cancelledAt,
+              cancellation_reason_id: $cancellationReasonId,
+              cancellation_notes: $cancellationNotes
+            }
+          ) { id }
+        }
+        `,
+        {
+          orderId,
+          cancelledBy,
+          cancelledAt: new Date().toISOString(),
+          cancellationReasonId: null,
+          cancellationNotes: notes ?? null,
+        }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to persist cancellation metadata: ${error.message}`
+      );
+    }
+  }
+
   async getCancellationPreview(
     orderId: string,
     actor?: AuthorizedBusinessActor
@@ -6797,36 +6909,22 @@ export class OrdersService {
         | undefined;
       if (paymentTiming !== 'pay_now') return;
       if ((order as any).payment_status === 'authorized') return;
+      if (this.isTerminalOrderForPaymentFinalize(order)) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
 
       const at = new Date().toISOString();
       const paymentIntentId = transaction.transaction_id ?? null;
-      await this.hasuraSystemService.executeMutation(
-        `
-        mutation AuthorizeOrderPayment(
-          $orderId: uuid!
-          $at: timestamptz!
-          $paymentIntentId: String
-        ) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: {
-              current_status: pending
-              payment_status: "authorized"
-              payment_authorized_at: $at
-              stripe_payment_intent_id: $paymentIntentId
-              updated_at: $at
-            }
-          ) {
-            id
-          }
-        }
-      `,
-        {
-          orderId: order.id,
-          at,
-          paymentIntentId,
-        }
-      );
+      const authorized = await this.tryAuthorizePendingOrder({
+        orderId: order.id,
+        at,
+        paymentIntentId,
+      });
+      if (!authorized) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
 
       await this.createStatusHistoryEntry(
         order.id,
@@ -6885,6 +6983,11 @@ export class OrdersService {
         | 'pay_at_pickup'
         | undefined;
 
+      if (this.isTerminalOrderForPaymentFinalize(order)) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
+
       if (
         paymentTiming === 'pay_now' &&
         (order as any).payment_status === 'paid'
@@ -6909,6 +7012,74 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  private isTerminalOrderForPaymentFinalize(order: {
+    current_status?: string;
+    payment_status?: string | null;
+  }): boolean {
+    const paymentStatus = order.payment_status;
+    return (
+      order.current_status === 'cancelled' ||
+      order.current_status === 'failed' ||
+      order.current_status === 'refunded' ||
+      paymentStatus === 'cancelled' ||
+      paymentStatus === 'refunded'
+    );
+  }
+
+  private async rejectLateStripePaymentForOrder(order: Orders): Promise<void> {
+    this.logger.warn(
+      `Ignoring late Stripe payment for ${order.current_status} order ${order.order_number}`
+    );
+    await this.stripeCaptureService.cancelOrderPaymentIntent({
+      orderNumber: order.order_number,
+      orderId: order.id,
+    });
+  }
+
+  private async tryAuthorizePendingOrder(params: {
+    orderId: string;
+    at: string;
+    paymentIntentId: string | null;
+  }): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation AuthorizeOrderPayment(
+        $orderId: uuid!
+        $at: timestamptz!
+        $paymentIntentId: String
+        $allowedStatuses: [order_status!]!
+      ) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _in: $allowedStatuses } }
+            ]
+          }
+          _set: {
+            current_status: pending
+            payment_status: "authorized"
+            payment_authorized_at: $at
+            stripe_payment_intent_id: $paymentIntentId
+            updated_at: $at
+          }
+        ) {
+          affected_rows
+        }
+      }
+    `,
+      {
+        orderId: params.orderId,
+        at: params.at,
+        paymentIntentId: params.paymentIntentId,
+        allowedStatuses: ['pending_payment', 'pending'],
+      }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
   /**
@@ -7414,32 +7585,12 @@ export class OrdersService {
   private async captureStripeAuthorizedOrderIfNeeded(
     order: Orders
   ): Promise<void> {
-    const paymentSource = (order as any).payment_source as string | undefined;
-    const paymentTiming = (order as any).payment_timing as string | undefined;
-    const paymentStatus = (order as any).payment_status as string | undefined;
+    if (!this.shouldCaptureAuthorizedStripeOrder(order)) return;
 
-    // Wallet / mobile / already-captured orders must never hit Stripe capture.
-    if (paymentStatus === 'paid') {
-      return;
-    }
-    if (paymentSource === 'wallet' || paymentSource === 'mobile_payment') {
-      return;
-    }
-    if (paymentSource !== 'credit_card' || paymentTiming !== 'pay_now') {
-      return;
-    }
-    if (paymentStatus !== 'authorized') {
-      return;
-    }
-
-    const isPickup = (order as any).fulfillment_method === 'pickup';
     const result = await this.stripeCaptureService.captureOrderPaymentIntent({
       orderId: order.id,
       orderNumber: order.order_number,
-      // Pickup orders may have switched from delivery with a waived delivery
-      // fee after the Stripe authorization was placed; capture only the
-      // current (possibly lower) total so Stripe releases the difference.
-      ...(isPickup ? { captureAmount: Number(order.total_amount) } : {}),
+      ...this.pickupStripeCaptureAmountFields(order),
     });
     if (!result.success) {
       throw new HttpException(
@@ -7450,6 +7601,40 @@ export class OrdersService {
     if (result.captured) {
       await this.finalizeStripeCapturedOrderPayment(order.order_number);
     }
+  }
+
+  private shouldCaptureAuthorizedStripeOrder(order: Orders): boolean {
+    const paymentSource = (order as any).payment_source as string | undefined;
+    const paymentTiming = (order as any).payment_timing as string | undefined;
+    const paymentStatus = (order as any).payment_status as string | undefined;
+    if (paymentStatus === 'paid') return false;
+    if (paymentSource === 'wallet' || paymentSource === 'mobile_payment') {
+      return false;
+    }
+    return (
+      paymentSource === 'credit_card' &&
+      paymentTiming === 'pay_now' &&
+      paymentStatus === 'authorized'
+    );
+  }
+
+  /**
+   * Partial capture only after switch-to-pickup waived the delivery fee.
+   * Native pickup must omit captureAmount so Stripe collects authorized tax.
+   */
+  private pickupStripeCaptureAmountFields(
+    order: Orders
+  ): { captureAmount?: number } {
+    const captureAmount = this.resolvePickupStripeCaptureAmount(order);
+    return captureAmount == null ? {} : { captureAmount };
+  }
+
+  private resolvePickupStripeCaptureAmount(order: Orders): number | undefined {
+    if ((order as any).fulfillment_method !== 'pickup') return undefined;
+    const currentTotal = Number(order.total_amount);
+    const originalPreTax = Number((order as any).pre_tax_total ?? currentTotal);
+    if (!(currentTotal + 0.0001 < originalPreTax)) return undefined;
+    return currentTotal;
   }
 
   private async finalizeStripeCapturedOrderPayment(
@@ -8804,8 +8989,25 @@ export class OrdersService {
       user,
       orderData.payer_country
     );
+    
+    // If recipient_id is provided, fetch the saved recipient and use it
+    // Fail the order if recipient is not found (no soft-fallback after inventory reserve)
+    let recipientData = orderData.recipient;
+    if (orderData.recipient_id) {
+      const ctx = this.hasuraUserService.resolveContext();
+      const savedRecipient = await this.recipientsService.getRecipient(
+        ctx,
+        orderData.recipient_id
+      );
+      recipientData = {
+        name: savedRecipient.name,
+        phone: savedRecipient.phone,
+        notify_whatsapp: savedRecipient.notify_whatsapp,
+      };
+    }
+    
     const recipient = resolveOrderRecipient({
-      recipient: orderData.recipient,
+      recipient: recipientData,
       sendingToSomeoneElse: orderData.sending_to_someone_else,
       fulfillmentCountry,
     });

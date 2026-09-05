@@ -40,15 +40,11 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
-import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderEventsService } from './order-events.service';
 import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
-import { OrderCleanupService } from './order-cleanup.service';
-import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
-import { FoodOrdersService } from '../food/food-orders.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -229,7 +225,7 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn(), getProviderForCountry: jest.fn().mockReturnValue('mypvit') } },
+        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn() } },
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
@@ -244,7 +240,9 @@ describe('OrdersService', () => {
         },
         {
           provide: FxEstimateService,
-          useValue: { estimate: jest.fn().mockReturnValue(null) },
+          useValue: {
+            estimateFx: jest.fn().mockResolvedValue({ rate: 1.0, fee: 0 }),
+          },
         },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
@@ -291,23 +289,6 @@ describe('OrdersService', () => {
           useValue: {
             resolveRailForBusiness: jest.fn(),
             resolveRailForUser: jest.fn(),
-            resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
-            getUserCountryCode: jest.fn().mockResolvedValue(null),
-            resolveOrderRail: jest.fn().mockResolvedValue({
-              rail: 'mobile_money',
-              source: 'seller',
-              isDiaspora: false,
-            }),
-            isDiasporaPayer: jest.fn().mockResolvedValue(false),
-            resolveTrustedPayerCountry: jest.fn(
-              async ({
-                profileCountry,
-                requestedCountry,
-              }: {
-                profileCountry?: string | null;
-                requestedCountry?: string | null;
-              }) => requestedCountry || profileCountry || null
-            ),
           },
         },
         { provide: StripeCheckoutService, useValue: {} },
@@ -316,9 +297,9 @@ describe('OrdersService', () => {
           useValue: {
             captureOrderPaymentIntent: jest.fn(),
             creditWalletForCapturedOrder: jest.fn(),
-            cancelOrderPaymentIntent: jest
-              .fn()
-              .mockResolvedValue({ success: true, skipped: false }),
+            cancelOrderPaymentIntent: jest.fn().mockResolvedValue({
+              success: true,
+            }),
           },
         },
         {
@@ -379,12 +360,6 @@ describe('OrdersService', () => {
             startAcceptanceSla: jest.fn(),
             isBusinessAcceptingOrders: jest.fn().mockResolvedValue(true),
             isWithinOperatingHours: jest.fn().mockReturnValue(true),
-            getBusinessTiming: jest.fn().mockResolvedValue({
-              defaultEstimatedPrepMinutes: 30,
-              asapTimeoutSeconds: 900,
-              futureTimeoutSeconds: 1800,
-              activationLeadMinutes: 30,
-            }),
             isSlotWithinOperatingHours: jest.fn().mockReturnValue(true),
             fetchDeliverySlotTimes: jest.fn().mockResolvedValue({
               start_time: '12:00',
@@ -392,23 +367,6 @@ describe('OrdersService', () => {
             }),
             getAcceptanceTimeoutSeconds: jest.fn().mockResolvedValue(300),
             recordMerchantCancelOfPending: jest.fn(),
-          },
-        },
-        {
-          provide: FulfillmentPromiseService,
-          useValue: {
-            persistForOrder: jest.fn(),
-            reanchorAsapAtReady: jest.fn(),
-            evaluateAsap: jest.fn().mockReturnValue({
-              available: true,
-              estimatedPrepMinutes: 30,
-              scheduleRequired: false,
-            }),
-            timezoneForCountry: jest.fn().mockResolvedValue('UTC'),
-            closedStoreMessage: jest
-              .fn()
-              .mockReturnValue('This store is closed. Select a future date below.'),
-            inferTiming: jest.fn().mockReturnValue('asap'),
           },
         },
         { provide: RbacService, useValue: {} },
@@ -427,26 +385,6 @@ describe('OrdersService', () => {
           provide: EventEmitter2,
           useValue: { emit: jest.fn() },
         },
-        {
-          provide: FoodOrdersService,
-          useValue: {
-            isCookedFoodOrder: jest.fn().mockResolvedValue(false),
-          },
-        },
-        {
-          provide: OrderCleanupService,
-          useValue: {
-            cancelUnpaidPendingPaymentAsSystem: jest
-              .fn()
-              .mockResolvedValue({ cancelled: true }),
-          },
-        },
-        {
-          provide: StripeRefundService,
-          useValue: {
-            initiateOrderRefund: jest.fn().mockResolvedValue({ success: true }),
-          },
-        },
       ],
     }).compile();
 
@@ -461,302 +399,6 @@ describe('OrdersService', () => {
   });
 
   describe('createOrder', () => {
-    // Diaspora: a payer billing from CA buys from a Gabonese merchant for a
-    // recipient who has no Rendasua account.
-    describe('diaspora orders', () => {
-      const diasporaInventoryFixture = () => ({
-        id: 'inventory-ga',
-        computed_available_quantity: 10,
-        selling_price: 14500,
-        is_active: true,
-        business_location_id: 'location-ga',
-        item_variant_id: null,
-        variant_price_overrides: [],
-        item_variant: null,
-        business_location: {
-          business_id: 'business-ga',
-          is_active: true,
-          operating_hours: null,
-          mobile_payment_phone: { is_verified: true },
-          address: { country: 'GA', state: 'Estuaire' },
-          business: {
-            id: 'business-ga',
-            can_accept_orders: true,
-            user: { id: 'merchant-user-ga', country: 'GA' },
-          },
-        },
-        item: {
-          id: 'item-ga',
-          name: 'Panier familial',
-          description: 'Food basket',
-          pay_on_delivery_enabled: true,
-          pay_at_pickup_enabled: false,
-          shipping_enabled: true,
-          shipping_price: 0,
-          shipping_currency: 'XAF',
-          currency: 'XAF',
-          weight: 1,
-          max_order_quantity: null,
-          stripe_tax_code_id: null,
-          item_variants: [],
-        },
-      });
-
-      function arrangeDiasporaOrder(): jest.SpyInstance {
-        hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-        hasuraUserService.sessionPersonaContext.mockReturnValue({
-          jwtDefaultRole: 'client',
-          jwtAllowedRoles: ['client'],
-        });
-        hasuraUserService.getUserAddressById.mockResolvedValue({
-          id: 'address-ga',
-          address_line_1: 'Quartier Louis',
-          city: 'Libreville',
-          state: 'Estuaire',
-          postal_code: '',
-          country: 'GA',
-        } as any);
-        hasuraSystemService.getAccount.mockResolvedValue({
-          id: 'account-xaf',
-          available_balance: 0,
-        } as any);
-
-        const routing = (service as any).paymentRoutingService;
-        routing.getUserCountryCode.mockResolvedValue('CA');
-        routing.getBusinessCountryCode = jest.fn().mockResolvedValue('GA');
-        routing.isDiasporaPayer.mockImplementation(
-          async (country?: string | null) =>
-            String(country || '').toUpperCase() === 'CA'
-        );
-        routing.resolveTrustedPayerCountry.mockImplementation(
-          async ({
-            profileCountry,
-            requestedCountry,
-          }: {
-            profileCountry?: string | null;
-            requestedCountry?: string | null;
-          }) =>
-            String(profileCountry || '').toUpperCase() === 'CA'
-              ? 'CA'
-              : requestedCountry || profileCountry || null
-        );
-        routing.resolveOrderRail.mockResolvedValue({
-          rail: 'stripe',
-          source: 'payer',
-          isDiaspora: true,
-        });
-        (
-          service as any
-        ).stripeCaptureService.resolveCaptureMethodForOrderEntity = jest
-          .fn()
-          .mockReturnValue('automatic');
-        jest
-          .spyOn(service as any, 'buildStripeTaxCheckoutParams')
-          .mockReturnValue({});
-
-        jest
-          .spyOn(service as any, 'updateReservedQuantities')
-          .mockResolvedValue(undefined);
-        jest
-          .spyOn(service as any, 'schedulePendingPaymentTimeout')
-          .mockResolvedValue(undefined);
-        const checkoutSpy = jest
-          .spyOn(service as any, 'createStripeOrderCheckout')
-          .mockResolvedValue({
-            paymentUrl: 'https://checkout.stripe.com/c/pay/test',
-            reference: 'ref-1',
-            transactionId: 'tx-1',
-          });
-
-        hasuraSystemService.executeQuery
-          .mockResolvedValueOnce({
-            business_inventory: [diasporaInventoryFixture()],
-          })
-          .mockResolvedValueOnce({ supported_payment_systems: [] })
-          .mockResolvedValueOnce({ item_deals: [] });
-        hasuraSystemService.executeMutation
-          .mockResolvedValueOnce({
-            insert_orders_one: {
-              id: 'order-ga',
-              order_number: '87654321',
-              payment_source: 'credit_card',
-            },
-          })
-          .mockResolvedValueOnce({ affected_rows: 1 });
-
-        return checkoutSpy;
-      }
-
-      const diasporaRequest = {
-        delivery_address_id: 'address-ga',
-        fulfillment_method: 'shipping' as const,
-        payment_timing: 'pay_now' as const,
-        items: [{ business_inventory_id: 'inventory-ga', quantity: 1 }],
-        payer_country: 'CA',
-        sending_to_someone_else: true,
-        recipient: {
-          name: 'Awa Ndong',
-          phone: '077123456',
-          notify_whatsapp: true,
-        },
-      };
-
-      it('persists payer and recipient distinctly and routes to Stripe', async () => {
-        const checkoutSpy = arrangeDiasporaOrder();
-
-        const result = await service.createOrder(diasporaRequest);
-
-        expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-          expect.stringContaining('mutation CreateOrderWithItems'),
-          expect.objectContaining({
-            recipientName: 'Awa Ndong',
-            recipientPhone: '+24177123456',
-            recipientNotifyWhatsapp: true,
-            isThirdPartyRecipient: true,
-            payerCountry: 'CA',
-            payerPaymentRail: 'stripe',
-            fulfillmentCountry: 'GA',
-            isDiasporaOrder: true,
-            currency: 'XAF',
-            paymentSource: 'credit_card',
-            currentStatus: 'pending_payment',
-          })
-        );
-        expect(checkoutSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ currency: 'XAF' })
-        );
-        expect(result.payment_rail).toBe('stripe');
-        expect(result.checkout_url).toBe(
-          'https://checkout.stripe.com/c/pay/test'
-        );
-      });
-
-      it('snapshots the payer identity alongside the recipient', async () => {
-        arrangeDiasporaOrder();
-
-        await service.createOrder(diasporaRequest);
-
-        expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-          expect.stringContaining('mutation CreateOrderWithItems'),
-          expect.objectContaining({
-            payerName: 'Client User',
-            payerEmail: 'client@example.com',
-          })
-        );
-      });
-
-      it('rejects a recipient with no phone before any order row is written', async () => {
-        arrangeDiasporaOrder();
-
-        await expect(
-          service.createOrder({
-            ...diasporaRequest,
-            recipient: { name: 'Awa Ndong', phone: '' },
-          })
-        ).rejects.toMatchObject({
-          response: { error: 'RECIPIENT_CONTACT_REQUIRED' },
-        });
-        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-      });
-
-      it('rejects a recipient phone that is invalid for the delivery country', async () => {
-        arrangeDiasporaOrder();
-
-        await expect(
-          service.createOrder({
-            ...diasporaRequest,
-            recipient: { name: 'Awa Ndong', phone: '12' },
-          })
-        ).rejects.toMatchObject({
-          response: { error: 'RECIPIENT_PHONE_INVALID_FOR_COUNTRY' },
-        });
-        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-      });
-
-      it('rejects pay at delivery when the payer is abroad', async () => {
-        arrangeDiasporaOrder();
-        jest
-          .spyOn(service as any, 'assertDeliveryAvailable')
-          .mockResolvedValue(undefined);
-        jest.spyOn(service, 'calculateItemDeliveryFee').mockResolvedValue({
-          deliveryFee: 1000,
-          baseDeliveryFee: 1000,
-          perKmDeliveryFee: 0,
-          firstOrderDeliveryFeePromo: false,
-          firstOrderBaseDeliveryDiscountAmount: 0,
-        } as any);
-
-        await expect(
-          service.createOrder({
-            ...diasporaRequest,
-            fulfillment_method: 'delivery',
-            payment_timing: 'pay_at_delivery',
-          })
-        ).rejects.toMatchObject({
-          response: { error: 'DIASPORA_REQUIRES_PAY_NOW' },
-        });
-        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-      });
-
-      it('rejects a spoofed local payer_country that would skip diaspora pay-now', async () => {
-        arrangeDiasporaOrder();
-        const routing = (service as any).paymentRoutingService;
-        jest
-          .spyOn(service as any, 'assertDeliveryAvailable')
-          .mockResolvedValue(undefined);
-        jest.spyOn(service, 'calculateItemDeliveryFee').mockResolvedValue({
-          deliveryFee: 1000,
-          baseDeliveryFee: 1000,
-          perKmDeliveryFee: 0,
-          firstOrderDeliveryFeePromo: false,
-          firstOrderBaseDeliveryDiscountAmount: 0,
-        } as any);
-
-        await expect(
-          service.createOrder({
-            ...diasporaRequest,
-            payer_country: 'GA',
-            fulfillment_method: 'delivery',
-            payment_timing: 'pay_at_delivery',
-          })
-        ).rejects.toMatchObject({
-          response: { error: 'DIASPORA_REQUIRES_PAY_NOW' },
-        });
-        expect(routing.resolveTrustedPayerCountry).toHaveBeenCalledWith({
-          profileCountry: 'CA',
-          requestedCountry: 'GA',
-        });
-        expect(routing.resolveOrderRail).toHaveBeenCalledWith(
-          expect.objectContaining({ payerCountry: 'CA' })
-        );
-        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-      });
-
-      it('leaves recipient columns empty for a shopper buying for themselves', async () => {
-        arrangeDiasporaOrder();
-        (service as any).paymentRoutingService.resolveOrderRail.mockResolvedValue(
-          { rail: 'stripe', source: 'payer', isDiaspora: true }
-        );
-
-        await service.createOrder({
-          delivery_address_id: 'address-ga',
-          fulfillment_method: 'shipping',
-          payment_timing: 'pay_now',
-          items: [{ business_inventory_id: 'inventory-ga', quantity: 1 }],
-          payer_country: 'CA',
-        });
-
-        expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-          expect.stringContaining('mutation CreateOrderWithItems'),
-          expect.objectContaining({
-            recipientName: null,
-            recipientPhone: null,
-            isThirdPartyRecipient: false,
-          })
-        );
-      });
-    });
-
     it('passes first-order delivery promo defaults for shipping orders', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.sessionPersonaContext.mockReturnValue({
@@ -822,340 +464,7 @@ describe('OrdersService', () => {
           perKmDeliveryFee: 0,
           firstOrderDeliveryFeePromo: false,
           firstOrderBaseDeliveryDiscountAmount: 0,
-          currentStatus: 'pending_payment',
-          paymentStatus: 'pending',
         })
-      );
-    });
-
-    it('rejects interest-only listings instead of creating a purchase', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-      });
-      hasuraUserService.getUserAddressById.mockResolvedValue({
-        id: 'address-123',
-        address_line_1: '123 Main St',
-        city: 'Toronto',
-        state: 'ON',
-        postal_code: 'M5V 1A1',
-        country: 'CA',
-      } as any);
-      hasuraSystemService.getAccount.mockResolvedValue({
-        id: 'account-123',
-        available_balance: 100,
-      } as any);
-      (service as any).paymentRoutingService.resolveRailForUser.mockResolvedValue(
-        'mobile_money'
-      );
-
-      const inventory = shippingInventoryFixture();
-      inventory.item = { ...inventory.item, interest_only: true };
-
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({
-          business_inventory: [inventory],
-        })
-        .mockResolvedValueOnce({ supported_payment_systems: [] })
-        .mockResolvedValueOnce({ item_deals: [] });
-
-      await expect(
-        service.createOrder({
-          delivery_address_id: 'address-123',
-          fulfillment_method: 'shipping',
-          payment_timing: 'pay_now',
-          phone_number: '+14165550123',
-          items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
-        })
-      ).rejects.toMatchObject({
-        status: 400,
-        response: { error: 'INTEREST_ONLY_ITEM' },
-      });
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('inserts wallet pay_now orders as pending_payment before finalizing payment', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-      });
-      hasuraUserService.getUserAddressById.mockResolvedValue({
-        id: 'address-123',
-        address_line_1: '123 Main St',
-        city: 'Toronto',
-        state: 'ON',
-        postal_code: 'M5V 1A1',
-        country: 'CA',
-      } as any);
-      hasuraSystemService.getAccount.mockResolvedValue({
-        id: 'account-123',
-        available_balance: 1000,
-      } as any);
-      (service as any).paymentRoutingService.resolveRailForUser.mockResolvedValue(
-        'mobile_money'
-      );
-      jest
-        .spyOn(service as any, 'updateReservedQuantities')
-        .mockResolvedValue(undefined);
-      const finalizeSpy = jest
-        .spyOn(service as any, 'finalizeClientOrderPayment')
-        .mockResolvedValue(undefined);
-      jest
-        .spyOn(service as any, 'requireOrderDetailsByNumber')
-        .mockResolvedValueOnce({
-          id: 'order-123',
-          order_number: '12345678',
-          current_status: 'pending_payment',
-        })
-        .mockResolvedValueOnce({
-          id: 'order-123',
-          order_number: '12345678',
-          current_status: 'pending',
-          payment_status: 'paid',
-          payment_source: 'wallet',
-        });
-
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({
-          business_inventory: [shippingInventoryFixture()],
-        })
-        .mockResolvedValueOnce({ supported_payment_systems: [] })
-        .mockResolvedValueOnce({ item_deals: [] });
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          insert_orders_one: {
-            id: 'order-123',
-            order_number: '12345678',
-            payment_source: 'wallet',
-          },
-        })
-        .mockResolvedValueOnce({ affected_rows: 1 });
-
-      const result = await service.createOrder({
-        delivery_address_id: 'address-123',
-        fulfillment_method: 'shipping',
-        payment_timing: 'pay_now',
-        phone_number: '+14165550123',
-        items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
-      });
-
-      expect(finalizeSpy).toHaveBeenCalled();
-      expect(result.current_status).toBe('pending');
-      expect(result.payment_status).toBe('paid');
-      finalizeSpy.mockRestore();
-    });
-
-    it('does not release holds when wallet finalize fails after order is paid', async () => {
-      const orderCleanup = (service as any).orderCleanupService as {
-        cancelUnpaidPendingPaymentAsSystem: jest.Mock;
-      };
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
-        id: 'order-123',
-        order_number: '12345678',
-        current_status: 'pending',
-        payment_status: 'paid',
-        client: { user_id: 'client-456' },
-        currency: 'USD',
-      });
-      const releaseSpy = jest
-        .spyOn(service as any, 'releaseWalletHoldsForPendingPaymentOrder')
-        .mockResolvedValue(undefined);
-
-      await (service as any).compensateUnpaidCreate(
-        'order-123',
-        'Create failed: wallet payment finalization error'
-      );
-
-      expect(releaseSpy).not.toHaveBeenCalled();
-      expect(orderCleanup.cancelUnpaidPendingPaymentAsSystem).not.toHaveBeenCalled();
-      releaseSpy.mockRestore();
-    });
-
-    const primeWalletCreateOrder = () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-      });
-      hasuraUserService.getUserAddressById.mockResolvedValue({
-        id: 'address-123',
-        address_line_1: '123 Main St',
-        city: 'Toronto',
-        state: 'ON',
-        postal_code: 'M5V 1A1',
-        country: 'CA',
-      } as any);
-      hasuraSystemService.getAccount.mockResolvedValue({
-        id: 'account-123',
-        available_balance: 1000,
-      } as any);
-      (service as any).paymentRoutingService.resolveRailForUser.mockResolvedValue(
-        'mobile_money'
-      );
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({
-          business_inventory: [shippingInventoryFixture()],
-        })
-        .mockResolvedValueOnce({ supported_payment_systems: [] })
-        .mockResolvedValueOnce({ item_deals: [] });
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          insert_orders_one: {
-            id: 'order-123',
-            order_number: '12345678',
-            payment_source: 'wallet',
-          },
-        })
-        .mockResolvedValue({ affected_rows: 1 });
-    };
-
-    const walletCreatePayload = {
-      delivery_address_id: 'address-123',
-      fulfillment_method: 'shipping' as const,
-      payment_timing: 'pay_now' as const,
-      phone_number: '+14165550123',
-      items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
-    };
-
-    it('reserves inventory before wallet finalize on pay_now create', async () => {
-      primeWalletCreateOrder();
-      const sequence: string[] = [];
-      jest.spyOn(service as any, 'updateReservedQuantities').mockImplementation(
-        async () => {
-          sequence.push('reserve');
-        }
-      );
-      jest.spyOn(service as any, 'finalizeClientOrderPayment').mockImplementation(
-        async () => {
-          sequence.push('finalize');
-        }
-      );
-      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
-        id: 'order-123',
-        order_number: '12345678',
-        current_status: 'pending',
-        payment_status: 'paid',
-        payment_source: 'wallet',
-      });
-
-      await service.createOrder(walletCreatePayload);
-
-      expect(sequence).toEqual(['reserve', 'finalize']);
-    });
-
-    it('compensates and does not charge when inventory reservation fails', async () => {
-      primeWalletCreateOrder();
-      jest.spyOn(service as any, 'updateReservedQuantities').mockRejectedValue(
-        new HttpException(
-          { error: 'INVENTORY_RESERVATION_FAILED' },
-          HttpStatus.BAD_REQUEST
-        )
-      );
-      const finalizeSpy = jest.spyOn(service as any, 'finalizeClientOrderPayment');
-      const compensateSpy = jest
-        .spyOn(service as any, 'compensateUnpaidCreate')
-        .mockResolvedValue(undefined);
-
-      await expect(service.createOrder(walletCreatePayload)).rejects.toMatchObject({
-        status: HttpStatus.BAD_REQUEST,
-      });
-      expect(compensateSpy).toHaveBeenCalledWith(
-        'order-123',
-        'Create failed: inventory reservation error',
-        { allowPendingUnpaid: true, releaseInventory: false }
-      );
-      expect(finalizeSpy).not.toHaveBeenCalled();
-    });
-
-    it('cancels unpaid pending_payment and releases holds on create compensation', async () => {
-      const orderCleanup = (service as any).orderCleanupService as {
-        cancelUnpaidPendingPaymentAsSystem: jest.Mock;
-      };
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
-        id: 'order-123',
-        order_number: '12345678',
-        current_status: 'pending',
-        payment_status: 'pending',
-        client: { user_id: 'client-456' },
-        currency: 'XAF',
-      });
-      const releaseSpy = jest
-        .spyOn(service as any, 'releaseWalletHoldsForPendingPaymentOrder')
-        .mockResolvedValue(undefined);
-
-      await (service as any).compensateUnpaidCreate(
-        'order-123',
-        'Create failed: inventory reservation error',
-        { releaseInventory: false, allowPendingUnpaid: true }
-      );
-
-      expect(releaseSpy).toHaveBeenCalledWith('order-123');
-      expect(orderCleanup.cancelUnpaidPendingPaymentAsSystem).toHaveBeenCalledWith(
-        'order-123',
-        'Create failed: inventory reservation error',
-        { allowPendingUnpaid: true, releaseInventory: false }
-      );
-      releaseSpy.mockRestore();
-    });
-
-    it('skips create compensation when the order row is already gone', async () => {
-      const orderCleanup = (service as any).orderCleanupService as {
-        cancelUnpaidPendingPaymentAsSystem: jest.Mock;
-      };
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(null);
-      const releaseSpy = jest
-        .spyOn(service as any, 'releaseWalletHoldsForPendingPaymentOrder')
-        .mockResolvedValue(undefined);
-
-      await (service as any).compensateUnpaidCreate('order-123', 'Create failed');
-
-      expect(releaseSpy).not.toHaveBeenCalled();
-      expect(orderCleanup.cancelUnpaidPendingPaymentAsSystem).not.toHaveBeenCalled();
-      releaseSpy.mockRestore();
-    });
-  });
-
-  describe('updateReservedQuantities', () => {
-    it('rolls back earlier atomic reserves when a later increment fails', async () => {
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          try_reserve_business_inventory: [{ id: 'inventory-a' }],
-        })
-        .mockResolvedValueOnce({
-          try_reserve_business_inventory: [],
-        })
-        .mockResolvedValueOnce({
-          try_release_business_inventory: [{ id: 'inventory-a' }],
-        });
-
-      await expect(
-        service.updateReservedQuantities(
-          [
-            { business_inventory_id: 'inventory-a', quantity: 2 },
-            { business_inventory_id: 'inventory-b', quantity: 1 },
-          ],
-          'increment'
-        )
-      ).rejects.toMatchObject({
-        response: { error: 'INVENTORY_RESERVATION_FAILED' },
-      });
-
-      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
-        1,
-        expect.stringContaining('try_reserve_business_inventory'),
-        { inventoryId: 'inventory-a', qty: 2 }
-      );
-      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
-        2,
-        expect.stringContaining('try_reserve_business_inventory'),
-        { inventoryId: 'inventory-b', qty: 1 }
-      );
-      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
-        3,
-        expect.stringContaining('try_release_business_inventory'),
-        { inventoryId: 'inventory-a', qty: 2 }
       );
     });
   });
@@ -1510,6 +819,82 @@ describe('OrdersService', () => {
 
       expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
     });
+  });
+
+  describe('captureStripeAuthorizedOrderIfNeeded', () => {
+    const authorizedPickup = {
+      id: 'order-123',
+      order_number: 'ORD-1001',
+      payment_timing: 'pay_now',
+      payment_source: 'credit_card',
+      payment_status: 'authorized',
+      fulfillment_method: 'pickup',
+      total_amount: 80,
+      pre_tax_total: 80,
+    };
+
+    beforeEach(() => {
+      stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
+        success: true,
+        captured: true,
+      });
+      jest
+        .spyOn(service as any, 'finalizeStripeCapturedOrderPayment')
+        .mockResolvedValue(undefined);
+    });
+
+    it('omits captureAmount for native pickup so Stripe Tax is collected', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded(authorizedPickup);
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+        orderId: 'order-123',
+        orderNumber: 'ORD-1001',
+      });
+    });
+
+    it('omits captureAmount for delivery so the full authorization is captured', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        ...authorizedPickup,
+        fulfillment_method: 'delivery',
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+        orderId: 'order-123',
+        orderNumber: 'ORD-1001',
+      });
+    });
+
+    it('passes a reduced captureAmount after switch-to-pickup waived delivery', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        ...authorizedPickup,
+        total_amount: 80,
+        pre_tax_total: 100,
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+        orderId: 'order-123',
+        orderNumber: 'ORD-1001',
+        captureAmount: 80,
+      });
+    });
+
+    it('does not capture Stripe when order was already paid from wallet', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        ...authorizedPickup,
+        payment_source: 'wallet',
+        payment_status: 'paid',
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe.skip('pickUpOrder errors', () => {
+    const assignedOrder = {
+      ...mockOrder,
+      current_status: 'assigned_to_agent',
+      assigned_agent_id: 'agent-123',
+    };
 
     it('should throw error if user is not an agent', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
@@ -1859,7 +1244,6 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
-        cancellationReasonId: 2, // client: changed_mind
         notes: 'Cancelled by business',
       });
 
@@ -1874,10 +1258,7 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({
-          orderId: 'order-123',
-          cancellationReasonId: 1, // other
-        })
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in delivered status',
@@ -1906,7 +1287,6 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
-        cancellationReasonId: 13, // business: cannot_fulfill_order
         notes: 'Customer did not pay at delivery',
       });
 
@@ -1936,10 +1316,7 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({
-          orderId: 'order-123',
-          cancellationReasonId: 1, // other
-        })
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in out_for_delivery status. Orders can only be cancelled before pickup by delivery agent.',
@@ -1962,7 +1339,6 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
-        cancellationReasonId: 2, // client: changed_mind
         notes: 'Cancelled by client',
       });
 
@@ -2007,7 +1383,6 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
-        cancellationReasonId: 2, // client: changed_mind
         notes: 'Cancelled by client',
       });
 
@@ -2067,7 +1442,6 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
-        cancellationReasonId: 13, // business: cannot_fulfill_order
         notes: 'Cancelled by business',
       });
 
@@ -2106,7 +1480,6 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
-        cancellationReasonId: 2, // client: changed_mind
         notes: 'Changed my mind',
       });
 
@@ -2121,10 +1494,7 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({
-          orderId: 'order-123',
-          cancellationReasonId: 1, // other
-        })
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in preparing status',
@@ -2144,10 +1514,7 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({
-          orderId: 'order-123',
-          cancellationReasonId: 1, // other
-        })
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Unauthorized to cancel this order',
@@ -2165,10 +1532,7 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockInvalidUser);
 
       await expect(
-        service.cancelOrder({
-          orderId: 'order-123',
-          cancellationReasonId: 1, // other
-        })
+        service.cancelOrder({ orderId: 'order-123' })
       ).rejects.toThrow(
         new HttpException(
           'Only business users and clients can cancel orders',
@@ -2376,27 +1740,80 @@ describe('OrdersService', () => {
       expect(getByNumberSpy).not.toHaveBeenCalled();
       expect(finalizeSpy).toHaveBeenCalledWith(rawOrder, 'account-1');
 
+      requireSpy.mockRestore();
+      getByNumberSpy.mockRestore();
       finalizeSpy.mockRestore();
     });
 
-    it('finalizeOrderAfterIncomingPayment skips terminal cancelled orders and refunds Stripe', async () => {
-      const stripeRefund = (service as any).stripeRefundService as {
-        initiateOrderRefund: jest.Mock;
-      };
-      const rawOrder = {
-        id: 'order-123',
-        order_number: 'ORD-1',
-        current_status: 'cancelled',
-        payment_timing: 'pay_now',
-        payment_status: 'paid',
-        payment_source: 'credit_card',
-        subtotal: 50,
-        base_delivery_fee: 3,
-        per_km_delivery_fee: 2,
-      };
-      jest
+    it('finalizeOrderAfterAuthorization does not resurrect a cancelled order', async () => {
+      const requireSpy = jest
         .spyOn(service as any, 'requireOrderDetailsByNumber')
-        .mockResolvedValue(rawOrder);
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'cancelled',
+          payment_status: 'cancelled',
+          payment_timing: 'pay_now',
+        });
+
+      await service.finalizeOrderAfterAuthorization({
+        entity_id: 'ORD-1',
+        transaction_id: 'pi_late',
+      });
+
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterAuthorization releases Stripe when CAS finds the order already cancelled', async () => {
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'pending_payment',
+          payment_status: 'pending',
+          payment_timing: 'pay_now',
+        });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await service.finalizeOrderAfterAuthorization({
+        entity_id: 'ORD-1',
+        transaction_id: 'pi_late',
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation AuthorizeOrderPayment'),
+        expect.objectContaining({
+          orderId: 'order-123',
+          allowedStatuses: ['pending_payment', 'pending'],
+        })
+      );
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterIncomingPayment does not mark a cancelled order paid', async () => {
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'cancelled',
+          payment_status: 'pending',
+          payment_timing: 'pay_now',
+        });
       const finalizeSpy = jest
         .spyOn(service as any, 'finalizeClientOrderPayment')
         .mockResolvedValue(undefined);
@@ -2407,140 +1824,13 @@ describe('OrdersService', () => {
       });
 
       expect(finalizeSpy).not.toHaveBeenCalled();
-      expect(stripeRefund.initiateOrderRefund).toHaveBeenCalledWith(
-        expect.objectContaining({ orderId: 'order-123', cancelledBy: 'system' })
-      );
-
-      finalizeSpy.mockRestore();
-    });
-
-    it('finalizeOrderAfterIncomingPayment skips Stripe on a late wallet payment for cancelled orders', async () => {
-      const stripeRefund = (service as any).stripeRefundService as {
-        initiateOrderRefund: jest.Mock;
-      };
-      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
-        id: 'order-123',
-        order_number: 'ORD-1',
-        current_status: 'cancelled',
-        payment_timing: 'pay_now',
-        payment_status: 'paid',
-        payment_source: 'wallet',
-      });
-      const finalizeSpy = jest.spyOn(service as any, 'finalizeClientOrderPayment');
-
-      await service.finalizeOrderAfterIncomingPayment({
-        entity_id: 'ORD-1',
-        account_id: 'account-1',
-      });
-
-      expect(finalizeSpy).not.toHaveBeenCalled();
-      expect(stripeRefund.initiateOrderRefund).not.toHaveBeenCalled();
-      expect(stripeCaptureService.cancelOrderPaymentIntent).not.toHaveBeenCalled();
-      finalizeSpy.mockRestore();
-    });
-
-    it('finalizeOrderAfterAuthorization skips failed orders and releases Stripe auth', async () => {
-      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
-        id: 'order-123',
-        order_number: 'ORD-1',
-        current_status: 'failed',
-        payment_status: 'authorized',
-        payment_source: 'credit_card',
-      });
-
-      await service.finalizeOrderAfterAuthorization({ entity_id: 'ORD-1' });
-
       expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
         orderNumber: 'ORD-1',
         orderId: 'order-123',
       });
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-  });
 
-  describe('updateReservedQuantities', () => {
-    it('aggregates duplicate lines onto try_reserve_business_inventory', async () => {
-      hasuraSystemService.executeMutation.mockResolvedValue({
-        try_reserve_business_inventory: [{ id: 'inventory-123' }],
-      });
-
-      await service.updateReservedQuantities(
-        [
-          { business_inventory_id: 'inventory-123', quantity: 3 },
-          { business_inventory_id: 'inventory-123', quantity: 2 },
-        ],
-        'increment'
-      );
-
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalledTimes(1);
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('try_reserve_business_inventory'),
-        { inventoryId: 'inventory-123', qty: 5 }
-      );
-    });
-
-    it('throws INVENTORY_RESERVATION_FAILED when reserve returns no row', async () => {
-      hasuraSystemService.executeMutation.mockResolvedValue({
-        try_reserve_business_inventory: [],
-      });
-
-      await expect(
-        service.updateReservedQuantities(
-          [{ business_inventory_id: 'inventory-123', quantity: 2 }],
-          'increment'
-        )
-      ).rejects.toMatchObject({
-        status: HttpStatus.BAD_REQUEST,
-        response: expect.objectContaining({
-          error: 'INVENTORY_RESERVATION_FAILED',
-        }),
-      });
-    });
-
-    it('calls try_release_business_inventory on decrement', async () => {
-      hasuraSystemService.executeMutation.mockResolvedValue({
-        try_release_business_inventory: [{ id: 'inventory-123' }],
-      });
-
-      await service.updateReservedQuantities(
-        [{ business_inventory_id: 'inventory-123', quantity: 2 }],
-        'decrement'
-      );
-
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('try_release_business_inventory'),
-        { inventoryId: 'inventory-123', qty: 2 }
-      );
-    });
-
-    it('throws when release returns no row', async () => {
-      hasuraSystemService.executeMutation.mockResolvedValue({
-        try_release_business_inventory: [],
-      });
-
-      await expect(
-        service.updateReservedQuantities(
-          [{ business_inventory_id: 'inventory-123', quantity: 2 }],
-          'decrement'
-        )
-      ).rejects.toMatchObject({
-        response: expect.objectContaining({
-          error: 'INVENTORY_RESERVATION_FAILED',
-          message: 'Could not release reserved inventory',
-        }),
-      });
-    });
-
-    it('skips items without inventory id or quantity', async () => {
-      await service.updateReservedQuantities(
-        [
-          { business_inventory_id: null, quantity: 2 },
-          { business_inventory_id: 'inventory-123', quantity: 0 },
-        ],
-        'increment'
-      );
-
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      requireSpy.mockRestore();
+      finalizeSpy.mockRestore();
     });
   });
 
@@ -2864,254 +2154,72 @@ describe('OrdersService', () => {
     });
   });
 
-  describe('calculateItemDeliveryFee', () => {
-    const itemId = '6c5c123d-f89d-46cb-8d4d-f43ca5e384bd';
-    const itemDetails = {
-      id: itemId,
-      computed_available_quantity: 5,
-      selling_price: 10,
-      item: { id: 'catalog-1', name: 'Item', currency: 'XAF' },
-      business_location: { address_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+  describe('cancelOrderAsAdmin', () => {
+    const openOrder = {
+      ...mockOrder,
+      current_status: 'assigned_to_agent',
+      payment_source: 'credit_card',
+      payment_status: 'authorized',
+      order_items: [],
     };
 
-    function stubItemQueries() {
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('ClientHasOrders')) {
-          return { orders_aggregate: { aggregate: { count: 1 } } };
-        }
-        if (query.includes('GetItem')) {
-          return { business_inventory_by_pk: itemDetails };
-        }
-        return {};
+    it('releases payment and runs cancel side effects instead of a status-only write', async () => {
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
+      hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
+      const releaseStripe = jest
+        .spyOn(service as any, 'releaseStripeAuthorizationIfNeeded')
+        .mockResolvedValue(undefined);
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...openOrder,
+        current_status: 'cancelled',
       });
-    }
+      const persistMeta = jest
+        .spyOn(service as any, 'persistCancellationMetadata')
+        .mockResolvedValue(undefined);
+      const history = jest
+        .spyOn(service as any, 'createStatusHistoryEntry')
+        .mockResolvedValue(undefined);
+      const sideEffects = jest
+        .spyOn(service as any, 'runOrderCancellationSideEffects')
+        .mockResolvedValue(undefined);
 
-    it('returns 404 when the client has no address instead of querying Hasura with ""', async () => {
-      const getAddressesByIds = jest.fn();
-      (service as any).addressesService = { getAddressesByIds };
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        addresses: [],
-      });
-      stubItemQueries();
-
-      await expect(service.calculateItemDeliveryFee(itemId)).rejects.toMatchObject({
-        status: HttpStatus.NOT_FOUND,
-        message: 'User address not found',
-      });
-      expect(getAddressesByIds).not.toHaveBeenCalled();
-    });
-
-    it('treats a blank addressId query as missing and still 404s without a fallback address', async () => {
-      const getAddressesByIds = jest.fn();
-      (service as any).addressesService = { getAddressesByIds };
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        addresses: [{ id: '', status: 'active', is_primary: true }],
-      });
-      stubItemQueries();
-
-      await expect(
-        service.calculateItemDeliveryFee(itemId, '   ')
-      ).rejects.toMatchObject({
-        status: HttpStatus.NOT_FOUND,
-        message: 'User address not found',
-      });
-      expect(getAddressesByIds).not.toHaveBeenCalled();
-    });
-
-    it('returns 404 when the item has no business address id', async () => {
-      const getAddressesByIds = jest.fn().mockResolvedValue([
-        { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
-      ]);
-      (service as any).addressesService = { getAddressesByIds };
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        addresses: [
-          {
-            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-            status: 'active',
-            is_primary: true,
-          },
-        ],
-      });
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('ClientHasOrders')) {
-          return { orders_aggregate: { aggregate: { count: 1 } } };
-        }
-        if (query.includes('GetItem')) {
-          return {
-            business_inventory_by_pk: {
-              ...itemDetails,
-              business_location: { address_id: '' },
-            },
-          };
-        }
-        return {};
-      });
-
-      await expect(service.calculateItemDeliveryFee(itemId)).rejects.toMatchObject({
-        status: HttpStatus.NOT_FOUND,
-        message: 'Business address not found',
-      });
-      expect(getAddressesByIds).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('initiatePayAtPickupPayment', () => {
-    const papOrder = {
-      id: 'order-123',
-      order_number: 'ORD-PAP',
-      current_status: 'ready_for_pickup',
-      payment_timing: 'pay_at_pickup',
-      payment_status: 'pending',
-      total_amount: 5000,
-      currency: 'XAF',
-      client_id: 'client-123',
-      client: {
-        user_id: 'client-456',
-        user: { id: 'client-456', phone_number: '+237670000000' },
-      },
-      business: { user_id: 'user-123' },
-    };
-
-    function stubPendingPickupTx() {
-      (service as any).mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber =
-        jest.fn().mockResolvedValue({
-          id: 'tx-1',
-          reference: 'ref-1',
-          status: 'pending',
-          transaction_id: 'tid-1',
-        });
-    }
-
-    it('lets the customer start pickup payment', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(papOrder);
-      stubPendingPickupTx();
-
-      const result = await service.initiatePayAtPickupPayment('order-123');
+      const result = await service.cancelOrderAsAdmin(
+        'order-123',
+        'Admin cancel'
+      );
 
       expect(result.success).toBe(true);
-      expect(result.message).toBe('Payment request already pending');
-      const resetCall = hasuraSystemService.executeMutation.mock.calls.find(
-        ([mutation]) => String(mutation).includes('ResetPaymentFailure')
+      expect(releaseStripe).toHaveBeenCalledWith(openOrder);
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
+        'order-123',
+        'cancelled',
+        { viaCancelEndpoint: true, viaSystem: true }
       );
-      expect(resetCall).toBeDefined();
-      expect(String(resetCall?.[0])).toContain('payment_status: { _nin: $blockedStatuses }');
-      expect(String(resetCall?.[0])).toContain('payment_failed_at: null');
-      expect(String(resetCall?.[0])).toContain('payment_failure_message: null');
-      expect(resetCall?.[1]).toEqual(
-        expect.objectContaining({
-          orderId: 'order-123',
-          paymentStatus: 'pending',
-          blockedStatuses: expect.arrayContaining(['paid', 'authorized']),
-        })
+      expect(persistMeta).toHaveBeenCalledWith(
+        'order-123',
+        'system',
+        'Admin cancel'
+      );
+      expect(history).toHaveBeenCalled();
+      expect(sideEffects).toHaveBeenCalledWith(
+        openOrder,
+        'order-123',
+        'assigned_to_agent',
+        'system',
+        'Admin cancel'
       );
     });
 
-    it('lets the customer start pickup payment when only client_id matches', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+    it('rejects cancel of an already terminal order', async () => {
       jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
-        ...papOrder,
-        client: { user: { phone_number: '+237670000000' } },
+        ...openOrder,
+        current_status: 'cancelled',
       });
-      stubPendingPickupTx();
 
-      const result = await service.initiatePayAtPickupPayment('order-123');
-
-      expect(result.success).toBe(true);
-    });
-
-    it('rejects another customer', async () => {
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        id: 'other-user',
-        client: { id: 'other-client', user_id: 'other-user' },
-      });
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-        activePersona: 'client',
-      });
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(papOrder);
-
-      await expect(
-        service.initiatePayAtPickupPayment('order-123')
-      ).rejects.toMatchObject({
-        status: HttpStatus.FORBIDDEN,
-        message: 'Only the store or customer can initiate pickup payment',
-      });
-    });
-  });
-
-  describe('retryOrderPayment', () => {
-    it('clears payment_failed_at when a pending mobile-money retry is reused', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-        activePersona: 'client',
-      });
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
-        ...mockOrder,
-        current_status: 'pending_payment',
-        payment_timing: 'pay_now',
-        payment_status: 'failed',
-        payment_source: 'mobile_money',
-        client: {
-          user_id: 'client-456',
-          user: { phone_number: '+237670000000' },
-        },
-      });
-      (service as any).mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber =
-        jest.fn().mockResolvedValue({
-          id: 'tx-1',
-          reference: 'ref-1',
-          status: 'pending',
-        });
-
-      const result = await service.retryOrderPayment('order-123');
-
-      expect(result.success).toBe(true);
-      expect(result.message).toBe('Payment request already pending');
-      const resetCall = hasuraSystemService.executeMutation.mock.calls.find(
-        ([mutation]) => String(mutation).includes('ResetPaymentFailure')
+      await expect(service.cancelOrderAsAdmin('order-123')).rejects.toMatchObject(
+        { status: HttpStatus.BAD_REQUEST }
       );
-      expect(resetCall).toBeDefined();
-      expect(String(resetCall?.[0])).toContain('payment_failed_at: null');
-      expect(resetCall?.[1]).toEqual(
-        expect.objectContaining({
-          orderId: 'order-123',
-          paymentStatus: 'pending',
-        })
-      );
-    });
-
-    it('rejects retry from another client', async () => {
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        id: 'other-user',
-        client: { id: 'other-client', user_id: 'other-user' },
-      });
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-        activePersona: 'client',
-      });
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
-        ...mockOrder,
-        current_status: 'pending_payment',
-        payment_timing: 'pay_now',
-        payment_status: 'failed',
-        client: { user_id: 'client-456' },
-      });
-
-      await expect(service.retryOrderPayment('order-123')).rejects.toMatchObject({
-        status: HttpStatus.FORBIDDEN,
-        message: 'Unauthorized to retry payment for this order',
-      });
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,7 @@
 import {
   deriveFollowUpStatus,
   isPaymentCapabilityVerified,
+  mapReferredBusinesses,
   mapReferredBusinessRow,
 } from './referred-business-followup.util';
 
@@ -236,5 +237,105 @@ describe('referred-business-followup', () => {
     expect(item.commission.requirements.requiresSale).toBe(false);
     expect(item.commission.requirements.minSalesTotal).toBe(0);
     expect(item.commission.requirements.windowEndsAt).toBeNull();
+  });
+
+  it('keeps a null created_at pending instead of expiring the window', () => {
+    const item = mapReferredBusinessRow(
+      {
+        id: 'b1',
+        name: 'Shop',
+        created_at: null,
+        referred_by_agent_id: 'agent-1',
+        user: { country: 'CM' },
+        items_approved: { aggregate: { count: 12 } },
+      },
+      'agent'
+    );
+    expect(item.createdAt).toBe('');
+    expect(item.commission.requirements.windowEndsAt).toBeNull();
+    expect(item.commission.status).toBe('pending');
+  });
+
+  it('excludes foreign-currency and out-of-window sales from progress', () => {
+    const item = mapReferredBusinessRow(
+      {
+        id: 'b1',
+        name: 'Shop',
+        created_at: '2026-08-10T00:00:00.000Z',
+        referred_by_agent_id: 'agent-1',
+        user: { country: 'CM' },
+        completed_orders: [
+          { subtotal: 1200, currency: 'XAF', completed_at: '2026-08-12T00:00:00.000Z' },
+          { subtotal: 800, currency: 'CAD', completed_at: '2026-08-12T00:00:00.000Z' },
+          { subtotal: 4000, currency: 'XAF', completed_at: '2026-10-01T00:00:00.000Z' },
+        ],
+      },
+      'agent'
+    );
+    expect(item.commission.requirements.salesTotal).toBe(1200);
+  });
+
+  it('reads min sale totals once per country and falls back when config is missing', async () => {
+    const readMinSaleTotal = jest.fn(async (country: string) => {
+      if (country === 'CM') return 4000;
+      return null;
+    });
+    const items = await mapReferredBusinesses(
+      [
+        {
+          id: 'cm-1',
+          name: 'A',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'a1',
+          user: { country: 'CM' },
+        },
+        {
+          id: 'cm-2',
+          name: 'B',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'a1',
+          user: { country: 'cm' },
+        },
+        {
+          id: 'ca-1',
+          name: 'C',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'a1',
+          user: { country: 'CA' },
+        },
+        {
+          id: 'xx',
+          name: 'D',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'a1',
+          user: {},
+        },
+      ],
+      'agent',
+      readMinSaleTotal
+    );
+
+    expect(readMinSaleTotal).toHaveBeenCalledTimes(2);
+    expect(readMinSaleTotal).toHaveBeenCalledWith('CM');
+    expect(readMinSaleTotal).toHaveBeenCalledWith('CA');
+    expect(items.map((row) => row.commission.requirements.minSalesTotal)).toEqual([
+      4000, 4000, 0, 2500,
+    ]);
+  });
+
+  it('honors a configured zero min sale total', async () => {
+    const items = await mapReferredBusinesses(
+      [
+        {
+          id: 'cm-1',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'a1',
+          user: { country: 'CM' },
+        },
+      ],
+      'agent',
+      async () => 0
+    );
+    expect(items[0].commission.requirements.minSalesTotal).toBe(0);
   });
 });

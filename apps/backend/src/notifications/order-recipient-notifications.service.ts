@@ -279,22 +279,17 @@ export class OrderRecipientNotificationsService {
   }
 
   /**
-   * Reuses Meta templates that are already approved (`rs_order_status`,
-   * `rs_order_ready`) so recipient WhatsApp ships without a new submission.
+   * Uses the approved `rs_recipient_order_update` template for all status
+   * notifications. Meta rejected dedicated recipient UTILITY names
+   * (rs_recipient_order_placed, rs_rcpt_out_for_delivery, rs_recipient_order_ready).
    */
   private whatsAppPayloadForStatus(
     status: string,
     contact: OrderRecipientContact,
     locale: EmailLocale
   ): { templateKey: string; variables: Record<string, string> } {
-    if (status === 'ready_for_pickup') {
-      return {
-        templateKey: 'order_ready',
-        variables: { orderNumber: contact.orderNumber },
-      };
-    }
     return {
-      templateKey: 'order_status_client',
+      templateKey: 'recipient_order_update',
       variables: {
         orderNumber: contact.orderNumber,
         statusLabel: this.statusLabel(status, locale),
