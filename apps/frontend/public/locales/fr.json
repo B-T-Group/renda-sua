@@ -6484,8 +6484,32 @@
       "phoneHelp": "Le suivi et le code de livraison sont envoyés à ce numéro.",
       "whatsapp": "Envoyer ses notifications sur WhatsApp",
       "whatsappHelp": "Nous basculons sur SMS si WhatsApp échoue.",
-      "pinNotice": "Le destinataire reçoit son propre code de livraison et le donne au livreur à la remise. Vous le voyez aussi dans votre commande."
+      "pinNotice": "Le destinataire reçoit son propre code de livraison et le donne au livreur à la remise. Vous le voyez aussi dans votre commande.",
+      "selectSaved": "Sélectionner un destinataire enregistré",
+      "addNew": "Ajouter un nouveau destinataire",
+      "noSaved": "Aucun destinataire enregistré. Ajoutez-en un ci-dessous.",
+      "loadError": "Échec du chargement des destinataires",
+      "whatsappEnabled": "WhatsApp"
     }
+  },
+  "recipients": {
+    "title": "Destinataires Enregistrés",
+    "subtitle": "Gérez vos destinataires pour les commandes diaspora",
+    "addButton": "Ajouter un Destinataire",
+    "addFirst": "Ajouter Votre Premier Destinataire",
+    "addTitle": "Ajouter un Nouveau Destinataire",
+    "editTitle": "Modifier le Destinataire",
+    "deleteTitle": "Supprimer le Destinataire ?",
+    "deleteConfirm": "Voulez-vous vraiment supprimer {{name}} ? Cette action est irréversible.",
+    "country": "Pays",
+    "name": "Nom Complet",
+    "phone": "Numéro de Téléphone",
+    "whatsapp": "Envoyer les notifications sur WhatsApp",
+    "whatsappHelp": "Bascule sur SMS si nécessaire",
+    "whatsappChip": "WhatsApp",
+    "empty": "Aucun destinataire enregistré",
+    "emptySubtitle": "Ajoutez des destinataires pour remplir rapidement les formulaires",
+    "loadError": "Échec du chargement des destinataires"
   },
   "agentOnboarding": {
     "title": "Comment Fonctionnent les Livraisons",

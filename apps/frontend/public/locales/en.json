@@ -6752,8 +6752,32 @@
       "phoneHelp": "Updates and the delivery code are sent to this number.",
       "whatsapp": "Send their updates on WhatsApp",
       "whatsappHelp": "We fall back to SMS if WhatsApp cannot be delivered.",
-      "pinNotice": "The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order."
+      "pinNotice": "The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order.",
+      "selectSaved": "Select saved recipient",
+      "addNew": "Add new recipient",
+      "noSaved": "No saved recipients yet. Add one below.",
+      "loadError": "Failed to load saved recipients",
+      "whatsappEnabled": "WhatsApp"
     }
+  },
+  "recipients": {
+    "title": "Saved Recipients",
+    "subtitle": "Manage your saved recipients for diaspora orders",
+    "addButton": "Add Recipient",
+    "addFirst": "Add Your First Recipient",
+    "addTitle": "Add New Recipient",
+    "editTitle": "Edit Recipient",
+    "deleteTitle": "Delete Recipient?",
+    "deleteConfirm": "Are you sure you want to delete {{name}}? This action cannot be undone.",
+    "country": "Country",
+    "name": "Full Name",
+    "phone": "Phone Number",
+    "whatsapp": "Send updates on WhatsApp",
+    "whatsappHelp": "Falls back to SMS if needed",
+    "whatsappChip": "WhatsApp",
+    "empty": "No saved recipients yet",
+    "emptySubtitle": "Add recipients to quickly fill checkout forms",
+    "loadError": "Failed to load recipients"
   },
   "agentOnboarding": {
     "title": "How Deliveries Work",
