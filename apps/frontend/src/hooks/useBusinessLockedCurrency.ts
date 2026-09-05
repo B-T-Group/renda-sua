@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { businessItemsApiParams } from '../utils/businessItemsApiParams';
+import { resolveCurrencyForCountry } from '../utils/resolveCurrencyForCountry';
 import { useApiClient } from './useApiClient';
-import {
-  type SupportedCountry,
-  useSupportedCountries,
-} from './useSupportedCountries';
+import { useSupportedCountries } from './useSupportedCountries';
 
 interface BusinessLocationsCurrencyResponse {
   success: boolean;
@@ -60,21 +58,4 @@ export function useBusinessLockedCurrency(businessId?: string | null) {
     primaryCountry,
     loading: countriesLoading || countryLoading,
   };
-}
-
-export function resolveCurrencyForCountry(
-  country: string | null | undefined,
-  countries: SupportedCountry[]
-): string {
-  if (!country?.trim()) return 'XAF';
-  const code = country.trim().toUpperCase().slice(0, 2);
-  const match = countries.find((c) => c.code?.toUpperCase() === code);
-  if (match?.currencyCode?.trim()) {
-    return match.currencyCode.trim().toUpperCase();
-  }
-  if (code === 'CA') return 'CAD';
-  if (code === 'US') return 'USD';
-  if (['TG', 'BJ', 'CI'].includes(code)) return 'XOF';
-  if (['GA', 'CM', 'TD', 'CF', 'CG', 'GQ'].includes(code)) return 'XAF';
-  return 'XAF';
 }

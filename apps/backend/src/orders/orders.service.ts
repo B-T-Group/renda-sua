@@ -86,6 +86,7 @@ import {
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
 import {
   resolveShopperVariant,
   ShopperVariantResolveException,
@@ -11345,26 +11346,11 @@ export class OrdersService {
         error
       );
 
-      const isCfaMarket = ['CM', 'GA', 'TG', 'BJ', 'CI', 'CG'].includes(
-        countryCode
-      );
-      // Fallback to hardcoded CFA values if configuration lookup fails
-      const fallbackConfig = {
-        baseFee: requiresFastDelivery ? 1500 : 1000,
-        ratePerKm: isCfaMarket ? 100 : 200,
-        maxPerKmFee: isCfaMarket ? 1500 : 0,
-        minFee: 1000,
-      };
-      const perKmCalculated = distanceKm * fallbackConfig.ratePerKm;
-      const perKmFee = Math.min(fallbackConfig.maxPerKmFee, perKmCalculated);
-      const calculatedFee = fallbackConfig.baseFee + perKmFee;
-      const totalFee = Math.max(fallbackConfig.minFee, calculatedFee);
-
-      return {
-        baseFee: fallbackConfig.baseFee,
-        perKmFee,
-        totalFee,
-      };
+      return calculateDeliveryFeeFallback({
+        distanceKm,
+        countryCode,
+        requiresFastDelivery,
+      });
     }
   }
 
