@@ -20,6 +20,8 @@ import LaunchPromoCongrats, {
 import { clearSignupDraft } from '../signup/wizard/useSignupDraft';
 import Logo from '../common/Logo';
 
+const OTP_LENGTH = 4;
+
 const OtpAuthPage: React.FC = () => {
   const apiClient = useApiClient();
   const { setPasswordlessSession } = useSessionAuth();
@@ -56,7 +58,7 @@ const OtpAuthPage: React.FC = () => {
   );
   const [email, setEmail] = useState(initialEmail);
   const [digits, setDigits] = useState<string[]>(
-    Array.from({ length: 6 }, () => '')
+    Array.from({ length: OTP_LENGTH }, () => '')
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,11 +123,11 @@ const OtpAuthPage: React.FC = () => {
 
   const handlePaste = (e: React.ClipboardEvent) => {
     const text = e.clipboardData.getData('text');
-    const onlyDigits = text.replace(/\D/g, '').slice(0, 6);
+    const onlyDigits = text.replace(/\D/g, '').slice(0, OTP_LENGTH);
     if (!onlyDigits) return;
     e.preventDefault();
-    setDigits(Array.from({ length: 6 }, (_, i) => onlyDigits[i] || ''));
-    const nextIndex = Math.min(onlyDigits.length, 5);
+    setDigits(Array.from({ length: OTP_LENGTH }, (_, i) => onlyDigits[i] || ''));
+    const nextIndex = Math.min(onlyDigits.length, OTP_LENGTH - 1);
     inputRefs.current[nextIndex]?.focus();
   };
 
@@ -226,11 +228,11 @@ const OtpAuthPage: React.FC = () => {
             Math.max(0, Date.parse(res.data.expiresAt) - Date.now())
           );
         }
-        setDigits(Array.from({ length: 6 }, () => ''));
+        setDigits(Array.from({ length: OTP_LENGTH }, () => ''));
         return;
       }
       await apiClient.post('/auth/login/start-otp', { email });
-      setDigits(Array.from({ length: 6 }, () => ''));
+      setDigits(Array.from({ length: OTP_LENGTH }, () => ''));
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
@@ -338,7 +340,7 @@ const OtpAuthPage: React.FC = () => {
           <Button
             variant="contained"
             size="large"
-            disabled={loading || otp.length < 6 || isExpired}
+            disabled={loading || otp.length < OTP_LENGTH || isExpired}
             onClick={() => void handleVerify()}
           >
             {loading ? (
