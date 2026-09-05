@@ -130,6 +130,7 @@
 - "!include public_representative_compensation_events.yaml"
 - "!include public_role_permissions.yaml"
 - "!include public_roles.yaml"
+- "!include public_signup_attempts.yaml"
 - "!include public_site_events.yaml"
 - "!include public_stripe_connect_accounts.yaml"
 - "!include public_stripe_events.yaml"

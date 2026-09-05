@@ -493,7 +493,8 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         if (
           order.fulfillment_method === 'pickup' &&
           order.payment_timing === 'pay_at_pickup' &&
-          order.payment_status === 'pending'
+          order.payment_status !== 'paid' &&
+          order.payment_status !== 'authorized'
         ) {
           actions.push({
             label: t(

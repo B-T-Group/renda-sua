@@ -350,7 +350,7 @@ export class InventoryItemsController {
     name: 'limit',
     required: false,
     type: Number,
-    description: 'Items per page (default: 20)',
+    description: 'Items per page (default: 20, max 50)',
   })
   @ApiQuery({
     name: 'search',

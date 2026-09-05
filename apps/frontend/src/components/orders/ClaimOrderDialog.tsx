@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimingOrderOverlay from '../common/ClaimingOrderOverlay';
 import PhoneInput from '../common/PhoneInput';
+import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 
 interface ClaimOrderDialogProps {
   open: boolean;
@@ -452,7 +453,10 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                 )}
                 error={!!phoneError}
                 helperText={phoneError}
-                defaultCountry="GA"
+                defaultCountry={pickMobileMoneyDefaultCountry(
+                  order.business_location?.address?.country
+                )}
+                onlyCountries={['CM', 'GA']}
                 fullWidth
               />
               <Stack direction="row" spacing={1} justifyContent="flex-end">
