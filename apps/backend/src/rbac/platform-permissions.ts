@@ -7,6 +7,7 @@ export const PlatformPermissions = {
   MANAGE_CLIENTS: 'platform.manage.clients',
   MANAGE_BUSINESSES: 'platform.manage.businesses',
   OPS_USER_MESSAGES: 'platform.ops.user_messages',
+  OPS_WHATSAPP_INBOX: 'platform.ops.whatsapp_inbox',
   FINANCIAL_REFUNDS: 'platform.financial.refunds',
   FINANCIAL_COMMISSIONS: 'platform.financial.commissions',
   FINANCIAL_MOBILE_PAYMENTS: 'platform.financial.mobile_payments',
@@ -38,6 +39,7 @@ export const PlatformRoles = {
   SUPPORT: 'support',
   CONTENT: 'content',
   ORDER_MANAGER: 'order_manager',
+  WHATSAPP_MANAGER: 'whatsapp_manager',
 } as const;
 
 export type PlatformRole = (typeof PlatformRoles)[keyof typeof PlatformRoles];

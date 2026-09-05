@@ -1,0 +1,7 @@
+table:
+  name: signup_attempts
+  schema: public
+object_relationships:
+  - name: completed_user
+    using:
+      foreign_key_constraint_on: completed_user_id

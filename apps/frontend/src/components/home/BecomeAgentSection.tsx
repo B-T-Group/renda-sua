@@ -5,6 +5,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import AppStoreBadges from '../common/AppStoreBadges';
+import { HOME_ACCENTS } from './homeTheme';
 
 const agentBenefits = [
   { key: 'home.agent.benefits.flexible', defaultLabel: 'Flexible hours — work when you want' },
@@ -50,21 +51,21 @@ const BecomeAgentSection: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                 <svg viewBox="0 0 300 260" style={{ width: '100%', maxWidth: 280 }} aria-hidden="true">
                   {/* Map background */}
-                  <rect width="300" height="260" rx="16" fill={alpha('#0891b2', 0.08)} />
+                  <rect width="300" height="260" rx="16" fill={alpha(HOME_ACCENTS.delivery, 0.08)} />
                   <line x1="0" y1="130" x2="300" y2="130" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
                   <line x1="150" y1="0" x2="150" y2="260" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
                   {/* Route */}
-                  <path d="M 50 200 Q 120 150 180 140 Q 230 130 260 80" stroke="#0891b2" strokeWidth="3" fill="none" strokeLinecap="round" />
+                  <path d="M 50 200 Q 120 150 180 140 Q 230 130 260 80" stroke={HOME_ACCENTS.delivery} strokeWidth="3" fill="none" strokeLinecap="round" />
                   {/* Agent */}
                   <motion.g
                     animate={shouldReduce ? {} : { x: [0, 10, 20, 30, 40], y: [0, -10, -20, -25, -30] }}
                     transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
                   >
-                    <circle cx="50" cy="200" r="20" fill="#0891b2" />
+                    <circle cx="50" cy="200" r="20" fill={HOME_ACCENTS.delivery} />
                     <text x="38" y="207" fill="white" fontSize="16">🛵</text>
                   </motion.g>
                   {/* Destination */}
-                  <circle cx="260" cy="80" r="18" fill="#16a34a" />
+                  <circle cx="260" cy="80" r="18" fill={HOME_ACCENTS.success} />
                   <text x="248" y="87" fill="white" fontSize="14">📦</text>
                   {/* Earnings card */}
                   <rect x="60" y="20" width="130" height="60" rx="10" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
@@ -85,7 +86,7 @@ const BecomeAgentSection: React.FC = () => {
             >
               <Typography
                 variant="overline"
-                sx={{ color: '#0891b2', fontWeight: 700, letterSpacing: '0.12em', mb: 2, display: 'block' }}
+                sx={{ color: HOME_ACCENTS.delivery, fontWeight: 700, letterSpacing: '0.12em', mb: 2, display: 'block' }}
               >
                 {t('home.agent.eyebrow', 'For delivery agents')}
               </Typography>
@@ -110,7 +111,7 @@ const BecomeAgentSection: React.FC = () => {
                 {agentBenefits.map((b) => (
                   <Grid key={b.key} size={{ xs: 12, sm: 6 }}>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <CheckCircle sx={{ fontSize: 18, color: '#0891b2', flexShrink: 0 }} />
+                      <CheckCircle sx={{ fontSize: 18, color: HOME_ACCENTS.delivery, flexShrink: 0 }} />
                       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.82)', fontWeight: 500 }}>
                         {t(b.key, b.defaultLabel)}
                       </Typography>

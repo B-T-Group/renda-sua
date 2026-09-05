@@ -2,6 +2,7 @@ import { Box, Container, Stack, Typography, alpha } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { HOME_ACCENTS } from './homeTheme';
 
 interface StoryBeat {
   stepKey: string;
@@ -15,15 +16,15 @@ interface StoryBeat {
 }
 
 const storyBeats: StoryBeat[] = [
-  { stepKey: 'home.story.step1', defaultStep: '1', emojiIcon: '🔍', titleKey: 'home.story.discover.title', defaultTitle: 'Discover', descKey: 'home.story.discover.desc', defaultDesc: 'Browse products and rentals from local businesses in your city.', color: '#6366f1' },
-  { stepKey: 'home.story.step2', defaultStep: '2', emojiIcon: '🛍️', titleKey: 'home.story.browse.title', defaultTitle: 'Browse', descKey: 'home.story.browse.desc', defaultDesc: 'Filter by category, brand, or distance. Find exactly what you need — to buy or to rent.', color: '#1e40af' },
-  { stepKey: 'home.story.step3', defaultStep: '3', emojiIcon: '📲', titleKey: 'home.story.order.title', defaultTitle: 'Order', descKey: 'home.story.order.desc', defaultDesc: 'Place your order or rental request in seconds. Pay securely with mobile money or card.', color: '#0891b2' },
-  { stepKey: 'home.story.step4', defaultStep: '4', emojiIcon: '🏪', titleKey: 'home.story.businessReceives.title', defaultTitle: 'Business prepares', descKey: 'home.story.businessReceives.desc', defaultDesc: 'The business receives your order and starts preparing it right away.', color: '#16a34a' },
-  { stepKey: 'home.story.step5', defaultStep: '5', emojiIcon: '🛵', titleKey: 'home.story.agentAccepts.title', defaultTitle: 'Agent picks up', descKey: 'home.story.agentAccepts.desc', defaultDesc: 'A nearby delivery agent accepts the request and picks up your order.', color: '#f59e0b' },
-  { stepKey: 'home.story.step6', defaultStep: '6', emojiIcon: '📍', titleKey: 'home.story.tracking.title', defaultTitle: 'Track live', descKey: 'home.story.tracking.desc', defaultDesc: 'Watch your delivery move on the map in real time. ETA always visible.', color: '#ef4444' },
-  { stepKey: 'home.story.step7', defaultStep: '7', emojiIcon: '💬', titleKey: 'home.story.messaging.title', defaultTitle: 'Message instantly', descKey: 'home.story.messaging.desc', defaultDesc: 'Chat directly with the business or your agent at any point.', color: '#8b5cf6' },
-  { stepKey: 'home.story.step8', defaultStep: '8', emojiIcon: '🔐', titleKey: 'home.story.pin.title', defaultTitle: 'Secure PIN delivery', descKey: 'home.story.pin.desc', defaultDesc: 'Share a 4-digit PIN with the agent to confirm safe delivery — no PIN, no handover.', color: '#1e40af' },
-  { stepKey: 'home.story.step9', defaultStep: '9', emojiIcon: '🎉', titleKey: 'home.story.success.title', defaultTitle: 'Everybody wins', descKey: 'home.story.success.desc', defaultDesc: 'You get your order. The business grows. The agent earns. Rendasua wins together.', color: '#16a34a' },
+  { stepKey: 'home.story.step1', defaultStep: '1', emojiIcon: '🔍', titleKey: 'home.story.discover.title', defaultTitle: 'Discover', descKey: 'home.story.discover.desc', defaultDesc: 'Browse products and rentals from local businesses in your city.', color: HOME_ACCENTS.primary },
+  { stepKey: 'home.story.step2', defaultStep: '2', emojiIcon: '🛍️', titleKey: 'home.story.browse.title', defaultTitle: 'Browse', descKey: 'home.story.browse.desc', defaultDesc: 'Filter by category, brand, or distance. Find exactly what you need — to buy or to rent.', color: HOME_ACCENTS.primaryLight },
+  { stepKey: 'home.story.step3', defaultStep: '3', emojiIcon: '📲', titleKey: 'home.story.order.title', defaultTitle: 'Order', descKey: 'home.story.order.desc', defaultDesc: 'Place your order or rental request in seconds. Pay securely with mobile money or card.', color: HOME_ACCENTS.business },
+  { stepKey: 'home.story.step4', defaultStep: '4', emojiIcon: '🏪', titleKey: 'home.story.businessReceives.title', defaultTitle: 'Business prepares', descKey: 'home.story.businessReceives.desc', defaultDesc: 'The business receives your order and starts preparing it right away.', color: HOME_ACCENTS.warning },
+  { stepKey: 'home.story.step5', defaultStep: '5', emojiIcon: '🛵', titleKey: 'home.story.agentAccepts.title', defaultTitle: 'Agent picks up', descKey: 'home.story.agentAccepts.desc', defaultDesc: 'A nearby delivery agent accepts the request and picks up your order.', color: HOME_ACCENTS.delivery },
+  { stepKey: 'home.story.step6', defaultStep: '6', emojiIcon: '📍', titleKey: 'home.story.tracking.title', defaultTitle: 'Track live', descKey: 'home.story.tracking.desc', defaultDesc: 'Watch your delivery move on the map in real time. ETA always visible.', color: HOME_ACCENTS.deliveryLight },
+  { stepKey: 'home.story.step7', defaultStep: '7', emojiIcon: '💬', titleKey: 'home.story.messaging.title', defaultTitle: 'Message instantly', descKey: 'home.story.messaging.desc', defaultDesc: 'Chat directly with the business or your agent at any point.', color: HOME_ACCENTS.info },
+  { stepKey: 'home.story.step8', defaultStep: '8', emojiIcon: '🔐', titleKey: 'home.story.pin.title', defaultTitle: 'Secure PIN delivery', descKey: 'home.story.pin.desc', defaultDesc: 'Share a 4-digit PIN with the agent to confirm safe delivery — no PIN, no handover.', color: HOME_ACCENTS.primary },
+  { stepKey: 'home.story.step9', defaultStep: '9', emojiIcon: '🎉', titleKey: 'home.story.success.title', defaultTitle: 'Everybody wins', descKey: 'home.story.success.desc', defaultDesc: 'You get your order. The business grows. The agent earns. Rendasua wins together.', color: HOME_ACCENTS.success },
 ];
 
 const HowItWorksStorySection: React.FC = () => {
@@ -34,7 +35,7 @@ const HowItWorksStorySection: React.FC = () => {
     <Box
       component="section"
       id="how-it-works"
-      sx={{ py: { xs: 8, md: 14 }, bgcolor: alpha('#1e40af', 0.02) }}
+      sx={{ py: { xs: 8, md: 14 }, bgcolor: alpha(HOME_ACCENTS.primary, 0.02) }}
     >
       <Container maxWidth="lg">
         <Box sx={{ textAlign: 'center', mb: 8 }}>

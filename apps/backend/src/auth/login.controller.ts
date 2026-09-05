@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from './public.decorator';
 import { LoginService } from './login.service';
 
@@ -11,6 +12,7 @@ export class LoginController {
   @Public()
   @Post('login/start-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 8, ttl: 60000 } })
   @ApiOperation({
     summary: 'Send a login OTP to an existing user (email or phone)',
   })
@@ -28,6 +30,7 @@ export class LoginController {
   @Public()
   @Post('login/verify-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 15, ttl: 60000 } })
   @ApiOperation({
     summary: 'Verify login OTP and return Auth0 tokens (email or phone)',
   })
@@ -42,4 +45,3 @@ export class LoginController {
     return { success: true, verified: true, ...tokenData };
   }
 }
-

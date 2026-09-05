@@ -16,7 +16,7 @@ import { MerchantAgreementProviderService } from './merchant-agreement-provider.
   imports: [
     HasuraModule,
     AwsModule,
-    NotificationsModule,
+    forwardRef(() => NotificationsModule),
     forwardRef(() => MerchantLifecycleModule),
   ],
   controllers: [BusinessContractsController, BusinessContractsWebhookController],
