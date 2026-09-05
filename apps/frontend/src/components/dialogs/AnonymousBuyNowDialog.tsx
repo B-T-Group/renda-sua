@@ -698,6 +698,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           <Button
             fullWidth
             variant="contained"
+            color="cta"
             size="large"
             onClick={handleContinue}
             disabled={!canSubmit}

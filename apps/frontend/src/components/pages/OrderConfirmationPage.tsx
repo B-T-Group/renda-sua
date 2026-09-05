@@ -17,6 +17,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -265,10 +266,13 @@ const OrderConfirmationPage: React.FC = () => {
         <Card
           sx={{
             mb: { xs: 3, sm: 4 },
-            background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-            color: 'white',
-            boxShadow: '0 4px 20px rgba(25, 118, 210, 0.3)',
-            border: '1px solid #1565c0',
+            background: (theme) =>
+              `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+            color: 'primary.contrastText',
+            boxShadow: (theme) =>
+              `0 4px 20px ${alpha(theme.palette.primary.main, 0.3)}`,
+            border: '1px solid',
+            borderColor: 'primary.dark',
           }}
         >
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
@@ -434,7 +438,8 @@ const OrderConfirmationPage: React.FC = () => {
             bgcolor: 'success.50',
             border: '1px solid',
             borderColor: 'success.main',
-            boxShadow: '0 4px 20px rgba(46, 125, 50, 0.15)',
+            boxShadow: (theme) =>
+              `0 4px 20px ${alpha(theme.palette.success.main, 0.15)}`,
           }}
         >
           <CardContent sx={{ p: { xs: 2, sm: 3 } }}>

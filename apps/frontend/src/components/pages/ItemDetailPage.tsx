@@ -329,6 +329,7 @@ function ItemDetailMobileOrderBar({
           </Box>
           <Button
             variant="contained"
+            color="cta"
             size="medium"
             startIcon={<MobileMoneyOrderIcon />}
             onClick={onOrder}
@@ -344,20 +345,20 @@ function ItemDetailMobileOrderBar({
               textTransform: 'none',
               letterSpacing: 0.02,
               borderRadius: 2.5,
-              boxShadow: `0 4px 18px ${alpha(theme.palette.primary.main, 0.45)}`,
-              background: `linear-gradient(160deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 45%, ${theme.palette.primary.dark} 100%)`,
+              boxShadow: `0 4px 18px ${alpha(theme.palette.cta.main, 0.45)}`,
+              background: `linear-gradient(160deg, ${theme.palette.cta.light} 0%, ${theme.palette.cta.main} 45%, ${theme.palette.cta.dark} 100%)`,
               transition: theme.transitions.create(
                 ['box-shadow', 'transform', 'background-color'],
                 { duration: 200 }
               ),
               '&:hover': {
-                boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.55)}`,
-                background: `linear-gradient(160deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                boxShadow: `0 6px 24px ${alpha(theme.palette.cta.main, 0.55)}`,
+                background: `linear-gradient(160deg, ${theme.palette.cta.main} 0%, ${theme.palette.cta.dark} 100%)`,
                 transform: 'translateY(-2px)',
               },
               '&:active': {
                 transform: 'translateY(0)',
-                boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
+                boxShadow: `0 2px 12px ${alpha(theme.palette.cta.main, 0.4)}`,
               },
               ...(shouldPulse
                 ? { animation: 'rendaCtaPulse 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 1' }
@@ -1472,6 +1473,7 @@ export default function ItemDetailPage() {
                     {showInlineOrderNow ? (
                       <Button
                         variant="contained"
+                        color="cta"
                         startIcon={<MobileMoneyOrderIcon />}
                         onClick={handleOrderClick}
                         size="medium"
@@ -1482,11 +1484,11 @@ export default function ItemDetailPage() {
                           fontWeight: 800,
                           textTransform: 'none',
                           borderRadius: 2.5,
-                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.primary.main, 0.45)}`,
-                          background: `linear-gradient(160deg, ${btnTheme.palette.primary.light} 0%, ${btnTheme.palette.primary.main} 45%, ${btnTheme.palette.primary.dark} 100%)`,
+                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.cta.main, 0.45)}`,
+                          background: `linear-gradient(160deg, ${btnTheme.palette.cta.light} 0%, ${btnTheme.palette.cta.main} 45%, ${btnTheme.palette.cta.dark} 100%)`,
                           '&:hover': {
-                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.primary.main, 0.55)}`,
-                            background: `linear-gradient(160deg, ${btnTheme.palette.primary.main} 0%, ${btnTheme.palette.primary.dark} 100%)`,
+                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.cta.main, 0.55)}`,
+                            background: `linear-gradient(160deg, ${btnTheme.palette.cta.main} 0%, ${btnTheme.palette.cta.dark} 100%)`,
                           },
                         })}
                       >

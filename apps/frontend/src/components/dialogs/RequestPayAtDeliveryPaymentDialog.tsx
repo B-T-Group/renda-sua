@@ -191,6 +191,7 @@ export default function RequestPayAtDeliveryPaymentDialog({
         </Button>
         <Button
           variant="contained"
+          color="cta"
           onClick={handleSubmit}
           disabled={loading || !isPayAtDelivery || !effectivePhone}
         >

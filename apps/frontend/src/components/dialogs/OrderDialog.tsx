@@ -51,6 +51,7 @@ const OrderDialog: React.FC<OrderDialogProps> = ({ selectedItem, onClose }) => {
       <Button
         onClick={handlePlaceOrder}
         variant="contained"
+        color="cta"
         startIcon={<ShoppingCart />}
         size="large"
       >

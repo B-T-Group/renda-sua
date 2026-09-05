@@ -112,7 +112,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     const actions: Array<{
       label: string;
       action: () => void;
-      color: 'error' | 'warning' | 'success';
+      color: 'error' | 'warning' | 'success' | 'cta';
       icon: React.ReactNode;
       variant?: 'outlined' | 'contained';
       loading?: boolean;
@@ -122,7 +122,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       actions.push({
         label: t('orders.payAtPickup.cta', 'Pay now'),
         action: () => setPayPickupOpen(true),
-        color: 'success',
+        color: 'cta',
         icon: <Payments />,
         variant: 'contained',
       });

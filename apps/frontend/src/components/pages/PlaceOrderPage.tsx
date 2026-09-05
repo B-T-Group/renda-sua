@@ -125,7 +125,7 @@ const getConfirmOrderAttentionSx = (enabled: boolean) => (theme: Theme) => ({
   ...(enabled
     ? {
         '--confirm-order-ring-color': alpha(
-          theme.palette.primary.main,
+          theme.palette.cta.main,
           theme.palette.mode === 'dark' ? 0.38 : 0.26
         ),
         animation: `${confirmOrderPulse} 2.8s ease-in-out infinite`,
@@ -706,6 +706,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         <Button
           onClick={onSubmit}
           variant="contained"
+          color="cta"
           size="large"
           fullWidth
           disabled={disabled || loading}
@@ -3150,6 +3151,7 @@ const PlaceOrderPage: React.FC = () => {
                   <Button
                     onClick={handleSubmitWithPhoneGate}
                     variant="contained"
+                    color="cta"
                     fullWidth
                     disabled={!isStepValid(activeStep) || loading}
                     startIcon={
