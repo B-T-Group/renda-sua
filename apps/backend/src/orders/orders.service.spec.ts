@@ -1859,6 +1859,7 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
+        cancellationReasonId: 2, // client: changed_mind
         notes: 'Cancelled by business',
       });
 
@@ -1873,7 +1874,10 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({
+          orderId: 'order-123',
+          cancellationReasonId: 1, // other
+        })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in delivered status',
@@ -1902,6 +1906,7 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
+        cancellationReasonId: 13, // business: cannot_fulfill_order
         notes: 'Customer did not pay at delivery',
       });
 
@@ -1931,7 +1936,10 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({
+          orderId: 'order-123',
+          cancellationReasonId: 1, // other
+        })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in out_for_delivery status. Orders can only be cancelled before pickup by delivery agent.',
@@ -1954,6 +1962,7 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
+        cancellationReasonId: 2, // client: changed_mind
         notes: 'Cancelled by client',
       });
 
@@ -1998,6 +2007,7 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
+        cancellationReasonId: 2, // client: changed_mind
         notes: 'Cancelled by client',
       });
 
@@ -2057,6 +2067,7 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
+        cancellationReasonId: 13, // business: cannot_fulfill_order
         notes: 'Cancelled by business',
       });
 
@@ -2095,6 +2106,7 @@ describe('OrdersService', () => {
 
       const result = await service.cancelOrder({
         orderId: 'order-123',
+        cancellationReasonId: 2, // client: changed_mind
         notes: 'Changed my mind',
       });
 
@@ -2109,7 +2121,10 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({
+          orderId: 'order-123',
+          cancellationReasonId: 1, // other
+        })
       ).rejects.toThrow(
         new HttpException(
           'Cannot cancel order in preparing status',
@@ -2129,7 +2144,10 @@ describe('OrdersService', () => {
       });
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({
+          orderId: 'order-123',
+          cancellationReasonId: 1, // other
+        })
       ).rejects.toThrow(
         new HttpException(
           'Unauthorized to cancel this order',
@@ -2147,7 +2165,10 @@ describe('OrdersService', () => {
       hasuraUserService.getUser.mockResolvedValue(mockInvalidUser);
 
       await expect(
-        service.cancelOrder({ orderId: 'order-123' })
+        service.cancelOrder({
+          orderId: 'order-123',
+          cancellationReasonId: 1, // other
+        })
       ).rejects.toThrow(
         new HttpException(
           'Only business users and clients can cancel orders',

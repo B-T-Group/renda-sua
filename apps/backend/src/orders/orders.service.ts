@@ -121,7 +121,7 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
-  cancellationReasonId?: number; // FK to order_cancellation_reasons
+  cancellationReasonId: number; // Required FK to order_cancellation_reasons
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -4694,7 +4694,7 @@ export class OrdersService {
           $orderId: uuid!,
           $cancelledBy: String!,
           $cancelledAt: timestamptz!,
-          $cancellationReasonId: Int,
+          $cancellationReasonId: Int!,
           $cancellationNotes: String
         ) {
           update_orders_by_pk(
@@ -4712,7 +4712,7 @@ export class OrdersService {
           orderId: request.orderId,
           cancelledBy,
           cancelledAt: new Date().toISOString(),
-          cancellationReasonId: request.cancellationReasonId ?? null,
+          cancellationReasonId: request.cancellationReasonId,
           cancellationNotes: request.notes ?? null,
         }
       );
