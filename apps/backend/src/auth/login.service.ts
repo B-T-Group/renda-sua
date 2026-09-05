@@ -279,8 +279,8 @@ export class LoginService {
     userAgent?: string
   ): Promise<LoginResult> {
     // Check lockout status
-    if (this.lockout.isLockedOut(email)) {
-      const remainingMs = this.lockout.getRemainingLockoutMs(email);
+    if (await this.lockout.isLockedOut(email)) {
+      const remainingMs = await this.lockout.getRemainingLockoutMs(email);
       const remainingMin = Math.ceil(remainingMs / 60000);
       throw new HttpException(
         { 
@@ -297,11 +297,11 @@ export class LoginService {
         ? this.auth0Service.verifyTestUserEmail(email)
         : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
     } catch (error: any) {
-      this.lockout.recordFailure(email);
+      await this.lockout.recordFailure(email);
       throw error;
     }
 
-    this.lockout.recordSuccess(email);
+    await this.lockout.recordSuccess(email);
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     const user = await this.getUserByEmail(email);
@@ -368,8 +368,8 @@ export class LoginService {
     userAgent?: string
   ): Promise<LoginResult> {
     // Check lockout status
-    if (this.lockout.isLockedOut(phoneNumber)) {
-      const remainingMs = this.lockout.getRemainingLockoutMs(phoneNumber);
+    if (await this.lockout.isLockedOut(phoneNumber)) {
+      const remainingMs = await this.lockout.getRemainingLockoutMs(phoneNumber);
       const remainingMin = Math.ceil(remainingMs / 60000);
       throw new HttpException(
         { 
@@ -386,11 +386,11 @@ export class LoginService {
         ? this.auth0Service.verifyTestUserPhone(phoneNumber)
         : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
     } catch (error: any) {
-      this.lockout.recordFailure(phoneNumber);
+      await this.lockout.recordFailure(phoneNumber);
       throw error;
     }
 
-    this.lockout.recordSuccess(phoneNumber);
+    await this.lockout.recordSuccess(phoneNumber);
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     const user = await this.getUserByPhoneNumber(phoneNumber);
