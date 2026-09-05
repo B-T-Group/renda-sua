@@ -42,6 +42,9 @@ import {
   RentalListingRequestSection,
 } from '../rentals/RentalListingRequestSection';
 import SEOHead from '../seo/SEOHead';
+import { DeliveryExpectationsCard } from '../common/DeliveryExpectationsCard';
+import { getDeliveryEstimate } from '../../utils/deliveryEstimateAdapter';
+import { useMarket } from '../../contexts/MarketContext';
 
 function formatMoney(amount: string | number, currency: string): string {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -460,6 +463,7 @@ const RentalListingDetailPage: React.FC = () => {
   const [row, setRow] = useState<RentalListingRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { selectedMarket } = useMarket();
 
   const load = useCallback(async () => {
     if (!listingId) return;
@@ -554,6 +558,16 @@ const RentalListingDetailPage: React.FC = () => {
     Number(row.base_price_per_day ?? 0),
     row.rental_item.currency
   );
+
+  const deliveryEstimate = React.useMemo(() => {
+    if (!selectedMarket) return null;
+    return getDeliveryEstimate({
+      category: 'rental',
+      market: selectedMarket.countryCode,
+      area: selectedMarket.areaLabel || null,
+      businessLocationId: row.business_location.id,
+    });
+  }, [selectedMarket, row.business_location.id]);
 
   return (
     <>
@@ -853,6 +867,19 @@ const RentalListingDetailPage: React.FC = () => {
             <Grid item xs={12}>
               <HowItWorksNotes />
             </Grid>
+
+            {deliveryEstimate && (
+              <Grid item xs={12}>
+                <DeliveryExpectationsCard
+                  category="rental"
+                  market={selectedMarket?.countryCode || 'CM'}
+                  area={selectedMarket?.areaLabel || null}
+                  estimate={deliveryEstimate}
+                  loading={loading}
+                  itemId={listingId}
+                />
+              </Grid>
+            )}
 
             <Grid
               item

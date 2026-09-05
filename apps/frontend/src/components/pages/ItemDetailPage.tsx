@@ -92,6 +92,9 @@ import { orderedVariantImages } from '../../types/itemVariant';
 import FoodAvailabilityChip from '../common/FoodAvailabilityChip';
 import FoodScheduleList from '../common/FoodScheduleList';
 import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
+import { DeliveryExpectationsCard } from '../common/DeliveryExpectationsCard';
+import { getDeliveryEstimate } from '../../utils/deliveryEstimateAdapter';
+import { useMarket } from '../../contexts/MarketContext';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -428,6 +431,7 @@ export default function ItemDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
+  const { selectedMarket } = useMarket();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const { isStripeRail } = useIsStripeRail();
@@ -869,6 +873,24 @@ export default function ItemDetailPage() {
     lp.hasDeal && lp.strikeOriginal != null && lp.strikeOriginal > 0
       ? Math.round((1 - lp.unit / lp.strikeOriginal) * 100)
       : null;
+
+  const deliveryEstimate = React.useMemo(() => {
+    if (!selectedMarket) return null;
+    const category = foodAvailability ? 'food' : 'store';
+    return getDeliveryEstimate({
+      category,
+      market: selectedMarket.countryCode,
+      area: selectedMarket.areaLabel || null,
+      businessLocationId: inventoryItem?.business_location_id,
+      foodAvailability: foodAvailability
+        ? {
+            is_available: foodAvailability.is_available,
+            is_sold_out: foodAvailability.is_sold_out ?? false,
+            has_schedule: foodAvailability.has_schedule,
+          }
+        : null,
+    });
+  }, [selectedMarket, foodAvailability, inventoryItem?.business_location_id]);
 
   const scrollToReviews = () => {
     document
@@ -1323,6 +1345,19 @@ export default function ItemDetailPage() {
             />
 
             <ItemDetailHowItWorks />
+
+            {/* Delivery Expectations Card (pre-checkout) */}
+            {deliveryEstimate && (
+              <DeliveryExpectationsCard
+                category={foodAvailability ? 'food' : 'store'}
+                market={selectedMarket?.countryCode || 'CM'}
+                area={selectedMarket?.areaLabel || null}
+                estimate={deliveryEstimate}
+                loading={loading}
+                itemId={id}
+              />
+            )}
+
             {showMobileStickyOrderBar ? (
               <Typography
                 variant="body2"
@@ -1502,28 +1537,6 @@ export default function ItemDetailPage() {
           </Stack>
         </Grid>
       </Grid>
-
-      {/* App download note — shown to guests below the order CTAs */}
-      {!isAuthenticated && (
-        <Box
-          sx={{
-            mt: 2,
-            px: 2,
-            py: 1.5,
-            borderRadius: 2,
-            bgcolor: 'rgba(30,64,175,0.04)',
-            border: '1px solid rgba(30,64,175,0.12)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-          }}
-        >
-          <span style={{ fontSize: '1.1rem' }} aria-hidden="true">📱</span>
-          <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-            {t('items.appTrackingNote', 'Track your order in real time — available in the Rendasua app.')}
-          </Typography>
-        </Box>
-      )}
 
       {/* Product information - full width, dense layout */}
       <Card variant="outlined" sx={{ mt: 3, borderColor: 'divider' }}>
