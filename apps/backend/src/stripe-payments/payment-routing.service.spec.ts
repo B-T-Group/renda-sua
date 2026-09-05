@@ -53,6 +53,18 @@ describe('PaymentRoutingService', () => {
     await expect(service.resolveRailForCountry('GA')).resolves.toBe(
       'mobile_money'
     );
+    await expect(service.resolveRailForCountry('TG')).resolves.toBe(
+      'mobile_money'
+    );
+    await expect(service.resolveRailForCountry('bj')).resolves.toBe(
+      'mobile_money'
+    );
+    await expect(service.resolveRailForCountry('CI')).resolves.toBe(
+      'mobile_money'
+    );
+    await expect(service.resolveRailForCountry('CG')).resolves.toBe(
+      'mobile_money'
+    );
 
     expect(hasuraService.executeQuery).not.toHaveBeenCalled();
   });
@@ -251,6 +263,26 @@ describe('PaymentRoutingService', () => {
         source: 'seller',
         isDiaspora: false,
       });
+    });
+  });
+
+  describe('resolveTrustedPayerCountry', () => {
+    it('refuses a local spoof when the profile country is a diaspora payer', async () => {
+      await expect(
+        service.resolveTrustedPayerCountry({
+          profileCountry: 'CA',
+          requestedCountry: 'GA',
+        })
+      ).resolves.toBe('CA');
+    });
+
+    it('lets a traveller upgrade from a local profile to a Stripe billing country', async () => {
+      await expect(
+        service.resolveTrustedPayerCountry({
+          profileCountry: 'GA',
+          requestedCountry: 'CA',
+        })
+      ).resolves.toBe('CA');
     });
   });
 });
