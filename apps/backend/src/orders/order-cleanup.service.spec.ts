@@ -372,6 +372,8 @@ describe('OrderCleanupService', () => {
 
       expect(n).toBe(0);
       expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+      const query = String(hasura.executeQuery.mock.calls[0][0]);
+      expect(query).toMatch(/fulfillment_method:\s*\{\s*_neq:\s*pickup\s*\}/);
     });
   });
 
@@ -525,6 +527,85 @@ describe('OrderCleanupService', () => {
 
       expect(n).toBe(0);
       expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('cancels using updated_at when ready history is missing', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'P1',
+              current_status: 'ready_for_pickup',
+              fulfillment_method: 'pickup',
+              payment_status: 'authorized',
+              payment_source: 'credit_card',
+              updated_at: '2026-08-01T12:00:00.000Z',
+              client: { user_id: 'c1', user: { timezone: 'UTC' } },
+              business: { user_id: 'b1' },
+              order_items: [],
+              order_status_history: [],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-09T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(1);
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('CleanupClaimCancel')
+        )
+      ).toBe(true);
+    });
+
+    it('does not cancel when ready time cannot be resolved', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders: [
+          {
+            id: 'o1',
+            order_number: 'P1',
+            current_status: 'ready_for_pickup',
+            fulfillment_method: 'pickup',
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+            updated_at: 'not-a-date',
+            client: { user_id: 'c1', user: { timezone: 'UTC' } },
+            business: { user_id: 'b1' },
+            order_items: [],
+            order_status_history: [{ status: 'ready_for_pickup' }],
+          },
+        ],
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-09T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(0);
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('queries only store-pickup ready_for_pickup rows', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({ orders: [] });
+      await service.cancelStaleStorePickupOrders(7, 100);
+      const query = String(hasura.executeQuery.mock.calls[0][0]);
+      expect(query).toMatch(/current_status:\s*\{\s*_eq:\s*ready_for_pickup\s*\}/);
+      expect(query).toMatch(/fulfillment_method:\s*\{\s*_eq:\s*pickup\s*\}/);
     });
   });
 
