@@ -2,6 +2,27 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CatalogStopsService } from './catalog-stops.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
+function lastQuery(
+  hasura: jest.Mocked<HasuraSystemService>
+): string {
+  const call = hasura.executeQuery.mock.calls.at(-1);
+  return String(call?.[0] ?? '');
+}
+
+function expectAddressCountryScope(query: string, hasCountry: boolean) {
+  expect(query).toContain('address: {');
+  expect(query).toContain('is_storefront_visible:');
+  expect(query).not.toContain('country_code:');
+  expect(query).not.toMatch(/(?<!is_)storefront_visible:/);
+  if (hasCountry) {
+    expect(query).toContain('country: { _eq: $countryCode }');
+    expect(query).toContain('$countryCode: String');
+  } else {
+    expect(query).toContain('country: { _is_null: false }');
+    expect(query).not.toContain('$countryCode');
+  }
+}
+
 describe('CatalogStopsService', () => {
   let service: CatalogStopsService;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
@@ -69,6 +90,7 @@ describe('CatalogStopsService', () => {
           }),
         })
       );
+      expectAddressCountryScope(lastQuery(hasuraSystemService), true);
     });
 
     it('should apply subcategory filter to itemWhere variable', async () => {
@@ -154,6 +176,36 @@ describe('CatalogStopsService', () => {
       const result = await service.getDeals({ country_code: 'GA' });
 
       expect(result.items).toEqual([]);
+      expectAddressCountryScope(lastQuery(hasuraSystemService), true);
+    });
+
+    it('scopes deals by address.country instead of business_locations.country_code', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        item_deals: [],
+      });
+
+      await service.getDeals({ country_code: 'GA', state: 'Estuaire' });
+
+      const query = lastQuery(hasuraSystemService);
+      expectAddressCountryScope(query, true);
+      expect(query).toContain('state: { _eq: $state }');
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ countryCode: 'GA', state: 'Estuaire' })
+      );
+    });
+
+    it('omits unused $countryCode when no country filter is provided', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        item_deals: [],
+      });
+
+      await service.getDeals({});
+
+      expectAddressCountryScope(lastQuery(hasuraSystemService), false);
+      expect(hasuraSystemService.executeQuery.mock.calls[0][1]).not.toHaveProperty(
+        'countryCode'
+      );
     });
 
     it('should calculate discount prices correctly', async () => {
@@ -232,12 +284,15 @@ describe('CatalogStopsService', () => {
       const mockLocations = [
         {
           id: 'loc-1',
-          location_name: 'Test Store',
+          name: 'Test Store',
           logo_url: 'https://...',
-          country_code: 'GA',
+          address: { city: 'Libreville' },
           business: {
             id: 'biz-1',
-            business_name: 'Test Business',
+            name: 'Test Business',
+            is_verified: true,
+            can_accept_orders: true,
+            is_storefront_visible: true,
           },
           business_inventory_aggregate: {
             aggregate: { count: 50 },
@@ -253,7 +308,15 @@ describe('CatalogStopsService', () => {
 
       expect(result.stores.length).toBe(1);
       expect(result.stores[0].business_location_id).toBe('loc-1');
+      expect(result.stores[0].name).toBe('Test Store');
+      expect(result.stores[0].city).toBe('Libreville');
       expect(result.stores[0].item_count).toBe(50);
+      expect(result.stores[0].is_verified).toBe(true);
+      const query = lastQuery(hasuraSystemService);
+      expectAddressCountryScope(query, true);
+      expect(query).not.toContain('location_name');
+      expect(query).not.toContain('business_name');
+      expect(query).not.toContain('business: { is_active:');
     });
   });
 
@@ -311,6 +374,7 @@ describe('CatalogStopsService', () => {
       });
 
       expect(result.items[0].reason_label).toBeDefined();
+      expectAddressCountryScope(lastQuery(hasuraSystemService), true);
     });
   });
 });

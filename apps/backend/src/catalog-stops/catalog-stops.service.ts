@@ -43,11 +43,61 @@ interface BagComplementsOptions extends StopQueryOptions {
   inventory_item_ids: string[];
 }
 
+interface FeaturedLocationRow {
+  id: string;
+  name: string;
+  logo_url?: string | null;
+  address?: { city?: string | null } | null;
+  business: {
+    id: string;
+    name: string;
+    is_verified?: boolean;
+    can_accept_orders?: boolean;
+    is_storefront_visible?: boolean;
+  };
+  business_inventory_aggregate: {
+    aggregate: { count: number };
+  };
+}
+
 @Injectable()
 export class CatalogStopsService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService
   ) {}
+
+  private geoVarDecls(countryCode?: string, state?: string): string {
+    return [
+      countryCode ? '$countryCode: String' : null,
+      state ? '$state: String' : null,
+    ]
+      .filter((decl): decl is string => Boolean(decl))
+      .join('\n        ');
+  }
+
+  private geoVariables(
+    countryCode?: string,
+    state?: string
+  ): Record<string, string> {
+    const variables: Record<string, string> = {};
+    if (countryCode) variables.countryCode = countryCode;
+    if (state) variables.state = state;
+    return variables;
+  }
+
+  /** Country/state live on addresses, not business_locations. */
+  private locationScopeFragment(countryCode?: string, state?: string): string {
+    const country = countryCode
+      ? 'country: { _eq: $countryCode }'
+      : 'country: { _is_null: false }';
+    const stateFilter = state ? '\n                state: { _eq: $state }' : '';
+    return `
+              is_active: { _eq: true }
+              address: {
+                ${country}${stateFilter}
+              }
+              business: { is_storefront_visible: { _eq: true } }`;
+  }
 
   /**
    * Get top items in category (reuses inventory item shape from GET /inventory-items).
@@ -78,8 +128,7 @@ export class CatalogStopsService {
 
     const query = `
       query GetTopInCategory(
-        $countryCode: String
-        $state: String
+        ${this.geoVarDecls(country_code, state)}
         $itemWhere: items_bool_exp!
         $limit: Int!
       ) {
@@ -88,11 +137,7 @@ export class CatalogStopsService {
             is_active: { _eq: true }
             computed_available_quantity: { _gt: 0 }
             item: $itemWhere
-            business_location: {
-              is_active: { _eq: true }
-              storefront_visible: { _eq: true }
-              ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-              ${state ? 'state: { _eq: $state }' : ''}
+            business_location: {${this.locationScopeFragment(country_code, state)}
             }
           }
           limit: $limit
@@ -141,10 +186,10 @@ export class CatalogStopsService {
           }
           business_location {
             id
-            location_name
+            name
             business {
               id
-              business_name
+              name
             }
           }
         }
@@ -154,9 +199,8 @@ export class CatalogStopsService {
     const variables: Record<string, unknown> = {
       limit,
       itemWhere,
+      ...this.geoVariables(country_code, state),
     };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
 
     const result = await this.hasuraSystemService.executeQuery(query, variables);
     const listings = (result.business_inventory || []) as InventoryItem[];
@@ -196,8 +240,7 @@ export class CatalogStopsService {
     const query = `
       query GetActiveDeals(
         $now: timestamptz!
-        $countryCode: String
-        $state: String
+        ${this.geoVarDecls(country_code, state)}
         $limit: Int!
       ) {
         item_deals(
@@ -209,11 +252,7 @@ export class CatalogStopsService {
               is_active: { _eq: true }
               computed_available_quantity: { _gt: 0 }
               item: { is_active: { _eq: true } }
-              business_location: {
-                is_active: { _eq: true }
-                storefront_visible: { _eq: true }
-                ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-                ${state ? 'state: { _eq: $state }' : ''}
+              business_location: {${this.locationScopeFragment(country_code, state)}
               }
             }
           }
@@ -270,10 +309,10 @@ export class CatalogStopsService {
             }
             business_location {
               id
-              location_name
+              name
               business {
                 id
-                business_name
+                name
               }
             }
           }
@@ -284,9 +323,8 @@ export class CatalogStopsService {
     const variables: Record<string, unknown> = {
       now,
       limit,
+      ...this.geoVariables(country_code, state),
     };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
 
     const result = await this.hasuraSystemService.executeQuery(query, variables);
     const deals = (result.item_deals || []) as Array<{
@@ -392,17 +430,12 @@ export class CatalogStopsService {
 
     const query = `
       query GetFeaturedStores(
-        $countryCode: String
-        $state: String
+        ${this.geoVarDecls(country_code, state)}
         $limit: Int!
       ) {
         business_locations(
           where: {
-            is_active: { _eq: true }
-            storefront_visible: { _eq: true }
-            ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-            ${state ? 'state: { _eq: $state }' : ''}
-            business: { is_active: { _eq: true } }
+            ${this.locationScopeFragment(country_code, state)}
             business_inventory_aggregate: {
               count: { predicate: { _gt: 0 } }
             }
@@ -411,14 +444,17 @@ export class CatalogStopsService {
           order_by: { created_at: desc }
         ) {
           id
-          location_name
+          name
           logo_url
-          country_code
-          state
-          city
+          address {
+            city
+          }
           business {
             id
-            business_name
+            name
+            is_verified
+            can_accept_orders
+            is_storefront_visible
           }
           business_inventory_aggregate(
             where: {
@@ -434,43 +470,26 @@ export class CatalogStopsService {
       }
     `;
 
-    const variables: Record<string, unknown> = {
+    const result = await this.hasuraSystemService.executeQuery(query, {
       limit,
-    };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
+      ...this.geoVariables(country_code, state),
+    });
+    const locations = (result.business_locations || []) as FeaturedLocationRow[];
+    return { stores: locations.map((loc) => this.mapFeaturedStore(loc)) };
+  }
 
-    const result = await this.hasuraSystemService.executeQuery(query, variables);
-    const locations = (result.business_locations || []) as Array<{
-      id: string;
-      location_name: string;
-      logo_url?: string | null;
-      country_code: string;
-      state?: string | null;
-      city?: string | null;
-      business: {
-        id: string;
-        business_name: string;
-      };
-      business_inventory_aggregate: {
-        aggregate: { count: number };
-      };
-    }>;
-
-    // Transform to TopInventoryStoreRow shape
-    const stores = locations.map((loc) => ({
+  private mapFeaturedStore(loc: FeaturedLocationRow): TopInventoryStoreRow {
+    return {
       business_id: loc.business.id,
       business_location_id: loc.id,
-      name: loc.location_name,
-      city: loc.city || null,
-      logo_url: loc.logo_url || null,
+      name: loc.name,
+      city: loc.address?.city ?? null,
+      logo_url: loc.logo_url ?? null,
       item_count: loc.business_inventory_aggregate.aggregate.count,
-      is_verified: false,
-      can_accept_orders: true,
-      is_storefront_visible: true,
-    })) as TopInventoryStoreRow[];
-
-    return { stores };
+      is_verified: loc.business.is_verified === true,
+      can_accept_orders: loc.business.can_accept_orders === true,
+      is_storefront_visible: loc.business.is_storefront_visible === true,
+    };
   }
 
   /**
@@ -521,8 +540,7 @@ export class CatalogStopsService {
       query GetComplementItems(
         $categoryIds: [Int!]!
         $excludeIds: [uuid!]!
-        $countryCode: String
-        $state: String
+        ${this.geoVarDecls(country_code, state)}
         $limit: Int!
       ) {
         business_inventory(
@@ -536,11 +554,7 @@ export class CatalogStopsService {
                 item_category_id: { _in: $categoryIds }
               }
             }
-            business_location: {
-              is_active: { _eq: true }
-              storefront_visible: { _eq: true }
-              ${country_code ? 'country_code: { _eq: $countryCode }' : 'country_code: { _is_null: false }'}
-              ${state ? 'state: { _eq: $state }' : ''}
+            business_location: {${this.locationScopeFragment(country_code, state)}
             }
           }
           limit: $limit
@@ -589,10 +603,10 @@ export class CatalogStopsService {
           }
           business_location {
             id
-            location_name
+            name
             business {
               id
-              business_name
+              name
             }
           }
         }
@@ -603,9 +617,8 @@ export class CatalogStopsService {
       categoryIds,
       excludeIds: inventory_item_ids,
       limit,
+      ...this.geoVariables(country_code, state),
     };
-    if (country_code) variables.countryCode = country_code;
-    if (state) variables.state = state;
 
     const result = await this.hasuraSystemService.executeQuery(
       complementQuery,
