@@ -1525,6 +1525,7 @@ const CheckoutPage: React.FC = () => {
           {/* Place Order Button */}
           <Button
             variant="contained"
+            color="cta"
             fullWidth
             size="large"
             onClick={handleSubmit}

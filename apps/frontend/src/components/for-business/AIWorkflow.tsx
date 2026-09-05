@@ -10,7 +10,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionCTA from './SectionCTA';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const AIWorkflow: React.FC = () => {
   const { t } = useTranslation();
@@ -63,8 +63,8 @@ const AIWorkflow: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  bgcolor: alpha(FB_GREEN, 0.1),
-                  color: FB_GREEN,
+                  bgcolor: alpha(FB_ACCENT, 0.1),
+                  color: FB_ACCENT,
                 }}
                 aria-hidden
               >
@@ -79,7 +79,7 @@ const AIWorkflow: React.FC = () => {
                 aria-hidden
                 sx={{
                   display: { xs: 'none', md: 'block' },
-                  color: FB_GREEN,
+                  color: FB_ACCENT,
                   fontWeight: 800,
                   px: 0.5,
                 }}

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { marketingGradients } from '../../theme/themeUtils';
 import AppStoreBadges from '../common/AppStoreBadges';
+import { HOME_ACCENTS } from './homeTheme';
 
 const PhoneMockupIllustration: React.FC = () => {
   const shouldReduce = useReducedMotion();
@@ -26,12 +27,12 @@ const PhoneMockupIllustration: React.FC = () => {
         {/* Screen */}
         <rect x="18" y="8" width="284" height="564" rx="32" fill="#f8fafc" />
         {/* Status bar */}
-        <rect x="18" y="8" width="284" height="44" rx="32" fill="#1e40af" />
-        <rect x="18" y="36" width="284" height="16" fill="#1e40af" />
+        <rect x="18" y="8" width="284" height="44" rx="32" fill={HOME_ACCENTS.primary} />
+        <rect x="18" y="36" width="284" height="16" fill={HOME_ACCENTS.primary} />
         {/* Notch */}
         <rect x="110" y="8" width="100" height="28" rx="14" fill="#0f172a" />
         {/* App header */}
-        <rect x="18" y="52" width="284" height="48" fill="#1e40af" />
+        <rect x="18" y="52" width="284" height="48" fill={HOME_ACCENTS.primary} />
         <text x="34" y="82" fill="white" fontSize="14" fontWeight="bold">Rendasua</text>
         <circle cx="272" cy="76" r="14" fill="rgba(255,255,255,0.2)" />
         <text x="265" y="81" fill="white" fontSize="12">🔔</text>
@@ -42,35 +43,35 @@ const PhoneMockupIllustration: React.FC = () => {
         <line x1="18" y1="190" x2="302" y2="190" stroke="white" strokeWidth="8" />
         <line x1="200" y1="100" x2="200" y2="280" stroke="white" strokeWidth="4" strokeDasharray="10,6" />
         {/* Delivery route */}
-        <path d="M 80 240 Q 130 200 180 210 Q 220 218 240 180" stroke="#1e40af" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <path d="M 80 240 Q 130 200 180 210 Q 220 218 240 180" stroke={HOME_ACCENTS.primary} strokeWidth="3" fill="none" strokeLinecap="round" />
         {/* Agent pin */}
-        <circle cx="80" cy="240" r="14" fill="#1e40af" />
+        <circle cx="80" cy="240" r="14" fill={HOME_ACCENTS.primary} />
         <text x="75" y="245" fill="white" fontSize="12">🛵</text>
         {/* Destination pin */}
-        <circle cx="240" cy="180" r="14" fill="#16a34a" />
+        <circle cx="240" cy="180" r="14" fill={HOME_ACCENTS.delivery} />
         <text x="234" y="185" fill="white" fontSize="12">🏠</text>
         {/* Order card */}
         <rect x="26" y="292" width="268" height="88" rx="12" fill="white" style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.08))' }} />
-        <circle cx="50" cy="322" r="16" fill={alpha('#16a34a', 0.15)} />
+        <circle cx="50" cy="322" r="16" fill={alpha(HOME_ACCENTS.delivery, 0.15)} />
         <text x="42" y="327" fontSize="14">📦</text>
-        <text x="74" y="316" fill="#1d1d1f" fontSize="11" fontWeight="bold">Your order is on the way</text>
-        <text x="74" y="330" fill="#86868b" fontSize="10">ETA 8 min · Agent: Jean</text>
-        <rect x="200" y="308" width="80" height="28" rx="8" fill="#1e40af" />
+        <text x="74" y="316" fill={HOME_ACCENTS.ink} fontSize="11" fontWeight="bold">Your order is on the way</text>
+        <text x="74" y="330" fill={HOME_ACCENTS.muted} fontSize="10">ETA 8 min · Agent: Jean</text>
+        <rect x="200" y="308" width="80" height="28" rx="8" fill={HOME_ACCENTS.primary} />
         <text x="220" y="326" fill="white" fontSize="10" fontWeight="bold">Track</text>
         {/* Chat card */}
         <rect x="26" y="390" width="160" height="60" rx="12" fill="white" style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.06))' }} />
-        <text x="38" y="412" fill="#86868b" fontSize="9">Jean (Agent)</text>
+        <text x="38" y="412" fill={HOME_ACCENTS.muted} fontSize="9">Jean (Agent)</text>
         <rect x="38" y="418" width="100" height="22" rx="6" fill="#f1f5f9" />
-        <text x="46" y="433" fill="#1d1d1f" fontSize="10">Almost there! 🎉</text>
+        <text x="46" y="433" fill={HOME_ACCENTS.ink} fontSize="10">Almost there! 🎉</text>
         {/* PIN card */}
-        <rect x="196" y="390" width="100" height="60" rx="12" fill="#1e40af" />
+        <rect x="196" y="390" width="100" height="60" rx="12" fill={HOME_ACCENTS.primary} />
         <text x="215" y="412" fill="rgba(255,255,255,0.8)" fontSize="9">Delivery PIN</text>
         <text x="210" y="435" fill="white" fontSize="18" fontWeight="bold">4 2 7 9</text>
         {/* Bottom nav */}
         <rect x="18" y="528" width="284" height="44" rx="0" fill="white" />
         <rect x="18" y="528" width="284" height="2" fill="#e2e8f0" />
         {['🏠','🛍️','📋','💬','👤'].map((icon, i) => (
-          <text key={i} x={46 + i * 56} y="556" fontSize="16" textAnchor="middle" fill={i === 0 ? '#1e40af' : '#86868b'}>{icon}</text>
+          <text key={i} x={46 + i * 56} y="556" fontSize="16" textAnchor="middle" fill={i === 0 ? HOME_ACCENTS.primary : HOME_ACCENTS.muted}>{icon}</text>
         ))}
       </svg>
     </motion.div>

@@ -215,6 +215,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
           {phase === 'failed' ? (
             <Button
               variant="contained"
+              color="cta"
               size="large"
               disabled={retrying}
               onClick={() => void onRetry()}

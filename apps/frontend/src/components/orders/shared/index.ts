@@ -16,7 +16,6 @@ export { StatusBadge, type StatusBadgeProps } from './StatusBadge';
 export {
   getOrderStatusBoxColor,
   getStatusChipColor,
-  ORDER_STATUS_BOX_COLORS,
   type OrderStatusChipColor,
 } from './statusColors';
 export { Timeline, type TimelineEntry, type TimelineProps } from './Timeline';
