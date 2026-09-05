@@ -193,7 +193,7 @@ describe('HasuraUserService (singleton + CLS)', () => {
     clsStore.set(
       REQUEST_CONTEXT_CLS_KEY,
       emptyRequestContext({
-        userId: '11111111-1111-1111-1111-111111111111',
+        userId: VALID_USER_ID,
         authToken: 'token',
       })
     );
@@ -216,7 +216,7 @@ describe('HasuraUserService (singleton + CLS)', () => {
     clsStore.set(
       REQUEST_CONTEXT_CLS_KEY,
       emptyRequestContext({
-        userId: '11111111-1111-1111-1111-111111111111',
+        userId: VALID_USER_ID,
         authToken: 'token',
       })
     );
@@ -239,12 +239,12 @@ describe('HasuraUserService (singleton + CLS)', () => {
     clsStore.set(
       REQUEST_CONTEXT_CLS_KEY,
       emptyRequestContext({
-        userId: '11111111-1111-1111-1111-111111111111',
+        userId: VALID_USER_ID,
         authToken: 'token',
       })
     );
     const missing = new Error(
-      'User not found for id: 11111111-1111-1111-1111-111111111111'
+      `User not found for id: ${VALID_USER_ID}`
     );
     (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue(
       missing
@@ -258,7 +258,7 @@ describe('HasuraUserService (singleton + CLS)', () => {
     clsStore.set(
       REQUEST_CONTEXT_CLS_KEY,
       emptyRequestContext({
-        userId: '11111111-1111-1111-1111-111111111111',
+        userId: VALID_USER_ID,
         authToken: 'token',
       })
     );
