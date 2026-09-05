@@ -19,9 +19,6 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
   payment_failed: { en: 'rs_payment_failed', fr: 'rs_payment_failed' },
   ai_proposal_ready: { en: 'rs_ai_proposal', fr: 'rs_ai_proposal' },
   admin_order_risk: { en: 'rs_admin_order_risk', fr: 'rs_admin_order_risk' },
-  recipient_order_placed: { en: 'rs_rcpt_order_contact', fr: 'rs_rcpt_order_contact' },
-  recipient_out_for_delivery: { en: 'rs_rcpt_out_for_delivery', fr: 'rs_rcpt_out_for_delivery' },
-  recipient_order_ready: { en: 'rs_rcpt_ready_pickup', fr: 'rs_rcpt_ready_pickup' },
   recipient_order_update: { en: 'rs_recipient_order_update', fr: 'rs_recipient_order_update' },
 };
 
@@ -39,9 +36,6 @@ const BODY_VARS: Record<string, string[]> = {
   payment_failed: ['orderNumber'],
   ai_proposal_ready: ['itemName'],
   admin_order_risk: ['orderNumber', 'riskLabel', 'reason'],
-  recipient_order_placed: ['payerName', 'storeName', 'orderNumber'],
-  recipient_out_for_delivery: ['orderNumber'],
-  recipient_order_ready: ['orderNumber', 'storeName'],
   recipient_order_update: ['orderNumber', 'statusLabel'],
 };
 
@@ -70,10 +64,6 @@ const TEMPLATE_CATEGORIES: Record<string, WhatsAppTemplateCategory> = {
 const STATIC_CTA_KEYS = new Set([
   'verification_attention',
   'order_action_business',
-  'recipient_order_placed',
-  'recipient_out_for_delivery',
-  'recipient_order_ready',
-  'recipient_order_update',
 ]);
 
 export type WhatsAppTemplateCatalogEntry = {
