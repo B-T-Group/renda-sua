@@ -121,7 +121,7 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
-  cancellationReasonId: number; // Required FK to order_cancellation_reasons
+  cancellationReasonId?: number; // Required by cancelOrder, optional for other operations
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -4602,6 +4602,14 @@ export class OrdersService {
     request: OrderStatusChangeRequest,
     actor?: AuthorizedBusinessActor
   ) {
+    // Validate required cancellation reason
+    if (!request.cancellationReasonId) {
+      throw new HttpException(
+        'cancellationReasonId is required for order cancellation',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     if (actor) {
       await this.requireBusinessOrderAccess(
         request.orderId,

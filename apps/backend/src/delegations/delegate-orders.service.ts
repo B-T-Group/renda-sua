@@ -117,7 +117,12 @@ export class DelegateOrdersService {
     status: string
   ) {
     if (status === 'cancelled') {
-      return this.orders.cancelOrder({ orderId }, this.actor(ctx));
+      // Delegate manually cancelling via generic status PATCH → use reason 13 (cannot_fulfill_order)
+      // for business-initiated cancel without collected reason
+      return this.orders.cancelOrder(
+        { orderId, cancellationReasonId: 13, notes: 'Cancelled by business delegate' },
+        this.actor(ctx)
+      );
     }
     if (status === 'ready_for_pickup') {
       return this.orders.completePreparation({ orderId }, this.actor(ctx));
