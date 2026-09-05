@@ -211,7 +211,11 @@ export class WhatsAppOrderActionService {
     lang?: string | null
   ): Promise<string> {
     await this.orders.cancelOrder(
-      { orderId: order.id, notes: 'Declined from WhatsApp' },
+      {
+        orderId: order.id,
+        cancellationReasonId: 13, // cannot_fulfill_order (business-specific)
+        notes: 'Declined from WhatsApp',
+      },
       this.toActor(actor, order)
     );
     return this.msgDeclined(order.order_number, lang);

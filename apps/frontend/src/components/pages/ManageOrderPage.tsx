@@ -28,6 +28,7 @@ import { useOrderRatingEligibility } from '../../hooks/useOrderRatingEligibility
 import { useOrderRefunds, type RefundRequestDetail } from '../../hooks/useOrderRefunds';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import ConfirmationModal from '../common/ConfirmationModal';
+import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
 import OrderRatingsDisplay from '../common/OrderRatingsDisplay';
 import OrderHistoryDialog from '../dialogs/OrderHistoryDialog';
@@ -108,7 +109,6 @@ const ManageOrderPageContent: React.FC = () => {
   const { accounts } = useAccountInfo();
   const { enqueueSnackbar } = useSnackbar();
   const {
-    cancelOrder,
     retryOrderPayment,
     loading: actionLoading,
   } = useBackendOrders();
@@ -131,6 +131,7 @@ const ManageOrderPageContent: React.FC = () => {
 
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [reportIssueDialogOpen, setReportIssueDialogOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [ratingDialogMode, setRatingDialogMode] =
     useState<RatingDialogMode | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -142,9 +143,6 @@ const ManageOrderPageContent: React.FC = () => {
     null
   );
   const [refundDetailLoading, setRefundDetailLoading] = useState(false);
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [cancelNotes, setCancelNotes] = useState('');
-  const [pendingCancel, setPendingCancel] = useState(false);
   const [cancellingClaim, setCancellingClaim] = useState(false);
 
   useEffect(() => {
@@ -325,28 +323,19 @@ const ManageOrderPageContent: React.FC = () => {
     ) : null;
 
   const handleCancelOrder = () => {
-    setPendingCancel(true);
-    setConfirmationOpen(true);
+    setCancelModalOpen(true);
   };
 
-  const handleConfirmCancel = async () => {
-    if (!orderId) return;
-    try {
-      await cancelOrder({
-        orderId,
-        notes: cancelNotes.trim() || undefined,
-      });
-      await refetch();
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message || t('orders.cancelFailed', 'Failed to cancel order'),
-        { variant: 'error' }
-      );
-    } finally {
-      setConfirmationOpen(false);
-      setPendingCancel(false);
-      setCancelNotes('');
-    }
+  const handleCancelSuccess = () => {
+    enqueueSnackbar(
+      t('messages.orderCancelSuccess', 'Order cancelled successfully'),
+      { variant: 'success' }
+    );
+    void refetch();
+  };
+
+  const handleCancelError = (errorMessage: string) => {
+    enqueueSnackbar(errorMessage, { variant: 'error' });
   };
 
   const handleCancelClaimRequest = async () => {
@@ -700,34 +689,21 @@ const ManageOrderPageContent: React.FC = () => {
         }}
       />
 
+      <CancellationReasonModal
+        open={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        order={order}
+        persona={persona}
+        onSuccess={handleCancelSuccess}
+        onError={handleCancelError}
+      />
+
       <ConfirmationModal
-        open={confirmationOpen && pendingCancel}
-        title={t('orders.confirmAction', 'Confirm action')}
-        message={t('orders.confirmActionMessage', {
-          defaultValue: 'Cancel order #{{orderNumber}}?',
-          orderNumber: order.order_number,
-        })}
-        confirmText={t('common.confirm', 'Confirm')}
-        cancelText={t('common.cancel', 'Cancel')}
-        onConfirm={() => void handleConfirmCancel()}
-        onCancel={() => {
-          setConfirmationOpen(false);
-          setPendingCancel(false);
-          setCancelNotes('');
-        }}
-        confirmColor="error"
-        loading={actionLoading}
-        additionalContent={
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label={t('orders.notes', 'Notes')}
-            value={cancelNotes}
-            onChange={(e) => setCancelNotes(e.target.value)}
-            sx={{ mt: 2 }}
-          />
-        }
+        open={false}
+        title=""
+        message=""
+        onConfirm={() => {}}
+        onCancel={() => {}}
       />
     </>
   );

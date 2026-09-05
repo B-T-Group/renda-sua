@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
-import { useBackendOrders } from './useBackendOrders';
 
 export interface ClientOrder {
   id: string;
@@ -218,9 +217,6 @@ export const useClientOrders = (clientId?: string) => {
 
   const apiClient = useApiClient();
 
-  // Use backend order management APIs for client actions
-  const { cancelOrder } = useBackendOrders();
-
   const buildFilters = useCallback(
     (filterParams: OrderFilters) => {
       const conditions: any[] = [];
@@ -300,47 +296,6 @@ export const useClientOrders = (clientId?: string) => {
     [apiClient, buildFilters]
   );
 
-  const updateOrderStatus = useCallback(
-    async (orderId: string, newStatus: string, notes?: string) => {
-      try {
-        let response;
-
-        switch (newStatus) {
-          case 'cancelled':
-            response = await cancelOrder({ orderId, notes });
-            break;
-          default:
-            throw new Error(`Unsupported status transition: ${newStatus}`);
-        }
-
-        if (response.success) {
-          // Update local state instead of refetching
-          setOrders((prevOrders) =>
-            prevOrders.map((order) =>
-              order.id === orderId
-                ? {
-                    ...order,
-                    current_status: newStatus,
-                    updated_at:
-                      response.order.updated_at || new Date().toISOString(),
-                  }
-                : order
-            )
-          );
-          return response.order;
-        } else {
-          throw new Error(response.message || 'Failed to update order status');
-        }
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to update order status'
-        );
-        throw err;
-      }
-    },
-    [cancelOrder]
-  );
-
   // Function to refresh orders when needed
   const refreshOrders = useCallback(() => {
     fetchOrders(filters);
@@ -360,7 +315,6 @@ export const useClientOrders = (clientId?: string) => {
     error,
     filters,
     fetchOrders,
-    updateOrderStatus,
     refreshOrders,
   };
 };

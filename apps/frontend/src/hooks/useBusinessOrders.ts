@@ -207,11 +207,11 @@ export const useBusinessOrders = (businessId?: string) => {
 
   const apiClient = useApiClient();
 
-  // Use backend order management APIs
+  // Use backend order management APIs for confirmOrder and completePreparation
+  // (cancel should go through CancellationReasonModal from UI components)
   const {
     confirmOrder,
     completePreparation,
-    cancelOrder,
   } = useBackendOrders();
 
   const buildFilters = useCallback(
@@ -324,8 +324,9 @@ export const useBusinessOrders = (businessId?: string) => {
             response = await completePreparation({ orderId, notes });
             break;
           case 'cancelled':
-            response = await cancelOrder({ orderId, notes });
-            break;
+            throw new Error(
+              'Use CancellationReasonModal component to cancel orders with a proper reason'
+            );
           default:
             throw new Error(`Unsupported status transition: ${newStatus}`);
         }
@@ -358,7 +359,6 @@ export const useBusinessOrders = (businessId?: string) => {
     [
       confirmOrder,
       completePreparation,
-      cancelOrder,
     ]
   );
 
