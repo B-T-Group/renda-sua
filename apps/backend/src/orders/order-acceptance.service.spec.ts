@@ -190,6 +190,9 @@ describe('OrderAcceptanceService.onAcceptanceReminder', () => {
     svc.orderEvents = {
       recordEvent: jest.fn().mockResolvedValue(undefined),
     };
+    svc.foodOrdersService = {
+      containsCookedFood: jest.fn().mockResolvedValue(false),
+    };
     return svc;
   }
 
