@@ -173,9 +173,9 @@ export class WhatsAppOrderActionService {
     lang?: string | null
   ): Promise<string> {
     try {
-      if (action === 'CONFIRM') return this.doConfirm(order, actor, lang);
-      if (action === 'BUSY') return this.doBusy(order, actor, lang);
-      return this.doDecline(order, actor, lang);
+      if (action === 'CONFIRM') return await this.doConfirm(order, actor, lang);
+      if (action === 'BUSY') return await this.doBusy(order, actor, lang);
+      return await this.doDecline(order, actor, lang);
     } catch (error: any) {
       return this.mapError(error, order, lang);
     }

@@ -1,5 +1,8 @@
 import { resolveCatalogHealth } from './catalogHealth';
-import { resolveQuietHomeNextAction } from './resolveQuietHomeNextAction';
+import {
+  resolveQuietHomeGating,
+  resolveQuietHomeNextAction,
+} from './resolveQuietHomeNextAction';
 import type { DashboardAggregates } from '../hooks/useDashboardAggregates';
 
 const aggregates = (
@@ -27,11 +30,90 @@ const aggregates = (
 });
 
 describe('web quiet home utils', () => {
-  it('resolves catalog health progress', () => {
+  it('prioritizes catalog health: rejected, restock, first item, add, manage', () => {
+    expect(
+      resolveCatalogHealth(
+        aggregates({ rejectedItemCount: 2, topViewedOutOfStockCount: 1 }),
+        'sell_items'
+      ).primary
+    ).toBe('fix_rejected');
+    expect(
+      resolveCatalogHealth(
+        aggregates({ topViewedOutOfStockCount: 1, approvedItemCount: 0 }),
+        'sell_items'
+      ).primary
+    ).toBe('restock');
+    expect(
+      resolveCatalogHealth(aggregates({ approvedItemCount: 0 }), 'sell_items')
+        .primary
+    ).toBe('first_item');
     expect(
       resolveCatalogHealth(aggregates({ approvedItemCount: 4 }), 'sell_items')
         .primary
     ).toBe('add_product');
+    expect(
+      resolveCatalogHealth(aggregates({ approvedItemCount: 10 }), 'sell_items')
+        .primary
+    ).toBe('manage');
+  });
+
+  it('uses rental approved count and falls back when aggregates are missing', () => {
+    expect(
+      resolveCatalogHealth(
+        aggregates({
+          approvedRentalCount: 2,
+          rentalItemCount: 8,
+          approvedItemCount: 10,
+        }),
+        'rent_items'
+      ).approved
+    ).toBe(2);
+    expect(
+      resolveCatalogHealth(
+        aggregates({
+          approvedRentalCount: undefined,
+          rentalItemCount: 3,
+        }),
+        'rent_items'
+      ).approved
+    ).toBe(3);
+    expect(resolveCatalogHealth(null, 'sell_items')).toMatchObject({
+      approved: 0,
+      primary: 'first_item',
+      isRental: false,
+    });
+  });
+
+  it('keeps fulfillment modules while aggregates load or fail', () => {
+    expect(
+      resolveQuietHomeGating({
+        showOperationalModules: true,
+        aggregatesLoading: true,
+        aggregates: null,
+      })
+    ).toEqual({ quietHomeMode: false, fulfillmentMode: true });
+    expect(
+      resolveQuietHomeGating({
+        showOperationalModules: true,
+        aggregatesLoading: false,
+        aggregates: null,
+        aggregatesError: 'Failed to load dashboard',
+      })
+    ).toEqual({ quietHomeMode: false, fulfillmentMode: true });
+    expect(
+      resolveQuietHomeGating({
+        showOperationalModules: true,
+        aggregatesLoading: false,
+        aggregates: { ordersTotal: 0 },
+      })
+    ).toEqual({ quietHomeMode: true, fulfillmentMode: false });
+    expect(
+      resolveQuietHomeGating({
+        showOperationalModules: true,
+        aggregatesLoading: false,
+        aggregates: { ordersTotal: 2 },
+      })
+    ).toEqual({ quietHomeMode: false, fulfillmentMode: true });
   });
 
   it('prioritizes cannot_accept_orders', () => {

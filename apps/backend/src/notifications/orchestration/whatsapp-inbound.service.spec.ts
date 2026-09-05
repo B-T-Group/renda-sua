@@ -318,4 +318,67 @@ describe('WhatsAppInboundService', () => {
       contextMessageId: 'wamid.out.order-c',
     });
   });
+
+  it('still routes merchant text when inbox persist fails', async () => {
+    const service = buildService();
+    inbox.persistInbound.mockRejectedValueOnce(new Error('unique wamid'));
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.in.2',
+                    type: 'text',
+                    text: { body: 'CONFIRM' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(replyService.handleInboundText).toHaveBeenCalledWith({
+      fromPhone: '15557654321',
+      text: 'CONFIRM',
+      messageId: 'wamid.in.2',
+    });
+  });
+
+  it('maps a failed delivery status and inbox error', async () => {
+    const service = buildService();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [
+                  {
+                    id: 'wamid.fail',
+                    status: 'failed',
+                    errors: [{ message: '131026' }],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(analytics.markByProviderMessageId).toHaveBeenCalledWith(
+      'wamid.fail',
+      'failed',
+      expect.any(Object)
+    );
+    expect(inbox.markByWamid).toHaveBeenCalledWith(
+      'wamid.fail',
+      'failed',
+      '131026'
+    );
+  });
 });

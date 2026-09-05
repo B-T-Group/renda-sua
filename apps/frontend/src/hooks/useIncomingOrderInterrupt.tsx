@@ -12,15 +12,16 @@ import type { OrderData } from './useOrderById';
 import { useApiClient } from './useApiClient';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { withOrdersApiPrefix } from '../contexts/OrdersApiPrefixContext';
+import {
+  incomingInterruptSecondsLeft,
+  isActionableIncomingOrder,
+  readIncomingInterruptPayload,
+  resolveIncomingInterruptDeadline,
+  shouldOpenIncomingInterrupt,
+} from '../utils/incomingOrderInterrupt';
 
 const POLL_MS = 15_000;
 const BUSY_SNOOZE_MS = 15 * 60 * 1000;
-const INTERRUPT_EVENTS = new Set([
-  'order_created',
-  'order_acceptance_activate',
-  'order_acceptance_reminder',
-]);
-const ACTIONABLE_STATES = new Set(['awaiting_acceptance', 'no_response', 'grace']);
 
 type InterruptUiState =
   | 'idle'
@@ -49,42 +50,6 @@ type IncomingOrderInterruptContextValue = {
 
 const IncomingOrderInterruptContext =
   createContext<IncomingOrderInterruptContextValue | null>(null);
-
-function isActionableOrder(order: OrderData | null): order is OrderData {
-  if (!order || order.current_status !== 'pending') return false;
-  const state = order.acceptance_state ?? 'awaiting_acceptance';
-  return ACTIONABLE_STATES.has(state);
-}
-
-function resolveDeadline(order: OrderData | null): string | null {
-  return order?.grace_deadline_at ?? order?.acceptance_deadline_at ?? null;
-}
-
-function secondsUntil(deadline: string | null, nowMs: number): number | null {
-  if (!deadline) return null;
-  const diff = Date.parse(deadline) - nowMs;
-  return Math.max(0, Math.ceil(diff / 1000));
-}
-
-function readInterruptPayload(event: MessageEvent): {
-  eventName: string | null;
-  orderId: string | null;
-} {
-  const data = event.data ?? {};
-  const eventName =
-    typeof data?.event === 'string'
-      ? data.event
-      : typeof data?.data?.event === 'string'
-        ? data.data.event
-        : null;
-  const orderId =
-    typeof data?.orderId === 'string'
-      ? data.orderId
-      : typeof data?.data?.orderId === 'string'
-        ? data.data.orderId
-        : null;
-  return { eventName, orderId };
-}
 
 export function IncomingOrderInterruptProvider({
   children,
@@ -144,7 +109,7 @@ export function IncomingOrderInterruptProvider({
         );
         const nextOrder = response.data?.order ?? null;
         if (epoch !== loadEpochRef.current) return;
-        if (!isActionableOrder(nextOrder)) {
+        if (!isActionableIncomingOrder(nextOrder)) {
           clearVisibleState();
           return;
         }
@@ -222,8 +187,8 @@ export function IncomingOrderInterruptProvider({
   useEffect(() => {
     if (!interruptEnabled || !('serviceWorker' in navigator)) return undefined;
     const handleMessage = (event: MessageEvent) => {
-      const payload = readInterruptPayload(event);
-      if (!payload.eventName || !INTERRUPT_EVENTS.has(payload.eventName)) return;
+      const payload = readIncomingInterruptPayload(event);
+      if (!shouldOpenIncomingInterrupt(payload.eventName)) return;
       if (payload.orderId) {
         void loadOrder(payload.orderId);
         return;
@@ -262,7 +227,7 @@ export function IncomingOrderInterruptProvider({
   }, [clearVisibleState]);
 
   const confirm = useCallback(async () => {
-    if (!isActionableOrder(order) || !apiClient) return;
+    if (!isActionableIncomingOrder(order) || !apiClient) return;
     setUiState('confirming');
     setMessage(null);
     const body = {
@@ -298,7 +263,7 @@ export function IncomingOrderInterruptProvider({
   ]);
 
   const markOrderBusy = useCallback(async () => {
-    if (!isActionableOrder(order) || !apiClient) return;
+    if (!isActionableIncomingOrder(order) || !apiClient) return;
     setUiState('busy');
     setMessage(null);
     try {
@@ -345,7 +310,10 @@ export function IncomingOrderInterruptProvider({
       order,
       uiState,
       message,
-      secondsLeft: secondsUntil(resolveDeadline(order), nowMs),
+      secondsLeft: incomingInterruptSecondsLeft(
+        resolveIncomingInterruptDeadline(order),
+        nowMs
+      ),
       showDeclineDialog,
       refreshPending,
       dismiss,
