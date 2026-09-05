@@ -270,25 +270,34 @@ export class SignupService {
     if (attempt.status === 'completed' && attempt.completion_result) {
       const result = this.replayCompletion(attempt.completion_result);
       if (platform === 'web') {
-        // Reuse existing session ID from completion result if available
-        const sessionId = result.sessionId || this.sessionStore.generateSessionId();
-        
-        // If no session ID was stored, create the session now (backward compat)
+        // SECURITY: Always reuse the session ID stored in completion_result
+        // Do NOT mint a new session on replay - this would create multiple refresh token bindings
         if (!result.sessionId) {
-          await this.sessionStore.createSession(sessionId, {
-            userId: result.user.id,
-            auth0RefreshToken: result.tokens.refresh_token!,
-            auth0AccessToken: result.tokens.access_token,
-            auth0IdToken: result.tokens.id_token,
-            createdAt: Date.now(),
-            lastRefreshedAt: Date.now(),
-            userAgent,
-            ipAddress,
-          });
+          this.logger.warn(`Signup replay for attempt ${body.attemptId}: no sessionId in completion_result (pre-fix attempt)`);
+          throw new HttpException(
+            { 
+              success: false, 
+              error: 'Signup session expired. Please log in to continue.' 
+            },
+            HttpStatus.GONE
+          );
+        }
+        
+        // Verify the stored session still exists
+        const existingSession = await this.sessionStore.getSession(result.sessionId);
+        if (!existingSession) {
+          this.logger.warn(`Signup replay for attempt ${body.attemptId}: stored session ${result.sessionId.slice(0, 8)}... no longer exists`);
+          throw new HttpException(
+            { 
+              success: false, 
+              error: 'Signup session expired. Please log in to continue.' 
+            },
+            HttpStatus.GONE
+          );
         }
         
         return {
-          sessionId,
+          sessionId: result.sessionId,
           response: {
             success: true,
             verified: true,
@@ -328,6 +337,10 @@ export class SignupService {
           userAgent,
           ipAddress,
         });
+        
+        // SECURITY: Store sessionId in completion_result so replays reuse the same session
+        await this.updateCompletionSessionId(body.attemptId, sessionId);
+        
         return {
           sessionId,
           response: {
@@ -1384,6 +1397,41 @@ export class SignupService {
         updatedAt: new Date().toISOString(),
       }
     );
+  }
+
+  /**
+   * Update the completion_result.sessionId after creating a web session.
+   * This ensures replays reuse the same session instead of minting new ones.
+   */
+  private async updateCompletionSessionId(
+    attemptId: string,
+    sessionId: string
+  ): Promise<void> {
+    const attempt = await this.loadAttempt(attemptId);
+    if (attempt.completion_result) {
+      const updated = {
+        ...attempt.completion_result,
+        sessionId,
+      };
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation UpdateCompletionSessionId($id: uuid!, $result: jsonb!, $updatedAt: timestamptz!) {
+          update_signup_attempts_by_pk(
+            pk_columns: { id: $id }
+            _set: {
+              completion_result: $result
+              updated_at: $updatedAt
+            }
+          ) { id }
+        }
+      `,
+        {
+          id: attemptId,
+          result: updated,
+          updatedAt: new Date().toISOString(),
+        }
+      );
+    }
   }
 
   private emitCompleteRegistration(

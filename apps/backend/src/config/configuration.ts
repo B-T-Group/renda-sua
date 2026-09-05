@@ -887,15 +887,18 @@ export default (): Configuration => {
       managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
       testUsers: {
+        // SECURITY: Test users are ONLY enabled when explicitly set to 'true'
+        // Never enable by default in production, even if NODE_ENV is misconfigured
         enabled:
-          process.env.AUTH0_TEST_USERS_ENABLED !== undefined
-            ? process.env.AUTH0_TEST_USERS_ENABLED === 'true'
-            : process.env.NODE_ENV !== 'production',
+          process.env.AUTH0_TEST_USERS_ENABLED === 'true' &&
+          process.env.NODE_ENV !== 'production',
         emailConnection:
           process.env.AUTH0_TEST_USERS_EMAIL_CONNECTION || 'Email-Test-Users',
         phoneConnection:
           process.env.AUTH0_TEST_USERS_PHONE_CONNECTION || 'Phone-Test-Users',
-        password: process.env.AUTH0_TEST_USER_PASSWORD || 'Rendasu@21',
+        // SECURITY: Hardcoded default password removed
+        // Must be set explicitly via AUTH0_TEST_USER_PASSWORD env var
+        password: process.env.AUTH0_TEST_USER_PASSWORD || '',
         emailDomain: process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
         phoneSuffix: process.env.AUTH0_TEST_PHONE_SUFFIX || '0000',
       },
