@@ -14,6 +14,7 @@ describe('isUuid', () => {
     expect(isUuid('f855d3b1c92f431aa6711ce1dcd0e868')).toBe(false);
     expect(isUuid('email|6a95505255ad3b18af9e159f')).toBe(false);
     expect(isUuid('auth0|abc123')).toBe(false);
+    expect(isUuid('auth0|test-phone|+24174000000')).toBe(false);
   });
 });
 
@@ -43,13 +44,18 @@ describe('requireAuthUserUuid', () => {
     ).toBe('11111111-1111-4111-8111-111111111111');
   });
 
-  it('throws HTTP 401 for an Auth0 subject', () => {
-    try {
-      requireAuthUserUuid('email|6a95505255ad3b18af9e159f');
-      fail('expected throw');
-    } catch (error: any) {
-      expect(error).toBeInstanceOf(UnauthorizedException);
-      expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+  it('throws HTTP 401 for Auth0 email and phone subjects', () => {
+    for (const sub of [
+      'email|6a95505255ad3b18af9e159f',
+      'auth0|test-phone|+24174000000',
+    ]) {
+      try {
+        requireAuthUserUuid(sub);
+        fail(`expected throw for ${sub}`);
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(UnauthorizedException);
+        expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+      }
     }
   });
 });
