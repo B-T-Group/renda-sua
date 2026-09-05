@@ -34,6 +34,13 @@ array_relationships:
         remote_table:
           name: business_inventory
           schema: public
+  - name: food_item_settings
+    using:
+      foreign_key_constraint_on:
+        column: item_id
+        table:
+          name: food_item_settings
+          schema: public
   - name: item_collections
     using:
       manual_configuration:
@@ -115,10 +122,12 @@ insert_permissions:
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
+        - preparation_minutes
         - min_order_quantity
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -150,10 +159,12 @@ select_permissions:
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
+        - preparation_minutes
         - min_order_quantity
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -190,10 +201,12 @@ select_permissions:
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
+        - preparation_minutes
         - min_order_quantity
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -230,10 +243,12 @@ select_permissions:
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
+        - preparation_minutes
         - min_order_quantity
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -277,10 +292,12 @@ select_permissions:
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
+        - preparation_minutes
         - min_order_quantity
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -317,10 +334,12 @@ select_permissions:
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
+        - preparation_minutes
         - min_order_quantity
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price
@@ -356,10 +375,12 @@ update_permissions:
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
+        - preparation_minutes
         - min_order_quantity
         - max_order_quantity
         - is_active
         - pay_on_delivery_enabled
+        - interest_only
         - pay_at_pickup_enabled
         - shipping_enabled
         - shipping_price

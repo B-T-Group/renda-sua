@@ -5,6 +5,7 @@ import {
 } from '../contexts/OrdersApiPrefixContext';
 import { useApiClient } from './useApiClient';
 import { useApiWithLoading } from './useApiWithLoading';
+import type { FoodConfirmationStockUpdate } from '../types/food';
 
 export interface OrderItem {
   business_inventory_id: string;
@@ -57,6 +58,7 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
+  cancellationReasonId: number; // Required for cancel endpoint
 }
 
 export interface CompleteDeliveryRequest {
@@ -76,6 +78,8 @@ export interface ConfirmOrderData {
     preferred_date: string;
     special_instructions?: string;
   };
+  /** Optional stock corrections for cooked-food lines on this order. */
+  food_stock_updates?: FoodConfirmationStockUpdate[];
 }
 
 export interface GetOrderRequest {
@@ -87,6 +91,13 @@ export interface OrderStatusChangeResponse {
   order: any;
   message: string;
   holdAmount?: number; // For agent operations
+}
+
+export interface MarkBusyResponse {
+  success: boolean;
+  order: any;
+  message: string;
+  snoozeUntil?: string;
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -363,6 +374,39 @@ export const useBackendOrders = () => {
         throw new Error(errorMessage);
       }
     }, 'orders.cancelling');
+  };
+
+  const markBusy = async (
+    request: { orderId: string }
+  ): Promise<MarkBusyResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<MarkBusyResponse>(
+          op('/orders/busy'),
+          request
+        );
+
+        if (!response.data.success) {
+          throw new Error(response.data.message || 'Failed to mark order busy');
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to mark order busy';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.updatingBusy');
   };
 
   const refundOrder = async (
@@ -1129,6 +1173,7 @@ export const useBackendOrders = () => {
     completePreparation,
     completePreparationBatch,
     cancelOrder,
+    markBusy,
     refundOrder,
 
     // Agent methods

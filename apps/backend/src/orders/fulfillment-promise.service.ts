@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DateTime } from 'luxon';
 import {
@@ -25,6 +25,8 @@ const CLOSING_SOON_MESSAGE =
 
 @Injectable()
 export class FulfillmentPromiseService {
+  private readonly logger = new Logger(FulfillmentPromiseService.name);
+
   constructor(
     private readonly hasura: HasuraSystemService,
     private readonly configService: ConfigService<Configuration>,
@@ -141,6 +143,32 @@ export class FulfillmentPromiseService {
     };
   }
 
+  /**
+   * Restart the ASAP clock at ready time (prep already done). Store-pickup
+   * never writes pickup_by, so cleanup must not keep the placement-time
+   * promised_fulfill_by or a late prep can expire the grace window.
+   */
+  async reanchorAsapAtReady(orderId: string, now = new Date()): Promise<void> {
+    try {
+      await this.writeAsapReadyPromise(orderId, now);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to reanchor ASAP promise for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async writeAsapReadyPromise(orderId: string, now: Date): Promise<void> {
+    const order = await this.fetchOrder(orderId);
+    if (!this.shouldReanchorAsap(order) || !order) return;
+    const method = order.fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery';
+    await this.writePromise(
+      orderId,
+      'asap',
+      this.computeAsapPromise(method, 0, order.requiresFastDelivery === true, now)
+    );
+  }
+
   async persistForOrder(
     orderId: string,
     options?: { extendPrepMinutes?: number }
@@ -166,6 +194,15 @@ export class FulfillmentPromiseService {
       : this.resolveAsapPromise(order, prep, options?.extendPrepMinutes);
     if (!promise) return;
     await this.writePromise(orderId, timing, promise);
+  }
+
+  private shouldReanchorAsap(order: PromiseOrderSnapshot | null): boolean {
+    if (!order || order.fulfillmentMethod === 'shipping') return false;
+    if (order.fulfillmentTiming === 'scheduled') return false;
+    return (
+      order.fulfillmentTiming === 'asap' ||
+      !order.deliveryTimeWindows?.[0]?.preferredDate
+    );
   }
 
   private resolveAsapPromise(

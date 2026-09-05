@@ -13,6 +13,7 @@ import type {
   OrderStatusChangeRequest,
 } from '../orders/orders.service';
 import { OrdersService } from '../orders/orders.service';
+import { OrderAcceptanceService } from '../orders/order-acceptance.service';
 import { GET_ORDERS } from '../orders/orders.queries';
 import type { DelegationAccessContext } from './delegation.types';
 
@@ -25,7 +26,8 @@ export class DelegateOrdersService {
     private readonly failedDeliveries: FailedDeliveriesService,
     private readonly messaging: MessagingService,
     private readonly quickMessage: QuickMessageService,
-    private readonly deliveryPinShare: DeliveryPinShareService
+    private readonly deliveryPinShare: DeliveryPinShareService,
+    private readonly acceptance: OrderAcceptanceService
   ) {}
 
   actor(ctx: DelegationAccessContext): AuthorizedBusinessActor {
@@ -34,6 +36,22 @@ export class DelegateOrdersService {
       businessId: ctx.businessId,
       locationId: ctx.locationId,
     };
+  }
+
+  async pendingAcceptance(ctx: DelegationAccessContext) {
+    await this.assertLocation(ctx);
+    return this.acceptance.getPendingAcceptanceForLocation(
+      ctx.businessId,
+      ctx.locationId
+    );
+  }
+
+  async markBusy(ctx: DelegationAccessContext, orderId: string) {
+    await this.requireOrderInLocation(ctx, orderId);
+    return this.acceptance.markBusy(orderId, {
+      userId: ctx.userId,
+      asDelegateLocationId: ctx.locationId,
+    });
   }
 
   async list(ctx: DelegationAccessContext, filters?: unknown) {
@@ -99,7 +117,12 @@ export class DelegateOrdersService {
     status: string
   ) {
     if (status === 'cancelled') {
-      return this.orders.cancelOrder({ orderId }, this.actor(ctx));
+      // Delegate manually cancelling via generic status PATCH → use reason 13 (cannot_fulfill_order)
+      // for business-initiated cancel without collected reason
+      return this.orders.cancelOrder(
+        { orderId, cancellationReasonId: 13, notes: 'Cancelled by business delegate' },
+        this.actor(ctx)
+      );
     }
     if (status === 'ready_for_pickup') {
       return this.orders.completePreparation({ orderId }, this.actor(ctx));

@@ -3,6 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import FormData from 'form-data';
 import { normalizeWeightUnit } from '../common/weight-units';
+import {
+  applyCookedFoodCategories,
+  isCookedFoodSuggestion,
+} from '../food/apply-cooked-food-category';
+import {
+  FOOD_CATEGORY_NAME,
+  FOOD_SUB_CATEGORY_NAME,
+} from '../food/food.constants';
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -70,6 +78,8 @@ export interface ImageItemSuggestionResult {
   isSizeRequired?: boolean | null;
   /** True when photos/text indicate a used / pre-owned item. */
   isUsed?: boolean | null;
+  /** True when the item is a cooked restaurant dish. */
+  isFoodItem?: boolean | null;
   confidence?: ImageItemSuggestionConfidence;
   categoryAlternates?: string[];
   subCategoryAlternates?: string[];
@@ -100,6 +110,18 @@ export interface ItemRefinementSuggestionResult {
   requiresSpecialHandling?: boolean | null;
   minOrderQuantity?: number | null;
   maxOrderQuantity?: number | null;
+}
+
+/** AI suggestions for a new variant of an existing catalog item. */
+export interface VariantSuggestionResult {
+  name?: string;
+  color?: string;
+  sku?: string;
+  price?: number | null;
+  currency?: string | null;
+  weight?: number | null;
+  weightUnit?: string | null;
+  dimensions?: string | null;
 }
 
 /** AI extraction for rental catalog items (vision). */
@@ -497,6 +519,10 @@ export class AiService {
     country?: string | null;
     existingCatalogNames?: string[];
     existingBrandNames?: string[];
+    /** Compact category > subcategory list for vision prompt. */
+    existingCatalogPrompt?: string | null;
+    /** Merchant indicated a cooked restaurant dish. */
+    isFoodItem?: boolean | null;
   }): Promise<ImageItemSuggestionResult> {
     const urls = (input.imageUrls ?? []).filter((u) => !!u?.trim());
     const defaultCurrency = input.defaultCurrency || 'XAF';
@@ -534,25 +560,41 @@ export class AiService {
           .join(', ')}`
       );
     }
+    if (input.existingCatalogPrompt?.trim()) {
+      textContextParts.push(
+        `Platform catalog (prefer these exact category and subcategory names when they fit; only invent new names if nothing matches):\n${input.existingCatalogPrompt.trim()}`
+      );
+    }
+    if (input.isFoodItem) {
+      textContextParts.push(
+        `Merchant indicated this is a cooked restaurant dish. Set isFoodItem true and use category "${FOOD_CATEGORY_NAME}" with subcategory "${FOOD_SUB_CATEGORY_NAME}".`
+      );
+    }
     const textContext = textContextParts.join('\n');
-    const emptyResult = (): ImageItemSuggestionResult => ({
-      name: input.hint?.trim() || input.caption || input.altText || undefined,
-      categoryName: undefined,
-      subCategoryName: undefined,
-      brandName: undefined,
-      description: undefined,
-      price: null,
-      currency: defaultCurrency,
-      barcodeValues: null,
-      weight: null,
-      weightUnit: null,
-      dimensions: null,
-      isSizeRequired: false,
-      isUsed: null,
-      confidence: this.defaultConfidence(!!input.hint?.trim()),
-      categoryAlternates: [],
-      subCategoryAlternates: [],
-    });
+    const emptyResult = (): ImageItemSuggestionResult => {
+      const base: ImageItemSuggestionResult = {
+        name: input.hint?.trim() || input.caption || input.altText || undefined,
+        categoryName: undefined,
+        subCategoryName: undefined,
+        brandName: undefined,
+        description: undefined,
+        price: null,
+        currency: defaultCurrency,
+        barcodeValues: null,
+        weight: null,
+        weightUnit: null,
+        dimensions: null,
+        isSizeRequired: false,
+        isUsed: null,
+        isFoodItem: input.isFoodItem ? true : null,
+        confidence: this.defaultConfidence(!!input.hint?.trim()),
+        categoryAlternates: [],
+        subCategoryAlternates: [],
+      };
+      return isCookedFoodSuggestion(base, input.isFoodItem)
+        ? applyCookedFoodCategories(base)
+        : base;
+    };
 
     if (!urls.length) {
       return emptyResult();
@@ -614,33 +656,36 @@ export class AiService {
       );
       const barcode = suggestion.barcodeValues?.find((v) => !!v)?.trim();
       if (!barcode) {
-        return suggestion;
+        return this.finalizeImageItemSuggestion(suggestion, input.isFoodItem);
       }
 
       const lookup = await this.lookupProductByBarcode(barcode);
       if (!lookup) {
-        return suggestion;
+        return this.finalizeImageItemSuggestion(suggestion, input.isFoodItem);
       }
 
-      return {
-        ...suggestion,
-        name:
-          this.sanitizeSuggestedProductName(lookup.name) || suggestion.name,
-        brandName: lookup.brandName || suggestion.brandName,
-        categoryName: lookup.categoryName || suggestion.categoryName,
-        subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
-        weight: lookup.weight ?? suggestion.weight,
-        weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
-        dimensions: lookup.dimensions ?? suggestion.dimensions,
-        confidence: {
-          ...suggestion.confidence!,
-          name: 'high',
-          brandName: lookup.brandName ? 'high' : suggestion.confidence!.brandName,
-          categoryName: lookup.categoryName
-            ? 'high'
-            : suggestion.confidence!.categoryName,
+      return this.finalizeImageItemSuggestion(
+        {
+          ...suggestion,
+          name:
+            this.sanitizeSuggestedProductName(lookup.name) || suggestion.name,
+          brandName: lookup.brandName || suggestion.brandName,
+          categoryName: lookup.categoryName || suggestion.categoryName,
+          subCategoryName: lookup.subCategoryName || suggestion.subCategoryName,
+          weight: lookup.weight ?? suggestion.weight,
+          weightUnit: lookup.weightUnit ?? suggestion.weightUnit,
+          dimensions: lookup.dimensions ?? suggestion.dimensions,
+          confidence: {
+            ...suggestion.confidence!,
+            name: 'high',
+            brandName: lookup.brandName ? 'high' : suggestion.confidence!.brandName,
+            categoryName: lookup.categoryName
+              ? 'high'
+              : suggestion.confidence!.categoryName,
+          },
         },
-      };
+        input.isFoodItem
+      );
     } catch (error: unknown) {
       return this.logAndDegrade(
         error,
@@ -766,10 +811,46 @@ export class AiService {
         typeof parsed.dimensions === 'string' ? parsed.dimensions : null,
       isSizeRequired: this.parseOptionalBoolean(parsed.isSizeRequired) ?? false,
       isUsed: typeof parsed.isUsed === 'boolean' ? parsed.isUsed : null,
+      isFoodItem: this.parseOptionalBoolean(parsed.isFoodItem),
       confidence: { ...defaults, ...confidence },
       categoryAlternates,
       subCategoryAlternates,
     };
+  }
+
+  async generateVariantSuggestions(input: {
+    parentSnapshot: Record<string, unknown>;
+    imageUrls: string[];
+    preferredLanguage?: string | null;
+  }): Promise<VariantSuggestionResult> {
+    const languageLabel =
+      this.resolvePreferredLanguage(input.preferredLanguage) === 'fr'
+        ? 'French'
+        : 'English';
+    const userText = this.buildVariantSuggestionPrompt(
+      input.parentSnapshot,
+      languageLabel
+    );
+    const resolvedImages = await this.resolveVisionImageUrls(input.imageUrls);
+    const userContent =
+      resolvedImages.length > 0
+        ? this.buildVisionUserContentParts(userText, resolvedImages)
+        : userText;
+    const request: ChatCompletionRequest = {
+      model: this.bedrockLunaService.getDefaultChatModel(),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You suggest fields for a new product variant (color/size option) of an existing catalog item. Use parent catalog data as ground truth; read distinguishing traits from the VARIANT photos provided.',
+        },
+        { role: 'user', content: userContent },
+      ],
+      max_tokens: 500,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+    };
+    return this.runVariantSuggestionCompletion(request);
   }
 
   async generateItemRefinementSuggestions(input: {
@@ -806,6 +887,104 @@ export class AiService {
       response_format: { type: 'json_object' },
     };
     return this.runItemRefinementCompletion(request);
+  }
+
+  private buildVariantSuggestionPrompt(
+    parent: Record<string, unknown>,
+    languageLabel: string
+  ): string {
+    const json = JSON.stringify(parent, null, 2);
+    return `
+You are suggesting fields for a NEW variant (color/size option) of an existing product. Parent item catalog data (JSON) — use as ground truth for shared attributes:
+${json}
+
+You are also given one or more photos of THIS NEW VARIANT (not the parent listing). Use OCR and visual cues from these variant photos to identify the distinguishing trait (color, size, volume, packaging, etc.).
+
+Rules:
+- This is a variant of the SAME product — not a new listing.
+- "name" MUST follow "{parent name} — {distinguishing trait}" using the parent name from the JSON.
+- Write "name" and "color" in ${languageLabel}.
+- Inherit price and currency from locked_price and locked_currency in the JSON — do NOT invent new values.
+- Inherit weight, weight_unit, and dimensions from the parent unless the variant photo clearly shows a different size/volume.
+- Suggest a unique "sku" that does not collide with existing_variant_skus in the JSON.
+- weightUnit MUST be one of: "g", "kg", "lb", "oz" (lowercase).
+- "color" should be the visible color or primary distinguishing visual trait from the variant photos.
+- Only output fields you can justify from the parent data or variant images; use null for unknowns.
+
+Return ONLY a single JSON object with this exact shape (null allowed):
+{
+  "name": string | null,
+  "color": string | null,
+  "sku": string | null,
+  "price": number | null,
+  "currency": string | null,
+  "weight": number | null,
+  "weightUnit": "g" | "kg" | "lb" | "oz" | null,
+  "dimensions": string | null
+}
+
+Do not include any text outside the JSON.`;
+  }
+
+  private async runVariantSuggestionCompletion(
+    request: ChatCompletionRequest
+  ): Promise<VariantSuggestionResult> {
+    try {
+      const response = await this.bedrockLunaService.chatCompletions(
+        request,
+        90000,
+        { reasoningEffort: 'none', jsonObject: true }
+      );
+      const rawContent = response.choices?.[0]?.message?.content;
+      const contentString = this.messageContentToString(rawContent);
+      const jsonString = this.coerceJsonObjectString(contentString);
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(jsonString) as Record<string, unknown>;
+      } catch (parseError: unknown) {
+        this.logger.error(
+          'Failed to parse JSON from variant suggestions',
+          parseError
+        );
+        parsed = {};
+      }
+      return this.mapParsedVariantSuggestion(parsed);
+    } catch (error: unknown) {
+      return this.logAndDegrade(
+        error,
+        'Failed to generate variant suggestions',
+        {}
+      );
+    }
+  }
+
+  private mapParsedVariantSuggestion(
+    parsed: Record<string, unknown>
+  ): VariantSuggestionResult {
+    const num = (v: unknown): number | null => {
+      if (typeof v === 'number' && !Number.isNaN(v)) return v;
+      if (v != null && v !== '') {
+        const n = Number(v);
+        return Number.isNaN(n) ? null : n;
+      }
+      return null;
+    };
+    return {
+      name: this.sanitizeSuggestedProductName(
+        typeof parsed.name === 'string' ? parsed.name : undefined
+      ),
+      color: typeof parsed.color === 'string' ? parsed.color : undefined,
+      sku: typeof parsed.sku === 'string' ? parsed.sku : undefined,
+      price: num(parsed.price),
+      currency: typeof parsed.currency === 'string' ? parsed.currency : undefined,
+      weight: num(parsed.weight),
+      weightUnit:
+        typeof parsed.weightUnit === 'string'
+          ? normalizeWeightUnit(parsed.weightUnit) ?? undefined
+          : undefined,
+      dimensions:
+        typeof parsed.dimensions === 'string' ? parsed.dimensions : undefined,
+    };
   }
 
   private buildItemRefinementPrompt(
@@ -891,6 +1070,15 @@ Do not include any text outside the JSON.`;
     }
   }
 
+  private finalizeImageItemSuggestion(
+    suggestion: ImageItemSuggestionResult,
+    merchantFoodFlag?: boolean | null
+  ): ImageItemSuggestionResult {
+    return isCookedFoodSuggestion(suggestion, merchantFoodFlag)
+      ? applyCookedFoodCategories(suggestion)
+      : suggestion;
+  }
+
   private buildImageItemVisionSystemPrompt(): string {
     return (
       'You are an AI assistant that reads product photos (OCR, labels, price tags, barcodes) ' +
@@ -923,6 +1111,7 @@ Then extract from the images:
 - Product name (only if clearly readable on packaging/labels; otherwise null — never invent a name)
 - Category name
 - Subcategory name
+- Prefer an exact category/subcategory pair from the platform catalog in the text context when one fits. Only invent new category or subcategory names when nothing in the catalog applies.
 - Brand name
 - A short 2–3 sentence e-commerce description in ${languageLabel}
 - The product price as a number (no currency symbol)
@@ -933,6 +1122,8 @@ Then extract from the images:
 - Shopper-facing size in "dimensions" when a buyer needs it to purchase: clothing/shoe size (e.g. "M", "42"), volume for perfume/lotion/cream/cosmetics (e.g. "50ml", "1.5L"), or L×W×H (e.g. "20x10x5 cm"). Infer from labels, packaging, or the photo. Prefer shopper-facing size over shipping-box measurements when both exist. Use null if unknown.
 - isSizeRequired: true when size matters for the purchase decision (clothing, shoes, apparel, perfume, lotion, cream, cosmetics, and similar) — even if dimensions was inferred, so the merchant can confirm. false when size is not purchase-relevant (e.g. a phone charger). null only if truly uncertain.
 - Whether the item appears used / pre-owned (not new): set isUsed true only when photos or text clearly show wear, scratches, open packaging, or "used"/"second-hand"/"refurbished"/"open-box" labels. Set false only when clearly new/sealed. If uncertain, set isUsed to null (do not guess).
+- isFoodItem: true when the product is a cooked/prepared restaurant dish meant to be eaten soon (plated meal, soup, stew, rice dish, grilled meat, takeaway hot food, local cuisine). false for packaged groceries, beverages, raw ingredients, retail goods, or sealed supermarket products. null only if truly uncertain.
+- When isFoodItem is true, set categoryName to "${FOOD_CATEGORY_NAME}" and subCategoryName to "${FOOD_SUB_CATEGORY_NAME}" exactly.
 - Up to 3 alternate category names and subcategory names.
 - Per-field confidence: "high" | "medium" | "low".
 
@@ -959,6 +1150,7 @@ Return ONLY a single JSON object with this exact shape:
   "dimensions": string | null,
   "isSizeRequired": boolean | null,
   "isUsed": boolean | null,
+  "isFoodItem": boolean | null,
   "categoryAlternates": string[] | null,
   "subCategoryAlternates": string[] | null,
   "confidence": {

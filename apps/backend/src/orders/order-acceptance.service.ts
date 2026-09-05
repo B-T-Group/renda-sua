@@ -22,6 +22,8 @@ import {
   timezoneFromAddressCountryCode,
 } from '../users/user-timezone.util';
 import { OrderSystemJobsService } from './order-system-jobs.service';
+import { OrderRiskMonitorService } from './order-risk-monitor.service';
+import { OrderEventsService } from './order-events.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import {
   ACTIVATION_LEAD_MINUTES_ALLOWED,
@@ -38,7 +40,13 @@ import {
   remainingWaitSeconds,
   type BusySlaPatch,
 } from './order-acceptance-busy.util';
+import {
+  firstReminderWaitSeconds,
+  planAcceptanceReminder,
+} from './order-acceptance-reminder.util';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { FoodOrdersService } from '../food/food-orders.service';
+import { capAcceptanceTimeoutForFood } from '../food/food-acceptance-timeout.util';
 
 interface SlaOrder {
   id: string;
@@ -51,6 +59,8 @@ interface SlaOrder {
   business_location_id?: string | null;
   estimated_prep_minutes?: number | null;
   acceptance_activates_at?: string | null;
+  busy_extra_prep_minutes?: number | null;
+  updated_at?: string | null;
   client?: {
     user_id?: string;
     user?: {
@@ -92,7 +102,10 @@ export class OrderAcceptanceService {
     private readonly notifications: NotificationsService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
-    private readonly fulfillmentPromiseService: FulfillmentPromiseService
+    private readonly fulfillmentPromiseService: FulfillmentPromiseService,
+    private readonly riskMonitor: OrderRiskMonitorService,
+    private readonly foodOrdersService: FoodOrdersService,
+    private readonly orderEvents: OrderEventsService
   ) {}
 
   private orderConfig(): Configuration['order'] {
@@ -157,9 +170,26 @@ export class OrderAcceptanceService {
       return { success: true, skipped: true };
     }
     const graceSec = this.orderConfig().acceptanceGraceSeconds;
-    const graceDeadline = new Date(Date.now() + graceSec * 1000).toISOString();
+    await this.persistGraceWindow(orderId, graceSec);
 
-    // no_response → grace in one step: escalate + start grace window.
+    await this.notifyEscalation(order);
+    // Grace is the last window before auto-decline refunds the client, so ops is
+    // pulled in now instead of after the order has already been cancelled.
+    await this.riskMonitor.evaluateOrderById(orderId);
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_grace_deadline',
+      { order_id: orderId },
+      graceSec
+    );
+    return { success: true };
+  }
+
+  /** no_response → grace in one step: escalate + start the grace window. */
+  private async persistGraceWindow(
+    orderId: string,
+    graceSec: number
+  ): Promise<void> {
+    const graceDeadline = new Date(Date.now() + graceSec * 1000).toISOString();
     await this.hasura.executeMutation(
       `mutation EscalateAcceptance($id: uuid!, $grace: timestamptz!) {
         update_orders_by_pk(
@@ -173,14 +203,6 @@ export class OrderAcceptanceService {
       }`,
       { id: orderId, grace: graceDeadline }
     );
-
-    await this.notifyEscalation(order);
-    await this.waitAndExecute.scheduleAcceptanceTimeout(
-      'order.acceptance_grace_deadline',
-      { order_id: orderId },
-      graceSec
-    );
-    return { success: true };
   }
 
   async onGraceDeadline(orderId: string): Promise<{ success: boolean; skipped?: boolean }> {
@@ -255,13 +277,28 @@ export class OrderAcceptanceService {
     }
   }
 
-  async markBusy(orderId: string, businessUserId: string): Promise<{
+  /**
+   * @param auth.userId owner or delegate user id
+   * @param auth.asDelegateLocationId when set, user must manage that location
+   * @param auth.locationAlertAuthorized till-phone path already verified
+   */
+  async markBusy(
+    orderId: string,
+    auth:
+      | string
+      | {
+          userId: string;
+          asDelegateLocationId?: string;
+          locationAlertAuthorized?: boolean;
+        }
+  ): Promise<{
     success: boolean;
     order: PendingAcceptanceOrder;
     message: string;
     snoozeUntil: string;
   }> {
-    const order = await this.loadBusyOrder(orderId, businessUserId);
+    const authObj = typeof auth === 'string' ? { userId: auth } : auth;
+    const order = await this.loadBusyOrder(orderId, authObj);
     const cfg = this.orderConfig();
     const previousExtra = order.busy_extra_prep_minutes || 0;
     const nextExtra = this.nextBusyExtraMinutes(previousExtra, cfg);
@@ -292,11 +329,15 @@ export class OrderAcceptanceService {
 
   private async loadBusyOrder(
     orderId: string,
-    businessUserId: string
+    auth: {
+      userId: string;
+      asDelegateLocationId?: string;
+      locationAlertAuthorized?: boolean;
+    }
   ): Promise<PendingAcceptanceOrder> {
     const order = await this.fetchPendingAcceptanceDetail(orderId);
     if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    await this.assertBusinessOwnsOrder(order.business_id, businessUserId);
+    await this.assertCanMarkBusy(order, auth);
     this.assertConfirmableAcceptance(order);
     if (order.acceptance_state === 'scheduled') {
       throw new HttpException(
@@ -305,6 +346,73 @@ export class OrderAcceptanceService {
       );
     }
     return order;
+  }
+
+  private async assertCanMarkBusy(
+    order: PendingAcceptanceOrder & { business_location_id?: string | null },
+    auth: {
+      userId: string;
+      asDelegateLocationId?: string;
+      locationAlertAuthorized?: boolean;
+    }
+  ): Promise<void> {
+    if (auth.locationAlertAuthorized) {
+      if (
+        auth.asDelegateLocationId &&
+        order.business_location_id &&
+        auth.asDelegateLocationId !== order.business_location_id
+      ) {
+        throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+      }
+      return;
+    }
+    if (auth.asDelegateLocationId) {
+      await this.assertDelegateCanManageLocation(
+        auth.userId,
+        auth.asDelegateLocationId,
+        order
+      );
+      return;
+    }
+    await this.assertBusinessOwnsOrder(order.business_id, auth.userId);
+  }
+
+  private async assertDelegateCanManageLocation(
+    userId: string,
+    locationId: string,
+    order: PendingAcceptanceOrder & { business_location_id?: string | null }
+  ): Promise<void> {
+    if (order.business_location_id && order.business_location_id !== locationId) {
+      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+    }
+    const res = await this.hasura.executeQuery<{
+      location_delegations: Array<{
+        role?: {
+          role_permissions?: Array<{ permission?: { key?: string } | null }>;
+        } | null;
+      }>;
+    }>(
+      `query BusyDelegate($uid: uuid!, $lid: uuid!) {
+        location_delegations(
+          where: {
+            user_id: { _eq: $uid }
+            business_location_id: { _eq: $lid }
+            status: { _eq: "active" }
+          }
+          limit: 1
+        ) {
+          role { role_permissions { permission { key } } }
+        }
+      }`,
+      { uid: userId, lid: locationId }
+    );
+    const row = res.location_delegations?.[0];
+    const canManage = (row?.role?.role_permissions ?? []).some(
+      (rp) => rp.permission?.key === 'delegation.orders.manage'
+    );
+    if (!canManage) {
+      throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+    }
   }
 
   private async persistMarkBusy(
@@ -386,37 +494,84 @@ export class OrderAcceptanceService {
   async getPendingAcceptanceForBusiness(
     businessId: string
   ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
+    return this.queryPendingAcceptance({ businessId });
+  }
+
+  async getPendingAcceptanceForLocation(
+    businessId: string,
+    locationId: string
+  ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
+    return this.queryPendingAcceptance({ businessId, locationId });
+  }
+
+  private async queryPendingAcceptance(params: {
+    businessId: string;
+    locationId?: string;
+  }): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
     const snoozeCutoff = busySnoozeCutoffIso(
       this.orderConfig().busyInterruptSnoozeMinutes ||
         DEFAULT_BUSY_INTERRUPT_SNOOZE_MINUTES
     );
     const res = await this.hasura.executeQuery(
-      `query PendingAcceptance($bid: uuid!, $snoozeCutoff: timestamptz!) {
-        orders(
-          where: {
-            business_id: { _eq: $bid }
-            current_status: { _eq: pending }
-            acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
-            _not: {
-              _and: [
-                { busy_extra_prep_minutes: { _gt: 0 } }
-                { updated_at: { _gte: $snoozeCutoff } }
-              ]
+      params.locationId
+        ? `query PendingAcceptanceLoc($bid: uuid!, $lid: uuid!, $snoozeCutoff: timestamptz!) {
+            orders(
+              where: {
+                business_id: { _eq: $bid }
+                business_location_id: { _eq: $lid }
+                current_status: { _eq: pending }
+                acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
+                _not: {
+                  _and: [
+                    { busy_extra_prep_minutes: { _gt: 0 } }
+                    { updated_at: { _gte: $snoozeCutoff } }
+                  ]
+                }
+              }
+              order_by: { created_at: asc }
+              limit: 1
+            ) {
+              id order_number current_status acceptance_state
+              acceptance_deadline_at grace_deadline_at
+              busy_extra_prep_minutes estimated_prep_minutes
+              created_at total_amount currency fulfillment_method
+              fulfillment_timing promised_ready_at promised_fulfill_by business_id
+              client { user { first_name last_name } }
+              order_items { item_name quantity }
             }
+          }`
+        : `query PendingAcceptance($bid: uuid!, $snoozeCutoff: timestamptz!) {
+            orders(
+              where: {
+                business_id: { _eq: $bid }
+                current_status: { _eq: pending }
+                acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
+                _not: {
+                  _and: [
+                    { busy_extra_prep_minutes: { _gt: 0 } }
+                    { updated_at: { _gte: $snoozeCutoff } }
+                  ]
+                }
+              }
+              order_by: { created_at: asc }
+              limit: 1
+            ) {
+              id order_number current_status acceptance_state
+              acceptance_deadline_at grace_deadline_at
+              busy_extra_prep_minutes estimated_prep_minutes
+              created_at total_amount currency fulfillment_method
+              fulfillment_timing promised_ready_at promised_fulfill_by business_id
+              client { user { first_name last_name } }
+              order_items { item_name quantity }
+            }
+          }`,
+      params.locationId
+        ? {
+            bid: params.businessId,
+            lid: params.locationId,
+            snoozeCutoff,
           }
-          order_by: { created_at: asc }
-          limit: 1
-        ) {
-          id order_number current_status acceptance_state
-          acceptance_deadline_at grace_deadline_at
-          busy_extra_prep_minutes estimated_prep_minutes
-          created_at total_amount currency fulfillment_method
-          fulfillment_timing promised_ready_at promised_fulfill_by business_id
-          client { user { first_name last_name } }
-          order_items { item_name quantity }
-        }
-      }`,
-      { bid: businessId, snoozeCutoff }
+        : { bid: params.businessId, snoozeCutoff }
     );
     const order = res.orders?.[0] ?? null;
     return { active: !!order, order };
@@ -1020,9 +1175,16 @@ export class OrderAcceptanceService {
   private async beginActiveAcceptanceSla(
     order: SlaOrder,
     prep: number,
-    timeoutSec: number,
+    requestedTimeoutSec: number,
     fromScheduled = false
   ): Promise<void> {
+    const containsCookedFood = await this.foodOrdersService.containsCookedFood(
+      order.id
+    );
+    const timeoutSec = capAcceptanceTimeoutForFood({
+      timeoutSeconds: requestedTimeoutSec,
+      containsCookedFood,
+    });
     const deadline = new Date(Date.now() + timeoutSec * 1000).toISOString();
     await this.hasura.executeMutation(
       `mutation BeginActiveSla(
@@ -1048,12 +1210,117 @@ export class OrderAcceptanceService {
       { order_id: order.id },
       timeoutSec
     );
+    await this.scheduleFirstAcceptanceReminder(
+      order.id,
+      timeoutSec,
+      containsCookedFood
+    );
     if (fromScheduled) {
       await this.notifyAcceptanceActivate(order, timeoutSec);
     }
     this.logger.log(
       `Started acceptance SLA for ${order.order_number} (${timeoutSec}s)`
     );
+  }
+
+  private async scheduleFirstAcceptanceReminder(
+    orderId: string,
+    timeoutSec: number,
+    containsCookedFood = false
+  ): Promise<void> {
+    const waitSeconds = firstReminderWaitSeconds(timeoutSec, containsCookedFood);
+    if (waitSeconds == null) return;
+    await this.waitAndExecute.scheduleAcceptanceTimeout(
+      'order.acceptance_reminder',
+      { order_id: orderId },
+      waitSeconds
+    );
+  }
+
+  async onAcceptanceReminder(
+    orderId: string
+  ): Promise<{ success: boolean; skipped?: boolean; reason?: string }> {
+    const order = await this.fetchOrderForSla(orderId);
+    if (!order) return { success: true, skipped: true, reason: 'not_found' };
+    const lastReminderAt = await this.lastAcceptanceReminderAt(orderId);
+    const cfg = this.orderConfig();
+    const containsCookedFood = await this.foodOrdersService.containsCookedFood(
+      orderId
+    );
+    const plan = planAcceptanceReminder({
+      currentStatus: order.current_status,
+      acceptanceState: order.acceptance_state,
+      acceptanceDeadlineAt: order.acceptance_deadline_at,
+      busyExtraPrepMinutes: order.busy_extra_prep_minutes || 0,
+      updatedAt: order.updated_at,
+      snoozeMinutes:
+        cfg.busyInterruptSnoozeMinutes || DEFAULT_BUSY_INTERRUPT_SNOOZE_MINUTES,
+      lastReminderAt,
+      containsCookedFood,
+    });
+    if (plan.action === 'skip') {
+      return { success: true, skipped: true, reason: plan.reason };
+    }
+    if (plan.action === 'reschedule') {
+      await this.waitAndExecute.scheduleAcceptanceTimeout(
+        'order.acceptance_reminder',
+        { order_id: orderId },
+        plan.waitSeconds
+      );
+      return { success: true, skipped: true, reason: plan.reason };
+    }
+    await this.notifyAcceptanceReminder(order, plan.remainingSeconds);
+    await this.orderEvents.recordEvent({
+      orderId,
+      eventType: 'acceptance_reminder_sent',
+      actorType: 'system',
+      payload: { remainingSeconds: plan.remainingSeconds },
+    });
+    if (plan.nextWaitSeconds != null) {
+      await this.waitAndExecute.scheduleAcceptanceTimeout(
+        'order.acceptance_reminder',
+        { order_id: orderId },
+        plan.nextWaitSeconds
+      );
+    }
+    return { success: true };
+  }
+
+  private async lastAcceptanceReminderAt(
+    orderId: string
+  ): Promise<string | null> {
+    const res = await this.hasura.executeQuery(
+      `query LastAcceptanceReminder($orderId: uuid!) {
+        order_events(
+          where: {
+            order_id: { _eq: $orderId }
+            event_type: { _eq: "acceptance_reminder_sent" }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { created_at }
+      }`,
+      { orderId }
+    );
+    return res.order_events?.[0]?.created_at ?? null;
+  }
+
+  private async notifyAcceptanceReminder(
+    order: SlaOrder,
+    remainingSeconds: number
+  ): Promise<void> {
+    try {
+      await this.notifications.sendOrderAcceptanceReminderPush({
+        businessUserId: order.business?.user_id,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        preferredLanguage: order.business?.user?.preferred_language,
+        remainingSeconds,
+        businessLocationId: order.business_location_id,
+      });
+    } catch (error: any) {
+      this.logger.error(`Acceptance reminder notify failed: ${error?.message}`);
+    }
   }
 
   private async beginScheduledAcceptance(
@@ -1174,6 +1441,7 @@ export class OrderAcceptanceService {
           id order_number current_status acceptance_state business_id
           business_location_id acceptance_deadline_at grace_deadline_at
           estimated_prep_minutes acceptance_activates_at
+          busy_extra_prep_minutes updated_at
           client {
             user_id
             user {
@@ -1205,7 +1473,9 @@ export class OrderAcceptanceService {
 
   private async fetchPendingAcceptanceDetail(
     orderId: string
-  ): Promise<PendingAcceptanceOrder | null> {
+  ): Promise<
+    (PendingAcceptanceOrder & { business_location_id?: string | null }) | null
+  > {
     const res = await this.hasura.executeQuery(
       `query OrderAcceptDetail($id: uuid!) {
         orders_by_pk(id: $id) {
@@ -1213,7 +1483,8 @@ export class OrderAcceptanceService {
           acceptance_deadline_at grace_deadline_at
           busy_extra_prep_minutes estimated_prep_minutes
           created_at total_amount currency fulfillment_method
-          fulfillment_timing promised_ready_at promised_fulfill_by business_id
+          fulfillment_timing promised_ready_at promised_fulfill_by
+          business_id business_location_id
           client { user { first_name last_name } }
           order_items { item_name quantity }
         }
@@ -1249,7 +1520,7 @@ export class OrderAcceptanceService {
     } | null;
   }): Promise<void> {
     try {
-      await this.notifications.sendOrderAcceptanceEscalationPush({
+      await this.notifications.sendOrderAcceptanceEscalation({
         businessUserId: order.business?.user_id,
         orderId: order.id,
         orderNumber: order.order_number,

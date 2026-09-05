@@ -7,7 +7,6 @@ import {
   CircularProgress,
   Container,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
@@ -19,6 +18,8 @@ import {
   useBusinessTokens,
 } from '../../hooks/useBusinessTokens';
 import SEOHead from '../seo/SEOHead';
+import PhoneInput from '../common/PhoneInput';
+import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 
 const BusinessAiTokensPage: React.FC = () => {
   const { t } = useTranslation();
@@ -128,13 +129,16 @@ const BusinessAiTokensPage: React.FC = () => {
       )}
 
       {packCurrency === 'XAF' && (
-        <TextField
-          fullWidth
-          label={t('business.tokens.phoneNumber', 'Mobile money phone number')}
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-          sx={{ mb: 3 }}
-        />
+        <Box sx={{ mb: 3 }}>
+          <PhoneInput
+            value={phoneNumber}
+            onChange={(value) => setPhoneNumber(value || '')}
+            label={t('business.tokens.phoneNumber', 'Mobile money phone number')}
+            defaultCountry={pickMobileMoneyDefaultCountry(profile?.country)}
+            onlyCountries={['CM', 'GA']}
+            fullWidth
+          />
+        </Box>
       )}
 
       {!packCurrency && (

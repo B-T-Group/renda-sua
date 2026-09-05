@@ -527,6 +527,7 @@ export default function ItemViewPage() {
             onOpenLightbox={openImageLightbox}
             onManageCollections={() => setShowCollectionsDialog(true)}
             onRefineWithAi={() => setShowRefineAiDialog(true)}
+            onCategorySaved={() => void fetchItemDetails({ silent: true })}
           />
           {itemId ? (
             <VariantsManagerSection

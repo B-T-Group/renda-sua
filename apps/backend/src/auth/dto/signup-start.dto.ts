@@ -205,4 +205,13 @@ export class SignupStartDto {
   @IsOptional()
   @IsString()
   eventSourceUrl?: string;
+
+  @ApiPropertyOptional({
+    enum: ['email', 'sms'],
+    description:
+      'Preferred OTP channel. Server validates contact exists for the channel.',
+  })
+  @IsOptional()
+  @IsIn(['email', 'sms'] as const)
+  verification_channel?: 'email' | 'sms';
 }

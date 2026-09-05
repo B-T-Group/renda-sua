@@ -55,6 +55,7 @@ describe('OrderCleanupService', () => {
         cleanupEnabled: true,
         cleanupGraceHours: 24,
         cleanupBatchLimit: 100,
+        storePickupCancelDays: 7,
       }),
     };
 
@@ -316,6 +317,296 @@ describe('OrderCleanupService', () => {
       expect(n).toBe(0);
       expect(orderQueue.sendOrderCancelledMessage).not.toHaveBeenCalled();
     });
+
+    it('does not cancel a late-prepped ASAP order from a stale placement promise', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders: [
+          {
+            id: 'o1',
+            order_number: 'R1',
+            current_status: 'ready_for_pickup',
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+            promised_fulfill_by: '2026-08-01T19:30:00.000Z',
+            pickup_by: '2026-08-02T20:00:00.000Z',
+            delivery_address: { country: 'CA' },
+            client: { user: { timezone: 'UTC' } },
+            business: { user_id: 'b1' },
+            order_items: [],
+            failed_delivery: [],
+          },
+        ],
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
+      const n = await service.cancelMissedPickupOrders(24, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(0);
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('skips store-pickup orders even when window + grace would apply', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders: [
+          {
+            id: 'o1',
+            order_number: 'P1',
+            current_status: 'ready_for_pickup',
+            fulfillment_method: 'pickup',
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+            pickup_by: '2026-08-01T12:00:00.000Z',
+            delivery_address: { country: 'CA' },
+            client: { user: { timezone: 'UTC' } },
+            business: { user_id: 'b1' },
+            order_items: [],
+            failed_delivery: [],
+          },
+        ],
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-03T13:00:00.000Z'));
+      const n = await service.cancelMissedPickupOrders(24, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(0);
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+      const query = String(hasura.executeQuery.mock.calls[0][0]);
+      expect(query).toMatch(/fulfillment_method:\s*\{\s*_neq:\s*pickup\s*\}/);
+    });
+  });
+
+  describe('cancelStaleStorePickupOrders', () => {
+    it('cancels store pickup after 7 days in ready_for_pickup', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'P1',
+              current_status: 'ready_for_pickup',
+              fulfillment_method: 'pickup',
+              payment_status: 'authorized',
+              payment_source: 'credit_card',
+              updated_at: '2026-08-01T12:00:00.000Z',
+              client: { user_id: 'c1', user: { timezone: 'UTC' } },
+              business: { user_id: 'b1' },
+              order_items: [],
+              order_status_history: [
+                {
+                  status: 'ready_for_pickup',
+                  created_at: '2026-08-01T12:00:00.000Z',
+                },
+              ],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-09T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(1);
+      const cancel = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('CleanupClaimCancel')
+      );
+      expect(cancel[1].reasonId).toBe(CANCEL_REASON_NOT_PICKED_UP_IN_TIME);
+      expect(orderQueue.sendOrderStatusUpdatedMessage).toHaveBeenCalledWith(
+        'o1',
+        'ready_for_pickup',
+        'cancelled',
+        null
+      );
+    });
+
+    it('releases reserved inventory atomically instead of writing reserved_quantity', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'P1',
+              current_status: 'ready_for_pickup',
+              fulfillment_method: 'pickup',
+              payment_status: 'authorized',
+              payment_source: 'credit_card',
+              updated_at: '2026-08-01T12:00:00.000Z',
+              client: { user_id: 'c1', user: { timezone: 'UTC' } },
+              business: { user_id: 'b1' },
+              order_items: [
+                { id: 'oi1', business_inventory_id: 'inv-1', quantity: 2 },
+              ],
+              order_status_history: [
+                {
+                  status: 'ready_for_pickup',
+                  created_at: '2026-08-01T12:00:00.000Z',
+                },
+              ],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        if (String(mutation).includes('try_release_business_inventory')) {
+          return Promise.resolve({
+            try_release_business_inventory: [{ id: 'inv-1' }],
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-09T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(1);
+      const release = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('try_release_business_inventory')
+      );
+      expect(release?.[1]).toEqual({ inventoryId: 'inv-1', qty: 2 });
+      expect(
+        hasura.executeQuery.mock.calls.some((c) =>
+          String(c[0]).includes('reserved_quantity')
+        )
+      ).toBe(false);
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('reserved_quantity:')
+        )
+      ).toBe(false);
+    });
+
+    it('does not cancel store pickup before 7 days even if window+grace elapsed', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders: [
+          {
+            id: 'o1',
+            order_number: 'P1',
+            current_status: 'ready_for_pickup',
+            fulfillment_method: 'pickup',
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+            updated_at: '2026-08-02T12:00:00.000Z',
+            client: { user_id: 'c1', user: { timezone: 'UTC' } },
+            business: { user_id: 'b1' },
+            order_items: [],
+            order_status_history: [
+              {
+                status: 'ready_for_pickup',
+                created_at: '2026-08-02T12:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-04T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(0);
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('cancels using updated_at when ready history is missing', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'P1',
+              current_status: 'ready_for_pickup',
+              fulfillment_method: 'pickup',
+              payment_status: 'authorized',
+              payment_source: 'credit_card',
+              updated_at: '2026-08-01T12:00:00.000Z',
+              client: { user_id: 'c1', user: { timezone: 'UTC' } },
+              business: { user_id: 'b1' },
+              order_items: [],
+              order_status_history: [],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-09T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(1);
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('CleanupClaimCancel')
+        )
+      ).toBe(true);
+    });
+
+    it('does not cancel when ready time cannot be resolved', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders: [
+          {
+            id: 'o1',
+            order_number: 'P1',
+            current_status: 'ready_for_pickup',
+            fulfillment_method: 'pickup',
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+            updated_at: 'not-a-date',
+            client: { user_id: 'c1', user: { timezone: 'UTC' } },
+            business: { user_id: 'b1' },
+            order_items: [],
+            order_status_history: [{ status: 'ready_for_pickup' }],
+          },
+        ],
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-09T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(0);
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('queries only store-pickup ready_for_pickup rows', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({ orders: [] });
+      await service.cancelStaleStorePickupOrders(7, 100);
+      const query = String(hasura.executeQuery.mock.calls[0][0]);
+      expect(query).toMatch(/current_status:\s*\{\s*_eq:\s*ready_for_pickup\s*\}/);
+      expect(query).toMatch(/fulfillment_method:\s*\{\s*_eq:\s*pickup\s*\}/);
+    });
   });
 
   describe('failMissedDeliveryOrders', () => {
@@ -489,6 +780,334 @@ describe('OrderCleanupService', () => {
       const result = await service.runDailyCleanup();
       expect(spy).not.toHaveBeenCalled();
       expect(result.skipped).toBe(true);
+    });
+  });
+
+  describe('cancelUnpaidPendingPaymentAsSystem', () => {
+    it('cancels pending_payment orders', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending_payment',
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+            order_items: [],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({ cancelled: true });
+    });
+
+    it('skips when order is no longer pending_payment', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending',
+          payment_status: 'paid',
+          payment_source: 'wallet',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'status_pending',
+      });
+    });
+
+    it('cancels unpaid pending when allowPendingUnpaid is set', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending',
+            payment_status: 'pending',
+            payment_source: 'mobile_payment',
+            order_items: [
+              { id: 'oi1', business_inventory_id: 'inv-1', quantity: 2 },
+            ],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_payment',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Create failed: inventory reservation error',
+        { allowPendingUnpaid: true, releaseInventory: false }
+      );
+
+      expect(result).toEqual({ cancelled: true });
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('update_business_inventory_by_pk')
+        )
+      ).toBe(false);
+      const claim = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('CleanupClaimCancel')
+      );
+      expect(claim?.[1].expectedStatus).toBe('pending');
+    });
+
+    it('does not cancel pending unless allowPendingUnpaid is set', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending',
+          payment_status: 'pending',
+          payment_source: 'mobile_payment',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'status_pending',
+      });
+    });
+
+    it('skips payment_failed_grace until grace elapses', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending_payment',
+          payment_status: 'failed',
+          payment_failed_at: new Date().toISOString(),
+          payment_source: 'mobile_money',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'grace_not_elapsed',
+      });
+    });
+
+    it('skips when the order row is missing', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({ orders_by_pk: null });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'missing',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'not_found',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips already-paid pending_payment without claiming cancel', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending_payment',
+          payment_status: 'paid',
+          payment_source: 'wallet',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'already_paid',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips when CAS claim loses the payment-finalize race', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending_payment',
+          payment_status: 'pending',
+          payment_source: 'mobile_money',
+          order_items: [],
+        },
+      });
+      hasura.executeMutation.mockResolvedValueOnce({
+        update_orders: { affected_rows: 0 },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'claim_lost',
+      });
+      expect(stripeCapture.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('skips payment_failed_grace when payment is not failed', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'pending_payment',
+          payment_status: 'pending',
+          payment_failed_at: '2026-09-01T10:00:00.000Z',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'payment_not_failed',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips payment_failed_grace when payment_failed_at is missing', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'pending_payment',
+          payment_status: 'failed',
+          payment_failed_at: null,
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'missing_payment_failed_at',
+      });
+    });
+
+    it('skips payment_failed_grace when payment_failed_at is invalid', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'pending_payment',
+          payment_status: 'failed',
+          payment_failed_at: 'not-a-date',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'invalid_payment_failed_at',
+      });
+    });
+
+    it('cancels after payment_failed grace has elapsed', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-02T10:00:00.000Z'));
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending_payment',
+            payment_status: 'failed',
+            payment_failed_at: '2026-09-02T06:59:00.000Z',
+            payment_source: 'mobile_money',
+            order_items: [],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'failed',
+            payment_source: 'mobile_money',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Grace',
+        { reason: 'payment_failed_grace' }
+      );
+      jest.useRealTimers();
+
+      expect(result).toEqual({ cancelled: true });
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('CleanupClaimCancel')
+        )
+      ).toBe(true);
     });
   });
 });

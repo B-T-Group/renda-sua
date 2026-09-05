@@ -68,6 +68,35 @@ describe('AiService suggestion fallbacks', () => {
     expect(result.isSizeRequired).toBe(true);
   });
 
+  it('applies cooked-food taxonomy when vision detects a restaurant dish', async () => {
+    const { service, bedrockLunaService } = makeService();
+    bedrockLunaService.chatCompletions.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              name: 'Grilled chicken plate',
+              isFoodItem: true,
+              categoryName: 'Food & Beverages',
+              subCategoryName: 'Snacks',
+              price: 3500,
+              currency: 'XAF',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.generateImageItemSuggestions({
+      imageUrls: ['https://uploads.example/plate.jpg'],
+      defaultCurrency: 'XAF',
+    });
+
+    expect(result.isFoodItem).toBe(true);
+    expect(result.categoryName).toBe('Restaurant & Cooked Food');
+    expect(result.subCategoryName).toBe('Local Dishes');
+  });
+
   it('defaults isSizeRequired to false when Bedrock omits the flag', async () => {
     const { service, bedrockLunaService } = makeService();
     bedrockLunaService.chatCompletions.mockResolvedValue({
@@ -104,6 +133,52 @@ describe('AiService suggestion fallbacks', () => {
     });
 
     expect(result).toEqual({});
+  });
+
+  it('returns empty variant suggestions when Bedrock is unavailable', async () => {
+    const { service, bedrockLunaService } = makeService();
+    bedrockLunaService.chatCompletions.mockRejectedValue(unavailable);
+
+    const result = await service.generateVariantSuggestions({
+      parentSnapshot: { name: 'T-shirt', locked_price: 5000 },
+      imageUrls: ['https://uploads.example/item.jpg'],
+    });
+
+    expect(result).toEqual({});
+  });
+
+  it('parses variant suggestion fields from Bedrock JSON', async () => {
+    const { service, bedrockLunaService } = makeService();
+    bedrockLunaService.chatCompletions.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              name: 'T-shirt — Red',
+              color: 'Red',
+              sku: 'TSH-RED',
+              price: 5000,
+              currency: 'XAF',
+              weight: 200,
+              weightUnit: 'g',
+              dimensions: 'M',
+            }),
+          },
+        },
+      ],
+    });
+
+    const result = await service.generateVariantSuggestions({
+      parentSnapshot: { name: 'T-shirt', locked_price: 5000 },
+      imageUrls: ['https://uploads.example/shirt.jpg'],
+    });
+
+    expect(result.name).toBe('T-shirt — Red');
+    expect(result.color).toBe('Red');
+    expect(result.sku).toBe('TSH-RED');
+    expect(result.price).toBe(5000);
+    expect(result.weightUnit).toBe('g');
+    expect(result.dimensions).toBe('M');
   });
 
   it('returns rental fallback fields when Bedrock is unavailable', async () => {

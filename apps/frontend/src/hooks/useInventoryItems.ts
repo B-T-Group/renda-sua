@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageType } from '../types/image';
+import type { FoodAvailability } from '../types/food';
 import type {
   ItemVariant,
   VariantPriceOverride,
 } from '../types/itemVariant';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useApiClient } from './useApiClient';
-import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
-import { useSupportedCountries } from './useSupportedCountries';
+import {
+  catalogGeoQueryParams,
+  useCatalogGeoParams,
+} from './useCatalogGeoParams';
+import { FOOD_CATEGORY_NAME, isFoodCatalogItem } from '../constants/food';
 
 export interface InventoryItem {
   id: string;
@@ -42,10 +46,13 @@ export interface InventoryItem {
   rating_count?: number | null;
   /** Location-specific variant price overrides (shared stock). */
   variant_price_overrides?: VariantPriceOverride[];
+  /** Present only for items in the cooked-food category. */
+  food_availability?: FoodAvailability | null;
   item: {
     id: string;
     name: string;
     description: string;
+    interest_only?: boolean;
     price: number;
     currency: string;
     weight: number;
@@ -65,6 +72,8 @@ export interface InventoryItem {
     requires_special_handling: boolean;
     max_delivery_distance: number;
     estimated_delivery_time: number;
+    /** Typical minutes to cook the dish (cooked food only). */
+    preparation_minutes?: number | null;
     min_order_quantity: number;
     max_order_quantity: number;
     is_active: boolean;
@@ -160,6 +169,8 @@ export interface GetInventoryItemsQuery {
   owner_preview?: boolean;
   anonymousOrigin?: { lat: number; lng: number } | null;
   collection?: string;
+  /** Restrict the list to cooked food sold by restaurants (the Food tab). */
+  food_only?: boolean;
   /** When false, skip fetching (e.g. wait for store header). */
   enabled?: boolean;
 }
@@ -178,9 +189,17 @@ export interface ApiResponse {
   message: string;
 }
 
+function isLocationScopedCatalogQuery(query: GetInventoryItemsQuery): boolean {
+  return Boolean(
+    query.owner_preview ||
+      query.business_location_id?.trim() ||
+      query.business_id?.trim()
+  );
+}
+
 export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const { isAuthenticated } = useAuth0();
-  const { supportedIsos } = useSupportedCountries();
+  const catalogGeo = useCatalogGeoParams();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -195,6 +214,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const apiClient = useApiClient();
   const abortControllerRef = useRef<AbortController | null>(null);
   const listScopeRef = useRef<string>('');
+  const locationScoped = isLocationScopedCatalogQuery(query);
+  const marketReady = locationScoped || catalogGeo.ready;
 
   const listScopeKey = [
     query.search ?? '',
@@ -212,6 +233,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.owner_preview ?? '',
     query.collection ?? '',
     query.is_active ?? '',
+    query.food_only ?? '',
+    locationScoped ? '' : `${catalogGeo.country_code ?? ''}:${catalogGeo.state ?? ''}`,
   ].join('|');
 
   const fetchInventoryItems = useCallback(async () => {
@@ -221,6 +244,11 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       setLoading(false);
       setLoadingMore(false);
       setError(null);
+      return;
+    }
+
+    if (!marketReady) {
+      setLoading(true);
       return;
     }
 
@@ -245,24 +273,11 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     }
     setError(null);
 
-    // Logged-in: backend uses user address; do not pass country_code/state.
-    // Anonymous: pass country_code only if detected and supported.
-    let country_code: string | undefined;
-    let state: string | undefined;
-    if (isAuthenticated) {
-      country_code = undefined;
-      state = undefined;
-    } else {
-      const detected =
-        typeof window !== 'undefined'
-          ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-          : null;
-      const code = detected?.toUpperCase();
-      if (code && supportedIsos.includes(code)) {
-        country_code = code;
-      }
-      state = undefined;
-    }
+    const geoParams = locationScoped
+      ? {}
+      : catalogGeoQueryParams(catalogGeo);
+    const country_code = query.country_code ?? geoParams.country_code;
+    const state = query.state ?? geoParams.state;
 
     try {
       const response = await apiClient.get<ApiResponse>('/inventory-items', {
@@ -272,6 +287,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           is_active: query.is_active !== undefined ? query.is_active : true,
           ...(query.search && { search: query.search }),
           ...(query.category && { category: query.category }),
+          ...(query.food_only === true &&
+            !query.category && { category: FOOD_CATEGORY_NAME }),
           ...(query.subcategory && { subcategory: query.subcategory }),
           ...(query.business_name && { business_name: query.business_name }),
           ...(query.brand && { brand: query.brand }),
@@ -294,6 +311,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           ...(query.collection?.trim() && {
             collection: query.collection.trim(),
           }),
+          ...(query.food_only === true && { food_only: true }),
           ...(!isAuthenticated &&
             query.anonymousOrigin && {
               origin_lat: query.anonymousOrigin.lat,
@@ -306,7 +324,13 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
       if (controller.signal.aborted) return;
 
       if (response.data.success) {
-        const nextItems = response.data.data.items;
+        const rawItems = response.data.data.items;
+        const nextItems =
+          query.food_only === true
+            ? rawItems.filter(isFoodCatalogItem)
+            : rawItems;
+        const leakedNonFood =
+          query.food_only === true && nextItems.length !== rawItems.length;
         if (isLoadMore) {
           setInventoryItems((prev) => {
             const seen = new Set(prev.map((item) => item.id));
@@ -317,10 +341,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           setInventoryItems(nextItems);
         }
         setPagination({
-          total: response.data.data.total,
+          total: leakedNonFood ? nextItems.length : response.data.data.total,
           page: response.data.data.page,
           limit: response.data.data.limit,
-          totalPages: response.data.data.totalPages,
+          totalPages: leakedNonFood ? 1 : response.data.data.totalPages,
         });
       } else {
         setError(response.data.message || 'Failed to fetch inventory items');
@@ -353,7 +377,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     }
   }, [
     isAuthenticated,
-    supportedIsos,
+    marketReady,
+    locationScoped,
+    catalogGeo.country_code,
+    catalogGeo.state,
     listScopeKey,
     query.page,
     query.limit,
@@ -375,6 +402,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.enabled,
     query.anonymousOrigin?.lat,
     query.anonymousOrigin?.lng,
+    query.country_code,
+    query.state,
   ]);
 
   useEffect(() => {

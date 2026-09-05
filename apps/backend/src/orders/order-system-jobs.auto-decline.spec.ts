@@ -29,17 +29,14 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
       if (mutation.includes('PatchAutoDeclinePayment')) {
         return { update_orders_by_pk: { id: orderId } };
       }
-      if (mutation.includes('UpdateReservedQuantity')) {
-        return { update_business_inventory_by_pk: { id: 'inv-1' } };
+      if (mutation.includes('try_release_business_inventory')) {
+        return { try_release_business_inventory: [{ id: 'inv-1' }] };
       }
       return {};
     });
     const executeQuery = jest.fn(async (query: string) => {
       if (query.includes('GetOrderForSystemJobs')) {
         return { orders_by_pk: order };
-      }
-      if (query.includes('GetCurrentReservedQuantities')) {
-        return { business_inventory: [{ id: 'inv-1', reserved_quantity: 1 }] };
       }
       return {};
     });
@@ -102,6 +99,15 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
     expect(patchIdx).toBeGreaterThan(claimIdx);
     expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalled();
     expect(orderQueueService.sendOrderCancelledMessage).toHaveBeenCalled();
+    const release = executeMutation.mock.calls.find((c) =>
+      String(c[0]).includes('try_release_business_inventory')
+    );
+    expect(release?.[1]).toEqual({ inventoryId: 'inv-1', qty: 1 });
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('reserved_quantity:')
+      )
+    ).toBe(false);
   });
 
   it('does not release payment when merchant confirm wins the race', async () => {

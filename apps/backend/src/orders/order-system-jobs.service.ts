@@ -7,8 +7,10 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
 import { OrderCleanupService } from './order-cleanup.service';
+import { CANCEL_REASON_NOT_PICKED_UP_IN_TIME } from './order-cleanup.constants';
 import { OrderQueueService } from './order-queue.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { releaseReservedInventory } from './release-reserved-inventory.util';
 
 /**
  * Singleton system actions for orders (cron / webhooks).
@@ -390,7 +392,7 @@ export class OrderSystemJobsService {
     const at = new Date().toISOString();
     const result = await this.hasuraSystemService.executeMutation(
       `
-      mutation ClaimStaleAuthorizedCancel($orderId: uuid!, $at: timestamptz!) {
+      mutation ClaimStaleAuthorizedCancel($orderId: uuid!, $at: timestamptz!, $reasonId: Int!) {
         update_orders(
           where: {
             _and: [
@@ -404,12 +406,14 @@ export class OrderSystemJobsService {
             current_status: cancelled
             cancelled_by: "system"
             cancelled_at: $at
+            cancellation_reason_id: $reasonId
+            cancellation_notes: "No delivery agent claimed the order within the timeout period"
             updated_at: $at
           }
         ) { affected_rows }
       }
     `,
-      { orderId, at }
+      { orderId, at, reasonId: CANCEL_REASON_NOT_PICKED_UP_IN_TIME }
     );
     return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
@@ -630,46 +634,15 @@ export class OrderSystemJobsService {
   }
 
   private async decrementReservedQuantities(orderItems: any[]): Promise<void> {
-    const validItems = orderItems.filter(
-      (item) => item.business_inventory_id && item.quantity
+    const result = await releaseReservedInventory(
+      this.hasuraSystemService,
+      orderItems
     );
-    if (!validItems.length) return;
-    const quantityChanges = new Map<string, number>();
-    for (const item of validItems) {
-      const id = item.business_inventory_id as string;
-      quantityChanges.set(
-        id,
-        (quantityChanges.get(id) || 0) + Number(item.quantity)
+    if (result.skipped > 0) {
+      this.logger.warn(
+        `Atomic inventory release skipped ${result.skipped} row(s)`
       );
     }
-    const ids = [...quantityChanges.keys()];
-    const currentData = await this.hasuraSystemService.executeQuery(
-      `query GetCurrentReservedQuantities($ids: [uuid!]!) {
-        business_inventory(where: { id: { _in: $ids } }) {
-          id
-          reserved_quantity
-        }
-      }`,
-      { ids }
-    );
-    const quantityMap = new Map<string, number>();
-    for (const inv of currentData.business_inventory || []) {
-      quantityMap.set(inv.id, inv.reserved_quantity || 0);
-    }
-    await Promise.all(
-      [...quantityChanges.entries()].map(([id, quantity]) => {
-        const next = Math.max(0, (quantityMap.get(id) || 0) - quantity);
-        return this.hasuraSystemService.executeMutation(
-          `mutation UpdateReservedQuantity($id: uuid!, $reservedQuantity: Int!) {
-            update_business_inventory_by_pk(
-              pk_columns: { id: $id }
-              _set: { reserved_quantity: $reservedQuantity }
-            ) { id }
-          }`,
-          { id, reservedQuantity: next }
-        );
-      })
-    );
   }
 
   private async createStatusHistoryEntry(

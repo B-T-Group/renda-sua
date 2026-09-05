@@ -11,6 +11,7 @@ import {
   type PickupPauseReason,
 } from './order-pickup.types';
 import { OrderReassignmentService } from './order-reassignment.service';
+import { OrderRiskMonitorService } from './order-risk-monitor.service';
 import { PickupProgressService } from './pickup-progress.service';
 
 @Injectable()
@@ -22,7 +23,8 @@ export class OrderPickupMonitorService {
     private readonly orderEvents: OrderEventsService,
     private readonly notifications: NotificationsService,
     private readonly progress: PickupProgressService,
-    private readonly reassignment: OrderReassignmentService
+    private readonly reassignment: OrderReassignmentService,
+    private readonly riskMonitor: OrderRiskMonitorService
   ) {}
 
   async startMonitoring(orderId: string): Promise<void> {
@@ -356,6 +358,9 @@ export class OrderPickupMonitorService {
       payload: { distanceMeters: progress.distanceMeters },
     });
     await this.notifyOverdue(order, remaining);
+    // Authoritative transition: raise the superuser incident now instead of
+    // waiting for the next risk sweep.
+    await this.riskMonitor.evaluateOrderById(order.id);
   }
 
   private async tryReassign(

@@ -62,18 +62,28 @@ async function loadSecrets() {
       return;
     }
 
-    // Inject into process.env
+    // Inject into process.env. Force-override keys that must always come from
+    // Secrets Manager (platform env / stale task defs must not win).
+    const forceFromSecrets = new Set([
+      'HASURA_GRAPHQL_ADMIN_SECRET',
+      'HASURA_GRAPHQL_ENDPOINT',
+      'GOOGLE_MAPS_API_KEY',
+      'DATABASE_URL',
+      'ASSISTANT_ENABLED',
+      'ASSISTANT_WHATSAPP_REPLIES_ENABLED',
+      'ASSISTANT_MODEL',
+      'ASSISTANT_MAX_HISTORY_MESSAGES',
+      'ASSISTANT_MAX_TOOL_ITERATIONS',
+      'ASSISTANT_WHATSAPP_MAX_REPLY_CHARS',
+    ]);
     for (const [key, value] of Object.entries(secrets)) {
-      if (
-        !process.env[key] ||
-        key === 'HASURA_GRAPHQL_ADMIN_SECRET' ||
-        key === 'HASURA_GRAPHQL_ENDPOINT' ||
-        key === 'GOOGLE_MAPS_API_KEY' ||
-        key === 'DATABASE_URL'
-      ) {
+      if (!process.env[key] || forceFromSecrets.has(key)) {
         process.env[key] = String(value);
       }
     }
+    console.log(
+      `Assistant flags after secrets: ENABLED=${process.env.ASSISTANT_ENABLED} WHATSAPP_REPLIES=${process.env.ASSISTANT_WHATSAPP_REPLIES_ENABLED}`
+    );
   } catch (err) {
     console.error(`Failed to load secrets from ${secretName}:`, err);
     // Continue without secrets - some may be in process.env already

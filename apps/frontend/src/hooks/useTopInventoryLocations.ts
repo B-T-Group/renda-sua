@@ -1,8 +1,10 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
-import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
-import { useSupportedCountries } from './useSupportedCountries';
+import {
+  catalogGeoQueryParams,
+  useCatalogGeoParams,
+} from './useCatalogGeoParams';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 
 export interface TopInventoryLocationRow {
@@ -18,8 +20,7 @@ export function useTopInventoryLocations(options: {
   include_unavailable?: boolean;
   anonymousOrigin?: PublicBrowserGeo | null;
 }) {
-  const { isAuthenticated } = useAuth0();
-  const { supportedIsos } = useSupportedCountries();
+  const catalogGeo = useCatalogGeoParams();
   const api = useApiClient();
   const [locations, setLocations] = useState<TopInventoryLocationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,19 +31,12 @@ export function useTopInventoryLocations(options: {
   const anonymousOrigin = options.anonymousOrigin;
 
   const fetchTop = useCallback(async () => {
+    if (!catalogGeo.ready) {
+      setLoading(true);
+      return;
+    }
     setLoading(true);
     setError(null);
-    let country_code: string | undefined;
-    if (!isAuthenticated) {
-      const detected =
-        typeof window !== 'undefined'
-          ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-          : null;
-      const code = detected?.toUpperCase();
-      if (code && supportedIsos.includes(code)) {
-        country_code = code;
-      }
-    }
     try {
       const { data } = await api.get<{
         success: boolean;
@@ -50,7 +44,7 @@ export function useTopInventoryLocations(options: {
       }>('/inventory-items/top-locations', {
         params: {
           limit,
-          ...(country_code && { country_code }),
+          ...catalogGeoQueryParams(catalogGeo),
           include_unavailable: includeUnavailable,
           ...(anonymousOrigin && {
             origin_lat: anonymousOrigin.lat,
@@ -71,8 +65,9 @@ export function useTopInventoryLocations(options: {
     }
   }, [
     api,
-    isAuthenticated,
-    supportedIsos,
+    catalogGeo.ready,
+    catalogGeo.country_code,
+    catalogGeo.state,
     limit,
     includeUnavailable,
     anonymousOrigin,

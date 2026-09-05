@@ -59,6 +59,7 @@ export function mapItems(
     currency: order.currency,
     notes: item.special_instructions ?? null,
     imageUrl: item.item?.item_images?.[0]?.image_url ?? null,
+    preparationMinutes: item.item?.preparation_minutes ?? null,
   }));
 }
 

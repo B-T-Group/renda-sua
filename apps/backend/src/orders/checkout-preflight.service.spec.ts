@@ -21,6 +21,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
@@ -28,6 +29,11 @@ import {
   CheckoutPreflightDto,
   VerificationMethod,
 } from './dto/checkout-preflight.dto';
+import {
+  FOOD_ITEM_CLOSED_CODE,
+  FOOD_ITEM_SOLD_OUT_CODE,
+} from '../food/food-order-guard.util';
+import { FOOD_CATEGORY_NAME } from '../food/food.constants';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -89,6 +95,41 @@ function makeInventoryRow(overrides: {
   };
 }
 
+const MONDAY_LUNCH = {
+  day_of_week: 1,
+  start_time: '12:30:00',
+  end_time: '16:00:00',
+};
+
+function makeFoodInventoryRow(overrides: {
+  id?: string;
+  itemName?: string;
+  markedUnavailableAt?: string | null;
+  slots?: Array<{
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+  }>;
+} = {}) {
+  const row = makeInventoryRow({
+    id: overrides.id,
+    itemName: overrides.itemName ?? 'Pizza',
+  });
+  return {
+    ...row,
+    food_settings: [
+      {
+        marked_unavailable_at: overrides.markedUnavailableAt ?? null,
+        availability_slots: overrides.slots ?? [MONDAY_LUNCH],
+      },
+    ],
+    item: {
+      ...row.item,
+      item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -101,6 +142,7 @@ describe('CheckoutPreflightService', () => {
   let mobilePaymentsService: jest.Mocked<MobilePaymentsService>;
   let loyaltyService: jest.Mocked<LoyaltyService>;
   let deliveryAvailabilityService: jest.Mocked<DeliveryAvailabilityService>;
+  let fxEstimateService: jest.Mocked<FxEstimateService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -125,12 +167,34 @@ describe('CheckoutPreflightService', () => {
           useValue: {
             resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
             resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
+            getUserCountryCode: jest.fn().mockResolvedValue(null),
+            resolveTrustedPayerCountry: jest.fn(
+              async ({
+                profileCountry,
+                requestedCountry,
+              }: {
+                profileCountry?: string | null;
+                requestedCountry?: string | null;
+              }) => requestedCountry || profileCountry || null
+            ),
+            resolveOrderRail: jest.fn(
+              async ({ sellerCountry }: { sellerCountry?: string | null }) => {
+                const rail =
+                  await paymentRoutingService.resolveRailForCountry(
+                    sellerCountry ?? undefined
+                  );
+                return { rail, source: 'seller', isDiaspora: false };
+              }
+            ),
           },
         },
         {
           provide: MobilePaymentsService,
           useValue: {
             getProvider: jest.fn().mockReturnValue('freemopay'),
+            getProviderForCountry: jest.fn((country?: string) =>
+              String(country || '').toUpperCase() === 'CM' ? 'freemopay' : 'mypvit'
+            ),
           },
         },
         {
@@ -191,6 +255,13 @@ describe('CheckoutPreflightService', () => {
             closedStoreMessage: jest.fn().mockReturnValue('This store is closed.'),
           },
         },
+        {
+          provide: FxEstimateService,
+          useValue: {
+            estimate: jest.fn().mockReturnValue(null),
+            payerCurrencyForCountry: jest.fn().mockReturnValue(null),
+          },
+        },
       ],
     }).compile();
 
@@ -201,6 +272,7 @@ describe('CheckoutPreflightService', () => {
     mobilePaymentsService = module.get(MobilePaymentsService);
     loyaltyService = module.get(LoyaltyService);
     deliveryAvailabilityService = module.get(DeliveryAvailabilityService);
+    fxEstimateService = module.get(FxEstimateService);
   });
 
   function mockInventory(
@@ -676,5 +748,272 @@ describe('CheckoutPreflightService', () => {
         (e) => e.code === 'MERCHANT_NOT_ACCEPTING_ORDERS'
       )
     ).toBe(true);
+  });
+
+  describe('food serving and sold-out blockers', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-08-24T12:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('blocks a cooked dish outside its serving window', async () => {
+      jest.setSystemTime(new Date('2026-08-24T08:00:00.000Z'));
+      mockInventory([makeFoodInventoryRow()]);
+
+      const result = await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 1 }] },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors[0]?.code).toBe(FOOD_ITEM_CLOSED_CODE);
+    });
+
+    it('blocks a cooked dish marked sold out for the day', async () => {
+      mockInventory([
+        makeFoodInventoryRow({
+          markedUnavailableAt: '2026-08-24T11:00:00.000Z',
+        }),
+      ]);
+
+      const result = await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 1 }] },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors[0]?.code).toBe(FOOD_ITEM_SOLD_OUT_CODE);
+    });
+
+    it('does not attach food blockers to electronics', async () => {
+      mockInventory([
+        makeInventoryRow({
+          itemName: 'Phone charger',
+        }),
+      ]);
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          provisional_country: 'CM',
+        },
+        false
+      );
+
+      expect(
+        result.blocking_errors.some(
+          (error) =>
+            error.code === FOOD_ITEM_CLOSED_CODE ||
+            error.code === FOOD_ITEM_SOLD_OUT_CODE
+        )
+      ).toBe(false);
+      expect(result.can_proceed).toBe(true);
+    });
+
+    it('blocks a mixed cart when only the food line is closed', async () => {
+      jest.setSystemTime(new Date('2026-08-24T08:00:00.000Z'));
+      mockInventory([
+        makeFoodInventoryRow({ id: 'inv-food' }),
+        makeInventoryRow({ id: 'inv-retail', itemName: 'Phone charger' }),
+      ]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            { business_inventory_id: 'inv-food', quantity: 1 },
+            { business_inventory_id: 'inv-retail', quantity: 1 },
+          ],
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        FOOD_ITEM_CLOSED_CODE,
+      ]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Diaspora checkout: payer abroad, recipient local
+  // -------------------------------------------------------------------------
+  describe('diaspora checkout', () => {
+    function mockDiasporaRail() {
+      (paymentRoutingService.resolveOrderRail as jest.Mock).mockResolvedValue({
+        rail: 'stripe',
+        source: 'payer',
+        isDiaspora: true,
+      });
+    }
+
+    it('routes a CA payer buying from a Gabonese merchant onto Stripe', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'GA' })], {
+        addressCountry: 'GA',
+      });
+      mockDiasporaRail();
+      (fxEstimateService.estimate as jest.Mock).mockReturnValue({
+        currency: 'CAD',
+        amount: 32.48,
+        rate: 0.00224,
+        source: 'indicative_config',
+      });
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          sending_to_someone_else: true,
+          recipient: { name: 'Awa Ndong', phone: '077123456' },
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.checkout_method).toBe(CheckoutMethod.STRIPE);
+      expect(result.diaspora).toEqual(
+        expect.objectContaining({
+          is_diaspora: true,
+          payer_country: 'CA',
+          fulfillment_country: 'GA',
+          rail_source: 'payer',
+          requires_recipient_contact: true,
+          payer_charge_estimate: expect.objectContaining({ currency: 'CAD' }),
+        })
+      );
+    });
+
+    it('omits the diaspora block for a purely local order', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'CM' })], {
+        addressCountry: 'CM',
+      });
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-cm',
+          payer_country: 'CM',
+        },
+        false
+      );
+
+      expect(result.diaspora).toBeNull();
+    });
+
+    it('blocks checkout when the recipient toggle has no contact details', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'GA' })], {
+        addressCountry: 'GA',
+      });
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          sending_to_someone_else: true,
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'RECIPIENT_CONTACT_REQUIRED'
+        )
+      ).toBe(true);
+    });
+
+    it('blocks a recipient phone that is invalid for the delivery country', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'GA' })], {
+        addressCountry: 'GA',
+      });
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          sending_to_someone_else: true,
+          recipient: { name: 'Awa Ndong', phone: '12' },
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'RECIPIENT_PHONE_INVALID_FOR_COUNTRY'
+        )
+      ).toBe(true);
+    });
+
+    it('blocks pay at delivery for a payer abroad', async () => {
+      mockInventory(
+        [makeInventoryRow({ sellerCountry: 'GA', payOnDelivery: true })],
+        { addressCountry: 'GA' }
+      );
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'CA',
+          payment_timing: 'pay_at_delivery',
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'DIASPORA_REQUIRES_PAY_NOW'
+        )
+      ).toBe(true);
+    });
+
+    it('ignores a spoofed local payer_country when the profile is abroad', async () => {
+      mockInventory(
+        [makeInventoryRow({ sellerCountry: 'GA', payOnDelivery: true })],
+        { addressCountry: 'GA' }
+      );
+      hasuraUserService.getUser.mockResolvedValue({ id: 'user-ca' } as any);
+      paymentRoutingService.getUserCountryCode.mockResolvedValue('CA');
+      paymentRoutingService.resolveTrustedPayerCountry.mockResolvedValue('CA');
+      mockDiasporaRail();
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          delivery_address_id: 'addr-ga',
+          payer_country: 'GA',
+          payment_timing: 'pay_at_delivery',
+        },
+        true
+      );
+
+      expect(paymentRoutingService.resolveTrustedPayerCountry).toHaveBeenCalledWith(
+        {
+          profileCountry: 'CA',
+          requestedCountry: 'GA',
+        }
+      );
+      expect(paymentRoutingService.resolveOrderRail).toHaveBeenCalledWith({
+        sellerCountry: 'GA',
+        payerCountry: 'CA',
+      });
+      expect(result.can_proceed).toBe(false);
+      expect(
+        result.blocking_errors.some(
+          (e) => e.code === 'DIASPORA_REQUIRES_PAY_NOW'
+        )
+      ).toBe(true);
+    });
   });
 });

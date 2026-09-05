@@ -1,8 +1,9 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
-import { DETECTED_COUNTRY_STORAGE_KEY } from './useDetectedCountry';
-import { useSupportedCountries } from './useSupportedCountries';
+import {
+  catalogGeoQueryParams,
+  useCatalogGeoParams,
+} from './useCatalogGeoParams';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 
 export interface CatalogStore {
@@ -25,8 +26,7 @@ export function useCatalogStores(options: {
   anonymousOrigin?: PublicBrowserGeo | null;
   enabled?: boolean;
 }) {
-  const { isAuthenticated } = useAuth0();
-  const { supportedIsos } = useSupportedCountries();
+  const catalogGeo = useCatalogGeoParams();
   const api = useApiClient();
   const [stores, setStores] = useState<CatalogStore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,27 +36,20 @@ export function useCatalogStores(options: {
   const search = options.search?.trim() || undefined;
   const includeUnavailable = options.include_unavailable ?? false;
   const anonymousOrigin = options.anonymousOrigin;
-  const enabled = options.enabled !== false;
+  const requested = options.enabled !== false;
 
   const fetchStores = useCallback(async () => {
-    if (!enabled) {
+    if (!requested) {
       setStores([]);
       setLoading(false);
       return;
     }
+    if (!catalogGeo.ready) {
+      setLoading(true);
+      return;
+    }
     setLoading(true);
     setError(null);
-    let country_code: string | undefined;
-    if (!isAuthenticated) {
-      const detected =
-        typeof window !== 'undefined'
-          ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-          : null;
-      const code = detected?.toUpperCase();
-      if (code && supportedIsos.includes(code)) {
-        country_code = code;
-      }
-    }
     try {
       const { data } = await api.get<{
         success: boolean;
@@ -66,7 +59,7 @@ export function useCatalogStores(options: {
         params: {
           limit,
           ...(search && { search }),
-          ...(country_code && { country_code }),
+          ...catalogGeoQueryParams(catalogGeo),
           include_unavailable: includeUnavailable,
           ...(anonymousOrigin && {
             origin_lat: anonymousOrigin.lat,
@@ -88,9 +81,10 @@ export function useCatalogStores(options: {
     }
   }, [
     api,
-    enabled,
-    isAuthenticated,
-    supportedIsos,
+    requested,
+    catalogGeo.country_code,
+    catalogGeo.state,
+    catalogGeo.ready,
     limit,
     search,
     includeUnavailable,
@@ -113,8 +107,6 @@ export function useCatalogStore(
     enabled?: boolean;
   } = {}
 ) {
-  const { isAuthenticated } = useAuth0();
-  const { supportedIsos } = useSupportedCountries();
   const api = useApiClient();
   const [store, setStore] = useState<CatalogStore | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,17 +126,6 @@ export function useCatalogStore(
     }
     setLoading(true);
     setError(null);
-    let country_code: string | undefined;
-    if (!isAuthenticated) {
-      const detected =
-        typeof window !== 'undefined'
-          ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-          : null;
-      const code = detected?.toUpperCase();
-      if (code && supportedIsos.includes(code)) {
-        country_code = code;
-      }
-    }
     try {
       const { data } = await api.get<{
         success: boolean;
@@ -154,7 +135,6 @@ export function useCatalogStore(
         `/inventory-items/stores/${encodeURIComponent(locationOrBusinessId.trim())}`,
         {
           params: {
-            ...(country_code && { country_code }),
             include_unavailable: includeUnavailable,
             ...(ownerPreview && { owner_preview: true }),
             ...(anonymousOrigin && {
@@ -180,8 +160,6 @@ export function useCatalogStore(
     api,
     enabled,
     locationOrBusinessId,
-    isAuthenticated,
-    supportedIsos,
     includeUnavailable,
     ownerPreview,
     anonymousOrigin,

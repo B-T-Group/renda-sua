@@ -1,9 +1,12 @@
 import {
+  Alert,
   FormControlLabel,
   MenuItem,
   Stack,
   Switch,
   TextField,
+  Typography,
+  CircularProgress,
 } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +21,8 @@ export interface VariantDetailsStepProps {
   skuError: string | null;
   onChange: (patch: Partial<CreateItemVariantPayload>) => void;
   onNameManualEdit: () => void;
+  aiLoading?: boolean;
+  aiFilled?: boolean;
 }
 
 const VariantDetailsStep: React.FC<VariantDetailsStepProps> = ({
@@ -27,6 +32,8 @@ const VariantDetailsStep: React.FC<VariantDetailsStepProps> = ({
   skuError,
   onChange,
   onNameManualEdit,
+  aiLoading = false,
+  aiFilled = false,
 }) => {
   const { t } = useTranslation();
   const currency = parentItem.currency || 'XAF';
@@ -36,6 +43,22 @@ const VariantDetailsStep: React.FC<VariantDetailsStepProps> = ({
 
   return (
     <Stack spacing={2} sx={{ pt: 1 }}>
+      {aiLoading ? (
+        <Stack direction="row" spacing={1} alignItems="center">
+          <CircularProgress size={18} />
+          <Typography variant="body2" color="text.secondary">
+            {t('business.variants.aiAnalyzing', 'Analyzing variant photo…')}
+          </Typography>
+        </Stack>
+      ) : null}
+      {aiFilled && !aiLoading ? (
+        <Alert severity="info" sx={{ py: 0.5 }}>
+          {t(
+            'business.variants.aiFilledBanner',
+            'Filled from variant photo — edit anything'
+          )}
+        </Alert>
+      ) : null}
       <TextField
         label={t('business.variants.name', 'Variant name')}
         value={form.name}

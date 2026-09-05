@@ -15,6 +15,7 @@ export interface PersonaOrderDetailsProps {
   messages?: React.ReactNode;
   tracking?: React.ReactNode;
   extras?: React.ReactNode;
+  headerTrailing?: React.ReactNode;
   hideDeliveryPin?: boolean;
   hideActions?: boolean;
   onActionComplete?: () => void;
