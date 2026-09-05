@@ -21,10 +21,10 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `payment_failed` | `rs_payment_failed` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `ai_proposal_ready` | `rs_ai_proposal` | UTILITY | itemName | URL CTA → `/app/items/{{1}}` |
 | `admin_order_risk` | `rs_admin_order_risk` | UTILITY | orderNumber, riskLabel, reason | URL CTA → `/app/admin/orders/{{1}}` |
-| `recipient_order_placed` | `rs_recipient_order_placed` | UTILITY | payerName, storeName, orderNumber | No button (third-party recipient) |
-| `recipient_out_for_delivery` | `rs_recipient_out_for_delivery` | UTILITY | orderNumber | No button (third-party recipient) |
-| `recipient_order_ready` | `rs_recipient_order_ready` | UTILITY | orderNumber, storeName | No button (third-party recipient) |
-| `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | No button (third-party recipient) |
+| `recipient_order_placed` | `rs_rcpt_order_contact` | UTILITY | payerName, storeName, orderNumber | None (no button) |
+| `recipient_out_for_delivery` | `rs_rcpt_out_for_delivery` | UTILITY | orderNumber | None (no button) |
+| `recipient_order_ready` | `rs_rcpt_ready_pickup` | UTILITY | orderNumber, storeName | None (no button) |
+| `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | None (no button) |
 
 ## Meta body rules (important)
 
@@ -371,84 +371,94 @@ Ouvrez le panneau d’administration pour contacter le client, le commerçant ou
 
 ---
 
+## 12. `rs_rcpt_order_contact`
 
----
+Notifies the delivery/pickup recipient that an order has been placed for them. The recipient is the local contact for a diaspora order placed by someone abroad.
 
-## 12. `rs_recipient_order_placed`
-
+**Internal key:** `recipient_order_placed`  
 **Vars:** `{{1}}` payerName · `{{2}}` storeName · `{{3}}` orderNumber  
-**Button:** None (third-party recipient, no app account)
+**Button:** None (no button)
 
 **en**
 ```
-Rendasua: someone placed an order for you.
+Rendasua: you are listed as the delivery contact for an order.
 
-{{1}} ordered for you at {{2}}.
-Order number: {{3}}.
-
-You will receive tracking updates and your delivery code on WhatsApp.
+Order {{3}} from {{2}} was placed by {{1}}.
+You will receive status updates and your delivery code on WhatsApp.
 ```
 
 **fr**
 ```
-Rendasua : quelqu'un a commandé pour vous.
+Rendasua : vous êtes le contact de livraison pour une commande.
 
-{{1}} a commandé pour vous chez {{2}}.
-Numéro de commande : {{3}}.
-
-Vous recevrez les mises à jour de suivi et votre code de livraison sur WhatsApp.
+La commande {{3}} de {{2}} a été passée par {{1}}.
+Vous recevrez les mises à jour de statut et votre code de livraison sur WhatsApp.
 ```
+
+> **Note:** Replaces the REJECTED `rs_recipient_order_placed`. The old name must NOT be deleted from Meta (it remains in PENDING_DELETION for ~4 weeks and blocks recreates). DevOps creates this new name only.
 
 ---
 
-## 13. `rs_recipient_out_for_delivery`
+## 13. `rs_rcpt_out_for_delivery`
 
+Notifies the delivery recipient that their order is out for delivery.
+
+**Internal key:** `recipient_out_for_delivery`  
 **Vars:** `{{1}}` orderNumber  
-**Button:** None (third-party recipient, no app account)
+**Button:** None (no button)
 
 **en**
 ```
-Rendasua: your order is out for delivery.
+Rendasua delivery update.
 
-Order {{1}} is on the way. Give your delivery code only to the Rendasua agent at handover.
+Order {{1}} is out for delivery. Share your delivery code only with the Rendasua agent at handover.
 ```
 
 **fr**
 ```
-Rendasua : votre commande est en cours de livraison.
+Mise à jour de livraison Rendasua.
 
-La commande {{1}} est en route. Donnez votre code de livraison uniquement au livreur Rendasua lors de la remise.
+La commande {{1}} est en cours de livraison. Partagez votre code de livraison uniquement avec le livreur Rendasua lors de la remise.
 ```
+
+> **Note:** Replaces the REJECTED `rs_recipient_out_for_delivery`. The old name must NOT be deleted from Meta.
 
 ---
 
-## 14. `rs_recipient_order_ready`
+## 14. `rs_rcpt_ready_pickup`
 
+Notifies the pickup recipient that their order is ready for collection.
+
+**Internal key:** `recipient_order_ready`  
 **Vars:** `{{1}}` orderNumber · `{{2}}` storeName  
-**Button:** None (third-party recipient, no app account)
+**Button:** None (no button)
 
 **en**
 ```
-Rendasua: your order is ready for pickup.
+Rendasua pickup update.
 
-Order {{1}} can be collected at {{2}}. Show your pickup code when you arrive.
+Order {{1}} is ready for pickup at {{2}}. Present your pickup code when collecting.
 ```
 
 **fr**
 ```
-Rendasua : votre commande est prête pour le retrait.
+Mise à jour de retrait Rendasua.
 
-La commande {{1}} peut être récupérée chez {{2}}. Présentez votre code de retrait à votre arrivée.
+La commande {{1}} est prête pour le retrait chez {{2}}. Présentez votre code de retrait lors de la récupération.
 ```
+
+> **Note:** Replaces the REJECTED `rs_recipient_order_ready`. The old name must NOT be deleted from Meta.
 
 ---
 
 ## 15. `rs_recipient_order_update`
 
 **Vars:** `{{1}}` orderNumber · `{{2}}` statusLabel  
-**Button:** None (third-party recipient, no app account)
+**Button:** None (no button)
 
-Used for confirmed / delivered / cancelled statuses. The `statusLabel` is localized at send time.
+**Status:** PENDING on Meta. Leave copy as-is.
+
+Used for confirmed / delivered / cancelled statuses when the three specific templates above don't apply. The `statusLabel` is localized at send time.
 
 **en**
 ```
@@ -467,6 +477,8 @@ Statut de la commande {{1}} : {{2}}.
 
 Vous recevrez d'autres mises à jour ici si quelque chose change.
 ```
+
+---
 
 ## 16. `rs_login_code` (AUTHENTICATION, Auth0)
 
