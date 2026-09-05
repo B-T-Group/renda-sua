@@ -94,18 +94,32 @@ function serviceDayStart(slots: ResolvedSlot[], local: DateTime): DateTime {
   return day.startOf('day');
 }
 
+function parseMarkedAt(
+  markedUnavailableAt: string | Date,
+  zone: DateTime['zone']
+): DateTime | null {
+  const marked =
+    markedUnavailableAt instanceof Date
+      ? DateTime.fromJSDate(markedUnavailableAt, { zone })
+      : DateTime.fromISO(markedUnavailableAt, { zone });
+  return marked.isValid ? marked : null;
+}
+
 function isMarkedUnavailableForServiceDay(
   markedUnavailableAt: string | Date | null | undefined,
   slots: ResolvedSlot[],
   local: DateTime
 ): boolean {
   if (!markedUnavailableAt) return false;
-  const marked =
-    markedUnavailableAt instanceof Date
-      ? DateTime.fromJSDate(markedUnavailableAt, { zone: local.zone })
-      : DateTime.fromISO(markedUnavailableAt, { zone: local.zone });
-  if (!marked.isValid) return false;
-  return marked >= serviceDayStart(slots, local);
+  const marked = parseMarkedAt(markedUnavailableAt, local.zone);
+  if (!marked) return false;
+  // Compare service days, not calendar instants. A stamp at 01:30 during an
+  // overnight tail belongs to yesterday's service day and must not block
+  // later windows on the new calendar day (lunch or the next evening).
+  return (
+    serviceDayStart(slots, marked).toMillis() ===
+    serviceDayStart(slots, local).toMillis()
+  );
 }
 
 function nextOpeningFrom(slots: ResolvedSlot[], local: DateTime): Date | null {
