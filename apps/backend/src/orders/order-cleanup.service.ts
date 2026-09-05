@@ -19,14 +19,17 @@ import {
   PAYMENT_FAILED_GRACE_MINUTES,
 } from './order-cleanup.constants';
 import { OrderQueueService } from './order-queue.service';
+import { releaseReservedInventory } from './release-reserved-inventory.util';
 
 interface CleanupOrderRow extends CleanupWindowOrder {
   id: string;
   order_number: string;
   current_status: string;
+  fulfillment_method?: string | null;
   payment_status?: string | null;
   payment_source?: string | null;
   created_at?: string;
+  updated_at?: string;
   client?: {
     user_id?: string;
     user?: {
@@ -46,6 +49,7 @@ interface CleanupOrderRow extends CleanupWindowOrder {
   }>;
   /** Hasura array relationship on orders (singular name). */
   failed_delivery?: Array<{ id: string }>;
+  order_status_history?: Array<{ status?: string | null; created_at?: string }>;
 }
 
 interface DigestParty {
@@ -91,15 +95,21 @@ export class OrderCleanupService {
     }
     const grace = cfg?.cleanupGraceHours ?? 24;
     const limit = cfg?.cleanupBatchLimit ?? 100;
+    const storePickupDays = cfg?.storePickupCancelDays ?? 7;
     const pending = await this.cancelStalePendingPaymentOrders(grace, limit);
+    const storePickup = await this.cancelStaleStorePickupOrders(
+      storePickupDays,
+      limit
+    );
     const missed = await this.cancelMissedPickupOrders(grace, limit);
     const failed = await this.failMissedDeliveryOrders(grace, limit);
+    const readyCancelled = storePickup + missed;
     this.logger.log(
-      `Order cleanup: pending_payment=${pending}, ready_for_pickup=${missed}, mid_fulfillment_failed=${failed}`
+      `Order cleanup: pending_payment=${pending}, store_pickup=${storePickup}, ready_window=${missed}, mid_fulfillment_failed=${failed}`
     );
     return {
       pendingPaymentCancelled: pending,
-      readyForPickupCancelled: missed,
+      readyForPickupCancelled: readyCancelled,
       midFulfillmentFailed: failed,
     };
   }
@@ -128,7 +138,32 @@ export class OrderCleanupService {
     return count;
   }
 
-  /** Cancel ready_for_pickup when pickup/delivery window + grace has passed. */
+  /**
+   * Cancel store-pickup ready_for_pickup orders that entered ready ≥ cancelDays ago.
+   * Delivery/shipping keep window+grace via cancelMissedPickupOrders.
+   */
+  async cancelStaleStorePickupOrders(
+    cancelDays: number,
+    limit: number
+  ): Promise<number> {
+    const pageSize = Math.max(limit, 50);
+    let count = 0;
+    let offset = 0;
+    for (let page = 0; page < 20 && count < limit; page += 1) {
+      const orders = await this.queryStorePickupReadyOrders(pageSize, offset);
+      if (!orders.length) break;
+      for (const order of orders) {
+        if (count >= limit) break;
+        if (!this.isStorePickupStale(order, cancelDays)) continue;
+        if (await this.cancelStaleStorePickupOrder(order)) count += 1;
+      }
+      offset += orders.length;
+      if (orders.length < pageSize) break;
+    }
+    return count;
+  }
+
+  /** Cancel non-pickup ready_for_pickup when pickup/delivery window + grace has passed. */
   async cancelMissedPickupOrders(
     graceHours: number,
     limit: number
@@ -138,6 +173,9 @@ export class OrderCleanupService {
       graceHours,
       limit,
       async (order) => {
+        if ((order.fulfillment_method || '').toLowerCase() === 'pickup') {
+          return false;
+        }
         if (!(await this.isStaleWindowOrder(order, graceHours))) return false;
         return this.cancelMissedPickupOrder(order);
       }
@@ -325,6 +363,45 @@ export class OrderCleanupService {
       'Auto-cancelled: not picked up before window elapsed',
       true
     );
+  }
+
+  private async cancelStaleStorePickupOrder(
+    order: CleanupOrderRow
+  ): Promise<boolean> {
+    return this.cancelWithClaim(
+      order,
+      'ready_for_pickup',
+      CANCEL_REASON_NOT_PICKED_UP_IN_TIME,
+      'Order was not picked up in time',
+      'Auto-cancelled: store pickup not collected within 7 days',
+      true
+    );
+  }
+
+  private isStorePickupStale(
+    order: CleanupOrderRow,
+    cancelDays: number,
+    now: Date = new Date()
+  ): boolean {
+    const readyAt = this.resolveReadyForPickupAt(order);
+    if (!readyAt) return false;
+    const staleAt = readyAt.getTime() + cancelDays * 24 * 60 * 60 * 1000;
+    return staleAt <= now.getTime();
+  }
+
+  private resolveReadyForPickupAt(order: CleanupOrderRow): Date | null {
+    const history = order.order_status_history ?? [];
+    const readyRows = history
+      .filter((row) => row.status === 'ready_for_pickup' && row.created_at)
+      .map((row) => new Date(row.created_at as string))
+      .filter((d) => !Number.isNaN(d.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime());
+    if (readyRows[0]) return readyRows[0];
+    if (order.updated_at) {
+      const updated = new Date(order.updated_at);
+      if (!Number.isNaN(updated.getTime())) return updated;
+    }
+    return null;
   }
 
   /** CAS-claim cancel before Stripe so payment/agent races cannot overwrite. */
@@ -635,6 +712,7 @@ export class OrderCleanupService {
     offset = 0
   ): Promise<CleanupOrderRow[]> {
     // Coarse filter: any past calendar date or pickup_by past grace; precise check in Node.
+    // Store pickup is cancelled by cancelStaleStorePickupOrders (7-day status clock).
     const todayUtc = new Date().toISOString().slice(0, 10);
     const pickupCutoff = new Date(
       Date.now() - graceHours * 60 * 60 * 1000
@@ -653,6 +731,7 @@ export class OrderCleanupService {
         orders(
           where: {
             current_status: { _in: $statuses }
+            fulfillment_method: { _neq: pickup }
             _or: [
               { pickup_by: { _lt: $pickupCutoff } }
               { promised_fulfill_by: { _lt: $pickupCutoff } }
@@ -670,6 +749,7 @@ export class OrderCleanupService {
           id
           order_number
           current_status
+          fulfillment_method
           payment_status
           payment_source
           pickup_by
@@ -689,6 +769,50 @@ export class OrderCleanupService {
       }
     `,
       { statuses, todayUtc, pickupCutoff, limit, offset }
+    );
+    return res.orders ?? [];
+  }
+
+  private async queryStorePickupReadyOrders(
+    limit: number,
+    offset = 0
+  ): Promise<CleanupOrderRow[]> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      orders: CleanupOrderRow[];
+    }>(
+      `
+      query StaleStorePickupOrders($limit: Int!, $offset: Int!) {
+        orders(
+          where: {
+            current_status: { _eq: ready_for_pickup }
+            fulfillment_method: { _eq: pickup }
+          }
+          order_by: [{ updated_at: asc }]
+          limit: $limit
+          offset: $offset
+        ) {
+          id
+          order_number
+          current_status
+          fulfillment_method
+          payment_status
+          payment_source
+          updated_at
+          client { user_id user { preferred_language timezone } }
+          business { user_id user { preferred_language } }
+          order_items { id business_inventory_id quantity }
+          order_status_history(
+            where: { status: { _eq: ready_for_pickup } }
+            order_by: { created_at: asc }
+            limit: 1
+          ) {
+            status
+            created_at
+          }
+        }
+      }
+    `,
+      { limit, offset }
     );
     return res.orders ?? [];
   }
@@ -965,44 +1089,14 @@ export class OrderCleanupService {
   private async decrementReservedQuantities(
     orderItems: CleanupOrderRow['order_items']
   ): Promise<void> {
-    const valid = (orderItems || []).filter(
-      (item) => item.business_inventory_id && item.quantity
+    const result = await releaseReservedInventory(
+      this.hasuraSystemService,
+      orderItems
     );
-    if (!valid.length) return;
-    const quantityChanges = new Map<string, number>();
-    for (const item of valid) {
-      const id = item.business_inventory_id as string;
-      quantityChanges.set(
-        id,
-        (quantityChanges.get(id) || 0) + Number(item.quantity)
+    if (result.skipped > 0) {
+      this.logger.warn(
+        `Atomic inventory release skipped ${result.skipped} row(s)`
       );
     }
-    const ids = [...quantityChanges.keys()];
-    const currentData = await this.hasuraSystemService.executeQuery(
-      `query($ids: [uuid!]!) {
-        business_inventory(where: { id: { _in: $ids } }) {
-          id reserved_quantity
-        }
-      }`,
-      { ids }
-    );
-    const quantityMap = new Map<string, number>();
-    for (const inv of currentData.business_inventory || []) {
-      quantityMap.set(inv.id, inv.reserved_quantity || 0);
-    }
-    await Promise.all(
-      [...quantityChanges.entries()].map(([id, quantity]) => {
-        const next = Math.max(0, (quantityMap.get(id) || 0) - quantity);
-        return this.hasuraSystemService.executeMutation(
-          `mutation($id: uuid!, $reservedQuantity: Int!) {
-            update_business_inventory_by_pk(
-              pk_columns: { id: $id }
-              _set: { reserved_quantity: $reservedQuantity }
-            ) { id }
-          }`,
-          { id, reservedQuantity: next }
-        );
-      })
-    );
   }
 }

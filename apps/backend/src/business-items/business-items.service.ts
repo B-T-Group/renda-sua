@@ -256,6 +256,7 @@ const GET_BUSINESS_LOCATIONS = `
       id
       name
       phone
+      order_alert_phone
       mobile_payment_phone_id
       email
       operating_hours
@@ -947,6 +948,7 @@ export class BusinessItemsService {
       };
       address_id?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -1044,7 +1046,7 @@ export class BusinessItemsService {
       data.phone
     );
     const locationMutation = `
-      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $mobilePaymentPhoneId: uuid, $email: String, $autoWithdraw: Boolean!, $logoUrl: String) {
+      mutation CreateBusinessLocation($businessId: uuid!, $addressId: uuid!, $name: String!, $locationType: location_type_enum!, $isPrimary: Boolean!, $phone: String, $orderAlertPhone: String, $mobilePaymentPhoneId: uuid, $email: String, $autoWithdraw: Boolean!, $logoUrl: String) {
         insert_business_locations_one(object: {
           business_id: $businessId,
           address_id: $addressId,
@@ -1052,6 +1054,7 @@ export class BusinessItemsService {
           location_type: $locationType,
           is_primary: $isPrimary,
           phone: $phone,
+          order_alert_phone: $orderAlertPhone,
           mobile_payment_phone_id: $mobilePaymentPhoneId,
           email: $email,
           auto_withdraw_commissions: $autoWithdraw,
@@ -1061,6 +1064,7 @@ export class BusinessItemsService {
           id
           name
           phone
+          order_alert_phone
           mobile_payment_phone_id
           email
           location_type
@@ -1082,6 +1086,7 @@ export class BusinessItemsService {
       locationType: data.location_type ?? 'store',
       isPrimary: data.is_primary ?? false,
       phone: phoneFields.phone,
+      orderAlertPhone: data.order_alert_phone?.trim() || null,
       mobilePaymentPhoneId: phoneFields.mobilePaymentPhoneId,
       email: data.email ?? null,
       autoWithdraw: data.auto_withdraw_commissions ?? true,
@@ -1111,6 +1116,7 @@ export class BusinessItemsService {
     data: {
       name?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -1139,6 +1145,9 @@ export class BusinessItemsService {
       );
     }
     const setInput: Record<string, unknown> = { ...data };
+    if (typeof setInput.order_alert_phone === 'string') {
+      setInput.order_alert_phone = setInput.order_alert_phone.trim() || null;
+    }
     if (setInput.logo_url === '') {
       setInput.logo_url = null;
     }
@@ -1162,6 +1171,7 @@ export class BusinessItemsService {
           id
           name
           phone
+          order_alert_phone
           mobile_payment_phone_id
           email
           auto_withdraw_commissions

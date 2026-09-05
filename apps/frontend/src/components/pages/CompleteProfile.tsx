@@ -753,9 +753,9 @@ const CompleteProfile: React.FC = () => {
                 const descKey = `completeProfile.signupGoals.${goalId}.description`;
                 const colors: Record<SignupGoalId, string> = {
                   browse_buy: theme.palette.primary.main,
-                  rent_and_earn: '#00897b',
-                  sell_items: '#f57c00',
-                  delivery_agent: '#388e3c',
+                  rent_and_earn: theme.palette.secondary.main,
+                  sell_items: theme.palette.cta.main,
+                  delivery_agent: theme.palette.secondary.dark,
                 };
                 const accent = colors[goalId];
                 const selected = profileData.signup_goal_ids.includes(goalId);

@@ -22,6 +22,7 @@ import {
 import type { DelegationGrant } from '../../types/delegation';
 import LoadingPage from '../common/LoadingPage';
 import { PersonaSelectCard } from '../onboarding/PersonaSelectCard';
+import { brandTokens } from '../../theme/brandTokens';
 
 const PERSONA_ORDER: UserType[] = ['client', 'agent', 'business'];
 
@@ -267,8 +268,8 @@ const SelectPersonaPage: React.FC = () => {
                     maxWidth: { xs: 400, sm: 'none' },
                     mx: 'auto',
                     border: '1.5px solid',
-                    borderColor: alpha('#0d9488', 0.35),
-                    bgcolor: alpha('#0d9488', 0.06),
+                    borderColor: alpha(brandTokens.secondary.main, 0.35),
+                    bgcolor: alpha(brandTokens.secondary.main, 0.06),
                     borderRadius: 2,
                     opacity: busy && !selecting ? 0.55 : 1,
                   }}
@@ -280,7 +281,9 @@ const SelectPersonaPage: React.FC = () => {
                   >
                     <CardContent>
                       <Stack spacing={1.25} alignItems="flex-start">
-                        <StorefrontOutlined sx={{ color: '#0d9488' }} />
+                        <StorefrontOutlined
+                          sx={{ color: brandTokens.secondary.main }}
+                        />
                         <Typography variant="h6" fontWeight={800}>
                           {grant.locationName}
                         </Typography>

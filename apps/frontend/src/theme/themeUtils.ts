@@ -1,4 +1,5 @@
 import { alpha, Theme } from '@mui/material/styles';
+import { brandTokens } from './brandTokens';
 
 /**
  * Theme utilities for consistent styling across the application
@@ -291,17 +292,31 @@ export const typography = {
  */
 export const marketingGradients = {
   // Hero background gradient
-  hero: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 40%, #1d4ed8 70%, #2563eb 100%)',
-  // Accent overlay used atop hero for depth
-  heroOverlay:
-    'radial-gradient(ellipse at 20% 50%, rgba(99,102,241,0.25) 0%, transparent 55%), radial-gradient(ellipse at 80% 20%, rgba(16,185,129,0.15) 0%, transparent 50%)',
+  hero: `linear-gradient(135deg, ${brandTokens.primary.dark} 0%, ${brandTokens.primary.main} 45%, ${brandTokens.primary.light} 100%)`,
+  // Accent overlay used atop hero for depth: blue chrome warmed by delivery teal
+  heroOverlay: `radial-gradient(ellipse at 20% 50%, ${alpha(
+    brandTokens.primary.light,
+    0.28
+  )} 0%, transparent 55%), radial-gradient(ellipse at 80% 20%, ${alpha(
+    brandTokens.secondary.light,
+    0.18
+  )} 0%, transparent 50%)`,
   // Subtle tinted section backgrounds
-  sectionBlue: 'linear-gradient(180deg, rgba(30,64,175,0.04) 0%, rgba(30,64,175,0) 100%)',
-  sectionGreen: 'linear-gradient(180deg, rgba(22,163,74,0.04) 0%, rgba(22,163,74,0) 100%)',
+  sectionBlue: `linear-gradient(180deg, ${alpha(
+    brandTokens.primary.main,
+    0.05
+  )} 0%, ${alpha(brandTokens.primary.main, 0)} 100%)`,
+  sectionTeal: `linear-gradient(180deg, ${alpha(
+    brandTokens.secondary.main,
+    0.05
+  )} 0%, ${alpha(brandTokens.secondary.main, 0)} 100%)`,
   // Card accent (for bento tiles)
-  cardAccent: 'linear-gradient(135deg, rgba(30,64,175,0.06) 0%, rgba(37,99,235,0.02) 100%)',
-  // CTA pill/button gradient
-  ctaPill: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+  cardAccent: `linear-gradient(135deg, ${alpha(
+    brandTokens.primary.main,
+    0.06
+  )} 0%, ${alpha(brandTokens.primary.light, 0.02)} 100%)`,
+  // Purchase CTA pill/button gradient — Buy / Pay / Checkout only
+  ctaPill: `linear-gradient(135deg, ${brandTokens.cta.light} 0%, ${brandTokens.cta.main} 100%)`,
   // Download section dark background
-  download: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+  download: `linear-gradient(135deg, ${brandTokens.text.primary} 0%, #1E293B 50%, ${brandTokens.text.primary} 100%)`,
 } as const;

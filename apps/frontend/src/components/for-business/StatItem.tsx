@@ -1,7 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import React from 'react';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 interface StatItemProps {
   value: string;
@@ -13,7 +13,7 @@ const StatItem: React.FC<StatItemProps> = ({ value, label }) => (
   <Box sx={{ textAlign: 'center', px: 1.5, py: 2, minWidth: 120 }}>
     <Typography
       component="p"
-      sx={{ fontSize: { xs: '1.5rem', md: '2rem' }, fontWeight: 800, color: FB_GREEN, lineHeight: 1.1 }}
+      sx={{ fontSize: { xs: '1.5rem', md: '2rem' }, fontWeight: 800, color: FB_ACCENT, lineHeight: 1.1 }}
     >
       {value}
     </Typography>
@@ -33,7 +33,7 @@ export const StatStrip: React.FC<{ children: React.ReactNode }> = ({ children })
       borderRadius: 3,
       border: '1.5px solid',
       borderColor: 'divider',
-      bgcolor: alpha(FB_GREEN, 0.04),
+      bgcolor: alpha(FB_ACCENT, 0.04),
       py: 1,
       px: 1,
     }}

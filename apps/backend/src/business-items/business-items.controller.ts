@@ -153,6 +153,7 @@ export class BusinessItemsController {
       properties: {
         name: { type: 'string' },
         phone: { type: 'string' },
+        order_alert_phone: { type: 'string', nullable: true },
         mobile_payment_phone_id: {
           type: 'string',
           format: 'uuid',
@@ -185,6 +186,7 @@ export class BusinessItemsController {
     body: {
       name?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
@@ -476,6 +478,7 @@ export class BusinessItemsController {
           },
         },
         phone: { type: 'string' },
+        order_alert_phone: { type: 'string', nullable: true },
         mobile_payment_phone_id: {
           type: 'string',
           format: 'uuid',
@@ -513,6 +516,7 @@ export class BusinessItemsController {
       };
       address_id?: string;
       phone?: string;
+      order_alert_phone?: string | null;
       mobile_payment_phone_id?: string | null;
       email?: string;
       location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
