@@ -311,6 +311,9 @@ export const MessagesCenterPage = lazy(() =>
 export const OrderConfirmationPage = lazy(() =>
   import('../components/pages/OrderConfirmationPage')
 );
+export const MobileMoneyAwaitingPaymentPage = lazy(() =>
+  import('../components/pages/MobileMoneyAwaitingPaymentPage')
+);
 export const AnonAddressPage = lazy(() =>
   import('../components/pages/AnonAddressPage')
 );
@@ -329,6 +332,9 @@ export const AppDeepLinkPage = lazy(
 );
 export const ProfileDeleteRequestPage = lazy(() =>
   import('../components/pages/ProfileDeleteRequestPage')
+);
+export const AssistantPage = lazy(() =>
+  import('../components/pages/AssistantPage')
 );
 export const SupportPage = lazy(() =>
   import('../components/pages/SupportPage')

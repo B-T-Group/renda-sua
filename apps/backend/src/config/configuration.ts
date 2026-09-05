@@ -195,6 +195,22 @@ export interface BedrockConfig {
   embeddingModel: string;
 }
 
+/** Channel-agnostic conversational AI assistant (WhatsApp + in-app chat). */
+export interface AssistantConfig {
+  /** Master switch for the assistant service and HTTP chat endpoint. */
+  enabled: boolean;
+  /** Auto-reply to unmatched inbound WhatsApp text via the assistant. */
+  whatsappRepliesEnabled: boolean;
+  /** Optional Converse model override; falls back to bedrock.chatModel. */
+  model: string;
+  /** Max prior messages included in a WhatsApp conversation context. */
+  maxHistoryMessages: number;
+  /** Max tool-use iterations per turn. */
+  maxToolIterations: number;
+  /** Cap on outbound WhatsApp reply length (characters). */
+  whatsappMaxReplyChars: number;
+}
+
 export interface InventorySearchConfig {
   minSimilarity: number;
   matchLimit: number;
@@ -278,6 +294,26 @@ export interface StripeConfig {
 
 export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
+}
+
+/**
+ * Diaspora checkout: a payer in a Stripe country buys for a recipient in a
+ * mobile-money country. Money still lands on the platform Stripe balance and
+ * settles to the merchant from the internal ledger on agent pickup.
+ */
+export interface DiasporaConfig {
+  /** Master switch for payer-aware rail selection and the recipient block at checkout. */
+  enabled: boolean;
+  /**
+   * ISO 3166-1 alpha-2 payer countries allowed to pay by card for a
+   * mobile-money merchant. Empty means "reuse stripe.enabledCountries".
+   */
+  payerCountries: string[];
+  /**
+   * Indicative FX rates for checkout presentment only, keyed `FROM:TO`
+   * (e.g. `XAF:CAD`). Never used for settlement — see issue #178.
+   */
+  fxRates: Record<string, number>;
 }
 
 /** Client rating prompts (rate agent on completion, rate item after delay). */
@@ -490,10 +526,12 @@ export interface Configuration {
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
   bedrock: BedrockConfig;
+  assistant: AssistantConfig;
   inventorySearch: InventorySearchConfig;
   imageValidation: ImageValidationConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
+  diaspora: DiasporaConfig;
   rating: RatingConfig;
   orderOffers: OrderOffersConfig;
   deliveryAvailability: DeliveryAvailabilityConfig;
@@ -523,6 +561,20 @@ function parseImageValidationModerationProvider(
     return normalized;
   }
   return 'none';
+}
+
+/** Parses `XAF:CAD=0.00224,XAF:USD=0.00165` into a rate lookup. */
+function parseDiasporaFxRates(value: string | undefined): Record<string, number> {
+  const rates: Record<string, number> = {};
+  for (const entry of (value || '').split(',')) {
+    const [pair, rate] = entry.split('=');
+    const key = pair?.trim().toUpperCase();
+    const parsed = Number(rate);
+    if (!key || !/^[A-Z]{3}:[A-Z]{3}$/.test(key)) continue;
+    if (!Number.isFinite(parsed) || parsed <= 0) continue;
+    rates[key] = parsed;
+  }
+  return rates;
 }
 
 // Secrets are now loaded in main.ts before NestJS starts
@@ -864,6 +916,24 @@ export default (): Configuration => {
         process.env.BEDROCK_EMBEDDING_MODEL?.trim() ||
         'amazon.titan-embed-text-v1',
     },
+    assistant: {
+      enabled: process.env.ASSISTANT_ENABLED === 'true',
+      whatsappRepliesEnabled:
+        process.env.ASSISTANT_WHATSAPP_REPLIES_ENABLED === 'true',
+      model: process.env.ASSISTANT_MODEL?.trim() || '',
+      maxHistoryMessages: parseInt(
+        process.env.ASSISTANT_MAX_HISTORY_MESSAGES || '10',
+        10
+      ),
+      maxToolIterations: parseInt(
+        process.env.ASSISTANT_MAX_TOOL_ITERATIONS || '5',
+        10
+      ),
+      whatsappMaxReplyChars: parseInt(
+        process.env.ASSISTANT_WHATSAPP_MAX_REPLY_CHARS || '1200',
+        10
+      ),
+    },
     inventorySearch: {
       minSimilarity: parseFloat(
         process.env.INVENTORY_SEARCH_MIN_SIMILARITY || '0.38'
@@ -901,6 +971,14 @@ export default (): Configuration => {
     },
     notificationsInternal: {
       apiKey: process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+    },
+    diaspora: {
+      enabled: process.env.DIASPORA_CHECKOUT_ENABLED !== 'false',
+      payerCountries: (process.env.DIASPORA_PAYER_COUNTRIES || '')
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2),
+      fxRates: parseDiasporaFxRates(process.env.DIASPORA_FX_RATES),
     },
     rating: {
       itemRatingDelayDays: parseInt(

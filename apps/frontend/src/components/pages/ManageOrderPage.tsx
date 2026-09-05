@@ -53,6 +53,7 @@ import {
   orderToPhaseInput,
   resolveOrderPhase,
 } from '../../utils/orderPhase';
+import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import SEOHead from '../seo/SEOHead';
 
 const CLIENT_TRACKING_STATUSES = ['picked_up', 'in_transit', 'out_for_delivery'];
@@ -244,14 +245,21 @@ const ManageOrderPageContent: React.FC = () => {
         window.location.assign(result.checkout_url);
         return;
       }
+      if (!isStripeOrder) {
+        navigate(
+          buildMomoAwaitingPaymentTo({
+            orderIds: [order.id],
+            phoneE164: order.client?.user?.phone_number?.trim() || '',
+            source: 'retry',
+            orderNumbers: [order.order_number],
+          })
+        );
+        return;
+      }
       enqueueSnackbar(
         t(
-          isStripeOrder
-            ? 'orders.retryPayment.successStripe'
-            : 'orders.retryPayment.success',
-          isStripeOrder
-            ? 'Opening secure card payment…'
-            : 'Payment retry started. Please check your phone to approve.'
+          'orders.retryPayment.successStripe',
+          'Opening secure card payment…'
         ),
         { variant: 'success' }
       );
@@ -280,22 +288,40 @@ const ManageOrderPageContent: React.FC = () => {
     phaseInfo.primaryActionId === 'pay' &&
     order.payment_timing === 'pay_now' &&
     order.payment_status !== 'paid';
-  const showRateCta = phaseInfo.primaryActionId === 'rate';
+  const canShowRatePrimary = !!(
+    eligibility?.canRateAgent ||
+    eligibility?.canRateItem ||
+    eligibility?.canRateClient
+  );
+  const showRateCta =
+    phaseInfo.primaryActionId === 'rate' && canShowRatePrimary;
+  const itemRatingLocked =
+    !!eligibility &&
+    !eligibility.canRateItem &&
+    !!eligibility.itemRatingUnlocksAt &&
+    new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
+    eligibility.items.some((i) => !i.rated) &&
+    !eligibility.canRateAgent &&
+    !eligibility.canRateClient;
   const phaseBannerAction =
-    persona === 'client' && (showPayCta || showRateCta) ? (
-      <Button
-        variant="contained"
-        fullWidth
-        onClick={handlePrimaryPhaseAction}
-        disabled={
-          showRateCta &&
-          !eligibility?.canRateAgent &&
-          !eligibility?.canRateItem &&
-          !eligibility?.canRateClient
-        }
-      >
+    persona === 'client' && showPayCta ? (
+      <Button variant="contained" fullWidth onClick={handlePrimaryPhaseAction}>
         {t(primaryLabelKey, primaryLabelDefault)}
       </Button>
+    ) : persona === 'client' && showRateCta ? (
+      <Button variant="contained" fullWidth onClick={handlePrimaryPhaseAction}>
+        {t(primaryLabelKey, primaryLabelDefault)}
+      </Button>
+    ) : persona === 'client' &&
+      phaseInfo.primaryActionId === 'rate' &&
+      itemRatingLocked &&
+      eligibility?.itemRatingUnlocksAt ? (
+      <Typography variant="body2" color="text.secondary">
+        {t('orders.itemRatingUnlocksOn', {
+          defaultValue: 'You can rate your items from {{date}}',
+          date: new Date(eligibility.itemRatingUnlocksAt).toLocaleDateString(),
+        })}
+      </Typography>
     ) : null;
 
   const handleCancelOrder = () => {

@@ -1,4 +1,5 @@
 import {
+  CardGiftcard,
   CheckCircle,
   Home,
   Phone,
@@ -40,6 +41,8 @@ interface OrderConfirmationData {
     created_at: string;
     payment_source?: PaymentSource;
     payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
+    recipient_name?: string | null;
+    is_third_party_recipient?: boolean | null;
     payment_transaction: {
       transaction_id: string | null;
       success: boolean;
@@ -61,6 +64,8 @@ interface OrderConfirmationData {
     created_at: string;
     payment_source?: PaymentSource;
     payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
+    recipient_name?: string | null;
+    is_third_party_recipient?: boolean | null;
     payment_transaction: {
       transaction_id: string | null;
       success: boolean;
@@ -129,6 +134,11 @@ const OrderConfirmationPage: React.FC = () => {
   const isWalletPayment = (src?: PaymentSource) => src === 'wallet';
   const hasPayAtDelivery = orders.some((o) => o.payment_timing === 'pay_at_delivery');
   const hasPayAtPickup = orders.some((o) => o.payment_timing === 'pay_at_pickup');
+  // Diaspora orders name the person receiving them, not the person who paid.
+  const recipientName =
+    orders
+      .find((o) => o.is_third_party_recipient && o.recipient_name?.trim())
+      ?.recipient_name?.trim() ?? null;
   const showMobilePaymentConfirmation = isMultipleOrders
     ? orders.some(
         (o) =>
@@ -253,11 +263,31 @@ const OrderConfirmationPage: React.FC = () => {
               variant="outlined"
             />
           )}
+          {recipientName && (
+            <Chip
+              icon={<CardGiftcard />}
+              label={t('orders.outForRecipient', 'Out for {{name}}', {
+                name: recipientName,
+              })}
+              color="primary"
+              variant="outlined"
+            />
+          )}
           <Chip
             label={t('orders.trackInMyOrders', 'Track progress in My Orders')}
             variant="outlined"
           />
         </Stack>
+
+        {recipientName && (
+          <Typography variant="body2" color="text.secondary">
+            {t(
+              'orders.recipientNotifiedNotice',
+              '{{name}} gets tracking updates and the delivery code by text. They do not need your login.',
+              { name: recipientName }
+            )}
+          </Typography>
+        )}
       </Box>
 
       {/* Payment confirmation: pay-now mobile payments vs pay-at-delivery */}
@@ -373,7 +403,7 @@ const OrderConfirmationPage: React.FC = () => {
             <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
               {t(
                 'orders.payAtDelivery.confirmationMessage',
-                'You chose pay at delivery. You will complete payment in the app when the agent arrives.'
+                'You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
               )}
             </Typography>
           </CardContent>
@@ -422,7 +452,7 @@ const OrderConfirmationPage: React.FC = () => {
             <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
               {t(
                 'orders.pickup.clientPaymentHint',
-                'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
               )}
             </Typography>
           </CardContent>
@@ -734,7 +764,7 @@ const OrderConfirmationPage: React.FC = () => {
                 <Typography variant="body1">
                   {t(
                     'orders.payAtDelivery.step2',
-                    'When the agent arrives, you will receive a mobile payment request in the app.'
+                    'When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
                   )}
                 </Typography>
               </Box>
@@ -761,7 +791,7 @@ const OrderConfirmationPage: React.FC = () => {
                 <Typography variant="body1">
                   {t(
                     'orders.pickup.clientPaymentHint',
-                    'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                    'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
                   )}
                 </Typography>
               </Box>

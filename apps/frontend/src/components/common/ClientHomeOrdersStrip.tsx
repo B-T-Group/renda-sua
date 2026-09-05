@@ -33,6 +33,13 @@ function ctaFor(order: Order, action: OrderPrimaryActionId): {
   defaultValue: string;
   icon: React.ReactElement;
 } {
+  if (action === 'pay' && order.payment_timing === 'pay_at_pickup') {
+    return {
+      key: 'orders.payAtPickup.cta',
+      defaultValue: 'Pay now',
+      icon: <Payment />,
+    };
+  }
   if (action !== 'none' && ORDER_PRIMARY_ACTION_LABEL[action]?.[1]) {
     const [key, defaultValue] = ORDER_PRIMARY_ACTION_LABEL[action];
     const icon =

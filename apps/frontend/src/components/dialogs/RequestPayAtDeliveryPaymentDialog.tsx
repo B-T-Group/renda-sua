@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import PhoneInput from '../common/PhoneInput';
+import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 
 interface RequestPayAtDeliveryPaymentDialogProps {
   open: boolean;
@@ -175,7 +176,10 @@ export default function RequestPayAtDeliveryPaymentDialog({
                 'orders.overridePhoneNumber',
                 'Phone Number for Payment'
               )}
-              defaultCountry="GA"
+              defaultCountry={pickMobileMoneyDefaultCountry(
+                order.business_location?.address?.country
+              )}
+              onlyCountries={['CM', 'GA']}
               disabled={loading}
             />
           ) : null}

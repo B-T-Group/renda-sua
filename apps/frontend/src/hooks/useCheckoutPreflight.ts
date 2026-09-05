@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CheckoutDiaspora } from '../utils/diasporaCheckout';
 import { useApiClient } from './useApiClient';
 
 export type CheckoutPreflightTaxNotice = 'calculated_at_checkout' | null;
@@ -13,6 +14,15 @@ export interface CheckoutPreflightRequest {
   fulfillment_method?: 'delivery' | 'pickup';
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   phone_number?: string;
+  /** ISO 3166-1 alpha-2 billing country of the payer. */
+  payer_country?: string;
+  /** Set when the shopper is buying for a different recipient. */
+  sending_to_someone_else?: boolean;
+  recipient?: {
+    name?: string;
+    phone?: string;
+    notify_whatsapp?: boolean;
+  };
 }
 
 export interface CheckoutDeliveryAvailability {
@@ -33,13 +43,28 @@ export interface CheckoutPreflightGroup {
   seller_state?: string;
   /** Business location id for this group, used to filter slots by operating hours. */
   business_location_id?: string;
+  /** ISO 4217 currency the merchant is actually paid in. */
+  currency?: string;
+  /** Group total in the merchant currency. */
+  total?: number;
+}
+
+export interface CheckoutPreflightBlocker {
+  code: string;
+  message: string;
 }
 
 export interface CheckoutPreflightResult {
   tax_notice?: CheckoutPreflightTaxNotice;
   checkout_method?: 'STRIPE' | 'MOBILE_MONEY';
   can_proceed?: boolean;
+  blocking_errors?: CheckoutPreflightBlocker[];
   groups?: CheckoutPreflightGroup[];
+  /**
+   * Payer-vs-recipient context. Null when the payer and the fulfillment market
+   * resolve to the same rail and no recipient was declared.
+   */
+  diaspora?: CheckoutDiaspora | null;
   /**
    * Aggregated delivery availability. Null when fulfillment is pickup.
    * When `available` is false, show the generic "Delivery is currently
