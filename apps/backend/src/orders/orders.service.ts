@@ -111,6 +111,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
+import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
 
@@ -1065,11 +1066,14 @@ export class OrdersService {
       );
     }
 
-    if (window.is_confirmed) {
-      throw new HttpException(
-        'Delivery time window is already confirmed',
-        HttpStatus.BAD_REQUEST
-      );
+    if (
+      shouldReuseConfirmedDeliveryWindow({
+        windowOrderId: window.order_id,
+        requestOrderId: orderId,
+        isConfirmed: window.is_confirmed,
+      })
+    ) {
+      return window.id;
     }
 
     const now = this.getCurrentTimeInTimezone(timezone);
