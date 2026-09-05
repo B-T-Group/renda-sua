@@ -43,6 +43,7 @@ import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useProductInterest } from '../../hooks/useProductInterest';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import { useListingVariantSelection } from '../../hooks/useListingVariantSelection';
@@ -428,6 +429,7 @@ export default function ItemDetailPage() {
   const { submitInterest } = useProductInterest();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
+  const { isStripeRail } = useIsStripeRail();
   const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
   const variantSel = useListingVariantSelection(
     inventoryItem,
@@ -858,19 +860,9 @@ export default function ItemDetailPage() {
       ? `★ ${ratingAvg.toFixed(1)} · ${ratingCount}`
       : null;
 
-  const hourNow = new Date().getHours();
-  const cutoff = t('items.detail.stickyBar.cutoffTime', '2:00 PM');
-  const stickyDeliveryHint =
-    hourNow < 14
-      ? t(
-          'items.detail.stickyBar.orderBeforeCutoff',
-          'Order before {{cutoff}} for the same-day delivery window.',
-          { cutoff }
-        )
-      : t(
-          'items.detail.stickyBarDeliveryHint',
-          'Get your item delivered in less than 24 hours.'
-        );
+  const stickyCheckoutHint = isStripeRail
+    ? t('items.detail.checkoutHintCard', 'Card at checkout')
+    : t('items.detail.checkoutHint', 'MoMo at checkout');
 
   const dealDiscountPct =
     lp.hasDeal && lp.strikeOriginal != null && lp.strikeOriginal > 0
@@ -1273,7 +1265,10 @@ export default function ItemDetailPage() {
 
             <ItemDetailScarcityBadge quantity={inventoryItem.computed_available_quantity} />
 
-            <ItemDetailTrustStrip isVerifiedSeller={Boolean(business?.is_verified)} />
+            <ItemDetailTrustStrip
+              isVerifiedSeller={Boolean(business?.is_verified)}
+              isStripeRail={isStripeRail}
+            />
 
             {location && business && (
               <Box>
@@ -1343,7 +1338,7 @@ export default function ItemDetailPage() {
                   fontStyle: 'italic',
                 })}
               >
-                {stickyDeliveryHint}
+                {stickyCheckoutHint}
               </Typography>
             ) : null}
 
