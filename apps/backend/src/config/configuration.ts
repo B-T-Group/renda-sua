@@ -729,7 +729,7 @@ export default (): Configuration => {
         process.env.RESEND_FROM_EMAIL || 'Rendasua <noreply@rendasua.com>',
     },
     redis: {
-      host: process.env.REDIS_HOST || 'localhost',
+      host: process.env.REDIS_HOST || (process.env.NODE_ENV === 'development' && !process.env.DEPLOYMENT_ENV ? 'localhost' : ''),
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD,
     },
