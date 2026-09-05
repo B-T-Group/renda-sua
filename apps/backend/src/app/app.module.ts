@@ -91,6 +91,7 @@ import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payme
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { DelegationsModule } from '../delegations/delegations.module';
+import { DiscoveryRailsModule } from '../discovery-rails/discovery-rails.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -212,6 +213,7 @@ import { AppService } from './app.service';
     LaunchPromoModule,
     BusinessesModule,
     DelegationsModule,
+    DiscoveryRailsModule,
     AccountRechargeModule,
     MobilePaymentPhonesModule,
   ],
