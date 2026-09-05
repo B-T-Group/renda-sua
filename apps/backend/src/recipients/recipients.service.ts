@@ -77,10 +77,14 @@ export class RecipientsService {
     try {
       const response = await this.hasuraUserService.executeQuery<{
         user_recipients: UserRecipient[];
-      }>(ctx, query, {
-        userId,
-        country: normalizedCountry,
-      });
+      }>(
+        query,
+        {
+          userId,
+          country: normalizedCountry,
+        },
+        ctx
+      );
 
       return response.user_recipients;
     } catch (error: any) {
@@ -134,7 +138,7 @@ export class RecipientsService {
     try {
       const response = await this.hasuraUserService.executeQuery<{
         user_recipients: UserRecipient[];
-      }>(ctx, query, { id, userId });
+      }>(query, { id, userId }, ctx);
 
       if (response.user_recipients.length === 0) {
         throw new HttpException(
@@ -238,13 +242,17 @@ export class RecipientsService {
     try {
       const response = await this.hasuraUserService.executeMutation<{
         insert_user_recipients_one: UserRecipient;
-      }>(ctx, mutation, {
-        userId,
-        country: normalizedCountry,
-        name: dto.name.trim(),
-        phone: normalizedPhone,
-        notifyWhatsapp: dto.notify_whatsapp ?? false,
-      });
+      }>(
+        mutation,
+        {
+          userId,
+          country: normalizedCountry,
+          name: dto.name.trim(),
+          phone: normalizedPhone,
+          notifyWhatsapp: dto.notify_whatsapp ?? false,
+        },
+        ctx
+      );
 
       return response.insert_user_recipients_one;
     } catch (error: any) {
@@ -337,11 +345,15 @@ export class RecipientsService {
     try {
       const response = await this.hasuraUserService.executeMutation<{
         update_user_recipients: { returning: UserRecipient[] };
-      }>(ctx, mutation, {
-        id,
-        userId,
-        updates,
-      });
+      }>(
+        mutation,
+        {
+          id,
+          userId,
+          updates,
+        },
+        ctx
+      );
 
       if (response.update_user_recipients.returning.length === 0) {
         throw new HttpException(
@@ -404,7 +416,7 @@ export class RecipientsService {
     try {
       const response = await this.hasuraUserService.executeMutation<{
         delete_user_recipients: { affected_rows: number };
-      }>(ctx, mutation, { id, userId });
+      }>(mutation, { id, userId }, ctx);
 
       if (response.delete_user_recipients.affected_rows === 0) {
         throw new HttpException(
