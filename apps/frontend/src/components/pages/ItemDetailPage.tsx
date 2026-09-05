@@ -95,6 +95,7 @@ import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
 import { DeliveryExpectationsCard } from '../common/DeliveryExpectationsCard';
 import { useDeliveryEstimate } from '../../hooks/useDeliveryEstimate';
 import { useMarket } from '../../contexts/MarketContext';
+import { MarketPickerDialog } from '../market/MarketPickerDialog';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -429,9 +430,10 @@ export default function ItemDetailPage() {
   const [interestSubmitting, setInterestSubmitting] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
+  const [marketPickerOpen, setMarketPickerOpen] = React.useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
-  const { selectedMarket } = useMarket();
+  const { selectedMarket, markets, setMarket } = useMarket();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const { isStripeRail } = useIsStripeRail();
@@ -588,6 +590,9 @@ export default function ItemDetailPage() {
         eventType: SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
         subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
         subjectId: id,
+        metadata: {
+          hadEstimate: deliveryEstimate != null,
+        },
       });
       trackView(id);
       if (!isAuthenticated) {
@@ -814,7 +819,8 @@ export default function ItemDetailPage() {
   const hasStock =
     inventoryItem.computed_available_quantity > 0 &&
     inventoryItem.is_active &&
-    !isFoodClosed;
+    !isFoodClosed &&
+    !deliveryBlocked.blocked;
   const variantSelectionReady = variantSel.selectionComplete;
   const cartLineVariantId = toCartVariantId(variantSel.selectedVariantId);
   const inCartQuantity = cartLineVariantId
@@ -886,6 +892,26 @@ export default function ItemDetailPage() {
   }, [selectedMarket, inventoryItem, foodAvailability]);
 
   const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } = useDeliveryEstimate(deliveryEstimateParams);
+
+  const deliveryBlocked = React.useMemo(() => {
+    if (!deliveryEstimate) return { blocked: false, reason: null };
+    
+    if (deliveryEstimate.coverage === 'out') {
+      return { 
+        blocked: true, 
+        reason: t('delivery.outOfCoverage', 'Delivery not available in this area') 
+      };
+    }
+    
+    if (deliveryEstimate.servingStatus && deliveryEstimate.servingStatus !== 'available') {
+      const reason = deliveryEstimate.servingStatus === 'sold_out'
+        ? t('foods.status.soldOutToday', 'Sold out today')
+        : t('foods.status.notServingNow', 'Not serving now');
+      return { blocked: true, reason };
+    }
+    
+    return { blocked: false, reason: null };
+  }, [deliveryEstimate, t]);
 
   const scrollToReviews = () => {
     document
@@ -1346,6 +1372,10 @@ export default function ItemDetailPage() {
               estimate={deliveryEstimate}
               loading={deliveryEstimateLoading}
               itemId={id}
+              category={foodAvailability ? 'food' : 'store'}
+              marketId={selectedMarket?.countryCode}
+              areaId={selectedMarket?.stateCode || undefined}
+              onAreaChange={() => setMarketPickerOpen(true)}
             />
 
             {showMobileStickyOrderBar ? (
@@ -1447,15 +1477,17 @@ export default function ItemDetailPage() {
                   >
                     {t('productInterest.cta', 'I’m interested')}
                   </Button>
-                ) : !hasStock ? (
+                ) : !hasStock || deliveryBlocked.blocked ? (
                   <Button variant="outlined" disabled size="medium">
-                    {isFoodClosed
-                      ? foodStatus === 'sold_out'
-                        ? t('foods.status.soldOutToday', 'Sold out today')
-                        : t('foods.status.notServingNow', 'Not serving now')
-                      : inventoryItem.computed_available_quantity === 0
-                        ? t('items.outOfStock', 'Out of Stock')
-                        : t('items.notAvailable', 'Not Available')}
+                    {deliveryBlocked.blocked
+                      ? deliveryBlocked.reason
+                      : isFoodClosed
+                        ? foodStatus === 'sold_out'
+                          ? t('foods.status.soldOutToday', 'Sold out today')
+                          : t('foods.status.notServingNow', 'Not serving now')
+                        : inventoryItem.computed_available_quantity === 0
+                          ? t('items.outOfStock', 'Out of Stock')
+                          : t('items.notAvailable', 'Not Available')}
                   </Button>
                 ) : !paymentsEnabled || !merchantCanAcceptOrders ? (
                   <Button variant="outlined" disabled size="medium" fullWidth>
@@ -1503,7 +1535,7 @@ export default function ItemDetailPage() {
                         onClick={handleOrderClick}
                         size="medium"
                         fullWidth
-                        disabled={!variantSelectionReady}
+                        disabled={!variantSelectionReady || deliveryBlocked.blocked}
                         sx={(btnTheme) => ({
                           minHeight: 48,
                           fontWeight: 800,
@@ -1973,6 +2005,18 @@ export default function ItemDetailPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+      <MarketPickerDialog
+        open={marketPickerOpen}
+        markets={markets}
+        selectedCode={selectedMarket?.countryCode || 'CM'}
+        selectedStateCode={selectedMarket?.stateCode || null}
+        catalogContext="inventory"
+        onSelect={(countryCode, stateCode) => {
+          setMarket(countryCode, stateCode);
+          setMarketPickerOpen(false);
+        }}
+        onClose={() => setMarketPickerOpen(false)}
+      />
     </>
   );
 }

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
 /**
- * Response shape from BE #196 GET /api/delivery/estimate
+ * Response shape from BE #200 (fixes #196) GET /api/delivery/estimate
+ * Matches apps/backend/src/delivery/dto/delivery-estimate-response.dto.ts
  */
 export interface DeliveryEstimateResponse {
   areaLabel: string;
@@ -12,17 +13,17 @@ export interface DeliveryEstimateResponse {
     band: string;
     start: string | null;
     end: string | null;
-  } | null;
+  };
   fee: {
     currency: string;
     min: number | null;
     max: number | null;
     exact: number | null;
     confidence: 'exact' | 'range' | 'unknown';
-  } | null;
+  };
   servingStatus: string | null;
   coverage: 'in' | 'out';
-  trustVariant: 'map_and_pin' | 'sms_link' | 'app_and_web' | null;
+  trustVariant: 'map_and_pin' | 'sms_link' | 'app_and_web';
 }
 
 export interface DeliveryEstimateParams {

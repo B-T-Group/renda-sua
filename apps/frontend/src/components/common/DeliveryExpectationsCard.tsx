@@ -32,6 +32,9 @@ export interface DeliveryExpectationsCardProps {
   estimate: DeliveryEstimateResponse | null;
   loading?: boolean;
   itemId?: string;
+  category?: 'store' | 'food' | 'rental';
+  marketId?: string;
+  areaId?: string;
   onAreaChange?: () => void;
 }
 
@@ -87,7 +90,7 @@ function getTrustLineLabel(
     return t('delivery.trackSms', 'Track by SMS link');
   }
   if (trustVariant === 'app_and_web') {
-    return t('delivery.trackStandard', 'Track your order in the app');
+    return t('delivery.trackAppAndWeb', 'Track on web or in the app once out for delivery');
   }
   return '';
 }
@@ -96,6 +99,9 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
   estimate,
   loading = false,
   itemId,
+  category,
+  marketId,
+  areaId,
   onAreaChange,
 }) => {
   const { t } = useTranslation();
@@ -112,12 +118,16 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
         subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
         subjectId: itemId,
         metadata: { 
+          category,
+          marketId,
+          areaId,
           areaLabel: estimate.areaLabel,
           coverage: estimate.coverage,
+          feeConfidence: estimate.fee.confidence,
         },
       });
     }
-  }, [loading, itemId, estimate, trackSiteEvent]);
+  }, [loading, itemId, estimate, category, marketId, areaId, trackSiteEvent]);
 
   useEffect(() => {
     if (
@@ -133,14 +143,18 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
         subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
         subjectId: itemId,
         metadata: {
+          category,
+          marketId,
+          areaId,
           areaLabel: estimate.areaLabel,
           hasWindow: estimate.window != null,
           hasFee: estimate.fee != null,
           coverage: estimate.coverage,
+          feeConfidence: estimate.fee.confidence,
         },
       });
     }
-  }, [loading, estimate, itemId, trackSiteEvent]);
+  }, [loading, estimate, itemId, category, marketId, areaId, trackSiteEvent]);
 
   const handleAreaPromptClick = () => {
     if (onAreaChange) {
@@ -206,11 +220,20 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
                 {getFoodStatusLabel(estimate.servingStatus, t)}
               </Typography>
               {estimate.servingStatus === 'closed' && estimate.window && (
-                <Typography variant="caption" color="text.secondary">
-                  {t('delivery.nextOpen', 'Next open: {{time}}', { 
-                    time: estimate.window.label || estimate.window.band 
-                  })}
-                </Typography>
+                <>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {t('delivery.nextOpen', 'Next open: {{time}}', { 
+                      time: estimate.window.label || estimate.window.band 
+                    })}
+                  </Typography>
+                  {estimate.window.band && (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                      {t('delivery.readyWhenOpen', 'Ready in {{band}} when open', { 
+                        band: estimate.window.band 
+                      })}
+                    </Typography>
+                  )}
+                </>
               )}
             </Alert>
           ) : isOutOfCoverage ? (
