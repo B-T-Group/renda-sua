@@ -8772,41 +8772,10 @@ export class OrdersService {
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
-    if (
-      (paymentTiming === 'pay_at_delivery' ||
-        paymentTiming === 'pay_at_pickup') &&
-      !phoneNumber.trim()
-    ) {
-      throw new HttpException(
-        {
-          success: false,
-          message:
-            paymentTiming === 'pay_at_pickup'
-              ? 'Phone number is required for pay at pickup'
-              : 'Phone number is required for pay at delivery',
-          error: 'PHONE_NUMBER_REQUIRED',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
     const itemCountry = resolveItemCountry(
       businessInventories[0]?.business_location?.address?.country,
       businessInventories[0]?.business_location?.business?.user?.country
     );
-    const provider = this.mobilePaymentsService.getProviderForCountry(itemCountry);
-
-    if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
-      throw new HttpException(
-        `Account balance is negative. Please top up your account before placing orders. Current balance: ${availableBalance} ${currency}`,
-        HttpStatus.FORBIDDEN
-      );
-    }
-
-    const canPayWithWallet =
-      paymentTiming === 'pay_now' &&
-      !isZeroOrNegativeOrder &&
-      availableBalance >= requiredAmountForHold;
 
     const fulfillmentCountry =
       normalizeCountryCode(
@@ -8839,12 +8808,46 @@ export class OrdersService {
       sellerCountry: itemCountry ?? undefined,
       payerCountry: payer.payer_country,
     });
-    const paymentRail = railResolution.rail;
+    // Checked before the phone and wallet rules below, which all assume a
+    // payer who is standing in the fulfillment market.
     assertDiasporaPaymentTiming({
       isDiaspora: railResolution.isDiaspora,
       paymentTiming,
     });
 
+    if (
+      (paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup') &&
+      !phoneNumber.trim()
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            paymentTiming === 'pay_at_pickup'
+              ? 'Phone number is required for pay at pickup'
+              : 'Phone number is required for pay at delivery',
+          error: 'PHONE_NUMBER_REQUIRED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const provider = this.mobilePaymentsService.getProviderForCountry(itemCountry);
+
+    if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
+      throw new HttpException(
+        `Account balance is negative. Please top up your account before placing orders. Current balance: ${availableBalance} ${currency}`,
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const canPayWithWallet =
+      paymentTiming === 'pay_now' &&
+      !isZeroOrNegativeOrder &&
+      availableBalance >= requiredAmountForHold;
+
+    const paymentRail = railResolution.rail;
     const useStripeRail =
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
