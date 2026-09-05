@@ -1520,8 +1520,10 @@ export class OrdersService {
   }
 
   /**
-   * Persist ready-time pickup_by and, for delivery, the agent dispatch gate.
-   * Pickup orders are never dispatched (returns null after writing pickup_by).
+   * Compute when agent dispatch/open-order visibility should open for a newly
+   * ready_for_pickup order (dispatch lead time before the scheduled delivery/
+   * pickup window) and persist it. Delivery orders only; pickup orders are
+   * never dispatched. Returns null for pickup/shipping orders or on failure.
    */
   private async scheduleAgentDispatchGate(
     order: Orders
@@ -1619,24 +1621,6 @@ export class OrdersService {
         ) { id }
       }`,
       { id: orderId }
-    );
-  }
-
-  private async persistPickupBy(
-    orderId: string,
-    pickupBy: Date | null
-  ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(
-      `mutation SetPickupBy($id: uuid!, $pickupBy: timestamptz) {
-        update_orders_by_pk(
-          pk_columns: { id: $id }
-          _set: { pickup_by: $pickupBy, updated_at: "now()" }
-        ) { id }
-      }`,
-      {
-        id: orderId,
-        pickupBy: pickupBy ? pickupBy.toISOString() : null,
-      }
     );
   }
 
