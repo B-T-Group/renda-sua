@@ -6909,36 +6909,22 @@ export class OrdersService {
         | undefined;
       if (paymentTiming !== 'pay_now') return;
       if ((order as any).payment_status === 'authorized') return;
+      if (this.isTerminalOrderForPaymentFinalize(order)) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
 
       const at = new Date().toISOString();
       const paymentIntentId = transaction.transaction_id ?? null;
-      await this.hasuraSystemService.executeMutation(
-        `
-        mutation AuthorizeOrderPayment(
-          $orderId: uuid!
-          $at: timestamptz!
-          $paymentIntentId: String
-        ) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: {
-              current_status: pending
-              payment_status: "authorized"
-              payment_authorized_at: $at
-              stripe_payment_intent_id: $paymentIntentId
-              updated_at: $at
-            }
-          ) {
-            id
-          }
-        }
-      `,
-        {
-          orderId: order.id,
-          at,
-          paymentIntentId,
-        }
-      );
+      const authorized = await this.tryAuthorizePendingOrder({
+        orderId: order.id,
+        at,
+        paymentIntentId,
+      });
+      if (!authorized) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
 
       await this.createStatusHistoryEntry(
         order.id,
@@ -6997,6 +6983,11 @@ export class OrdersService {
         | 'pay_at_pickup'
         | undefined;
 
+      if (this.isTerminalOrderForPaymentFinalize(order)) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
+
       if (
         paymentTiming === 'pay_now' &&
         (order as any).payment_status === 'paid'
@@ -7021,6 +7012,74 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  private isTerminalOrderForPaymentFinalize(order: {
+    current_status?: string;
+    payment_status?: string | null;
+  }): boolean {
+    const paymentStatus = order.payment_status;
+    return (
+      order.current_status === 'cancelled' ||
+      order.current_status === 'failed' ||
+      order.current_status === 'refunded' ||
+      paymentStatus === 'cancelled' ||
+      paymentStatus === 'refunded'
+    );
+  }
+
+  private async rejectLateStripePaymentForOrder(order: Orders): Promise<void> {
+    this.logger.warn(
+      `Ignoring late Stripe payment for ${order.current_status} order ${order.order_number}`
+    );
+    await this.stripeCaptureService.cancelOrderPaymentIntent({
+      orderNumber: order.order_number,
+      orderId: order.id,
+    });
+  }
+
+  private async tryAuthorizePendingOrder(params: {
+    orderId: string;
+    at: string;
+    paymentIntentId: string | null;
+  }): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation AuthorizeOrderPayment(
+        $orderId: uuid!
+        $at: timestamptz!
+        $paymentIntentId: String
+        $allowedStatuses: [order_status!]!
+      ) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _in: $allowedStatuses } }
+            ]
+          }
+          _set: {
+            current_status: pending
+            payment_status: "authorized"
+            payment_authorized_at: $at
+            stripe_payment_intent_id: $paymentIntentId
+            updated_at: $at
+          }
+        ) {
+          affected_rows
+        }
+      }
+    `,
+      {
+        orderId: params.orderId,
+        at: params.at,
+        paymentIntentId: params.paymentIntentId,
+        allowedStatuses: ['pending_payment', 'pending'],
+      }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
   /**
