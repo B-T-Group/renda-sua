@@ -4127,7 +4127,7 @@
       "trustSignals": {
         "deliveryTime": "Livraison 24-48h",
         "securePayment": "Paiements sécurisés (MTN, Orange, Moov, Airtel Money)"
-      }
+      },
       "mockupCaption": "Exemple en cours de livraison"
     },
     "howItWorks": {
@@ -6851,8 +6851,8 @@
         "notifications": "Notifications push instantanées pour chaque mise à jour",
         "pin": "Vérification PIN de livraison sécurisée",
         "checkout": "Paiement plus rapide avec les adresses enregistrées"
+      },
       "mockupCaption": "Exemple en cours de livraison"
-      }
     },
     "faq": {
       "title": "Questions fréquemment posées",

@@ -12,7 +12,7 @@
       "subheadline": "Want to own something? Rendasua's got your back. Just want to rent it? We've still got your back. Browse local businesses, order or book in minutes, and track every delivery in real time.",
       "browseItems": "Browse Items",
       "browseRentals": "Browse Rentals",
-      "sellOnRendasua": "Sell on Rendasua"
+      "sellOnRendasua": "Sell on Rendasua",
       "mockupCaption": "Example while out for delivery"
     },
     "trust": {
@@ -202,7 +202,7 @@
         "notifications": "Instant push notifications for every update",
         "pin": "Secure delivery PIN verification",
         "checkout": "Faster checkout with saved addresses"
-      }
+      },
       "mockupCaption": "Example while out for delivery"
     },
     "faq": {
