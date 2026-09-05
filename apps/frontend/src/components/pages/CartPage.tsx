@@ -1,7 +1,6 @@
 import {
   Add,
   ArrowBack,
-  CheckCircle,
   Delete,
   LocalShipping,
   Remove,
@@ -18,9 +17,6 @@ import {
   Divider,
   IconButton,
   Paper,
-  Step,
-  StepLabel,
-  Stepper,
   Typography,
 } from '@mui/material';
 import React, { useMemo } from 'react';
@@ -35,6 +31,7 @@ import {
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
+import CheckoutProgressStepper from '../common/CheckoutProgressStepper';
 
 const CartPage: React.FC = () => {
   const { t } = useTranslation();
@@ -130,19 +127,7 @@ const CartPage: React.FC = () => {
       </Box>
 
       {/* Progress Stepper */}
-      <Box sx={{ mb: 4 }}>
-        <Stepper activeStep={0} alternativeLabel>
-          <Step>
-            <StepLabel>{t('cart.steps.cart', 'Cart')}</StepLabel>
-          </Step>
-          <Step>
-            <StepLabel>{t('cart.steps.checkout', 'Checkout')}</StepLabel>
-          </Step>
-          <Step>
-            <StepLabel>{t('cart.steps.pay', 'Pay')}</StepLabel>
-          </Step>
-        </Stepper>
-      </Box>
+      <CheckoutProgressStepper activeStep={0} />
 
       <Box
         sx={{
