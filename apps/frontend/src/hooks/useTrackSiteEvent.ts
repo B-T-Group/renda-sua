@@ -67,6 +67,16 @@ export const SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP =
 export const SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP =
   'checkout.order_created_pickup' as const;
 
+// PDP Delivery Expectations Card events
+export const SITE_EVENT_DELIVERY_CARD_VIEW =
+  'inventory.delivery_card.view' as const;
+
+export const SITE_EVENT_DELIVERY_CARD_AREA_PROMPT_CLICK =
+  'inventory.delivery_card.area_prompt_click' as const;
+
+export const SITE_EVENT_DELIVERY_CARD_ESTIMATE_READY =
+  'inventory.delivery_card.estimate_ready' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -87,7 +97,10 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT
   | typeof SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN
   | typeof SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP
-  | typeof SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP;
+  | typeof SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP
+  | typeof SITE_EVENT_DELIVERY_CARD_VIEW
+  | typeof SITE_EVENT_DELIVERY_CARD_AREA_PROMPT_CLICK
+  | typeof SITE_EVENT_DELIVERY_CARD_ESTIMATE_READY;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;
