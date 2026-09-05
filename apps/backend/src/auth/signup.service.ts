@@ -408,6 +408,10 @@ export class SignupService {
         userAgent,
         ipAddress,
       });
+      
+      // SECURITY: Store sessionId in completion_result so replays reuse the same session
+      await this.updateCompletionSessionId(body.attemptId, sessionId);
+      
       return {
         sessionId,
         response: {

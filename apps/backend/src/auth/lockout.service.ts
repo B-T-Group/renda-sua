@@ -22,7 +22,7 @@ export class LockoutService implements OnModuleDestroy {
   private readonly MAX_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
   private readonly ATTEMPT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-  private readonly LOCKOUT_TTL_SECONDS = Math.ceil(this.LOCKOUT_DURATION_MS / 1000);
+  private readonly LOCKOUT_TTL_SECONDS = Math.ceil((this.ATTEMPT_WINDOW_MS) / 1000); // 1 hour TTL for attempt tracking
   
   constructor(private readonly configService: ConfigService<Configuration>) {
     this.initializeRedis().catch((err) =>
@@ -88,6 +88,7 @@ export class LockoutService implements OnModuleDestroy {
    */
   async isLockedOut(identifier: string): Promise<boolean> {
     const key = this.normalizeKey(identifier);
+    const nodeEnv = process.env.NODE_ENV || 'development';
     
     if (this.redisClient?.isOpen) {
       const data = await this.redisClient.get(`lockout:${key}`);
@@ -105,6 +106,13 @@ export class LockoutService implements OnModuleDestroy {
         return false;
       }
     } else {
+      // SECURITY: In production, fail closed if Redis is unavailable
+      if (nodeEnv === 'production') {
+        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
+        throw new Error('Lockout service unavailable');
+      }
+      
+      // Development: fall back to in-memory
       const entry = this.inMemoryStore.get(key);
       if (!entry) return false;
       
@@ -127,6 +135,7 @@ export class LockoutService implements OnModuleDestroy {
   async recordFailure(identifier: string): Promise<void> {
     const key = this.normalizeKey(identifier);
     const now = Date.now();
+    const nodeEnv = process.env.NODE_ENV || 'development';
     
     if (this.redisClient?.isOpen) {
       const data = await this.redisClient.get(`lockout:${key}`);
@@ -145,6 +154,13 @@ export class LockoutService implements OnModuleDestroy {
         JSON.stringify(entry)
       );
     } else {
+      // SECURITY: In production, fail closed if Redis is unavailable
+      if (nodeEnv === 'production') {
+        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
+        throw new Error('Lockout service unavailable');
+      }
+      
+      // Development: fall back to in-memory
       const entry = this.inMemoryStore.get(key) || { attempts: 0 };
       
       entry.attempts += 1;
@@ -171,10 +187,18 @@ export class LockoutService implements OnModuleDestroy {
    */
   async recordSuccess(identifier: string): Promise<void> {
     const key = this.normalizeKey(identifier);
+    const nodeEnv = process.env.NODE_ENV || 'development';
     
     if (this.redisClient?.isOpen) {
       await this.redisClient.del(`lockout:${key}`);
     } else {
+      // SECURITY: In production, fail closed if Redis is unavailable
+      if (nodeEnv === 'production') {
+        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
+        throw new Error('Lockout service unavailable');
+      }
+      
+      // Development: fall back to in-memory
       this.inMemoryStore.delete(key);
     }
   }
@@ -184,6 +208,7 @@ export class LockoutService implements OnModuleDestroy {
    */
   async getRemainingLockoutMs(identifier: string): Promise<number> {
     const key = this.normalizeKey(identifier);
+    const nodeEnv = process.env.NODE_ENV || 'development';
     
     if (this.redisClient?.isOpen) {
       const data = await this.redisClient.get(`lockout:${key}`);
@@ -199,6 +224,13 @@ export class LockoutService implements OnModuleDestroy {
         return 0;
       }
     } else {
+      // SECURITY: In production, fail closed if Redis is unavailable
+      if (nodeEnv === 'production') {
+        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
+        throw new Error('Lockout service unavailable');
+      }
+      
+      // Development: fall back to in-memory
       const entry = this.inMemoryStore.get(key);
       if (!entry?.lockedUntil) return 0;
       
@@ -212,6 +244,7 @@ export class LockoutService implements OnModuleDestroy {
    */
   async getAttemptCount(identifier: string): Promise<number> {
     const key = this.normalizeKey(identifier);
+    const nodeEnv = process.env.NODE_ENV || 'development';
     
     if (this.redisClient?.isOpen) {
       const data = await this.redisClient.get(`lockout:${key}`);
@@ -224,6 +257,13 @@ export class LockoutService implements OnModuleDestroy {
         return 0;
       }
     } else {
+      // SECURITY: In production, fail closed if Redis is unavailable
+      if (nodeEnv === 'production') {
+        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
+        throw new Error('Lockout service unavailable');
+      }
+      
+      // Development: fall back to in-memory
       return this.inMemoryStore.get(key)?.attempts || 0;
     }
   }
