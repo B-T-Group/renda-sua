@@ -862,6 +862,80 @@ describe('OrdersService', () => {
       expect(orderCleanup.cancelUnpaidPendingPaymentAsSystem).not.toHaveBeenCalled();
       releaseSpy.mockRestore();
     });
+
+    it('cancels unpaid pending create without releasing inventory after reserve failure', async () => {
+      const orderCleanup = (service as any).orderCleanupService as {
+        cancelUnpaidPendingPaymentAsSystem: jest.Mock;
+      };
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+        id: 'order-123',
+        order_number: '12345678',
+        current_status: 'pending',
+        payment_status: 'pending',
+        client: { user_id: 'client-456' },
+        currency: 'XAF',
+      });
+      const releaseSpy = jest
+        .spyOn(service as any, 'releaseWalletHoldsForPendingPaymentOrder')
+        .mockResolvedValue(undefined);
+
+      await (service as any).compensateUnpaidCreate(
+        'order-123',
+        'Create failed: inventory reservation error',
+        { releaseInventory: false, allowPendingUnpaid: true }
+      );
+
+      expect(releaseSpy).toHaveBeenCalledWith('order-123');
+      expect(orderCleanup.cancelUnpaidPendingPaymentAsSystem).toHaveBeenCalledWith(
+        'order-123',
+        'Create failed: inventory reservation error',
+        { allowPendingUnpaid: true, releaseInventory: false }
+      );
+      releaseSpy.mockRestore();
+    });
+  });
+
+  describe('updateReservedQuantities', () => {
+    it('rolls back earlier atomic reserves when a later increment fails', async () => {
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          try_reserve_business_inventory: [{ id: 'inventory-a' }],
+        })
+        .mockResolvedValueOnce({
+          try_reserve_business_inventory: [],
+        })
+        .mockResolvedValueOnce({
+          try_release_business_inventory: [{ id: 'inventory-a' }],
+        });
+
+      await expect(
+        service.updateReservedQuantities(
+          [
+            { business_inventory_id: 'inventory-a', quantity: 2 },
+            { business_inventory_id: 'inventory-b', quantity: 1 },
+          ],
+          'increment'
+        )
+      ).rejects.toMatchObject({
+        response: { error: 'INVENTORY_RESERVATION_FAILED' },
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('try_reserve_business_inventory'),
+        { inventoryId: 'inventory-a', qty: 2 }
+      );
+      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('try_reserve_business_inventory'),
+        { inventoryId: 'inventory-b', qty: 1 }
+      );
+      expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining('try_release_business_inventory'),
+        { inventoryId: 'inventory-a', qty: 2 }
+      );
+    });
   });
 
   describe.skip('confirmOrder', () => {

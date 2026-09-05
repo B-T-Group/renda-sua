@@ -839,6 +839,74 @@ describe('OrderCleanupService', () => {
       });
     });
 
+    it('cancels unpaid pending when allowPendingUnpaid is set', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'pending',
+            payment_status: 'pending',
+            payment_source: 'mobile_payment',
+            order_items: [
+              { id: 'oi1', business_inventory_id: 'inv-1', quantity: 2 },
+            ],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_payment',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Create failed: inventory reservation error',
+        { allowPendingUnpaid: true, releaseInventory: false }
+      );
+
+      expect(result).toEqual({ cancelled: true });
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('update_business_inventory_by_pk')
+        )
+      ).toBe(false);
+      const claim = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('CleanupClaimCancel')
+      );
+      expect(claim?.[1].expectedStatus).toBe('pending');
+    });
+
+    it('does not cancel pending unless allowPendingUnpaid is set', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'A1',
+          current_status: 'pending',
+          payment_status: 'pending',
+          payment_source: 'mobile_payment',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'status_pending',
+      });
+    });
+
     it('skips payment_failed_grace until grace elapses', async () => {
       hasura.executeQuery.mockResolvedValueOnce({
         orders_by_pk: {
