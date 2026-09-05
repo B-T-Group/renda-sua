@@ -21,6 +21,10 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `payment_failed` | `rs_payment_failed` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `ai_proposal_ready` | `rs_ai_proposal` | UTILITY | itemName | URL CTA → `/app/items/{{1}}` |
 | `admin_order_risk` | `rs_admin_order_risk` | UTILITY | orderNumber, riskLabel, reason | URL CTA → `/app/admin/orders/{{1}}` |
+| `recipient_order_placed` | `rs_recipient_order_placed` | UTILITY | payerName, storeName, orderNumber | No button (third-party recipient) |
+| `recipient_out_for_delivery` | `rs_recipient_out_for_delivery` | UTILITY | orderNumber | No button (third-party recipient) |
+| `recipient_order_ready` | `rs_recipient_order_ready` | UTILITY | orderNumber, storeName | No button (third-party recipient) |
+| `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | No button (third-party recipient) |
 
 ## Meta body rules (important)
 
@@ -367,7 +371,104 @@ Ouvrez le panneau d’administration pour contacter le client, le commerçant ou
 
 ---
 
-## 12. `rs_login_code` (AUTHENTICATION, Auth0)
+
+---
+
+## 12. `rs_recipient_order_placed`
+
+**Vars:** `{{1}}` payerName · `{{2}}` storeName · `{{3}}` orderNumber  
+**Button:** None (third-party recipient, no app account)
+
+**en**
+```
+Rendasua: someone placed an order for you.
+
+{{1}} ordered for you at {{2}}.
+Order number: {{3}}.
+
+You will receive tracking updates and your delivery code on WhatsApp.
+```
+
+**fr**
+```
+Rendasua : quelqu'un a commandé pour vous.
+
+{{1}} a commandé pour vous chez {{2}}.
+Numéro de commande : {{3}}.
+
+Vous recevrez les mises à jour de suivi et votre code de livraison sur WhatsApp.
+```
+
+---
+
+## 13. `rs_recipient_out_for_delivery`
+
+**Vars:** `{{1}}` orderNumber  
+**Button:** None (third-party recipient, no app account)
+
+**en**
+```
+Rendasua: your order is out for delivery.
+
+Order {{1}} is on the way. Give your delivery code only to the Rendasua agent at handover.
+```
+
+**fr**
+```
+Rendasua : votre commande est en cours de livraison.
+
+La commande {{1}} est en route. Donnez votre code de livraison uniquement au livreur Rendasua lors de la remise.
+```
+
+---
+
+## 14. `rs_recipient_order_ready`
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` storeName  
+**Button:** None (third-party recipient, no app account)
+
+**en**
+```
+Rendasua: your order is ready for pickup.
+
+Order {{1}} can be collected at {{2}}. Show your pickup code when you arrive.
+```
+
+**fr**
+```
+Rendasua : votre commande est prête pour le retrait.
+
+La commande {{1}} peut être récupérée chez {{2}}. Présentez votre code de retrait à votre arrivée.
+```
+
+---
+
+## 15. `rs_recipient_order_update`
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` statusLabel  
+**Button:** None (third-party recipient, no app account)
+
+Used for confirmed / delivered / cancelled statuses. The `statusLabel` is localized at send time.
+
+**en**
+```
+Rendasua order update.
+
+Order {{1}} status: {{2}}.
+
+You will get further updates here if anything changes.
+```
+
+**fr**
+```
+Mise à jour de commande Rendasua.
+
+Statut de la commande {{1}} : {{2}}.
+
+Vous recevrez d'autres mises à jour ici si quelque chose change.
+```
+
+## 16. `rs_login_code` (AUTHENTICATION, Auth0)
 
 Auth0 sends this login OTP. It is **not** mapped in `WhatsAppTemplateService` and is not sent by Nest.
 
