@@ -28,6 +28,12 @@ import { isPersonaId, type PersonaId } from '../users/persona.types';
 import { normalizeAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
 import type { AgentLocationTrackingConsent } from '../agents/dto/update-location-tracking-consent.dto';
 import { HasuraSystemService } from './hasura-system.service';
+import {
+  formatHasuraNetworkError,
+  isTransientHasuraNetworkError,
+  mapExhaustedHasuraQueryError,
+  requestHasuraWithRetry,
+} from './hasura-request.util';
 
 export type MeAgent = Agents & {
   location_tracking_consent_ios: AgentLocationTrackingConsent;
@@ -195,7 +201,14 @@ export class HasuraUserService {
     variables?: any,
     ctx?: RequestContext
   ): Promise<T> {
-    return this.createGraphQLClient(ctx).request<T>(query, variables);
+    try {
+      return await requestHasuraWithRetry(
+        () => this.createGraphQLClient(ctx).request<T>(query, variables),
+        this.logger
+      );
+    } catch (error: any) {
+      mapExhaustedHasuraQueryError(error);
+    }
   }
 
   /**
@@ -883,23 +896,41 @@ export class HasuraUserService {
 
       return user;
     } catch (error: any) {
-      this.logger.error('Error in getUser()', {
-        userId,
-        error: error.message,
-        stack: error.stack,
-      });
+      this.rethrowGetUserFailure(error, userId);
+    }
+  }
 
-      if (error instanceof HttpException) {
-        throw error;
-      }
+  private rethrowGetUserFailure(error: any, userId: string): never {
+    this.logger.error('Error in getUser()', {
+      userId,
+      error: formatHasuraNetworkError(error),
+      stack: error.stack,
+    });
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    if (error.message?.includes('User not found')) {
+      throw error;
+    }
+    throw this.toGetUserFailure(error);
+  }
 
-      if (error.message?.includes('User not found')) {
-        throw error;
-      }
-      throw new Error(
-        `Failed to get user by id: ${error.message || 'Unknown error'}`
+  private toGetUserFailure(error: any): Error {
+    if (isTransientHasuraNetworkError(error)) {
+      return new HttpException(
+        {
+          success: false,
+          error: 'Temporarily unable to load user profile',
+          message: 'Temporarily unable to load user profile',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+        { cause: error instanceof Error ? error : undefined }
       );
     }
+    return new Error(
+      `Failed to get user by id: ${formatHasuraNetworkError(error)}`,
+      { cause: error instanceof Error ? error : undefined }
+    );
   }
 
   /** Ensures `/users/me` always exposes platform-specific location consent fields. */

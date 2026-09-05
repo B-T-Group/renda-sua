@@ -247,6 +247,39 @@ describe('WhatsAppInboundService', () => {
     });
   });
 
+  it('acknowledges the webhook when command routing hits Hasura 404', async () => {
+    const service = buildService();
+    replyService.handleInboundText.mockRejectedValue(
+      new Error(
+        'GraphQL Error (Code: 404): {"response":{"error":"<html><title>404 Not Found</title></html>","status":404}}'
+      )
+    );
+
+    await expect(
+      service.handleWebhookBody({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: '15557654321',
+                      id: 'wamid.in.404',
+                      type: 'text',
+                      text: { body: 'CONFIRM' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      })
+    ).resolves.toEqual({ received: true });
+    expect(replyService.handleInboundText).toHaveBeenCalled();
+  });
+
   it('routes template quick-reply button taps', async () => {
     const service = buildService();
     replyService.handleInteractiveReply = jest.fn();
