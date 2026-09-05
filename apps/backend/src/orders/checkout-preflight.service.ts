@@ -9,6 +9,7 @@
  * If you change a rule in one, change it in both.
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -23,6 +24,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
   CheckoutBlockerDto,
+  CheckoutDiasporaDto,
   CheckoutDiscountPreviewDto,
   CheckoutGroupDto,
   CheckoutItemLineDto,
@@ -32,6 +34,12 @@ import {
   DeliveryAvailabilityDto,
   VerificationMethod,
 } from './dto/checkout-preflight.dto';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import {
+  DIASPORA_ERROR_CODES,
+  normalizeCountryCode,
+  normalizeRecipientPhone,
+} from '../diaspora/diaspora-order.util';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
 import {
   resolveShopperVariant,
@@ -41,6 +49,9 @@ import {
   fetchStripeEnabledCountries,
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
+import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { resolveItemCountry } from '../mobile-payments/item-country.util';
+import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 
 const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
   query GetInventoryForPreflight($ids: [uuid!]!) {
@@ -59,6 +70,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         id
         business_id
         is_active
+        operating_hours
         mobile_payment_phone {
           is_verified
         }
@@ -66,9 +78,18 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           id
           name
           can_accept_orders
+          default_estimated_prep_minutes
           user { id country }
         }
         address { country state latitude longitude }
+      }
+      food_settings {
+        marked_unavailable_at
+        availability_slots(order_by: [{ day_of_week: asc }, { start_time: asc }]) {
+          day_of_week
+          start_time
+          end_time
+        }
       }
       item {
         id
@@ -76,11 +97,16 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         currency
         weight
         max_order_quantity
+        preparation_minutes
         pay_on_delivery_enabled
+        interest_only
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
         shipping_currency
+        item_sub_category {
+          item_category { name }
+        }
         item_variants(where: { is_active: { _eq: true } }, order_by: { sort_order: asc }) {
           id
           name
@@ -122,7 +148,9 @@ export class CheckoutPreflightService {
     private readonly configService: ConfigService,
     private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
-    private readonly metaConversionsService: MetaConversionsService
+    private readonly metaConversionsService: MetaConversionsService,
+    private readonly fulfillmentPromiseService: FulfillmentPromiseService,
+    private readonly fxEstimateService: FxEstimateService
   ) {}
 
   async resolve(
@@ -198,6 +226,11 @@ export class CheckoutPreflightService {
           code: 'ITEM_UNAVAILABLE',
           message: `${inv.item?.name ?? 'An item'} is not currently available.`,
         });
+      } else if (inv.item?.interest_only === true) {
+        blockers.push({
+          code: 'INTEREST_ONLY_ITEM',
+          message: `${inv.item?.name ?? 'An item'} cannot be purchased. Submit interest instead.`,
+        });
       } else if (inv.business_location?.is_active !== true) {
         blockers.push({
           code: 'ITEM_UNAVAILABLE',
@@ -210,6 +243,9 @@ export class CheckoutPreflightService {
           code: 'LOCATION_PAYMENTS_COMING_SOON',
           message: `${inv.item?.name ?? 'An item'} is not available for purchase yet. Payments at this location are coming soon.`,
         });
+      } else {
+        const foodBlock = checkFoodOrderable(inv);
+        if (foodBlock) blockers.push(foodBlock);
       }
     }
 
@@ -236,15 +272,12 @@ export class CheckoutPreflightService {
       const inv = inventoryById.get(line.business_inventory_id)!;
       const businessId: string = inv.business_location?.business_id;
       const ownerId: string = inv.business_location?.business?.user?.id ?? '';
-      // Seller country comes from the owner's users.country (canonical market
-      // source); fall back to the location address for unbackfilled users.
-      const sellerCountry: string = (
-        inv.business_location?.business?.user?.country ??
-        inv.business_location?.address?.country ??
-        ''
-      )
-        .trim()
-        .toUpperCase();
+      // Item country is the listing location; owner country is only a fallback.
+      const sellerCountry: string =
+        resolveItemCountry(
+          inv.business_location?.address?.country,
+          inv.business_location?.business?.user?.country
+        ) ?? '';
       const sellerState: string = (
         inv.business_location?.address?.state ?? ''
       ).trim();
@@ -355,14 +388,35 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     // 6. Resolve payment rail per seller group
     // -----------------------------------------------------------------------
+    const payerCountry = await this.resolvePayerCountry(dto, isAuthenticated);
+    const fulfillmentCountry =
+      deliveryCountry ??
+      normalizeCountryCode(guestCountry) ??
+      normalizeCountryCode(sellerCountries[0]);
+
     const groupRails = new Map<string, 'stripe' | 'mobile_money'>();
+    let diasporaRailSource: 'seller' | 'payer' = 'seller';
     for (const [businessId, group] of businessMap) {
       // Resolve rail from the seller's country (already on the inventory row),
-      // not via a user-level address lookup which can miss records.
-      const rail = group.sellerCountry
-        ? await this.paymentRoutingService.resolveRailForCountry(group.sellerCountry)
-        : 'mobile_money';
-      groupRails.set(businessId, rail);
+      // not via a user-level address lookup which can miss records. A payer
+      // billing from a Stripe country can also unlock Stripe for a
+      // mobile-money merchant — see PaymentRoutingService.resolveOrderRail.
+      const resolution = await this.paymentRoutingService.resolveOrderRail({
+        sellerCountry: group.sellerCountry || null,
+        payerCountry,
+      });
+      if (resolution.isDiaspora) diasporaRailSource = 'payer';
+      groupRails.set(businessId, resolution.rail);
+    }
+    const isDiaspora = diasporaRailSource === 'payer';
+
+    this.collectRecipientBlockers(dto, fulfillmentCountry, blockers);
+    if (isDiaspora && (dto.payment_timing ?? 'pay_now') !== 'pay_now') {
+      blockers.push({
+        code: DIASPORA_ERROR_CODES.requiresPayNow,
+        message:
+          'Orders paid from abroad must be paid online at checkout. Pay at delivery and pay at pickup are not available.',
+      });
     }
 
     // Determine overall checkout method (all groups must agree, or we pick dominant)
@@ -505,19 +559,19 @@ export class CheckoutPreflightService {
         }
       }
 
-      // Mobile money provider
       let mobileMoneyProvider: string | null = null;
-      if (rail === 'mobile_money' && dto.phone_number?.trim()) {
-        try {
-          mobileMoneyProvider = this.mobilePaymentsService.getProvider(dto.phone_number.trim());
-        } catch {
-          mobileMoneyProvider = null;
-        }
+      if (rail === 'mobile_money') {
+        mobileMoneyProvider = this.mobilePaymentsService.getProviderForCountry(
+          group.sellerCountry
+        );
       }
 
-      // Phone country alignment for Mobile Money
       if (rail === 'mobile_money' && dto.phone_number?.trim() && group.sellerCountry) {
-        if (!mobileMoneyProvider) {
+        const phoneOk = validatePhoneNumber(
+          dto.phone_number.trim(),
+          group.sellerCountry
+        ).isValid;
+        if (!phoneOk) {
           blockers.push({
             code: 'MOBILE_MONEY_PHONE_UNSUPPORTED',
             message: `The phone number provided is not supported for Mobile Money payments in ${group.sellerCountry}.`,
@@ -596,6 +650,25 @@ export class CheckoutPreflightService {
       }
 
       const totalFee = shippingFee ?? deliveryFee ?? 0;
+      const location = group.inventoryRows[0]?.business_location;
+      const configuredPrep =
+        this.configService.get<Configuration['order']>('order')
+          ?.defaultEstimatedPrepMinutes ?? 30;
+      const prepMinutes =
+        typeof location?.business?.default_estimated_prep_minutes === 'number' &&
+        location.business.default_estimated_prep_minutes > 0
+          ? location.business.default_estimated_prep_minutes
+          : configuredPrep;
+      const timezone = await this.fulfillmentPromiseService.timezoneForCountry(
+        group.sellerCountry
+      );
+      const asap = this.fulfillmentPromiseService.evaluateAsap({
+        operatingHours: location?.operating_hours,
+        prepMinutes,
+        fulfillmentMethod: fulfillment,
+        timezone,
+        isFastDelivery: dto.requires_fast_delivery === true,
+      });
 
       groups.push({
         business_id: businessId,
@@ -616,6 +689,13 @@ export class CheckoutPreflightService {
         pickup_eligible: allPayAtPickup,
         shipping_eligible: allShippingEnabled,
         items: itemLines,
+        asap_available: asap.available,
+        asap_disabled_reason: asap.reason,
+        opens_at: asap.opensAt ?? null,
+        estimated_prep_minutes: asap.estimatedPrepMinutes,
+        estimated_ready_at: asap.estimatedReadyAt,
+        estimated_fulfill_by: asap.estimatedFulfillBy,
+        schedule_required: asap.scheduleRequired,
       });
     }
 
@@ -698,6 +778,14 @@ export class CheckoutPreflightService {
       this.scheduleInitiateCheckout(dto, groups, meta);
     }
 
+    const asapGroups = groups.filter((g) => fulfillment !== 'shipping');
+    const scheduleRequired = asapGroups.some((g) => g.schedule_required);
+    const asapAvailable =
+      fulfillment !== 'shipping' &&
+      asapGroups.length > 0 &&
+      asapGroups.every((g) => g.asap_available);
+    const firstBlocked = asapGroups.find((g) => !g.asap_available);
+
     return {
       success: true,
       can_proceed: canProceed,
@@ -720,6 +808,116 @@ export class CheckoutPreflightService {
         fulfillment === 'delivery'
           ? this.aggregateDeliveryAvailability(groups)
           : null,
+      asap_available: asapAvailable,
+      asap_disabled_reason: firstBlocked?.asap_disabled_reason,
+      opens_at: firstBlocked?.opens_at ?? asapGroups[0]?.opens_at ?? null,
+      estimated_prep_minutes: asapGroups[0]?.estimated_prep_minutes,
+      estimated_ready_at: asapGroups[0]?.estimated_ready_at,
+      estimated_fulfill_by: asapGroups[0]?.estimated_fulfill_by,
+      schedule_required: scheduleRequired,
+      diaspora: this.buildDiasporaBlock({
+        dto,
+        isDiaspora,
+        railSource: diasporaRailSource,
+        payerCountry,
+        fulfillmentCountry,
+        groups,
+      }),
+    };
+  }
+
+  /**
+   * Billing country of the payer: the explicit checkout selection first, then
+   * the authenticated profile country. Never the delivery country.
+   */
+  private async resolvePayerCountry(
+    dto: CheckoutPreflightDto,
+    isAuthenticated: boolean
+  ): Promise<string | null> {
+    const requested = normalizeCountryCode(dto.payer_country);
+    if (!isAuthenticated) return requested;
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.id) return requested;
+      const profile = normalizeCountryCode(
+        await this.paymentRoutingService.getUserCountryCode(user.id)
+      );
+      return this.paymentRoutingService.resolveTrustedPayerCountry({
+        profileCountry: profile,
+        requestedCountry: requested,
+      });
+    } catch (err: any) {
+      this.logger.warn('Preflight payer country lookup failed', err?.message);
+      return requested;
+    }
+  }
+
+  /** Validates the recipient block so checkout fails before the card is charged. */
+  private collectRecipientBlockers(
+    dto: CheckoutPreflightDto,
+    fulfillmentCountry: string | null,
+    blockers: CheckoutBlockerDto[]
+  ): void {
+    const name = dto.recipient?.name?.trim();
+    const phone = dto.recipient?.phone?.trim();
+    const wantsThirdParty =
+      dto.sending_to_someone_else === true || Boolean(name || phone);
+    if (!wantsThirdParty) return;
+
+    if (!name || !phone) {
+      blockers.push({
+        code: DIASPORA_ERROR_CODES.recipientContactRequired,
+        message:
+          'A recipient name and phone number are required when sending to someone else.',
+      });
+      return;
+    }
+    if (!normalizeRecipientPhone(phone, fulfillmentCountry)) {
+      blockers.push({
+        code: DIASPORA_ERROR_CODES.recipientPhoneInvalid,
+        message: `The recipient phone number is not a valid number for ${
+          fulfillmentCountry ?? 'the delivery country'
+        }.`,
+      });
+    }
+  }
+
+  /**
+   * Payer-vs-recipient context for the checkout banner and FX line. Returned
+   * whenever the shopper is buying for someone else or paying from abroad, so
+   * the UI has one place to read both facts from.
+   */
+  private buildDiasporaBlock(params: {
+    dto: CheckoutPreflightDto;
+    isDiaspora: boolean;
+    railSource: 'seller' | 'payer';
+    payerCountry: string | null;
+    fulfillmentCountry: string | null;
+    groups: CheckoutGroupDto[];
+  }): CheckoutDiasporaDto | null {
+    const requiresRecipientContact =
+      params.dto.sending_to_someone_else === true;
+    const crossBorder =
+      !!params.payerCountry &&
+      !!params.fulfillmentCountry &&
+      params.payerCountry !== params.fulfillmentCountry;
+    if (!params.isDiaspora && !crossBorder && !requiresRecipientContact) {
+      return null;
+    }
+
+    const total = params.groups.reduce((sum, g) => sum + (g.total || 0), 0);
+    const merchantCurrency = params.groups[0]?.currency ?? '';
+    return {
+      is_diaspora: params.isDiaspora,
+      payer_country: params.payerCountry,
+      fulfillment_country: params.fulfillmentCountry,
+      rail_source: params.railSource,
+      payer_charge_estimate: this.fxEstimateService.estimate({
+        amount: total,
+        merchantCurrency,
+        payerCountry: params.payerCountry,
+      }),
+      requires_recipient_contact: requiresRecipientContact,
     };
   }
 

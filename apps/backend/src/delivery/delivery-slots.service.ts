@@ -10,6 +10,9 @@ import {
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
+/** Sentinel state for country-level default slots used when a state has none. */
+export const DEFAULT_DELIVERY_SLOT_STATE = '__DEFAULT__';
+
 export interface DeliveryTimeSlot {
   id: string;
   country_code: string;
@@ -62,47 +65,12 @@ export class DeliverySlotsService {
   ): Promise<AvailableSlot[]> {
     try {
       const slotType = isFastDelivery ? 'fast' : 'standard';
-
-      // First, get all slots for the location
-      const slotsQuery = `
-        query GetAvailableSlots($country_code: bpchar!, $state: String!, $slot_type: String!) {
-          delivery_time_slots(
-            where: {
-              country_code: { _eq: $country_code },
-              state: { _eq: $state },
-              slot_type: { _eq: $slot_type },
-              is_active: { _eq: true }
-            },
-            order_by: { display_order: asc }
-          ) {
-            id
-            country_code
-            state
-            slot_name
-            slot_type
-            start_time
-            end_time
-            is_active
-            max_orders_per_slot
-            display_order
-          }
-        }
-      `;
-
-      const slotsResponse = await this.hasuraSystemService.executeQuery(
-        slotsQuery,
-        {
-          country_code: countryCode,
-          state: stateCode,
-          slot_type: slotType,
-        }
+      const slots = await this.resolveSlotsForLocation(
+        countryCode,
+        stateCode,
+        slotType
       );
-
-      const slots = slotsResponse.delivery_time_slots || [];
-
-      if (slots.length === 0) {
-        return [];
-      }
+      if (slots.length === 0) return [];
 
       const slotsWithinBusinessHours = businessLocationId
         ? await this.filterSlotsByBusinessHours(
@@ -111,17 +79,90 @@ export class DeliverySlotsService {
             date
           )
         : slots;
+      if (slotsWithinBusinessHours.length === 0) return [];
 
-      if (slotsWithinBusinessHours.length === 0) {
-        return [];
-      }
-
-      // Batch capacity check: Get booking counts for all slots in a single query
-      const slotIds = slotsWithinBusinessHours.map(
-        (slot: DeliveryTimeSlot) => slot.id
+      return this.attachCapacityAndAvailability(
+        countryCode,
+        date,
+        slotsWithinBusinessHours,
+        timezone
       );
+    } catch (error) {
+      this.logger.error('Failed to get available slots:', error);
+      throw error;
+    }
+  }
 
-      const capacityQuery = `
+  private async resolveSlotsForLocation(
+    countryCode: string,
+    stateCode: string,
+    slotType: string
+  ): Promise<DeliveryTimeSlot[]> {
+    const stateSlots = await this.fetchActiveSlots(
+      countryCode,
+      stateCode,
+      slotType
+    );
+    if (stateSlots.length > 0) return stateSlots;
+
+    const defaultSlots = await this.fetchActiveSlots(
+      countryCode,
+      DEFAULT_DELIVERY_SLOT_STATE,
+      slotType
+    );
+    if (defaultSlots.length > 0) {
+      this.logger.warn(
+        `No ${slotType} slots for ${countryCode}/${stateCode}; using ${DEFAULT_DELIVERY_SLOT_STATE}`
+      );
+    }
+    return defaultSlots;
+  }
+
+  private async fetchActiveSlots(
+    countryCode: string,
+    state: string,
+    slotType: string
+  ): Promise<DeliveryTimeSlot[]> {
+    const slotsQuery = `
+      query GetAvailableSlots($country_code: bpchar!, $state: String!, $slot_type: String!) {
+        delivery_time_slots(
+          where: {
+            country_code: { _eq: $country_code },
+            state: { _eq: $state },
+            slot_type: { _eq: $slot_type },
+            is_active: { _eq: true }
+          },
+          order_by: { display_order: asc }
+        ) {
+          id
+          country_code
+          state
+          slot_name
+          slot_type
+          start_time
+          end_time
+          is_active
+          max_orders_per_slot
+          display_order
+        }
+      }
+    `;
+    const slotsResponse = await this.hasuraSystemService.executeQuery(
+      slotsQuery,
+      { country_code: countryCode, state, slot_type: slotType }
+    );
+    return slotsResponse.delivery_time_slots || [];
+  }
+
+  private async attachCapacityAndAvailability(
+    countryCode: string,
+    date: string,
+    slots: DeliveryTimeSlot[],
+    timezone?: string
+  ): Promise<AvailableSlot[]> {
+    const slotIds = slots.map((slot) => slot.id);
+    const capacityResponse = await this.hasuraSystemService.executeQuery(
+      `
         query GetSlotCapacities($slot_ids: [uuid!]!, $date: date!) {
           delivery_time_slots(where: { id: { _in: $slot_ids } }) {
             id
@@ -136,73 +177,48 @@ export class DeliverySlotsService {
             slot_id
           }
         }
-      `;
+      `,
+      { slot_ids: slotIds, date }
+    );
 
-      const capacityResponse = await this.hasuraSystemService.executeQuery(
-        capacityQuery,
-        {
-          slot_ids: slotIds,
-          date: date,
-        }
-      );
+    const slotCapacityMap = new Map<string, number>();
+    (capacityResponse.delivery_time_slots || []).forEach((slot: any) => {
+      slotCapacityMap.set(slot.id, slot.max_orders_per_slot || 0);
+    });
+    const bookingCountMap = new Map<string, number>();
+    (capacityResponse.delivery_time_windows || []).forEach((window: any) => {
+      const slotId = window.slot_id;
+      bookingCountMap.set(slotId, (bookingCountMap.get(slotId) || 0) + 1);
+    });
 
-      // Create a map of slot capacities
-      const slotCapacityMap = new Map<string, number>();
-      (capacityResponse.delivery_time_slots || []).forEach((slot: any) => {
-        slotCapacityMap.set(slot.id, slot.max_orders_per_slot || 0);
-      });
+    const resolvedTimezone =
+      timezone ??
+      (await this.deliveryConfigService.getTimezone(countryCode)) ??
+      'Africa/Libreville';
+    const twoHoursFromNow = DateTime.now()
+      .plus({ hours: 2 })
+      .toUTC()
+      .toJSDate();
 
-      // Count bookings per slot
-      const bookingCountMap = new Map<string, number>();
-      (capacityResponse.delivery_time_windows || []).forEach((window: any) => {
-        const slotId = window.slot_id;
-        bookingCountMap.set(slotId, (bookingCountMap.get(slotId) || 0) + 1);
-      });
-
-      // Get timezone for the country (use provided or fetch from config)
-      const resolvedTimezone =
-        timezone ??
-        (await this.deliveryConfigService.getTimezone(countryCode)) ??
-        'Africa/Libreville';
-
-      // Get current time + 2 hours in UTC for comparison
-      const twoHoursFromNow = DateTime.now()
-        .plus({ hours: 2 })
-        .toUTC()
-        .toJSDate();
-
-      // Calculate available capacity and time-based availability for each slot
-      const slotsWithCapacity = await Promise.all(
-        slotsWithinBusinessHours.map(async (slot: DeliveryTimeSlot) => {
-          const totalCapacity =
-            slotCapacityMap.get(slot.id) || slot.max_orders_per_slot || 0;
-          const bookedCount = bookingCountMap.get(slot.id) || 0;
-          const availableCapacity = Math.max(0, totalCapacity - bookedCount);
-
-          // Check if slot is at least 2 hours in the future
-          const isSlotInFuture = await this.isSlotAtLeast2HoursInFuture(
-            date,
-            slot.start_time,
-            resolvedTimezone,
-            twoHoursFromNow
-          );
-
-          // Slot is available if there's capacity AND it's at least 2 hours in the future
-          const isAvailable = availableCapacity > 0 && isSlotInFuture;
-
-          return {
-            ...slot,
-            available_capacity: availableCapacity,
-            is_available: isAvailable,
-          };
-        })
-      );
-
-      return slotsWithCapacity;
-    } catch (error) {
-      this.logger.error('Failed to get available slots:', error);
-      throw error;
-    }
+    return Promise.all(
+      slots.map(async (slot) => {
+        const totalCapacity =
+          slotCapacityMap.get(slot.id) || slot.max_orders_per_slot || 0;
+        const bookedCount = bookingCountMap.get(slot.id) || 0;
+        const availableCapacity = Math.max(0, totalCapacity - bookedCount);
+        const isSlotInFuture = await this.isSlotAtLeast2HoursInFuture(
+          date,
+          slot.start_time,
+          resolvedTimezone,
+          twoHoursFromNow
+        );
+        return {
+          ...slot,
+          available_capacity: availableCapacity,
+          is_available: availableCapacity > 0 && isSlotInFuture,
+        };
+      })
+    );
   }
 
   /**

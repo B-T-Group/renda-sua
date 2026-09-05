@@ -9,6 +9,7 @@ import {
   aggregatePaymentCapabilityForProvider,
   deriveLifecycleStatus,
   deriveStorefrontVisibility,
+  deriveVerifiedBadge,
   mapCapabilityStatusToDb,
   paymentProviderForRail,
 } from './merchant-lifecycle-status.util';
@@ -100,11 +101,11 @@ export class MerchantLifecycleService {
     if (!current || current.lifecycle_status !== 'suspended') {
       return current;
     }
-    const next = deriveLifecycleStatus(
-      await this.hasSignedContract(businessId),
-      await this.resolvePaymentCapability(businessId)
-    );
-    await this.persistLifecycleState(businessId, next, true);
+    const contractSigned = await this.hasSignedContract(businessId);
+    const paymentCapability = await this.resolvePaymentCapability(businessId);
+    const next = deriveLifecycleStatus(contractSigned);
+    const isVerified = deriveVerifiedBadge(paymentCapability);
+    await this.persistLifecycleState(businessId, next, true, isVerified);
     await this.recordHistory({
       businessId,
       fromStatus: 'suspended',
@@ -252,12 +253,17 @@ export class MerchantLifecycleService {
       await this.syncStorefrontVisibility(businessId, 'suspended');
       return this.getBusinessSnapshot(businessId);
     }
-    const next = deriveLifecycleStatus(
-      await this.hasSignedContract(businessId),
-      await this.resolvePaymentCapability(businessId)
-    );
+    const contractSigned = await this.hasSignedContract(businessId);
+    const paymentCapability = await this.resolvePaymentCapability(businessId);
+    const next = deriveLifecycleStatus(contractSigned);
+    const isVerified = deriveVerifiedBadge(paymentCapability);
     const statusChanged = next !== current.lifecycle_status;
-    await this.persistLifecycleState(businessId, next, statusChanged);
+    await this.persistLifecycleState(
+      businessId,
+      next,
+      statusChanged,
+      isVerified
+    );
     if (statusChanged) {
       await this.afterLifecycleTransition(current, next, reason, changedByUserId);
     }
@@ -285,9 +291,8 @@ export class MerchantLifecycleService {
   }
 
   private async hasSignedContract(businessId: string): Promise<boolean> {
-    // Signed agreement is the shared readiness gate. MoMo also needs an
-    // approved ID (via resolveMoMoCapabilityFromIdentity). Products/rentals
-    // and confirmed location phones are not required for lifecycle-active.
+    // Signed agreement alone unlocks lifecycle-active / can_accept_orders.
+    // Rail payment proof (approved ID or Stripe Connect) drives is_verified.
     return this.businessContractsService.hasValidSignedContract(businessId);
   }
 
@@ -404,8 +409,8 @@ export class MerchantLifecycleService {
     }
 
     const rail = await this.paymentRoutingService.resolveRailForUser(userId);
-    // MoMo account activation is identity-based (agreement + approved ID).
-    // Confirmed phones gate locations, not the business payment account row.
+    // MoMo verified badge is identity-based (approved ID). Confirmed phones
+    // gate locations, not the business payment account row or lifecycle.
     if (rail === 'mobile_money') {
       const identity = await this.resolveMoMoCapabilityFromIdentity(userId);
       await this.syncMoMoPaymentAccount(businessId, identity);
@@ -420,7 +425,7 @@ export class MerchantLifecycleService {
 
   /**
    * Maps ID document review state to the payment-capability slot used by
-   * deriveLifecycleStatus. Location payout readiness is separate.
+   * deriveVerifiedBadge. Location payout readiness is separate.
    */
   private async resolveMoMoCapabilityFromIdentity(userId: string): Promise<{
     status: PaymentCapabilityStatus;
@@ -511,7 +516,12 @@ export class MerchantLifecycleService {
     const current = await this.getBusinessSnapshot(businessId);
     if (!current) return null;
     if (current.lifecycle_status === 'suspended') return current;
-    await this.persistLifecycleState(businessId, 'suspended', true);
+    await this.persistLifecycleState(
+      businessId,
+      'suspended',
+      true,
+      current.is_verified
+    );
     await this.recordHistory({
       businessId,
       fromStatus: current.lifecycle_status,
@@ -587,25 +597,32 @@ export class MerchantLifecycleService {
   }
 
   /**
-   * Persist lifecycle status and storefront visibility in one mutation when
-   * the status changes, so a failed visibility write cannot leave them split.
+   * Persist lifecycle status, storefront visibility, and verified badge.
+   * is_verified is written on every recompute so ID/Connect can flip the
+   * badge after the store is already active.
    */
   private async persistLifecycleState(
     businessId: string,
     status: BusinessLifecycleStatus,
-    updateStatus: boolean
+    updateStatus: boolean,
+    isVerified?: boolean
   ): Promise<void> {
     const visible = deriveStorefrontVisibility(status);
     if (updateStatus) {
       const mutation = `
-        mutation SetLifecycleAndVisibility(
+        mutation SetLifecycleVisibilityAndVerified(
           $id: uuid!
           $status: business_lifecycle_status_enum!
           $visible: Boolean!
+          $verified: Boolean!
         ) {
           update_businesses_by_pk(
             pk_columns: { id: $id }
-            _set: { lifecycle_status: $status, is_storefront_visible: $visible }
+            _set: {
+              lifecycle_status: $status
+              is_storefront_visible: $visible
+              is_verified: $verified
+            }
           ) { id }
         }
       `;
@@ -613,10 +630,39 @@ export class MerchantLifecycleService {
         id: businessId,
         status,
         visible,
+        verified: isVerified ?? false,
       });
       return;
     }
+    if (typeof isVerified === 'boolean') {
+      await this.persistVerifiedAndVisibility(businessId, visible, isVerified);
+      return;
+    }
     await this.syncStorefrontVisibility(businessId, status, visible);
+  }
+
+  private async persistVerifiedAndVisibility(
+    businessId: string,
+    visible: boolean,
+    isVerified: boolean
+  ): Promise<void> {
+    const mutation = `
+      mutation SetVerifiedAndVisibility(
+        $id: uuid!
+        $visible: Boolean!
+        $verified: Boolean!
+      ) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _set: { is_storefront_visible: $visible, is_verified: $verified }
+        ) { id }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      id: businessId,
+      visible,
+      verified: isVerified,
+    });
   }
 
   private async syncStorefrontVisibility(
@@ -692,7 +738,15 @@ export class MerchantLifecycleService {
   }): Promise<void> {
     const snapshot = await this.getBusinessSnapshot(params.businessId);
     const email = snapshot?.user?.email?.trim();
-    if (!snapshot || !email || snapshot.lifecycle_status === 'active') return;
+    if (!snapshot || !email) return;
+    // Skip pending-review noise when already verified, but still notify on
+    // rejection (snapshot may still show is_verified until persist clears it).
+    if (
+      snapshot.is_verified &&
+      params.capabilityStatus !== 'rejected'
+    ) {
+      return;
+    }
     // Review emails presuppose a signed contract: merchants still in
     // `created` (nothing signed yet) must not receive payment-review emails.
     if (!(await this.hasSignedContract(params.businessId))) return;
@@ -707,10 +761,17 @@ export class MerchantLifecycleService {
       );
       return;
     }
-    await this.notificationsService.sendMerchantPaymentReviewPendingEmail({
-      to: email,
-      businessName: snapshot.name,
-    });
+
+    // Avoid stacking "badge under review" with the activation email when the
+    // same recompute is promoting created/contract_signed → active. Still
+    // notify admins; merchants who upload ID after go-live still get email.
+    const activatingNow = snapshot.lifecycle_status !== 'active';
+    if (!activatingNow) {
+      await this.notificationsService.sendMerchantPaymentReviewPendingEmail({
+        to: email,
+        businessName: snapshot.name,
+      });
+    }
     await this.notificationsService.sendAdminMerchantReviewPendingEmail({
       businessName: snapshot.name,
       businessId: snapshot.id,

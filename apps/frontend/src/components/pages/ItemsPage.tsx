@@ -3,7 +3,6 @@ import {
     Assignment,
     Inventory,
     LocalShipping,
-    Map as MapIcon,
     Search as SearchIcon,
 } from '@mui/icons-material';
 import {
@@ -16,7 +15,6 @@ import {
     CircularProgress,
     Container,
     Paper,
-    Stack,
     Skeleton,
     Typography,
     useMediaQuery,
@@ -65,10 +63,16 @@ import { useCatalogStores } from '../../hooks/useCatalogStores';
 import ItemsPageFilter, {
     ItemsPageFilterState,
 } from '../common/ItemsPageFilter';
+import ClientHomeOrdersStrip from '../common/ClientHomeOrdersStrip';
+import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import { TrackOrderModal } from '../dialogs/TrackOrderModal';
 import SEOHead from '../seo/SEOHead';
+import { MarketSelector } from '../market/MarketSelector';
+import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
+import type { Order } from '../../hooks/useOrders';
+import { useMarket } from '../../hooks/useMarket';
 
 // ItemCardSkeleton component for better loading UX
 const ItemCardSkeleton: React.FC = () => (
@@ -219,6 +223,7 @@ const ItemsPage: React.FC = () => {
   );
 
   const { isAuthenticated, user } = useAuth0();
+  const { selectedMarket } = useMarket();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
@@ -266,7 +271,7 @@ const ItemsPage: React.FC = () => {
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
     null
   );
-  const [trackOrderOpen, setTrackOrderOpen] = useState(false);
+  const [trackOrderId, setTrackOrderId] = useState<string | null>(null);
 
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
 
@@ -307,6 +312,44 @@ const ItemsPage: React.FC = () => {
       filters.collection.trim() || collectionSlug.trim() || undefined,
   });
 
+  // Check if any filters are active
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+      filters.category ||
+      filters.subcategory ||
+      filters.brand ||
+      filters.business ||
+      filters.collection ||
+      collectionSlug ||
+      businessLocationId
+  );
+
+  const theme = useTheme();
+  const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
+
+  // Defer curated rail fetches until after main grid starts (reduces initial stampede)
+  const [curatedEnabled, setCuratedEnabled] = useState(false);
+  useEffect(() => {
+    if (!loading && inventoryItems.length > 0) {
+      const timer = requestIdleCallback
+        ? requestIdleCallback(() => setCuratedEnabled(true), { timeout: 100 })
+        : setTimeout(() => setCuratedEnabled(true), 0);
+      return () => {
+        if (typeof timer === 'number') {
+          clearTimeout(timer);
+        } else {
+          cancelIdleCallback(timer);
+        }
+      };
+    }
+  }, [loading, inventoryItems.length]);
+
+  // Only fetch curated sections when they will be shown
+  const shouldFetchCurated = showCuratedSections && !hasActiveFilters && curatedEnabled;
+
+  // Popular relevance duplicates main grid when sort=relevance and no filters
+  const popularDuplicatesMain = sort === 'relevance' && !hasActiveFilters;
+
   const { inventoryItems: dealsItems, loading: dealsLoading } = useInventoryItems({
     page: 1,
     limit: 24,
@@ -314,6 +357,7 @@ const ItemsPage: React.FC = () => {
     sort: 'deals',
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
+    enabled: shouldFetchCurated,
   });
 
   const { inventoryItems: topRatedItems, loading: topRatedLoading } = useInventoryItems({
@@ -323,6 +367,7 @@ const ItemsPage: React.FC = () => {
     sort: 'top_rated',
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
+    enabled: shouldFetchCurated,
   });
 
   const { inventoryItems: popularItems, loading: popularLoading } = useInventoryItems({
@@ -332,6 +377,7 @@ const ItemsPage: React.FC = () => {
     sort: 'relevance',
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
+    enabled: shouldFetchCurated && !popularDuplicatesMain,
   });
 
   const { collections: featuredCollections, loading: collectionsLoading } =
@@ -385,6 +431,7 @@ const ItemsPage: React.FC = () => {
     filters.business,
     sort,
     businessLocationId,
+    selectedMarket?.id,
   ]);
 
   const totalPages = pagination?.totalPages ?? 0;
@@ -455,14 +502,11 @@ const ItemsPage: React.FC = () => {
     });
   }, [orders, profile?.user_type_id]);
 
-  const activeDeliveryOrder = React.useMemo(() => {
-    if (!isClient || !orders) return null;
-    const delivering = new Set(['picked_up', 'in_transit', 'out_for_delivery']);
-    return (
-      orders.find(
-        (o) => delivering.has(o.current_status) && Boolean(o.assigned_agent_id)
-      ) ?? null
-    );
+  const homeOrdersSelection = React.useMemo(() => {
+    if (!isClient || !orders?.length) {
+      return { selected: [] as Order[], totalActive: 0 };
+    }
+    return selectClientHomeOrders(orders);
   }, [isClient, orders]);
 
   /** Catalog list is server-paginated; filter panel only drives `filters` + API query. */
@@ -549,20 +593,7 @@ const ItemsPage: React.FC = () => {
     }).format(amount);
   };
 
-  // Check if any filters are active
-  const hasActiveFilters = Boolean(
-    searchTerm ||
-      filters.category ||
-      filters.subcategory ||
-      filters.brand ||
-      filters.business ||
-      filters.collection ||
-      collectionSlug ||
-      businessLocationId
-  );
 
-  const theme = useTheme();
-  const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
 
   const {
     dealsDisplay,
@@ -582,7 +613,10 @@ const ItemsPage: React.FC = () => {
     const seen = new Set<string>();
     const dealsDisplay = pickUniqueCatalogItems(dealsItems, seen, 8);
     const topRatedDisplay = pickUniqueCatalogItems(topRatedItems, seen, 8);
-    const popularDisplay = pickUniqueCatalogItems(popularItems, seen, 8);
+
+    // When popular would duplicate main grid, derive from inventoryItems instead
+    const popularSource = popularDuplicatesMain ? inventoryItems : popularItems;
+    const popularDisplay = pickUniqueCatalogItems(popularSource, seen, 8);
     const catalogDisplay = filterExcludedCatalogItems(inventoryItems, seen);
 
     return { dealsDisplay, topRatedDisplay, popularDisplay, catalogDisplay };
@@ -593,6 +627,7 @@ const ItemsPage: React.FC = () => {
     topRatedItems,
     popularItems,
     inventoryItems,
+    popularDuplicatesMain,
   ]);
 
   const handleClearAllFilters = () => {
@@ -707,6 +742,8 @@ const ItemsPage: React.FC = () => {
                 flexWrap: 'wrap',
               }}
             >
+              <MarketSelector catalogContext="inventory" />
+              <AssistantHomeEntry compact />
               {isClient && nearbyAgentsCount > 0 && (
                 <Chip
                   size="small"
@@ -737,59 +774,12 @@ const ItemsPage: React.FC = () => {
           {/* Address Alert - Only for authenticated clients */}
           {isClient && <AddressAlert />}
 
-          {activeDeliveryOrder && (
-            <Paper
-              variant="outlined"
-              sx={{
-                mt: 1.5,
-                p: 1.5,
-                borderRadius: 2,
-                bgcolor: (theme) =>
-                  theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.primary.main, 0.12)
-                    : alpha(theme.palette.primary.main, 0.06),
-                borderColor: (theme) => alpha(theme.palette.primary.main, 0.35),
-              }}
-            >
-              <Stack direction="column" spacing={1.5} alignItems="stretch">
-                <Stack direction="row" spacing={1.25} alignItems="center">
-                  <Box
-                    sx={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 2,
-                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.18),
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flex: '0 0 auto',
-                    }}
-                  >
-                    <LocalShipping color="primary" />
-                  </Box>
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
-                      {t('orders.trackYourOrder.note', 'Your order is on its way.')}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t(
-                        'orders.trackYourOrder.helper',
-                        'Track your delivery agent on the map in real time.'
-                      )}
-                    </Typography>
-                  </Box>
-                </Stack>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={<MapIcon />}
-                  onClick={() => setTrackOrderOpen(true)}
-                  sx={{ fontWeight: 900 }}
-                >
-                  {t('orders.trackYourOrder.cta', 'Track your order')}
-                </Button>
-              </Stack>
-            </Paper>
+          {isClient && homeOrdersSelection.selected.length > 0 && (
+            <ClientHomeOrdersStrip
+              orders={homeOrdersSelection.selected}
+              totalActive={homeOrdersSelection.totalActive}
+              onTrackOrder={(order) => setTrackOrderId(order.id)}
+            />
           )}
 
           {/* Unified filter for all users (contains search bar) */}
@@ -945,11 +935,11 @@ const ItemsPage: React.FC = () => {
         )}
       </Box>
 
-      {activeDeliveryOrder && (
+      {trackOrderId && (
         <TrackOrderModal
-          open={trackOrderOpen}
-          orderId={activeDeliveryOrder.id}
-          onClose={() => setTrackOrderOpen(false)}
+          open={Boolean(trackOrderId)}
+          orderId={trackOrderId}
+          onClose={() => setTrackOrderId(null)}
         />
       )}
 

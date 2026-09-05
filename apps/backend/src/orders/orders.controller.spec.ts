@@ -339,7 +339,11 @@ describe('OrdersController', () => {
 
   describe('cancelOrder', () => {
     it('should cancel order successfully', async () => {
-      const request = { orderId: 'order-123', notes: 'Cancelled by business' };
+      const request = {
+        orderId: 'order-123',
+        cancellationReasonId: 13, // business: cannot_fulfill_order
+        notes: 'Cancelled by business',
+      };
       const expectedResult = {
         success: true,
         order: { id: 'order-123', current_status: 'cancelled' },
@@ -392,7 +396,11 @@ describe('OrdersController', () => {
       });
 
       expect(result).toEqual(expectedResult);
-      expect(ordersService.cancelOrder).toHaveBeenCalledWith({ orderId });
+      expect(ordersService.cancelOrder).toHaveBeenCalledWith({
+        orderId,
+        cancellationReasonId: 1, // "other" fallback for legacy path
+        notes: 'Cancelled via legacy PATCH endpoint',
+      });
     });
   });
 });

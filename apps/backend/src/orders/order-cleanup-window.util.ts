@@ -13,6 +13,7 @@ export interface CleanupDeliveryWindow {
 
 export interface CleanupWindowOrder {
   pickup_by?: string | null;
+  promised_fulfill_by?: string | null;
   delivery_time_window?: CleanupDeliveryWindow | null;
   client?: { user?: { timezone?: string | null } | null } | null;
   delivery_address?: { country?: string | null } | null;
@@ -69,17 +70,16 @@ export function resolveCleanupTimezone(
   return DEFAULT_USER_TIMEZONE;
 }
 
-/**
- * Window/pickup end instant in UTC, or null when the order has no usable window.
- */
-export function resolveWindowEndUtc(
+function parseCleanupTimestamp(value?: string | null): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveSlotEndUtc(
   order: CleanupWindowOrder,
   timezone: string
 ): Date | null {
-  if (order.pickup_by) {
-    const pickupBy = new Date(order.pickup_by);
-    if (!Number.isNaN(pickupBy.getTime())) return pickupBy;
-  }
   const win = order.delivery_time_window;
   if (!win?.preferred_date || !win.time_slot_end) return null;
   const parsed = parseSlotTime(win.time_slot_end);
@@ -94,6 +94,24 @@ export function resolveWindowEndUtc(
   } catch {
     return null;
   }
+}
+
+/**
+ * Latest usable window/pickup instant in UTC. ASAP ready time (pickup_by)
+ * must beat a stale placement-time promised_fulfill_by so late merchant
+ * prep cannot expire the grace window before the order is actually ready.
+ */
+export function resolveWindowEndUtc(
+  order: CleanupWindowOrder,
+  timezone: string
+): Date | null {
+  const candidates = [
+    parseCleanupTimestamp(order.promised_fulfill_by),
+    parseCleanupTimestamp(order.pickup_by),
+    resolveSlotEndUtc(order, timezone),
+  ].filter((value): value is Date => value != null);
+  if (!candidates.length) return null;
+  return new Date(Math.max(...candidates.map((value) => value.getTime())));
 }
 
 /** True when windowEnd + graceHours is strictly before `now`. */

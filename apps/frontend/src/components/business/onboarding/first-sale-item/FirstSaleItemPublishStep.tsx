@@ -112,7 +112,12 @@ const FirstSaleItemPublishStep: React.FC<FirstSaleItemPublishStepProps> = ({
         subCategoryName: form.subCategoryName.trim() || undefined,
         brandName: form.brandName.trim() || undefined,
         is_used: form.isUsed,
+        dimensions: form.dimensions.trim() || undefined,
       };
+      const prepMinutes = Number.parseInt(form.preparationMinutes ?? '', 10);
+      if (Number.isFinite(prepMinutes) && prepMinutes >= 0) {
+        patch.preparation_minutes = prepMinutes;
+      }
       if (form.description.trim()) {
         patch.description = form.description.trim();
       }

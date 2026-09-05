@@ -19,31 +19,16 @@ import { useAgentOrders } from '../../hooks/useAgentOrders';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import AgentEarningsWidget from '../common/AgentEarningsWidget';
+import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
 import AgentQuickStats from '../common/AgentQuickStats';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
+import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import { ReferredBusinessesList } from '../referrals/ReferredBusinessesList';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useReferredBusinesses } from '../../hooks/useReferredBusinesses';
+import { getOrderStatusBoxColor } from '../orders/shared';
 import OpenOrdersPage from './OpenOrdersPage';
-
-const ORDER_STATUS_BOX_COLORS: Record<string, string> = {
-  pending: '#fff3e0',
-  pending_payment: '#fff8e1',
-  confirmed: '#e3f2fd',
-  preparing: '#e3f2fd',
-  ready_for_pickup: '#e8eaf6',
-  assigned_to_agent: '#e8eaf6',
-  picked_up: '#e1f5fe',
-  in_transit: '#e1f5fe',
-  out_for_delivery: '#e0f7fa',
-  delivered: '#e8f5e9',
-  complete: '#e8f5e9',
-  completed: '#e8f5e9',
-};
-
-const getOrderStatusBoxColor = (status: string): string =>
-  ORDER_STATUS_BOX_COLORS[status] ?? '#f5f5f5';
 
 /**
  * AgentDashboard component that shows available orders for agents to claim,
@@ -103,6 +88,8 @@ const AgentDashboard: React.FC = () => {
             )}
           </Alert>
         ) : null}
+        <ReferralPayoutSnapshot source="agent" walletPath="/profile" />
+        <AssistantHomeEntry />
         <Grid container spacing={1.5} sx={{ width: '100%' }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <AgentEarningsWidget summary={summary} loading={loading} error={error} />

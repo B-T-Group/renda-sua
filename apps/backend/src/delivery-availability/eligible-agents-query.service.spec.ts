@@ -106,6 +106,33 @@ describe('EligibleAgentsQueryService', () => {
     expect(result.map((c) => c.agentId)).toEqual(['internal']);
   });
 
+  it('matches via GPS reverse-geocode when the profile address has no state (accents + ISO code)', async () => {
+    // Prod repro: address stores country "CA" with an empty state; Google
+    // returns "Canada"/"Québec" long names for the agent's GPS position.
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      agent_locations: [agentRow('quebec-agent', 4.01, { country: 'CA', state: '' })],
+    });
+    const reverseGeocode = jest.fn().mockResolvedValue({
+      country: 'Canada',
+      country_code: 'CA',
+      state: 'Québec',
+    });
+    service = new EligibleAgentsQueryService(
+      hasuraSystemService,
+      { reverseGeocode } as unknown as GoogleDistanceService
+    );
+
+    const result = await service.findEligibleAgents({
+      originLat: 4,
+      originLon: 9,
+      targetCountry: 'CA',
+      targetState: 'Quebec',
+    });
+
+    expect(result.map((c) => c.agentId)).toEqual(['quebec-agent']);
+    expect(reverseGeocode).toHaveBeenCalled();
+  });
+
   it('accepts cased/padded focus strings when deciding delivery eligibility', async () => {
     hasuraSystemService.executeQuery.mockResolvedValue({
       agent_locations: [

@@ -21,6 +21,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminClients } from '../../hooks/useAdminClients';
 import { usePermissions } from '../../hooks/usePermissions';
+import { AdminReferralMeta } from '../admin/AdminReferralMeta';
 import AdminUserCard from '../common/AdminUserCard';
 
 const AdminManageClients: React.FC = () => {
@@ -165,6 +166,12 @@ const AdminManageClients: React.FC = () => {
                   verified={undefined}
                   userId={c.user.id}
                   userType="client"
+                  meta={
+                    <AdminReferralMeta
+                      createdAt={c.created_at}
+                      showReferral={false}
+                    />
+                  }
                   footer={
                     <Button
                       size="small"

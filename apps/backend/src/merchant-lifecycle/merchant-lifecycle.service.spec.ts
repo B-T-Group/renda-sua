@@ -103,7 +103,7 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     );
   });
 
-  it('persists pending MoMo capability and emails once when the contract is signed', async () => {
+  it('persists pending MoMo capability and emails admin when activating', async () => {
     uploads = [{ is_approved: false, note: null }];
 
     await service.recompute('biz-1');
@@ -114,6 +114,23 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
       provider: 'mobile_money',
       capability_status: 'verification_pending',
     });
+    // Merchant review-pending is skipped during activation to avoid conflicting
+    // with the store-activated email; admins still get notified.
+    expect(
+      notificationsService.sendMerchantPaymentReviewPendingEmail
+    ).not.toHaveBeenCalled();
+    expect(
+      notificationsService.sendAdminMerchantReviewPendingEmail
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('emails the merchant when ID review starts after the store is already active', async () => {
+    businessSnapshot.lifecycle_status = 'active';
+    businessSnapshot.can_accept_orders = true;
+    uploads = [{ is_approved: false, note: null }];
+
+    await service.recompute('biz-1');
+
     expect(
       notificationsService.sendMerchantPaymentReviewPendingEmail
     ).toHaveBeenCalledTimes(1);
@@ -129,6 +146,8 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
   });
 
   it('does not re-send emails when the MoMo state is unchanged', async () => {
+    businessSnapshot.lifecycle_status = 'active';
+    businessSnapshot.can_accept_orders = true;
     uploads = [{ is_approved: false, note: null }];
 
     await service.recompute('biz-1');
@@ -164,6 +183,27 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('still sends rejection email when clearing a previously verified badge', async () => {
+    businessSnapshot.lifecycle_status = 'active';
+    businessSnapshot.can_accept_orders = true;
+    businessSnapshot.is_verified = true;
+    uploads = [{ is_approved: false, note: '[REJECTED] Name mismatch' }];
+    momoAccounts = [{ capability_status: 'verified' }];
+
+    await service.recompute('biz-1');
+
+    expect(
+      notificationsService.sendMerchantPaymentVerificationFailedEmail
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      notificationsService.sendMerchantPaymentVerificationFailedEmail
+    ).toHaveBeenCalledWith({
+      to: 'merchant@example.com',
+      businessName: 'Test Biz',
+      reason: 'Name mismatch',
+    });
+  });
+
   it('does not send review emails when MoMo identity is verified', async () => {
     uploads = [{ is_approved: true, note: null }];
     momoAccounts = [{ capability_status: 'verification_pending' }];
@@ -190,6 +230,23 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     expect(
       notificationsService.sendMerchantPaymentReviewPendingEmail
     ).not.toHaveBeenCalled();
+  });
+
+  it('persists is_verified independently of lifecycle when ID is approved', async () => {
+    businessSnapshot.lifecycle_status = 'active';
+    businessSnapshot.can_accept_orders = true;
+    uploads = [{ is_approved: true, note: null }];
+
+    await service.recompute('biz-1');
+
+    const verifiedCalls = hasuraSystemService.executeMutation.mock.calls.filter(
+      ([mutation]) =>
+        mutation.includes('SetVerifiedAndVisibility') ||
+        mutation.includes('SetLifecycleVisibilityAndVerified')
+    );
+    expect(verifiedCalls.length).toBeGreaterThan(0);
+    const vars = verifiedCalls[0][1];
+    expect(vars.verified).toBe(true);
   });
 
   it('persists capability but sends no emails while in created status (no signed contract)', async () => {
@@ -235,6 +292,8 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
   });
 
   it('upsertPaymentAccount recomputes once without recursion or double emails', async () => {
+    businessSnapshot.lifecycle_status = 'active';
+    businessSnapshot.can_accept_orders = true;
     uploads = [{ is_approved: false, note: null }];
     const recomputeSpy = jest.spyOn(service, 'recompute');
 

@@ -101,6 +101,21 @@ describe('FacebookCatalogFeedService', () => {
       });
 
     const { csv, rowCount } = await service.buildCsv();
+    const feedCall = hasura.executeQuery.mock.calls.find(([query]) =>
+      String(query).includes('FacebookCatalogFeed')
+    );
+    expect(feedCall?.[1].where).toEqual(
+      expect.objectContaining({
+        _and: expect.arrayContaining([
+          expect.objectContaining({
+            item: expect.objectContaining({
+              moderation_status: { _eq: 'approved' },
+              interest_only: { _eq: false },
+            }),
+          }),
+        ]),
+      })
+    );
     expect(rowCount).toBe(2);
     expect(csv).toContain('inv-momo-ok');
     expect(csv).toContain('inv-stripe');

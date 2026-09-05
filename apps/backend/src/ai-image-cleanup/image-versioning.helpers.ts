@@ -193,6 +193,27 @@ export function buildSelectVersionPatch(args: {
   };
 }
 
+const VARIANT_IMAGE_UNSUPPORTED_SET_FIELDS = [
+  'width',
+  'height',
+  'validation_warnings',
+  'validation_errors',
+  'quality_score',
+  'validated_at',
+  'perceptual_hash',
+] as const;
+
+/** Strip columns that exist on item_images but not item_variant_images. */
+export function omitUnsupportedVariantImageFields(
+  patch: Record<string, unknown>
+): Record<string, unknown> {
+  const next = { ...patch };
+  for (const key of VARIANT_IMAGE_UNSUPPORTED_SET_FIELDS) {
+    delete next[key];
+  }
+  return next;
+}
+
 export function hasExistingVersion(
   row: {
     is_ai_cleaned?: boolean;

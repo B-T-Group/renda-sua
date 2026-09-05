@@ -23,10 +23,13 @@ export class UpdateItemDto {
   requires_special_handling?: boolean;
   max_delivery_distance?: number | null;
   estimated_delivery_time?: number | null;
+  /** Typical minutes to cook the dish (cooked food only). */
+  preparation_minutes?: number | null;
   min_order_quantity?: number;
   max_order_quantity?: number | null;
   is_active?: boolean;
   pay_on_delivery_enabled?: boolean;
+  interest_only?: boolean;
   pay_at_pickup_enabled?: boolean;
   shipping_enabled?: boolean;
   shipping_price?: number | null;

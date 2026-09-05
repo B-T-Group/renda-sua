@@ -62,18 +62,23 @@ describe('NotificationPreferenceService WhatsApp opt-in', () => {
     expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
-  it('rejects WhatsApp enable when phone is unverified', async () => {
+  it('allows WhatsApp enable when a phone number is present', async () => {
     mockPrefsAndPhone({
       phone_number: '+237600000001',
       phone_number_verified: false,
     });
 
-    await expect(
-      service.patchPreferences('user-1', { whatsappEnabled: true })
-    ).rejects.toThrow(
-      'Verify your phone number before enabling WhatsApp notifications'
+    await service.patchPreferences('user-1', { whatsappEnabled: true });
+
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('update_user_notification_preferences_by_pk'),
+      expect.objectContaining({
+        userId: 'user-1',
+        set: expect.objectContaining({
+          whatsapp_enabled: true,
+        }),
+      })
     );
-    expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
   it('enables WhatsApp and stamps opted_in_at when phone is verified', async () => {
@@ -100,7 +105,7 @@ describe('NotificationPreferenceService WhatsApp opt-in', () => {
     expect(result.phoneNumber).toBe('+237600000001');
   });
 
-  it('isWhatsAppEligible requires enabled + verified phone', () => {
+  it('isWhatsAppEligible requires enabled + a phone number', () => {
     expect(
       service.isWhatsAppEligible({
         userId: 'user-1',
@@ -137,7 +142,7 @@ describe('NotificationPreferenceService WhatsApp opt-in', () => {
         phoneNumber: '+237600000001',
         phoneNumberVerified: false,
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('findUserIdByPhoneE164 matches with and without leading plus', async () => {

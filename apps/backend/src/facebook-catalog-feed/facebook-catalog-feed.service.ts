@@ -100,7 +100,12 @@ export class FacebookCatalogFeedService {
     return {
       _and: [
         { is_active: { _eq: true } },
-        { item: { moderation_status: { _eq: 'approved' } } },
+        {
+          item: {
+            moderation_status: { _eq: 'approved' },
+            interest_only: { _eq: false },
+          },
+        },
         {
           business_location: {
             is_active: { _eq: true },

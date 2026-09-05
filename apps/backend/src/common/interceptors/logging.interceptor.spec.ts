@@ -24,8 +24,8 @@ describe('LoggingInterceptor', () => {
 
   const request = {
     method: 'GET',
-    url: '/api/health?code=secret-oauth',
-    originalUrl: '/api/health?code=secret-oauth',
+    url: '/api/orders?code=secret-oauth',
+    originalUrl: '/api/orders?code=secret-oauth',
   };
 
   const context = {
@@ -40,7 +40,26 @@ describe('LoggingInterceptor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     response.statusCode = 200;
+    request.url = '/api/orders?code=secret-oauth';
+    request.originalUrl = '/api/orders?code=secret-oauth';
     interceptor = new LoggingInterceptor(logger);
+  });
+
+  it('skips access logs for health probe paths', (done) => {
+    request.url = '/api/health';
+    request.originalUrl = '/api/health';
+    const next: CallHandler = { handle: () => of({ ok: true }) };
+
+    interceptor.intercept(context, next).subscribe({
+      complete: () => {
+        expect(response.setHeader).toHaveBeenCalledWith(
+          'X-Request-Id',
+          'req-abc'
+        );
+        expect(logger.info).not.toHaveBeenCalled();
+        done();
+      },
+    });
   });
 
   it('sets X-Request-Id and logs access on success', (done) => {
@@ -56,7 +75,7 @@ describe('LoggingInterceptor', () => {
           'HTTP request',
           expect.objectContaining({
             method: 'GET',
-            path: '/api/health',
+            path: '/api/orders',
             status: 200,
             requestId: 'req-abc',
             durationMs: expect.any(Number),

@@ -1,4 +1,13 @@
-export const ACTIVE_PHONE_COUNTRY_ISO_CODES = ['CM', 'GA', 'CA', 'US'] as const;
+export const ACTIVE_PHONE_COUNTRY_ISO_CODES = [
+  'CM',
+  'GA',
+  'TG',
+  'BJ',
+  'CI',
+  'CG',
+  'CA',
+  'US',
+] as const;
 
 export type ActivePhoneCountryIsoCode = (typeof ACTIVE_PHONE_COUNTRY_ISO_CODES)[number];
 
@@ -11,6 +20,10 @@ export interface ActivePhoneCountryOption {
 const ACTIVE_PHONE_COUNTRY_DIAL_CODES: Record<ActivePhoneCountryIsoCode, string> = {
   CM: '237',
   GA: '241',
+  TG: '228',
+  BJ: '229',
+  CI: '225',
+  CG: '242',
   CA: '1',
   US: '1',
 };

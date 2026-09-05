@@ -49,6 +49,7 @@ import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useCollections } from '../../hooks/useCollections';
 import { useAuth0 } from '@auth0/auth0-react';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
+import { useCatalogGeoParams } from '../../hooks/useCatalogGeoParams';
 
 export interface ItemsPageFilterState {
   category: string;
@@ -99,6 +100,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth0();
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const catalogGeo = useCatalogGeoParams();
   const { collections: collectionOptions } = useCollections({
     anonymousOrigin: browserGeo,
   });
@@ -127,13 +129,14 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
         q: searchDraft,
         include_unavailable: suggestionsQuery?.include_unavailable,
         is_active: suggestionsQuery?.is_active,
-        country_code: suggestionsQuery?.country_code,
-        state: suggestionsQuery?.state,
+        country_code:
+          suggestionsQuery?.country_code ?? catalogGeo.country_code,
+        state: suggestionsQuery?.state ?? catalogGeo.state,
         business_location_id: suggestionsQuery?.business_location_id,
         origin_lat: suggestionsQuery?.origin_lat,
         origin_lng: suggestionsQuery?.origin_lng,
       },
-      { enabled: Boolean(suggestionsQuery) }
+      { enabled: Boolean(suggestionsQuery) && catalogGeo.ready }
     );
 
   const suggestionsGroupLabel = React.useCallback(

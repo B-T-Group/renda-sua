@@ -22,6 +22,39 @@ describe('BusinessDelegationsService', () => {
     );
   });
 
+  it('lists assignable roles and unwraps nested GraphQL data', async () => {
+    const role = {
+      id: 'role-om',
+      key: 'order_manager',
+      name: 'Order Manager',
+      description: '',
+      is_assignable: true,
+    };
+    hasura.executeQuery.mockResolvedValueOnce({
+      location_delegation_roles: [role],
+    });
+    await expect(service.listAssignableRoles()).resolves.toEqual([role]);
+
+    hasura.executeQuery.mockResolvedValueOnce({
+      data: { location_delegation_roles: [role] },
+    });
+    await expect(service.listAssignableRoles()).resolves.toEqual([role]);
+  });
+
+  it('falls back to every role when none are marked assignable', async () => {
+    const catalog = {
+      id: 'role-cat',
+      key: 'catalog_manager',
+      name: 'Catalog Manager',
+      description: '',
+      is_assignable: false,
+    };
+    hasura.executeQuery.mockResolvedValueOnce({
+      location_delegation_roles: [catalog],
+    });
+    await expect(service.listAssignableRoles()).resolves.toEqual([catalog]);
+  });
+
   it('rejects a non-assignable role on invite', async () => {
     hasura.executeQuery.mockImplementation(async (query: string) => {
       if (String(query).includes('OwnedLocation')) {

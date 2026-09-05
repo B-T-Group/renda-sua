@@ -1,11 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { businessReferralPayoutConfigKeyFromUser } from '../admin/business-referral-payout-config.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
-
-const BUSINESS_CUTOFF_DATE = '2026-04-01';
-const MIN_ITEM_COUNT = 10;
+import {
+  BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
+  BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
+  currencyForReferralPayout,
+} from './business-referral-payout.constants';
+import type {
+  PreviewEligibleBusiness,
+  PreviewGross,
+  PreviewPendingClaim,
+  PayoutPreviewReferrer,
+} from './referral-payout-preview.types';
 
 interface EligibleAgentReferral {
   kind: 'agent';
@@ -15,7 +25,7 @@ interface EligibleAgentReferral {
   agent: {
     id: string;
     user_id: string;
-    user: { id: string; preferred_language: string };
+    user: { id: string; first_name?: string; last_name?: string; preferred_language: string };
   };
   items_aggregate: { aggregate: { count: number } };
 }
@@ -27,13 +37,34 @@ interface EligibleBusinessReferral {
   referred_by_business_id: string;
   referring_business: {
     id: string;
+    name?: string;
     user_id: string;
-    user: { id: string; preferred_language: string };
+    user: { id: string; first_name?: string; last_name?: string; preferred_language: string };
   };
   items_aggregate: { aggregate: { count: number } };
 }
 
 type EligibleBusiness = EligibleAgentReferral | EligibleBusinessReferral;
+
+interface IncompletePayoutRow {
+  id: string;
+  business_id: string;
+  agent_id: string | null;
+  referrer_business_id: string | null;
+  amount: number;
+  currency: string;
+  business: { id: string; name: string };
+  agent?: {
+    id: string;
+    user_id: string;
+    user?: { first_name?: string; last_name?: string };
+  } | null;
+  referrer_business?: {
+    id: string;
+    name: string;
+    user_id: string;
+  } | null;
+}
 
 interface PayoutSummary {
   processed: number;
@@ -50,8 +81,40 @@ export class BusinessReferralPayoutsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly configurationsService: ConfigurationsService,
-    private readonly referralPyramidService: ReferralPyramidService
+    private readonly referralPyramidService: ReferralPyramidService,
+    private readonly representativeCompensationService: RepresentativeCompensationService
   ) {}
+
+  async isPayoutFeatureEnabled(): Promise<boolean> {
+    return this.isPayoutEnabled();
+  }
+
+  async listEligibleForPreview(): Promise<PreviewEligibleBusiness[]> {
+    const rows = await this.fetchEligibleBusinesses();
+    return rows.map((row) => this.toPreviewEligible(row));
+  }
+
+  async previewGrossForUser(userId: string): Promise<PreviewGross> {
+    const countryCode = await this.paymentRoutingService.getUserCountryCode(
+      userId
+    );
+    const normalized = countryCode ? String(countryCode).toUpperCase() : null;
+    const configKey = await this.referrerPayoutAmountKey(userId);
+    const amount = configKey
+      ? await this.getPayoutAmount(configKey, countryCode)
+      : 0;
+    return {
+      countryCode: normalized,
+      currency: this.getCurrencyForCountry(countryCode),
+      amount: amount || 0,
+      configKey,
+    };
+  }
+
+  async listIncompleteClaimsForPreview(): Promise<PreviewPendingClaim[]> {
+    const rows = await this.loadIncompletePayoutRows();
+    return rows.map((row) => this.toPreviewPendingClaim(row));
+  }
 
   async runWeeklyPayouts(): Promise<PayoutSummary & { skippedReason?: string }> {
     const enabled = await this.isPayoutEnabled();
@@ -66,27 +129,18 @@ export class BusinessReferralPayoutsService {
       };
     }
 
-    const businesses = await this.fetchEligibleBusinesses();
-    this.logger.log(`Found ${businesses.length} eligible businesses for payout.`);
-
     const summary: PayoutSummary = {
       processed: 0,
       credited: 0,
       skipped: 0,
       failures: 0,
     };
-    for (const business of businesses) {
-      summary.processed++;
-      try {
-        const credited = await this.processBusinessPayout(business);
-        credited ? summary.credited++ : summary.skipped++;
-      } catch (error: any) {
-        this.logger.error(
-          `Payout failed for business ${business.id}: ${error.message}`
-        );
-        summary.failures++;
-      }
-    }
+
+    const sweep = await this.representativeCompensationService.sweepPending();
+    summary.processed += sweep.credited + sweep.skipped + sweep.failed;
+    summary.credited += sweep.credited;
+    summary.skipped += sweep.skipped;
+    summary.failures += sweep.failed;
 
     const retried = await this.retryIncompletePayoutClaims();
     summary.processed += retried.processed;
@@ -105,6 +159,23 @@ export class BusinessReferralPayoutsService {
       skipped: 0,
       failures: 0,
     };
+    const rows = await this.loadIncompletePayoutRows();
+    for (const row of rows) {
+      summary.processed++;
+      try {
+        const ok = await this.retryIncompletePayout(row);
+        ok ? summary.credited++ : summary.skipped++;
+      } catch (error: any) {
+        this.logger.error(
+          `Incomplete payout retry failed for ${row.business_id}: ${error.message}`
+        );
+        summary.failures++;
+      }
+    }
+    return summary;
+  }
+
+  private async loadIncompletePayoutRows(): Promise<IncompletePayoutRow[]> {
     const query = `
       query IncompleteBusinessReferralPayouts {
         business_referral_payouts(where: { transaction_id: { _is_null: true } }) {
@@ -121,76 +192,19 @@ export class BusinessReferralPayoutsService {
         }
       }
     `;
-    let rows: any[] = [];
     try {
       const result = await this.hasuraSystemService.executeQuery(query);
-      rows = result?.business_referral_payouts ?? [];
+      return result?.business_referral_payouts ?? [];
     } catch (error: any) {
       this.logger.error(
         `Failed to load incomplete referral payouts: ${error.message}`
       );
-      return summary;
+      return [];
     }
-
-    for (const row of rows) {
-      summary.processed++;
-      try {
-        const ok = await this.retryIncompletePayout(row);
-        ok ? summary.credited++ : summary.skipped++;
-      } catch (error: any) {
-        this.logger.error(
-          `Incomplete payout retry failed for ${row.business_id}: ${error.message}`
-        );
-        summary.failures++;
-      }
-    }
-    return summary;
   }
 
-  private async retryIncompletePayout(row: {
-    id: string;
-    business_id: string;
-    agent_id: string | null;
-    referrer_business_id: string | null;
-    amount: number;
-    currency: string;
-    business: { id: string; name: string };
-    agent?: {
-      id: string;
-      user_id: string;
-      user?: { first_name?: string; last_name?: string };
-    } | null;
-    referrer_business?: {
-      id: string;
-      name: string;
-      user_id: string;
-    } | null;
-  }): Promise<boolean> {
-    let earner: {
-      kind: 'agent' | 'business';
-      id: string;
-      userId: string;
-      name: string;
-    } | null = null;
-
-    if (row.agent_id && row.agent?.user_id) {
-      earner = {
-        kind: 'agent',
-        id: row.agent.id,
-        userId: row.agent.user_id,
-        name:
-          `${row.agent.user?.first_name ?? ''} ${row.agent.user?.last_name ?? ''}`.trim() ||
-          'Agent',
-      };
-    } else if (row.referrer_business_id && row.referrer_business?.user_id) {
-      earner = {
-        kind: 'business',
-        id: row.referrer_business.id,
-        userId: row.referrer_business.user_id,
-        name: row.referrer_business.name || 'Business',
-      };
-    }
-
+  private async retryIncompletePayout(row: IncompletePayoutRow): Promise<boolean> {
+    const earner = this.earnerFromIncompleteRow(row);
     if (!earner) {
       this.logger.warn(
         `Incomplete payout ${row.id} missing earner relation — skipping`
@@ -265,7 +279,7 @@ export class BusinessReferralPayoutsService {
           agent: referring_agent {
             id
             user_id
-            user { id preferred_language }
+            user { id first_name last_name preferred_language }
           }
           items_aggregate(
             where: {
@@ -278,8 +292,8 @@ export class BusinessReferralPayoutsService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      cutoff: BUSINESS_CUTOFF_DATE,
-      minItems: MIN_ITEM_COUNT,
+      cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
+      minItems: BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
     });
     return (result?.businesses ?? []).map((b: Omit<EligibleAgentReferral, 'kind'>) => ({
       ...b,
@@ -316,8 +330,9 @@ export class BusinessReferralPayoutsService {
           referred_by_business_id
           referring_business {
             id
+            name
             user_id
-            user { id preferred_language }
+            user { id first_name last_name preferred_language }
           }
           items_aggregate(
             where: {
@@ -330,8 +345,8 @@ export class BusinessReferralPayoutsService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      cutoff: BUSINESS_CUTOFF_DATE,
-      minItems: MIN_ITEM_COUNT,
+      cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
+      minItems: BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
     });
     return (result?.businesses ?? []).map(
       (b: Omit<EligibleBusinessReferral, 'kind'>) => ({
@@ -341,13 +356,100 @@ export class BusinessReferralPayoutsService {
     );
   }
 
-  private async processBusinessPayout(
+  async processBusinessPayout(
     business: EligibleBusiness
   ): Promise<boolean> {
     if (business.kind === 'agent') {
       return this.processAgentReferralPayout(business);
     }
     return this.processBusinessReferralPayout(business);
+  }
+
+  private toPreviewEligible(row: EligibleBusiness): PreviewEligibleBusiness {
+    if (row.kind === 'agent') return this.toPreviewAgentEligible(row);
+    return this.toPreviewBusinessEligible(row);
+  }
+
+  private toPreviewPendingClaim(row: IncompletePayoutRow): PreviewPendingClaim {
+    const earner = this.earnerFromIncompleteRow(row);
+    return {
+      referredBusinessId: row.business_id,
+      referredBusinessName: row.business?.name || 'Business',
+      referralKind: earner?.kind ?? (row.agent_id ? 'agent' : 'business'),
+      amount: Number(row.amount),
+      currency: row.currency,
+      earner,
+    };
+  }
+
+  private earnerFromIncompleteRow(
+    row: IncompletePayoutRow
+  ): PayoutPreviewReferrer | null {
+    if (row.agent_id && row.agent?.user_id) {
+      return {
+        kind: 'agent',
+        id: row.agent.id,
+        userId: row.agent.user_id,
+        name: this.displayName(row.agent.user, 'Agent'),
+      };
+    }
+    if (row.referrer_business_id && row.referrer_business?.user_id) {
+      return {
+        kind: 'business',
+        id: row.referrer_business.id,
+        userId: row.referrer_business.user_id,
+        name: row.referrer_business.name || 'Business',
+      };
+    }
+    return null;
+  }
+
+  private toPreviewAgentEligible(
+    row: EligibleAgentReferral
+  ): PreviewEligibleBusiness {
+    const agent = row.agent;
+    return {
+      kind: 'agent',
+      id: row.id,
+      name: row.name,
+      itemCount: row.items_aggregate.aggregate.count,
+      earner: agent?.user_id
+        ? {
+            kind: 'agent',
+            id: agent.id,
+            userId: agent.user_id,
+            name: this.displayName(agent.user, 'Agent'),
+          }
+        : null,
+    };
+  }
+
+  private toPreviewBusinessEligible(
+    row: EligibleBusinessReferral
+  ): PreviewEligibleBusiness {
+    const biz = row.referring_business;
+    return {
+      kind: 'business',
+      id: row.id,
+      name: row.name,
+      itemCount: row.items_aggregate.aggregate.count,
+      earner: biz?.user_id
+        ? {
+            kind: 'business',
+            id: biz.id,
+            userId: biz.user_id,
+            name: biz.name || this.displayName(biz.user, 'Business'),
+          }
+        : null,
+    };
+  }
+
+  private displayName(
+    user: { first_name?: string; last_name?: string } | null | undefined,
+    fallback: string
+  ): string {
+    const name = `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim();
+    return name || fallback;
   }
 
   private async processAgentReferralPayout(
@@ -530,17 +632,12 @@ export class BusinessReferralPayoutsService {
       params.referrerUserId
     );
     const currency = this.getCurrencyForCountry(countryCode);
-    const isInternal = await this.isInternalUser(params.referrerUserId);
-    const amountKey = isInternal
-      ? 'business_referral_payout_amount_internal'
-      : 'business_referral_payout_amount';
-    const amount = await this.getPayoutAmount(amountKey, countryCode);
-    if (!amount || amount <= 0) {
-      this.logger.warn(
-        `No payout amount configured for country ${countryCode} — skipping business ${params.businessId}.`
-      );
-      return null;
-    }
+    const amount = await this.resolvePayoutAmount(
+      params.referrerUserId,
+      countryCode,
+      params.businessId
+    );
+    if (!amount) return null;
 
     const accountId = params.preferPersonalAccount
       ? await this.findPersonalAccountId(params.referrerUserId, currency)
@@ -562,33 +659,51 @@ export class BusinessReferralPayoutsService {
     return { accountId, amount, currency, rail };
   }
 
-  private async isInternalUser(userId: string): Promise<boolean> {
+  private async resolvePayoutAmount(
+    userId: string,
+    countryCode: string | null,
+    businessId: string
+  ): Promise<number | null> {
+    const amountKey = await this.referrerPayoutAmountKey(userId);
+    if (!amountKey) {
+      this.logger.warn(
+        `Could not resolve payout tier for referrer ${userId} — skipping business ${businessId}.`
+      );
+      return null;
+    }
+    const amount = await this.getPayoutAmount(amountKey, countryCode);
+    if (!amount || amount <= 0) {
+      this.logger.warn(
+        `No payout amount configured for country ${countryCode} — skipping business ${businessId}.`
+      );
+      return null;
+    }
+    return amount;
+  }
+
+  private async referrerPayoutAmountKey(userId: string): Promise<string | null> {
     const query = `
-      query IsInternalUser($userId: uuid!) {
-        users_by_pk(id: $userId) { internal }
+      query ReferrerPayoutUser($userId: uuid!) {
+        users_by_pk(id: $userId) { internal agent { id } }
       }
     `;
     try {
       const result = await this.hasuraSystemService.executeQuery(query, {
         userId,
       });
-      return result?.users_by_pk?.internal === true;
+      const row = result?.users_by_pk;
+      if (!row) return null;
+      return businessReferralPayoutConfigKeyFromUser(row);
     } catch (error: any) {
       this.logger.warn(
-        `Failed to read users.internal for ${userId}: ${error.message}`
+        `Failed to read referrer payout tier for ${userId}: ${error.message}`
       );
-      return false;
+      return null;
     }
   }
 
   private getCurrencyForCountry(countryCode: string | null): string {
-    const map: Record<string, string> = {
-      GA: 'XAF',
-      CM: 'XAF',
-      CA: 'CAD',
-      US: 'USD',
-    };
-    return map[(countryCode ?? '').toUpperCase()] ?? 'XAF';
+    return currencyForReferralPayout(countryCode);
   }
 
   private async getPayoutAmount(

@@ -14,6 +14,9 @@ export interface OrderData {
   assigned_agent_id?: string;
   delivery_address_id?: string | null;
   fulfillment_method?: 'delivery' | 'pickup';
+  fulfillment_timing?: 'asap' | 'scheduled' | null;
+  promised_ready_at?: string | null;
+  promised_fulfill_by?: string | null;
   dispatch_ready_at?: string | null;
   pickup_by?: string | null;
   assigned_at?: string | null;
@@ -35,6 +38,9 @@ export interface OrderData {
   acceptance_state?: string | null;
   acceptance_deadline_at?: string | null;
   acceptance_activates_at?: string | null;
+  grace_deadline_at?: string | null;
+  busy_extra_prep_minutes?: number | null;
+  estimated_prep_minutes?: number | null;
   estimated_delivery_time?: string;
   actual_delivery_time?: string;
   special_instructions?: string;

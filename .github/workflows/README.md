@@ -2,11 +2,21 @@
 
 This directory contains GitHub Actions workflows for automated deployment and testing.
 
+## Concurrency Strategy
+
+All deployment workflows use GitHub Actions `concurrency` groups to prevent conflicting deploys:
+
+- **Development workflows** (`main` branch): Use `cancel-in-progress: true` to cancel superseded deploys and always deploy the latest code.
+- **Production workflows** (`prod` branch): Use `cancel-in-progress: false` to queue deploys, ensuring in-flight production deploys complete safely.
+- Each workflow has a unique concurrency group to prevent cross-environment interference (e.g., dev deploys don't cancel prod deploys).
+
+This prevents "deployment already in progress" errors and ensures safe, sequential deploys to each environment.
+
 ## Workflows
 
 ### 1. Deploy Backend (`deploy-backend.yml`)
 
-**Trigger:** Push to `main` branch with changes to backend files
+**Trigger:** Push to `main` or `prod` branch with changes to backend files
 **Purpose:** Deploy the NestJS backend to AWS Lightsail Container Service
 
 **Files monitored:**
@@ -14,6 +24,7 @@ This directory contains GitHub Actions workflows for automated deployment and te
 - `apps/backend/**`
 - `package.json`
 - `Dockerfile.backend`
+- `Dockerfile.backend.prod`
 - `nx.json`
 - `tsconfig.base.json`
 
@@ -22,7 +33,14 @@ This directory contains GitHub Actions workflows for automated deployment and te
 1. Build backend application
 2. Build Docker container
 3. Push to Amazon ECR
-4. Deploy to Lightsail Container Service
+4. Deploy to Lightsail Container Service (with retry on failure)
+
+**Concurrency Control:**
+
+- **Development (main branch):** Only one deploy runs at a time. New deploys cancel in-progress ones (`cancel-in-progress: true`), as dev deploys can safely be superseded.
+- **Production (prod branch):** Only one deploy runs at a time. New deploys queue until the current one finishes (`cancel-in-progress: false`), ensuring production deploys complete safely.
+- Separate concurrency groups prevent dev/prod cross-cancellation.
+- Lightsail deploy step includes retry logic (up to 3 attempts with backoff) to handle transient "deployment already in progress" errors.
 
 ### 2. Deploy CDK Infrastructure (`deploy-cdk.yml`)
 
@@ -45,9 +63,14 @@ This directory contains GitHub Actions workflows for automated deployment and te
 5. Deploy to development environment and shared Hasura stack
 6. Verify deployment
 
+**Concurrency Control:**
+
+- Only one dev CDK deploy runs at a time
+- New deploys cancel in-progress ones (`cancel-in-progress: true`)
+
 ### 3. Deploy CDK to Production (`deploy-cdk-production.yml`)
 
-**Trigger:** Manual workflow dispatch
+**Trigger:** Push to `prod` branch or manual workflow dispatch
 **Purpose:** Deploy CDK infrastructure to production/staging environments
 
 **Features:**
@@ -56,6 +79,34 @@ This directory contains GitHub Actions workflows for automated deployment and te
 - Production environment protection
 - Deployment plan preview
 - Environment-specific deployment (production stack only; excludes shared Hasura stack)
+
+**Concurrency Control:**
+
+- Only one production CDK deploy runs at a time
+- New deploys queue until current one finishes (`cancel-in-progress: false`)
+
+### 4. Apply Hasura Migrations (`hasura-apply.yml`)
+
+**Trigger:** Push to `main` or `prod` branch with changes to Hasura files
+**Purpose:** Apply Hasura migrations and metadata to development or production
+
+**Files monitored:**
+
+- `apps/hasura/**`
+- `.github/actions/apply-hasura/**`
+- `.github/workflows/hasura-apply.yml`
+
+**Process:**
+
+1. Checkout code
+2. Configure AWS credentials
+3. Apply Hasura migrations and metadata using reusable action
+
+**Concurrency Control:**
+
+- **Development:** Only one dev Hasura apply runs at a time. New applies cancel in-progress ones (`cancel-in-progress: true`).
+- **Production:** Only one production Hasura apply runs at a time. New applies queue until current one finishes (`cancel-in-progress: false`).
+- Separate concurrency groups for dev/prod environments.
 
 ## Required Secrets
 

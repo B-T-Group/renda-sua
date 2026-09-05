@@ -65,7 +65,7 @@ export function DeferredFloatingWhatsApp({
       }
     >
       <FloatingWhatsApp
-        phoneNumber="237690043293"
+        phoneNumber="18556488855"
         accountName={t('support.whatsapp.accountName', 'Rendasua Support')}
         statusMessage={t(
           'support.whatsapp.statusMessage',

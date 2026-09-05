@@ -61,6 +61,7 @@ describe('AgentsController location tracking consent', () => {
       hasuraSystemService as any,
       {} as any,
       {} as any,
+      {} as any,
       {} as any
     );
   });

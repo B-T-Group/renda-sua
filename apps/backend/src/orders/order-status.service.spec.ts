@@ -3,6 +3,8 @@ import { OrderStatusService } from './order-status.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrderQueueService } from './order-queue.service';
+import { AgentReferralsService } from '../agents/agent-referrals.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 
 describe('OrderStatusService', () => {
   let service: OrderStatusService;
@@ -10,6 +12,8 @@ describe('OrderStatusService', () => {
     Pick<HasuraSystemService, 'executeQuery' | 'executeMutation'>
   >;
   let hasuraUserService: jest.Mocked<Pick<HasuraUserService, 'getUser'>>;
+  let agentReferralsService: { creditAfterFirstDelivery: jest.Mock };
+  let paymentRoutingService: { getUserCountryCode: jest.Mock };
 
   const clientUser = {
     id: 'user-client-1',
@@ -50,6 +54,13 @@ describe('OrderStatusService', () => {
       getUser: jest.fn(),
     };
 
+    agentReferralsService = {
+      creditAfterFirstDelivery: jest.fn().mockResolvedValue(undefined),
+    };
+    paymentRoutingService = {
+      getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderStatusService,
@@ -59,6 +70,8 @@ describe('OrderStatusService', () => {
           provide: OrderQueueService,
           useValue: { sendOrderStatusUpdatedMessage: jest.fn() },
         },
+        { provide: AgentReferralsService, useValue: agentReferralsService },
+        { provide: PaymentRoutingService, useValue: paymentRoutingService },
       ],
     }).compile();
 
@@ -203,6 +216,70 @@ describe('OrderStatusService', () => {
       await expect(
         service.updateOrderStatus('order-123', 'cancelled')
       ).rejects.toThrow('Cancellations must use POST /orders/cancel');
+    });
+  });
+
+  describe('updateOrderStatus viaSystem admin cancel', () => {
+    it('rejects system cancel without the dedicated cancel flag', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'assigned_to_agent',
+          assigned_agent_id: 'agent-1',
+          assigned_agent: { user_id: 'user-agent-1' },
+        },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'cancelled', { viaSystem: true })
+      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
+      expect(hasuraUserService.getUser).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('allows system cancel from the dedicated admin cancel path', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'assigned_to_agent',
+          assigned_agent_id: 'agent-1',
+          assigned_agent: { user_id: 'user-agent-1' },
+        },
+      });
+      mockSuccessfulUpdate('cancelled');
+
+      const result = await service.updateOrderStatus('order-123', 'cancelled', {
+        viaCancelEndpoint: true,
+        viaSystem: true,
+      });
+
+      expect(result.current_status).toBe('cancelled');
+      expect(hasuraUserService.getUser).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateOrderStatus after delivery completion', () => {
+    it('credits the agent referral after PIN completion', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'out_for_delivery',
+          assigned_agent_id: 'agent-1',
+          assigned_agent: { user_id: 'user-agent-1' },
+        },
+      });
+      mockSuccessfulUpdate('complete');
+
+      await service.updateOrderStatus('order-123', 'complete');
+
+      expect(paymentRoutingService.getUserCountryCode).toHaveBeenCalledWith(
+        'user-agent-1'
+      );
+      expect(agentReferralsService.creditAfterFirstDelivery).toHaveBeenCalledWith(
+        'agent-1',
+        'CM'
+      );
     });
   });
 });

@@ -26,6 +26,11 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmOrderData } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import DeliveryTimeWindowSelector from '../common/DeliveryTimeWindowSelector';
+import { isFoodCategoryName } from '../../constants/food';
+import type { FoodConfirmationStockUpdate } from '../../types/food';
+import FoodOrderStockPrompt, {
+  type FoodOrderLine,
+} from './food/FoodOrderStockPrompt';
 
 interface ConfirmOrderModalProps {
   open: boolean;
@@ -63,6 +68,27 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     special_instructions?: string;
   } | null>(null);
   const [error, setError] = useState<string>('');
+  const [foodStockUpdates, setFoodStockUpdates] = useState<
+    Record<string, FoodConfirmationStockUpdate>
+  >({});
+
+  const foodLines: FoodOrderLine[] = useMemo(
+    () =>
+      (order?.order_items ?? [])
+        .filter((line) =>
+          isFoodCategoryName(line.item?.item_sub_category?.item_category?.name)
+        )
+        .map((line) => ({
+          order_item_id: line.id,
+          name: line.item_name || line.item?.name || '',
+          quantity: line.quantity,
+        })),
+    [order?.order_items]
+  );
+
+  useEffect(() => {
+    if (!open) setFoodStockUpdates({});
+  }, [open]);
 
   // Calculate existing windows using optional chaining
   const allExistingWindows: DeliveryWindowOption[] =
@@ -113,6 +139,10 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   const windowCountryCode = windowAddress?.country?.trim() || 'GA';
   const windowStateCode = windowAddress?.state?.trim() || '';
   const isPickup = order?.fulfillment_method === 'pickup';
+  const isAsap =
+    order?.fulfillment_timing === 'asap' ||
+    (!order?.delivery_time_windows?.length &&
+      order?.fulfillment_method !== 'shipping');
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -168,8 +198,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   const handleConfirm = useCallback(async () => {
     setError('');
 
-    // Validate that a delivery window is selected
-    if (!selectedWindowId && !newWindowData) {
+    // Validate that a delivery window is selected (not required for ASAP)
+    if (!isAsap && !selectedWindowId && !newWindowData) {
       setError(
         isPickup
           ? t(
@@ -216,6 +246,11 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
         confirmData.delivery_window_details = newWindowData;
       }
 
+      const stockUpdates = Object.values(foodStockUpdates);
+      if (stockUpdates.length > 0) {
+        confirmData.food_stock_updates = stockUpdates;
+      }
+
       await onConfirm(confirmData);
       onClose();
     } catch (err: unknown) {
@@ -233,6 +268,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     t,
     existingWindows,
     isPickup,
+    isAsap,
+    foodStockUpdates,
   ]);
 
   // Early return after all hooks
@@ -379,6 +416,20 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
           {/* Delivery Window Selection */}
           <Card>
             <CardContent sx={{ py: 2 }}>
+              {isAsap ? (
+                <Typography variant="body1">
+                  {isPickup
+                    ? t(
+                        'orders.confirmModal.asapPickup',
+                        'Customer wants pickup as soon as possible. Confirm to start preparing now.'
+                      )
+                    : t(
+                        'orders.confirmModal.asapDelivery',
+                        'Customer wants delivery as soon as possible. Confirm to start preparing now.'
+                      )}
+                </Typography>
+              ) : (
+                <>
               <Typography variant="h6" gutterBottom>
                 {isPickup
                   ? t(
@@ -547,8 +598,17 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                   />
                 </Box>
               )}
+              </>
+              )}
             </CardContent>
           </Card>
+
+          <FoodOrderStockPrompt
+            lines={foodLines}
+            updates={foodStockUpdates}
+            onChange={setFoodStockUpdates}
+            disabled={loading}
+          />
         </Stack>
       </DialogContent>
 
@@ -566,7 +626,9 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
           <Button
             variant="contained"
             onClick={handleConfirm}
-            disabled={loading || (!selectedWindowId && !newWindowData)}
+            disabled={
+              loading || (!isAsap && !selectedWindowId && !newWindowData)
+            }
             startIcon={<CheckCircle />}
           >
             {loading

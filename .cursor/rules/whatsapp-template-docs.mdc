@@ -1,0 +1,52 @@
+---
+description: Keep the WhatsApp Meta template submission checklist in sync with the code
+globs: apps/backend/src/notifications/**
+alwaysApply: false
+---
+
+# WhatsApp templates must be documented before they can send
+
+`apps/backend/docs/whatsapp-meta-templates.md` is the **submission checklist ops works from** in Meta Business Manager. A `templateKey` that exists only in code will never be approved, so every send using it fails silently at the WhatsApp channel.
+
+## When to update the doc
+
+Update it in the **same change** whenever you:
+
+- Add a key to `TEMPLATE_NAMES` / `BODY_VARS` in `whatsapp-template.service.ts`
+- Change a template's body variables, their **order**, or its CTA URL
+- Rename or retire a Meta template
+- Learn that Meta **recategorized** a template (it can do this after approval) — update both `TEMPLATE_CATEGORIES` and the doc's `Category` column
+
+Reusing an already-listed template (e.g. sending `order_status_client` from a new flow) needs **no** doc change.
+
+## What to add
+
+1. A row in the table at the top: internal key, Meta name, category, body variables in positional order, button target.
+2. A numbered section with `**Vars:**`, `**Button:**`, and the exact **en** and **fr** body copy, matching the format of the existing sections.
+
+Meta must have the template approved under exactly the `en` and `fr` translation codes — those are the only two `languageCode` ever requests. Any other code (e.g. `en_US`) fails at send time with #132001.
+
+Keep the table row and the section consistent with `BODY_VARS` — the array order *is* the Meta `{{1}}, {{2}}, …` order.
+
+## Category changes behavior, not just price
+
+`TEMPLATE_CATEGORIES` drives the endpoint: MARKETING goes to `/PHONE_NUMBER_ID/marketing_messages` when `WHATSAPP_MARKETING_MESSAGES_API_ENABLED` is on, everything else to `/messages`. Marketing sends are also capped by per-user marketing limits, so treat WhatsApp as best-effort for anything operational that got recategorized to marketing — keep push or another channel as the primary path.
+
+## Meta body constraints (utility templates)
+
+- Never start or end a body with a variable.
+- Keep substantial fixed text around variables; short bodies with many variables get rejected.
+- Dynamic URL buttons take the entity id only (`/app/orders/{{1}}`). A static CTA must send no button parameter.
+
+## Authentication templates are different
+
+`AUTH_CODE_VARS` in `whatsapp-template.service.ts` lists them (today: `delivery_pin`). Do **not** treat these as utility:
+
+- The body takes the **code and nothing else**. A second parameter is rejected on parameter count.
+- The code is repeated on the button: `sub_type: "url"`, `index: "0"` — Meta keeps the send-time sub_type as `url` even though the button is created as type `OTP`.
+- Any `ctaUrl` is ignored; there is no URL to parameterize.
+- You do not author the body copy in Meta, so the doc records the contract and category rather than en/fr strings.
+
+## Prefer reuse over new templates
+
+Each new template needs Meta review before it can send. If an approved template can carry the message (e.g. packing detail into `rs_order_status`'s `statusLabel` or `rs_admin_order_risk`'s `reason`), reuse it and say so in your summary rather than adding a key that blocks the feature on approval.

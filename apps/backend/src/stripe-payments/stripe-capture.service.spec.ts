@@ -123,6 +123,10 @@ describe('StripeCaptureService', () => {
 
   it('persists partial captureAmount so wallet credit matches Stripe charge', async () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'requires_capture',
+      amount: 12500,
+    });
     stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
 
     await expect(
@@ -200,6 +204,62 @@ describe('StripeCaptureService', () => {
       status: 'success',
       captured_at: now.toISOString(),
     });
+  });
+
+  it('scales a pre-tax captureAmount when Stripe Tax increased the authorization', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'requires_capture',
+      amount: 14125,
+    });
+    stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 125,
+      })
+    ).resolves.toEqual({ success: true, captured: true });
+
+    expect(stripeService.capturePaymentIntent).toHaveBeenCalledWith(
+      'pi_123',
+      'capture_order-id-123',
+      { amount: 141.25, currency: 'CAD' }
+    );
+    expect(databaseService.updateTransaction).toHaveBeenNthCalledWith(
+      1,
+      'tx-123',
+      { status: 'capture_pending', amount: 125 }
+    );
+  });
+
+  it('scales a waived-fee captureAmount to keep tax on the remaining goods', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+    stripeService.retrievePaymentIntent.mockResolvedValue({
+      status: 'requires_capture',
+      amount: 14125,
+    });
+    stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+
+    await expect(
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+        captureAmount: 100,
+      })
+    ).resolves.toEqual({ success: true, captured: true });
+
+    expect(stripeService.capturePaymentIntent).toHaveBeenCalledWith(
+      'pi_123',
+      'capture_order-id-123',
+      { amount: 113, currency: 'CAD' }
+    );
+    expect(databaseService.updateTransaction).toHaveBeenNthCalledWith(
+      2,
+      'tx-123',
+      { status: 'success', captured_at: now.toISOString(), amount: 100 }
+    );
   });
 
   it('credits wallet using the persisted (possibly partial) transaction amount', async () => {

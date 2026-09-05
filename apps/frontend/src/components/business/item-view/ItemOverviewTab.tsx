@@ -18,6 +18,7 @@ interface ItemOverviewTabProps {
   onOpenLightbox: (index: number) => void;
   onManageCollections: () => void;
   onRefineWithAi: () => void;
+  onCategorySaved: () => void;
 }
 
 const ItemOverviewTab: React.FC<ItemOverviewTabProps> = ({
@@ -30,6 +31,7 @@ const ItemOverviewTab: React.FC<ItemOverviewTabProps> = ({
   onOpenLightbox,
   onManageCollections,
   onRefineWithAi,
+  onCategorySaved,
 }) => {
   const { t } = useTranslation();
 
@@ -134,6 +136,7 @@ const ItemOverviewTab: React.FC<ItemOverviewTabProps> = ({
             canSuperUserActions={canSuperUserActions}
             onManageCollections={onManageCollections}
             onRefineWithAi={onRefineWithAi}
+            onCategorySaved={onCategorySaved}
           />
         </Grid>
       </Grid>

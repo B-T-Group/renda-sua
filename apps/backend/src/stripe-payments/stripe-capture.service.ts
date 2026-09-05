@@ -96,34 +96,25 @@ export class StripeCaptureService {
     }
 
     // If Stripe already captured (or settled) this PI, sync local tx — do not capture again.
-    try {
-      const existingPi = await this.stripeService.retrievePaymentIntent(
-        tx.stripe_payment_intent_id
-      );
-      if (existingPi?.status === 'succeeded') {
-        const capturedAt = new Date().toISOString();
-        const shouldSyncAmount =
-          params.captureAmount != null &&
-          existingPi.amount_received ===
-            this.toStripeMinorUnits(params.captureAmount, tx.currency);
-        await this.databaseService.updateTransaction(tx.id, {
-          status: 'success',
-          captured_at: capturedAt,
-          ...(shouldSyncAmount ? { amount: params.captureAmount } : {}),
-        });
-        return { success: true, message: 'Already captured on Stripe', captured: true };
-      }
-      if (existingPi?.status && existingPi.status !== 'requires_capture') {
-        return {
-          success: false,
-          message: `Cannot capture PaymentIntent in status ${existingPi.status}`,
-        };
-      }
-    } catch (error: any) {
-      this.logger.warn(
-        `Could not retrieve PI before capture for ${params.orderNumber}: ${error?.message}`
-      );
+    const existingPi = await this.tryRetrievePaymentIntent(
+      tx.stripe_payment_intent_id,
+      params.orderNumber
+    );
+    if (existingPi?.status === 'succeeded') {
+      return this.syncAlreadyCapturedTransaction(tx, existingPi, params.captureAmount);
     }
+    if (existingPi?.status && existingPi.status !== 'requires_capture') {
+      return {
+        success: false,
+        message: `Cannot capture PaymentIntent in status ${existingPi.status}`,
+      };
+    }
+
+    const stripeCaptureAmount = this.scalePreTaxCaptureForAuthorizedTax(
+      params.captureAmount,
+      tx,
+      existingPi
+    );
 
     // Persist reduced amount before Stripe capture so a concurrent
     // payment_intent.succeeded webhook cannot credit the pre-waiver total.
@@ -136,8 +127,8 @@ export class StripeCaptureService {
       const pi = await this.stripeService.capturePaymentIntent(
         tx.stripe_payment_intent_id,
         `capture_${params.orderId}`,
-        params.captureAmount != null
-          ? { amount: params.captureAmount, currency: tx.currency }
+        stripeCaptureAmount != null
+          ? { amount: stripeCaptureAmount, currency: tx.currency }
           : undefined
       );
       if (pi.status === 'succeeded') {
@@ -166,6 +157,66 @@ export class StripeCaptureService {
       );
       return { success: false, message: error?.message || 'Capture failed' };
     }
+  }
+
+  private async tryRetrievePaymentIntent(
+    paymentIntentId: string,
+    orderNumber: string
+  ): Promise<{ status?: string; amount?: number; amount_received?: number } | null> {
+    try {
+      return await this.stripeService.retrievePaymentIntent(paymentIntentId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not retrieve PI before capture for ${orderNumber}: ${error?.message}`
+      );
+      return null;
+    }
+  }
+
+  private async syncAlreadyCapturedTransaction(
+    tx: StripePaymentTransaction,
+    existingPi: { amount_received?: number },
+    captureAmount: number | undefined
+  ): Promise<{ success: boolean; message?: string; captured?: boolean }> {
+    const capturedAt = new Date().toISOString();
+    const shouldSyncAmount =
+      captureAmount != null &&
+      existingPi.amount_received ===
+        this.toStripeMinorUnits(captureAmount, tx.currency);
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'success',
+      captured_at: capturedAt,
+      ...(shouldSyncAmount ? { amount: captureAmount } : {}),
+    });
+    return { success: true, message: 'Already captured on Stripe', captured: true };
+  }
+
+  /**
+   * Checkout/PaymentSheet authorizes pre-tax + Stripe Tax, but callers pass the
+   * pre-tax order total as captureAmount. Scale so tax is actually collected.
+   * Ledger/wallet still persist the caller amount so settlement stays consistent.
+   */
+  private scalePreTaxCaptureForAuthorizedTax(
+    captureAmount: number | undefined,
+    tx: StripePaymentTransaction,
+    paymentIntent?: { amount?: number } | null
+  ): number | undefined {
+    if (captureAmount == null) return undefined;
+    const authorizedMinor = paymentIntent?.amount;
+    const storedMinor = this.toStripeMinorUnits(Number(tx.amount), tx.currency);
+    if (!authorizedMinor || storedMinor <= 0 || authorizedMinor <= storedMinor) {
+      return captureAmount;
+    }
+    const requestedMinor = this.toStripeMinorUnits(captureAmount, tx.currency);
+    const scaledMinor = Math.round((requestedMinor * authorizedMinor) / storedMinor);
+    return this.fromStripeMinorUnits(scaledMinor, tx.currency);
+  }
+
+  private fromStripeMinorUnits(amount: number, currency?: string | null): number {
+    const code = currency?.toUpperCase();
+    const divisor =
+      code && ZERO_DECIMAL_STRIPE_CURRENCIES.has(code) ? 1 : 100;
+    return amount / divisor;
   }
 
   private async restoreAuthorizationAfterFailedCapture(

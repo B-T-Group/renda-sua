@@ -23,6 +23,7 @@ import { resolveCurrencyFromCountry } from '../country-currency/country-currency
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 import { AgentHoldService } from './agent-hold.service';
 import { AgentReferralsService } from './agent-referrals.service';
+import { ReferralProjectedPayoutService } from '../business-referral-payouts/referral-projected-payout.service';
 import { assertLocationConsentTransition } from './agent-location-consent.util';
 import {
   type AgentLocationTrackingConsent,
@@ -128,7 +129,8 @@ export class AgentsController {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly commissionsService: CommissionsService,
     private readonly agentHoldService: AgentHoldService,
-    private readonly agentReferralsService: AgentReferralsService
+    private readonly agentReferralsService: AgentReferralsService,
+    private readonly referralProjectedPayoutService: ReferralProjectedPayoutService
   ) {}
 
   private requireAgentActor(user: any, ctx: RequestContext): string {
@@ -409,7 +411,7 @@ export class AgentsController {
   @ApiOperation({
     summary: 'List businesses referred by the current agent',
     description:
-      'Follow-up list with owner contact, lifecycle, payment-setup status, and item counts.',
+      'Follow-up list with owner contact, lifecycle, payment-setup status, item counts, and one-time commission progress.',
   })
   @ApiResponse({ status: 200, description: 'Referred businesses list' })
   @ApiResponse({ status: 403, description: 'User is not an agent' })
@@ -459,6 +461,24 @@ export class AgentsController {
       goOffline
     );
     return { success: true, agent };
+  }
+
+  @Get('me/referral-payout-projection')
+  @ApiOperation({
+    summary: 'Projected Saturday referral payout for the current agent',
+    description:
+      'Counts approved unpaid referred businesses that meet the catalog bar, using the same rules as the weekly Saturday payout.',
+  })
+  @ApiResponse({ status: 200, description: 'Projected referral payout' })
+  @ApiResponse({ status: 403, description: 'User is not an agent' })
+  async getReferralPayoutProjection(@ReqContext() ctx: RequestContext) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const agentId = this.requireAgentActor(user, ctx);
+    const projection = await this.referralProjectedPayoutService.forAgent(
+      agentId,
+      user.id
+    );
+    return { success: true, ...projection };
   }
 
   @Get('me/referred-businesses-summary')

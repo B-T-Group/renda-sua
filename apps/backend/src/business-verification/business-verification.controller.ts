@@ -64,12 +64,12 @@ export class BusinessVerificationController {
             requiresMerchantAction: {
               type: 'boolean',
               description:
-                'True when nextAction is a merchant setup step (agreement, payouts, or ID)',
+                'True when nextAction is sign_agreement (required setup)',
             },
             isOnboarding: {
               type: 'boolean',
               description:
-                'Focused setup UI. Stripe: until lifecycle is active/suspended. Mobile money: until agreement signed and an ID uploaded (pending/rejected review is handled on the dashboard).',
+                'Focused setup UI until the merchant agreement is signed (lifecycle active/suspended ends onboarding)',
             },
             paymentRail: {
               type: 'string',

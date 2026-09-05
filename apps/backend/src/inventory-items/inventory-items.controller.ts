@@ -44,6 +44,7 @@ interface GetInventoryItemsQueryParams {
   origin_lat?: string;
   origin_lng?: string;
   collection?: string;
+  food_only?: string;
 }
 
 interface GetInventorySearchSuggestionsQueryParams
@@ -349,7 +350,7 @@ export class InventoryItemsController {
     name: 'limit',
     required: false,
     type: Number,
-    description: 'Items per page (default: 20)',
+    description: 'Items per page (default: 20, max 50)',
   })
   @ApiQuery({
     name: 'search',
@@ -478,6 +479,13 @@ export class InventoryItemsController {
     type: String,
     description: 'Filter by platform collection slug (e.g. home-essentials)',
   })
+  @ApiQuery({
+    name: 'food_only',
+    required: false,
+    type: Boolean,
+    description:
+      'Restrict results to cooked food sold by restaurants. Each row then carries a food_availability block and dishes being served now rank first.',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -536,6 +544,7 @@ export class InventoryItemsController {
         ...(Number.isFinite(oLat) && { origin_lat: oLat }),
         ...(Number.isFinite(oLng) && { origin_lng: oLng }),
         collection: query.collection?.trim() || undefined,
+        food_only: query.food_only === 'true',
       };
 
       const data = await this.inventoryItemsService.getInventoryItems(

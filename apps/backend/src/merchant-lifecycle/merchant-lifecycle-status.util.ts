@@ -69,12 +69,21 @@ export function aggregatePaymentCapabilityForProvider(
   return aggregatePaymentCapability(statuses);
 }
 
+/** Active once the merchant agreement is signed (payment proof is the badge). */
 export function deriveLifecycleStatus(
-  contractSigned: boolean,
-  paymentCapability: PaymentCapabilityStatus
+  contractSigned: boolean
 ): BusinessLifecycleStatus {
-  if (!contractSigned) return 'created';
-  return paymentCapability === 'VERIFIED' ? 'active' : 'contract_signed';
+  return contractSigned ? 'active' : 'created';
+}
+
+/**
+ * Storefront verified badge from rail payment capability:
+ * MM = approved ID; Stripe = Connect charges+payouts enabled.
+ */
+export function deriveVerifiedBadge(
+  paymentCapability: PaymentCapabilityStatus
+): boolean {
+  return paymentCapability === 'VERIFIED';
 }
 
 /**

@@ -16,6 +16,7 @@ import { Public } from '../auth/public.decorator';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { BusinessReferralsService } from '../business-referrals/business-referrals.service';
+import { ReferralProjectedPayoutService } from '../business-referral-payouts/referral-projected-payout.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 
 @ApiTags('businesses')
@@ -23,7 +24,8 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 export class BusinessesController {
   constructor(
     private readonly businessReferralsService: BusinessReferralsService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly referralProjectedPayoutService: ReferralProjectedPayoutService
   ) {}
 
   @Public()
@@ -100,6 +102,31 @@ export class BusinessesController {
     const businesses =
       await this.businessReferralsService.listReferredBusinesses(businessId);
     return { success: true, businesses };
+  }
+
+  @Get('me/referral-payout-projection')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Projected Saturday referral payout for the current business',
+    description:
+      'Counts approved unpaid referred businesses that meet the catalog bar, using the same rules as the weekly Saturday payout.',
+  })
+  @ApiResponse({ status: 200, description: 'Projected referral payout' })
+  @ApiResponse({ status: 403, description: 'User is not a business' })
+  async getReferralPayoutProjection(@ReqContext() ctx: RequestContext) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'Business profile required' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const projection = await this.referralProjectedPayoutService.forBusiness(
+      businessId,
+      user.id
+    );
+    return { success: true, ...projection };
   }
 
   @Get('me/referrals-summary')

@@ -38,7 +38,9 @@ import {
   RejectSaleItemDto,
 } from './dto/item-moderation.dto';
 import { AdminMessageService } from './admin-message.service';
+import { AdminReferralService } from './admin-referral.service';
 import { AdminService } from './admin.service';
+import { ApplyReferralDto } from './dto/apply-referral.dto';
 import { ThreadsService } from '../threads/threads.service';
 import { ApplicationSetupResponse } from './dto/application-setup.dto';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
@@ -82,6 +84,7 @@ export class AdminController {
   constructor(
     private readonly adminMessageService: AdminMessageService,
     private readonly adminService: AdminService,
+    private readonly adminReferralService: AdminReferralService,
     private readonly rentalListingModerationService: RentalListingModerationService,
     private readonly rentalListingAiReviewAdminService: RentalListingAiReviewAdminService,
     private readonly itemModerationService: ItemModerationService,
@@ -542,6 +545,23 @@ export class AdminController {
     }
   }
 
+  @Post('agents/:id/referral')
+  @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Apply a referral code to an agent who has none',
+  })
+  @ApiParam({ name: 'id', description: 'Agent UUID' })
+  @ApiBody({ type: ApplyReferralDto })
+  @ApiResponse({ status: 200, description: 'Referral applied' })
+  @ApiResponse({ status: 409, description: 'Agent already has a referrer' })
+  async applyAgentReferral(
+    @Param('id') agentId: string,
+    @Body() body: ApplyReferralDto
+  ) {
+    return this.adminReferralService.applyToAgent(agentId, body.code);
+  }
+
   @Post('agents/:id/restore')
   @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
   @ApiOperation({
@@ -784,6 +804,23 @@ export class AdminController {
         error: error.message || 'Failed to fetch businesses',
       };
     }
+  }
+
+  @Post('businesses/:id/referral')
+  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Apply a referral code to a business who has none',
+  })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiBody({ type: ApplyReferralDto })
+  @ApiResponse({ status: 200, description: 'Referral applied' })
+  @ApiResponse({ status: 409, description: 'Business already has a referrer' })
+  async applyBusinessReferral(
+    @Param('id') businessId: string,
+    @Body() body: ApplyReferralDto
+  ) {
+    return this.adminReferralService.applyToBusiness(businessId, body.code);
   }
 
   @Get('businesses/:id/verification')

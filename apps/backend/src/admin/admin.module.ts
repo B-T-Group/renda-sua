@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
+import { AgentsModule } from '../agents/agents.module';
 import { AuthModule } from '../auth/auth.module';
+import { BusinessReferralPayoutsModule } from '../business-referral-payouts/business-referral-payouts.module';
+import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
+import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
+import { CreditsModule } from '../credits/credits.module';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
@@ -14,6 +19,7 @@ import { AdminPerformanceService } from './admin-performance.service';
 import { BusinessReferralReviewController } from './business-referral-review.controller';
 import { BusinessReferralReviewService } from './business-referral-review.service';
 import { AdminMessageService } from './admin-message.service';
+import { AdminReferralService } from './admin-referral.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { ApplicationSetupService } from './application-setup.service';
@@ -31,6 +37,7 @@ import { WithdrawalPinService } from './withdrawal-pin.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { AdminAuthModule } from './admin-auth.module';
 import { ThreadsModule } from '../threads/threads.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 import { AdminBroadcastController } from './admin-broadcast.controller';
 import { AdminBroadcastInternalController } from './admin-broadcast-internal.controller';
 import { AdminBroadcastService } from './admin-broadcast.service';
@@ -38,10 +45,19 @@ import { AdminBroadcastAudienceService } from './admin-broadcast-audience.servic
 import { AdminBroadcastQueueService } from './admin-broadcast-queue.service';
 import { AdminCatalogItemsController } from './admin-catalog-items.controller';
 import { AdminCatalogItemsService } from './admin-catalog-items.service';
+import { AdminWhatsAppTemplatesController } from './admin-whatsapp-templates.controller';
+import { AdminWhatsAppTemplatesService } from './admin-whatsapp-templates.service';
+import { AdminWhatsAppInboxController } from './admin-whatsapp-inbox.controller';
+import { AdminWhatsAppInboxService } from './admin-whatsapp-inbox.service';
 
 @Module({
   imports: [
     AuthModule,
+    AgentsModule,
+    BusinessReferralsModule,
+    CreditsModule,
+    BusinessReferralPayoutsModule,
+    RepresentativeCompensationModule,
     AdminAuthModule,
     RbacModule,
     HasuraModule,
@@ -57,6 +73,7 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
     ImageValidationModule,
     AiImageCleanupModule,
     ThreadsModule,
+    WhatsAppModule,
   ],
   controllers: [
     AdminController,
@@ -68,12 +85,15 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
     RbacAdminController,
     AdminBroadcastController,
     AdminBroadcastInternalController,
+    AdminWhatsAppTemplatesController,
+    AdminWhatsAppInboxController,
   ],
   providers: [
     AdminPerformanceService,
     BusinessReferralReviewService,
     AdminMessageService,
     AdminService,
+    AdminReferralService,
     ConfigurationsService,
     RentalListingModerationService,
     ItemModerationService,
@@ -84,6 +104,8 @@ import { AdminCatalogItemsService } from './admin-catalog-items.service';
     AdminBroadcastService,
     AdminBroadcastAudienceService,
     AdminBroadcastQueueService,
+    AdminWhatsAppTemplatesService,
+    AdminWhatsAppInboxService,
   ],
   exports: [
     AdminAuthModule,

@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
+import { ConfigurationsService } from '../admin/configurations.service';
 import {
-  mapReferredBusinessRow,
+  mapReferredBusinesses,
   REFERRED_BUSINESSES_LIST_SELECTION,
   type ReferredBusinessFollowUp,
   type ReferredBusinessRow,
 } from '../business-referrals/referred-business-followup.util';
+import { ONBOARDING_10_MIN_SALE_TOTAL_KEY } from '../representative-compensation/compensation-rules';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 
@@ -32,7 +34,8 @@ export class AgentReferralsService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly referralPyramidService: ReferralPyramidService
+    private readonly referralPyramidService: ReferralPyramidService,
+    private readonly configurationsService: ConfigurationsService
   ) {}
 
   normalizeAgentCode(agentCode: string): string | null {
@@ -109,17 +112,36 @@ export class AgentReferralsService {
     };
   }
 
+  async creditAfterFirstDelivery(
+    referredAgentId: string,
+    countryCode: string
+  ): Promise<void> {
+    if (!countryCode) return;
+    if (await this.hasCreditedReferral(referredAgentId)) return;
+    if (!(await this.hasCompletedDelivery(referredAgentId))) return;
+    const context = await this.loadReferrerCreditContext(referredAgentId);
+    if (!context) return;
+    await this.creditResolvedAgentReferral(
+      referredAgentId,
+      context.resolved,
+      countryCode,
+      context.referredAgentName
+    );
+  }
+
   async creditResolvedAgentReferral(
     newAgentId: string,
     resolved: ResolvedBusinessReferral,
     countryCode: string,
-    referredAgentName = 'Agent'
+    referredAgentName = 'Agent',
+    options?: { swallowErrors?: boolean }
   ): Promise<void> {
     if (!countryCode) return;
+    const throwOnFailure = options?.swallowErrors === false;
     try {
       if (resolved.kind === 'agent') {
         const earnerUserId = await this.getAgentUserId(resolved.agentId);
-        await this.creditReferral({
+        await this.creditReferralChecked({
           referringAgentId: resolved.agentId,
           referrerBusinessId: null,
           referredAgentId: newAgentId,
@@ -128,10 +150,11 @@ export class AgentReferralsService {
           referredAgentName,
           earnerName: `${resolved.userFirstName}`.trim() || 'Agent',
           earnerUserId,
+          throwOnFailure,
         });
         return;
       }
-      await this.creditReferral({
+      await this.creditReferralChecked({
         referringAgentId: null,
         referrerBusinessId: resolved.businessId,
         referredAgentId: newAgentId,
@@ -140,10 +163,23 @@ export class AgentReferralsService {
         referredAgentName,
         earnerName: resolved.businessName || 'Business',
         earnerUserId: resolved.userId,
+        throwOnFailure,
       });
     } catch (error: any) {
       this.logger.error(
         `Failed to credit agent referral for ${newAgentId}: ${error.message}`
+      );
+      if (throwOnFailure) throw error;
+    }
+  }
+
+  private async creditReferralChecked(
+    params: Parameters<AgentReferralsService['creditReferral']>[0]
+  ): Promise<void> {
+    const result = await this.creditReferral(params);
+    if (params.throwOnFailure && !result.credited) {
+      throw new Error(
+        `Failed to credit agent referral for ${params.referredAgentId}`
       );
     }
   }
@@ -163,18 +199,7 @@ export class AgentReferralsService {
       return;
     }
 
-    await this.creditResolvedAgentReferral(
-      newAgentId,
-      {
-        kind: 'agent',
-        agentId: referringAgent.agentId,
-        normalizedCode: normalizedCode.toUpperCase(),
-        userEmail: referringAgent.userEmail,
-        userFirstName: referringAgent.userFirstName,
-        preferredLanguage: referringAgent.preferredLanguage,
-      },
-      countryCode
-    );
+    await this.creditAfterFirstDelivery(newAgentId, countryCode);
   }
 
   async creditReferral(params: {
@@ -186,7 +211,9 @@ export class AgentReferralsService {
     referredAgentName: string;
     earnerName: string;
     earnerUserId: string | null;
+    throwOnFailure?: boolean;
   }): Promise<{ credited: boolean; amount?: number }> {
+    let referralId: string | null = null;
     try {
       const earnerId = params.referringAgentId || params.referrerBusinessId;
       if (!earnerId || !params.earnerUserId) {
@@ -203,7 +230,7 @@ export class AgentReferralsService {
       }
 
       const currency = this.getCurrencyForCountry(params.countryCode);
-      const referralId = await this.insertOrGetReferralRecord({
+      referralId = await this.insertOrGetReferralRecord({
         referringAgentId: params.referringAgentId,
         referrerBusinessId: params.referrerBusinessId,
         referredAgentId: params.referredAgentId,
@@ -245,8 +272,137 @@ export class AgentReferralsService {
       this.logger.error(
         `Failed to credit referral for agent ${params.referredAgentId}: ${error.message}`
       );
+      if (referralId) await this.deleteReferralRecord(referralId);
+      if (params.throwOnFailure) throw error;
       return { credited: false };
     }
+  }
+
+  private async hasCreditedReferral(referredAgentId: string): Promise<boolean> {
+    const referralId = await this.findReferralIdByReferredAgent(referredAgentId);
+    if (!referralId) return false;
+    return this.hasPaidDistribution(referralId);
+  }
+
+  private async hasPaidDistribution(referralId: string): Promise<boolean> {
+    const query = `
+      query AgentReferralPaidDist($referralId: uuid!) {
+        referral_bonus_distributions(
+          where: {
+            agent_referral_id: { _eq: $referralId }
+            transaction_id: { _is_null: false }
+          }
+          limit: 1
+        ) { id }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      referralId,
+    });
+    return Boolean(result?.referral_bonus_distributions?.[0]?.id);
+  }
+
+  private async hasCompletedDelivery(agentId: string): Promise<boolean> {
+    const query = `
+      query AgentCompletedDeliveries($agentId: uuid!) {
+        orders_aggregate(
+          where: {
+            assigned_agent_id: { _eq: $agentId }
+            current_status: { _in: ["complete", "delivered"] }
+          }
+        ) {
+          aggregate { count }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+    });
+    return (result?.orders_aggregate?.aggregate?.count ?? 0) > 0;
+  }
+
+  private async loadReferrerCreditContext(
+    referredAgentId: string
+  ): Promise<{
+    resolved: ResolvedBusinessReferral;
+    referredAgentName: string;
+  } | null> {
+    const row = await this.loadReferredAgentRow(referredAgentId);
+    if (!row) return null;
+    const referredAgentName =
+      `${row.user?.first_name ?? ''} ${row.user?.last_name ?? ''}`.trim() ||
+      'Agent';
+    const resolved = this.resolvedReferrerFromRow(row);
+    return resolved ? { resolved, referredAgentName } : null;
+  }
+
+  private async loadReferredAgentRow(agentId: string): Promise<any> {
+    const query = `
+      query ReferredAgentForCredit($agentId: uuid!) {
+        agents_by_pk(id: $agentId) {
+          referral_code_used
+          user { first_name last_name }
+          referring_agent {
+            id
+            user { first_name email preferred_language }
+          }
+          referring_business {
+            id
+            name
+            user_id
+            user { first_name email preferred_language }
+          }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      agentId,
+    });
+    return result?.agents_by_pk ?? null;
+  }
+
+  private resolvedReferrerFromRow(row: any): ResolvedBusinessReferral | null {
+    const code = String(row.referral_code_used || '').trim().toUpperCase();
+    if (!code) return null;
+    if (row.referring_agent?.id) {
+      return this.resolvedAgentReferrer(row.referring_agent, code);
+    }
+    if (row.referring_business?.id) {
+      return this.resolvedBusinessReferrer(row.referring_business, code);
+    }
+    return null;
+  }
+
+  private resolvedAgentReferrer(
+    agent: { id: string; user?: any },
+    code: string
+  ): ResolvedBusinessReferral {
+    const user = agent.user || {};
+    return {
+      kind: 'agent',
+      agentId: agent.id,
+      normalizedCode: code,
+      userEmail: user.email ?? '',
+      userFirstName: user.first_name ?? '',
+      preferredLanguage: user.preferred_language ?? 'en',
+    };
+  }
+
+  private resolvedBusinessReferrer(
+    business: { id: string; name?: string; user_id: string; user?: any },
+    code: string
+  ): ResolvedBusinessReferral {
+    const user = business.user || {};
+    return {
+      kind: 'business',
+      businessId: business.id,
+      businessName: business.name || 'Business',
+      normalizedCode: code,
+      userId: business.user_id,
+      userEmail: user.email ?? '',
+      userFirstName: user.first_name ?? '',
+      preferredLanguage: user.preferred_language ?? 'en',
+    };
   }
 
   private async getAgentUserId(agentId: string): Promise<string | null> {
@@ -263,7 +419,7 @@ export class AgentReferralsService {
 
   private async getReferralConfig(countryCode: string): Promise<ReferralConfig> {
     const defaults: ReferralConfig = {
-      referralAmount: 500,
+      referralAmount: 1000,
       maxReferralTotal: 10000,
     };
 
@@ -464,7 +620,26 @@ export class AgentReferralsService {
     const result = await this.hasuraSystemService.executeQuery<{
       businesses: ReferredBusinessRow[];
     }>(query, { agentId });
-    return (result?.businesses ?? []).map(mapReferredBusinessRow);
+    return mapReferredBusinesses(
+      result?.businesses ?? [],
+      'agent',
+      (country) => this.readOnboardingMinSaleTotal(country)
+    );
+  }
+
+  private async readOnboardingMinSaleTotal(
+    country: string
+  ): Promise<number | null> {
+    try {
+      const config = await this.configurationsService.getConfigurationByKey(
+        ONBOARDING_10_MIN_SALE_TOTAL_KEY,
+        country
+      );
+      const value = Number(config?.number_value);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    } catch {
+      return null;
+    }
   }
 
   async getReferredBusinessCount(agentId: string): Promise<number> {

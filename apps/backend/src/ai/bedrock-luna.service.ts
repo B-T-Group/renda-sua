@@ -3,7 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import {
   BedrockRuntimeClient,
   ConverseCommand,
+  type ContentBlock,
+  type ConverseCommandInput,
   type ConverseCommandOutput,
+  type Message,
+  type SystemContentBlock,
+  type ToolConfiguration,
 } from '@aws-sdk/client-bedrock-runtime';
 import type { Configuration } from '../config/configuration';
 import type {
@@ -14,6 +19,7 @@ import {
   extractConverseOutputText,
   mapChatMessagesToConverse,
 } from './bedrock-converse.mapper';
+import { mapBedrockErrorToHttpException } from './bedrock-luna.errors';
 
 export type BedrockReasoningEffort =
   | 'none'
@@ -40,6 +46,33 @@ export type BedrockCompleteResult = {
   usage: unknown;
   model: string;
   raw: unknown;
+};
+
+export type BedrockToolUseBlock = {
+  toolUseId: string;
+  name: string;
+  input: Record<string, unknown>;
+};
+
+export type BedrockConverseWithToolsOptions = {
+  model?: string;
+  system?: string;
+  messages: Message[];
+  toolConfig: ToolConfiguration;
+  maxTokens?: number;
+  temperature?: number;
+  timeoutMs?: number;
+};
+
+export type BedrockConverseWithToolsResult = {
+  stopReason: string;
+  text: string;
+  toolUses: BedrockToolUseBlock[];
+  /** Assistant message content to append before tool results. */
+  assistantContent: ContentBlock[];
+  usage: unknown;
+  model: string;
+  raw: ConverseCommandOutput;
 };
 
 const DEFAULT_CHAT_MODEL = 'amazon.nova-lite-v1:0';
@@ -143,6 +176,43 @@ export class BedrockLunaService {
     };
   }
 
+  /**
+   * Single Converse turn with toolConfig. Callers run the tool loop themselves.
+   */
+  async converseWithTools(
+    options: BedrockConverseWithToolsOptions
+  ): Promise<BedrockConverseWithToolsResult> {
+    const model = this.resolveModel(options.model);
+    const system: SystemContentBlock[] | undefined = options.system?.trim()
+      ? [{ text: options.system.trim() }]
+      : undefined;
+    const input: ConverseCommandInput = {
+      modelId: model,
+      messages: options.messages,
+      toolConfig: options.toolConfig,
+      ...(system ? { system } : {}),
+      inferenceConfig: {
+        ...(options.maxTokens != null
+          ? { maxTokens: Math.max(1, options.maxTokens) }
+          : { maxTokens: 1024 }),
+        ...(options.temperature != null
+          ? { temperature: options.temperature }
+          : { temperature: 0.3 }),
+      },
+    };
+    const raw = await this.converse(input, options.timeoutMs ?? 90000);
+    const assistantContent = raw.output?.message?.content ?? [];
+    return {
+      stopReason: String(raw.stopReason ?? 'end_turn'),
+      text: extractConverseOutputText(raw.output),
+      toolUses: extractToolUses(assistantContent),
+      assistantContent,
+      usage: raw.usage ?? null,
+      model,
+      raw,
+    };
+  }
+
   private async converse(
     input: ConstructorParameters<typeof ConverseCommand>[0],
     timeoutMs: number,
@@ -221,27 +291,26 @@ export class BedrockLunaService {
         error?.name ?? 'Error'
       }: ${error?.message ?? 'unknown'}`
     );
-    if (status === 429 || error?.name === 'ThrottlingException') {
-      throw new HttpException(
-        'AI temporarily unavailable. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS
-      );
-    }
-    if (status === 401 || status === 403) {
-      throw new HttpException(
-        'AI temporarily unavailable. Please try again later.',
-        HttpStatus.SERVICE_UNAVAILABLE
-      );
-    }
-    if (error?.code === 'ECONNABORTED') {
-      throw new HttpException(
-        'AI request timed out. Please try again.',
-        HttpStatus.REQUEST_TIMEOUT
-      );
-    }
-    throw new HttpException(
-      'AI temporarily unavailable. Please try again.',
-      HttpStatus.SERVICE_UNAVAILABLE
-    );
+    throw mapBedrockErrorToHttpException(error);
   }
+}
+
+function extractToolUses(
+  content: ContentBlock[] | undefined
+): BedrockToolUseBlock[] {
+  if (!content?.length) return [];
+  const uses: BedrockToolUseBlock[] = [];
+  for (const block of content) {
+    const toolUse = block.toolUse;
+    if (!toolUse?.toolUseId || !toolUse.name) continue;
+    uses.push({
+      toolUseId: toolUse.toolUseId,
+      name: toolUse.name,
+      input:
+        toolUse.input && typeof toolUse.input === 'object'
+          ? (toolUse.input as Record<string, unknown>)
+          : {},
+    });
+  }
+  return uses;
 }

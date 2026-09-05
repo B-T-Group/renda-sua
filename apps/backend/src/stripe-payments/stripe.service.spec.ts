@@ -80,4 +80,23 @@ describe('StripeService', () => {
     );
     expect(createAccount.mock.calls[0][0].individual.phone).toBeUndefined();
   });
+
+  it('retries Express account create when Stripe reports an in-progress idempotency key', async () => {
+    jest.spyOn(service as any, 'delay').mockResolvedValue(undefined);
+    createAccount
+      .mockRejectedValueOnce({
+        message:
+          'There is currently another in-progress request using this Idempotent Key: connect_account_user-123',
+      })
+      .mockResolvedValueOnce({ id: 'acct_123' });
+
+    await expect(
+      service.createExpressAccount({
+        country: 'CA',
+        email: 'owner@example.com',
+        userId: 'user-123',
+      })
+    ).resolves.toEqual({ id: 'acct_123' });
+    expect(createAccount).toHaveBeenCalledTimes(2);
+  });
 });

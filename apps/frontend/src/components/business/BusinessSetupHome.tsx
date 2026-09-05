@@ -22,26 +22,23 @@ import {
 import {
   SetupAgreementIllustration,
   SetupCatalogIllustration,
-  SetupIdentityIllustration,
-  SetupPayoutsIllustration,
 } from '../illustrations/BusinessSetupIllustrations';
-import StripeConnectOnboardingCard from './StripeConnectOnboardingCard';
 
 export interface BusinessSetupHomeProps {
   status: BusinessVerificationStatus;
   mainInterest: 'sell_items' | 'rent_items';
   businessId?: string;
+  reachability?: {
+    hasPush: boolean;
+    whatsappReady: boolean;
+    locationAlertPhoneSet: boolean | null;
+  };
   /** Soft catalog progress when the MM rail omits steps.catalog. */
   hasAnyItem?: boolean;
   onRefresh?: () => Promise<void> | void;
 }
 
-type SetupStepId =
-  | 'agreement'
-  | 'payouts'
-  | 'identity'
-  | 'catalog'
-  | 'previewStore';
+type SetupStepId = 'agreement' | 'catalog' | 'previewStore' | 'reachability';
 
 type SetupStep = {
   id: SetupStepId;
@@ -52,7 +49,6 @@ type SetupStep = {
   error?: boolean;
   to?: string;
   cta?: string;
-  embedStripe?: boolean;
   pendingNote?: string;
 };
 
@@ -60,6 +56,7 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
   status,
   mainInterest,
   businessId,
+  reachability,
   hasAnyItem = false,
   onRefresh,
 }) => {
@@ -67,7 +64,6 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
   const navigate = useNavigate();
   const [previewDone, setPreviewDone] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const isStripe = status.paymentRail === 'stripe';
   const catalog = status.steps.catalog;
   const agreementSigned = status.steps.agreement?.complete === true;
   const hasCatalogItem =
@@ -101,22 +97,13 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
     () =>
       buildSetupSteps({
         status,
-        isStripe,
-        mainInterest,
         businessId,
+        reachability,
         previewDone,
         hasCatalogItem,
         t,
       }),
-    [
-      status,
-      isStripe,
-      mainInterest,
-      businessId,
-      previewDone,
-      hasCatalogItem,
-      t,
-    ]
+    [status, businessId, reachability, previewDone, hasCatalogItem, t]
   );
 
   const current = steps.find((s) => s.current && !s.done) ?? steps.find((s) => !s.done);
@@ -181,12 +168,6 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
           ))}
         </Stack>
 
-        {current?.embedStripe ? (
-          <Box sx={{ mt: 2 }}>
-            <StripeConnectOnboardingCard />
-          </Box>
-        ) : null}
-
         {current?.pendingNote ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
             {current.pendingNote}
@@ -194,7 +175,7 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
         ) : null}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
-          {current?.to && current.cta && !current.embedStripe ? (
+          {current?.to && current.cta ? (
             <Button
               variant="contained"
               color="primary"
@@ -247,12 +228,6 @@ function StepIllustration({ stepId }: { stepId: SetupStepId }) {
   const label = t('business.setup.illustrationLabel', 'Setup step');
   if (stepId === 'agreement') {
     return <SetupAgreementIllustration label={label} />;
-  }
-  if (stepId === 'payouts') {
-    return <SetupPayoutsIllustration label={label} />;
-  }
-  if (stepId === 'identity') {
-    return <SetupIdentityIllustration label={label} />;
   }
   return <SetupCatalogIllustration label={label} />;
 }
@@ -324,7 +299,7 @@ function SetupStepRow({
           ) : null}
         </Box>
       </Box>
-      {!step.done && step.to && step.cta && !step.embedStripe ? (
+      {!step.done && step.to && step.cta ? (
         <Button
           component={RouterLink}
           to={step.to}
@@ -343,9 +318,8 @@ function SetupStepRow({
 
 type BuildParams = {
   status: BusinessVerificationStatus;
-  isStripe: boolean;
-  mainInterest: 'sell_items' | 'rent_items';
   businessId?: string;
+  reachability?: BusinessSetupHomeProps['reachability'];
   previewDone: boolean;
   hasCatalogItem: boolean;
   t: (key: string, defaultValue: string) => string;
@@ -369,87 +343,60 @@ function buildAgreementStep(params: BuildParams): SetupStep {
   };
 }
 
-function buildStripeRailSteps(params: BuildParams): SetupStep[] {
-  const { status, t } = params;
-  const next = status.nextAction;
-  return [
-    {
-      id: 'payouts',
-      label: t('business.setup.stepPayouts', 'Connect payouts'),
-      description: t(
-        'business.setup.stepPayoutsDesc',
-        'Link Stripe so you can receive customer payments.'
-      ),
-      done: status.steps.stripeConnect?.complete === true,
-      current: next === 'setup_stripe_connect',
-      embedStripe: next === 'setup_stripe_connect',
-    },
-  ];
-}
-
-function buildMobileMoneyRailSteps(params: BuildParams): SetupStep[] {
-  const { status, t } = params;
-  const next = status.nextAction;
-  const identity = status.steps.identity;
-  const identityRejected = identity?.status === 'rejected';
-  const identityPending = identity?.status === 'pending';
-  const identityApproved = identity?.status === 'approved';
-  const identityReason = identity?.rejectionReason?.trim() || '';
-  return [
-    {
-      id: 'identity',
-      label: identityRejected
-        ? t('business.setup.stepIdentityRejected', 'Identification rejected')
-        : identityPending
-          ? t('business.setup.stepIdentityPending', 'ID under review')
-          : t('business.setup.stepIdentity', 'Upload identification'),
-      description: identityRejected
-        ? t(
-            'business.setup.stepIdentityRejectedDesc',
-            'Your ID was not approved. Please upload a clearer valid ID document.'
-          )
-        : identityPending
-          ? t(
-              'business.setup.stepIdentityPendingDesc',
-              'We are reviewing your identification. You can add items while you wait.'
-            )
-          : t(
-              'business.setup.stepIdentityDesc',
-              "Upload a national ID, passport, or driver's license."
-            ),
-      done: identityApproved,
-      current: next === 'upload_id' || next === 'pending_review',
-      error: identityRejected,
-      pendingNote: identityRejected
-        ? identityReason
-          ? `${t('business.setup.identityRejectionReasonPrefix', 'Reason:')} ${identityReason}`
-          : t(
-              'business.setup.identityRejectedNoReason',
-              'Please upload a new identification document.'
-            )
-        : identityPending
-          ? t(
-              'business.setup.identityPendingNote',
-              'Approval usually takes a short time. Refresh for updates.'
-            )
-          : undefined,
-      to: identityPending ? undefined : '/documents',
-      cta: identityRejected
-        ? t('business.setup.ctaReuploadIdentity', 'Reupload ID')
-        : identityPending
-          ? undefined
-          : t('business.setup.ctaIdentity', 'Upload ID'),
-    },
-  ];
+function buildReachabilityStep(params: BuildParams): SetupStep | null {
+  const reachability = params.reachability;
+  if (!reachability) return null;
+  const locationMissing = reachability.locationAlertPhoneSet === false;
+  const done =
+    reachability.hasPush &&
+    reachability.whatsappReady &&
+    reachability.locationAlertPhoneSet !== false;
+  let description = params.t(
+    'business.setup.stepReachabilityDesc',
+    'Keep at least one fast alert channel on so your kitchen notices new orders.'
+  );
+  if (!reachability.hasPush && !reachability.whatsappReady) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingBoth',
+      'Turn on push notifications or WhatsApp alerts so you do not miss new orders.'
+    );
+  } else if (!reachability.hasPush) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingPush',
+      'Allow browser notifications on this device for instant order alerts.'
+    );
+  } else if (!reachability.whatsappReady) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingWhatsapp',
+      'Turn on WhatsApp order updates so your team has a backup alert channel.'
+    );
+  } else if (locationMissing) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingLocationPhone',
+      'Add a kitchen or till phone on a location so WhatsApp reminders reach the right device.'
+    );
+  }
+  return {
+    id: 'reachability',
+    label: params.t('business.setup.stepReachability', 'Stay reachable for new orders'),
+    description,
+    done,
+    current: !done,
+    to: locationMissing ? '/business/locations' : '/settings/notifications',
+    cta: locationMissing
+      ? params.t('business.setup.ctaReachabilityLocations', 'Update locations')
+      : params.t('business.setup.ctaReachabilityNotifications', 'Open notification settings'),
+  };
 }
 
 function buildSetupSteps(params: BuildParams): SetupStep[] {
   const steps: SetupStep[] = [buildAgreementStep(params)];
-  if (params.isStripe) {
-    steps.push(...buildStripeRailSteps(params));
-  } else {
-    steps.push(...buildMobileMoneyRailSteps(params));
+  const reachability = buildReachabilityStep(params);
+  if (reachability) {
+    steps.push(reachability);
   }
+  // ID (MM) and Stripe Connect are optional post-go-live verified-badge tips,
+  // not required setup steps.
   if (params.businessId && params.hasCatalogItem) {
     steps.push({
       id: 'previewStore',

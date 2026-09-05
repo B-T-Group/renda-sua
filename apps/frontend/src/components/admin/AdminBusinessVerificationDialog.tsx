@@ -146,7 +146,7 @@ function blockerLabel(
     case 'missing_payment_verification':
       return t(
         'admin.businesses.blockers.missingPaymentVerification',
-        'Missing: payment verification'
+        'No verified badge yet (ID or Stripe Connect)'
       );
     default:
       return blocker;

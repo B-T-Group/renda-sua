@@ -1,4 +1,5 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { resolveSaleItemRejectionReasons } from '../common/moderation-rejection-reason';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
@@ -59,7 +60,9 @@ export class ItemModerationService {
     private readonly notificationsService: NotificationsService,
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
-    private readonly threadsService: ThreadsService
+    private readonly threadsService: ThreadsService,
+    @Optional()
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
 
   async listModerationQueue(params: {
@@ -115,6 +118,9 @@ export class ItemModerationService {
     await this.merchantLifecycleService.recompute(
       item.business.id,
       'item_approved'
+    );
+    void this.representativeCompensationService?.evaluateForBusinessSafe(
+      item.business.id
     );
   }
 

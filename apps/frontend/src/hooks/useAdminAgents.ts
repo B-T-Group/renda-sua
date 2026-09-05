@@ -33,6 +33,12 @@ export interface AdminAgent {
   is_internal?: boolean;
   created_at: string;
   updated_at: string;
+  referralCode?: string;
+  referredBy?: {
+    kind: 'agent' | 'business';
+    name: string;
+    codeUsed: string | null;
+  } | null;
   user: AdminAgentUser;
   addresses: any[];
   id_documents?: AdminAgentIdDocument[];
@@ -135,6 +141,15 @@ export const useAdminAgents = () => {
     [apiClient, callWithLoading, ensureClient, fetchAgents]
   );
 
+  const applyReferral = useCallback(
+    async (id: string, code: string) => {
+      const client = ensureClient(apiClient);
+      await client.post(`/admin/agents/${id}/referral`, { code });
+      await fetchAgents();
+    },
+    [apiClient, ensureClient, fetchAgents]
+  );
+
   useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
@@ -157,6 +172,7 @@ export const useAdminAgents = () => {
       updateAgent,
       setAgentInternal,
       setUserInternal,
+      applyReferral,
     }),
     [
       agents,
@@ -171,6 +187,7 @@ export const useAdminAgents = () => {
       updateAgent,
       setAgentInternal,
       setUserInternal,
+      applyReferral,
     ]
   );
 };

@@ -1,15 +1,13 @@
 import {
   Alert,
   Box,
-  Button,
   Container,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAccountInfo } from '../../hooks/useAccountInfo';
 import { useAiImageCleanup } from '../../hooks/useAiImageCleanup';
 import { useImageEnhancements } from '../../hooks/useImageEnhancements';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
@@ -17,11 +15,8 @@ import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import { useLocationTransfers } from '../../hooks/useLocationTransfers';
 import AiImageCleanupPendingCard from '../business/AiImageCleanupPendingCard';
 import LocationTransferPendingCard from '../business/LocationTransferPendingCard';
-import BusinessDashboardFirstItemCta from '../business/BusinessDashboardFirstItemCta';
 import BusinessPreviewStoreCta from '../business/BusinessPreviewStoreCta';
-import { BusinessExcitementStats } from '../business/BusinessExcitementStats';
 import { BusinessTopViewedProducts } from '../business/BusinessTopViewedProducts';
-import { BusinessAccountTypeLink } from '../business/BusinessAccountTypeLink';
 import BusinessReferralCodeCard from '../business/BusinessReferralCodeCard';
 import { BusinessGoLiveCelebration } from '../business/BusinessGoLiveCelebration';
 import LaunchPromoBanner from '../business/LaunchPromoBanner';
@@ -31,6 +26,9 @@ import BusinessDashboardModuleCard, {
   BusinessDashboardModule,
 } from '../business/BusinessDashboardModuleCard';
 import BusinessDashboardSection from '../business/BusinessDashboardSection';
+import BusinessStoreReachCard from '../business/BusinessStoreReachCard';
+import BusinessCatalogHealthCard from '../business/BusinessCatalogHealthCard';
+import BusinessQuietHomeNextActionCard from '../business/BusinessQuietHomeNextActionCard';
 import AddressAlert from '../common/AddressAlert';
 import StatusBadge from '../common/StatusBadge';
 import { MerchantStatusChip } from '../business/MerchantStatusChip';
@@ -41,20 +39,19 @@ import {
   markGoLiveCelebrated,
   shouldShowGoLiveCelebration,
 } from '../../utils/businessSetup';
-import UserAccount from '../common/UserAccount';
+import { resolveCatalogHealth } from '../../utils/catalogHealth';
+import { resolveQuietHomeNextAction, resolveQuietHomeGating } from '../../utils/resolveQuietHomeNextAction';
+import { pickQuietHomeCatalogModules } from '../../utils/pickQuietHomeCatalogModules';
+import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
+import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import SEOHead from '../seo/SEOHead';
-
-const DASHBOARD_ACCOUNT_PREVIEW_LIMIT = 2;
 
 const BusinessDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
-  const { accounts } = useAccountInfo();
   const { getPending } = useAiImageCleanup();
   const { hydrateActivity } = useImageEnhancements();
-  const previewAccounts = accounts.slice(0, DASHBOARD_ACCOUNT_PREVIEW_LIMIT);
-  const hasMoreAccounts = accounts.length > DASHBOARD_ACCOUNT_PREVIEW_LIMIT;
   const {
     aggregates,
     loading: aggregatesLoading,
@@ -67,7 +64,6 @@ const BusinessDashboard: React.FC = () => {
     refresh: refreshVerification,
   } = useBusinessVerification(!!profile?.business?.id);
   const setupMode = isSetupMode(verificationStatus);
-  // Avoid flashing operational modules before verification status resolves.
   const showOperationalModules = !verificationLoading && !setupMode;
   const [goLiveOpen, setGoLiveOpen] = useState(false);
   const goLiveDismissedRef = useRef(false);
@@ -151,6 +147,12 @@ const BusinessDashboard: React.FC = () => {
   const isLoading = aggregatesLoading;
   const itemCount = aggregates?.itemCount ?? 0;
   const rentalItemCount = aggregates?.rentalItemCount ?? 0;
+  const { quietHomeMode, fulfillmentMode } = resolveQuietHomeGating({
+    showOperationalModules,
+    aggregatesLoading,
+    aggregates,
+    aggregatesError,
+  });
 
   const {
     primaryOrderModules,
@@ -159,18 +161,160 @@ const BusinessDashboard: React.FC = () => {
     catalogMenuHubModule,
     adminHubModule,
     hasAdminAccess,
+    rentalModules,
   } = useBusinessDashboardModules({ aggregates, isRentalFocused });
 
-  const showFirstSaleCta =
-    showOperationalModules &&
-    !isLoading &&
-    mainInterest === 'sell_items' &&
-    itemCount === 0;
-  const showFirstRentalCta =
-    showOperationalModules &&
-    !isLoading &&
-    mainInterest === 'rent_items' &&
-    rentalItemCount === 0;
+  const quietCatalogModules = useMemo(
+    () =>
+      pickQuietHomeCatalogModules({
+        primaryCatalogModules,
+        rentalModules,
+        isRentalFocused,
+        itemCount: aggregates?.itemCount ?? 0,
+        rentalItemCount: aggregates?.rentalItemCount ?? 0,
+      }),
+    [
+      primaryCatalogModules,
+      rentalModules,
+      isRentalFocused,
+      aggregates?.itemCount,
+      aggregates?.rentalItemCount,
+    ]
+  );
+
+  const catalogHealth = useMemo(
+    () => resolveCatalogHealth(aggregates, mainInterest),
+    [aggregates, mainInterest]
+  );
+
+  const showIdReview =
+    verificationStatus?.paymentRail === 'mobile_money' &&
+    !!verificationStatus.steps.identity &&
+    verificationStatus.steps.identity.status !== 'approved' &&
+    verificationStatus.steps.identity.status !== 'missing';
+
+  const showMmPhoneConfirm =
+    verificationStatus?.paymentRail === 'mobile_money' &&
+    verificationStatus.can_accept_orders === true &&
+    (() => {
+      const phone = verificationStatus.steps.mobilePaymentPhone;
+      const needing =
+        phone?.locationsWithItemsNeedingPhone ??
+        phone?.locationCountNeedingPhone ??
+        0;
+      return needing > 0;
+    })();
+
+  const quietNextAction = useMemo(() => {
+    if (!quietHomeMode) return null;
+    return resolveQuietHomeNextAction({
+      aggregates,
+      verification: verificationStatus,
+      mainInterest,
+      showIdReview,
+      showMmPhoneConfirm,
+    });
+  }, [
+    quietHomeMode,
+    aggregates,
+    verificationStatus,
+    mainInterest,
+    showIdReview,
+    showMmPhoneConfirm,
+  ]);
+
+  const onCatalogHealthPrimary = useCallback(() => {
+    const primary = catalogHealth.primary;
+    if (primary === 'fix_rejected') {
+      navigate(
+        isRentalFocused
+          ? '/business/rentals/catalog?moderation=rejected'
+          : '/business/items?moderation=rejected'
+      );
+      return;
+    }
+    if (primary === 'restock' || primary === 'manage') {
+      navigate(isRentalFocused ? '/business/rentals/catalog' : '/business/items');
+      return;
+    }
+    navigate(
+      isRentalFocused
+        ? '/business/onboarding/add-rental-item'
+        : '/business/onboarding/first-sale-item'
+    );
+  }, [catalogHealth.primary, isRentalFocused, navigate]);
+
+  const onQuietNextAction = useCallback(() => {
+    if (!quietNextAction) return;
+    const id = quietNextAction.id;
+    if (id === 'cannot_accept_orders') {
+      const next = verificationStatus?.nextAction;
+      if (next === 'upload_id') {
+        navigate('/business/documents');
+        return;
+      }
+      if (next === 'verify_mobile_payment_phone') {
+        navigate('/business/locations');
+        return;
+      }
+      if (next === 'setup_stripe_connect') {
+        navigate('/business/payments');
+        return;
+      }
+      void handleSetupRefresh();
+      return;
+    }
+    if (id === 'id_review') {
+      navigate('/business/documents');
+      return;
+    }
+    if (id === 'confirm_mm_phone') {
+      navigate('/business/locations');
+      return;
+    }
+    if (id === 'fix_rejected') {
+      navigate(
+        isRentalFocused
+          ? '/business/rentals/catalog?moderation=rejected'
+          : '/business/items?moderation=rejected'
+      );
+      return;
+    }
+    if (id === 'restock' || id === 'pending_moderation') {
+      navigate(isRentalFocused ? '/business/rentals/catalog' : '/business/items');
+      return;
+    }
+    if (id === 'catalog_goal') {
+      navigate(
+        isRentalFocused
+          ? '/business/onboarding/add-rental-item'
+          : '/business/onboarding/first-sale-item'
+      );
+      return;
+    }
+    if (id === 'logo' || id === 'hours') {
+      navigate('/business/locations');
+      return;
+    }
+    if (id === 'share_store' && profile?.business?.id) {
+      navigate(`/store/${profile.business.id}?preview=1`);
+      return;
+    }
+    if (id === 'offer_rentals') {
+      navigate('/business/rentals/catalog');
+      return;
+    }
+    if (id === 'offer_sale_items') {
+      navigate('/business/items');
+    }
+  }, [
+    quietNextAction,
+    verificationStatus,
+    navigate,
+    handleSetupRefresh,
+    isRentalFocused,
+    profile?.business?.id,
+  ]);
 
   const renderModules = (modules: BusinessDashboardModule[]) =>
     modules.map((mod) => (
@@ -180,6 +324,11 @@ const BusinessDashboard: React.FC = () => {
         isLoading={isLoading}
       />
     ));
+
+  const topViewed =
+    aggregatesError || !aggregates?.topViewedProducts?.length
+      ? []
+      : aggregates.topViewedProducts;
 
   if (!profile?.business) {
     return (
@@ -201,7 +350,7 @@ const BusinessDashboard: React.FC = () => {
         keywords={t('seo.business-dashboard.keywords')}
       />
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
         <Typography variant="h4" gutterBottom sx={{ mb: 0 }}>
           {t('business.dashboard.welcome', { name: profile.business.name })}
         </Typography>
@@ -215,37 +364,6 @@ const BusinessDashboard: React.FC = () => {
         </Box>
       </Box>
 
-      {showOperationalModules ? <BusinessAccountTypeLink /> : null}
-
-      {showOperationalModules ? (
-        <BusinessExcitementStats
-          clientCount={
-            aggregatesError ? null : (aggregates?.uniqueClientCount ?? null)
-          }
-          productViews={
-            aggregatesError ? null : (aggregates?.totalProductViews ?? null)
-          }
-          productViewsLast7d={
-            aggregatesError ? null : (aggregates?.productViewsLast7d ?? null)
-          }
-          loading={isLoading}
-          onClientsClick={() => navigate('/business/client-cities')}
-        />
-      ) : null}
-
-      {showOperationalModules ? (
-        <BusinessTopViewedProducts
-          products={
-            aggregatesError ? [] : (aggregates?.topViewedProducts ?? [])
-          }
-          loading={isLoading}
-          onProductClick={(product) => {
-            if (!product.itemId) return;
-            navigate(`/business/items/${product.itemId}`);
-          }}
-        />
-      ) : null}
-
       {setupMode && verificationStatus ? (
         <BusinessSetupHome
           status={verificationStatus}
@@ -258,17 +376,52 @@ const BusinessDashboard: React.FC = () => {
           }
           onRefresh={handleSetupRefresh}
         />
-      ) : !verificationLoading ? (
+      ) : null}
+
+      {showOperationalModules ? (
+        <>
+          <BusinessStoreReachCard
+            businessId={profile.business.id}
+            businessName={profile.business.name}
+            productViews={
+              aggregatesError ? null : (aggregates?.totalProductViews ?? null)
+            }
+            metricsLoading={isLoading}
+            compact={fulfillmentMode}
+          />
+          {aggregatesReady ? (
+            <BusinessCatalogHealthCard
+              health={catalogHealth}
+              compact={fulfillmentMode}
+              onPrimary={onCatalogHealthPrimary}
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {quietHomeMode && quietNextAction ? (
+        <BusinessQuietHomeNextActionCard
+          action={quietNextAction}
+          onAction={onQuietNextAction}
+        />
+      ) : null}
+
+      <AssistantHomeEntry />
+
+      {!setupMode && !verificationLoading && !quietHomeMode ? (
         <BusinessVerificationBanner />
       ) : null}
 
-      <Box sx={{ mb: 2 }}>
-        <LaunchPromoBanner />
-      </Box>
-
-      <Box sx={{ mb: 2 }}>
-        <BusinessReferralCodeCard />
-      </Box>
+      {fulfillmentMode && topViewed.length > 0 ? (
+        <BusinessTopViewedProducts
+          products={topViewed}
+          loading={isLoading}
+          onProductClick={(product) => {
+            if (!product.itemId) return;
+            navigate(`/business/items/${product.itemId}`);
+          }}
+        />
+      ) : null}
 
       <LocationTransferPendingCard
         pendingCount={incomingTransfers.length}
@@ -292,52 +445,6 @@ const BusinessDashboard: React.FC = () => {
         }}
       />
 
-      {showOperationalModules && accounts.length > 0 ? (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-            {t('accounts.accountInformation')}
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {previewAccounts.map((account) => (
-              <UserAccount
-                key={account.id}
-                accountId={account.id}
-                compactView={true}
-                showTransactions={false}
-              />
-            ))}
-          </Box>
-          {hasMoreAccounts ? (
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => navigate('/business/accounts')}
-              sx={{ mt: 1.5 }}
-            >
-              {t('accounts.viewAllAccounts', 'View all {{count}} accounts', {
-                count: accounts.length,
-              })}
-            </Button>
-          ) : null}
-        </Box>
-      ) : null}
-
-      {showOperationalModules ? (
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-          {t(
-            'business.dashboard.subtitleSimplified',
-            'Manage orders, reconcile cash payments, and resolve delivery issues. Use catalog tools for your products and locations.'
-          )}
-        </Typography>
-      ) : null}
-
-      {showFirstSaleCta ? (
-        <BusinessDashboardFirstItemCta variant="sale" />
-      ) : null}
-      {showFirstRentalCta ? (
-        <BusinessDashboardFirstItemCta variant="rental" />
-      ) : null}
-
       <AddressAlert />
 
       {aggregatesError ? (
@@ -346,35 +453,45 @@ const BusinessDashboard: React.FC = () => {
         </Alert>
       ) : null}
 
-      {showOperationalModules ? (
-        <BusinessDashboardSection
-          title={t(
-            'business.dashboard.sections.ordersAndDelivery',
-            'Orders & delivery'
-          )}
-          subtitle={t(
-            'business.dashboard.sections.ordersPrimaryHint',
-            'Your day-to-day order workflows.'
-          )}
-        >
-          {renderModules([...primaryOrderModules, moreHubModule])}
-        </BusinessDashboardSection>
-      ) : null}
-
-      {showOperationalModules ? (
+      {quietHomeMode ? (
         <BusinessDashboardSection
           title={t(
             'business.dashboard.sections.catalog',
             'Catalog & locations'
           )}
-          subtitle={t(
-            'business.dashboard.sections.catalogPrimaryHint',
-            'Products and where you sell from.'
-          )}
         >
-          {renderModules([...primaryCatalogModules, catalogMenuHubModule])}
-          <BusinessPreviewStoreCta businessId={profile.business.id} />
+          {renderModules(quietCatalogModules)}
         </BusinessDashboardSection>
+      ) : null}
+
+      {fulfillmentMode ? (
+        <>
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.ordersAndDelivery',
+              'Orders & delivery'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.ordersPrimaryHint',
+              'Your day-to-day order workflows.'
+            )}
+          >
+            {renderModules([...primaryOrderModules, moreHubModule])}
+          </BusinessDashboardSection>
+          <BusinessDashboardSection
+            title={t(
+              'business.dashboard.sections.catalog',
+              'Catalog & locations'
+            )}
+            subtitle={t(
+              'business.dashboard.sections.catalogPrimaryHint',
+              'Products and where you sell from.'
+            )}
+          >
+            {renderModules([...primaryCatalogModules, catalogMenuHubModule])}
+            <BusinessPreviewStoreCta businessId={profile.business.id} />
+          </BusinessDashboardSection>
+        </>
       ) : null}
 
       {setupMode &&
@@ -387,6 +504,19 @@ const BusinessDashboard: React.FC = () => {
         </Box>
       ) : null}
 
+      {showOperationalModules ? (
+        <Box sx={{ mb: 2 }}>
+          <ReferralPayoutSnapshot
+            source="business"
+            walletPath="/business/accounts"
+          />
+        </Box>
+      ) : null}
+
+      <Box sx={{ mb: 2 }}>
+        <LaunchPromoBanner />
+      </Box>
+
       {hasAdminAccess ? (
         <BusinessDashboardSection
           title={t('business.dashboard.adminManagement')}
@@ -398,6 +528,10 @@ const BusinessDashboard: React.FC = () => {
           {renderModules([adminHubModule])}
         </BusinessDashboardSection>
       ) : null}
+
+      <Box sx={{ mb: 2 }}>
+        <BusinessReferralCodeCard />
+      </Box>
 
       <BusinessGoLiveCelebration
         open={goLiveOpen}

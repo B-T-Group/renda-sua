@@ -12,13 +12,21 @@ export interface WhatsAppTemplateComponent {
   parameters?: WhatsAppTemplateParameter[];
 }
 
+/** Meta's approved template category. Drives transport, pricing, and consent. */
+export type WhatsAppTemplateCategory =
+  | 'AUTHENTICATION'
+  | 'UTILITY'
+  | 'MARKETING';
+
 export interface SendWhatsAppTemplateParams {
   /** Recipient phone in international format (digits, optional leading +). */
   to: string;
   templateName: string;
-  /** BCP-47 language code for the template, e.g. en_US. */
+  /** Template translation code as approved in Meta; ours are `en` and `fr`. */
   languageCode?: string;
   components?: WhatsAppTemplateComponent[];
+  /** Defaults to UTILITY; MARKETING may route through the Marketing Messages API. */
+  category?: WhatsAppTemplateCategory;
 }
 
 export interface WhatsAppSendMessageResult {
@@ -32,4 +40,17 @@ export interface WhatsAppGraphMessagesResponse {
   contacts?: Array<{ input?: string; wa_id?: string }>;
   messages?: Array<{ id?: string; message_status?: string }>;
   error?: { message?: string; type?: string; code?: number };
+}
+
+export interface WhatsAppGraphMediaMeta {
+  url?: string;
+  mime_type?: string;
+  sha256?: string;
+  file_size?: number;
+  id?: string;
+}
+
+export interface WhatsAppDownloadedMedia {
+  buffer: Buffer;
+  mimeType: string;
 }

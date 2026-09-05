@@ -84,6 +84,10 @@ const AgentReferralCodeCard: React.FC<AgentReferralCodeCardProps> = ({
           {t(
             'agent.referrals.shareHint',
             'Share this code with other agents and businesses so they can enter it when they sign up.'
+          )}{' '}
+          {t(
+            'agent.referrals.shareHintAgentBonus',
+            "Agent-referral bonuses pay after the referred agent's first delivery."
           )}
         </Typography>
       </CardContent>

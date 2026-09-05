@@ -52,6 +52,8 @@ export interface ReferredBusinessSummary {
   payoutReviewStatus?: 'pending' | 'approved' | 'rejected';
   payoutReviewRejectionReason?: string | null;
   isPaid?: boolean;
+  /** Credited compensation for this shop in the selected window. */
+  earnedAmount?: number;
 }
 
 export interface TopAgentEntry {
@@ -67,8 +69,12 @@ export interface TopAgentEntry {
   /** sum(itemCount + 1) over referred businesses. */
   score?: number;
   referredBusinesses?: ReferredBusinessSummary[];
+  /** Pending representative_compensation_events waiting for Saturday credit. */
   projectedPayoutAmount?: number;
   projectedPayoutCurrency?: string;
+  /** Credited representative compensation in the selected window. */
+  earnedAmount?: number;
+  earnedCurrency?: string;
   isInternal?: boolean;
 }
 
@@ -78,6 +84,60 @@ export const GOLDEN_ITEMS_PER_REFERRAL = 10;
 export interface PerformanceMarket {
   countryCode: string;
   countryName: string;
+}
+
+export interface PayoutPreviewBeneficiary {
+  generation: number;
+  kind: 'agent' | 'business';
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  percent: number | null;
+  hasAccount: boolean;
+}
+
+export interface PayoutPreviewRow {
+  referredBusinessId: string;
+  referredBusinessName: string;
+  itemCount: number;
+  referralKind: 'agent' | 'business';
+  countryCode: string | null;
+  currency: string;
+  grossAmount: number;
+  payoutConfigKey: string | null;
+  wouldCredit: boolean;
+  skipReason: 'no_referrer' | 'no_amount' | 'no_account' | null;
+  pendingRetry: boolean;
+  referrer: {
+    kind: 'agent' | 'business';
+    id: string;
+    userId: string;
+    name: string;
+  } | null;
+  beneficiaries: PayoutPreviewBeneficiary[];
+}
+
+export interface CompensationEventRow {
+  id: string;
+  rule_code: string;
+  amount: number;
+  currency: string;
+  country_code: string;
+  status: string;
+  created_at: string;
+  business?: { id: string; name: string } | null;
+}
+
+export interface WeeklyPayoutPreview {
+  enabled: boolean;
+  cutoffDate: string;
+  minItems: number;
+  percents: { gen1: number; gen2: number; gen3: number };
+  payableCount: number;
+  skippedCount: number;
+  rows: PayoutPreviewRow[];
+  totalsByCurrency: Array<{ currency: string; count: number; gross: number }>;
 }
 
 export function resolvePeriodRange(period: PerformancePeriod): {
@@ -204,5 +264,48 @@ export function useAdminPerformance() {
     [apiClient]
   );
 
-  return { fetchMarkets, fetchSummary, fetchTopAgents, error };
+  const fetchPayoutPreview = useCallback(
+    async (countryCode: string): Promise<WeeklyPayoutPreview | null> => {
+      if (!apiClient) return null;
+      try {
+        const params = new URLSearchParams();
+        if (countryCode) params.set('countryCode', countryCode);
+        const qs = params.toString();
+        const { data } = await apiClient.get<WeeklyPayoutPreview>(
+          `/admin/performance/payout-preview${qs ? `?${qs}` : ''}`
+        );
+        return data;
+      } catch {
+        return null;
+      }
+    },
+    [apiClient]
+  );
+
+  const fetchCompensationEvents = useCallback(
+    async (countryCode: string): Promise<CompensationEventRow[] | null> => {
+      if (!apiClient) return null;
+      try {
+        const params = new URLSearchParams();
+        if (countryCode) params.set('countryCode', countryCode);
+        const qs = params.toString();
+        const { data } = await apiClient.get<{ events: CompensationEventRow[] }>(
+          `/admin/performance/compensation-events${qs ? `?${qs}` : ''}`
+        );
+        return data.events;
+      } catch {
+        return null;
+      }
+    },
+    [apiClient]
+  );
+
+  return {
+    fetchMarkets,
+    fetchSummary,
+    fetchTopAgents,
+    fetchPayoutPreview,
+    fetchCompensationEvents,
+    error,
+  };
 }

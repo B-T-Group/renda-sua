@@ -45,6 +45,7 @@ export interface NotificationData {
   agentPreferredLanguage?: string;
   /** delivery | pickup — drives ready-for-pickup copy */
   fulfillmentMethod?: 'delivery' | 'pickup' | string | null;
+  fulfillmentTiming?: 'asap' | 'scheduled' | string | null;
   /** pay_now | pay_at_delivery | pay_at_pickup */
   paymentTiming?: string | null;
   /** Seconds the merchant has to confirm before acceptance escalate/grace */
@@ -103,6 +104,18 @@ export interface BusinessRentalBookingRequestEmailPayload {
   requestedStartAt: string;
   requestedEndAt: string;
   clientName: string;
+}
+
+export interface BusinessProductInterestNotificationPayload {
+  businessUserId: string;
+  requestId: string;
+  itemName: string;
+  locationName: string;
+  clientName: string;
+  clientEmail?: string | null;
+  clientPhone?: string | null;
+  clientNote?: string | null;
+  inventoryId: string;
 }
 
 export interface ClientRentalRequestAcceptedEmailPayload {

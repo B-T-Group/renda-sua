@@ -28,8 +28,12 @@ import {
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useAuth0 } from '@auth0/auth0-react';
+import { useSnackbar } from 'notistack';
 import { useCart } from '../../contexts/CartContext';
 import { InventoryItem } from '../../hooks/useInventoryItems';
+import { useProductInterest } from '../../hooks/useProductInterest';
+import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import {
   SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
   SITE_EVENT_INVENTORY_CARD_VIEW_DETAILS_CLICK,
@@ -54,6 +58,8 @@ import {
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import ItemLikeButton from './ItemLikeButton';
 import { CatalogOptionChips } from './CatalogOptionChips';
+import FoodAvailabilityChip from './FoodAvailabilityChip';
+import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
 
 /** Strip HTML and collapse whitespace for card preview text. */
 function plainTextSummary(text: string | null | undefined): string {
@@ -108,10 +114,16 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 }) => {
   const navigate = useNavigate();
   const [anonBuyNowOpen, setAnonBuyNowOpen] = useState(false);
+  const [interestOpen, setInterestOpen] = useState(false);
+  const [interestSubmitting, setInterestSubmitting] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
+  const { loginWithRedirect, isAuthenticated } = useAuth0();
+  const { enqueueSnackbar } = useSnackbar();
+  const { submitInterest } = useProductInterest();
   const { trackSiteEvent } = useTrackSiteEvent();
   const { getListingQuantityInCart } = useCart();
+  const interestOnly = inventory.item?.interest_only === true;
   const inCartQuantity = getListingQuantityInCart(inventory.id);
   const inCart = inCartQuantity > 0;
   const inCartLabel =
@@ -241,7 +253,10 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     inventory.avg_rating != null &&
     Number.isFinite(inventory.avg_rating);
 
-  const isUnavailable = inventory.computed_available_quantity <= 0;
+  const foodStatus = resolveFoodAvailabilityStatus(inventory.food_availability);
+  const isFoodClosed = foodStatus != null && foodStatus !== 'available';
+  const isUnavailable =
+    inventory.computed_available_quantity <= 0 || isFoodClosed;
 
   const viewDetailsLabel = t('items.itemCard.viewDetails', 'View details');
   const noImageLabel = t('items.itemCard.noImage', 'No image');
@@ -480,7 +495,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 pointerEvents: 'none',
               }}
             >
-              {hasDealPrices ? (
+              {interestOnly ? (
+                <Typography variant="body2" color="primary" fontWeight="bold">
+                  {t('productInterest.priceNotApplicable', 'Price on request')}
+                </Typography>
+              ) : hasDealPrices ? (
                 <>
                   <Box>
                     <Typography
@@ -729,18 +748,35 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 flexWrap: 'wrap',
               }}
             >
-              <Chip
-                label={t('items.itemCard.availableCount', '{{count}} available', {
-                  count: inventory.computed_available_quantity,
-                })}
-                color={
-                  inventory.computed_available_quantity > 0
-                    ? 'success'
-                    : 'error'
-                }
-                size="small"
-                sx={{ fontSize: '0.7rem' }}
+              {inventory.item?.preparation_minutes ? (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.7rem' }}
+                  label={t('foods.prepMinutes', '~{{count}} min prep', {
+                    count: inventory.item.preparation_minutes,
+                  })}
+                />
+              ) : null}
+              <FoodAvailabilityChip
+                availability={inventory.food_availability}
               />
+              {foodStatus == null ? (
+                <Chip
+                  label={t(
+                    'items.itemCard.availableCount',
+                    '{{count}} available',
+                    { count: inventory.computed_available_quantity }
+                  )}
+                  color={
+                    inventory.computed_available_quantity > 0
+                      ? 'success'
+                      : 'error'
+                  }
+                  size="small"
+                  sx={{ fontSize: '0.7rem' }}
+                />
+              ) : null}
             </Box>
             {hasVariantOptions ? (
               <CatalogOptionChips
@@ -1083,7 +1119,35 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           >
             {viewDetailsLabel}
           </Button>
-          {inventory.computed_available_quantity === 0 ? (
+          {interestOnly ? (
+            <Button
+              variant="contained"
+              size="small"
+              sx={{ width: '75%', alignSelf: 'center' }}
+              onClick={() => {
+                if (!isAuthenticated) {
+                  void loginWithRedirect({
+                    appState: { returnTo: window.location.pathname },
+                  });
+                  return;
+                }
+                setInterestOpen(true);
+              }}
+            >
+              {t('productInterest.cta', 'I’m interested')}
+            </Button>
+          ) : isFoodClosed ? (
+            <Button
+              variant="outlined"
+              disabled
+              size="small"
+              sx={{ width: '75%' }}
+            >
+              {foodStatus === 'sold_out'
+                ? t('foods.status.soldOutToday', 'Sold out today')
+                : t('foods.status.notServingNow', 'Not serving now')}
+            </Button>
+          ) : inventory.computed_available_quantity === 0 ? (
             <Button
               variant="outlined"
               disabled
@@ -1117,6 +1181,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           ) : isPublicView ? (
             <Button
               variant="contained"
+              color="cta"
               startIcon={<ShoppingCart />}
               onClick={() => {
                 void trackSiteEvent({
@@ -1181,6 +1246,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               ) : (
               <Button
                 variant="contained"
+                color="cta"
                 onClick={() => {
                   void trackSiteEvent({
                     eventType: SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
@@ -1205,6 +1271,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           ) : (
             <Button
               variant="contained"
+              color="cta"
               startIcon={<ShoppingCart />}
               onClick={() => {
                 void trackSiteEvent({
@@ -1223,6 +1290,34 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
         </CardActions>
       </Box>
 
+      <ProductInterestDialog
+        open={interestOpen}
+        itemName={inventory.item.name}
+        submitting={interestSubmitting}
+        onClose={() => setInterestOpen(false)}
+        onSubmit={async (note) => {
+          setInterestSubmitting(true);
+          try {
+            await submitInterest(inventory.id, note);
+            setInterestOpen(false);
+            enqueueSnackbar(
+              t(
+                'productInterest.success',
+                'Interest sent. The seller will contact you.'
+              ),
+              { variant: 'success' }
+            );
+          } catch (e: any) {
+            enqueueSnackbar(
+              e?.response?.data?.message ||
+                t('productInterest.error', 'Could not send interest'),
+              { variant: 'error' }
+            );
+          } finally {
+            setInterestSubmitting(false);
+          }
+        }}
+      />
       <AnonymousBuyNowDialog
         open={anonBuyNowOpen}
         inventoryItemId={inventory.id}

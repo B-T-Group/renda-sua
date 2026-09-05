@@ -58,8 +58,6 @@ export const PersonasStep: React.FC = () => {
   };
 
   const hasBusiness = personas.includes('business');
-  const showReferral =
-    personas.includes('business') || personas.includes('agent');
 
   return (
     <Stack spacing={{ xs: 2, sm: 2.5 }}>
@@ -147,6 +145,27 @@ export const PersonasStep: React.FC = () => {
                       compact
                       align="center"
                     />
+                    {(opt.id === 'agent' || opt.id === 'business') && (
+                      <Box
+                        sx={{ mt: 1.5, textAlign: 'left' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Controller
+                          name="business.referralAgentCode"
+                          control={control}
+                          render={({ field }) => (
+                            <ReferralCodeEntryButton
+                              value={field.value}
+                              onChange={field.onChange}
+                              labelKey="referrals.referralCodeLabel"
+                              labelDefault="Agent referral code (optional)"
+                              helpKey="referrals.referralCodeHelp"
+                              helpDefault="Enter the 6-character code of the Rendasua agent who referred you."
+                            />
+                          )}
+                        />
+                      </Box>
+                    )}
                   </Box>
                 ) : (
                   <Typography
@@ -230,22 +249,6 @@ export const PersonasStep: React.FC = () => {
             )}
           />
         </>
-      )}
-      {showReferral && (
-        <Controller
-          name="business.referralAgentCode"
-          control={control}
-          render={({ field }) => (
-            <ReferralCodeEntryButton
-              value={field.value}
-              onChange={field.onChange}
-              labelKey="referrals.referralCodeLabel"
-              labelDefault="Agent referral code (optional)"
-              helpKey="referrals.referralCodeHelp"
-              helpDefault="Enter the 6-character code of the Rendasua agent who referred you."
-            />
-          )}
-        />
       )}
     </Stack>
   );

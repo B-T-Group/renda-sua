@@ -6,6 +6,10 @@ export interface SignupWizardUiContextValue {
   countriesLoading: boolean;
   postalCodeRequired: boolean;
   signupCountryCodes: string[];
+  onLoginInstead: () => void;
+  emailTaken: boolean;
+  setEmailTaken: (taken: boolean) => void;
+  ownSignupEmail: string | null;
 }
 
 const SignupWizardUiContext = createContext<SignupWizardUiContextValue>({
@@ -13,6 +17,10 @@ const SignupWizardUiContext = createContext<SignupWizardUiContextValue>({
   countriesLoading: false,
   postalCodeRequired: false,
   signupCountryCodes: [],
+  onLoginInstead: () => undefined,
+  emailTaken: false,
+  setEmailTaken: () => undefined,
+  ownSignupEmail: null,
 });
 
 export const SignupWizardUiProvider: React.FC<{

@@ -32,6 +32,7 @@ import {
   BusinessReferralsService,
   ResolvedBusinessReferral,
 } from '../business-referrals/business-referrals.service';
+import { CreditsService } from '../credits/credits.service';
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { LaunchPromoService } from '../launch-promo/launch-promo.service';
 import { MobilePaymentPhoneSeedService } from '../mobile-payment-phones/mobile-payment-phone-seed.service';
@@ -151,6 +152,7 @@ export class UsersController {
     private readonly configService: ConfigService<Configuration>,
     private readonly agentReferralsService: AgentReferralsService,
     private readonly businessReferralsService: BusinessReferralsService,
+    private readonly creditsService: CreditsService,
     private readonly accountDeletionService: AccountDeletionService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly businessContractsService: BusinessContractsService,
@@ -169,6 +171,34 @@ export class UsersController {
           `Contract creation for business ${businessId} failed: ${error?.message}`
         );
       });
+  }
+
+  private async awardReferralOpsCredit(
+    referral: ResolvedBusinessReferral,
+    target: { kind: 'business' | 'agent'; id: string }
+  ): Promise<void> {
+    try {
+      const referrerUserId = await this.creditsService.resolveReferrerUserId({
+        kind: referral.kind,
+        agentId: referral.kind === 'agent' ? referral.agentId : undefined,
+        businessUserId:
+          referral.kind === 'business' ? referral.userId : undefined,
+      });
+      if (!referrerUserId) return;
+      if (target.kind === 'business') {
+        await this.creditsService.awardBusinessReferred({
+          referrerUserId,
+          businessId: target.id,
+        });
+        return;
+      }
+      await this.creditsService.awardAgentReferred({
+        referrerUserId,
+        agentId: target.id,
+      });
+    } catch (error: any) {
+      this.logger.warn(`Referral credit award failed: ${error?.message}`);
+    }
   }
 
   /**
@@ -1344,14 +1374,6 @@ export class UsersController {
             }
           }
         }
-        if (inserted.agent?.id && signupReferral) {
-          await this.agentReferralsService.creditResolvedAgentReferral(
-            inserted.agent.id,
-            signupReferral,
-            userData.address?.country ?? '',
-            `${userData.first_name} ${userData.last_name}`.trim() || 'Agent'
-          );
-        }
         if (inserted.business?.id && signupReferral) {
           await this.businessReferralsService.notifyReferrerOfBusinessReferral(
             {
@@ -1365,6 +1387,16 @@ export class UsersController {
             },
             signupReferral
           );
+          await this.awardReferralOpsCredit(signupReferral, {
+            kind: 'business',
+            id: inserted.business.id,
+          });
+        }
+        if (inserted.agent?.id && signupReferral) {
+          await this.awardReferralOpsCredit(signupReferral, {
+            kind: 'agent',
+            id: inserted.agent.id,
+          });
         }
         if (inserted.business?.id) {
           this.scheduleEnsureContract(inserted.business.id);
@@ -1610,21 +1642,10 @@ export class UsersController {
         );
       }
       if (agentReferral) {
-        const country =
-          source?.country ||
-          (await this.paymentRoutingService.getUserCountryCode(uid));
-        if (country) {
-          await this.agentReferralsService.creditResolvedAgentReferral(
-            r.insert_agents_one.id,
-            agentReferral,
-            country,
-            `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() || 'Agent'
-          );
-        } else {
-          this.logger.warn(
-            `Agent referral credit skipped for ${r.insert_agents_one.id}: no country`
-          );
-        }
+        await this.awardReferralOpsCredit(agentReferral, {
+          kind: 'agent',
+          id: r.insert_agents_one.id,
+        });
       }
       return { success: true, agent: r.insert_agents_one };
     }
@@ -1781,6 +1802,10 @@ export class UsersController {
           },
           businessReferral
         );
+        await this.awardReferralOpsCredit(businessReferral, {
+          kind: 'business',
+          id: r.insert_businesses_one.id,
+        });
       }
       this.scheduleEnsureContract(r.insert_businesses_one.id);
       await this.launchPromoService.claimSlotIfAvailable(
