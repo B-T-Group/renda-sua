@@ -24,6 +24,17 @@ const ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 120 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
 const COMPLETION_TOKEN_TTL_MS = 15 * 60 * 1000;
+const SUPERSEDE_OPEN_ATTEMPTS = `
+  mutation SupersedeSignupAttempts(
+    $where: signup_attempts_bool_exp!
+    $now: timestamptz!
+  ) {
+    update_signup_attempts(
+      where: $where
+      _set: { status: "expired", updated_at: $now }
+    ) { affected_rows }
+  }
+`;
 
 interface SignupStartPayload {
   first_name: string;
@@ -110,6 +121,16 @@ interface SignupCompletionSnapshot {
   launchPromo: SignupLaunchPromoResult | null;
   tokens: Auth0TokenResponse;
   completedAt: string;
+}
+
+interface SignupAttemptContactFilter {
+  email?: { _eq: string };
+  phone_number?: { _eq: string };
+}
+
+interface SignupAttemptContactWhere {
+  status: { _in: Array<'pending' | 'otp_verified'> };
+  _or: SignupAttemptContactFilter[];
 }
 
 interface Auth0IdTokenClaims {
@@ -375,6 +396,7 @@ export class SignupService {
     payload: SignupStartPayload;
     expires_at: string;
   }): Promise<SignupAttemptRow> {
+    await this.expireOpenAttemptsForContact(input.email, input.phone_number);
     const result = await this.hasuraSystemService.executeMutation<{
       insert_signup_attempts_one: SignupAttemptRow;
     }>(
@@ -411,6 +433,29 @@ export class SignupService {
       input
     );
     return result.insert_signup_attempts_one;
+  }
+
+  private async expireOpenAttemptsForContact(
+    email: string | null,
+    phoneNumber: string | null
+  ): Promise<void> {
+    const where = this.openAttemptContactWhere(email, phoneNumber);
+    if (!where) return;
+    await this.hasuraSystemService.executeMutation(SUPERSEDE_OPEN_ATTEMPTS, {
+      where,
+      now: new Date().toISOString(),
+    });
+  }
+
+  private openAttemptContactWhere(
+    email: string | null,
+    phoneNumber: string | null
+  ): SignupAttemptContactWhere | null {
+    const contacts: SignupAttemptContactFilter[] = [];
+    if (email) contacts.push({ email: { _eq: email } });
+    if (phoneNumber) contacts.push({ phone_number: { _eq: phoneNumber } });
+    if (!contacts.length) return null;
+    return { status: { _in: ['pending', 'otp_verified'] }, _or: contacts };
   }
 
   private async loadAttempt(attemptId: string): Promise<SignupAttemptRow> {

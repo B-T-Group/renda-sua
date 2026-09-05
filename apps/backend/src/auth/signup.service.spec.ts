@@ -248,6 +248,61 @@ describe('SignupService', () => {
       ).not.toHaveBeenCalled();
     });
 
+    it('expires prior open attempts by email/phone, never contact_value', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      hasuraSystemService.executeMutation.mockImplementation(
+        async (mutation: string, variables?: Record<string, unknown>) => {
+          if (mutation.includes('CleanupExpiredSignupAttempts')) {
+            return { update_signup_attempts: { affected_rows: 0 } };
+          }
+          if (mutation.includes('SupersedeSignupAttempts')) {
+            return { update_signup_attempts: { affected_rows: 1 } };
+          }
+          if (mutation.includes('InsertSignupAttempt')) {
+            return {
+              insert_signup_attempts_one: {
+                ...pendingAttempt,
+                channel: variables?.channel || 'email',
+                email: variables?.email ?? pendingAttempt.email,
+                phone_number:
+                  variables?.phone_number ?? pendingAttempt.phone_number,
+              },
+            };
+          }
+          return {};
+        }
+      );
+
+      await service.startSignup({
+        ...basePayload,
+        email: ' New@Example.COM ',
+        phone_number: ' +237600000001 ',
+        country: 'CM',
+      });
+
+      const supersedeCall = hasuraSystemService.executeMutation.mock.calls.find(
+        ([mutation]) => String(mutation).includes('SupersedeSignupAttempts')
+      );
+      const insertCall = hasuraSystemService.executeMutation.mock.calls.find(
+        ([mutation]) => String(mutation).includes('InsertSignupAttempt')
+      );
+
+      expect(supersedeCall).toBeDefined();
+      expect(String(supersedeCall?.[0])).not.toContain('contact_value');
+      expect(String(insertCall?.[0])).not.toContain('contact_value');
+      expect(supersedeCall?.[1]).toEqual(
+        expect.objectContaining({
+          where: {
+            status: { _in: ['pending', 'otp_verified'] },
+            _or: [
+              { email: { _eq: 'new@example.com' } },
+              { phone_number: { _eq: '+237600000001' } },
+            ],
+          },
+        })
+      );
+    });
+
     it('rejects store_location without country', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
 
