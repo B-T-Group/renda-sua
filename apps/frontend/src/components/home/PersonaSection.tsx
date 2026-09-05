@@ -59,6 +59,8 @@ const PersonaIllustration: React.FC<{ id: 'client' | 'business' | 'agent'; color
           <text x="90" y="178" fill={HOME_ACCENTS.muted} fontSize="9">ETA 5 min</text>
           <rect x="205" y="157" width="28" height="20" rx="5" fill={color} />
           <text x="219" y="170" textAnchor="middle" fill="white" fontSize="8" fontWeight="bold">NAV</text>
+          {/* Caption note */}
+          <text x="150" y="208" textAnchor="middle" fontSize="8" fill={alpha(color, 0.4)} fontStyle="italic">Example while out for delivery</text>
         </>
       )}
     </svg>

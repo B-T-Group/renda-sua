@@ -97,7 +97,7 @@ const DownloadAppSection: React.FC = () => {
                 animate={shouldReduce ? {} : { y: [0, -10, 0] }}
                 transition={{ repeat: Infinity, duration: 4.5, ease: 'easeInOut' }}
               >
-                <svg viewBox="0 0 260 500" style={{ width: 220, height: 'auto', filter: 'drop-shadow(0 32px 80px rgba(0,0,0,0.5))' }} aria-hidden="true">
+                <svg viewBox="0 0 260 500" style={{ width: 220, height: 'auto', filter: 'drop-shadow(0 32px 80px rgba(0,0,0,0.5))' }} aria-hidden="hidden">
                   <rect x="8" y="0" width="244" height="500" rx="34" fill="#0f172a" />
                   <rect x="16" y="8" width="228" height="484" rx="28" fill="#1e293b" />
                   <rect x="16" y="8" width="228" height="484" rx="28" fill="#f8fafc" />
@@ -139,6 +139,18 @@ const DownloadAppSection: React.FC = () => {
                     <text key={i} x={38 + i * 56} y="484" fontSize="14" textAnchor="middle">{icon}</text>
                   ))}
                 </svg>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    textAlign: 'center',
+                    color: 'rgba(255,255,255,0.55)',
+                    mt: 1.5,
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {t('home.download.mockupCaption', 'Example while out for delivery')}
+                </Typography>
               </motion.div>
             </motion.div>
           </Grid>

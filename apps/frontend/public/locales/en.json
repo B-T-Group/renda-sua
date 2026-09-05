@@ -13,6 +13,7 @@
       "browseItems": "Browse Items",
       "browseRentals": "Browse Rentals",
       "sellOnRendasua": "Sell on Rendasua"
+      "mockupCaption": "Example while out for delivery"
     },
     "trust": {
       "fastDelivery": "Fast local delivery",
@@ -202,6 +203,7 @@
         "pin": "Secure delivery PIN verification",
         "checkout": "Faster checkout with saved addresses"
       }
+      "mockupCaption": "Example while out for delivery"
     },
     "faq": {
       "title": "Frequently asked questions",
@@ -217,7 +219,7 @@
       },
       "canITrack": {
         "question": "Can I track my delivery in real time?",
-        "answer": "Yes! The Rendasua app provides live tracking so you can see exactly where your delivery agent is and get an estimated arrival time."
+        "answer": "Yes! Track your order on web or in the app. Once out for delivery, you can see exactly where your delivery agent is and get an estimated arrival time."
       },
       "howSellBusiness": {
         "question": "How do I start selling as a business?",
@@ -4268,7 +4270,7 @@
       },
       "deliveryTime": {
         "q": "How long does delivery take?",
-        "a": "Delivery times depend on your location and the seller. Standard delivery is typically within 24–48 hours. Fast delivery options may be available at checkout for quicker delivery."
+        "a": "Store products are usually delivered within 24–48 hours after order confirmation. Food orders are ready during business operating hours. Once an agent is assigned and out for delivery, you can track live location and see minute-level ETA updates on web or in the app."
       },
       "cancelOrder": {
         "q": "Can I cancel my order?",
@@ -5636,7 +5638,7 @@
         "paymentQ": "How do I pay?",
         "paymentA": "Pay with MTN MoMo, Orange Money, or other supported mobile money at checkout.",
         "deliveryQ": "When will I receive my order?",
-        "deliveryA": "Delivery is typically within 6–24 hours depending on when you order and local availability.",
+        "deliveryA": "Store products are usually delivered within 24–48 hours after order confirmation. Once an agent is assigned and out for delivery, you can track live location and see minute-level ETA updates on web or in the app.",
         "issueQ": "What if something goes wrong?",
         "issueA": "Contact support with your order details. We will help you resolve delivery or product issues.",
         "sellerQ": "Who is selling this item?",
@@ -6544,7 +6546,7 @@
         "deliveryFees": "How are delivery fees calculated?",
         "deliveryFeesAnswer": "Delivery fees are calculated based on distance, item weight, and delivery urgency. You'll see the exact fee before confirming your order.",
         "deliveryTime": "How long does delivery take?",
-        "deliveryTimeAnswer": "Delivery times vary by location and item. Most orders are delivered within 2-4 hours for same-day delivery, or 24-48 hours for standard delivery.",
+        "deliveryTimeAnswer": "Store products are usually delivered within 24–48 hours after order confirmation. Food orders are ready during business operating hours. Once an agent is assigned and out for delivery, you'll see minute-level ETA updates.",
         "title": "Delivery & Tracking",
         "trackOrder": "How do I track my order?",
         "trackOrderAnswer": "You can track your order in real-time through your dashboard or by clicking the tracking link sent to your email."
