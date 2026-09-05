@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, Storefront, Undo } from '@mui/icons-material';
+import { Cancel, CheckCircle, Payments, Storefront, Undo } from '@mui/icons-material';
 import { Box, Button } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import type { OrderData } from '../../hooks/useOrderById';
 import { isWithinRefundWindow } from '../../hooks/useOrderRefunds';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import ClientRefundRequestDialog from '../dialogs/ClientRefundRequestDialog';
+import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 import { ClientDeliveryPinButton } from './ClientDeliveryPinButton';
 
 interface ClientActionsProps {
@@ -23,6 +24,16 @@ interface ClientActionsProps {
   deliveryPinFullWidth?: boolean;
 }
 
+function clientCanPayAtPickup(order: OrderData): boolean {
+  return (
+    order.fulfillment_method === 'pickup' &&
+    order.current_status === 'ready_for_pickup' &&
+    order.payment_timing === 'pay_at_pickup' &&
+    order.payment_status !== 'paid' &&
+    order.payment_status !== 'authorized'
+  );
+}
+
 const ClientActions: React.FC<ClientActionsProps> = ({
   order,
   onActionComplete,
@@ -34,6 +45,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const { completeOrder, switchToPickup } = useBackendOrders();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [payPickupOpen, setPayPickupOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [switchingToPickup, setSwitchingToPickup] = useState(false);
 
@@ -100,11 +112,21 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     const actions: Array<{
       label: string;
       action: () => void;
-      color: 'error' | 'warning' | 'success';
+      color: 'error' | 'warning' | 'success' | 'cta';
       icon: React.ReactNode;
       variant?: 'outlined' | 'contained';
       loading?: boolean;
     }> = [];
+
+    if (clientCanPayAtPickup(order)) {
+      actions.push({
+        label: t('orders.payAtPickup.cta', 'Pay now'),
+        action: () => setPayPickupOpen(true),
+        color: 'cta',
+        icon: <Payments />,
+        variant: 'contained',
+      });
+    }
 
     if (order.current_status === 'delivered') {
       actions.push({
@@ -253,6 +275,22 @@ const ClientActions: React.FC<ClientActionsProps> = ({
           onActionComplete?.();
         }}
         onError={(msg) => onShowNotification?.(msg, 'error')}
+      />
+      <RequestPayAtPickupPaymentDialog
+        open={payPickupOpen}
+        order={order}
+        audience="client"
+        onClose={() => setPayPickupOpen(false)}
+        onSuccess={() => {
+          onShowNotification?.(
+            t(
+              'orders.payAtPickup.sent',
+              'Approve the payment request on your phone. The store will see it once it succeeds.'
+            ),
+            'success'
+          );
+          onActionComplete?.();
+        }}
       />
     </>
   );

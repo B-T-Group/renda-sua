@@ -13,6 +13,7 @@ describe('AdminWhatsAppInboxService', () => {
   const whatsApp = {
     isConfigured: jest.fn().mockReturnValue(true),
     sendSessionText: jest.fn(),
+    downloadMedia: jest.fn(),
   };
   const inbox = {
     persistOutbound: jest.fn().mockResolvedValue('msg-1'),
@@ -52,6 +53,17 @@ describe('AdminWhatsAppInboxService', () => {
     expect(result.total).toBe(1);
     expect(result.items[0].waId).toBe('15557654321');
     expect(result.items[0].canReply).toBe(true);
+    expect(hasura.executeQuery).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        where: {
+          _and: [
+            { last_customer_message_at: { _is_null: false } },
+            { status: { _eq: 'open' } },
+          ],
+        },
+      })
+    );
   });
 
   it('rejects reply when session expired', async () => {
@@ -195,5 +207,115 @@ describe('AdminWhatsAppInboxService', () => {
     });
     expect(hasura.executeMutation.mock.calls[0][1].set.status).toBeUndefined();
     expect(result.conversation.unreadCount).toBe(0);
+  });
+
+  it('exposes media metadata from raw_payload on thread messages', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        whatsapp_conversations_by_pk: openConversation,
+      })
+      .mockResolvedValueOnce({
+        whatsapp_messages: [
+          {
+            id: '22222222-2222-4222-8222-222222222222',
+            conversation_id: openConversation.id,
+            wamid: 'wamid.img',
+            direction: 'inbound',
+            source: 'user',
+            type: 'image',
+            body: '[Image]',
+            raw_payload: {
+              type: 'image',
+              image: { id: 'media-1', mime_type: 'image/jpeg', caption: 'Hi' },
+            },
+            sender_user_id: null,
+            status: 'delivered',
+            error: null,
+            created_at: openConversation.last_message_at,
+            sender_user: null,
+          },
+        ],
+        whatsapp_messages_aggregate: { aggregate: { count: 1 } },
+      });
+    const result = await service.listMessages(openConversation.id, {});
+    expect(result.items[0].media).toMatchObject({
+      id: 'media-1',
+      mimeType: 'image/jpeg',
+      caption: 'Hi',
+    });
+  });
+
+  it('shows template button taps as text instead of unknown attachments', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        whatsapp_conversations_by_pk: openConversation,
+      })
+      .mockResolvedValueOnce({
+        whatsapp_messages: [
+          {
+            id: '44444444-4444-4444-8444-444444444444',
+            conversation_id: openConversation.id,
+            wamid: 'wamid.btn',
+            direction: 'inbound',
+            source: 'user',
+            type: 'unknown',
+            body: '[unknown]',
+            raw_payload: {
+              type: 'button',
+              button: { text: 'Confirmer', payload: 'Confirmer' },
+            },
+            sender_user_id: null,
+            status: 'delivered',
+            error: null,
+            created_at: openConversation.last_message_at,
+            sender_user: null,
+          },
+        ],
+        whatsapp_messages_aggregate: { aggregate: { count: 1 } },
+      });
+    const result = await service.listMessages(openConversation.id, {});
+    expect(result.items[0].type).toBe('text');
+    expect(result.items[0].body).toBe('Confirmer');
+  });
+
+  it('proxies Graph media for a message with an attachment id', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      whatsapp_messages_by_pk: {
+        id: '22222222-2222-4222-8222-222222222222',
+        conversation_id: openConversation.id,
+        type: 'document',
+        raw_payload: {
+          document: {
+            id: 'doc-1',
+            filename: 'invoice.pdf',
+            mime_type: 'application/pdf',
+          },
+        },
+      },
+    });
+    whatsApp.downloadMedia.mockResolvedValue({
+      buffer: Buffer.from('pdf-bytes'),
+      mimeType: 'application/octet-stream',
+    });
+    const file = await service.downloadMessageMedia(
+      '22222222-2222-4222-8222-222222222222'
+    );
+    expect(whatsApp.downloadMedia).toHaveBeenCalledWith('doc-1');
+    expect(file.mimeType).toBe('application/pdf');
+    expect(file.filename).toBe('invoice.pdf');
+    expect(file.contentDisposition).toContain('invoice.pdf');
+  });
+
+  it('rejects media download when the message has no attachment', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      whatsapp_messages_by_pk: {
+        id: '33333333-3333-4333-8333-333333333333',
+        type: 'text',
+        raw_payload: { text: { body: 'hi' } },
+      },
+    });
+    await expect(
+      service.downloadMessageMedia('33333333-3333-4333-8333-333333333333')
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

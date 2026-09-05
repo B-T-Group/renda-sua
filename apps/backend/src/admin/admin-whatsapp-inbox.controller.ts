@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -18,9 +19,11 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
+  ApiProduces,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RequirePermissions } from '../rbac/permissions.decorator';
@@ -58,6 +61,28 @@ export class AdminWhatsAppInboxController {
   @ApiResponse({ status: 200, description: 'Conversation list' })
   list(@Query() query: ListWhatsAppInboxQueryDto) {
     return this.service.listConversations(query);
+  }
+
+  @Get('messages/:messageId/media')
+  @ApiOperation({
+    summary: 'Download inbound WhatsApp media for an inbox message',
+    operationId: 'adminGetWhatsAppInboxMedia',
+  })
+  @ApiParam({ name: 'messageId', format: 'uuid' })
+  @ApiProduces('application/octet-stream')
+  @ApiResponse({ status: 200, description: 'Media bytes' })
+  @ApiResponse({ status: 404, description: 'No media or expired' })
+  async streamMedia(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Res({ passthrough: false }) res: Response
+  ) {
+    const file = await this.service.downloadMessageMedia(messageId);
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    if (file.contentDisposition) {
+      res.setHeader('Content-Disposition', file.contentDisposition);
+    }
+    res.send(file.buffer);
   }
 
   @Get(':id/messages')

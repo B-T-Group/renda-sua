@@ -41,6 +41,8 @@ import { OrderStatusService } from './order-status.service';
 import { OrderCleanupCronService } from './order-cleanup-cron.service';
 import { OrderCleanupInternalController } from './order-cleanup-internal.controller';
 import { OrderCleanupService } from './order-cleanup.service';
+import { StorePickupReminderCronService } from './store-pickup-reminder-cron.service';
+import { StorePickupReminderService } from './store-pickup-reminder.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { AdminOrdersController } from './admin-orders.controller';
@@ -116,6 +118,8 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
     CancellationPolicyService,
     OrderCleanupService,
     OrderCleanupCronService,
+    StorePickupReminderService,
+    StorePickupReminderCronService,
     OrderSystemJobsService,
     OrderAcceptanceService,
     FulfillmentPromiseService,

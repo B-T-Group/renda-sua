@@ -40,11 +40,10 @@ import {
   shouldShowGoLiveCelebration,
 } from '../../utils/businessSetup';
 import { resolveCatalogHealth } from '../../utils/catalogHealth';
-import {
-  resolveQuietHomeGating,
-  resolveQuietHomeNextAction,
-} from '../../utils/resolveQuietHomeNextAction';
+import { resolveQuietHomeNextAction, resolveQuietHomeGating } from '../../utils/resolveQuietHomeNextAction';
+import { pickQuietHomeCatalogModules } from '../../utils/pickQuietHomeCatalogModules';
 import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
+import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessDashboard: React.FC = () => {
@@ -165,23 +164,23 @@ const BusinessDashboard: React.FC = () => {
     rentalModules,
   } = useBusinessDashboardModules({ aggregates, isRentalFocused });
 
-  const quietCatalogModules = useMemo(() => {
-    const catalogEntry = isRentalFocused
-      ? rentalModules.filter((m) => m.path.includes('/rentals/catalog'))
-      : primaryCatalogModules.filter(
-          (m) =>
-            m.path.includes('/business/items') || m.path === '/business/items'
-        );
-    const locations = primaryCatalogModules.filter((m) =>
-      m.path.includes('location')
-    );
-    const picked = [...catalogEntry, ...locations];
-    return picked.length > 0
-      ? picked
-      : isRentalFocused
-        ? [...rentalModules.slice(0, 1), ...locations]
-        : primaryCatalogModules.slice(0, 2);
-  }, [primaryCatalogModules, rentalModules, isRentalFocused]);
+  const quietCatalogModules = useMemo(
+    () =>
+      pickQuietHomeCatalogModules({
+        primaryCatalogModules,
+        rentalModules,
+        isRentalFocused,
+        itemCount: aggregates?.itemCount ?? 0,
+        rentalItemCount: aggregates?.rentalItemCount ?? 0,
+      }),
+    [
+      primaryCatalogModules,
+      rentalModules,
+      isRentalFocused,
+      aggregates?.itemCount,
+      aggregates?.rentalItemCount,
+    ]
+  );
 
   const catalogHealth = useMemo(
     () => resolveCatalogHealth(aggregates, mainInterest),
@@ -299,6 +298,14 @@ const BusinessDashboard: React.FC = () => {
     }
     if (id === 'share_store' && profile?.business?.id) {
       navigate(`/store/${profile.business.id}?preview=1`);
+      return;
+    }
+    if (id === 'offer_rentals') {
+      navigate('/business/rentals/catalog');
+      return;
+    }
+    if (id === 'offer_sale_items') {
+      navigate('/business/items');
     }
   }, [
     quietNextAction,
@@ -398,6 +405,8 @@ const BusinessDashboard: React.FC = () => {
           onAction={onQuietNextAction}
         />
       ) : null}
+
+      <AssistantHomeEntry />
 
       {!setupMode && !verificationLoading && !quietHomeMode ? (
         <BusinessVerificationBanner />
