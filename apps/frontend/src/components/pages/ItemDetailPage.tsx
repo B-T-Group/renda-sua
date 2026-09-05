@@ -93,7 +93,7 @@ import FoodAvailabilityChip from '../common/FoodAvailabilityChip';
 import FoodScheduleList from '../common/FoodScheduleList';
 import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
 import { DeliveryExpectationsCard } from '../common/DeliveryExpectationsCard';
-import { getDeliveryEstimate } from '../../utils/deliveryEstimateAdapter';
+import { useDeliveryEstimate } from '../../hooks/useDeliveryEstimate';
 import { useMarket } from '../../contexts/MarketContext';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
@@ -874,23 +874,18 @@ export default function ItemDetailPage() {
       ? Math.round((1 - lp.unit / lp.strikeOriginal) * 100)
       : null;
 
-  const deliveryEstimate = React.useMemo(() => {
-    if (!selectedMarket) return null;
-    const category = foodAvailability ? 'food' : 'store';
-    return getDeliveryEstimate({
-      category,
-      market: selectedMarket.countryCode,
-      area: selectedMarket.areaLabel || null,
-      businessLocationId: inventoryItem?.business_location_id,
-      foodAvailability: foodAvailability
-        ? {
-            is_available: foodAvailability.is_available,
-            is_sold_out: foodAvailability.is_sold_out ?? false,
-            has_schedule: foodAvailability.has_schedule,
-          }
-        : null,
-    });
-  }, [selectedMarket, foodAvailability, inventoryItem?.business_location_id]);
+  const deliveryEstimateParams = React.useMemo(() => {
+    if (!selectedMarket || !inventoryItem) return null;
+    return {
+      marketId: selectedMarket.countryCode,
+      areaId: selectedMarket.stateCode || undefined,
+      category: (foodAvailability ? 'food' : 'store') as 'store' | 'food' | 'rental',
+      sellerId: inventoryItem.business_location?.business_id,
+      skuId: inventoryItem.item_id,
+    };
+  }, [selectedMarket, inventoryItem, foodAvailability]);
+
+  const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } = useDeliveryEstimate(deliveryEstimateParams);
 
   const scrollToReviews = () => {
     document
@@ -1347,16 +1342,11 @@ export default function ItemDetailPage() {
             <ItemDetailHowItWorks />
 
             {/* Delivery Expectations Card (pre-checkout) */}
-            {deliveryEstimate && (
-              <DeliveryExpectationsCard
-                category={foodAvailability ? 'food' : 'store'}
-                market={selectedMarket?.countryCode || 'CM'}
-                area={selectedMarket?.areaLabel || null}
-                estimate={deliveryEstimate}
-                loading={loading}
-                itemId={id}
-              />
-            )}
+            <DeliveryExpectationsCard
+              estimate={deliveryEstimate}
+              loading={deliveryEstimateLoading}
+              itemId={id}
+            />
 
             {showMobileStickyOrderBar ? (
               <Typography

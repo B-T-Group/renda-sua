@@ -19,11 +19,7 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
-import type {
-  DeliveryCategory,
-  DeliveryEstimate,
-  ServingStatus,
-} from '../../utils/deliveryEstimateAdapter';
+import type { DeliveryEstimateResponse } from '../../hooks/useDeliveryEstimate';
 import {
   SITE_EVENT_DELIVERY_CARD_VIEW,
   SITE_EVENT_DELIVERY_CARD_AREA_PROMPT_CLICK,
@@ -33,10 +29,7 @@ import {
 } from '../../hooks/useTrackSiteEvent';
 
 export interface DeliveryExpectationsCardProps {
-  category: DeliveryCategory;
-  market: string;
-  area: string | null;
-  estimate: DeliveryEstimate | null;
+  estimate: DeliveryEstimateResponse | null;
   loading?: boolean;
   itemId?: string;
   onAreaChange?: () => void;
@@ -71,7 +64,7 @@ function formatFeeRange(
 }
 
 function getFoodStatusLabel(
-  status: ServingStatus,
+  status: string | null,
   t: (key: string, fallback: string) => string
 ): string {
   if (status === 'sold_out') {
@@ -83,16 +76,23 @@ function getFoodStatusLabel(
   return '';
 }
 
-function getFoodNextOpenLabel(
-  t: (key: string, fallback: string, vars?: Record<string, unknown>) => string
+function getTrustLineLabel(
+  trustVariant: string | null,
+  t: (key: string, fallback: string) => string
 ): string {
-  return t('delivery.nextOpen', 'Next open: {{time}}', { time: 'Mon 08:00–20:00' });
+  if (trustVariant === 'map_and_pin') {
+    return t('delivery.trackWithPin', 'Live map tracking + delivery PIN after you order');
+  }
+  if (trustVariant === 'sms_link') {
+    return t('delivery.trackSms', 'Track by SMS link');
+  }
+  if (trustVariant === 'app_and_web') {
+    return t('delivery.trackStandard', 'Track your order in the app');
+  }
+  return '';
 }
 
 export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> = ({
-  category,
-  market,
-  area,
   estimate,
   loading = false,
   itemId,
@@ -105,16 +105,19 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
   const trackedReadyRef = useRef(false);
 
   useEffect(() => {
-    if (!loading && !trackedViewRef.current && itemId) {
+    if (!loading && !trackedViewRef.current && itemId && estimate) {
       trackedViewRef.current = true;
       void trackSiteEvent({
         eventType: SITE_EVENT_DELIVERY_CARD_VIEW,
         subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
         subjectId: itemId,
-        metadata: { category, market, area },
+        metadata: { 
+          areaLabel: estimate.areaLabel,
+          coverage: estimate.coverage,
+        },
       });
     }
-  }, [loading, itemId, category, market, area, trackSiteEvent]);
+  }, [loading, itemId, estimate, trackSiteEvent]);
 
   useEffect(() => {
     if (
@@ -130,24 +133,23 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
         subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
         subjectId: itemId,
         metadata: {
-          category,
-          market,
-          area,
+          areaLabel: estimate.areaLabel,
           hasWindow: estimate.window != null,
           hasFee: estimate.fee != null,
+          coverage: estimate.coverage,
         },
       });
     }
-  }, [loading, estimate, itemId, category, market, area, trackSiteEvent]);
+  }, [loading, estimate, itemId, trackSiteEvent]);
 
   const handleAreaPromptClick = () => {
     if (onAreaChange) {
-      if (itemId) {
+      if (itemId && estimate) {
         void trackSiteEvent({
           eventType: SITE_EVENT_DELIVERY_CARD_AREA_PROMPT_CLICK,
           subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
           subjectId: itemId,
-          metadata: { category, market },
+          metadata: { areaLabel: estimate.areaLabel },
         });
       }
       onAreaChange();
@@ -178,18 +180,18 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
     return null;
   }
 
-  const isFoodClosed = category === 'food' && estimate.servingStatus !== 'available';
+  const isFoodClosed = estimate.servingStatus != null && estimate.servingStatus !== 'available';
   const needsArea = estimate.needsFinerArea;
-  const marketLabel = market.toUpperCase() === 'CM' ? 'Cameroon' : market;
+  const isOutOfCoverage = estimate.coverage === 'out';
 
   return (
     <Card
       variant="outlined"
       sx={{
         borderRadius: 2,
-        borderColor: needsArea || isFoodClosed ? 'warning.main' : 'divider',
-        borderWidth: needsArea || isFoodClosed ? 2 : 1,
-        bgcolor: needsArea || isFoodClosed ? alpha(theme.palette.warning.main, 0.04) : 'background.paper',
+        borderColor: needsArea || isFoodClosed || isOutOfCoverage ? 'warning.main' : 'divider',
+        borderWidth: needsArea || isFoodClosed || isOutOfCoverage ? 2 : 1,
+        bgcolor: needsArea || isFoodClosed || isOutOfCoverage ? alpha(theme.palette.warning.main, 0.04) : 'background.paper',
       }}
     >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -203,11 +205,23 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
               <Typography variant="body2" fontWeight={600}>
                 {getFoodStatusLabel(estimate.servingStatus, t)}
               </Typography>
-              {estimate.servingStatus === 'closed' && (
+              {estimate.servingStatus === 'closed' && estimate.window && (
                 <Typography variant="caption" color="text.secondary">
-                  {getFoodNextOpenLabel(t)}
+                  {t('delivery.nextOpen', 'Next open: {{time}}', { 
+                    time: estimate.window.label || estimate.window.band 
+                  })}
                 </Typography>
               )}
+            </Alert>
+          ) : isOutOfCoverage ? (
+            <Alert
+              severity="warning"
+              icon={<WarningIcon />}
+              sx={{ py: 0.5 }}
+            >
+              <Typography variant="body2" fontWeight={600}>
+                {t('delivery.outOfCoverage', 'Delivery not available in this area')}
+              </Typography>
             </Alert>
           ) : (
             <>
@@ -218,8 +232,7 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
                     sx={{ color: needsArea ? 'warning.main' : 'primary.main' }}
                   />
                   <Typography variant="body2" fontWeight={600}>
-                    {t('delivery.deliveringTo', 'Delivering to {{market}} · {{area}}', {
-                      market: marketLabel,
+                    {t('delivery.deliveringTo', 'Delivering to {{area}}', {
                       area: estimate.areaLabel,
                     })}
                   </Typography>
@@ -268,22 +281,28 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ClockIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                   <Typography variant="body2" color="text.secondary">
-                    {estimate.window.label}
+                    {estimate.window.label}{estimate.window.band ? ` ${estimate.window.band}` : ''}
                   </Typography>
                 </Box>
               )}
 
-              {!needsArea && estimate.fee && (
+              {!needsArea && estimate.fee && estimate.fee.confidence !== 'unknown' && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <DeliveryIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                   <Typography variant="body2" color="text.secondary">
                     {t('delivery.deliveryFee', 'Delivery {{fee}} for this area', {
-                      fee: formatFeeRange(
-                        estimate.fee.min,
-                        estimate.fee.max,
-                        estimate.fee.currency,
-                        t
-                      ),
+                      fee: estimate.fee.exact != null
+                        ? new Intl.NumberFormat(undefined, {
+                            style: 'currency',
+                            currency: estimate.fee.currency,
+                            maximumFractionDigits: 0,
+                          }).format(estimate.fee.exact)
+                        : formatFeeRange(
+                            estimate.fee.min,
+                            estimate.fee.max,
+                            estimate.fee.currency,
+                            t
+                          ),
                     })}
                   </Typography>
                 </Box>
@@ -298,20 +317,11 @@ export const DeliveryExpectationsCard: React.FC<DeliveryExpectationsCardProps> =
                 </Box>
               )}
 
-              {!needsArea && estimate.trustVariant === 'map_pin' && (
+              {!needsArea && estimate.trustVariant && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ShieldCheckIcon fontSize="small" sx={{ color: 'success.main' }} />
                   <Typography variant="caption" color="text.secondary">
-                    {t('delivery.trackWithPin', 'Live map tracking + delivery PIN after you order')}
-                  </Typography>
-                </Box>
-              )}
-
-              {!needsArea && estimate.trustVariant === 'standard' && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ShieldCheckIcon fontSize="small" sx={{ color: 'success.main' }} />
-                  <Typography variant="caption" color="text.secondary">
-                    {t('delivery.trackStandard', 'Track your order in the app')}
+                    {getTrustLineLabel(estimate.trustVariant, t)}
                   </Typography>
                 </Box>
               )}
