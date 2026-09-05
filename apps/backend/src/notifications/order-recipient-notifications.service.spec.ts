@@ -72,10 +72,9 @@ describe('OrderRecipientNotificationsService', () => {
           to: '+24177123456',
           locale: 'fr',
           payload: {
-            templateKey: 'order_status_client',
+            templateKey: 'recipient_out_for_delivery',
             variables: {
               orderNumber: 'ORD-20260905-000001',
-              statusLabel: 'en cours de livraison',
             },
           },
         })
@@ -83,14 +82,64 @@ describe('OrderRecipientNotificationsService', () => {
       expect(sms.sendSms).not.toHaveBeenCalled();
     });
 
-    it('reuses the approved ready template for store pickup', async () => {
+    it('uses the recipient ready template for store pickup', async () => {
       build({ ...THIRD_PARTY_ORDER, recipient_notify_whatsapp: true });
 
       await service.notifyStatusChange('order-1', 'ready_for_pickup');
 
-      expect(whatsApp.send.mock.calls[0][0].payload.templateKey).toBe(
-        'order_ready'
-      );
+      expect(whatsApp.send.mock.calls[0][0].payload).toEqual({
+        templateKey: 'recipient_order_ready',
+        variables: {
+          orderNumber: 'ORD-20260905-000001',
+          storeName: 'Chez Nkoghe',
+        },
+      });
+    });
+
+    it('uses the recipient placed template with payer name', async () => {
+      build({ ...THIRD_PARTY_ORDER, recipient_notify_whatsapp: true });
+
+      await service.notifyStatusChange('order-1', 'pending');
+
+      expect(whatsApp.send.mock.calls[0][0].payload).toEqual({
+        templateKey: 'recipient_order_placed',
+        variables: {
+          payerName: 'Marie Obame',
+          storeName: 'Chez Nkoghe',
+          orderNumber: 'ORD-20260905-000001',
+        },
+      });
+    });
+
+    it('uses fallback names when payer or store is missing', async () => {
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        payer_name: null,
+        business: null,
+      });
+
+      await service.notifyStatusChange('order-1', 'pending');
+
+      expect(whatsApp.send.mock.calls[0][0].payload.variables).toEqual({
+        payerName: 'un proche',
+        storeName: 'le magasin',
+        orderNumber: 'ORD-20260905-000001',
+      });
+    });
+
+    it('uses the recipient update template for confirmed/delivered/cancelled', async () => {
+      build({ ...THIRD_PARTY_ORDER, recipient_notify_whatsapp: true });
+
+      await service.notifyStatusChange('order-1', 'confirmed');
+
+      expect(whatsApp.send.mock.calls[0][0].payload).toEqual({
+        templateKey: 'recipient_order_update',
+        variables: {
+          orderNumber: 'ORD-20260905-000001',
+          statusLabel: 'confirmée',
+        },
+      });
     });
 
     it('falls back to SMS when the WhatsApp send fails', async () => {

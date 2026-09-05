@@ -279,22 +279,41 @@ export class OrderRecipientNotificationsService {
   }
 
   /**
-   * Reuses Meta templates that are already approved (`rs_order_status`,
-   * `rs_order_ready`) so recipient WhatsApp ships without a new submission.
+   * Uses dedicated recipient templates that do not include URL CTA deep links
+   * (third-party recipients often have no Rendasua account).
    */
   private whatsAppPayloadForStatus(
     status: string,
     contact: OrderRecipientContact,
     locale: EmailLocale
   ): { templateKey: string; variables: Record<string, string> } {
+    if (status === 'pending') {
+      return {
+        templateKey: 'recipient_order_placed',
+        variables: {
+          payerName: contact.payerName || (locale === 'fr' ? 'un proche' : 'someone'),
+          storeName: contact.businessName || (locale === 'fr' ? 'le magasin' : 'the store'),
+          orderNumber: contact.orderNumber,
+        },
+      };
+    }
     if (status === 'ready_for_pickup') {
       return {
-        templateKey: 'order_ready',
+        templateKey: 'recipient_order_ready',
+        variables: {
+          orderNumber: contact.orderNumber,
+          storeName: contact.businessName || (locale === 'fr' ? 'le magasin' : 'the store'),
+        },
+      };
+    }
+    if (status === 'out_for_delivery') {
+      return {
+        templateKey: 'recipient_out_for_delivery',
         variables: { orderNumber: contact.orderNumber },
       };
     }
     return {
-      templateKey: 'order_status_client',
+      templateKey: 'recipient_order_update',
       variables: {
         orderNumber: contact.orderNumber,
         statusLabel: this.statusLabel(status, locale),
