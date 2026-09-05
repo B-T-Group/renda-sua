@@ -21,11 +21,11 @@ Create **ready catalog + inventory** rows for one `business_location_id` from a 
 Treat as ambiguous (examples, not exhaustive):
 
 - Env, location, or business ownership unclear or conflicting
-- Price unclear (range, “from / quote / sur demande”, unit mismatch, missing when required)
+- Price unclear (range, “from / quote / sur demande”, unit mismatch, missing when required) — **unless** the import is explicitly **interest-only / sur demande** mode (see below), in which case skip positive-price requirement and set `items.interest_only = true`
 - Category/subcategory could match multiple existing rows, or creating new taxonomy is speculative
 - Near-duplicate name/SKU — unclear whether to reuse or create
 - Brand unclear when multiple candidates exist
-- **Image missing** (no usable `image_url` / `image_path`) — **never insert** that row
+- **Image missing** (no usable `image_url` / `image_path`) — still insert, but set **`is_active=false`** (never leave imageless items active)
 - Multiple candidate images with no clear primary
 - Currency / pay-on-delivery / perishable flags cannot be derived without assuming
 
@@ -110,11 +110,14 @@ Required effective fields after enrichment (may be filled by AI):
 | Field | Notes |
 |-------|--------|
 | `name` | Required |
-| `price` / `selling_price` | > 0 for ready product |
+| `price` / `selling_price` | > 0 for ready product — **or** omit / placeholder when `interest_only` |
 | `quantity` | Default **10** if blank |
-| `image_url` or usable `image_path` | **Required** — at least **1** usable image. **No image → `blocked_ambiguous`, do not insert.** Generate image only if user explicitly allows |
+| `image_url` or usable `image_path` | Prefer ≥1 usable image. **No image → insert with `is_active=false`.** Generate image only if user explicitly allows |
+| `interest_only` | Optional boolean / aliases `pricing_not_applicable`, `sur_demande`. Default **false**. When true (or CSV/import default for sur-demande catalogs): set `items.interest_only = true`; price may be `0` or kept for merchant reference but shoppers see “I’m interested” instead of buy |
 
 Optional: description, sku, brand, category, subcategory, unit_cost, reorder_*, weight, color, model, dimensions, is_used, etc. Full alias map: [reference.md](reference.md). Example: [scripts/products.example.csv](scripts/products.example.csv).
+
+**Interest-only / sur demande catalogs:** If the user says pricing is not applicable (quote / “sur demande” / interest mode), either pass a CSV column `interest_only=true` per row or apply a **batch default** `interest_only=true` for the whole import. Do not block those rows for missing/zero price.
 
 ### 3) AI enrichment (per row)
 
@@ -146,11 +149,11 @@ Prefer a **single transaction per batch** (or per row with clear error isolation
 
 - Remote `image_url` → store URL as-is (same as Nest CSV upload).
 - Local file → upload via Nest `POST /aws/presigned-url/image` + PUT + public URL **if** a business JWT is available; otherwise ask user for a public URL. Do not invent S3 URLs.
-- **0 images → always `blocked_ambiguous` (`missing_image`); never insert.**
+- **0 images → insert item with `is_active=false`** (and no `item_images` row). Never leave imageless items active.
 
 ### 5) Done report
 
-For each row: item id, inventory id, subcategory id, image linked?, skipped/error reason. Items are inserted **`is_active=true`** and **`moderation_status='approved'`** so they can appear in catalog (embeddings / AI moderation may still be missing until Nest publish path runs).
+For each row: item id, inventory id, subcategory id, image linked?, skipped/error reason. Items with ≥1 image are **`is_active=true`** and **`moderation_status='approved'`**; imageless items are **`is_active=false`**.
 
 ## Gap checklist (always fill)
 
@@ -162,11 +165,12 @@ When inserting `items`, set:
 | `currency` | Business currency |
 | `description` | `''` if still empty after AI |
 | `item_sub_category_id` | Resolved NOT NULL id |
-| `price` | Catalog price (> 0) |
+| `price` | Catalog price (> 0), or `0` / retained numeric when `interest_only` |
+| `interest_only` | `true` when CSV/default says so; else `false` |
 | `sku` | Provided or generated unique per business |
 | `status` | `'active'` |
 | `moderation_status` | `'approved'` |
-| `is_active` | `true` |
+| `is_active` | `true` if ≥1 image; **`false` if no image** |
 | `ai_review_version` | `0` |
 | `is_used` | from CSV or `false` |
 | `min_order_quantity` | `1` |
@@ -204,5 +208,6 @@ Use Secrets Manager + SQL when they asked for DB import, JWT is unavailable, or 
 - Confirm **prod** before any write.
 - Never commit secrets, plan files with credentials, or downloaded PII beyond the CSV the user provided.
 - Do not create users or businesses; location must already exist.
-- Do not leave imported items inactive: set **`is_active=true`** and **`moderation_status='approved'`** unless the user explicitly asks for draft/review-first.
+- Do not leave imported items with images inactive: set **`is_active=true`** and **`moderation_status='approved'`** when ≥1 image exists, unless the user explicitly asks for draft/review-first.
+- **Imageless items must be `is_active=false`.**
 - Skip Nest migrations / Hasura seed SQL for tenant catalog data.

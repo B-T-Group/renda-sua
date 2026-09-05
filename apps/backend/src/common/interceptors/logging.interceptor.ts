@@ -12,6 +12,8 @@ import { Observable, tap } from 'rxjs';
 import { Logger } from 'winston';
 import { getRequestLogContext } from '../request-context-log.util';
 
+const SKIP_ACCESS_LOG_PATHS = new Set(['/api/health', '/health']);
+
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
   constructor(
@@ -57,9 +59,13 @@ export class LoggingInterceptor implements NestInterceptor {
     startedAt: number,
     requestId?: string
   ): void {
+    const path = this.pathWithoutQuery(request);
+    if (SKIP_ACCESS_LOG_PATHS.has(path)) {
+      return;
+    }
     this.logger.info('HTTP request', {
       method: request.method,
-      path: this.pathWithoutQuery(request),
+      path,
       status,
       durationMs: Date.now() - startedAt,
       requestId,

@@ -8,7 +8,8 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 
 | Internal key | Meta name | Category | Body variables (positional) | Button |
 |--------------|-----------|----------|-------------------------------|--------|
-| `order_created_business` | `rs_order_new` | UTILITY | orderNumber, customerName, pickupWindow | URL CTA → `/app/orders/{{1}}` |
+| `order_created_business` | `rs_order_created` | UTILITY | orderNumber, customerName, pickupWindow | URL CTA → `/app/orders/{{1}}` |
+| `order_action_business` | `rs_order_action` | UTILITY | orderNumber, customerName, pickupWindow | QUICK_REPLY: Confirm / Need more time / Decline |
 | `order_offer_agent` | `rs_delivery_offer` | **MARKETING** | pickupArea, distance | URL CTA → `/app/deliveries/{{1}}` |
 | `order_status_client` | `rs_order_status` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
 | `order_ready` | `rs_order_ready` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
@@ -43,7 +44,7 @@ Marketing templates are also priced as marketing and are subject to WhatsApp's *
 
 ---
 
-## 1. `rs_order_new`
+## 1. `rs_order_created`
 
 **Vars:** `{{1}}` orderNumber · `{{2}}` customerName · `{{3}}` pickupWindow  
 **Button:** Open order → `https://rendasua.com/app/orders/{{1}}`
@@ -69,6 +70,35 @@ Veuillez confirmer sous {{3}} pour ne pas faire attendre le client.
 
 Appuyez ci-dessous pour ouvrir la commande dans Rendasua.
 ```
+
+## 1b. `rs_order_action`
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` customerName · `{{3}}` pickupWindow  
+**Buttons:** QUICK_REPLY Confirm / Need more time / Decline (inbound ids: `confirm`, `busy`, `decline`)
+
+**en**
+```
+Rendasua: you have a new marketplace order.
+
+Order number: {{1}}
+Customer name: {{2}}
+Please confirm within {{3}} so the customer is not left waiting.
+
+Tap a button below to respond.
+```
+
+**fr**
+```
+Rendasua : vous avez une nouvelle commande marketplace.
+
+Numéro de commande : {{1}}
+Nom du client : {{2}}
+Veuillez confirmer sous {{3}} pour ne pas faire attendre le client.
+
+Appuyez sur un bouton ci-dessous pour répondre.
+```
+
+Until Meta approves `rs_order_action`, production keeps sending `rs_order_created`. After approval, prefer internal key `order_action_business`.
 
 ---
 
@@ -349,6 +379,19 @@ Meta owns the body copy. Do not submit custom en/fr strings.
 
 ---
 
+## Admin test send
+
+Superusers (or `platform.ops.user_messages`) can list catalog params and send a live template without waiting on the product `WHATSAPP_NOTIFICATIONS_ENABLED` flag. Graph credentials must still be configured.
+
+- `GET /api/admin/whatsapp/templates?category=UTILITY`
+- `POST /api/admin/whatsapp/templates/test`
+
+`templateId` is the internal key **or** the Meta name. Body fields must match `Body variables` above. Templates with a dynamic URL button also need `entityId` (or a full `ctaUrl`).
+
+Import `apps/backend/postman/Rendasua.postman_collection.json` for ready-made examples.
+
+---
+
 ## Ops notes
 
 1. After approval, set `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
@@ -363,3 +406,11 @@ npm run create:whatsapp-templates -- --access-token "$TOKEN"
 WABA id defaults to `1014752277854609` and Graph API to `v25.0`. Override with `--waba-id` / `WHATSAPP_WABA_ID` or `--api-version`.
 
 Missing name+language rows are created. Existing translations are updated in place when body or buttons differ; unchanged rows are skipped so Meta does not re-review them. Use `--dry-run` to print payloads. Edited templates go back to `PENDING` review.
+
+**Approved templates cannot have their body or buttons changed.** Graph will not let you recreate a name that is still in `PENDING_DELETION` (Meta holds the name for **4 weeks**). `rs_order_new` is in that lock; merchant new-order sends use **`rs_order_created`** instead:
+
+```bash
+npm run create:whatsapp-templates -- --only rs_order_created --access-token "$TOKEN"
+```
+
+Sends work after the new `en` / `fr` rows are **APPROVED**. For other names that are approved but not deleting, `--force-recreate NAME` deletes then creates — only use that when Meta is not in the 4-week name lock.

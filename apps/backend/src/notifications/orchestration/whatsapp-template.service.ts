@@ -7,7 +7,8 @@ import type { WhatsAppChannelPayload } from './notification.types';
 
 /** Maps internal template keys → Meta-approved template names (en / fr). */
 const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
-  order_created_business: { en: 'rs_order_new', fr: 'rs_order_new' },
+  order_created_business: { en: 'rs_order_created', fr: 'rs_order_created' },
+  order_action_business: { en: 'rs_order_action', fr: 'rs_order_action' },
   order_offer_agent: { en: 'rs_delivery_offer', fr: 'rs_delivery_offer' },
   order_status_client: { en: 'rs_order_status', fr: 'rs_order_status' },
   order_ready: { en: 'rs_order_ready', fr: 'rs_order_ready' },
@@ -23,6 +24,7 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
 /** Ordered body variables per template (Meta positional params). */
 const BODY_VARS: Record<string, string[]> = {
   order_created_business: ['orderNumber', 'customerName', 'pickupWindow'],
+  order_action_business: ['orderNumber', 'customerName', 'pickupWindow'],
   order_offer_agent: ['pickupArea', 'distance'],
   order_status_client: ['orderNumber', 'statusLabel'],
   order_ready: ['orderNumber'],
@@ -56,12 +58,46 @@ const TEMPLATE_CATEGORIES: Record<string, WhatsAppTemplateCategory> = {
   order_offer_agent: 'MARKETING',
 };
 
+/** Static URL buttons (no send-time {{1}}). Auth templates have no URL CTA. */
+const STATIC_CTA_KEYS = new Set([
+  'verification_attention',
+  'order_action_business',
+]);
+
+export type WhatsAppTemplateCatalogEntry = {
+  templateKey: string;
+  metaNameEn: string;
+  metaNameFr: string;
+  bodyVariables: string[];
+  category: WhatsAppTemplateCategory;
+  needsDynamicCta: boolean;
+};
+
 @Injectable()
 export class WhatsAppTemplateService {
   resolveMetaName(templateKey: string, locale?: string): string | null {
     const entry = TEMPLATE_NAMES[templateKey];
     if (!entry) return null;
     return locale === 'fr' ? entry.fr : entry.en;
+  }
+
+  /** Internal key from a catalog key or Meta template name. */
+  resolveTemplateKey(templateId: string): string | null {
+    const needle = templateId.trim();
+    if (!needle) return null;
+    if (TEMPLATE_NAMES[needle]) return needle;
+    return this.findKeyByMetaName(needle.toLowerCase());
+  }
+
+  requiredBodyVariables(templateKey: string): string[] {
+    return BODY_VARS[templateKey] ?? [];
+  }
+
+  needsDynamicCta(templateKey: string): boolean {
+    if (!TEMPLATE_NAMES[templateKey] || AUTH_CODE_VARS[templateKey]) {
+      return false;
+    }
+    return !STATIC_CTA_KEYS.has(templateKey);
   }
 
   /**
@@ -85,10 +121,7 @@ export class WhatsAppTemplateService {
     if (codeVar) return this.buildAuthComponents(payload, codeVar);
 
     const keys = BODY_VARS[payload.templateKey] ?? Object.keys(payload.variables);
-    const bodyParams = keys
-      .map((k) => payload.variables[k])
-      .filter((v): v is string => typeof v === 'string' && v.length > 0)
-      .map((text) => ({ type: 'text' as const, text }));
+    const bodyParams = keys.map((k) => this.bodyTextParam(payload.variables[k]));
 
     const components: WhatsAppTemplateComponent[] = [];
     if (bodyParams.length) {
@@ -128,20 +161,31 @@ export class WhatsAppTemplateService {
     ];
   }
 
-  listTemplateCatalog(): Array<{
-    templateKey: string;
-    metaNameEn: string;
-    metaNameFr: string;
-    bodyVariables: string[];
-    category: WhatsAppTemplateCategory;
-  }> {
+  listTemplateCatalog(): WhatsAppTemplateCatalogEntry[] {
     return Object.keys(TEMPLATE_NAMES).map((templateKey) => ({
       templateKey,
       metaNameEn: TEMPLATE_NAMES[templateKey].en,
       metaNameFr: TEMPLATE_NAMES[templateKey].fr,
       bodyVariables: BODY_VARS[templateKey] ?? [],
       category: this.category(templateKey),
+      needsDynamicCta: this.needsDynamicCta(templateKey),
     }));
+  }
+
+  private findKeyByMetaName(metaName: string): string | null {
+    const match = Object.entries(TEMPLATE_NAMES).find(
+      ([key, names]) =>
+        key.toLowerCase() === metaName ||
+        names.en === metaName ||
+        names.fr === metaName
+    );
+    return match?.[0] ?? null;
+  }
+
+  private bodyTextParam(value: unknown): { type: 'text'; text: string } {
+    const text =
+      typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+    return { type: 'text', text: text || '-' };
   }
 
   /**

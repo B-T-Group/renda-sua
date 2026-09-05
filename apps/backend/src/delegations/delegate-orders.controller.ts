@@ -197,6 +197,34 @@ export class DelegateOrdersController {
     return { success: true, order: await this.service.getById(req.delegation, id) };
   }
 
+  @Get('orders/acceptance/pending')
+  @RequireDelegationPermissions(DELEGATION_PERMISSIONS.ORDERS_MANAGE)
+  @ApiOperation({ summary: 'Pending acceptance interrupt for this location' })
+  async pendingAcceptance(@Req() req: { delegation: DelegationAccessContext }) {
+    return this.service.pendingAcceptance(req.delegation);
+  }
+
+  @Post('orders/busy')
+  @RequireDelegationPermissions(DELEGATION_PERMISSIONS.ORDERS_MANAGE)
+  @ApiOperation({ summary: 'Mark a location order as busy (extra prep)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: { orderId: { type: 'string', format: 'uuid' } },
+    },
+  })
+  async markBusy(
+    @Req() req: { delegation: DelegationAccessContext },
+    @Body() body: { orderId?: string }
+  ) {
+    const orderId = body?.orderId?.trim();
+    if (!orderId) {
+      return { success: false, message: 'orderId is required' };
+    }
+    return this.service.markBusy(req.delegation, orderId);
+  }
+
   @Post('orders/confirm')
   @RequireDelegationPermissions(DELEGATION_PERMISSIONS.ORDERS_MANAGE)
   @ApiOperation({ summary: 'Confirm a location order' })

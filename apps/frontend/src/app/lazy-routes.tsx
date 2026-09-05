@@ -161,6 +161,12 @@ export const CartPage = lazy(
 export const ClientRentalRequestsPage = lazy(() =>
   import('../components/pages/ClientRentalRequestsPage')
 );
+export const ClientProductInterestPage = lazy(() =>
+  import('../components/pages/ClientProductInterestPage')
+);
+export const BusinessProductInterestPage = lazy(() =>
+  import('../components/pages/BusinessProductInterestPage')
+);
 export const RentalRequestSubmittedPage = lazy(() =>
   import('../components/pages/RentalRequestSubmittedPage')
 );
@@ -305,6 +311,9 @@ export const MessagesCenterPage = lazy(() =>
 export const OrderConfirmationPage = lazy(() =>
   import('../components/pages/OrderConfirmationPage')
 );
+export const MobileMoneyAwaitingPaymentPage = lazy(() =>
+  import('../components/pages/MobileMoneyAwaitingPaymentPage')
+);
 export const AnonAddressPage = lazy(() =>
   import('../components/pages/AnonAddressPage')
 );
@@ -315,11 +324,17 @@ export const Profile = lazy(() => import('../components/pages/Profile'));
 export const NotificationPreferencesPage = lazy(
   () => import('../components/pages/NotificationPreferencesPage')
 );
+export const KitchenModePage = lazy(
+  () => import('../components/pages/KitchenModePage')
+);
 export const AppDeepLinkPage = lazy(
   () => import('../components/pages/AppDeepLinkPage')
 );
 export const ProfileDeleteRequestPage = lazy(() =>
   import('../components/pages/ProfileDeleteRequestPage')
+);
+export const AssistantPage = lazy(() =>
+  import('../components/pages/AssistantPage')
 );
 export const SupportPage = lazy(() =>
   import('../components/pages/SupportPage')

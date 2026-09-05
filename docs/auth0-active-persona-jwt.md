@@ -32,7 +32,7 @@ If **Post-Login** does not run on refresh, add the hook Auth0 documents for your
 
 When the UI is in **delegation mode**, silent refresh should pass **no `active_persona`**. The Action must then set **`x-hasura-default-role = user`** (do not invent a fourth persona). Nest still identifies the user via `x-hasura-user-id`; `/api/delegate/*` uses **`X-Active-Delegation`**, not a Hasura `business` role.
 
-This Auth0 change is additive and safe while the `location_delegations` feature flag is off.
+The `location_delegations` feature flag is on in production. The Auth0 Action must include `user` in `x-hasura-allowed-roles` (and use `user` as default when there is no persona) so location delegates can authenticate.
 
 ## No `app_metadata` for personas
 

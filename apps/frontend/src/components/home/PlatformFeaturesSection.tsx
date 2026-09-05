@@ -3,6 +3,7 @@ import { Box, Card, CardContent, Container, Grid, Stack, Typography, alpha } fro
 import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { HOME_ACCENTS } from './homeTheme';
 
 interface FeatureTile {
   icon: React.ReactNode;
@@ -16,54 +17,54 @@ interface FeatureTile {
 
 const features: FeatureTile[] = [
   {
-    icon: <Map sx={{ fontSize: 32, color: '#1e40af' }} />,
+    icon: <Map sx={{ fontSize: 32, color: HOME_ACCENTS.primary }} />,
     titleKey: 'home.features.tracking.title',
     defaultTitle: 'Real-time delivery tracking',
     descKey: 'home.features.tracking.desc',
     defaultDesc: 'Watch your delivery move on a live map. Know the ETA before you even ask.',
-    color: '#1e40af',
+    color: HOME_ACCENTS.primary,
     heroSize: true,
   },
   {
-    icon: <Pin sx={{ fontSize: 32, color: '#8b5cf6' }} />,
+    icon: <Pin sx={{ fontSize: 32, color: HOME_ACCENTS.primaryLight }} />,
     titleKey: 'home.features.pin.title',
     defaultTitle: 'Secure delivery PIN',
     descKey: 'home.features.pin.desc',
     defaultDesc: 'Every delivery is confirmed with a 4-digit PIN — no PIN, no handover. Your order is always protected.',
-    color: '#8b5cf6',
+    color: HOME_ACCENTS.primaryLight,
     heroSize: true,
   },
   {
-    icon: <Chat sx={{ fontSize: 24, color: '#0891b2' }} />,
+    icon: <Chat sx={{ fontSize: 24, color: HOME_ACCENTS.info }} />,
     titleKey: 'home.features.messaging.title',
     defaultTitle: 'In-app messaging',
     descKey: 'home.features.messaging.desc',
     defaultDesc: 'Chat instantly with the business or your delivery agent.',
-    color: '#0891b2',
+    color: HOME_ACCENTS.info,
   },
   {
-    icon: <AutoAwesome sx={{ fontSize: 24, color: '#f59e0b' }} />,
+    icon: <AutoAwesome sx={{ fontSize: 24, color: HOME_ACCENTS.warning }} />,
     titleKey: 'home.features.ai.title',
     defaultTitle: 'AI product descriptions',
     descKey: 'home.features.ai.desc',
     defaultDesc: 'Businesses can generate compelling product descriptions with AI in one click.',
-    color: '#f59e0b',
+    color: HOME_ACCENTS.warning,
   },
   {
-    icon: <LocationOn sx={{ fontSize: 24, color: '#ef4444' }} />,
+    icon: <LocationOn sx={{ fontSize: 24, color: HOME_ACCENTS.delivery }} />,
     titleKey: 'home.features.addresses.title',
     defaultTitle: 'Multiple delivery addresses',
     descKey: 'home.features.addresses.desc',
     defaultDesc: 'Save home, work, and custom addresses. Switch anytime before checkout.',
-    color: '#ef4444',
+    color: HOME_ACCENTS.delivery,
   },
   {
-    icon: <NotificationsActive sx={{ fontSize: 24, color: '#16a34a' }} />,
+    icon: <NotificationsActive sx={{ fontSize: 24, color: HOME_ACCENTS.success }} />,
     titleKey: 'home.features.notifications.title',
     defaultTitle: 'Push notifications',
     descKey: 'home.features.notifications.desc',
     defaultDesc: 'Get instant updates on order status, delivery milestones, and messages.',
-    color: '#16a34a',
+    color: HOME_ACCENTS.success,
   },
 ];
 
