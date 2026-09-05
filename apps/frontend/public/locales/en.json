@@ -1787,7 +1787,14 @@
       "expiresIn": "Expires in",
       "expired": "Code expired",
       "verify": "Verify OTP",
-      "verifying": "Verifying..."
+      "verifying": "Verifying...",
+      "createAccountError": "Could not start verification. Please try again.",
+      "attemptMissing": "Your verification session expired. Please go back and submit again.",
+      "attemptExpired": "This verification code expired. Please request a new one.",
+      "attemptBusy": "Account setup is still finishing. Please wait a moment and try again.",
+      "tooManyAttempts": "Too many incorrect codes. Please request a new verification code.",
+      "verifyContactTitle": "Verify your contact",
+      "verifyContactSubtitle": "Enter the code we sent to confirm your contact before your account is created."
     },
     "otpLogin": {
       "continue": "Continue with OTP",
@@ -1800,7 +1807,8 @@
       "userNotFound": "No account found for this email."
     },
     "otpSignup": {
-      "title": "Verify your account"
+      "title": "Verify your contact",
+      "subtitle": "Enter the code we sent. Your account is created only after this step."
     },
     "profile": "Profile",
     "signIn": "Sign In",
@@ -1907,7 +1915,7 @@
     "updateContact": "Update contact",
     "verifyEmailToContinue": "Verify your email to continue",
     "alreadyHaveAccount": "Already have an account? Log in",
-    "createAccountError": "Unable to create account at this time.",
+    "createAccountError": "Unable to start verification at this time.",
     "goalSectionHintMulti": "Choose how you want to start. You can add other modes later.",
     "primaryBusinessFocus": "Primary business focus",
     "trustContact": "We'll only use this to verify your account and send order updates.",
