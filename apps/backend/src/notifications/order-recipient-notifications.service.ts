@@ -279,46 +279,22 @@ export class OrderRecipientNotificationsService {
   }
 
   /**
-   * Uses recipient-specific Meta templates for diaspora orders. Variables match
-   * the UTILITY transactional copy approved for these flows.
+   * Uses the approved `rs_recipient_order_update` template for all status
+   * notifications. Meta rejected dedicated recipient UTILITY names
+   * (rs_recipient_order_placed, rs_rcpt_out_for_delivery, rs_recipient_order_ready).
    */
   private whatsAppPayloadForStatus(
     status: string,
     contact: OrderRecipientContact,
     locale: EmailLocale
   ): { templateKey: string; variables: Record<string, string> } {
-    switch (status) {
-      case 'pending':
-        return {
-          templateKey: 'recipient_order_placed',
-          variables: {
-            payerName: contact.payerName || 'Unknown',
-            storeName: contact.businessName || 'a store',
-            orderNumber: contact.orderNumber,
-          },
-        };
-      case 'out_for_delivery':
-        return {
-          templateKey: 'recipient_out_for_delivery',
-          variables: { orderNumber: contact.orderNumber },
-        };
-      case 'ready_for_pickup':
-        return {
-          templateKey: 'recipient_order_ready',
-          variables: {
-            orderNumber: contact.orderNumber,
-            storeName: contact.businessName || 'the store',
-          },
-        };
-      default:
-        return {
-          templateKey: 'recipient_order_update',
-          variables: {
-            orderNumber: contact.orderNumber,
-            statusLabel: this.statusLabel(status, locale),
-          },
-        };
-    }
+    return {
+      templateKey: 'recipient_order_update',
+      variables: {
+        orderNumber: contact.orderNumber,
+        statusLabel: this.statusLabel(status, locale),
+      },
+    };
   }
 
   private statusLabel(status: string, locale: EmailLocale): string {

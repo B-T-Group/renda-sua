@@ -346,67 +346,28 @@ Détails : {{3}}
 Ouvrez le panneau d’administration pour contacter le client, le commerçant ou le livreur.`,
     },
   },
+  authTemplate('rs_login_code'),
   {
     kind: 'content',
     name: 'rs_recipient_order_update',
     category: 'UTILITY',
-    exampleValues: ['ORD-1001', 'Confirmed'],
-    body: {
-      en: `Rendasua order update.
-
-Order {{1}} status: {{2}}.
-
-You will get further updates here if anything changes.`,
-      fr: `Mise à jour de commande Rendasua.
-
-Statut de la commande {{1}} : {{2}}.
-
-Vous recevrez d'autres mises à jour ici si quelque chose change.`,
+    exampleValues: ['ORD-1001', 'confirmed'],
+    button: {
+      text: { en: 'View order', fr: 'Voir la commande' },
+      url: `${APP}/app/orders/{{1}}`,
+      dynamic: true,
     },
-  },
-  authTemplate('rs_login_code'),
-  {
-    kind: 'content',
-    name: 'rs_rcpt_order_contact',
-    category: 'UTILITY',
-    exampleValues: ['John Smith', 'Douala Market', 'ORD-5001'],
     body: {
-      en: `Rendasua: you are listed as the delivery contact for an order.
+      en: `Rendasua order update for you.
 
-Order {{3}} from {{2}} was placed by {{1}}.
-You will receive status updates and your delivery code on WhatsApp.`,
-      fr: `Rendasua : vous êtes le contact de livraison pour une commande.
+Order number {{1}} status: {{2}}.
 
-La commande {{3}} de {{2}} a été passée par {{1}}.
-Vous recevrez les mises à jour de statut et votre code de livraison sur WhatsApp.`,
-    },
-  },
-  {
-    kind: 'content',
-    name: 'rs_rcpt_out_for_delivery',
-    category: 'UTILITY',
-    exampleValues: ['ORD-5001'],
-    body: {
-      en: `Rendasua delivery update.
+The person who placed this order for you will receive full details.`,
+      fr: `Mise à jour de commande Rendasua pour vous.
 
-Order {{1}} is out for delivery. Share your delivery code only with the Rendasua agent at handover.`,
-      fr: `Mise à jour de livraison Rendasua.
+Numéro de commande {{1}}, statut : {{2}}.
 
-La commande {{1}} est en cours de livraison. Partagez votre code de livraison uniquement avec le livreur Rendasua lors de la remise.`,
-    },
-  },
-  {
-    kind: 'content',
-    name: 'rs_rcpt_ready_pickup',
-    category: 'UTILITY',
-    exampleValues: ['ORD-5001', 'Douala Market'],
-    body: {
-      en: `Rendasua pickup update.
-
-Order {{1}} is ready for pickup at {{2}}. Present your pickup code when collecting.`,
-      fr: `Mise à jour de retrait Rendasua.
-
-La commande {{1}} est prête pour le retrait chez {{2}}. Présentez votre code de retrait lors de la récupération.`,
+La personne qui a passé cette commande pour vous recevra tous les détails.`,
     },
   },
 ];
@@ -482,10 +443,7 @@ function contentComponents(
   template: ContentTemplate,
   language: TemplateLanguage
 ): GraphComponent[] {
-  const components: GraphComponent[] = [bodyComponent(template, language)];
-  const buttons = buttonsComponent(template, language);
-  if (buttons) components.push(buttons);
-  return components;
+  return [bodyComponent(template, language), buttonsComponent(template, language)];
 }
 
 function bodyComponent(
@@ -502,7 +460,7 @@ function bodyComponent(
 function buttonsComponent(
   template: ContentTemplate,
   language: TemplateLanguage
-): GraphComponent | null {
+): GraphComponent {
   if (template.quickReplies?.length) {
     return {
       type: 'BUTTONS',
@@ -513,7 +471,7 @@ function buttonsComponent(
     };
   }
   if (!template.button) {
-    return null;
+    return { type: 'BUTTONS', buttons: [] };
   }
   return {
     type: 'BUTTONS',
