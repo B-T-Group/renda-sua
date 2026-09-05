@@ -11,6 +11,8 @@ import type { MetaActionSource } from '../meta-conversions/meta-conversions.type
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
 import { Auth0Service, Auth0TokenResponse } from './auth0.service';
+import { SessionStoreService } from './session-store.service';
+import { ClientPlatform } from './platform.decorator';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
 import { normalizeSignupAddress } from './provisioning/signup-address.normalize';
@@ -121,6 +123,7 @@ interface SignupCompletionSnapshot {
   launchPromo: SignupLaunchPromoResult | null;
   tokens: Auth0TokenResponse;
   completedAt: string;
+  sessionId?: string;
 }
 
 interface SignupAttemptContactFilter {
@@ -147,6 +150,7 @@ export class SignupService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
+    private readonly sessionStore: SessionStoreService,
     private readonly addressesService: AddressesService,
     private readonly userProvisioning: UserProvisioningService,
     private readonly businessProvisioning: BusinessProvisioningService,
@@ -235,13 +239,25 @@ export class SignupService {
     return this.toStartResult(updated);
   }
 
-  async verifySignupOtp(body: {
-    attemptId: string;
-    otp: string;
-  }): Promise<{
-    tokens: Auth0TokenResponse;
-    user: SignupCreatedUser;
-    launchPromo: SignupLaunchPromoResult | null;
+  async verifySignupOtp(
+    body: { attemptId: string; otp: string },
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<{
+    sessionId?: string;
+    response: {
+      success: boolean;
+      verified: true;
+      attemptId: string;
+      user: SignupCreatedUser;
+      launchPromo: SignupLaunchPromoResult | null;
+      access_token: string;
+      id_token?: string;
+      refresh_token?: string;
+      token_type: string;
+      expires_in: number;
+    };
   }> {
     const otp = String(body.otp || '').trim();
     if (!otp) {
@@ -252,11 +268,91 @@ export class SignupService {
     }
     const attempt = await this.loadAttempt(body.attemptId);
     if (attempt.status === 'completed' && attempt.completion_result) {
-      return this.replayCompletion(attempt.completion_result);
+      const result = this.replayCompletion(attempt.completion_result);
+      if (platform === 'web') {
+        // Reuse existing session ID from completion result if available
+        const sessionId = result.sessionId || this.sessionStore.generateSessionId();
+        
+        // If no session ID was stored, create the session now (backward compat)
+        if (!result.sessionId) {
+          await this.sessionStore.createSession(sessionId, {
+            userId: result.user.id,
+            auth0RefreshToken: result.tokens.refresh_token!,
+            auth0AccessToken: result.tokens.access_token,
+            auth0IdToken: result.tokens.id_token,
+            createdAt: Date.now(),
+            lastRefreshedAt: Date.now(),
+            userAgent,
+            ipAddress,
+          });
+        }
+        
+        return {
+          sessionId,
+          response: {
+            success: true,
+            verified: true,
+            attemptId: body.attemptId,
+            user: result.user,
+            launchPromo: result.launchPromo,
+            access_token: result.tokens.access_token,
+            id_token: result.tokens.id_token,
+            token_type: result.tokens.token_type,
+            expires_in: result.tokens.expires_in,
+          },
+        };
+      }
+      return {
+        response: {
+          success: true,
+          verified: true,
+          attemptId: body.attemptId,
+          user: result.user,
+          launchPromo: result.launchPromo,
+          ...result.tokens,
+        },
+      };
     }
     this.assertAttemptVerifiable(attempt);
     if (attempt.status === 'otp_verified' || attempt.status === 'provisioning') {
-      return this.provisionFromVerifiedAttempt(attempt);
+      const result = await this.provisionFromVerifiedAttempt(attempt);
+      if (platform === 'web') {
+        const sessionId = this.sessionStore.generateSessionId();
+        await this.sessionStore.createSession(sessionId, {
+          userId: result.user.id,
+          auth0RefreshToken: result.tokens.refresh_token!,
+          auth0AccessToken: result.tokens.access_token,
+          auth0IdToken: result.tokens.id_token,
+          createdAt: Date.now(),
+          lastRefreshedAt: Date.now(),
+          userAgent,
+          ipAddress,
+        });
+        return {
+          sessionId,
+          response: {
+            success: true,
+            verified: true,
+            attemptId: body.attemptId,
+            user: result.user,
+            launchPromo: result.launchPromo,
+            access_token: result.tokens.access_token,
+            id_token: result.tokens.id_token,
+            token_type: result.tokens.token_type,
+            expires_in: result.tokens.expires_in,
+          },
+        };
+      }
+      return {
+        response: {
+          success: true,
+          verified: true,
+          attemptId: body.attemptId,
+          user: result.user,
+          launchPromo: result.launchPromo,
+          ...result.tokens,
+        },
+      };
     }
     let tokens: Auth0TokenResponse;
     try {
@@ -285,7 +381,46 @@ export class SignupService {
         completedAt: new Date().toISOString(),
       },
     };
-    return this.provisionFromVerifiedAttempt(verified, tokens);
+    const result = await this.provisionFromVerifiedAttempt(verified, tokens);
+
+    if (platform === 'web') {
+      const sessionId = this.sessionStore.generateSessionId();
+      await this.sessionStore.createSession(sessionId, {
+        userId: result.user.id,
+        auth0RefreshToken: tokens.refresh_token!,
+        auth0AccessToken: tokens.access_token,
+        auth0IdToken: tokens.id_token,
+        createdAt: Date.now(),
+        lastRefreshedAt: Date.now(),
+        userAgent,
+        ipAddress,
+      });
+      return {
+        sessionId,
+        response: {
+          success: true,
+          verified: true,
+          attemptId: body.attemptId,
+          user: result.user,
+          launchPromo: result.launchPromo,
+          access_token: tokens.access_token,
+          id_token: tokens.id_token,
+          token_type: tokens.token_type,
+          expires_in: tokens.expires_in,
+        },
+      };
+    }
+
+    return {
+      response: {
+        success: true,
+        verified: true,
+        attemptId: body.attemptId,
+        user: result.user,
+        launchPromo: result.launchPromo,
+        ...tokens,
+      },
+    };
   }
 
   /** @deprecated Pending-user contact updates are no longer supported. */
@@ -731,6 +866,7 @@ export class SignupService {
     tokens: Auth0TokenResponse;
     user: SignupCreatedUser;
     launchPromo: SignupLaunchPromoResult | null;
+    sessionId?: string;
   } {
     const age = Date.now() - new Date(snapshot.completedAt).getTime();
     if (age > COMPLETION_TOKEN_TTL_MS || !snapshot.tokens?.access_token) {
@@ -746,6 +882,7 @@ export class SignupService {
       tokens: snapshot.tokens,
       user: snapshot.user,
       launchPromo: snapshot.launchPromo,
+      sessionId: snapshot.sessionId,
     };
   }
 
@@ -830,6 +967,7 @@ export class SignupService {
       launchPromo: provisioned.launchPromo,
       tokens: authTokens,
       completedAt: new Date().toISOString(),
+      sessionId: undefined, // Will be set in verifySignupOtp for web clients
     };
     await this.markAttemptCompleted(attempt.id, provisioned.user.id, snapshot);
     return {

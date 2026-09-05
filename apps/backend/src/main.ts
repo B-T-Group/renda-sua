@@ -16,6 +16,7 @@ import {
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 import { json, raw, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app/app.module';
@@ -113,15 +114,40 @@ async function bootstrap() {
   app.use('/api/whatsapp/webhook', raw({ type: '*/*' }));
   app.use(json({ limit: JSON_BODY_LIMIT }));
   app.use(urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+  app.use(cookieParser());
 
   // Use Winston as the NestJS logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
-  // Enable CORS for all origins
+  // CORS configuration with explicit origin allowlist for credentials
+  const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:4200')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: '*',
+    origin: (origin, callback) => {
+      // Cookie-setting routes must have explicit Origin header
+      if (!origin) {
+        // Allow requests without Origin for non-browser clients (but they won't get credentials)
+        // Browser requests with credentials MUST have Origin header
+        callback(null, false);
+        return;
+      }
+      if (corsOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Client-Platform',
+      'X-Requested-With',
+    ],
   });
 
   const globalPrefix = 'api';
