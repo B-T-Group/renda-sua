@@ -139,7 +139,7 @@ describe('CatalogStopsController', () => {
           {
             business_id: 'biz-1',
             business_location_id: 'loc-1',
-            location_name: 'Test Store',
+            name: 'Test Store',
           },
         ],
       };

@@ -45,6 +45,32 @@ describe('CatalogStopsService', () => {
       expect(result.category_name).toBe('Electronics');
     });
 
+    it('should build query with both country and state in single address block', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_inventory: [],
+      });
+
+      await service.getTopInCategory({
+        category: 'Electronics',
+        country_code: 'CM',
+        state: 'Centre',
+      });
+
+      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[0][0] as string;
+      const addressMatches = (query.match(/address:\s*\{/g) || []).length;
+      
+      expect(addressMatches).toBe(1); // Single address block
+      expect(query).toContain('country: { _eq: $countryCode }');
+      expect(query).toContain('state: { _eq: $state }');
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          countryCode: 'CM',
+          state: 'Centre',
+        })
+      );
+    });
+
     it('should apply category filter to itemWhere variable', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         business_inventory: [],
@@ -212,6 +238,24 @@ describe('CatalogStopsService', () => {
       );
     });
 
+    it('should build query with both country and state in single address block', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        item_deals: [],
+      });
+
+      await service.getDeals({
+        country_code: 'CM',
+        state: 'Centre',
+      });
+
+      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[0][0] as string;
+      const addressMatches = (query.match(/address:\s*\{/g) || []).length;
+      
+      expect(addressMatches).toBe(1); // Single address block
+      expect(query).toContain('country: { _eq: $countryCode }');
+      expect(query).toContain('state: { _eq: $state }');
+    });
+
     it('should calculate discount prices correctly', async () => {
       const mockDeals = [
         {
@@ -284,6 +328,24 @@ describe('CatalogStopsService', () => {
       expect(result.stores).toEqual([]);
     });
 
+    it('should build query with both country and state in single address block', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_locations: [],
+      });
+
+      await service.getFeaturedStore({
+        country_code: 'CM',
+        state: 'Centre',
+      });
+
+      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[0][0] as string;
+      const addressWhereMatches = (query.match(/address:\s*\{/g) || []).length;
+      
+      expect(addressWhereMatches).toBe(1); // Single address block in where clause
+      expect(query).toContain('country: { _eq: $countryCode }');
+      expect(query).toContain('state: { _eq: $state }');
+    });
+
     it('should transform locations to TopInventoryStoreRow shape', async () => {
       const mockLocations = [
         {
@@ -335,6 +397,33 @@ describe('CatalogStopsService', () => {
       });
 
       expect(result.items).toEqual([]);
+    });
+
+    it('should build query with both country and state in single address block', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [
+            {
+              item: {
+                item_sub_category: { item_category_id: 1 },
+              },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ business_inventory: [] });
+
+      await service.getBagComplements({
+        inventory_item_ids: ['item-1'],
+        country_code: 'CM',
+        state: 'Centre',
+      });
+
+      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[1][0] as string;
+      const addressMatches = (query.match(/address:\s*\{/g) || []).length;
+      
+      expect(addressMatches).toBe(1); // Single address block
+      expect(query).toContain('country: { _eq: $countryCode }');
+      expect(query).toContain('state: { _eq: $state }');
     });
 
     it('should return empty array when cart items have no categories', async () => {

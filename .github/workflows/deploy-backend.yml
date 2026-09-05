@@ -154,15 +154,22 @@ jobs:
                   "ports": {
                     "3000": "HTTP"
                   },
-                            "environment": {
-              "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
-              "DEPLOYMENT_ENV": "${{ env.DEPLOYMENT_ENV }}",
-              "GIT_SHA": "${{ github.sha }}",
-              "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
-              "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
-              "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-              "AWS_REGION": "${{ env.AWS_REGION }}"
-            }
+                  "environment": {
+                    "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
+                    "DEPLOYMENT_ENV": "${{ env.DEPLOYMENT_ENV }}",
+                    "GIT_SHA": "${{ github.sha }}",
+                    "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
+                    "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
+                    "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+                    "AWS_REGION": "${{ env.AWS_REGION }}",
+                    "REDIS_HOST": "redis",
+                    "REDIS_PORT": "6379"
+                  }
+                },
+                "redis": {
+                  "image": "redis:7-alpine",
+                  "command": ["redis-server", "--save", "", "--appendonly", "no"],
+                  "ports": {}
                 }
               }' \
               --public-endpoint '{
