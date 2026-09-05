@@ -102,8 +102,10 @@ export const useApiClient = (): AxiosInstance => {
     const instance = axios.create({
       baseURL: environment.apiUrl,
       timeout: 30000,
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
+        'X-Client-Platform': 'web',
       },
     });
 

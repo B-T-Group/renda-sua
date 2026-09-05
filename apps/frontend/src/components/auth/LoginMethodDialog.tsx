@@ -1,15 +1,15 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import EmailOutlined from '@mui/icons-material/EmailOutlined';
-import LockOutlined from '@mui/icons-material/LockOutlined';
 import SmsOutlined from '@mui/icons-material/SmsOutlined';
 import {
+  Alert,
   Box,
   Button,
   Dialog,
   DialogContent,
   IconButton,
   Stack,
+  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -18,8 +18,8 @@ import { alpha } from '@mui/material/styles';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useApiClient } from '../../hooks/useApiClient';
 import {
-  EmailSignInMode,
   getBrowserDefaultCountryCode,
   getDefaultLoginMethod,
   LoginIdentifierMode,
@@ -40,54 +40,6 @@ function resolveReturnTo(returnTo?: string): string {
   return path || '/app';
 }
 
-function MethodChip({
-  selected,
-  label,
-  onClick,
-  disabled,
-}: {
-  selected: boolean;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  const theme = useTheme();
-  return (
-    <Box
-      component="button"
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-pressed={selected}
-      sx={{
-        flex: 1,
-        border: 0,
-        cursor: disabled ? 'default' : 'pointer',
-        py: 1.1,
-        px: 1.5,
-        borderRadius: 1.5,
-        bgcolor: selected ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
-        color: selected ? 'primary.main' : 'text.secondary',
-        fontWeight: selected ? 700 : 500,
-        fontSize: '0.875rem',
-        fontFamily: 'inherit',
-        transition: theme.transitions.create(['background-color', 'color'], {
-          duration: theme.transitions.duration.shorter,
-        }),
-        '&:hover': disabled
-          ? undefined
-          : {
-              bgcolor: selected
-                ? alpha(theme.palette.primary.main, 0.16)
-                : alpha(theme.palette.action.hover, 0.04),
-            },
-      }}
-    >
-      {label}
-    </Box>
-  );
-}
-
 const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
   open,
   onClose,
@@ -96,51 +48,86 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
+  const apiClient = useApiClient();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  const { loginWithRedirect } = useAuth0();
   const resolvedReturnTo = resolveReturnTo(returnTo);
 
+  const browserCountry = getBrowserDefaultCountryCode();
   const [identifierMode, setIdentifierMode] = useState<LoginIdentifierMode>(() =>
-    getDefaultLoginMethod(getBrowserDefaultCountryCode())
+    getDefaultLoginMethod(browserCountry)
   );
-  const [emailSignInMode, setEmailSignInMode] = useState<EmailSignInMode>('otp');
+  const [emailValue, setEmailValue] = useState('');
+  const [phoneValue, setPhoneValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const redirectToAuth = useCallback(
-    async (authorizationParams: Record<string, string>) => {
+  const startLogin = useCallback(
+    async (contactInfo: { email?: string; phone_number?: string }) => {
       setSubmitting(true);
+      setError(null);
       try {
-        await loginWithRedirect({
-          authorizationParams,
-          appState: { returnTo: resolvedReturnTo },
+        await apiClient.post('/auth/login/start-otp', contactInfo, {
+          headers: { 'X-Client-Platform': 'web' },
         });
-      } catch (err: unknown) {
-        console.error('loginWithRedirect failed:', err);
+
+        const destination = contactInfo.email || contactInfo.phone_number || '';
+        if (contactInfo.email) {
+          sessionStorage.setItem('pendingLoginEmail', contactInfo.email);
+        }
+        if (contactInfo.phone_number) {
+          sessionStorage.setItem('pendingLoginPhone', contactInfo.phone_number);
+        }
+        sessionStorage.setItem(
+          'pendingLoginOtpExpiresAtMs',
+          String(Date.now() + 15 * 60 * 1000)
+        );
+        sessionStorage.setItem('pendingLoginDestination', destination);
+        sessionStorage.setItem('pendingLoginReturnTo', resolvedReturnTo);
+
+        navigate(`/otp-auth?flow=login`);
+        onClose();
+      } catch (err: any) {
         setSubmitting(false);
+        setError(
+          err?.response?.data?.error ||
+            err?.message ||
+            t('auth.loginError', 'Failed to send login code. Please try again.')
+        );
       }
     },
-    [loginWithRedirect, resolvedReturnTo]
+    [apiClient, navigate, onClose, resolvedReturnTo, t]
   );
 
   const handlePrimaryContinue = useCallback(() => {
     if (identifierMode === 'phone') {
-      void redirectToAuth({ connection: 'sms' });
-      return;
+      const trimmed = phoneValue.trim();
+      if (!trimmed) {
+        setError(t('auth.phoneRequired', 'Please enter your phone number'));
+        return;
+      }
+      void startLogin({ phone_number: trimmed });
+    } else {
+      const trimmed = emailValue.trim().toLowerCase();
+      if (!trimmed) {
+        setError(t('auth.emailRequired', 'Please enter your email address'));
+        return;
+      }
+      if (!trimmed.includes('@')) {
+        setError(t('auth.emailInvalid', 'Please enter a valid email address'));
+        return;
+      }
+      void startLogin({ email: trimmed });
     }
-    if (emailSignInMode === 'otp') {
-      void redirectToAuth({ connection: 'email' });
-      return;
-    }
-    void redirectToAuth({ screen_hint: 'login' });
-  }, [identifierMode, emailSignInMode, redirectToAuth]);
+  }, [identifierMode, phoneValue, emailValue, startLogin, t]);
 
   const switchToEmail = useCallback(() => {
     setIdentifierMode('email');
-    setEmailSignInMode('otp');
+    setError(null);
   }, []);
 
   const switchToPhone = useCallback(() => {
     setIdentifierMode('phone');
+    setError(null);
   }, []);
 
   const handleSignup = useCallback(() => {
@@ -149,37 +136,32 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
   }, [navigate, onClose]);
 
   const primaryLabel = useMemo(() => {
-    if (identifierMode === 'phone' || emailSignInMode === 'otp') {
-      return t('auth.sendCodeButton', 'Send code');
-    }
-    return t('auth.signIn', 'Sign In');
-  }, [identifierMode, emailSignInMode, t]);
+    return t('auth.sendCodeButton', 'Send code');
+  }, [t]);
 
   const primaryHint = useMemo(() => {
     if (identifierMode === 'phone') {
       return t(
         'auth.loginMethodHintPhoneShort',
-        'We’ll open a secure page to text you a short code.'
-      );
-    }
-    if (emailSignInMode === 'otp') {
-      return t(
-        'auth.loginMethodHintEmailOtpShort',
-        'We’ll open a secure page to email you a one-time code.'
+        'We'll text you a 4-digit code to verify your identity.'
       );
     }
     return t(
-      'auth.loginMethodHintPasswordShort',
-      'We’ll open a secure page to sign in with your email and password.'
+      'auth.loginMethodHintEmailOtpShort',
+      'We'll email you a 4-digit code to verify your identity.'
     );
-  }, [identifierMode, emailSignInMode, t]);
+  }, [identifierMode, t]);
 
-  const PrimaryIcon =
-    identifierMode === 'phone'
-      ? SmsOutlined
-      : emailSignInMode === 'otp'
-        ? EmailOutlined
-        : LockOutlined;
+  const PrimaryIcon = identifierMode === 'phone' ? SmsOutlined : EmailOutlined;
+
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !submitting) {
+        handlePrimaryContinue();
+      }
+    },
+    [submitting, handlePrimaryContinue]
+  );
 
   return (
     <Dialog
@@ -244,14 +226,19 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
         >
           {t(
             'auth.loginSubtitle',
-            'Sign in with a one-time code — or use your password if you prefer.'
+            'Sign in with a one-time code sent to your email or phone.'
           )}
         </Typography>
       </Box>
 
       <DialogContent sx={{ px: 3, pb: fullScreen ? 4 : 3, pt: 2 }}>
         <Stack spacing={2}>
-          {/* Primary path card */}
+          {error && (
+            <Alert severity="error" onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
           <Box
             sx={{
               border: 1,
@@ -261,7 +248,7 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
               bgcolor: alpha(theme.palette.primary.main, 0.03),
             }}
           >
-            <Stack direction="row" spacing={1.5} alignItems="flex-start">
+            <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ mb: 2 }}>
               <Box
                 sx={{
                   width: 44,
@@ -281,9 +268,7 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
                 <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.25 }}>
                   {identifierMode === 'phone'
                     ? t('auth.phoneLoginTitle', 'Continue with phone')
-                    : emailSignInMode === 'otp'
-                      ? t('auth.emailOtpLoginTitle', 'Continue with email code')
-                      : t('auth.passwordLoginTitle', 'Continue with password')}
+                    : t('auth.emailOtpLoginTitle', 'Continue with email code')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.45 }}>
                   {primaryHint}
@@ -291,32 +276,48 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
               </Box>
             </Stack>
 
-            {identifierMode === 'email' ? (
-              <Box
-                sx={{
-                  mt: 2,
-                  display: 'flex',
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 2,
-                  p: 0.5,
-                  bgcolor: 'background.paper',
+            {identifierMode === 'phone' ? (
+              <TextField
+                fullWidth
+                placeholder={
+                  browserCountry === 'CM' || browserCountry === 'GA'
+                    ? '+237 6 XX XX XX XX'
+                    : t('auth.phonePlaceholder', 'Phone number')
+                }
+                value={phoneValue}
+                onChange={(e) => setPhoneValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                disabled={submitting}
+                autoFocus
+                inputProps={{
+                  inputMode: 'tel',
                 }}
-              >
-                <MethodChip
-                  selected={emailSignInMode === 'otp'}
-                  label={t('auth.signInWithOtp', 'Send code')}
-                  onClick={() => setEmailSignInMode('otp')}
-                  disabled={submitting}
-                />
-                <MethodChip
-                  selected={emailSignInMode === 'password'}
-                  label={t('auth.signInWithPassword', 'Password')}
-                  onClick={() => setEmailSignInMode('password')}
-                  disabled={submitting}
-                />
-              </Box>
-            ) : null}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+            ) : (
+              <TextField
+                fullWidth
+                type="email"
+                placeholder={t('auth.emailPlaceholder', 'you@example.com')}
+                value={emailValue}
+                onChange={(e) => setEmailValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                disabled={submitting}
+                autoFocus
+                inputProps={{
+                  inputMode: 'email',
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+            )}
           </Box>
 
           <Button

@@ -29,7 +29,6 @@ const OtpAuthPage: React.FC = () => {
   const { t } = useTranslation();
   const [search] = useSearchParams();
   const flow = search.get('flow') || 'login';
-  const emailFromQuery = search.get('email') || '';
   const isSignup = flow === 'signup';
   const attemptId = useMemo(
     () => sessionStorage.getItem('pendingSignupAttemptId') || '',
@@ -45,18 +44,30 @@ const OtpAuthPage: React.FC = () => {
     []
   );
   const initialEmail = useMemo(() => {
-    if (emailFromQuery) {
-      sessionStorage.setItem('pendingLoginEmail', emailFromQuery);
-      return emailFromQuery;
-    }
     const key = isSignup ? 'pendingSignupEmail' : 'pendingLoginEmail';
     return sessionStorage.getItem(key) || '';
-  }, [emailFromQuery, isSignup]);
-  const initialPhone = useMemo(
-    () => (isSignup ? sessionStorage.getItem('pendingSignupPhone') || '' : ''),
-    [isSignup]
+  }, [isSignup]);
+  const initialPhone = useMemo(() => {
+    const key = isSignup ? 'pendingSignupPhone' : 'pendingLoginPhone';
+    return sessionStorage.getItem(key) || '';
+  }, [isSignup]);
+  const maskedDestination = useMemo(() => {
+    const dest = sessionStorage.getItem('pendingLoginDestination') || initialEmail;
+    if (dest.includes('@')) {
+      const [local, domain] = dest.split('@');
+      return `${local.slice(0, 2)}***@${domain}`;
+    }
+    if (dest.length > 6) {
+      return `***${dest.slice(-4)}`;
+    }
+    return dest;
+  }, [initialEmail]);
+  const returnTo = useMemo(
+    () => sessionStorage.getItem('pendingLoginReturnTo') || '/app',
+    []
   );
-  const [email, setEmail] = useState(initialEmail);
+  const [email] = useState(initialEmail);
+  const [resendCooldownMs, setResendCooldownMs] = useState(0);
   const [digits, setDigits] = useState<string[]>(
     Array.from({ length: OTP_LENGTH }, () => '')
   );
@@ -79,6 +90,7 @@ const OtpAuthPage: React.FC = () => {
   useEffect(() => {
     const interval = window.setInterval(() => {
       setRemainingMs((ms) => Math.max(0, ms - 1000));
+      setResendCooldownMs((ms) => Math.max(0, ms - 1000));
     }, 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -88,6 +100,17 @@ const OtpAuthPage: React.FC = () => {
   const minutes = Math.floor(remainingMs / 1000 / 60);
   const seconds = Math.floor((remainingMs / 1000) % 60);
   const timerLabel = `${minutes}:${String(seconds).padStart(2, '0')}`;
+
+  const isOtpComplete = useMemo(
+    () => otp.length === OTP_LENGTH && /^\d{4}$/.test(otp),
+    [otp]
+  );
+
+  useEffect(() => {
+    if (isOtpComplete && !loading && !isExpired) {
+      void handleVerify();
+    }
+  }, [isOtpComplete]);
 
   const handleDigitChange = (idx: number, next: string) => {
     const value = next.replace(/\D/g, '').slice(-1);
@@ -184,10 +207,20 @@ const OtpAuthPage: React.FC = () => {
         return;
       }
 
-      const res = await apiClient.post('/auth/login/verify-otp', { email, otp });
+      const payload = initialEmail
+        ? { email: initialEmail, otp }
+        : initialPhone
+          ? { phone_number: initialPhone, otp }
+          : { email, otp };
+      const res = await apiClient.post('/auth/login/verify-otp', payload);
       setPasswordlessSession(res.data);
       await apiClient.get('/users/me');
-      navigate('/app');
+      sessionStorage.removeItem('pendingLoginEmail');
+      sessionStorage.removeItem('pendingLoginPhone');
+      sessionStorage.removeItem('pendingLoginDestination');
+      sessionStorage.removeItem('pendingLoginReturnTo');
+      sessionStorage.removeItem('pendingLoginOtpExpiresAtMs');
+      navigate(returnTo);
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
@@ -200,7 +233,7 @@ const OtpAuthPage: React.FC = () => {
   };
 
   const handleResend = async () => {
-    if (resendBusy || isExpired) return;
+    if (resendBusy || isExpired || resendCooldownMs > 0) return;
     setResendBusy(true);
     setError(null);
     try {
@@ -229,10 +262,13 @@ const OtpAuthPage: React.FC = () => {
           );
         }
         setDigits(Array.from({ length: OTP_LENGTH }, () => ''));
+        setResendCooldownMs(120 * 1000);
         return;
       }
-      await apiClient.post('/auth/login/start-otp', { email });
+      const payload = initialEmail ? { email: initialEmail } : initialPhone ? { phone_number: initialPhone } : { email };
+      await apiClient.post('/auth/login/start-otp', payload);
       setDigits(Array.from({ length: OTP_LENGTH }, () => ''));
+      setResendCooldownMs(120 * 1000);
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
@@ -268,23 +304,32 @@ const OtpAuthPage: React.FC = () => {
     );
   }
 
+  const resendCooldownSec = Math.ceil(resendCooldownMs / 1000);
+
   return (
     <Container maxWidth="sm" sx={{ py: 5 }}>
       <Paper sx={{ p: 4, borderRadius: 3 }}>
         <Stack spacing={2.5}>
           <Logo variant="default" size="medium" />
           <Typography variant="h4">
-            {isSignup
-              ? t('auth.otpSignup.title', 'Verify your contact')
-              : t('auth.otpLogin.titleShort', 'Log in with OTP')}
+            {t('auth.otp.verificationTitle', 'Enter verification code')}
           </Typography>
           <Typography color="text.secondary">
-            {channel === 'sms'
-              ? t('auth.otp.enterCodeSms', 'Enter the OTP sent to {{phone}}.', {
+            {isSignup && channel === 'sms'
+              ? t('auth.otp.enterCodeSms', 'Enter the code sent to {{phone}}.', {
                   phone: contactLabel,
                 })
-              : t('auth.otp.enterCode', 'Enter the OTP sent to your email.')}
+              : isSignup
+                ? t('auth.otp.enterCode', 'Enter the code sent to your email.')
+                : channel === 'sms' && initialPhone
+                  ? t('auth.otp.loginCodeSms', 'We sent a 4-digit code to {{phone}}.', { phone: maskedDestination })
+                  : t('auth.otp.loginCodeEmail', 'We sent a 4-digit code to {{email}}.', { email: maskedDestination })}
           </Typography>
+          {!isSignup && channel === 'sms' && (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              {t('auth.otp.smsMayTake', 'SMS delivery may take 30-60 seconds.')}
+            </Typography>
+          )}
           <Box
             sx={{
               display: 'flex',
@@ -307,14 +352,6 @@ const OtpAuthPage: React.FC = () => {
             ) : null}
           </Box>
           {error && <Alert severity="error">{error}</Alert>}
-          {!isSignup || channel === 'email' ? (
-            <TextField
-              label={t('auth.emailAddressLabel', 'Email address')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isSignup}
-            />
-          ) : null}
           <Box
             onPaste={handlePaste}
             sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}
@@ -351,20 +388,22 @@ const OtpAuthPage: React.FC = () => {
           </Button>
           <Button
             color="inherit"
-            disabled={resendBusy || isExpired}
+            disabled={resendBusy || isExpired || resendCooldownMs > 0}
             onClick={() => void handleResend()}
           >
             {resendBusy
               ? t('common.loading', 'Loading…')
-              : t('auth.otp.resend', 'Resend code')}
+              : resendCooldownMs > 0
+                ? t('auth.otp.resendIn', 'Resend in {{seconds}}s', { seconds: resendCooldownSec })
+                : t('auth.otp.resend', 'Resend code')}
           </Button>
-          {isSignup ? (
-            <Button color="inherit" onClick={() => navigate('/signup')}>
-              {channel === 'sms'
-                ? t('auth.otp.changeNumber', 'Change phone number')
-                : t('auth.otp.changeEmail', 'Change email')}
-            </Button>
-          ) : null}
+          <Button color="inherit" onClick={() => navigate(isSignup ? '/signup' : '/')}>
+            {isSignup && channel === 'sms'
+              ? t('auth.otp.changeNumber', 'Change phone number')
+              : isSignup
+                ? t('auth.otp.changeEmail', 'Change email')
+                : t('auth.otp.changeContact', 'Use a different email or phone')}
+          </Button>
         </Stack>
       </Paper>
     </Container>

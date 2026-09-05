@@ -3,6 +3,11 @@ import * as jwt from 'jsonwebtoken';
 import { Auth0Service } from './auth0.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
+import { SessionStoreService } from './session-store.service';
+import { LockoutService } from './lockout.service';
+import { LoginStartDto } from './dto/login-start.dto';
+import { LoginVerifyDto } from './dto/login-verify.dto';
+import type { ClientPlatform } from './platform.decorator';
 
 interface Auth0IdTokenClaims {
   sub?: string;
@@ -18,12 +23,41 @@ interface TokenData {
   expires_in: number;
 }
 
+interface WebLoginResult {
+  sessionId: string;
+  response: {
+    success: boolean;
+    verified: boolean;
+    access_token: string;
+    id_token?: string;
+    token_type: string;
+    expires_in: number;
+  };
+}
+
+interface MobileLoginResult {
+  sessionId?: never;
+  response: {
+    success: boolean;
+    verified: boolean;
+    access_token: string;
+    id_token?: string;
+    refresh_token?: string;
+    token_type: string;
+    expires_in: number;
+  };
+}
+
+type LoginResult = WebLoginResult | MobileLoginResult;
+
 @Injectable()
 export class LoginService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
-    private readonly businessProvisioning: BusinessProvisioningService
+    private readonly businessProvisioning: BusinessProvisioningService,
+    private readonly sessionStore: SessionStoreService,
+    private readonly lockout: LockoutService
   ) {}
 
   private normalizeEmail(email: string): string {
@@ -103,10 +137,7 @@ export class LoginService {
     return result.users?.[0] || null;
   }
 
-  async startLoginOtp(body: {
-    email?: string;
-    phone_number?: string;
-  }): Promise<void> {
+  async startLoginOtp(body: LoginStartDto): Promise<void> {
     const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
     const phone = body.phone_number?.trim()
       ? this.normalizePhone(body.phone_number)
@@ -208,11 +239,12 @@ export class LoginService {
     );
   }
 
-  async verifyLoginOtp(body: {
-    email?: string;
-    phone_number?: string;
-    otp: string;
-  }): Promise<TokenData> {
+  async verifyLoginOtp(
+    body: LoginVerifyDto,
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<LoginResult> {
     const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
     const phone = body.phone_number?.trim()
       ? this.normalizePhone(body.phone_number)
@@ -234,18 +266,42 @@ export class LoginService {
       );
     }
     if (email) {
-      return this.verifyLoginOtpWithEmail(email, otp);
+      return this.verifyLoginOtpWithEmail(email, otp, platform, ipAddress, userAgent);
     }
-    return this.verifyLoginOtpWithPhone(phone, otp);
+    return this.verifyLoginOtpWithPhone(phone, otp, platform, ipAddress, userAgent);
   }
 
   private async verifyLoginOtpWithEmail(
     email: string,
-    otp: string
-  ): Promise<TokenData> {
-    const tokenData = (await (this.isTestUser(email, false)
-      ? this.auth0Service.verifyTestUserEmail(email)
-      : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
+    otp: string,
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<LoginResult> {
+    // Check lockout status
+    if (this.lockout.isLockedOut(email)) {
+      const remainingMs = this.lockout.getRemainingLockoutMs(email);
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      throw new HttpException(
+        { 
+          success: false, 
+          error: `Too many failed attempts. Try again in ${remainingMin} minute(s).` 
+        },
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+
+    let tokenData: TokenData;
+    try {
+      tokenData = (await (this.isTestUser(email, false)
+        ? this.auth0Service.verifyTestUserEmail(email)
+        : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
+    } catch (error: any) {
+      this.lockout.recordFailure(email);
+      throw error;
+    }
+
+    this.lockout.recordSuccess(email);
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     const user = await this.getUserByEmail(email);
@@ -260,20 +316,81 @@ export class LoginService {
       try {
         await this.businessProvisioning.ensureContractForUser(user.id);
       } catch {
-        return tokenData;
+        // Continue even if contract provisioning fails
       }
       await this.markEmailVerifiedIfNeeded(user.id, true);
     }
-    return tokenData;
+
+    if (platform === 'web') {
+      const sessionId = this.sessionStore.generateSessionId();
+      await this.sessionStore.createSession(sessionId, {
+        userId: user.id,
+        auth0RefreshToken: tokenData.refresh_token!,
+        auth0AccessToken: tokenData.access_token,
+        auth0IdToken: tokenData.id_token,
+        createdAt: Date.now(),
+        lastRefreshedAt: Date.now(),
+        userAgent,
+        ipAddress,
+      });
+
+      return {
+        sessionId,
+        response: {
+          success: true,
+          verified: true,
+          access_token: tokenData.access_token,
+          id_token: tokenData.id_token,
+          token_type: tokenData.token_type,
+          expires_in: tokenData.expires_in,
+        },
+      };
+    }
+
+    return {
+      response: {
+        success: true,
+        verified: true,
+        access_token: tokenData.access_token,
+        id_token: tokenData.id_token,
+        refresh_token: tokenData.refresh_token,
+        token_type: tokenData.token_type,
+        expires_in: tokenData.expires_in,
+      },
+    };
   }
 
   private async verifyLoginOtpWithPhone(
     phoneNumber: string,
-    otp: string
-  ): Promise<TokenData> {
-    const tokenData = (await (this.isTestUser(phoneNumber, true)
-      ? this.auth0Service.verifyTestUserPhone(phoneNumber)
-      : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
+    otp: string,
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<LoginResult> {
+    // Check lockout status
+    if (this.lockout.isLockedOut(phoneNumber)) {
+      const remainingMs = this.lockout.getRemainingLockoutMs(phoneNumber);
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      throw new HttpException(
+        { 
+          success: false, 
+          error: `Too many failed attempts. Try again in ${remainingMin} minute(s).` 
+        },
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+
+    let tokenData: TokenData;
+    try {
+      tokenData = (await (this.isTestUser(phoneNumber, true)
+        ? this.auth0Service.verifyTestUserPhone(phoneNumber)
+        : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
+    } catch (error: any) {
+      this.lockout.recordFailure(phoneNumber);
+      throw error;
+    }
+
+    this.lockout.recordSuccess(phoneNumber);
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     const user = await this.getUserByPhoneNumber(phoneNumber);
@@ -288,11 +405,48 @@ export class LoginService {
       try {
         await this.businessProvisioning.ensureContractForUser(user.id);
       } catch {
-        return tokenData;
+        // Continue even if contract provisioning fails
       }
       await this.markPhoneVerifiedIfNeeded(user.id, true);
     }
-    return tokenData;
+
+    if (platform === 'web') {
+      const sessionId = this.sessionStore.generateSessionId();
+      await this.sessionStore.createSession(sessionId, {
+        userId: user.id,
+        auth0RefreshToken: tokenData.refresh_token!,
+        auth0AccessToken: tokenData.access_token,
+        auth0IdToken: tokenData.id_token,
+        createdAt: Date.now(),
+        lastRefreshedAt: Date.now(),
+        userAgent,
+        ipAddress,
+      });
+
+      return {
+        sessionId,
+        response: {
+          success: true,
+          verified: true,
+          access_token: tokenData.access_token,
+          id_token: tokenData.id_token,
+          token_type: tokenData.token_type,
+          expires_in: tokenData.expires_in,
+        },
+      };
+    }
+
+    return {
+      response: {
+        success: true,
+        verified: true,
+        access_token: tokenData.access_token,
+        id_token: tokenData.id_token,
+        refresh_token: tokenData.refresh_token,
+        token_type: tokenData.token_type,
+        expires_in: tokenData.expires_in,
+      },
+    };
   }
 
   private assertTokenPayload(tokenData: TokenData): void {
@@ -308,6 +462,72 @@ export class LoginService {
         HttpStatus.BAD_GATEWAY
       );
     }
+  }
+
+  async refreshSession(
+    sessionId: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<{
+    newSessionId?: string;
+    response: {
+      success: boolean;
+      access_token: string;
+      id_token?: string;
+      token_type: string;
+      expires_in: number;
+    };
+  }> {
+    const session = await this.sessionStore.getSession(sessionId);
+    if (!session) {
+      throw new HttpException(
+        { success: false, error: 'Invalid or expired session' },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
+    try {
+      const refreshed = await this.auth0Service.refreshAccessToken(
+        session.auth0RefreshToken
+      );
+
+      const newSessionId = await this.sessionStore.rotateSession(sessionId);
+      if (!newSessionId) {
+        throw new HttpException(
+          { success: false, error: 'Session rotation failed' },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+
+      await this.sessionStore.updateSession(newSessionId, {
+        auth0AccessToken: refreshed.access_token,
+        auth0IdToken: refreshed.id_token,
+        lastRefreshedAt: Date.now(),
+        userAgent,
+        ipAddress,
+      });
+
+      return {
+        newSessionId,
+        response: {
+          success: true,
+          access_token: refreshed.access_token,
+          id_token: refreshed.id_token,
+          token_type: refreshed.token_type,
+          expires_in: refreshed.expires_in,
+        },
+      };
+    } catch (error: any) {
+      await this.sessionStore.deleteSession(sessionId);
+      throw new HttpException(
+        { success: false, error: 'Token refresh failed' },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+  }
+
+  async destroySession(sessionId: string): Promise<void> {
+    await this.sessionStore.deleteSession(sessionId);
   }
 }
 

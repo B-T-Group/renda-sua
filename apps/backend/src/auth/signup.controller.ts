@@ -7,7 +7,8 @@ import {
   HttpStatus,
   Post,
   Query,
-  Request,
+  Req,
+  Res,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -20,19 +21,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { RENDASUA_PLATFORM_HEADER } from '../agents/agent-location-claim.util';
 import { resolveMetaActionSource } from '../meta-conversions/resolve-meta-action-source.util';
 import { CurrentUser } from './user.decorator';
 import { Public } from './public.decorator';
-import {
-  SignupAttemptStartResult,
-  SignupCreatedUser,
-  SignupLaunchPromoResult,
-  SignupService,
-} from './signup.service';
+import type { ClientPlatform } from './platform.decorator';
+import { Platform } from './platform.decorator';
+import { SignupAttemptStartResult, SignupService } from './signup.service';
 import { SignupStartDto } from './dto/signup-start.dto';
 import { SignupResendOtpDto, SignupVerifyOtpDto } from './dto/signup-otp.dto';
-import { Auth0TokenResponse } from './auth0.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -86,7 +84,7 @@ export class SignupController {
   @ApiResponse({ status: 409, description: 'Email or phone already taken' })
   async signupStart(
     @Body() body: SignupStartDto,
-    @Request() req: { ip?: string; headers?: Record<string, unknown> },
+    @Req() req: { ip?: string; headers?: Record<string, unknown> },
     @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ): Promise<{ success: boolean } & SignupAttemptStartResult> {
     const ua = req.headers?.['user-agent'];
@@ -137,26 +135,36 @@ export class SignupController {
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @ApiOperation({
     summary:
-      'Verify signup OTP, create the durable account, and return Auth0 tokens',
+      'Verify signup OTP, create the durable account. Web clients receive HttpOnly session cookie; mobile clients receive tokens in JSON.',
   })
   @ApiBody({ type: SignupVerifyOtpDto })
   @ApiResponse({ status: 200, description: 'Account created and authenticated' })
-  async verifyOtp(@Body() body: SignupVerifyOtpDto): Promise<{
-    success: boolean;
-    verified: true;
-    attemptId: string;
-    user: SignupCreatedUser;
-    launchPromo: SignupLaunchPromoResult | null;
-  } & Auth0TokenResponse> {
-    const result = await this.signupService.verifySignupOtp(body);
-    return {
-      success: true,
-      verified: true,
-      attemptId: body.attemptId,
-      user: result.user,
-      launchPromo: result.launchPromo,
-      ...result.tokens,
-    };
+  async verifyOtp(
+    @Body() body: SignupVerifyOtpDto,
+    @Platform() platform: ClientPlatform,
+    @Req() req: { ip?: string; headers?: Record<string, unknown> },
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const result = await this.signupService.verifySignupOtp(
+      body,
+      platform,
+      req.ip,
+      typeof req.headers?.['user-agent'] === 'string'
+        ? req.headers['user-agent']
+        : undefined
+    );
+
+    if (platform === 'web' && result.sessionId) {
+      res.cookie('rs_session', result.sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        path: '/',
+      });
+    }
+
+    return result.response;
   }
 
   @Post('signup/complete')
