@@ -8921,8 +8921,9 @@ export class OrdersService {
     let recipientData = orderData.recipient;
     if (orderData.recipient_id) {
       try {
+        const ctx = this.hasuraUserService.resolveContext();
         const savedRecipient = await this.recipientsService.getRecipient(
-          { userId: user.id, authToken: '' } as any,
+          ctx,
           orderData.recipient_id
         );
         recipientData = {
