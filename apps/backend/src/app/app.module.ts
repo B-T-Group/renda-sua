@@ -91,6 +91,7 @@ import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payme
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { DelegationsModule } from '../delegations/delegations.module';
+import { CatalogStopsModule } from '../catalog-stops/catalog-stops.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -212,6 +213,7 @@ import { AppService } from './app.service';
     LaunchPromoModule,
     BusinessesModule,
     DelegationsModule,
+    CatalogStopsModule,
     AccountRechargeModule,
     MobilePaymentPhonesModule,
   ],
