@@ -1,6 +1,6 @@
-import type { PersonaId } from '../../users/persona.types';
-import type { MetaActionSource } from '../../meta-conversions/meta-conversions.types';
-import type { Auth0TokenResponse } from '../auth0.service';
+import type { PersonaId } from '../users/persona.types';
+import type { MetaActionSource } from '../meta-conversions/meta-conversions.types';
+import type { Auth0TokenResponse } from './auth0.service';
 
 export const SIGNUP_ATTEMPT_TTL_MS = 15 * 60 * 1000;
 export const SIGNUP_OTP_RESEND_COOLDOWN_MS = 120 * 1000;
