@@ -4,6 +4,7 @@
  * Run from repo root:
  *   npm run create:whatsapp-templates -- --access-token "$TOKEN"
  *   npm run create:whatsapp-templates -- --dry-run --access-token "$TOKEN"
+ *   npm run create:whatsapp-templates -- --force-recreate rs_order_created --access-token "$TOKEN"
  *   npm run create:whatsapp-templates -- --only rs_login_code
  *
  * Token also read from WHATSAPP_ACCESS_TOKEN. WABA id defaults to
@@ -27,6 +28,7 @@ type CliOptions = {
   wabaId: string;
   dryRun: boolean;
   only: Set<string> | null;
+  forceRecreate: Set<string>;
   apiVersion: string;
 };
 
@@ -80,13 +82,20 @@ async function main(): Promise<void> {
 function parseOptions(argv: string[]): CliOptions {
   const raw = parseRawFlags(argv);
   const only = raw.only?.split(',').map((name) => name.trim()).filter(Boolean);
+  const forceRecreate = namesFromFlag(raw['force-recreate']);
   return {
     accessToken: raw['access-token'] || process.env.WHATSAPP_ACCESS_TOKEN || '',
     wabaId: raw['waba-id'] || process.env.WHATSAPP_WABA_ID || DEFAULT_WABA_ID,
     dryRun: raw['dry-run'] === 'true',
     only: only?.length ? new Set(only) : null,
+    forceRecreate,
     apiVersion: raw['api-version'] || process.env.WHATSAPP_API_VERSION || DEFAULT_API_VERSION,
   };
+}
+
+function namesFromFlag(raw: string | undefined): Set<string> {
+  if (!raw) return new Set();
+  return new Set(raw.split(',').map((name) => name.trim()).filter(Boolean));
 }
 
 function parseRawFlags(argv: string[]): Record<string, string> {
@@ -95,6 +104,13 @@ function parseRawFlags(argv: string[]): Record<string, string> {
     const arg = argv[i];
     if (arg === '--dry-run') {
       flags['dry-run'] = 'true';
+      continue;
+    }
+    if (arg === '--force-recreate') {
+      const next = argv[i + 1];
+      flags['force-recreate'] =
+        next && !next.startsWith('--') ? next : flags['force-recreate'] || '';
+      if (next && !next.startsWith('--')) i += 1;
       continue;
     }
     if (arg === '--help' || arg === '-h') {
@@ -118,14 +134,15 @@ function printUsage(): void {
   console.error(`Usage:
   npm run create:whatsapp-templates -- --access-token TOKEN
   npm run create:whatsapp-templates -- --dry-run --access-token TOKEN
-  npm run create:whatsapp-templates -- --only rs_login_code,rs_delivery_pin
+  npm run create:whatsapp-templates -- --force-recreate rs_order_created --access-token TOKEN
 
 Options:
-  --access-token   Meta user/system token (or WHATSAPP_ACCESS_TOKEN)
-  --waba-id        WhatsApp Business Account id (default ${DEFAULT_WABA_ID})
-  --dry-run        Print payloads without calling Graph
-  --only           Comma-separated template names
-  --api-version    Graph version (default ${DEFAULT_API_VERSION})`);
+  --access-token    Meta user/system token (or WHATSAPP_ACCESS_TOKEN)
+  --waba-id         WhatsApp Business Account id (default ${DEFAULT_WABA_ID})
+  --dry-run         Print payloads without calling Graph
+  --only            Comma-separated template names
+  --force-recreate  Delete then create these names (approved templates cannot be edited)
+  --api-version     Graph version (default ${DEFAULT_API_VERSION})`);
 }
 
 function requireTemplates(only: Set<string> | null): CatalogTemplate[] {
@@ -184,6 +201,9 @@ async function upsertOne(
     return 'skipped';
   }
   if (!current) return createOne(options, template, language, label);
+  if (options.forceRecreate.has(template.name)) {
+    return recreateOne(options, existing, template, language, label);
+  }
   if (!templateNeedsUpdate(current, template, language)) {
     console.log(`skip  ${label} — unchanged (${current.status ?? 'unknown'})`);
     return 'skipped';
@@ -200,6 +220,44 @@ async function createOne(
   const payload = buildCreatePayload(template, language);
   const url = `https://graph.facebook.com/${options.apiVersion}/${options.wabaId}/message_templates`;
   return writeTemplate(options, 'POST', url, payload, 'created', label);
+}
+
+async function recreateOne(
+  options: CliOptions,
+  existing: Map<string, GraphTemplate>,
+  template: CatalogTemplate,
+  language: TemplateLanguage,
+  label: string
+): Promise<UpsertResult> {
+  const deleted = await deleteTemplateName(options, existing, template.name);
+  if (!deleted) return 'failed';
+  return createOne(options, template, language, label);
+}
+
+async function deleteTemplateName(
+  options: CliOptions,
+  existing: Map<string, GraphTemplate>,
+  name: string
+): Promise<boolean> {
+  const keys = [...existing.keys()].filter((key) => key.startsWith(`${name}::`));
+  if (keys.length === 0) return true;
+  const params = new URLSearchParams({ name });
+  const url = `https://graph.facebook.com/${options.apiVersion}/${options.wabaId}/message_templates?${params}`;
+  console.log(`delete ${name} — recreating approved template`);
+  if (options.dryRun) {
+    for (const key of keys) existing.delete(key);
+    return true;
+  }
+  try {
+    await graphWrite('DELETE', url, options.accessToken);
+    for (const key of keys) existing.delete(key);
+    return true;
+  } catch (error) {
+    console.error(
+      `fail  delete ${name} — ${error instanceof Error ? error.message : error}`
+    );
+    return false;
+  }
 }
 
 async function updateOne(
@@ -232,7 +290,14 @@ async function writeTemplate(
     console.log(`${action} ${label} — id=${result.id ?? 'n/a'} status=${result.status ?? 'ok'}`);
     return action;
   } catch (error) {
-    console.error(`fail  ${label} — ${error instanceof Error ? error.message : error}`);
+    console.error(
+      `fail  ${label} — ${error instanceof Error ? error.message : error}`
+    );
+    if (action === 'updated') {
+      console.error(
+        `      approved templates cannot be edited; re-run with --force-recreate ${label.split(' ')[0]}`
+      );
+    }
     return 'failed';
   }
 }
@@ -246,15 +311,18 @@ async function graphGet<T extends { error?: GraphErrorBody }>(
 }
 
 async function graphWrite(
-  method: 'POST',
+  method: 'POST' | 'DELETE',
   url: string,
   token: string,
-  payload: Record<string, unknown>
+  payload?: Record<string, unknown>
 ): Promise<GraphWriteResponse> {
   const response = await fetch(url, {
     method,
-    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    headers: {
+      ...authHeaders(token),
+      ...(payload ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: payload ? JSON.stringify(payload) : undefined,
   });
   return readGraphJson<GraphWriteResponse>(response);
 }

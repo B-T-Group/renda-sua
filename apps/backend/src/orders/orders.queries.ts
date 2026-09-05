@@ -36,6 +36,17 @@ export const GET_ORDERS = gql`
       shipping_carrier
       shipped_at
       received_at
+      recipient_name
+      recipient_phone
+      recipient_notify_whatsapp
+      is_third_party_recipient
+      payer_name
+      payer_country
+      payer_payment_rail
+      fulfillment_country
+      is_diaspora_order
+      presentment_currency
+      presentment_amount
       created_at
       updated_at
       client {
@@ -214,6 +225,17 @@ export const GET_ORDER_BY_ID = gql`
       shipping_carrier
       shipped_at
       received_at
+      recipient_name
+      recipient_phone
+      recipient_notify_whatsapp
+      is_third_party_recipient
+      payer_name
+      payer_country
+      payer_payment_rail
+      fulfillment_country
+      is_diaspora_order
+      presentment_currency
+      presentment_amount
       created_at
       updated_at
       client {
@@ -687,6 +709,11 @@ export const GET_OPEN_ORDERS = gql`
     ) {
       id
       order_number
+      recipient_name
+      recipient_phone
+      is_third_party_recipient
+      is_diaspora_order
+      fulfillment_country
       business {
         name
       }

@@ -38,10 +38,11 @@ export class Auth0Service {
     await client.jobs.verifyEmail({ user_id: userId });
   }
 
-  private async postPasswordlessStart(
-    connection: 'email' | 'sms',
-    recipient: { email: string } | { phone_number: string }
-  ): Promise<void> {
+  private getPasswordlessApp(): {
+    domain: string;
+    clientId: string;
+    clientSecret?: string;
+  } {
     const auth0 = this.configService.get('auth0');
     const domain = auth0?.domain;
     const clientId = auth0?.clientId || auth0?.managementClientId;
@@ -49,6 +50,31 @@ export class Auth0Service {
     if (!domain || !clientId) {
       throw new Error('Auth0 passwordless configuration is missing');
     }
+    return { domain, clientId, clientSecret };
+  }
+
+  private throwMappedAuth0Error(error: any, fallbackMessage: string): never {
+    const status = Number(error?.response?.status);
+    if (status >= 400 && status < 500) {
+      throw new HttpException(
+        { success: false, error: fallbackMessage },
+        status === 429 ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.BAD_REQUEST
+      );
+    }
+    if (status >= 500) {
+      throw new HttpException(
+        { success: false, error: fallbackMessage },
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    throw error;
+  }
+
+  private async postPasswordlessStart(
+    connection: 'email' | 'sms',
+    recipient: { email: string } | { phone_number: string }
+  ): Promise<void> {
+    const { domain, clientId, clientSecret } = this.getPasswordlessApp();
     const body: Record<string, unknown> = {
       client_id: clientId,
       connection,
@@ -58,7 +84,11 @@ export class Auth0Service {
     if (clientSecret) {
       body.client_secret = clientSecret;
     }
-    await axios.post(`https://${domain}/passwordless/start`, body);
+    try {
+      await axios.post(`https://${domain}/passwordless/start`, body);
+    } catch (error: any) {
+      this.throwMappedAuth0Error(error, 'Unable to send login code');
+    }
   }
 
   async startEmailOtp(email: string): Promise<void> {
@@ -69,29 +99,38 @@ export class Auth0Service {
     await this.postPasswordlessStart('sms', { phone_number: phoneNumber });
   }
 
-  private async exchangePasswordlessOtp(
+  private async postPasswordlessToken(
     username: string,
     otp: string,
     realm: 'email' | 'sms'
   ): Promise<Auth0TokenResponse> {
-    const auth0 = this.configService.get('auth0');
-    const clientId = auth0?.clientId || auth0?.managementClientId;
-    const clientSecret = auth0?.clientSecret || auth0?.managementClientSecret;
-    const audience = auth0?.audience;
-    if (!auth0?.domain || !clientId || !clientSecret) {
+    const { domain, clientId, clientSecret } = this.getPasswordlessApp();
+    if (!clientSecret) {
       throw new Error('Auth0 OTP verification configuration is missing');
     }
-    const { data } = await axios.post(`https://${auth0.domain}/oauth/token`, {
+    const { data } = await axios.post(`https://${domain}/oauth/token`, {
       grant_type: 'http://auth0.com/oauth/grant-type/passwordless/otp',
       client_id: clientId,
       client_secret: clientSecret,
       username,
       otp,
       realm,
-      audience,
+      audience: this.configService.get('auth0')?.audience,
       scope: 'openid profile email offline_access',
     });
     return data;
+  }
+
+  private async exchangePasswordlessOtp(
+    username: string,
+    otp: string,
+    realm: 'email' | 'sms'
+  ): Promise<Auth0TokenResponse> {
+    try {
+      return await this.postPasswordlessToken(username, otp, realm);
+    } catch (error: any) {
+      this.throwMappedAuth0Error(error, 'Invalid or expired code');
+    }
   }
 
   async verifyEmailOtp(email: string, otp: string) {

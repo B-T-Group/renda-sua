@@ -2,6 +2,7 @@ import { Backdrop, Box, Typography, useTheme } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { brandTokens } from '../../theme/brandTokens';
 
 const orbit = keyframes`
   from { transform: rotate(0deg); }
@@ -77,7 +78,7 @@ const PersonaSwitchOverlay: React.FC<PersonaSwitchOverlayProps> = ({
           >
             <defs>
               <linearGradient id="personaSwitchRing" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#93c5fd" />
+                <stop offset="0%" stopColor={brandTokens.tint.primaryStrong} />
                 <stop offset="50%" stopColor="#4ade80" />
                 <stop offset="100%" stopColor="#fb923c" />
               </linearGradient>
@@ -154,7 +155,7 @@ const PersonaSwitchOverlay: React.FC<PersonaSwitchOverlayProps> = ({
             width: 12,
             height: 12,
             borderRadius: '50%',
-            bgcolor: '#93c5fd',
+            bgcolor: brandTokens.tint.primaryStrong,
             top: 16,
             left: '50%',
             ml: '-6px',

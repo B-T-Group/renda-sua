@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { CommerceIntegrationsModule } from '../commerce-integrations/commerce-integrations.module';
@@ -15,7 +15,6 @@ import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycl
 import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
 import { CreditsModule } from '../credits/credits.module';
 import { FoodModule } from '../food/food.module';
-import { NotificationsModule } from '../notifications/notifications.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
@@ -42,6 +41,8 @@ import { OrderStatusService } from './order-status.service';
 import { OrderCleanupCronService } from './order-cleanup-cron.service';
 import { OrderCleanupInternalController } from './order-cleanup-internal.controller';
 import { OrderCleanupService } from './order-cleanup.service';
+import { StorePickupReminderCronService } from './store-pickup-reminder-cron.service';
+import { StorePickupReminderService } from './store-pickup-reminder.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { AdminOrdersController } from './admin-orders.controller';
@@ -58,10 +59,14 @@ import { OrderRiskMonitorService } from './order-risk-monitor.service';
 import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
 
 @Module({
   imports: [
-    NotificationsModule,
+    // Lazy require avoids TDZ with OrdersModule <-> NotificationsModule cycle.
+    forwardRef(
+      () => require('../notifications/notifications.module').NotificationsModule
+    ),
     MessagingModule,
     LoyaltyModule,
     AdminModule,
@@ -113,6 +118,8 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     CancellationPolicyService,
     OrderCleanupService,
     OrderCleanupCronService,
+    StorePickupReminderService,
+    StorePickupReminderCronService,
     OrderSystemJobsService,
     OrderAcceptanceService,
     FulfillmentPromiseService,
@@ -124,6 +131,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     StripeAuthReconcilerService,
     AdminOrderContactService,
     AdminOrdersService,
+    WhatsAppOrderActionService,
   ],
   exports: [
     OrdersService,
@@ -142,6 +150,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
     OrderRiskIncidentsService,
     OrderRiskMonitorService,
     FailedDeliveriesService,
+    WhatsAppOrderActionService,
   ],
 })
 export class OrdersModule {}

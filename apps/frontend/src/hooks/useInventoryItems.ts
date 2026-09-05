@@ -52,6 +52,7 @@ export interface InventoryItem {
     id: string;
     name: string;
     description: string;
+    interest_only?: boolean;
     price: number;
     currency: string;
     weight: number;

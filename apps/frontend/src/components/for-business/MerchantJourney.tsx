@@ -11,7 +11,7 @@ import { Box, Typography, alpha } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const MerchantJourney: React.FC = () => {
   const { t } = useTranslation();
@@ -51,9 +51,9 @@ const MerchantJourney: React.FC = () => {
               textAlign: 'center',
               p: 2,
               borderRadius: 3,
-              bgcolor: alpha(FB_GREEN, 0.04),
+              bgcolor: alpha(FB_ACCENT, 0.04),
               border: '1px solid',
-              borderColor: alpha(FB_GREEN, 0.15),
+              borderColor: alpha(FB_ACCENT, 0.15),
               position: 'relative',
             }}
           >
@@ -62,7 +62,7 @@ const MerchantJourney: React.FC = () => {
                 width: 36,
                 height: 36,
                 borderRadius: '50%',
-                bgcolor: FB_GREEN,
+                bgcolor: FB_ACCENT,
                 color: '#fff',
                 fontWeight: 800,
                 fontSize: 14,
@@ -75,7 +75,7 @@ const MerchantJourney: React.FC = () => {
             >
               {i + 1}
             </Box>
-            <Box sx={{ color: FB_GREEN, mb: 1 }} aria-hidden>
+            <Box sx={{ color: FB_ACCENT, mb: 1 }} aria-hidden>
               {s.icon}
             </Box>
             <Typography variant="body2" sx={{ fontWeight: 700 }}>

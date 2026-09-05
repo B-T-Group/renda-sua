@@ -381,16 +381,32 @@ const NewComponent = () => {
 
 The theme system is used throughout the application components. Check existing components for usage patterns.
 
-## Color Palette
+## Color Palette — Trust Coast Blue
 
-The theme uses a carefully selected color palette:
+All brand colours live in `src/theme/brandTokens.ts` and flow into the MUI palette. Read them from `theme.palette.*` (or `brandTokens` when you are outside a component) instead of inlining a hex.
 
-- **Primary**: `#1e40af` (Deep blue) - Speed, trust, reliability
-- **Secondary**: `#16a34a` (Vibrant green) - Fast delivery, success
-- **Success**: `#16a34a` (Green) - Successful deliveries
-- **Warning**: `#f59e0b` (Amber) - Pending deliveries
-- **Error**: `#dc2626` (Red) - Delivery issues
-- **Info**: `#0891b2` (Cyan) - Tracking information
+| Role | Token | Hex | Used for |
+| --- | --- | --- | --- |
+| Primary | `palette.primary.main` | `#1E3A8A` | App chrome, links, secondary actions, client persona |
+| Secondary | `palette.secondary.main` | `#0F766E` | Delivery and agent chrome |
+| CTA | `palette.cta.main` | `#C2410C` | Buy / Pay / Checkout only, business persona accent |
+| CTA soft | `palette.cta.soft` | `#FFEDD5` | Low-emphasis accent surfaces |
+| Success | `palette.success.main` | `#15803D` | Completed deliveries and confirmations |
+| Error | `palette.error.main` | `#B91C1C` | Failures and destructive actions |
+| Warning | `palette.warning.main` | `#B45309` | Pending and needs-attention states |
+| Info | `palette.info.main` | `#0E7490` | Tracking information |
+| Background | `palette.background.default` | `#F8FAFC` | App background |
+| Paper | `palette.background.paper` | `#FFFFFF` | Cards and sheets |
+| Text | `palette.text.primary` | `#0F172A` | Body copy |
+| Muted | `palette.text.secondary` | `#64748B` | Secondary copy (AA on the app background) |
+
+### Colour rules
+
+- **Orange is purchase intent only.** Use `color="cta"` on Buy, Buy now, Order now, Place order, Proceed to checkout, Pay now and payment-retry buttons. Everything else — including "Add to cart" when it sits beside a purchase button — stays primary blue.
+- **Personas**: client → primary, agent → secondary, business → CTA/accent family (`constants/personaTheme.ts`).
+- **MoMo yellow** belongs on payment badges only, never on app chrome.
+- **White text on filled surfaces** only where contrast is ≥ 4.5:1. Every `*.main` token above clears that against `#FFFFFF`.
+- **Blockers** render as soft alert cards with a left accent (the `MuiAlert` theme override does this), not solid colour-on-colour banners.
 
 ## Typography Scale
 

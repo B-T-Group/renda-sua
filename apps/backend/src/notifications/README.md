@@ -97,7 +97,7 @@ The acting user is omitted from email/push recipient lists when their `users.id`
 
 **Push-only channel:** When **`push.enabled`** and Hasura shows that user has at least one valid Expo token or at least one web subscription (with VAPID configured), **Resend order-status emails and client Orange SMS** for that user are skipped for that event; only push is used.
 
-**Observability:** Each successful web push subscription send and each successful Expo chunk logs a line (`Push sent channel=web|expo userId=… orderId=…`). If valid Expo tokens exist but the Expo SDK client cannot be created while push is enabled, a **warning** is logged and Expo sends are skipped for that user (web push may still run).
+**Observability:** If valid Expo tokens exist but the Expo SDK client cannot be created while push is enabled, a **warning** is logged and Expo sends are skipped for that user (web push may still run).
 
 **Pay-by-link / payment confirmation**: When `OrdersService` moves an order from `pending_payment` to `pending` after payment, it enqueues the same `order.status.updated` message with `previousStatus: pending_payment` and `actorUserId` set to the client’s user id.
 

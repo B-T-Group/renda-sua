@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import AppStoreBadges from '../common/AppStoreBadges';
 import { useInventoryItems, InventoryItem } from '../../hooks/useInventoryItems';
+import { HOME_ACCENTS } from './homeTheme';
 
 const ProductPreviewCard: React.FC<{ item: InventoryItem }> = ({ item }) => {
   const image = item.item?.item_images?.[0]?.image_url ?? '';
@@ -30,8 +31,8 @@ const ProductPreviewCard: React.FC<{ item: InventoryItem }> = ({ item }) => {
         {image ? (
           <CardMedia component="img" height={160} image={image} alt={item.item?.name ?? ''} sx={{ objectFit: 'cover' }} />
         ) : (
-          <Box sx={{ height: 160, bgcolor: alpha('#1e40af', 0.06), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ShoppingBag sx={{ fontSize: 40, color: alpha('#1e40af', 0.3) }} />
+          <Box sx={{ height: 160, bgcolor: alpha(HOME_ACCENTS.primary, 0.06), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShoppingBag sx={{ fontSize: 40, color: alpha(HOME_ACCENTS.primary, 0.3) }} />
           </Box>
         )}
         <CardContent sx={{ p: 2 }}>
@@ -57,7 +58,7 @@ const BrowseProductsPreviewSection: React.FC = () => {
     <Box
       component="section"
       id="browse-products"
-      sx={{ py: { xs: 8, md: 12 }, bgcolor: alpha('#1e40af', 0.02) }}
+      sx={{ py: { xs: 8, md: 12 }, bgcolor: alpha(HOME_ACCENTS.primary, 0.02) }}
     >
       <Container maxWidth="xl">
         <Box sx={{ textAlign: 'center', mb: 6 }}>
