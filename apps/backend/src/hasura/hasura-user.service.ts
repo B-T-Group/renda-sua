@@ -27,6 +27,7 @@ import {
 import { isPersonaId, type PersonaId } from '../users/persona.types';
 import { normalizeAgentLocationTrackingConsent } from '../agents/agent-location-consent.util';
 import type { AgentLocationTrackingConsent } from '../agents/dto/update-location-tracking-consent.dto';
+import { requireAuthUserUuid } from '../common/uuid.util';
 import { HasuraSystemService } from './hasura-system.service';
 import {
   formatHasuraNetworkError,
@@ -774,6 +775,19 @@ export class HasuraUserService {
     };
   }
 
+  /** JWT Hasura user id must be a DB UUID, not an Auth0 `sub` (`email|…`). */
+  private requireAuthenticatedDbUserId(ctx?: RequestContext): RequestContext {
+    const resolved = this.resolveContext(ctx);
+    const userId = resolved.userId;
+    if (!userId || userId === 'anonymous') {
+      throw new Error(
+        'No authenticated user. Please provide a valid authentication token.'
+      );
+    }
+    requireAuthUserUuid(userId);
+    return resolved;
+  }
+
   /**
    * Load users + persona relations without resolving a session persona.
    * Safe for delegate-only accounts. Existing controllers must keep using getUser().
@@ -786,13 +800,8 @@ export class HasuraUserService {
       personas?: PersonaId[];
     }
   > {
-    const resolved = this.resolveContext(ctx);
+    const resolved = this.requireAuthenticatedDbUserId(ctx);
     const userId = resolved.userId;
-    if (!userId || userId === 'anonymous') {
-      throw new Error(
-        'No authenticated user. Please provide a valid authentication token.'
-      );
-    }
     const userData = await this.hasuraSystemService.getUserByIdWithRelations(
       userId
     );
@@ -832,13 +841,8 @@ export class HasuraUserService {
       active_persona?: PersonaId;
     }
   > {
-    const resolved = this.resolveContext(ctx);
+    const resolved = this.requireAuthenticatedDbUserId(ctx);
     const userId = resolved.userId;
-    if (!userId || userId === 'anonymous') {
-      throw new Error(
-        'No authenticated user. Please provide a valid authentication token.'
-      );
-    }
 
     try {
       const userData = await this.hasuraSystemService.getUserByIdWithRelations(

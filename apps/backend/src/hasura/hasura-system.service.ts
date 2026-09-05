@@ -38,6 +38,7 @@ import {
   requestHasuraWithRetry,
 } from './hasura-request.util';
 import type { LocationConsentPlatform } from '../agents/dto/update-location-tracking-consent.dto';
+import { isUuid } from '../common/uuid.util';
 
 /** Row from account lookup queries; used for explicit location vs legacy matching. */
 type UserAccountLookupRow = {
@@ -167,6 +168,9 @@ export class HasuraSystemService {
    * If not present, you should add this to HasuraSystemService:
    */
   async getUserById(userId: string) {
+    if (!isUuid(userId)) {
+      return null;
+    }
     const result = await this.executeQuery<GetUserByIdQuery>(GET_USER_BY_ID, {
       userId,
     });
@@ -178,6 +182,9 @@ export class HasuraSystemService {
    * Needed for /users/me personas: user-scoped GraphQL can hide relations under RLS.
    */
   async getUserByIdWithRelations(userId: string): Promise<any> {
+    if (!isUuid(userId)) {
+      return null;
+    }
     const result = await this.executeQuery<any>(
       GET_USER_BY_ID_WITH_RELATIONS,
       { userId }
