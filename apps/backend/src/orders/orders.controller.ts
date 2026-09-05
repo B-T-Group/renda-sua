@@ -5,6 +5,7 @@ import {
   Headers,
   HttpException,
   HttpStatus,
+  Logger,
   Param,
   Patch,
   Post,
@@ -58,6 +59,8 @@ export interface UpdateOrderStatusRequest {
 @Controller('orders')
 @Throttle({ short: { limit: 30, ttl: 60000 } })
 export class OrdersController {
+  private readonly logger = new Logger(OrdersController.name);
+
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
