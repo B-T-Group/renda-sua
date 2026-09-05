@@ -146,6 +146,12 @@ export class SessionStoreService implements OnModuleDestroy {
         this.SESSION_TTL_SECONDS,
         encrypted
       );
+      
+      // Track session in family SET for reuse detection
+      const familyId = data.familyId || sessionId;
+      await this.redisClient.sAdd(`session-family:${familyId}`, sessionId);
+      // Set TTL on family SET to auto-cleanup
+      await this.redisClient.expire(`session-family:${familyId}`, this.SESSION_TTL_SECONDS);
     } else {
       this.inMemoryStore.set(sessionId, encrypted);
       setTimeout(
@@ -190,7 +196,16 @@ export class SessionStoreService implements OnModuleDestroy {
 
   async deleteSession(sessionId: string): Promise<void> {
     if (this.redisClient?.isOpen) {
+      // Get session data to find family before deleting
+      const data = await this.getSession(sessionId);
+      
       await this.redisClient.del(`session:${sessionId}`);
+      
+      // Remove from family SET
+      if (data) {
+        const familyId = data.familyId || sessionId;
+        await this.redisClient.sRem(`session-family:${familyId}`, sessionId);
+      }
     } else {
       this.inMemoryStore.delete(sessionId);
     }
@@ -231,17 +246,26 @@ export class SessionStoreService implements OnModuleDestroy {
   }
 
   private async invalidateSessionFamily(familyId: string): Promise<void> {
-    // In a production Redis setup, you'd maintain a family->sessions index
-    // For now, we'll delete the specific session IDs we know about
-    // This is a simplified version; a full implementation would track all sessions in a family
-    this.logger.log(`Invalidating session family ${familyId.slice(0, 8)}...`);
+    this.logger.warn(`Invalidating session family ${familyId.slice(0, 8)}... due to reuse detection`);
     
-    if (this.redisClient) {
-      // In production, implement proper family tracking with a SET in Redis
-      // For now, just log the security event
-      this.logger.warn('Session family invalidation triggered - full family tracking not yet implemented');
+    if (this.redisClient?.isOpen) {
+      // Get all session IDs in this family from Redis SET
+      const sessionIds = await this.redisClient.sMembers(`session-family:${familyId}`);
+      
+      if (sessionIds.length > 0) {
+        this.logger.warn(`Deleting ${sessionIds.length} sessions in family ${familyId.slice(0, 8)}...`);
+        
+        // Delete all sessions in the family
+        const pipeline = this.redisClient.multi();
+        for (const sessionId of sessionIds) {
+          pipeline.del(`session:${sessionId}`);
+        }
+        // Delete the family SET itself
+        pipeline.del(`session-family:${familyId}`);
+        await pipeline.exec();
+      }
     } else {
-      // For in-memory store, we can scan all sessions
+      // For in-memory store, scan all sessions
       for (const [sessionId, encryptedData] of this.inMemoryStore.entries()) {
         try {
           const data = JSON.parse(this.decrypt(encryptedData)) as SessionData;
