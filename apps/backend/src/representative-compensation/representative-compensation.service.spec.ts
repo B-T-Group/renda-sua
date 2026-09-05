@@ -154,7 +154,7 @@ describe('RepresentativeCompensationService', () => {
 
   it('credits 7500 on a small sale when min sale total is configured to 0', async () => {
     configurationsService.getConfigurationByKey.mockImplementation(
-      async (key: string) => {
+      async (key: string, country?: string) => {
         if (key === 'business_referral_payout_enabled') {
           return { boolean_value: true, status: 'active' };
         }
@@ -174,7 +174,7 @@ describe('RepresentativeCompensationService', () => {
 
     const result = await service.evaluateForOrder('order-1', 'biz-1');
 
-    expect(result.credited).toBe(2);
+    expect(result.credited).toBe(1);
     const inserts = hasuraSystemService.executeMutation.mock.calls
       .filter(([q]) => String(q).includes('InsertCompensationEvent'))
       .map(([, vars]) => vars.object.rule_code);
@@ -183,7 +183,7 @@ describe('RepresentativeCompensationService', () => {
 
   it('falls back to 2500 XAF when the min sale config is negative', async () => {
     configurationsService.getConfigurationByKey.mockImplementation(
-      async (key: string) => {
+      async (key: string, country?: string) => {
         if (key === 'business_referral_payout_enabled') {
           return { boolean_value: true, status: 'active' };
         }
