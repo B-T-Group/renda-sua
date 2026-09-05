@@ -41,11 +41,33 @@ describe('WhatsAppReplyService', () => {
     config as any
   );
 
+  async function flushBackground(times = 6): Promise<void> {
+    for (let i = 0; i < times; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
+  function holdAssistantChat(): { resolve: (value: unknown) => void } {
+    let resolveChat: (value: unknown) => void = () => undefined;
+    assistant.chat.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolveChat = done;
+        })
+    );
+    return {
+      resolve: (value: unknown) => resolveChat(value),
+    };
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
     whatsapp.isConfigured.mockReturnValue(false);
     assistant.isWhatsAppRepliesEnabled.mockReturnValue(false);
     assistant.detectLocaleFromText.mockReturnValue('en');
+    (service as any).assistantInFlight.clear();
+    (service as any).assistantPending.clear();
+    (service as any).assistantCancelled.clear();
   });
 
   it('parses STOP and aliases', () => {
@@ -225,5 +247,103 @@ describe('WhatsAppReplyService', () => {
     });
 
     expect(assistant.chat).not.toHaveBeenCalled();
+  });
+
+  it('queues a second inbound while an assistant turn is in flight', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    whatsapp.isConfigured.mockReturnValue(true);
+    assistant.isWhatsAppRepliesEnabled.mockReturnValue(true);
+    identity.resolveFromPhone.mockResolvedValue({ preferredLanguage: 'en' });
+    inbox.listRecentMessages.mockResolvedValue([]);
+    whatsapp.sendSessionText.mockResolvedValue({
+      messages: [{ id: 'wamid.reply' }],
+    });
+    const held = holdAssistantChat();
+
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'Where is my order?',
+    });
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'And the delivery fee?',
+    });
+    await flushBackground();
+
+    expect(assistant.chat).toHaveBeenCalledTimes(1);
+    held.resolve({
+      reply: 'First answer',
+      handoff: false,
+      locale: 'en',
+    });
+    await flushBackground();
+
+    expect(assistant.chat).toHaveBeenCalledTimes(2);
+    expect(assistant.chat.mock.calls[1][0].messages).toEqual(
+      expect.arrayContaining([
+        { role: 'user', content: 'And the delivery fee?' },
+      ])
+    );
+  });
+
+  it('does not send an in-flight assistant reply after STOP', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    whatsapp.isConfigured.mockReturnValue(true);
+    assistant.isWhatsAppRepliesEnabled.mockReturnValue(true);
+    identity.resolveFromPhone.mockResolvedValue({ preferredLanguage: 'en' });
+    inbox.listRecentMessages.mockResolvedValue([]);
+    const held = holdAssistantChat();
+
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'Need help',
+    });
+    await flushBackground();
+    expect(assistant.chat).toHaveBeenCalledTimes(1);
+
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'STOP',
+    });
+    expect(prefs.disableWhatsApp).toHaveBeenCalledWith('user-1');
+
+    held.resolve({
+      reply: 'Late answer after opt-out',
+      handoff: false,
+      locale: 'en',
+    });
+    await flushBackground();
+
+    expect(whatsapp.sendSessionText).not.toHaveBeenCalled();
+    expect(inbox.persistOutbound).not.toHaveBeenCalled();
+  });
+
+  it('drops a queued assistant turn when STOP arrives mid-flight', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    whatsapp.isConfigured.mockReturnValue(true);
+    assistant.isWhatsAppRepliesEnabled.mockReturnValue(true);
+    identity.resolveFromPhone.mockResolvedValue({ preferredLanguage: 'en' });
+    inbox.listRecentMessages.mockResolvedValue([]);
+    const held = holdAssistantChat();
+
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'first',
+    });
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'second should be dropped',
+    });
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'UNSUBSCRIBE',
+    });
+    await flushBackground();
+
+    held.resolve({ reply: 'stale', handoff: false, locale: 'en' });
+    await flushBackground();
+
+    expect(assistant.chat).toHaveBeenCalledTimes(1);
+    expect(whatsapp.sendSessionText).not.toHaveBeenCalled();
   });
 });

@@ -528,6 +528,42 @@ describe('SignupService', () => {
     });
   });
 
+  describe('purgeExpiredAttempts', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('expires pending attempts past expires_at and clears PII', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-09-05T10:00:00.000Z'));
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_signup_attempts: { affected_rows: 3 },
+      });
+
+      const removed = await service.purgeExpiredAttempts();
+
+      expect(removed).toBe(3);
+      const cleanupCall = hasuraSystemService.executeMutation.mock.calls.find(
+        ([mutation]) => String(mutation).includes('CleanupExpiredSignupAttempts')
+      );
+      expect(cleanupCall).toBeDefined();
+      expect(String(cleanupCall?.[0])).toContain('status: { _eq: "pending" }');
+      expect(String(cleanupCall?.[0])).toContain('expires_at: { _lt: $now }');
+      expect(String(cleanupCall?.[0])).toContain('email: null');
+      expect(String(cleanupCall?.[0])).toContain('phone_number: null');
+      expect(String(cleanupCall?.[0])).toContain('payload: {}');
+      expect(cleanupCall?.[1]).toEqual({ now: '2026-09-05T10:00:00.000Z' });
+    });
+
+    it('returns 0 when Hasura cleanup fails', async () => {
+      hasuraSystemService.executeMutation.mockRejectedValue(
+        new Error('Hasura 503')
+      );
+
+      await expect(service.purgeExpiredAttempts()).resolves.toBe(0);
+    });
+  });
+
   describe('deprecated endpoints', () => {
     it('returns gone for updateContact', async () => {
       await expect(service.updateContact()).rejects.toThrow(
