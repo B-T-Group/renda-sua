@@ -253,4 +253,24 @@ describe('PaymentRoutingService', () => {
       });
     });
   });
+
+  describe('resolveTrustedPayerCountry', () => {
+    it('refuses a local spoof when the profile country is a diaspora payer', async () => {
+      await expect(
+        service.resolveTrustedPayerCountry({
+          profileCountry: 'CA',
+          requestedCountry: 'GA',
+        })
+      ).resolves.toBe('CA');
+    });
+
+    it('lets a traveller upgrade from a local profile to a Stripe billing country', async () => {
+      await expect(
+        service.resolveTrustedPayerCountry({
+          profileCountry: 'GA',
+          requestedCountry: 'CA',
+        })
+      ).resolves.toBe('CA');
+    });
+  });
 });

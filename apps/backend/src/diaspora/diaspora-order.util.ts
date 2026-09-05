@@ -131,8 +131,29 @@ export function resolveOrderRecipient(params: {
 }
 
 /**
- * Snapshots who paid. The requested billing country wins over the profile
- * country so a traveller can pay from where their card actually bills.
+ * Billing country used for rail + pay-now gates.
+ *
+ * A traveller may *upgrade* into diaspora (profile local, card abroad). A
+ * client-supplied country must never *downgrade* a diaspora profile to a
+ * local rail — that would skip Stripe and re-enable pay-at-delivery.
+ */
+export function trustedPayerCountry(params: {
+  profileCountry?: string | null;
+  requestedCountry?: string | null;
+  profileIsDiaspora: boolean;
+  requestedIsDiaspora: boolean;
+}): string | null {
+  const profile = normalizeCountryCode(params.profileCountry);
+  const requested = normalizeCountryCode(params.requestedCountry);
+  if (params.profileIsDiaspora && !params.requestedIsDiaspora) {
+    return profile;
+  }
+  return requested ?? profile;
+}
+
+/**
+ * Snapshots who paid. Pass an already-trusted billing country as
+ * `requestedPayerCountry` (see `trustedPayerCountry`).
  */
 export function resolveOrderPayer(params: {
   user: PayerIdentity;
