@@ -21,6 +21,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
 import {
@@ -141,6 +142,7 @@ describe('CheckoutPreflightService', () => {
   let mobilePaymentsService: jest.Mocked<MobilePaymentsService>;
   let loyaltyService: jest.Mocked<LoyaltyService>;
   let deliveryAvailabilityService: jest.Mocked<DeliveryAvailabilityService>;
+  let fxEstimateService: jest.Mocked<FxEstimateService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -165,12 +167,34 @@ describe('CheckoutPreflightService', () => {
           useValue: {
             resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
             resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
+            getUserCountryCode: jest.fn().mockResolvedValue(null),
+            resolveTrustedPayerCountry: jest.fn(
+              async ({
+                profileCountry,
+                requestedCountry,
+              }: {
+                profileCountry?: string | null;
+                requestedCountry?: string | null;
+              }) => requestedCountry || profileCountry || null
+            ),
+            resolveOrderRail: jest.fn(
+              async ({ sellerCountry }: { sellerCountry?: string | null }) => {
+                const rail =
+                  await paymentRoutingService.resolveRailForCountry(
+                    sellerCountry ?? undefined
+                  );
+                return { rail, source: 'seller', isDiaspora: false };
+              }
+            ),
           },
         },
         {
           provide: MobilePaymentsService,
           useValue: {
             getProvider: jest.fn().mockReturnValue('freemopay'),
+            getProviderForCountry: jest.fn((country?: string) =>
+              String(country || '').toUpperCase() === 'CM' ? 'freemopay' : 'mypvit'
+            ),
           },
         },
         {
@@ -231,6 +255,13 @@ describe('CheckoutPreflightService', () => {
             closedStoreMessage: jest.fn().mockReturnValue('This store is closed.'),
           },
         },
+        {
+          provide: FxEstimateService,
+          useValue: {
+            estimate: jest.fn().mockReturnValue(null),
+            payerCurrencyForCountry: jest.fn().mockReturnValue(null),
+          },
+        },
       ],
     }).compile();
 
@@ -241,6 +272,7 @@ describe('CheckoutPreflightService', () => {
     mobilePaymentsService = module.get(MobilePaymentsService);
     loyaltyService = module.get(LoyaltyService);
     deliveryAvailabilityService = module.get(DeliveryAvailabilityService);
+    fxEstimateService = module.get(FxEstimateService);
   });
 
   function mockInventory(
@@ -805,7 +837,7 @@ describe('CheckoutPreflightService', () => {
       ]);
     });
   });
-});
+
   // -------------------------------------------------------------------------
   // Diaspora checkout: payer abroad, recipient local
   // -------------------------------------------------------------------------
