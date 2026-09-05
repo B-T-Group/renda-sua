@@ -1362,7 +1362,7 @@ const CheckoutPage: React.FC = () => {
                 </Box>
               )}
 
-              {/* Mobile Payment Method */}
+              {/* Mobile Payment Method - MoMo only */}
               {checkoutPreflight?.checkout_method === 'MOBILE_MONEY' && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" gutterBottom fontWeight={600}>
@@ -1372,7 +1372,7 @@ const CheckoutPage: React.FC = () => {
                     {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
                   </Typography>
 
-                {/* Primary Phone Number Display */}
+                  {/* Primary Phone Number Display */}
                 <Card
                   variant="outlined"
                   sx={{
@@ -1521,15 +1521,16 @@ const CheckoutPage: React.FC = () => {
                     )}
                   </Card>
                 )}
-              </Box>
+                </Box>
+              )}
 
-              {/* Held Until Store Accepts Trust Banner */}
+              {/* Held Until Store Accepts Trust Banner - shown for all payment methods */}
               <Box
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1.5,
-                  mt: 2,
+                  mt: 3,
                   p: 2,
                   bgcolor: 'info.50',
                   borderRadius: 1,
@@ -1545,8 +1546,6 @@ const CheckoutPage: React.FC = () => {
                   )}
                 </Typography>
               </Box>
-              </Box>
-              )}
             </CardContent>
           </Card>
         </Grid>
