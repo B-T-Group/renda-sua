@@ -413,6 +413,50 @@ Vous recevrez d'autres mises à jour ici si quelque chose change.`,
     },
   },
   authTemplate('rs_login_code'),
+  {
+    kind: 'content',
+    name: 'rs_rcpt_order_contact',
+    category: 'UTILITY',
+    exampleValues: ['John Smith', 'Douala Market', 'ORD-5001'],
+    body: {
+      en: `Rendasua: you are listed as the delivery contact for an order.
+
+Order {{3}} from {{2}} was placed by {{1}}.
+You will receive status updates and your delivery code on WhatsApp.`,
+      fr: `Rendasua : vous êtes le contact de livraison pour une commande.
+
+La commande {{3}} de {{2}} a été passée par {{1}}.
+Vous recevrez les mises à jour de statut et votre code de livraison sur WhatsApp.`,
+    },
+  },
+  {
+    kind: 'content',
+    name: 'rs_rcpt_out_for_delivery',
+    category: 'UTILITY',
+    exampleValues: ['ORD-5001'],
+    body: {
+      en: `Rendasua delivery update.
+
+Order {{1}} is out for delivery. Share your delivery code only with the Rendasua agent at handover.`,
+      fr: `Mise à jour de livraison Rendasua.
+
+La commande {{1}} est en cours de livraison. Partagez votre code de livraison uniquement avec le livreur Rendasua lors de la remise.`,
+    },
+  },
+  {
+    kind: 'content',
+    name: 'rs_rcpt_ready_pickup',
+    category: 'UTILITY',
+    exampleValues: ['ORD-5001', 'Douala Market'],
+    body: {
+      en: `Rendasua pickup update.
+
+Order {{1}} is ready for pickup at {{2}}. Present your pickup code when collecting.`,
+      fr: `Mise à jour de retrait Rendasua.
+
+La commande {{1}} est prête pour le retrait chez {{2}}. Présentez votre code de retrait lors de la récupération.`,
+    },
+  },
 ];
 
 function authTemplate(name: string): AuthTemplate {
@@ -486,7 +530,10 @@ function contentComponents(
   template: ContentTemplate,
   language: TemplateLanguage
 ): GraphComponent[] {
-  return [bodyComponent(template, language), buttonsComponent(template, language)];
+  const components: GraphComponent[] = [bodyComponent(template, language)];
+  const buttons = buttonsComponent(template, language);
+  if (buttons) components.push(buttons);
+  return components;
 }
 
 function bodyComponent(
@@ -503,7 +550,7 @@ function bodyComponent(
 function buttonsComponent(
   template: ContentTemplate,
   language: TemplateLanguage
-): GraphComponent {
+): GraphComponent | null {
   if (template.quickReplies?.length) {
     return {
       type: 'BUTTONS',
@@ -514,7 +561,7 @@ function buttonsComponent(
     };
   }
   if (!template.button) {
-    return { type: 'BUTTONS', buttons: [] };
+    return null;
   }
   return {
     type: 'BUTTONS',

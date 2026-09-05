@@ -279,46 +279,46 @@ export class OrderRecipientNotificationsService {
   }
 
   /**
-   * Uses dedicated recipient templates that do not include URL CTA deep links
-   * (third-party recipients often have no Rendasua account).
+   * Uses recipient-specific Meta templates for diaspora orders. Variables match
+   * the UTILITY transactional copy approved for these flows.
    */
   private whatsAppPayloadForStatus(
     status: string,
     contact: OrderRecipientContact,
     locale: EmailLocale
   ): { templateKey: string; variables: Record<string, string> } {
-    if (status === 'pending') {
-      return {
-        templateKey: 'recipient_order_placed',
-        variables: {
-          payerName: contact.payerName || (locale === 'fr' ? 'un proche' : 'someone'),
-          storeName: contact.businessName || (locale === 'fr' ? 'le magasin' : 'the store'),
-          orderNumber: contact.orderNumber,
-        },
-      };
+    switch (status) {
+      case 'pending':
+        return {
+          templateKey: 'recipient_order_placed',
+          variables: {
+            payerName: contact.payerName || 'Unknown',
+            storeName: contact.businessName || 'a store',
+            orderNumber: contact.orderNumber,
+          },
+        };
+      case 'out_for_delivery':
+        return {
+          templateKey: 'recipient_out_for_delivery',
+          variables: { orderNumber: contact.orderNumber },
+        };
+      case 'ready_for_pickup':
+        return {
+          templateKey: 'recipient_order_ready',
+          variables: {
+            orderNumber: contact.orderNumber,
+            storeName: contact.businessName || 'the store',
+          },
+        };
+      default:
+        return {
+          templateKey: 'recipient_order_update',
+          variables: {
+            orderNumber: contact.orderNumber,
+            statusLabel: this.statusLabel(status, locale),
+          },
+        };
     }
-    if (status === 'ready_for_pickup') {
-      return {
-        templateKey: 'recipient_order_ready',
-        variables: {
-          orderNumber: contact.orderNumber,
-          storeName: contact.businessName || (locale === 'fr' ? 'le magasin' : 'the store'),
-        },
-      };
-    }
-    if (status === 'out_for_delivery') {
-      return {
-        templateKey: 'recipient_out_for_delivery',
-        variables: { orderNumber: contact.orderNumber },
-      };
-    }
-    return {
-      templateKey: 'recipient_order_update',
-      variables: {
-        orderNumber: contact.orderNumber,
-        statusLabel: this.statusLabel(status, locale),
-      },
-    };
   }
 
   private statusLabel(status: string, locale: EmailLocale): string {

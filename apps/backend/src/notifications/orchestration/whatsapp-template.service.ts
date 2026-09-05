@@ -19,9 +19,9 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
   payment_failed: { en: 'rs_payment_failed', fr: 'rs_payment_failed' },
   ai_proposal_ready: { en: 'rs_ai_proposal', fr: 'rs_ai_proposal' },
   admin_order_risk: { en: 'rs_admin_order_risk', fr: 'rs_admin_order_risk' },
-  recipient_order_placed: { en: 'rs_recipient_order_placed', fr: 'rs_recipient_order_placed' },
-  recipient_out_for_delivery: { en: 'rs_recipient_out_for_delivery', fr: 'rs_recipient_out_for_delivery' },
-  recipient_order_ready: { en: 'rs_recipient_order_ready', fr: 'rs_recipient_order_ready' },
+  recipient_order_placed: { en: 'rs_rcpt_order_contact', fr: 'rs_rcpt_order_contact' },
+  recipient_out_for_delivery: { en: 'rs_rcpt_out_for_delivery', fr: 'rs_rcpt_out_for_delivery' },
+  recipient_order_ready: { en: 'rs_rcpt_ready_pickup', fr: 'rs_rcpt_ready_pickup' },
   recipient_order_update: { en: 'rs_recipient_order_update', fr: 'rs_recipient_order_update' },
 };
 
