@@ -14,9 +14,6 @@ describe('WhatsAppChannel', () => {
   const configService = {
     get: jest.fn(),
   };
-  const inbox = {
-    persistOutbound: jest.fn().mockResolvedValue('msg-1'),
-  };
   let channel: WhatsAppChannel;
 
   beforeEach(() => {
@@ -30,8 +27,7 @@ describe('WhatsAppChannel', () => {
     channel = new WhatsAppChannel(
       whatsAppService as never,
       templateService as never,
-      configService as never,
-      inbox as never
+      configService as never
     );
   });
 
@@ -122,6 +118,19 @@ describe('WhatsAppChannel', () => {
       components: [],
       category: 'UTILITY',
     });
+  });
+
+  it('does not persist product templates into the support inbox', async () => {
+    await channel.send({
+      to: '+237600000001',
+      payload: {
+        templateKey: 'order_action_business',
+        variables: { orderNumber: '42' },
+      },
+      entityType: 'order',
+      entityId: '11111111-1111-1111-1111-111111111111',
+    });
+    expect(whatsAppService.sendTemplateMessage).toHaveBeenCalled();
   });
 
   it('returns failed status when Graph send throws', async () => {

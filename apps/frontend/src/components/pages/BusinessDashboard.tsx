@@ -42,6 +42,7 @@ import {
 import { resolveCatalogHealth } from '../../utils/catalogHealth';
 import { resolveQuietHomeNextAction } from '../../utils/resolveQuietHomeNextAction';
 import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
+import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessDashboard: React.FC = () => {
@@ -420,6 +421,8 @@ const BusinessDashboard: React.FC = () => {
           onAction={onQuietNextAction}
         />
       ) : null}
+
+      <AssistantHomeEntry />
 
       {!setupMode && !verificationLoading && !quietHomeMode ? (
         <BusinessVerificationBanner />

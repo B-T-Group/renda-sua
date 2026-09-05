@@ -28,15 +28,54 @@ type WaActor =
 type ResolvedWaActor = Exclude<WaActor, { kind: 'ambiguous' }>;
 
 type PendingWaOrder = PendingAcceptanceOrder & {
+  business_id?: string | null;
   business_location_id?: string | null;
   fulfillment_timing?: string | null;
   delivery_time_windows?: Array<{ id: string }>;
+  business_location?: {
+    id: string;
+    business_id: string;
+    order_alert_phone?: string | null;
+    business?: { user_id?: string | null } | null;
+  } | null;
 };
+
+type WaUserRow = {
+  id: string;
+  business?: { id: string } | null;
+  location_delegations?: Array<{
+    business_location_id: string;
+    business_location?: { business_id: string } | null;
+    role?: {
+      role_permissions?: Array<{ permission?: { key?: string } | null }>;
+    } | null;
+  }>;
+};
+
+type WaManageDelegation = {
+  business_location_id: string;
+  business_id: string;
+};
+
+const CONFIRMABLE_ACCEPTANCE = [
+  'awaiting_acceptance',
+  'no_response',
+  'grace',
+] as const;
+
+const ORDER_ACTION_FIELDS = `
+  id order_number current_status acceptance_state
+  acceptance_deadline_at grace_deadline_at
+  busy_extra_prep_minutes estimated_prep_minutes
+  created_at total_amount currency fulfillment_method
+  fulfillment_timing business_id business_location_id
+  delivery_time_windows(limit: 1) { id }
+`;
 
 /**
  * Resolves WhatsApp Confirm / Busy / Decline to acceptance APIs.
- * Button IDs are static; acts on the oldest confirmable pending order for the actor.
- * Session ack text is sent by WhatsAppReplyService.
+ * Interactive replies bind to the outbound template via Meta context.id.
+ * Text commands without context still act on the oldest pending order.
  */
 @Injectable()
 export class WhatsAppOrderActionService {
@@ -51,8 +90,11 @@ export class WhatsAppOrderActionService {
   async handleAction(params: {
     fromPhone: string;
     action: MerchantWaAction;
+    contextMessageId?: string | null;
     preferredLanguage?: string | null;
   }): Promise<{ handled: boolean; message: string }> {
+    const bound = await this.handleBoundAction(params);
+    if (bound) return bound;
     const actor = await this.resolveActor(params.fromPhone);
     if (!actor) {
       return { handled: false, message: this.msgUnknown(params.preferredLanguage) };
@@ -63,6 +105,52 @@ export class WhatsAppOrderActionService {
     const order = await this.loadOldestPending(actor);
     if (!order) {
       return { handled: true, message: this.msgNone(params.preferredLanguage) };
+    }
+    return {
+      handled: true,
+      message: await this.runAction(
+        params.action,
+        order,
+        actor,
+        params.preferredLanguage
+      ),
+    };
+  }
+
+  private async handleBoundAction(params: {
+    fromPhone: string;
+    action: MerchantWaAction;
+    contextMessageId?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<{ handled: boolean; message: string } | null> {
+    const wamid = params.contextMessageId?.trim();
+    if (!wamid) return null;
+    const orderId = await this.lookupBoundOrderId(wamid);
+    if (!orderId) return null;
+    return this.runBoundOrderAction(params, orderId);
+  }
+
+  private async runBoundOrderAction(
+    params: {
+      fromPhone: string;
+      action: MerchantWaAction;
+      preferredLanguage?: string | null;
+    },
+    orderId: string
+  ): Promise<{ handled: boolean; message: string }> {
+    const order = await this.loadOrderById(orderId);
+    if (!order) {
+      return { handled: true, message: this.msgNone(params.preferredLanguage) };
+    }
+    if (!this.isAwaitingAcceptance(order)) {
+      return {
+        handled: true,
+        message: this.msgAlready(order.order_number, params.preferredLanguage),
+      };
+    }
+    const actor = await this.resolveActorForOrder(params.fromPhone, order);
+    if (!actor) {
+      return { handled: false, message: this.msgUnknown(params.preferredLanguage) };
     }
     return {
       handled: true,
@@ -195,6 +283,159 @@ export class WhatsAppOrderActionService {
     };
   }
 
+  private isAwaitingAcceptance(order: PendingWaOrder): boolean {
+    const state = order.acceptance_state;
+    if (order.current_status !== 'pending' || !state) return false;
+    return (CONFIRMABLE_ACCEPTANCE as readonly string[]).includes(state);
+  }
+
+  private async lookupBoundOrderId(wamid: string): Promise<string | null> {
+    const fromEvents = await this.lookupOrderIdFromEvents(wamid);
+    if (fromEvents) return fromEvents;
+    return this.lookupOrderIdFromInbox(wamid);
+  }
+
+  private async lookupOrderIdFromEvents(wamid: string): Promise<string | null> {
+    const res = await this.hasura.executeQuery<{
+      notification_events: Array<{ entity_id?: string | null }>;
+    }>(
+      `query WaOrderByWamid($wamid: String!) {
+        notification_events(
+          where: {
+            provider_message_id: { _eq: $wamid }
+            entity_type: { _eq: "order" }
+            entity_id: { _is_null: false }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { entity_id }
+      }`,
+      { wamid }
+    );
+    return res.notification_events?.[0]?.entity_id?.trim() || null;
+  }
+
+  private async lookupOrderIdFromInbox(wamid: string): Promise<string | null> {
+    const res = await this.hasura.executeQuery<{
+      whatsapp_messages: Array<{ raw_payload?: Record<string, unknown> | null }>;
+    }>(
+      `query WaInboxByWamid($wamid: String!) {
+        whatsapp_messages(where: { wamid: { _eq: $wamid } }, limit: 1) {
+          raw_payload
+        }
+      }`,
+      { wamid }
+    );
+    return this.orderIdFromInboxPayload(res.whatsapp_messages?.[0]?.raw_payload);
+  }
+
+  private async orderIdFromInboxPayload(
+    raw?: Record<string, unknown> | null
+  ): Promise<string | null> {
+    const direct = this.asUuid(raw?.orderId ?? raw?.entityId);
+    if (direct) return direct;
+    const variables = (raw?.variables ?? {}) as Record<string, unknown>;
+    const orderNumber = this.asNonEmpty(
+      variables.orderNumber ?? raw?.orderNumber
+    );
+    if (!orderNumber) return null;
+    return this.lookupOrderIdByNumber(orderNumber);
+  }
+
+  private async lookupOrderIdByNumber(
+    orderNumber: string
+  ): Promise<string | null> {
+    const res = await this.hasura.executeQuery<{
+      orders: Array<{ id: string }>;
+    }>(
+      `query WaOrderByNumber($n: String!) {
+        orders(where: { order_number: { _eq: $n } }, limit: 1) { id }
+      }`,
+      { n: orderNumber }
+    );
+    return res.orders?.[0]?.id ?? null;
+  }
+
+  private async loadOrderById(orderId: string): Promise<PendingWaOrder | null> {
+    const res = await this.hasura.executeQuery<{
+      orders_by_pk: PendingWaOrder | null;
+    }>(
+      `query WaOrderById($id: uuid!) {
+        orders_by_pk(id: $id) {
+          ${ORDER_ACTION_FIELDS}
+          business_location {
+            id business_id order_alert_phone
+            business { user_id }
+          }
+        }
+      }`,
+      { id: orderId }
+    );
+    return res.orders_by_pk ?? null;
+  }
+
+  private async resolveActorForOrder(
+    fromPhone: string,
+    order: PendingWaOrder
+  ): Promise<WaActor | null> {
+    const normalized = this.normalizePhone(fromPhone);
+    const user = await this.loadUserByPhone(normalized);
+    const matched = user ? this.userActorForOrder(user, order) : null;
+    if (matched) return matched;
+    return this.locationAlertActorForOrder(normalized, order);
+  }
+
+  private userActorForOrder(
+    user: WaUserRow,
+    order: PendingWaOrder
+  ): WaActor | null {
+    if (user.business?.id && user.business.id === order.business_id) {
+      return { kind: 'owner', userId: user.id, businessId: user.business.id };
+    }
+    const match = this.manageDelegations(user).find(
+      (row) => row.business_location_id === order.business_location_id
+    );
+    if (!match) return null;
+    return {
+      kind: 'delegate',
+      userId: user.id,
+      businessId: match.business_id,
+      locationIds: [match.business_location_id],
+    };
+  }
+
+  private locationAlertActorForOrder(
+    normalized: string,
+    order: PendingWaOrder
+  ): WaActor | null {
+    const loc = order.business_location;
+    const ownerUserId = loc?.business?.user_id;
+    if (!loc || !ownerUserId) return null;
+    if (!phonesEqual(loc.order_alert_phone, normalized)) return null;
+    if (loc.business_id !== order.business_id) return null;
+    return {
+      kind: 'location_alert',
+      businessId: loc.business_id,
+      locationIds: [loc.id],
+      ownerUserId,
+    };
+  }
+
+  private asUuid(value: unknown): string | null {
+    const text = this.asNonEmpty(value);
+    return text && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      text
+    )
+      ? text
+      : null;
+  }
+
+  private asNonEmpty(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const text = value.trim();
+    return text || null;
+  }
+
   private async resolveActor(fromPhone: string): Promise<WaActor | null> {
     const normalized = this.normalizePhone(fromPhone);
     const byUser = await this.resolveUserActor(normalized);
@@ -203,20 +444,17 @@ export class WhatsAppOrderActionService {
   }
 
   private async resolveUserActor(normalized: string): Promise<WaActor | null> {
+    const user = await this.loadUserByPhone(normalized);
+    if (!user) return null;
+    if (user.business?.id) {
+      return { kind: 'owner', userId: user.id, businessId: user.business.id };
+    }
+    return this.delegateActorFromDelegations(user);
+  }
+
+  private async loadUserByPhone(normalized: string): Promise<WaUserRow | null> {
     const withPlus = `+${normalized}`;
-    const res = await this.hasura.executeQuery<{
-      users: Array<{
-        id: string;
-        business?: { id: string } | null;
-        location_delegations?: Array<{
-          business_location_id: string;
-          business_location?: { business_id: string } | null;
-          role?: {
-            role_permissions?: Array<{ permission?: { key?: string } | null }>;
-          } | null;
-        }>;
-      }>;
-    }>(
+    const res = await this.hasura.executeQuery<{ users: WaUserRow[] }>(
       `query WaActor($a: String!, $b: String!) {
         users(where: { _or: [
           { phone_number: { _eq: $a } },
@@ -233,39 +471,38 @@ export class WhatsAppOrderActionService {
       }`,
       { a: normalized, b: withPlus }
     );
-    const user = res.users?.[0];
-    if (!user) return null;
-    if (user.business?.id) {
-      return { kind: 'owner', userId: user.id, businessId: user.business.id };
-    }
-    return this.delegateActorFromDelegations(user.id, user.location_delegations);
+    return res.users?.[0] ?? null;
   }
 
-  private delegateActorFromDelegations(
-    userId: string,
-    delegations:
-      | Array<{
-          business_location_id: string;
-          business_location?: { business_id: string } | null;
-          role?: {
-            role_permissions?: Array<{ permission?: { key?: string } | null }>;
-          } | null;
-        }>
-      | undefined
-  ): WaActor | null {
-    const manage = (delegations ?? []).filter(
-      (d) =>
-        !!d.business_location?.business_id &&
-        (d.role?.role_permissions ?? []).some(
-          (rp) => rp.permission?.key === DELEGATION_PERMISSIONS.ORDERS_MANAGE
-        )
+  private manageDelegations(user: WaUserRow): WaManageDelegation[] {
+    const rows: WaManageDelegation[] = [];
+    for (const delegation of user.location_delegations ?? []) {
+      const businessId = delegation.business_location?.business_id;
+      if (!businessId || !this.hasOrdersManage(delegation)) continue;
+      rows.push({
+        business_location_id: delegation.business_location_id,
+        business_id: businessId,
+      });
+    }
+    return rows;
+  }
+
+  private hasOrdersManage(
+    delegation: NonNullable<WaUserRow['location_delegations']>[number]
+  ): boolean {
+    return (delegation.role?.role_permissions ?? []).some(
+      (rp) => rp.permission?.key === DELEGATION_PERMISSIONS.ORDERS_MANAGE
     );
+  }
+
+  private delegateActorFromDelegations(user: WaUserRow): WaActor | null {
+    const manage = this.manageDelegations(user);
     if (!manage.length) return null;
-    const businessIds = [...new Set(manage.map((d) => d.business_location!.business_id))];
+    const businessIds = [...new Set(manage.map((d) => d.business_id))];
     if (businessIds.length > 1) return { kind: 'ambiguous' };
     return {
       kind: 'delegate',
-      userId,
+      userId: user.id,
       businessId: businessIds[0],
       locationIds: [...new Set(manage.map((d) => d.business_location_id))],
     };
@@ -326,7 +563,7 @@ export class WhatsAppOrderActionService {
               order_by: { created_at: asc }
               limit: 1
             ) {
-              ${this.pendingOrderFields()}
+              ${ORDER_ACTION_FIELDS}
             }
           }`
         : `query WaPendingBiz($bid: uuid!) {
@@ -339,7 +576,7 @@ export class WhatsAppOrderActionService {
               order_by: { created_at: asc }
               limit: 1
             ) {
-              ${this.pendingOrderFields()}
+              ${ORDER_ACTION_FIELDS}
             }
           }`,
       locationIds
@@ -347,15 +584,6 @@ export class WhatsAppOrderActionService {
         : { bid: actor.businessId }
     );
     return res.orders?.[0] ?? null;
-  }
-
-  private pendingOrderFields(): string {
-    return `id order_number current_status acceptance_state
-              acceptance_deadline_at grace_deadline_at
-              busy_extra_prep_minutes estimated_prep_minutes
-              created_at total_amount currency fulfillment_method
-              fulfillment_timing business_id business_location_id
-              delivery_time_windows(limit: 1) { id }`;
   }
 
   private normalizePhone(phone: string): string {

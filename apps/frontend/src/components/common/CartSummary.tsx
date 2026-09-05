@@ -152,6 +152,7 @@ const CartSummary: React.FC<CartSummaryProps> = ({
       {showCheckoutButton && (
         <Button
           variant="contained"
+          color="cta"
           fullWidth
           size={compact ? 'medium' : 'large'}
           onClick={handleProceedToCheckout}

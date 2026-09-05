@@ -1,8 +1,12 @@
-/** Shared brand accents for the for-business landing (emerald system). */
-export const FB_GREEN = '#16a34a';
-export const FB_GREEN_DARK = '#15803d';
-export const FB_HERO_GRADIENT =
-  'linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 70%, #059669 100%)';
+import { brandTokens } from '../../theme/brandTokens';
+
+/**
+ * Shared brand accents for the for-business landing. The business persona sits
+ * in the Trust Coast Blue accent family, over deep-blue brand chrome.
+ */
+export const FB_ACCENT = brandTokens.cta.main;
+export const FB_ACCENT_DARK = brandTokens.cta.dark;
+export const FB_HERO_GRADIENT = `linear-gradient(135deg, ${brandTokens.text.primary} 0%, ${brandTokens.primary.dark} 40%, ${brandTokens.primary.main} 75%, ${brandTokens.primary.light} 100%)`;
 
 export const SIGNUP_SELL = '/signup?intent=business_sell';
 export const SIGNUP_RENT = '/signup?intent=business_rent';

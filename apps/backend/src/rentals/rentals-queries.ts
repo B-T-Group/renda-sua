@@ -266,6 +266,9 @@ export const GET_RENTAL_REQUEST_FULL = `
           name
           business { name }
         }
+        business_location {
+          address { country }
+        }
       }
       client { id user_id }
       rental_booking {
@@ -476,6 +479,7 @@ export const GET_RENTAL_BOOKING_FULL = `
         business_location_id
         base_price_per_hour
         rental_item { name }
+        business_location { address { country } }
       }
     }
   }
@@ -583,6 +587,7 @@ export const GET_RENTAL_BOOKING_FULL_BY_BOOKING_NUMBER = `
         business_location_id
         base_price_per_hour
         rental_item { name }
+        business_location { address { country } }
       }
     }
   }
