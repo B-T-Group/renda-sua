@@ -6,6 +6,27 @@ Python tool for cleaning up `item_categories` and `item_sub_categories` in Renda
 
 **SURGICAL:** Never delete a category/subcategory that still has items (or child subs). Always remap items (and subcategory parents) to a canonical target first. Schema uses `ON DELETE RESTRICT`.
 
+## Production Scale (as of Sep 2026)
+
+- **382 categories**, **1,250 subcategories**, **10,342 items**
+- Categories/subcategories have `status` field: `active` or `draft`
+- **42 empty subcategories** (0 items)
+- **~420/422** of 1,250 subs have fb/google taxonomy mapped
+
+### Known Production Duplicates
+
+**Categories (case-only):**
+- `vêtements` (381 items)
+- `soins de la peau` (105 items)
+- `mode` (21 items)
+
+**Subcategories (same parent):**
+- `eau de parfum` (113 items)
+
+**Known Junk:**
+- Category ID 420: `T`
+- Subcategory ID 579: `T`
+
 ## Prerequisites
 
 - Python 3.10+ recommended.
@@ -56,9 +77,10 @@ python category_cleanup.py inventory --output-dir ./reports
 Generate remap plan (`remap_plan.json`) proposing `from_id → to_id` remaps.
 
 **Canonical selection rules:**
-1. Highest item count
-2. Title Case preference
-3. Lowest ID as tie-breaker
+1. Highest item count (most used)
+2. Status: `active` > `draft` > others
+3. Title Case preference (better formatting)
+4. Lowest ID (tie-breaker)
 
 ```bash
 ./run.sh prod plan
@@ -95,9 +117,11 @@ Execute the remap plan:
 ```
 
 **What happens:**
-1. Remap `items.item_sub_category_id` for duplicate subcategories
-2. Remap `item_sub_categories.item_category_id` for duplicate categories
-3. Optionally delete now-empty categories/subcategories (with `--delete-empty`)
+1. **Subcategory remaps:** Update `items.item_sub_category_id` to point to canonical subcategory
+2. **Category remaps:** Update `item_sub_categories.item_category_id` to point to canonical category
+3. **Optional delete:** Remove now-empty categories/subcategories (with `--delete-empty`)
+
+Note: When merging categories, items stay with their subcategories (no direct item update needed).
 
 ### Phase 5: Normalize Names
 
@@ -195,11 +219,17 @@ Normalize names to Title Case using `INITCAP(TRIM(name))`.
 
 ## Schema FK References
 
-**`item_sub_categories` references:**
-- `item_sub_categories.item_category_id` → `item_categories.id` (ON DELETE RESTRICT)
+**IMPORTANT:** Items do NOT have a direct category FK. Remap path:
 
-**`items` references:**
-- `items.item_sub_category_id` → `item_sub_categories.id` (ON DELETE RESTRICT)
+1. **`items.item_sub_category_id`** → `item_sub_categories.id` (ON DELETE RESTRICT)
+2. **`item_sub_categories.item_category_id`** → `item_categories.id` (ON DELETE RESTRICT)
+
+**Merging categories means:**
+- Remap all child subcategories' `item_category_id` to the canonical category
+- Items automatically follow their subcategory (no direct item remap needed for category merges)
+
+**Merging subcategories means:**
+- Remap all items' `item_sub_category_id` to the canonical subcategory
 
 **Note:** `rental_categories` is a separate domain, not related to `item_categories`.
 

@@ -16,6 +16,19 @@ Clean up `item_categories` and `item_sub_categories`: duplicates, test junk, cas
 
 **SURGICAL:** Never delete a category/subcategory that still has items (or child subcategories). Always remap items (and subcategory parents) to a canonical target first. Schema uses `ON DELETE RESTRICT`.
 
+## Production Scale (Sep 2026)
+
+- **382 categories**, **1,250 subcategories**, **10,342 items**
+- Categories/subcategories have `status`: `active` or `draft`
+- **42 empty subcategories**
+- **~420/422** of 1,250 subs have fb/google taxonomy
+
+### Known Prod Duplicates
+
+**Categories:** `vêtements` (381 items), `soins de la peau` (105), `mode` (21)
+**Subcategories:** `eau de parfum` (113 items)
+**Junk:** Category 420 `T`, Subcategory 579 `T`
+
 ## Resolve Environment
 
 | User says | Env | Secrets Manager secret |
@@ -51,8 +64,9 @@ Generate `remap_plan.json` proposing `from_id → to_id` remaps.
 
 **Canonical selection:**
 1. Highest item count
-2. Title Case preference
-3. Lowest ID tie-breaker
+2. Status: `active` > `draft` > others
+3. Title Case preference
+4. Lowest ID tie-breaker
 
 ```bash
 ./run.sh prod plan
@@ -83,9 +97,11 @@ Execute the plan:
 ```
 
 **Actions:**
-1. Remap `items.item_sub_category_id` for duplicate subcategories
-2. Remap `item_sub_categories.item_category_id` for duplicate categories
-3. Delete now-empty categories/subcategories (with `--delete-empty`)
+1. **Subcategory remaps:** Update `items.item_sub_category_id` to canonical subcategory
+2. **Category remaps:** Update `item_sub_categories.item_category_id` to canonical category
+3. **Delete empties:** Remove now-empty categories/subcategories (with `--delete-empty`)
+
+**Important:** Items do NOT have direct category FK. When merging categories, items stay with their subcategories.
 
 ### Phase 5: Normalize Names
 
@@ -164,13 +180,15 @@ FROM public.item_sub_categories;
 
 ## Schema FK References
 
-**`item_sub_categories` references:**
-- `item_sub_categories.item_category_id` → `item_categories.id` (ON DELETE RESTRICT)
+**IMPORTANT:** Items do NOT have direct category FK. Remap path:
 
-**`items` references:**
-- `items.item_sub_category_id` → `item_sub_categories.id` (ON DELETE RESTRICT)
+1. `items.item_sub_category_id` → `item_sub_categories.id` (ON DELETE RESTRICT)
+2. `item_sub_categories.item_category_id` → `item_categories.id` (ON DELETE RESTRICT)
 
-**Note:** `rental_categories` is a separate domain, not related to `item_categories`.
+**Merging categories:** Remap child subcategories' `item_category_id`. Items follow automatically.
+**Merging subcategories:** Remap items' `item_sub_category_id`.
+
+**Note:** `rental_categories` is separate (not covered).
 
 ## Integration with Existing Tools
 

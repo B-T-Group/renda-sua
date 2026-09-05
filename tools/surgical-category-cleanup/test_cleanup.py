@@ -15,10 +15,10 @@ class TestCategoryCleanup(unittest.TestCase):
     def test_find_duplicates(self):
         """Test duplicate detection."""
         items = [
-            CategoryInfo(id=1, name="Electronics", item_count=10),
-            CategoryInfo(id=2, name="electronics", item_count=5),
-            CategoryInfo(id=3, name="  ELECTRONICS  ", item_count=3),
-            CategoryInfo(id=4, name="Clothing", item_count=20),
+            CategoryInfo(id=1, name="Electronics", item_count=10, status="active"),
+            CategoryInfo(id=2, name="electronics", item_count=5, status="draft"),
+            CategoryInfo(id=3, name="  ELECTRONICS  ", item_count=3, status="active"),
+            CategoryInfo(id=4, name="Clothing", item_count=20, status="active"),
         ]
 
         cleanup = CategoryCleanup(dsn="")
@@ -31,10 +31,10 @@ class TestCategoryCleanup(unittest.TestCase):
     def test_find_case_variants(self):
         """Test case variant detection."""
         items = [
-            CategoryInfo(id=1, name="Electronics", item_count=10),
-            CategoryInfo(id=2, name="electronics", item_count=5),
-            CategoryInfo(id=3, name="Clothing", item_count=20),
-            CategoryInfo(id=4, name="Clothing", item_count=15),
+            CategoryInfo(id=1, name="Electronics", item_count=10, status="active"),
+            CategoryInfo(id=2, name="electronics", item_count=5, status="draft"),
+            CategoryInfo(id=3, name="Clothing", item_count=20, status="active"),
+            CategoryInfo(id=4, name="Clothing", item_count=15, status="active"),
         ]
 
         cleanup = CategoryCleanup(dsn="")
@@ -47,10 +47,10 @@ class TestCategoryCleanup(unittest.TestCase):
     def test_find_test_junk(self):
         """Test junk detection."""
         items = [
-            CategoryInfo(id=1, name="Test Category", item_count=0),
-            CategoryInfo(id=2, name="Demo Items", item_count=1),
-            CategoryInfo(id=3, name="Electronics", item_count=10),
-            CategoryInfo(id=4, name="xxx-temp", item_count=0),
+            CategoryInfo(id=1, name="Test Category", item_count=0, status="draft"),
+            CategoryInfo(id=2, name="Demo Items", item_count=1, status="draft"),
+            CategoryInfo(id=3, name="Electronics", item_count=10, status="active"),
+            CategoryInfo(id=4, name="xxx-temp", item_count=0, status="draft"),
         ]
 
         cleanup = CategoryCleanup(dsn="")
@@ -63,9 +63,9 @@ class TestCategoryCleanup(unittest.TestCase):
     def test_select_canonical_highest_count(self):
         """Test canonical selection by item count."""
         group = [
-            CategoryInfo(id=1, name="electronics", item_count=5),
-            CategoryInfo(id=2, name="Electronics", item_count=10),
-            CategoryInfo(id=3, name="ELECTRONICS", item_count=3),
+            CategoryInfo(id=1, name="electronics", item_count=5, status="active"),
+            CategoryInfo(id=2, name="Electronics", item_count=10, status="active"),
+            CategoryInfo(id=3, name="ELECTRONICS", item_count=3, status="active"),
         ]
 
         cleanup = CategoryCleanup(dsn="")
@@ -77,9 +77,9 @@ class TestCategoryCleanup(unittest.TestCase):
     def test_select_canonical_title_case_preference(self):
         """Test canonical selection by Title Case when counts are equal."""
         group = [
-            CategoryInfo(id=1, name="electronics", item_count=10),
-            CategoryInfo(id=2, name="Electronics", item_count=10),
-            CategoryInfo(id=3, name="ELECTRONICS", item_count=10),
+            CategoryInfo(id=1, name="electronics", item_count=10, status="active"),
+            CategoryInfo(id=2, name="Electronics", item_count=10, status="active"),
+            CategoryInfo(id=3, name="ELECTRONICS", item_count=10, status="active"),
         ]
 
         cleanup = CategoryCleanup(dsn="")
@@ -91,9 +91,9 @@ class TestCategoryCleanup(unittest.TestCase):
     def test_select_canonical_lowest_id_tiebreaker(self):
         """Test canonical selection by lowest ID as final tie-breaker."""
         group = [
-            CategoryInfo(id=3, name="electronics", item_count=10),
-            CategoryInfo(id=1, name="ELECTRONICS", item_count=10),
-            CategoryInfo(id=2, name="eLECTRONICS", item_count=10),
+            CategoryInfo(id=3, name="electronics", item_count=10, status="active"),
+            CategoryInfo(id=1, name="ELECTRONICS", item_count=10, status="active"),
+            CategoryInfo(id=2, name="eLECTRONICS", item_count=10, status="active"),
         ]
 
         cleanup = CategoryCleanup(dsn="")
@@ -105,9 +105,9 @@ class TestCategoryCleanup(unittest.TestCase):
         """Test remap plan generation."""
         duplicates = {
             "electronics": [
-                CategoryInfo(id=1, name="Electronics", item_count=10),
-                CategoryInfo(id=2, name="electronics", item_count=5),
-                CategoryInfo(id=3, name="ELECTRONICS", item_count=3),
+                CategoryInfo(id=1, name="Electronics", item_count=10, status="active"),
+                CategoryInfo(id=2, name="electronics", item_count=5, status="draft"),
+                CategoryInfo(id=3, name="ELECTRONICS", item_count=3, status="active"),
             ],
         }
 
@@ -120,6 +120,21 @@ class TestCategoryCleanup(unittest.TestCase):
         self.assertEqual(from_ids, {2, 3})
         for plan in plans:
             self.assertEqual(plan.to_id, canonical_id)
+
+    def test_select_canonical_status_preference(self):
+        """Test canonical selection prefers active over draft."""
+        group = [
+            CategoryInfo(id=1, name="Electronics", item_count=10, status="draft"),
+            CategoryInfo(id=2, name="electronics", item_count=10, status="active"),
+            CategoryInfo(id=3, name="ELECTRONICS", item_count=10, status=None),
+        ]
+
+        cleanup = CategoryCleanup(dsn="")
+        canonical, others = cleanup.select_canonical(group)
+
+        # Should pick active status
+        self.assertEqual(canonical.id, 2)
+        self.assertEqual(canonical.status, "active")
 
 
 if __name__ == "__main__":

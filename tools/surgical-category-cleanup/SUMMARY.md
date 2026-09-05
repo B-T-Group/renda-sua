@@ -50,8 +50,9 @@
 
 ### Canonical Selection Logic
 1. Highest item count (most used)
-2. Title Case preference (better formatting)
-3. Lowest ID (tie-breaker)
+2. Status: `active` > `draft` > others
+3. Title Case preference (better formatting)
+4. Lowest ID (tie-breaker)
 
 ### Safety Features
 - ✅ AWS Secrets Manager integration (never echoes DATABASE_URL)
@@ -60,10 +61,23 @@
 - ✅ Separate prod/dev secret handling
 - ✅ Detailed logging with connection host verification
 
-### Schema Discovery
-Discovered and handles:
+### Schema Discovery & Prod Scale
+**Remap path (corrected from prod inventory):**
 - `items.item_sub_category_id` → `item_sub_categories.id` (ON DELETE RESTRICT)
 - `item_sub_categories.item_category_id` → `item_categories.id` (ON DELETE RESTRICT)
+
+**IMPORTANT:** Items do NOT have direct category FK. When merging categories, remap subcategories' `item_category_id`; items follow automatically.
+
+**Production scale (Sep 2026):**
+- 382 categories, 1,250 subcategories, 10,342 items
+- Categories/subs have `status`: `active` or `draft`
+- 42 empty subcategories
+- ~420/422 subs have fb/google taxonomy
+
+**Known duplicates:**
+- Categories: `vêtements` (381 items), `soins de la peau` (105), `mode` (21)
+- Subcategories: `eau de parfum` (113 items)
+- Junk: Category 420 `T`, Subcategory 579 `T`
 
 Note: `rental_categories` is separate (not covered)
 
@@ -83,11 +97,12 @@ cd ../embed-product-taxonomy
 
 ## Testing
 
-### Unit Tests (7 tests, all passing ✅)
+### Unit Tests (8 tests, all passing ✅)
 - `test_find_duplicates` - Normalized name matching
 - `test_find_case_variants` - Case inconsistency detection
 - `test_find_test_junk` - Pattern-based junk detection
 - `test_select_canonical_highest_count` - Item count selection
+- `test_select_canonical_status_preference` - Status priority (active > draft)
 - `test_select_canonical_title_case_preference` - Title Case preference
 - `test_select_canonical_lowest_id_tiebreaker` - ID tie-breaking
 - `test_plan_remaps` - Remap plan generation

@@ -35,6 +35,7 @@ class CategoryInfo:
     name: str
     item_count: int
     parent_id: Optional[int] = None
+    status: Optional[str] = None
 
 
 @dataclass
@@ -90,11 +91,12 @@ class CategoryCleanup:
             return cur.rowcount
 
     def inventory_categories(self) -> List[CategoryInfo]:
-        """Get all categories with item counts (via subcategories)."""
+        """Get all categories with item counts (via subcategories → items)."""
         query = """
             SELECT
                 c.id,
                 c.name,
+                c.status,
                 COALESCE(SUM(sub_items.item_count), 0)::int AS item_count
             FROM public.item_categories c
             LEFT JOIN public.item_sub_categories s ON s.item_category_id = c.id
@@ -103,7 +105,7 @@ class CategoryCleanup:
                 FROM public.items
                 GROUP BY item_sub_category_id
             ) sub_items ON sub_items.item_sub_category_id = s.id
-            GROUP BY c.id, c.name
+            GROUP BY c.id, c.name, c.status
             ORDER BY c.id
         """
         rows = self._execute_query(query)
@@ -115,6 +117,7 @@ class CategoryCleanup:
             SELECT
                 s.id,
                 s.name,
+                s.status,
                 s.item_category_id AS parent_id,
                 COALESCE(items.item_count, 0)::int AS item_count
             FROM public.item_sub_categories s
@@ -186,18 +189,29 @@ class CategoryCleanup:
 
         Rules:
         1. Highest item count
-        2. Title Case preference
-        3. Lowest ID as tie-breaker
+        2. Status: 'active' > 'draft' > others
+        3. Title Case preference
+        4. Lowest ID as tie-breaker
         """
 
         def is_title_case(name: str) -> bool:
             """Check if name is Title Case."""
             return name == name.title()
 
+        def status_priority(status: Optional[str]) -> int:
+            """Lower = better priority."""
+            if status == "active":
+                return 0
+            elif status == "draft":
+                return 1
+            else:
+                return 2
+
         sorted_group = sorted(
             group,
             key=lambda x: (
                 -x.item_count,
+                status_priority(x.status),
                 not is_title_case(x.name),
                 x.id,
             ),
@@ -376,20 +390,23 @@ def cmd_inventory(args):
         os.makedirs(args.output_dir, exist_ok=True)
 
         with open(cat_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["id", "name", "item_count"])
+            writer = csv.DictWriter(
+                f, fieldnames=["id", "name", "status", "item_count"]
+            )
             writer.writeheader()
             for cat in categories:
                 writer.writerow(
                     {
                         "id": cat.id,
                         "name": cat.name,
+                        "status": cat.status or "",
                         "item_count": cat.item_count,
                     }
                 )
 
         with open(sub_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
-                f, fieldnames=["id", "name", "parent_id", "item_count"]
+                f, fieldnames=["id", "name", "status", "parent_id", "item_count"]
             )
             writer.writeheader()
             for sub in subcategories:
@@ -397,6 +414,7 @@ def cmd_inventory(args):
                     {
                         "id": sub.id,
                         "name": sub.name,
+                        "status": sub.status or "",
                         "parent_id": sub.parent_id,
                         "item_count": sub.item_count,
                     }
@@ -415,7 +433,8 @@ def cmd_inventory(args):
 
         with open(cat_dupes_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
-                f, fieldnames=["normalized_name", "id", "name", "item_count"]
+                f,
+                fieldnames=["normalized_name", "id", "name", "status", "item_count"],
             )
             writer.writeheader()
             for norm_name, group in cat_dupes.items():
@@ -425,6 +444,7 @@ def cmd_inventory(args):
                             "normalized_name": norm_name,
                             "id": item.id,
                             "name": item.name,
+                            "status": item.status or "",
                             "item_count": item.item_count,
                         }
                     )
@@ -432,7 +452,14 @@ def cmd_inventory(args):
         with open(sub_dupes_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
                 f,
-                fieldnames=["normalized_name", "id", "name", "parent_id", "item_count"],
+                fieldnames=[
+                    "normalized_name",
+                    "id",
+                    "name",
+                    "status",
+                    "parent_id",
+                    "item_count",
+                ],
             )
             writer.writeheader()
             for norm_name, group in sub_dupes.items():
@@ -442,6 +469,7 @@ def cmd_inventory(args):
                             "normalized_name": norm_name,
                             "id": item.id,
                             "name": item.name,
+                            "status": item.status or "",
                             "parent_id": item.parent_id,
                             "item_count": item.item_count,
                         }
@@ -470,7 +498,8 @@ def cmd_inventory(args):
 
         with open(cat_case_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
-                f, fieldnames=["normalized_name", "id", "name", "item_count"]
+                f,
+                fieldnames=["normalized_name", "id", "name", "status", "item_count"],
             )
             writer.writeheader()
             for norm_name, group in cat_case.items():
@@ -480,6 +509,7 @@ def cmd_inventory(args):
                             "normalized_name": norm_name,
                             "id": item.id,
                             "name": item.name,
+                            "status": item.status or "",
                             "item_count": item.item_count,
                         }
                     )
@@ -487,7 +517,14 @@ def cmd_inventory(args):
         with open(sub_case_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
                 f,
-                fieldnames=["normalized_name", "id", "name", "parent_id", "item_count"],
+                fieldnames=[
+                    "normalized_name",
+                    "id",
+                    "name",
+                    "status",
+                    "parent_id",
+                    "item_count",
+                ],
             )
             writer.writeheader()
             for norm_name, group in sub_case.items():
@@ -497,6 +534,7 @@ def cmd_inventory(args):
                             "normalized_name": norm_name,
                             "id": item.id,
                             "name": item.name,
+                            "status": item.status or "",
                             "parent_id": item.parent_id,
                             "item_count": item.item_count,
                         }
@@ -522,20 +560,23 @@ def cmd_inventory(args):
         )
 
         with open(cat_junk_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["id", "name", "item_count"])
+            writer = csv.DictWriter(
+                f, fieldnames=["id", "name", "status", "item_count"]
+            )
             writer.writeheader()
             for item in cat_junk:
                 writer.writerow(
                     {
                         "id": item.id,
                         "name": item.name,
+                        "status": item.status or "",
                         "item_count": item.item_count,
                     }
                 )
 
         with open(sub_junk_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
-                f, fieldnames=["id", "name", "parent_id", "item_count"]
+                f, fieldnames=["id", "name", "status", "parent_id", "item_count"]
             )
             writer.writeheader()
             for item in sub_junk:
@@ -543,6 +584,7 @@ def cmd_inventory(args):
                     {
                         "id": item.id,
                         "name": item.name,
+                        "status": item.status or "",
                         "parent_id": item.parent_id,
                         "item_count": item.item_count,
                     }
