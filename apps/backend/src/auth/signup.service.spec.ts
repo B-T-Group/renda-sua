@@ -346,6 +346,13 @@ describe('SignupService', () => {
       ).toHaveBeenCalled();
       expect(result.user.id).toBe('user-123');
       expect(result.tokens.access_token).toBe('token');
+
+      const completeCall = hasuraSystemService.executeMutation.mock.calls.find(
+        ([mutation]) => String(mutation).includes('CompleteSignupAttempt')
+      );
+      expect(completeCall?.[0]).toContain('status: "completed"');
+      expect(completeCall?.[0]).toContain('email: null');
+      expect(completeCall?.[0]).toContain('phone_number: null');
     });
 
     it('rejects expired attempts without creating a user', async () => {

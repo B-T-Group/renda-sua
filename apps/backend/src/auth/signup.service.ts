@@ -1167,6 +1167,7 @@ export class SignupService {
     );
   }
 
+  /** Persist completion and clear contact PII. Terminal statuses may have null email/phone. */
   private async markAttemptCompleted(
     attemptId: string,
     userId: string,
