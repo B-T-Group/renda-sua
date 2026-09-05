@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClsService } from 'nestjs-cls';
 import {
@@ -6,6 +7,9 @@ import {
 } from '../auth/request-context';
 import { HasuraSystemService } from './hasura-system.service';
 import { HasuraUserService } from './hasura-user.service';
+
+const VALID_USER_ID = '11111111-1111-4111-8111-111111111111';
+const AUTH0_EMAIL_SUB = 'email|6a95505255ad3b18af9e159f';
 
 function makeService(clsStore: Map<string, unknown> = new Map()) {
   const cls = {
@@ -133,5 +137,139 @@ describe('HasuraUserService (singleton + CLS)', () => {
     expect(client.requestConfig.headers).toMatchObject({
       'X-Hasura-Role': 'client',
     });
+  });
+
+  it('getUser rejects Auth0-style JWT user ids before querying Hasura', async () => {
+    const { service, hasuraSystem } = makeService();
+    const ctx = emptyRequestContext({
+      userId: AUTH0_EMAIL_SUB,
+      authToken: 'token',
+    });
+
+    await expect(service.getUser(ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+    expect(hasuraSystem.getUserByIdWithRelations).not.toHaveBeenCalled();
+  });
+
+  it('getUserIdentity rejects Auth0-style JWT user ids before querying Hasura', async () => {
+    const { service, hasuraSystem } = makeService();
+    const ctx = emptyRequestContext({
+      userId: AUTH0_EMAIL_SUB,
+      authToken: 'token',
+    });
+
+    await expect(service.getUserIdentity(ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+    expect(hasuraSystem.getUserByIdWithRelations).not.toHaveBeenCalled();
+  });
+
+  it('getUser loads the user when JWT user id is a UUID', async () => {
+    const { service, hasuraSystem } = makeService();
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockResolvedValue({
+      id: VALID_USER_ID,
+      client: { id: 'c1' },
+      agent: null,
+      business: null,
+    });
+    const ctx = emptyRequestContext({
+      userId: VALID_USER_ID,
+      authToken: 'token',
+      jwtDefaultRole: 'client',
+      jwtAllowedRoles: ['client'],
+    });
+
+    const user = await service.getUser(ctx);
+
+    expect(user.id).toBe(VALID_USER_ID);
+    expect(hasuraSystem.getUserByIdWithRelations).toHaveBeenCalledWith(
+      VALID_USER_ID
+    );
+  });
+
+  it('maps transient Hasura network errors in getUser to 503', async () => {
+    const { service, clsStore, hasuraSystem } = makeService();
+    clsStore.set(
+      REQUEST_CONTEXT_CLS_KEY,
+      emptyRequestContext({
+        userId: VALID_USER_ID,
+        authToken: 'token',
+      })
+    );
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue({
+      message:
+        'GraphQL Error (Code: 503): {"response":{"error":"<html><title>503 Service Temporarily Unavailable</title></html>","status":503}}',
+      response: {
+        error: '<html><title>503 Service Temporarily Unavailable</title></html>',
+        status: 503,
+      },
+    });
+
+    await expect(service.getUser()).rejects.toMatchObject({
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+    });
+  });
+
+  it('maps nginx HTML 404s in getUser to 503', async () => {
+    const { service, clsStore, hasuraSystem } = makeService();
+    clsStore.set(
+      REQUEST_CONTEXT_CLS_KEY,
+      emptyRequestContext({
+        userId: VALID_USER_ID,
+        authToken: 'token',
+      })
+    );
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue({
+      message:
+        'GraphQL Error (Code: 404): {"response":{"error":"<html><title>404 Not Found</title></html>","status":404}}',
+      response: {
+        error: '<html><title>404 Not Found</title></html>',
+        status: 404,
+      },
+    });
+
+    await expect(service.getUser()).rejects.toMatchObject({
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+    });
+  });
+
+  it('rethrows user-not-found from getUser', async () => {
+    const { service, clsStore, hasuraSystem } = makeService();
+    clsStore.set(
+      REQUEST_CONTEXT_CLS_KEY,
+      emptyRequestContext({
+        userId: VALID_USER_ID,
+        authToken: 'token',
+      })
+    );
+    const missing = new Error(
+      `User not found for id: ${VALID_USER_ID}`
+    );
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue(
+      missing
+    );
+
+    await expect(service.getUser()).rejects.toBe(missing);
+  });
+
+  it('preserves HttpException from getUser', async () => {
+    const { service, clsStore, hasuraSystem } = makeService();
+    clsStore.set(
+      REQUEST_CONTEXT_CLS_KEY,
+      emptyRequestContext({
+        userId: VALID_USER_ID,
+        authToken: 'token',
+      })
+    );
+    const forbidden = new HttpException(
+      { success: false, error: 'Account has been deleted' },
+      HttpStatus.FORBIDDEN
+    );
+    (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockRejectedValue(
+      forbidden
+    );
+
+    await expect(service.getUser()).rejects.toBe(forbidden);
   });
 });

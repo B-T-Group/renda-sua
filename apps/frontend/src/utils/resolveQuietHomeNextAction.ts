@@ -48,6 +48,33 @@ export type QuietHomeNextActionInput = {
   showMmPhoneConfirm: boolean;
 };
 
+export type QuietHomeGatingInput = {
+  showOperationalModules: boolean;
+  aggregatesLoading: boolean;
+  aggregates: { ordersTotal?: number } | null | undefined;
+  aggregatesError?: string | null;
+};
+
+/**
+ * Quiet home only after aggregates succeed with zero orders.
+ * Loading or failed totals must keep day-to-day fulfillment modules visible.
+ */
+export function resolveQuietHomeGating(input: QuietHomeGatingInput): {
+  quietHomeMode: boolean;
+  fulfillmentMode: boolean;
+} {
+  const aggregatesReady =
+    !input.aggregatesLoading && !!input.aggregates && !input.aggregatesError;
+  const quietHomeMode =
+    input.showOperationalModules &&
+    aggregatesReady &&
+    (input.aggregates?.ordersTotal ?? 0) === 0;
+  return {
+    quietHomeMode,
+    fulfillmentMode: input.showOperationalModules && !quietHomeMode,
+  };
+}
+
 /**
  * Web quiet-home next action (no FTUE dismiss). First match wins.
  * Skips tips whose CTA is already on Store reach or Catalog health.

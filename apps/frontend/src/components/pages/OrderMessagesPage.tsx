@@ -20,6 +20,10 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrderById } from '../../hooks/useOrderById';
 import UserMessagesComponent from '../common/UserMessagesComponent';
 import SEOHead from '../seo/SEOHead';
+import {
+  canSeeOrderMessages,
+  resolveDelegateMessagesRedirect,
+} from '../../utils/orderMessagesAccess';
 
 function emptyPromptForPersona(
   t: (key: string, defaultValue: string) => string,
@@ -50,13 +54,14 @@ const OrderMessagesPage: React.FC = () => {
   const ordersApiPrefix = useOrdersApiPrefix();
   const { isDelegationContext } = useUserProfileContext();
 
-  if (isDelegationContext && ordersApiPrefix !== '/delegate' && orderId) {
-    return (
-      <Navigate
-        to={`/delegate/orders/${orderId}/messages${location.search}`}
-        replace
-      />
-    );
+  const delegateRedirect = resolveDelegateMessagesRedirect({
+    isDelegationContext,
+    ordersApiPrefix,
+    orderId,
+    search: location.search,
+  });
+  if (delegateRedirect) {
+    return <Navigate to={delegateRedirect} replace />;
   }
 
   return <OrderMessagesPageContent />;
@@ -82,10 +87,11 @@ const OrderMessagesPageContent: React.FC = () => {
     if (orderId) void fetchOrder(orderId);
   }, [orderId, fetchOrder]);
 
-  const canSeeMessages =
-    persona !== 'agent' ||
-    (Boolean(profile?.agent?.id) &&
-      order?.assigned_agent_id === profile?.agent?.id);
+  const canSeeMessages = canSeeOrderMessages({
+    persona,
+    agentId: profile?.agent?.id,
+    assignedAgentId: order?.assigned_agent_id,
+  });
 
   if (loading && !order) {
     return (

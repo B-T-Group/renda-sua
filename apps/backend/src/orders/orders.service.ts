@@ -28,6 +28,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { resolveOrderNotificationAddress } from './order-notification-address.util';
+import { resetOrderPaymentFailure as writePaymentFailureReset } from './reset-order-payment-failure.util';
 import {
   MobilePaymentsDatabaseService,
   type MobilePaymentTransaction,
@@ -41,6 +42,14 @@ import {
   NotificationData,
   NotificationsService,
 } from '../notifications/notifications.service';
+import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import {
+  assertDiasporaPaymentTiming,
+  normalizeCountryCode,
+  resolveOrderPayer,
+  resolveOrderRecipient,
+} from '../diaspora/diaspora-order.util';
 import { PdfService } from '../pdf/pdf.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
@@ -78,12 +87,17 @@ import {
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
 import {
   resolveShopperVariant,
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 import { GET_ORDERS } from './orders.queries';
+import {
+  withDeliveryContact,
+  withDeliveryContactForFulfiller,
+} from './delivery-contact.util';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
@@ -99,6 +113,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
+import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
 
@@ -106,7 +121,7 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
-  cancellationReasonId?: number; // FK to order_cancellation_reasons
+  cancellationReasonId: number; // Required FK to order_cancellation_reasons
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -416,6 +431,8 @@ export class OrdersService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
+    private readonly fxEstimateService: FxEstimateService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
@@ -821,12 +838,12 @@ export class OrdersService {
         return { ...restItem, item: restrictedItem };
       });
 
-      return {
+      return withDeliveryContactForFulfiller({
         ...restOrder,
         delivery_commission: earnings.totalEarnings,
         agent_hold_amount: agentHoldAmount,
         order_items: orderItems,
-      };
+      });
     } catch (error: any) {
       this.logger.warn(
         `Failed to transform order ${order.id} for agent: ${error.message}`
@@ -1051,11 +1068,14 @@ export class OrdersService {
       );
     }
 
-    if (window.is_confirmed) {
-      throw new HttpException(
-        'Delivery time window is already confirmed',
-        HttpStatus.BAD_REQUEST
-      );
+    if (
+      shouldReuseConfirmedDeliveryWindow({
+        windowOrderId: window.order_id,
+        requestOrderId: orderId,
+        isConfirmed: window.is_confirmed,
+      })
+    ) {
+      return window.id;
     }
 
     const now = this.getCurrentTimeInTimezone(timezone);
@@ -1908,6 +1928,24 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Pushes the PIN to a third-party recipient's phone. A recipient who never
+   * logs in cannot open the in-app PIN screen, so the code has to reach them
+   * over SMS/WhatsApp for the existing agent handover to work.
+   */
+  private async shareDeliveryPinWithRecipient(
+    orderId: string,
+    pin: string
+  ): Promise<void> {
+    try {
+      await this.orderRecipientNotifications.notifyDeliveryPin(orderId, pin);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to send delivery PIN to recipient for order ${orderId}: ${error?.message ?? error}`
+      );
+    }
+  }
+
   /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
   private async ensurePickupPinIfNeeded(order: Orders): Promise<void> {
     if ((order as any).fulfillment_method !== 'pickup') return;
@@ -1922,6 +1960,7 @@ export class OrdersService {
     const deliveryPinHash = this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
     await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
   }
 
   /**
@@ -4005,32 +4044,7 @@ export class OrdersService {
   }
 
   private async resetOrderPaymentFailure(orderId: string): Promise<void> {
-    const at = new Date().toISOString();
-    const mutation = `
-      mutation ResetPaymentFailure(
-        $orderId: uuid!
-        $paymentStatus: String!
-        $at: timestamptz!
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            payment_status: $paymentStatus
-            payment_failed_at: null
-            payment_failure_message: null
-            updated_at: $at
-          }
-        ) {
-          id
-          payment_status
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      paymentStatus: 'pending',
-      at,
-    });
+    await writePaymentFailureReset(this.hasuraSystemService, orderId);
   }
 
   private buildOrderPaymentAttemptReference(orderNumber: string): string {
@@ -4680,7 +4694,7 @@ export class OrdersService {
           $orderId: uuid!,
           $cancelledBy: String!,
           $cancelledAt: timestamptz!,
-          $cancellationReasonId: Int,
+          $cancellationReasonId: Int!,
           $cancellationNotes: String
         ) {
           update_orders_by_pk(
@@ -4698,7 +4712,7 @@ export class OrdersService {
           orderId: request.orderId,
           cancelledBy,
           cancelledAt: new Date().toISOString(),
-          cancellationReasonId: request.cancellationReasonId ?? null,
+          cancellationReasonId: request.cancellationReasonId,
           cancellationNotes: request.notes ?? null,
         }
       );
@@ -5144,6 +5158,11 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          recipient_name
+          recipient_phone
+          is_third_party_recipient
+          is_diaspora_order
+          fulfillment_country
           business {
             name
           }
@@ -5479,6 +5498,11 @@ export class OrdersService {
           shipping_carrier
           shipped_at
           received_at
+          recipient_name
+          recipient_phone
+          is_third_party_recipient
+          is_diaspora_order
+          fulfillment_country
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -5688,6 +5712,20 @@ export class OrdersService {
           shipping_carrier
           shipped_at
           received_at
+          recipient_name
+          recipient_phone
+          recipient_email
+          recipient_notify_whatsapp
+          is_third_party_recipient
+          payer_name
+          payer_country
+          payer_payment_rail
+          fulfillment_country
+          is_diaspora_order
+          presentment_currency
+          presentment_amount
+          presentment_fx_rate
+          presentment_fx_source
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -5950,7 +5988,7 @@ export class OrdersService {
     }
 
     return {
-      ...orderData,
+      ...withDeliveryContact(orderData),
       access_reason: accessReason,
     };
   }
@@ -6804,6 +6842,10 @@ export class OrdersService {
         orderWithDetails.id,
         deliveryPin
       );
+      await this.shareDeliveryPinWithRecipient(
+        orderWithDetails.id,
+        deliveryPin
+      );
       try {
         await this.orderAcceptanceService.startAcceptanceSla(order.id);
       } catch (slaError: any) {
@@ -7254,6 +7296,7 @@ export class OrdersService {
       this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
     await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
 
     await this.sendOrderPlacedNotifications(order, 'pending');
   }
@@ -7341,6 +7384,10 @@ export class OrdersService {
 
       await this.notificationsService.sendOrderCreatedNotifications(
         notificationData
+      );
+      await this.orderRecipientNotifications.notifyStatusChange(
+        order.id,
+        orderStatus
       );
     } catch (error) {
       this.logger.error(
@@ -8168,6 +8215,33 @@ export class OrdersService {
   }
 
   /**
+   * Snapshot the payer after refusing a client-supplied local-country spoof.
+   */
+  private async resolveTrustedOrderPayer(
+    user: {
+      id: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      email?: string | null;
+      phone_number?: string | null;
+    },
+    requestedPayerCountry?: string | null
+  ) {
+    const profileCountry = await this.paymentRoutingService.getUserCountryCode(
+      user.id
+    );
+    const payerCountry =
+      await this.paymentRoutingService.resolveTrustedPayerCountry({
+        profileCountry,
+        requestedCountry: requestedPayerCountry,
+      });
+    return resolveOrderPayer({
+      user: { ...user, country: profileCountry },
+      requestedPayerCountry: payerCountry,
+    });
+  }
+
+  /**
    * Create a new order with validation and fund withholding
    */
   async createOrder(orderData: any): Promise<any> {
@@ -8706,6 +8780,42 @@ export class OrdersService {
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
+    const itemCountry = resolveItemCountry(
+      businessInventories[0]?.business_location?.address?.country,
+      businessInventories[0]?.business_location?.business?.user?.country
+    );
+
+    const fulfillmentCountry =
+      normalizeCountryCode(
+        fulfillmentMethod === 'pickup'
+          ? businessInventories[0]?.business_location?.address?.country
+          : address?.country
+      ) ?? normalizeCountryCode(itemCountry);
+
+    const payer = await this.resolveTrustedOrderPayer(
+      user,
+      orderData.payer_country
+    );
+    const recipient = resolveOrderRecipient({
+      recipient: orderData.recipient,
+      sendingToSomeoneElse: orderData.sending_to_someone_else,
+      fulfillmentCountry,
+    });
+
+    // The seller country decides the rail as it always has. A payer billing
+    // from a Stripe country may additionally fund a mobile-money merchant —
+    // that is the diaspora path, and the card still charges the platform.
+    const railResolution = await this.paymentRoutingService.resolveOrderRail({
+      sellerCountry: itemCountry ?? undefined,
+      payerCountry: payer.payer_country,
+    });
+    // Checked before the phone and wallet rules below, which all assume a
+    // payer who is standing in the fulfillment market.
+    assertDiasporaPaymentTiming({
+      isDiaspora: railResolution.isDiaspora,
+      paymentTiming,
+    });
+
     if (
       (paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup') &&
@@ -8724,10 +8834,6 @@ export class OrdersService {
       );
     }
 
-    const itemCountry = resolveItemCountry(
-      businessInventories[0]?.business_location?.address?.country,
-      businessInventories[0]?.business_location?.business?.user?.country
-    );
     const provider = this.mobilePaymentsService.getProviderForCountry(itemCountry);
 
     if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
@@ -8742,10 +8848,7 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       availableBalance >= requiredAmountForHold;
 
-    // Resolve the payment rail from the item location country, not the owner user.
-    const paymentRail = await this.paymentRoutingService.resolveRailForCountry(
-      itemCountry ?? undefined
-    );
+    const paymentRail = railResolution.rail;
     const useStripeRail =
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
@@ -8808,6 +8911,20 @@ export class OrdersService {
     const verified_agent_delivery = !!orderData.verified_agent_delivery;
     const requires_fast_delivery =
       fulfillmentMethod === 'pickup' ? false : !!orderData.requires_fast_delivery;
+    const payer_payment_rail =
+      payment_source === 'credit_card'
+        ? 'stripe'
+        : payment_source === 'wallet'
+          ? 'wallet'
+          : 'mobile_money';
+    // Display-only conversion for the payer; settlement stays in `currency`.
+    const fxEstimate = railResolution.isDiaspora
+      ? this.fxEstimateService.estimate({
+          amount: total_amount,
+          merchantCurrency: currency,
+          payerCountry: payer.payer_country,
+        })
+      : null;
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
@@ -8843,7 +8960,23 @@ export class OrdersService {
         $verifiedAgentDelivery: Boolean!,
         $requiresFastDelivery: Boolean!,
         $firstOrderDeliveryFeePromo: Boolean!,
-        $firstOrderBaseDeliveryDiscountAmount: numeric!
+        $firstOrderBaseDeliveryDiscountAmount: numeric!,
+        $recipientName: String,
+        $recipientPhone: String,
+        $recipientEmail: String,
+        $recipientNotifyWhatsapp: Boolean!,
+        $isThirdPartyRecipient: Boolean!,
+        $payerName: String,
+        $payerPhone: String,
+        $payerEmail: String,
+        $payerCountry: String,
+        $payerPaymentRail: String,
+        $fulfillmentCountry: String,
+        $isDiasporaOrder: Boolean!,
+        $presentmentCurrency: String,
+        $presentmentAmount: numeric,
+        $presentmentFxRate: numeric,
+        $presentmentFxSource: String
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -8877,6 +9010,22 @@ export class OrdersService {
           requires_fast_delivery: $requiresFastDelivery,
           first_order_delivery_fee_promo: $firstOrderDeliveryFeePromo,
           first_order_base_delivery_discount_amount: $firstOrderBaseDeliveryDiscountAmount,
+          recipient_name: $recipientName,
+          recipient_phone: $recipientPhone,
+          recipient_email: $recipientEmail,
+          recipient_notify_whatsapp: $recipientNotifyWhatsapp,
+          is_third_party_recipient: $isThirdPartyRecipient,
+          payer_name: $payerName,
+          payer_phone: $payerPhone,
+          payer_email: $payerEmail,
+          payer_country: $payerCountry,
+          payer_payment_rail: $payerPaymentRail,
+          fulfillment_country: $fulfillmentCountry,
+          is_diaspora_order: $isDiasporaOrder,
+          presentment_currency: $presentmentCurrency,
+          presentment_amount: $presentmentAmount,
+          presentment_fx_rate: $presentmentFxRate,
+          presentment_fx_source: $presentmentFxSource,
           order_items: {
             data: $orderItems
           }
@@ -8913,6 +9062,20 @@ export class OrdersService {
           requires_fast_delivery
           first_order_delivery_fee_promo
           first_order_base_delivery_discount_amount
+          recipient_name
+          recipient_phone
+          recipient_email
+          recipient_notify_whatsapp
+          is_third_party_recipient
+          payer_name
+          payer_country
+          payer_payment_rail
+          fulfillment_country
+          is_diaspora_order
+          presentment_currency
+          presentment_amount
+          presentment_fx_rate
+          presentment_fx_source
           order_items {
             id
             business_inventory_id
@@ -9001,6 +9164,22 @@ export class OrdersService {
         firstOrderDeliveryFeePromo: deliveryFeeInfo.firstOrderDeliveryFeePromo,
         firstOrderBaseDeliveryDiscountAmount:
           deliveryFeeInfo.firstOrderBaseDeliveryDiscountAmount,
+        recipientName: recipient.recipient_name,
+        recipientPhone: recipient.recipient_phone,
+        recipientEmail: recipient.recipient_email,
+        recipientNotifyWhatsapp: recipient.recipient_notify_whatsapp,
+        isThirdPartyRecipient: recipient.is_third_party_recipient,
+        payerName: payer.payer_name,
+        payerPhone: payer.payer_phone,
+        payerEmail: payer.payer_email,
+        payerCountry: payer.payer_country,
+        payerPaymentRail: payer_payment_rail,
+        fulfillmentCountry: fulfillmentCountry,
+        isDiasporaOrder: railResolution.isDiaspora,
+        presentmentCurrency: fxEstimate?.currency ?? null,
+        presentmentAmount: fxEstimate?.amount ?? null,
+        presentmentFxRate: fxEstimate?.rate ?? null,
+        presentmentFxSource: fxEstimate?.source ?? null,
       }
     );
 
@@ -9011,7 +9190,8 @@ export class OrdersService {
     } catch (error: any) {
       await this.compensateUnpaidCreate(
         order.id,
-        'Create failed: inventory reservation error'
+        'Create failed: inventory reservation error',
+        { releaseInventory: false, allowPendingUnpaid: true }
       );
       throw error;
     }
@@ -9409,14 +9589,15 @@ export class OrdersService {
 
   private async compensateUnpaidCreate(
     orderId: string,
-    notes: string
+    notes: string,
+    options?: { releaseInventory?: boolean; allowPendingUnpaid?: boolean }
   ): Promise<void> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       return;
     }
     const paymentStatus = String((order as any).payment_status || '').toLowerCase();
-    if (order.current_status !== 'pending_payment' || paymentStatus === 'paid') {
+    if (!this.canCompensateUnpaidCreate(order, paymentStatus, options)) {
       this.logger.warn(
         `Skipping create compensation for ${order.order_number}: status=${order.current_status} payment_status=${paymentStatus}`
       );
@@ -9433,13 +9614,33 @@ export class OrdersService {
     try {
       await this.orderCleanupService.cancelUnpaidPendingPaymentAsSystem(
         orderId,
-        notes
+        notes,
+        {
+          allowPendingUnpaid: options?.allowPendingUnpaid === true,
+          releaseInventory: options?.releaseInventory !== false,
+        }
       );
     } catch (error: any) {
       this.logger.error(
         `System cancel during create compensation failed for ${orderId}: ${error?.message}`
       );
     }
+  }
+
+  private canCompensateUnpaidCreate(
+    order: { current_status: string },
+    paymentStatus: string,
+    options?: { allowPendingUnpaid?: boolean }
+  ): boolean {
+    if (paymentStatus === 'paid') {
+      return false;
+    }
+    if (order.current_status === 'pending_payment') {
+      return true;
+    }
+    return (
+      options?.allowPendingUnpaid === true && order.current_status === 'pending'
+    );
   }
 
   private async releaseWalletHoldsForPendingPaymentOrder(
@@ -11141,26 +11342,11 @@ export class OrdersService {
         error
       );
 
-      const isCfaMarket = ['CM', 'GA', 'TG', 'BJ', 'CI', 'CG'].includes(
-        countryCode
-      );
-      // Fallback to hardcoded CFA values if configuration lookup fails
-      const fallbackConfig = {
-        baseFee: requiresFastDelivery ? 1500 : 1000,
-        ratePerKm: isCfaMarket ? 100 : 200,
-        maxPerKmFee: isCfaMarket ? 1500 : 0,
-        minFee: 1000,
-      };
-      const perKmCalculated = distanceKm * fallbackConfig.ratePerKm;
-      const perKmFee = Math.min(fallbackConfig.maxPerKmFee, perKmCalculated);
-      const calculatedFee = fallbackConfig.baseFee + perKmFee;
-      const totalFee = Math.max(fallbackConfig.minFee, calculatedFee);
-
-      return {
-        baseFee: fallbackConfig.baseFee,
-        perKmFee,
-        totalFee,
-      };
+      return calculateDeliveryFeeFallback({
+        distanceKm,
+        countryCode,
+        requiresFastDelivery,
+      });
     }
   }
 
@@ -11224,55 +11410,115 @@ export class OrdersService {
     const validItems = orderItems.filter(
       (item) => item.business_inventory_id && item.quantity
     );
-
     if (validItems.length === 0) {
       this.logger.warn('No valid items to update reserved quantities for');
       return;
     }
-
-    const invalidItems = orderItems.filter(
-      (item) => !item.business_inventory_id || !item.quantity
-    );
-    if (invalidItems.length > 0) {
+    const skipped = orderItems.length - validItems.length;
+    if (skipped > 0) {
       this.logger.warn(
-        `Skipping ${invalidItems.length} items with missing reserved-quantity data`
+        `Skipping ${skipped} items with missing reserved-quantity data`
       );
     }
-
     const quantityChanges = this.getRequestedQuantitiesByInventory(validItems);
-    const fn =
-      operation === 'increment'
-        ? 'try_reserve_business_inventory'
-        : 'try_release_business_inventory';
+    if (operation === 'increment') {
+      await this.reserveInventoryAtomically(quantityChanges);
+      return;
+    }
+    await this.applyAtomicInventoryMap(
+      'try_release_business_inventory',
+      quantityChanges,
+      'decrement'
+    );
+  }
 
-    for (const [inventoryId, quantity] of quantityChanges) {
-      const result = await this.hasuraSystemService.executeMutation<{
-        [key: string]: Array<{ id: string }>;
-      }>(
-        `mutation AtomicReserve($inventoryId: uuid!, $qty: Int!) {
-          ${fn}(args: { p_inventory_id: $inventoryId, p_qty: $qty }) {
-            id
-          }
-        }`,
-        { inventoryId, qty: quantity }
-      );
-      if (!result[fn]?.length) {
-        throw new HttpException(
-          {
-            success: false,
-            message:
-              operation === 'increment'
-                ? 'Insufficient stock to reserve for this order'
-                : 'Could not release reserved inventory',
-            error: 'INVENTORY_RESERVATION_FAILED',
-          },
-          HttpStatus.BAD_REQUEST
+  private async reserveInventoryAtomically(
+    quantityChanges: Map<string, number>
+  ): Promise<void> {
+    const reserved: Array<[string, number]> = [];
+    try {
+      for (const [inventoryId, quantity] of quantityChanges) {
+        await this.applyAtomicInventoryChange(
+          'try_reserve_business_inventory',
+          inventoryId,
+          quantity,
+          'increment'
+        );
+        reserved.push([inventoryId, quantity]);
+      }
+    } catch (error: any) {
+      await this.releaseReservedAfterPartialFailure(reserved);
+      throw error;
+    }
+  }
+
+  private async releaseReservedAfterPartialFailure(
+    reserved: Array<[string, number]>
+  ): Promise<void> {
+    for (const [inventoryId, quantity] of reserved) {
+      try {
+        await this.applyAtomicInventoryChange(
+          'try_release_business_inventory',
+          inventoryId,
+          quantity,
+          'decrement'
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to roll back reserve for ${inventoryId}: ${error?.message}`
         );
       }
-      this.logger.log(
-        `${operation === 'increment' ? 'Reserved' : 'Released'} ${quantity} for inventory ${inventoryId}`
-      );
     }
+  }
+
+  private async applyAtomicInventoryMap(
+    fn: string,
+    quantityChanges: Map<string, number>,
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
+    for (const [inventoryId, quantity] of quantityChanges) {
+      await this.applyAtomicInventoryChange(fn, inventoryId, quantity, operation);
+    }
+  }
+
+  private async applyAtomicInventoryChange(
+    fn: string,
+    inventoryId: string,
+    quantity: number,
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      [key: string]: Array<{ id: string }>;
+    }>(
+      `mutation AtomicReserve($inventoryId: uuid!, $qty: Int!) {
+        ${fn}(args: { p_inventory_id: $inventoryId, p_qty: $qty }) {
+          id
+        }
+      }`,
+      { inventoryId, qty: quantity }
+    );
+    if (!result[fn]?.length) {
+      throw this.reservationFailure(operation);
+    }
+    this.logger.log(
+      `${operation === 'increment' ? 'Reserved' : 'Released'} ${quantity} for inventory ${inventoryId}`
+    );
+  }
+
+  private reservationFailure(
+    operation: 'increment' | 'decrement'
+  ): HttpException {
+    return new HttpException(
+      {
+        success: false,
+        message:
+          operation === 'increment'
+            ? 'Insufficient stock to reserve for this order'
+            : 'Could not release reserved inventory',
+        error: 'INVENTORY_RESERVATION_FAILED',
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   /**

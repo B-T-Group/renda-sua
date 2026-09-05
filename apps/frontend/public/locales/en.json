@@ -12,7 +12,8 @@
       "subheadline": "Want to own something? Rendasua's got your back. Just want to rent it? We've still got your back. Browse local businesses, order or book in minutes, and track every delivery in real time.",
       "browseItems": "Browse Items",
       "browseRentals": "Browse Rentals",
-      "sellOnRendasua": "Sell on Rendasua"
+      "sellOnRendasua": "Sell on Rendasua",
+      "mockupCaption": "Example while out for delivery"
     },
     "trust": {
       "fastDelivery": "Fast local delivery",
@@ -201,7 +202,8 @@
         "notifications": "Instant push notifications for every update",
         "pin": "Secure delivery PIN verification",
         "checkout": "Faster checkout with saved addresses"
-      }
+      },
+      "mockupCaption": "Example while out for delivery"
     },
     "faq": {
       "title": "Frequently asked questions",
@@ -217,7 +219,7 @@
       },
       "canITrack": {
         "question": "Can I track my delivery in real time?",
-        "answer": "Yes! The Rendasua app provides live tracking so you can see exactly where your delivery agent is and get an estimated arrival time."
+        "answer": "Yes! Track your order on web or in the app. Once out for delivery, you can see exactly where your delivery agent is and get an estimated arrival time."
       },
       "howSellBusiness": {
         "question": "How do I start selling as a business?",
@@ -4268,7 +4270,7 @@
       },
       "deliveryTime": {
         "q": "How long does delivery take?",
-        "a": "Delivery times depend on your location and the seller. Standard delivery is typically within 24–48 hours. Fast delivery options may be available at checkout for quicker delivery."
+        "a": "Store products are usually delivered within 24–48 hours after order confirmation. Food orders are ready during business operating hours. Once an agent is assigned and out for delivery, you can track live location and see minute-level ETA updates on web or in the app."
       },
       "cancelOrder": {
         "q": "Can I cancel my order?",
@@ -5508,7 +5510,12 @@
       "messageBusiness": "Message the business",
       "cancelOrder": "Cancel order",
       "draftMessage": "Hi! Just confirming I'm still coming to pick up order {{orderNumber}}. See you soon."
-    }
+    },
+    "outForRecipient": "Out for {{name}}",
+    "recipientNotifiedNotice": "{{name}} gets tracking updates and the delivery code by text. They do not need your login.",
+    "deliveryContactRecipient": "Recipient",
+    "orderedBy": "Ordered by {{name}}",
+    "earningsPendingRelease": "Earnings pending · Releases when agent confirms pickup"
   },
   "items": {
     "brand": "Brand",
@@ -5631,7 +5638,7 @@
         "paymentQ": "How do I pay?",
         "paymentA": "Pay with MTN MoMo, Orange Money, or other supported mobile money at checkout.",
         "deliveryQ": "When will I receive my order?",
-        "deliveryA": "Delivery is typically within 6–24 hours depending on when you order and local availability.",
+        "deliveryA": "Store products are usually delivered within 24–48 hours after order confirmation. Once an agent is assigned and out for delivery, you can track live location and see minute-level ETA updates on web or in the app.",
         "issueQ": "What if something goes wrong?",
         "issueA": "Contact support with your order details. We will help you resolve delivery or product issues.",
         "sellerQ": "Who is selling this item?",
@@ -6539,7 +6546,7 @@
         "deliveryFees": "How are delivery fees calculated?",
         "deliveryFeesAnswer": "Delivery fees are calculated based on distance, item weight, and delivery urgency. You'll see the exact fee before confirming your order.",
         "deliveryTime": "How long does delivery take?",
-        "deliveryTimeAnswer": "Delivery times vary by location and item. Most orders are delivered within 2-4 hours for same-day delivery, or 24-48 hours for standard delivery.",
+        "deliveryTimeAnswer": "Store products are usually delivered within 24–48 hours after order confirmation. Food orders are ready during business operating hours. Once an agent is assigned and out for delivery, you'll see minute-level ETA updates.",
         "title": "Delivery & Tracking",
         "trackOrder": "How do I track my order?",
         "trackOrderAnswer": "You can track your order in real-time through your dashboard or by clicking the tracking link sent to your email."
@@ -6722,7 +6729,31 @@
     "fulfillmentDelivery": "Delivery",
     "fulfillmentPickup": "Store pickup",
     "pickupNotice": "No delivery fee. Collect your order at each store once it is ready.",
-    "pickupNoFee": "Waived (store pickup)"
+    "pickupNoFee": "Waived (store pickup)",
+    "diaspora": {
+      "title": "Sending an order home",
+      "payingFrom": "Paying from {{country}}",
+      "deliveringTo": "Delivering to {{country}}",
+      "sendingToSomeoneElse": "Someone else is receiving this order",
+      "sendingToSomeoneElseHelp": "We will collect their name and phone so they can follow the delivery themselves.",
+      "payerCharge": "You'll pay ≈ {{amount}}",
+      "merchantPrice": "Merchant price {{amount}}",
+      "fxDisclaimer": "Estimate only. Your card is charged in the merchant currency and your bank sets the final rate.",
+      "heldForRecipient": "Paid · Held until {{name}} receives the order",
+      "heldUntilHandover": "Paid · Held until delivery or pickup"
+    },
+    "recipient": {
+      "title": "Who is receiving this order?",
+      "subtitle": "They get tracking updates and the delivery code by text — no Rendasua account needed.",
+      "name": "Recipient full name",
+      "nameRequired": "The agent needs a name to hand the order to.",
+      "phone": "Recipient phone number",
+      "phoneRequired": "A local number in the delivery country is required.",
+      "phoneHelp": "Updates and the delivery code are sent to this number.",
+      "whatsapp": "Send their updates on WhatsApp",
+      "whatsappHelp": "We fall back to SMS if WhatsApp cannot be delivered.",
+      "pinNotice": "The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order."
+    }
   },
   "agentOnboarding": {
     "title": "How Deliveries Work",

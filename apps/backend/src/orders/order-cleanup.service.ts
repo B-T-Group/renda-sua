@@ -19,6 +19,7 @@ import {
   PAYMENT_FAILED_GRACE_MINUTES,
 } from './order-cleanup.constants';
 import { OrderQueueService } from './order-queue.service';
+import { releaseReservedInventory } from './release-reserved-inventory.util';
 
 interface CleanupOrderRow extends CleanupWindowOrder {
   id: string;
@@ -188,39 +189,55 @@ export class OrderCleanupService {
   async cancelUnpaidPendingPaymentAsSystem(
     orderId: string,
     notes: string,
-    options?: { reason?: 'timeout' | 'payment_failed_grace' }
+    options?: {
+      reason?: 'timeout' | 'payment_failed_grace';
+      allowPendingUnpaid?: boolean;
+      releaseInventory?: boolean;
+    }
   ): Promise<{ cancelled: boolean; skipped?: boolean; reason?: string }> {
     const order = await this.fetchOrderForUnpaidCancel(orderId);
     if (!order) {
       return { cancelled: false, skipped: true, reason: 'not_found' };
     }
-    if (order.current_status !== 'pending_payment') {
-      return {
-        cancelled: false,
-        skipped: true,
-        reason: `status_${order.current_status}`,
-      };
-    }
-    if ((order.payment_status || '').toLowerCase() === 'paid') {
-      return { cancelled: false, skipped: true, reason: 'already_paid' };
-    }
-    if (options?.reason === 'payment_failed_grace') {
-      const graceSkip = this.shouldSkipPaymentFailedGraceCancel(order);
-      if (graceSkip) {
-        return { cancelled: false, skipped: true, reason: graceSkip };
-      }
+    const skipReason = this.unpaidCancelSkipReason(order, options);
+    if (skipReason) {
+      return { cancelled: false, skipped: true, reason: skipReason };
     }
     const ok = await this.cancelWithClaim(
       order,
-      'pending_payment',
+      order.current_status,
       CANCEL_REASON_PAYMENT_NOT_COMPLETED,
       notes,
       notes,
-      false
+      false,
+      options?.releaseInventory !== false
     );
     return ok
       ? { cancelled: true }
       : { cancelled: false, skipped: true, reason: 'claim_lost' };
+  }
+
+  private unpaidCancelSkipReason(
+    order: CleanupOrderRow,
+    options?: {
+      reason?: 'timeout' | 'payment_failed_grace';
+      allowPendingUnpaid?: boolean;
+    }
+  ): string | null {
+    const status = order.current_status;
+    const allowed =
+      status === 'pending_payment' ||
+      (options?.allowPendingUnpaid === true && status === 'pending');
+    if (!allowed) {
+      return `status_${status}`;
+    }
+    if ((order.payment_status || '').toLowerCase() === 'paid') {
+      return 'already_paid';
+    }
+    if (options?.reason === 'payment_failed_grace') {
+      return this.shouldSkipPaymentFailedGraceCancel(order);
+    }
+    return null;
   }
 
   private shouldSkipPaymentFailedGraceCancel(
@@ -394,7 +411,8 @@ export class OrderCleanupService {
     reasonId: number,
     notes: string,
     historyNotes: string,
-    notifyViaStatusUpdated: boolean
+    notifyViaStatusUpdated: boolean,
+    releaseInventory = true
   ): Promise<boolean> {
     const claimed = await this.claimCancelled(
       order.id,
@@ -408,7 +426,8 @@ export class OrderCleanupService {
         order,
         expectedStatus,
         historyNotes,
-        notifyViaStatusUpdated
+        notifyViaStatusUpdated,
+        releaseInventory
       );
     } catch (error) {
       if (!(error as { paymentFinalized?: boolean }).paymentFinalized) {
@@ -447,7 +466,8 @@ export class OrderCleanupService {
     order: CleanupOrderRow,
     previousStatus: string,
     historyNotes: string,
-    notifyViaStatusUpdated: boolean
+    notifyViaStatusUpdated: boolean,
+    releaseInventory = true
   ): Promise<boolean> {
     const payment = await this.getOrderPaymentFields(order.id);
     let paymentFinalized = false;
@@ -464,7 +484,8 @@ export class OrderCleanupService {
         order,
         previousStatus,
         historyNotes,
-        notifyViaStatusUpdated
+        notifyViaStatusUpdated,
+        releaseInventory
       );
     } catch (error) {
       if (paymentFinalized) {
@@ -491,7 +512,8 @@ export class OrderCleanupService {
           order,
           previousStatus,
           historyNotes,
-          notifyViaStatusUpdated
+          notifyViaStatusUpdated,
+          releaseInventory
         ).catch((sideEffectError: any) =>
           this.logger.error(
             `Cancellation side-effect retry failed for ${order.id}: ${sideEffectError?.message}`
@@ -1031,9 +1053,12 @@ export class OrderCleanupService {
     order: CleanupOrderRow,
     previousStatus: string,
     notes: string,
-    notifyViaStatusUpdated: boolean
+    notifyViaStatusUpdated: boolean,
+    releaseInventory = true
   ): Promise<void> {
-    await this.decrementReservedQuantities(order.order_items || []);
+    if (releaseInventory) {
+      await this.decrementReservedQuantities(order.order_items || []);
+    }
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         order.id,
@@ -1064,44 +1089,14 @@ export class OrderCleanupService {
   private async decrementReservedQuantities(
     orderItems: CleanupOrderRow['order_items']
   ): Promise<void> {
-    const valid = (orderItems || []).filter(
-      (item) => item.business_inventory_id && item.quantity
+    const result = await releaseReservedInventory(
+      this.hasuraSystemService,
+      orderItems
     );
-    if (!valid.length) return;
-    const quantityChanges = new Map<string, number>();
-    for (const item of valid) {
-      const id = item.business_inventory_id as string;
-      quantityChanges.set(
-        id,
-        (quantityChanges.get(id) || 0) + Number(item.quantity)
+    if (result.skipped > 0) {
+      this.logger.warn(
+        `Atomic inventory release skipped ${result.skipped} row(s)`
       );
     }
-    const ids = [...quantityChanges.keys()];
-    const currentData = await this.hasuraSystemService.executeQuery(
-      `query($ids: [uuid!]!) {
-        business_inventory(where: { id: { _in: $ids } }) {
-          id reserved_quantity
-        }
-      }`,
-      { ids }
-    );
-    const quantityMap = new Map<string, number>();
-    for (const inv of currentData.business_inventory || []) {
-      quantityMap.set(inv.id, inv.reserved_quantity || 0);
-    }
-    await Promise.all(
-      [...quantityChanges.entries()].map(([id, quantity]) => {
-        const next = Math.max(0, (quantityMap.get(id) || 0) - quantity);
-        return this.hasuraSystemService.executeMutation(
-          `mutation($id: uuid!, $reservedQuantity: Int!) {
-            update_business_inventory_by_pk(
-              pk_columns: { id: $id }
-              _set: { reserved_quantity: $reservedQuantity }
-            ) { id }
-          }`,
-          { id, reservedQuantity: next }
-        );
-      })
-    );
   }
 }

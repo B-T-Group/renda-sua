@@ -1,50 +1,32 @@
-import { createTheme } from '@mui/material/styles';
+import { alpha, createTheme } from '@mui/material/styles';
+import { brandTokens } from './brandTokens';
 import { spacing, borderRadius, shadows, transitions } from './themeUtils';
+
+const { primary, secondary, cta, success, warning, error, info, surface, text } =
+  brandTokens;
+
+const brandShadow = (color: string, opacity: number, blur: number, y: number) =>
+  `0 ${y}px ${blur}px ${alpha(color, opacity)}`;
 
 export const theme = createTheme({
   palette: {
     mode: 'light',
-    primary: {
-      main: '#1e40af', // Deep blue - represents speed, trust, and reliability
-      light: '#3b82f6',
-      dark: '#1e3a8a',
-      contrastText: '#ffffff',
-    },
-    secondary: {
-      main: '#16a34a', // Vibrant green - represents fast delivery and success
-      light: '#22c55e',
-      dark: '#15803d',
-      contrastText: '#ffffff',
-    },
-    success: {
-      main: '#16a34a', // Green for successful deliveries
-      light: '#22c55e',
-      dark: '#15803d',
-    },
-    warning: {
-      main: '#f59e0b', // Amber for pending deliveries
-      light: '#fbbf24',
-      dark: '#d97706',
-    },
-    error: {
-      main: '#dc2626', // Red for delivery issues
-      light: '#ef4444',
-      dark: '#b91c1c',
-    },
-    info: {
-      main: '#0891b2', // Cyan for tracking information
-      light: '#06b6d4',
-      dark: '#0e7490',
-    },
+    primary, // Trust Coast Blue - app chrome, links and secondary actions
+    secondary, // Deep teal - delivery and agent chrome
+    cta, // Purchase accent - Buy / Pay / Checkout only
+    success,
+    warning,
+    error,
+    info,
     background: {
-      default: '#f1f5f9', // Soft blue-grey; easier on the eyes and ties to primary blue
-      paper: '#ffffff',
+      default: surface.background,
+      paper: surface.paper,
     },
     text: {
-      primary: '#1d1d1f', // Apple's primary text color
-      secondary: '#86868b', // Apple's secondary text color
+      primary: text.primary,
+      secondary: text.muted,
     },
-    divider: '#e2e8f0',
+    divider: surface.divider,
   },
   typography: {
     fontFamily:
@@ -52,42 +34,42 @@ export const theme = createTheme({
     h1: {
       fontWeight: 700,
       fontSize: '3rem',
-      color: '#1d1d1f',
+      color: text.primary,
       letterSpacing: '-0.02em',
       lineHeight: 1.1,
     },
     h2: {
       fontWeight: 600,
       fontSize: '2.25rem',
-      color: '#1d1d1f',
+      color: text.primary,
       letterSpacing: '-0.02em',
       lineHeight: 1.2,
     },
     h3: {
       fontWeight: 600,
       fontSize: '1.875rem',
-      color: '#1d1d1f',
+      color: text.primary,
       letterSpacing: '-0.015em',
       lineHeight: 1.25,
     },
     h4: {
       fontWeight: 600,
       fontSize: '1.5rem',
-      color: '#1d1d1f',
+      color: text.primary,
       letterSpacing: '-0.015em',
       lineHeight: 1.3,
     },
     h5: {
       fontWeight: 600,
       fontSize: '1.25rem',
-      color: '#1d1d1f',
+      color: text.primary,
       letterSpacing: '-0.01em',
       lineHeight: 1.4,
     },
     h6: {
       fontWeight: 600,
       fontSize: '1.125rem',
-      color: '#1d1d1f',
+      color: text.primary,
       letterSpacing: '-0.01em',
       lineHeight: 1.4,
     },
@@ -101,26 +83,26 @@ export const theme = createTheme({
       fontSize: '1.0625rem',
       fontWeight: 400,
       lineHeight: 1.47,
-      color: '#1d1d1f',
+      color: text.primary,
       letterSpacing: '0.011em',
     },
     body2: {
       fontSize: '0.875rem',
       fontWeight: 400,
       lineHeight: 1.43,
-      color: '#86868b',
+      color: text.muted,
       letterSpacing: '0.016em',
     },
     subtitle1: {
       fontSize: '1rem',
       fontWeight: 500,
-      color: '#1d1d1f',
+      color: text.primary,
       lineHeight: 1.5,
     },
     subtitle2: {
       fontSize: '0.875rem',
       fontWeight: 500,
-      color: '#86868b',
+      color: text.muted,
       lineHeight: 1.57,
     },
   },
@@ -195,17 +177,26 @@ export const theme = createTheme({
           },
         },
         contained: {
-          boxShadow: '0 4px 14px rgba(30, 64, 175, 0.25)',
+          boxShadow: brandShadow(primary.main, 0.25, 14, 4),
           '&:hover': {
-            boxShadow: '0 6px 20px rgba(30, 64, 175, 0.35)',
+            boxShadow: brandShadow(primary.main, 0.35, 20, 6),
           },
           '&.Mui-disabled': {
             boxShadow: 'none',
           },
           '&.MuiButton-containedSecondary': {
-            boxShadow: '0 4px 14px rgba(22, 163, 74, 0.25)',
+            boxShadow: brandShadow(secondary.main, 0.25, 14, 4),
             '&:hover': {
-              boxShadow: '0 6px 20px rgba(22, 163, 74, 0.35)',
+              boxShadow: brandShadow(secondary.main, 0.35, 20, 6),
+            },
+          },
+          // Purchase intent: Buy / Pay / Checkout carry extra weight
+          '&.MuiButton-containedCta': {
+            fontWeight: 600,
+            boxShadow: brandShadow(cta.main, 0.3, 14, 4),
+            '&:hover': {
+              backgroundColor: cta.dark,
+              boxShadow: brandShadow(cta.main, 0.4, 20, 6),
             },
           },
         },
@@ -217,7 +208,7 @@ export const theme = createTheme({
         },
         text: {
           '&:hover': {
-            backgroundColor: 'rgba(30, 64, 175, 0.04)',
+            backgroundColor: alpha(primary.main, 0.04),
           },
         },
       },
@@ -268,15 +259,15 @@ export const theme = createTheme({
             borderRadius: 10,
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#1e40af',
+              borderColor: primary.main,
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#1e40af',
+              borderColor: primary.main,
               borderWidth: '2px',
             },
           },
           '& .MuiInputLabel-root.Mui-focused': {
-            color: '#1e40af',
+            color: primary.main,
           },
         },
       },
@@ -289,25 +280,58 @@ export const theme = createTheme({
           fontSize: '0.75rem',
           letterSpacing: '0.025em',
         },
+        // Solid fills are scoped to filled chips so outlined chips stay outlined.
+        // Every pairing below clears 4.5:1 against white text.
         colorPrimary: {
-          backgroundColor: '#1e40af',
-          color: '#ffffff',
+          '&.MuiChip-filled': {
+            backgroundColor: primary.main,
+            color: primary.contrastText,
+          },
         },
         colorSecondary: {
-          backgroundColor: '#16a34a',
-          color: '#ffffff',
+          '&.MuiChip-filled': {
+            backgroundColor: secondary.main,
+            color: secondary.contrastText,
+          },
         },
         colorSuccess: {
-          backgroundColor: '#16a34a',
-          color: '#ffffff',
+          '&.MuiChip-filled': {
+            backgroundColor: success.main,
+            color: success.contrastText,
+          },
         },
         colorWarning: {
-          backgroundColor: '#f59e0b',
-          color: '#ffffff',
+          '&.MuiChip-filled': {
+            backgroundColor: warning.main,
+            color: warning.contrastText,
+          },
         },
         colorError: {
-          backgroundColor: '#dc2626',
-          color: '#ffffff',
+          '&.MuiChip-filled': {
+            backgroundColor: error.main,
+            color: error.contrastText,
+          },
+        },
+        colorInfo: {
+          '&.MuiChip-filled': {
+            backgroundColor: info.main,
+            color: info.contrastText,
+          },
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        // Blockers read as soft cards with a left accent rather than solid
+        // colour-on-colour banners.
+        standard: {
+          borderRadius: 12,
+          borderLeft: '4px solid currentColor',
+          alignItems: 'flex-start',
+        },
+        outlined: {
+          borderRadius: 12,
+          borderLeftWidth: 4,
         },
       },
     },
@@ -315,7 +339,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 6,
-          backgroundColor: '#e2e8f0',
+          backgroundColor: surface.divider,
           height: 8,
         },
         bar: {
@@ -326,15 +350,15 @@ export const theme = createTheme({
     MuiFab: {
       styleOverrides: {
         root: {
-          boxShadow: '0 4px 14px rgba(30, 64, 175, 0.25)',
+          boxShadow: brandShadow(primary.main, 0.25, 14, 4),
           '&:hover': {
-            boxShadow: '0 6px 20px rgba(30, 64, 175, 0.35)',
+            boxShadow: brandShadow(primary.main, 0.35, 20, 6),
           },
         },
         secondary: {
-          boxShadow: '0 4px 14px rgba(22, 163, 74, 0.25)',
+          boxShadow: brandShadow(secondary.main, 0.25, 14, 4),
           '&:hover': {
-            boxShadow: '0 6px 20px rgba(22, 163, 74, 0.35)',
+            boxShadow: brandShadow(secondary.main, 0.35, 20, 6),
           },
         },
       },
@@ -342,9 +366,9 @@ export const theme = createTheme({
     MuiSpeedDial: {
       styleOverrides: {
         fab: {
-          boxShadow: '0 4px 14px rgba(30, 64, 175, 0.25)',
+          boxShadow: brandShadow(primary.main, 0.25, 14, 4),
           '&:hover': {
-            boxShadow: '0 6px 20px rgba(30, 64, 175, 0.35)',
+            boxShadow: brandShadow(primary.main, 0.35, 20, 6),
           },
         },
       },

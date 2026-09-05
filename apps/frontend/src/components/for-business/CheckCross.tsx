@@ -1,7 +1,7 @@
 import { CheckCircle, Close } from '@mui/icons-material';
 import { Box } from '@mui/material';
 import React from 'react';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 interface CheckCrossProps {
   available: boolean;
@@ -21,10 +21,10 @@ const CheckCross: React.FC<CheckCrossProps> = ({ available, emphasize }) => (
       borderRadius: '50%',
       bgcolor: available
         ? emphasize
-          ? FB_GREEN
+          ? FB_ACCENT
           : 'rgba(22,163,74,0.12)'
         : 'action.hover',
-      color: available ? (emphasize ? '#fff' : FB_GREEN) : 'text.disabled',
+      color: available ? (emphasize ? '#fff' : FB_ACCENT) : 'text.disabled',
     }}
   >
     {available ? <CheckCircle sx={{ fontSize: 18 }} /> : <Close sx={{ fontSize: 16 }} />}

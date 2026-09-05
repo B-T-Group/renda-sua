@@ -182,4 +182,104 @@ describe('ItemsService privileged field filtering', () => {
 
     expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
   });
+
+  it('persists interest_only on create', async () => {
+    const { service, hasuraSystem } = createService();
+    hasuraSystem.executeMutation.mockResolvedValue({
+      insert_items_one: {
+        id: 'item-1',
+        name: 'Quote part',
+        description: '',
+        sku: null,
+      },
+    });
+
+    await service.createItem('business-1', {
+      name: 'Quote part',
+      interest_only: true,
+      price: 0,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      name: 'Quote part',
+      interest_only: true,
+      price: 0,
+      business_id: 'business-1',
+      is_active: false,
+      moderation_status: 'draft',
+    });
+  });
+
+  it('rejects turning off interest-only without a shopper price', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      interest_only: true,
+      price: 0,
+    });
+
+    await expect(
+      service.updateItem('business-1', 'item-1', { interest_only: false })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'PRICE_REQUIRED' },
+    });
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects turning off interest-only when the new price is not positive', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      interest_only: true,
+      price: 1500,
+    });
+
+    await expect(
+      service.updateItem('business-1', 'item-1', {
+        interest_only: false,
+        price: 0,
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'PRICE_REQUIRED' },
+    });
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('allows turning off interest-only when a positive price is already stored', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      interest_only: true,
+      price: 1500,
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', interest_only: false },
+    });
+
+    await service.updateItem('business-1', 'item-1', { interest_only: false });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      interest_only: false,
+    });
+  });
+
+  it('allows turning off interest-only when the update supplies a price', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      interest_only: true,
+      price: null,
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', interest_only: false },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      interest_only: false,
+      price: 2500,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      interest_only: false,
+      price: 2500,
+    });
+  });
 });

@@ -63,6 +63,7 @@ import UserRatingSummary from '../common/UserRatingSummary';
 import { MarketSelector } from '../market/MarketSelector';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
+import { brandTokens } from '../../theme/brandTokens';
 
 function catalogContextFromPath(pathname: string): MarketStatesCatalog {
   if (pathname.startsWith('/rentals')) return 'rentals';
@@ -125,14 +126,14 @@ const Header: React.FC = () => {
   const personaHeader = useMemo(() => {
     if (isAuthenticated && isDelegationContext) {
       return {
-        backgroundColor: '#0f766e',
-        navActiveUnderline: '#99f6e4',
+        backgroundColor: brandTokens.secondary.main,
+        navActiveUnderline: brandTokens.tint.secondaryStrong,
       };
     }
     if (!isAuthenticated || userType == null) {
       return {
         backgroundColor: theme.palette.primary.dark,
-        navActiveUnderline: '#93c5fd',
+        navActiveUnderline: brandTokens.tint.primaryStrong,
       };
     }
     switch (userType) {
@@ -148,7 +149,7 @@ const Header: React.FC = () => {
       default:
         return {
           backgroundColor: theme.palette.primary.dark,
-          navActiveUnderline: '#93c5fd',
+          navActiveUnderline: brandTokens.tint.primaryStrong,
         };
     }
   }, [isAuthenticated, userType, theme.palette.primary.dark, isDelegationContext]);

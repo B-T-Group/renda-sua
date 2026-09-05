@@ -57,6 +57,16 @@ import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import DiasporaCheckoutBanner from '../checkout/DiasporaCheckoutBanner';
+import PayerChargeSummary from '../checkout/PayerChargeSummary';
+import RecipientDetailsSection from '../checkout/RecipientDetailsSection';
+import {
+  EMPTY_RECIPIENT_DRAFT,
+  buildRecipientPayload,
+  isCrossBorderCheckout,
+  isRecipientDraftIncomplete,
+  type RecipientDraft,
+} from '../../utils/diasporaCheckout';
 
 // Loading Skeleton Component
 const CheckoutPageSkeleton: React.FC = () => (
@@ -548,6 +558,10 @@ const CheckoutPage: React.FC = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [sendingToSomeoneElse, setSendingToSomeoneElse] = useState(false);
+  const [recipient, setRecipient] = useState<RecipientDraft>(
+    EMPTY_RECIPIENT_DRAFT
+  );
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
@@ -605,6 +619,11 @@ const CheckoutPage: React.FC = () => {
     (addr) => addr.address.id === selectedAddressId
   )?.address;
 
+  const recipientPayload = useMemo(
+    () => buildRecipientPayload({ sendingToSomeoneElse, recipient }),
+    [sendingToSomeoneElse, recipient]
+  );
+
   const checkoutPreflightRequest = useMemo(() => {
     if (cartItems.length === 0) return null;
     return {
@@ -621,13 +640,32 @@ const CheckoutPage: React.FC = () => {
         ? { delivery_address_id: selectedAddressId }
         : {}),
       payment_timing: 'pay_now' as const,
+      ...(sendingToSomeoneElse ? { sending_to_someone_else: true } : {}),
+      ...(recipientPayload ? { recipient: recipientPayload } : {}),
     };
-  }, [cartItems, fulfillment, selectedAddressId]);
+  }, [
+    cartItems,
+    fulfillment,
+    selectedAddressId,
+    sendingToSomeoneElse,
+    recipientPayload,
+  ]);
 
   const checkoutPreflight = useCheckoutPreflight(
     checkoutPreflightRequest,
     cartItems.length > 0
   );
+
+  const diaspora = checkoutPreflight?.diaspora ?? null;
+  const crossBorderCheckout = isCrossBorderCheckout(diaspora);
+  const recipientIncomplete = isRecipientDraftIncomplete({
+    sendingToSomeoneElse,
+    recipient,
+  });
+  const recipientBlockerMessage =
+    checkoutPreflight?.blocking_errors?.find((b) =>
+      b.code.startsWith('RECIPIENT_')
+    )?.message ?? null;
 
   const showTaxAtCheckoutNotice =
     checkoutPreflight?.tax_notice === 'calculated_at_checkout';
@@ -851,6 +889,16 @@ const CheckoutPage: React.FC = () => {
     }).format(amount);
   };
 
+  // Merchant-currency total for the payer FX line. Preflight is authoritative;
+  // the cart subtotal is only a fallback while preflight is still resolving.
+  const merchantTotal =
+    preflightGroups.length > 0
+      ? preflightGroups.reduce((sum, g) => sum + (g.total ?? 0), 0)
+      : cartItems.reduce(
+          (sum, item) => sum + item.itemData.price * item.quantity,
+          0
+        );
+
   const handleSubmit = async () => {
     if (cartItems.length === 0) return;
     if (placingOrderRef.current) return;
@@ -860,6 +908,11 @@ const CheckoutPage: React.FC = () => {
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
+      return;
+    }
+
+    // A recipient with no phone cannot be reached or verified at handover.
+    if (recipientIncomplete) {
       return;
     }
 
@@ -891,7 +944,12 @@ const CheckoutPage: React.FC = () => {
               special_instructions: deliveryWindow.special_instructions,
             }
           : undefined,
-        fulfillment
+        fulfillment,
+        {
+          payerCountry: diaspora?.payer_country ?? undefined,
+          sendingToSomeoneElse,
+          recipient: recipientPayload,
+        }
       );
 
       if (isPickup) {
@@ -1045,6 +1103,33 @@ const CheckoutPage: React.FC = () => {
       <Grid container spacing={3}>
         {/* Main Content */}
         <Grid size={{ xs: 12, lg: 8 }}>
+          <DiasporaCheckoutBanner
+            payerCountry={diaspora?.payer_country}
+            fulfillmentCountry={
+              diaspora?.fulfillment_country ||
+              selectedAddress?.country ||
+              preflightGroups[0]?.seller_country
+            }
+            crossBorder={crossBorderCheckout}
+            sendingToSomeoneElse={sendingToSomeoneElse}
+            onSendingToSomeoneElseChange={setSendingToSomeoneElse}
+            disabled={checkoutLoading || isCheckoutInProgress}
+          />
+
+          {sendingToSomeoneElse && (
+            <RecipientDetailsSection
+              recipient={recipient}
+              onChange={setRecipient}
+              fulfillmentCountry={
+                diaspora?.fulfillment_country ||
+                selectedAddress?.country ||
+                preflightGroups[0]?.seller_country
+              }
+              errorMessage={recipientBlockerMessage}
+              disabled={checkoutLoading || isCheckoutInProgress}
+            />
+          )}
+
           {/* Delivery Information */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
@@ -1422,15 +1507,32 @@ const CheckoutPage: React.FC = () => {
             showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
           />
 
+          {(crossBorderCheckout || sendingToSomeoneElse) && (
+            <Box sx={{ px: 2 }}>
+              <PayerChargeSummary
+                estimate={diaspora?.payer_charge_estimate}
+                merchantPriceLabel={formatCurrency(
+                  merchantTotal,
+                  preflightGroups[0]?.currency
+                )}
+                recipientName={
+                  sendingToSomeoneElse ? recipient.name : undefined
+                }
+              />
+            </Box>
+          )}
+
           {/* Place Order Button */}
           <Button
             variant="contained"
+            color="cta"
             fullWidth
             size="large"
             onClick={handleSubmit}
             disabled={
               checkoutLoading ||
               isCheckoutInProgress ||
+              recipientIncomplete ||
               (fulfillment === 'delivery' &&
                 (!selectedAddressId || deliveryUnavailable))
             }

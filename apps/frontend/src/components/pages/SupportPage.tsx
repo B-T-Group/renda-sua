@@ -185,7 +185,7 @@ const SupportPage: React.FC = () => {
           ),
           answer: t(
             'support.faq.delivery.trackOrderAnswer',
-            'You can track your order in real-time through your dashboard or by clicking the tracking link sent to your email.'
+            "Track your order on web or in the app from your dashboard. Once out for delivery, you'll see live location updates and estimated arrival time."
           ),
         },
         {
@@ -195,7 +195,7 @@ const SupportPage: React.FC = () => {
           ),
           answer: t(
             'support.faq.delivery.deliveryTimeAnswer',
-            'Delivery times vary by location and item. Most orders are delivered within 2-4 hours for same-day delivery, or 24-48 hours for standard delivery.'
+            "Store products are usually delivered within 24-48 hours after order confirmation. Food orders are ready during business operating hours. Once an agent is assigned and out for delivery, you'll see minute-level ETA updates."
           ),
         },
         {

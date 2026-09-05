@@ -25,7 +25,7 @@ export const homeFaqItems: HomeFaqItem[] = [
     defaultQuestion: 'Can I track my delivery in real time?',
     answerKey: 'home.faq.canITrack.answer',
     defaultAnswer:
-      'Yes! The Rendasua app provides live tracking so you can see exactly where your delivery agent is and get an estimated arrival time.',
+      'Yes! Track your order on web or in the app. Once out for delivery, you can see exactly where your delivery agent is and get an estimated arrival time.',
   },
   {
     questionKey: 'home.faq.howSellBusiness.question',
