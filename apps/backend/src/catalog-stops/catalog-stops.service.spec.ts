@@ -45,7 +45,7 @@ describe('CatalogStopsService', () => {
       expect(result.category_name).toBe('Electronics');
     });
 
-    it('should build query with both country and state in single address block', async () => {
+    it('should build query with locationWhere variable for country and state', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         business_inventory: [],
       });
@@ -56,17 +56,17 @@ describe('CatalogStopsService', () => {
         state: 'Centre',
       });
 
-      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[0][0] as string;
-      const addressMatches = (query.match(/address:\s*\{/g) || []).length;
+      const [query, variables] = hasuraSystemService.executeQuery.mock.calls[0];
       
-      expect(addressMatches).toBe(1); // Single address block
-      expect(query).toContain('country: { _eq: $countryCode }');
-      expect(query).toContain('state: { _eq: $state }');
-      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.any(String),
+      expect(query).toContain('$locationWhere: business_locations_bool_exp!');
+      expect(variables).toEqual(
         expect.objectContaining({
-          countryCode: 'CM',
-          state: 'Centre',
+          locationWhere: expect.objectContaining({
+            address: {
+              country: { _eq: 'CM' },
+              state: { _eq: 'Centre' },
+            },
+          }),
         })
       );
     });
@@ -238,7 +238,7 @@ describe('CatalogStopsService', () => {
       );
     });
 
-    it('should build query with both country and state in single address block', async () => {
+    it('should build query with locationWhere variable for country and state', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         item_deals: [],
       });
@@ -248,12 +248,19 @@ describe('CatalogStopsService', () => {
         state: 'Centre',
       });
 
-      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[0][0] as string;
-      const addressMatches = (query.match(/address:\s*\{/g) || []).length;
+      const [query, variables] = hasuraSystemService.executeQuery.mock.calls[0];
       
-      expect(addressMatches).toBe(1); // Single address block
-      expect(query).toContain('country: { _eq: $countryCode }');
-      expect(query).toContain('state: { _eq: $state }');
+      expect(query).toContain('$locationWhere: business_locations_bool_exp!');
+      expect(variables).toEqual(
+        expect.objectContaining({
+          locationWhere: expect.objectContaining({
+            address: {
+              country: { _eq: 'CM' },
+              state: { _eq: 'Centre' },
+            },
+          }),
+        })
+      );
     });
 
     it('should calculate discount prices correctly', async () => {
@@ -328,7 +335,7 @@ describe('CatalogStopsService', () => {
       expect(result.stores).toEqual([]);
     });
 
-    it('should build query with both country and state in single address block', async () => {
+    it('should build query with locationWhere variable for country and state', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         business_locations: [],
       });
@@ -338,12 +345,19 @@ describe('CatalogStopsService', () => {
         state: 'Centre',
       });
 
-      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[0][0] as string;
-      const addressWhereMatches = (query.match(/address:\s*\{/g) || []).length;
+      const [query, variables] = hasuraSystemService.executeQuery.mock.calls[0];
       
-      expect(addressWhereMatches).toBe(1); // Single address block in where clause
-      expect(query).toContain('country: { _eq: $countryCode }');
-      expect(query).toContain('state: { _eq: $state }');
+      expect(query).toContain('$locationWhere: business_locations_bool_exp!');
+      expect(variables).toEqual(
+        expect.objectContaining({
+          locationWhere: expect.objectContaining({
+            address: {
+              country: { _eq: 'CM' },
+              state: { _eq: 'Centre' },
+            },
+          }),
+        })
+      );
     });
 
     it('should transform locations to TopInventoryStoreRow shape', async () => {
@@ -399,7 +413,7 @@ describe('CatalogStopsService', () => {
       expect(result.items).toEqual([]);
     });
 
-    it('should build query with both country and state in single address block', async () => {
+    it('should build query with locationWhere variable for country and state', async () => {
       hasuraSystemService.executeQuery
         .mockResolvedValueOnce({
           business_inventory: [
@@ -418,12 +432,19 @@ describe('CatalogStopsService', () => {
         state: 'Centre',
       });
 
-      const query = (hasuraSystemService.executeQuery as jest.Mock).mock.calls[1][0] as string;
-      const addressMatches = (query.match(/address:\s*\{/g) || []).length;
+      const [query, variables] = hasuraSystemService.executeQuery.mock.calls[1];
       
-      expect(addressMatches).toBe(1); // Single address block
-      expect(query).toContain('country: { _eq: $countryCode }');
-      expect(query).toContain('state: { _eq: $state }');
+      expect(query).toContain('$locationWhere: business_locations_bool_exp!');
+      expect(variables).toEqual(
+        expect.objectContaining({
+          locationWhere: expect.objectContaining({
+            address: {
+              country: { _eq: 'CM' },
+              state: { _eq: 'Centre' },
+            },
+          }),
+        })
+      );
     });
 
     it('should return empty array when cart items have no categories', async () => {
