@@ -1,7 +1,8 @@
-import { Lock } from '@mui/icons-material';
+import { Lock, Person } from '@mui/icons-material';
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
   FormControlLabel,
@@ -10,14 +11,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RecipientDraft } from '../../utils/diasporaCheckout';
 import PhoneInput from '../common/PhoneInput';
+import RecipientPickerDialog from '../dialogs/RecipientPickerDialog';
+import type { SavedRecipient } from '../../hooks/useRecipients';
 
 interface RecipientDetailsSectionProps {
   recipient: RecipientDraft;
-  onChange: (recipient: RecipientDraft) => void;
+  onChange: (recipient: RecipientDraft & { recipient_id?: string }) => void;
   /** Delivery country, used to default the phone country selector. */
   fulfillmentCountry?: string | null;
   /** Server-side blocker for the recipient block, when preflight rejected it. */
@@ -37,8 +40,20 @@ const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
   disabled,
 }) => {
   const { t } = useTranslation();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const nameMissing = !recipient.name.trim();
   const phoneMissing = !recipient.phone.trim();
+
+  const handleSelectRecipient = (saved: SavedRecipient | null) => {
+    if (saved) {
+      onChange({
+        name: saved.name,
+        phone: saved.phone,
+        notifyWhatsapp: saved.notify_whatsapp,
+        recipient_id: saved.id,
+      });
+    }
+  };
 
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
@@ -52,6 +67,17 @@ const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
             'They get tracking updates and the delivery code by text — no Rendasua account needed.'
           )}
         </Typography>
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<Person />}
+          onClick={() => setPickerOpen(true)}
+          disabled={disabled}
+          sx={{ mb: 2 }}
+        >
+          {t('checkout.recipient.selectSaved', 'Select saved recipient')}
+        </Button>
 
         {errorMessage && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -139,6 +165,13 @@ const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
           )}
         </Alert>
       </CardContent>
+
+      <RecipientPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSelectRecipient}
+        fulfillmentCountry={fulfillmentCountry}
+      />
     </Card>
   );
 };
