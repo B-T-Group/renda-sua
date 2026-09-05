@@ -312,6 +312,21 @@ const ItemsPage: React.FC = () => {
       filters.collection.trim() || collectionSlug.trim() || undefined,
   });
 
+  // Check if any filters are active
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+      filters.category ||
+      filters.subcategory ||
+      filters.brand ||
+      filters.business ||
+      filters.collection ||
+      collectionSlug ||
+      businessLocationId
+  );
+
+  const theme = useTheme();
+  const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
+
   // Defer curated rail fetches until after main grid starts (reduces initial stampede)
   const [curatedEnabled, setCuratedEnabled] = useState(false);
   useEffect(() => {
@@ -578,20 +593,7 @@ const ItemsPage: React.FC = () => {
     }).format(amount);
   };
 
-  // Check if any filters are active
-  const hasActiveFilters = Boolean(
-    searchTerm ||
-      filters.category ||
-      filters.subcategory ||
-      filters.brand ||
-      filters.business ||
-      filters.collection ||
-      collectionSlug ||
-      businessLocationId
-  );
 
-  const theme = useTheme();
-  const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
 
   const {
     dealsDisplay,
