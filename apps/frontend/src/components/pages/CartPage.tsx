@@ -1,7 +1,9 @@
 import {
   Add,
   ArrowBack,
+  CheckCircle,
   Delete,
+  LocalShipping,
   Remove,
   ShoppingCart,
 } from '@mui/icons-material';
@@ -16,6 +18,9 @@ import {
   Divider,
   IconButton,
   Paper,
+  Step,
+  StepLabel,
+  Stepper,
   Typography,
 } from '@mui/material';
 import React, { useMemo } from 'react';
@@ -115,13 +120,28 @@ const CartPage: React.FC = () => {
       sx={{ py: 4, px: { xs: 0, sm: 2 } }}
     >
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <IconButton onClick={() => navigate(-1)} sx={{ mr: 2 }}>
           <ArrowBack />
         </IconButton>
         <Typography variant="h4" component="h1">
           {t('cart.title', 'Shopping Cart')}
         </Typography>
+      </Box>
+
+      {/* Progress Stepper */}
+      <Box sx={{ mb: 4 }}>
+        <Stepper activeStep={0} alternativeLabel>
+          <Step>
+            <StepLabel>{t('cart.steps.cart', 'Cart')}</StepLabel>
+          </Step>
+          <Step>
+            <StepLabel>{t('cart.steps.checkout', 'Checkout')}</StepLabel>
+          </Step>
+          <Step>
+            <StepLabel>{t('cart.steps.pay', 'Pay')}</StepLabel>
+          </Step>
+        </Stepper>
       </Box>
 
       <Box
@@ -401,6 +421,26 @@ const CartPage: React.FC = () => {
               </Typography>
             </Box>
 
+            {/* Delivery ETA Trust Strip */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                mb: 2,
+                p: 1.5,
+                bgcolor: 'primary.50',
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'primary.200',
+              }}
+            >
+              <LocalShipping sx={{ color: 'primary.main', fontSize: 20 }} />
+              <Typography variant="caption" color="primary.main">
+                {t('cart.deliveryEstimate', 'Usually 1–3 hrs · fee shown at checkout')}
+              </Typography>
+            </Box>
+
             {cartByBusiness.size > 1 && (
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {t(
@@ -419,7 +459,7 @@ const CartPage: React.FC = () => {
               onClick={handleProceedToCheckout}
               sx={{ mb: 2 }}
             >
-              {t('cart.proceedToCheckout', 'Proceed to Checkout')}
+              {t('cart.placeOrder', 'Place order')}
             </Button>
 
             <Button

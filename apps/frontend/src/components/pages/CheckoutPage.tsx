@@ -1,4 +1,4 @@
-import { ArrowBack, Security } from '@mui/icons-material';
+import { ArrowBack, CheckCircle, Lock, Security } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -19,6 +19,9 @@ import {
   Select,
   Skeleton,
   Stack,
+  Step,
+  StepLabel,
+  Stepper,
   Switch,
   TextField,
   Typography,
@@ -1091,13 +1094,34 @@ const CheckoutPage: React.FC = () => {
         sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
       >
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <IconButton onClick={handleBack} sx={{ mr: 2 }}>
           <ArrowBack />
         </IconButton>
         <Typography variant="h4" component="h1">
           {t('checkout.title', 'Checkout')}
         </Typography>
+      </Box>
+
+      {/* Progress Stepper */}
+      <Box sx={{ mb: 4 }}>
+        <Stepper activeStep={1} alternativeLabel>
+          <Step completed>
+            <StepLabel
+              StepIconComponent={() => (
+                <CheckCircle sx={{ color: 'success.main', fontSize: 24 }} />
+              )}
+            >
+              {t('cart.steps.cart', 'Cart')}
+            </StepLabel>
+          </Step>
+          <Step>
+            <StepLabel>{t('cart.steps.checkout', 'Checkout')}</StepLabel>
+          </Step>
+          <Step>
+            <StepLabel>{t('cart.steps.pay', 'Pay')}</StepLabel>
+          </Step>
+        </Stepper>
       </Box>
 
       <Grid container spacing={3}>
@@ -1311,11 +1335,62 @@ const CheckoutPage: React.FC = () => {
                 {t('checkout.paymentInformation', 'Payment Information')}
               </Typography>
 
+              {/* Locked Payment Method Display */}
+              {checkoutPreflight?.checkout_method && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                    {t('checkout.paymentMethod', 'Payment method')}
+                  </Typography>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      bgcolor: 'grey.50',
+                      borderColor: 'grey.300',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        bgcolor: 'warning.light',
+                        borderRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Typography variant="h6" fontWeight="bold">
+                        {checkoutPreflight.checkout_method === 'MOBILE_MONEY' ? 'MoMo' : 'Card'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body1" fontWeight={600}>
+                        {checkoutPreflight.checkout_method === 'MOBILE_MONEY'
+                          ? t('checkout.mobileMoneyMethod', 'Mobile Money · Cameroon')
+                          : t('checkout.stripeMethod', 'Credit or Debit Card')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('checkout.basedOnYourCountry', 'Based on your country')}
+                      </Typography>
+                    </Box>
+                    <Lock sx={{ color: 'action.disabled', fontSize: 20 }} />
+                  </Card>
+                </Box>
+              )}
+
               {/* Mobile Payment Method */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" gutterBottom fontWeight={600}>
-                  {t('checkout.mobilePaymentMethod', 'Mobile Payment Method')}
-                </Typography>
+              {checkoutPreflight?.checkout_method === 'MOBILE_MONEY' && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                    {t('checkout.yourMoMoNumber', 'Your MoMo number')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
+                  </Typography>
 
                 {/* Primary Phone Number Display */}
                 <Card
@@ -1469,14 +1544,28 @@ const CheckoutPage: React.FC = () => {
               </Box>
 
               {/* Payment Security Notice */}
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  mt: 2,
+                  p: 2,
+                  bgcolor: 'info.50',
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'info.200',
+                }}
+              >
+                <Lock sx={{ color: 'info.main', fontSize: 20 }} />
+                <Typography variant="caption" color="info.main">
                   {t(
-                    'checkout.paymentSecurityNotice',
-                    'Your payment will be processed securely through mobile money. The phone number above will be used to initiate the payment transaction.'
+                    'checkout.heldUntilAccepted',
+                    'Held until store accepts'
                   )}
                 </Typography>
-              </Alert>
+              </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
