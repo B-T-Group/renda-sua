@@ -331,7 +331,15 @@ export class OrdersController {
     // Never apply cancelled via the generic status path — that skips payment
     // release and inventory restore. Route to the dedicated cancel flow.
     if (updateData.status === 'cancelled') {
-      return this.ordersService.cancelOrder({ orderId });
+      // Legacy PATCH path without collected reason; use "other" as fallback
+      this.logger.warn(
+        `Order ${orderId} cancelled via legacy PATCH without reason - use POST /orders/cancel instead`
+      );
+      return this.ordersService.cancelOrder({
+        orderId,
+        cancellationReasonId: 1, // "other" fallback for legacy path
+        notes: 'Cancelled via legacy PATCH endpoint',
+      });
     }
 
     try {
@@ -830,7 +838,7 @@ export class OrdersController {
         },
         cancellationReasonId: {
           type: 'number',
-          description: 'ID from order_cancellation_reasons lookup table',
+          description: 'ID from order_cancellation_reasons lookup table (required)',
           example: 1,
         },
         notes: {
@@ -839,7 +847,7 @@ export class OrdersController {
           example: 'Changed my mind after thinking it over',
         },
       },
-      required: ['orderId'],
+      required: ['orderId', 'cancellationReasonId'],
     },
   })
   @ApiResponse({

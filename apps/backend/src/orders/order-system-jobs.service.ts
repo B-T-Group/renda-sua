@@ -7,6 +7,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
 import { OrderCleanupService } from './order-cleanup.service';
+import { CANCEL_REASON_NOT_PICKED_UP_IN_TIME } from './order-cleanup.constants';
 import { OrderQueueService } from './order-queue.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { releaseReservedInventory } from './release-reserved-inventory.util';
@@ -391,7 +392,7 @@ export class OrderSystemJobsService {
     const at = new Date().toISOString();
     const result = await this.hasuraSystemService.executeMutation(
       `
-      mutation ClaimStaleAuthorizedCancel($orderId: uuid!, $at: timestamptz!) {
+      mutation ClaimStaleAuthorizedCancel($orderId: uuid!, $at: timestamptz!, $reasonId: Int!) {
         update_orders(
           where: {
             _and: [
@@ -405,12 +406,14 @@ export class OrderSystemJobsService {
             current_status: cancelled
             cancelled_by: "system"
             cancelled_at: $at
+            cancellation_reason_id: $reasonId
+            cancellation_notes: "No delivery agent claimed the order within the timeout period"
             updated_at: $at
           }
         ) { affected_rows }
       }
     `,
-      { orderId, at }
+      { orderId, at, reasonId: CANCEL_REASON_NOT_PICKED_UP_IN_TIME }
     );
     return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
