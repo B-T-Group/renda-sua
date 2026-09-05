@@ -8239,6 +8239,33 @@ export class OrdersService {
   }
 
   /**
+   * Snapshot the payer after refusing a client-supplied local-country spoof.
+   */
+  private async resolveTrustedOrderPayer(
+    user: {
+      id: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      email?: string | null;
+      phone_number?: string | null;
+    },
+    requestedPayerCountry?: string | null
+  ) {
+    const profileCountry = await this.paymentRoutingService.getUserCountryCode(
+      user.id
+    );
+    const payerCountry =
+      await this.paymentRoutingService.resolveTrustedPayerCountry({
+        profileCountry,
+        requestedCountry: requestedPayerCountry,
+      });
+    return resolveOrderPayer({
+      user: { ...user, country: profileCountry },
+      requestedPayerCountry: payerCountry,
+    });
+  }
+
+  /**
    * Create a new order with validation and fund withholding
    */
   async createOrder(orderData: any): Promise<any> {
@@ -8789,17 +8816,10 @@ export class OrdersService {
           : address?.country
       ) ?? normalizeCountryCode(itemCountry);
 
-    const payer = resolveOrderPayer({
-      user: {
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: user.email,
-        phone_number: user.phone_number,
-      },
-      requestedPayerCountry:
-        normalizeCountryCode(orderData.payer_country) ??
-        (await this.paymentRoutingService.getUserCountryCode(user.id)),
-    });
+    const payer = await this.resolveTrustedOrderPayer(
+      user,
+      orderData.payer_country
+    );
     const recipient = resolveOrderRecipient({
       recipient: orderData.recipient,
       sendingToSomeoneElse: orderData.sending_to_someone_else,

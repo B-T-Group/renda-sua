@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DiasporaConfig, StripeConfig } from '../config/configuration';
+import {
+  normalizeCountryCode,
+  trustedPayerCountry,
+} from '../diaspora/diaspora-order.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export type PaymentRail = 'stripe' | 'mobile_money';
@@ -120,6 +124,29 @@ export class PaymentRoutingService {
     if (!code || code.length !== 2) return false;
     if (!this.diasporaPayerCountries.includes(code)) return false;
     return (await this.resolveRailForCountry(code)) === 'stripe';
+  }
+
+  /**
+   * Payer country for rail + timing gates. Requested billing country may
+   * upgrade a local profile into diaspora; it cannot downgrade a diaspora
+   * profile into mobile money / pay-at-delivery.
+   */
+  async resolveTrustedPayerCountry(params: {
+    profileCountry?: string | null;
+    requestedCountry?: string | null;
+  }): Promise<string | null> {
+    const profile = normalizeCountryCode(params.profileCountry);
+    const requested = normalizeCountryCode(params.requestedCountry);
+    const [profileIsDiaspora, requestedIsDiaspora] = await Promise.all([
+      this.isDiasporaPayer(profile),
+      this.isDiasporaPayer(requested),
+    ]);
+    return trustedPayerCountry({
+      profileCountry: profile,
+      requestedCountry: requested,
+      profileIsDiaspora,
+      requestedIsDiaspora,
+    });
   }
 
   /** Resolve the rail for a user based on their country. */
