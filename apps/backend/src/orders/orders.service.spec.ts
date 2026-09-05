@@ -2913,6 +2913,13 @@ describe('OrdersService', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Payment request already pending');
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('payment_status: { _nin: $blockedStatuses }'),
+        expect.objectContaining({
+          orderId: 'order-123',
+          blockedStatuses: expect.arrayContaining(['paid', 'authorized']),
+        })
+      );
     });
 
     it('lets the customer start pickup payment when only client_id matches', async () => {
