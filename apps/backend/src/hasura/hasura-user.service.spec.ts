@@ -9,7 +9,9 @@ import { HasuraSystemService } from './hasura-system.service';
 import { HasuraUserService } from './hasura-user.service';
 
 const VALID_USER_ID = '11111111-1111-4111-8111-111111111111';
+const CLS_USER_ID = '22222222-2222-4222-8222-222222222222';
 const AUTH0_EMAIL_SUB = 'email|6a95505255ad3b18af9e159f';
+const AUTH0_PHONE_SUB = 'auth0|test-phone|+24174000000';
 
 function makeService(clsStore: Map<string, unknown> = new Map()) {
   const cls = {
@@ -37,7 +39,7 @@ describe('HasuraUserService (singleton + CLS)', () => {
     clsStore.set(
       REQUEST_CONTEXT_CLS_KEY,
       emptyRequestContext({
-        userId: 'cls-user',
+        userId: CLS_USER_ID,
         authToken: 'cls-token',
         jwtDefaultRole: 'client',
         jwtAllowedRoles: ['client'],
@@ -45,13 +47,13 @@ describe('HasuraUserService (singleton + CLS)', () => {
     );
 
     const ctx = emptyRequestContext({
-      userId: 'explicit-user',
+      userId: VALID_USER_ID,
       authToken: 'explicit-token',
       jwtDefaultRole: 'agent',
       jwtAllowedRoles: ['agent', 'client'],
     });
 
-    expect(service.getUserId(ctx)).toBe('explicit-user');
+    expect(service.getUserId(ctx)).toBe(VALID_USER_ID);
     expect(service.sessionPersonaContext(ctx)).toEqual({
       jwtDefaultRole: 'agent',
       jwtAllowedRoles: ['agent', 'client'],
@@ -65,20 +67,20 @@ describe('HasuraUserService (singleton + CLS)', () => {
     clsStore.set(
       REQUEST_CONTEXT_CLS_KEY,
       emptyRequestContext({
-        userId: 'cls-user',
+        userId: CLS_USER_ID,
         authToken: 'cls-token',
         jwtDefaultRole: 'business',
         jwtAllowedRoles: ['business'],
       })
     );
 
-    expect(service.getUserId()).toBe('cls-user');
+    expect(service.getUserId()).toBe(CLS_USER_ID);
     expect(service.sessionPersonaContext()).toEqual({
       jwtDefaultRole: 'business',
       jwtAllowedRoles: ['business'],
       activePersona: undefined,
     });
-    expect(service.user_id).toBe('cls-user');
+    expect(service.user_id).toBe(CLS_USER_ID);
     expect(service.isConfigured()).toBe(true);
   });
 
@@ -137,6 +139,20 @@ describe('HasuraUserService (singleton + CLS)', () => {
     expect(client.requestConfig.headers).toMatchObject({
       'X-Hasura-Role': 'client',
     });
+  });
+
+  it('getUserId rejects Auth0 email and phone JWT user ids', () => {
+    const { service } = makeService();
+
+    expect(() =>
+      service.getUserId(emptyRequestContext({ userId: AUTH0_EMAIL_SUB }))
+    ).toThrow(UnauthorizedException);
+    expect(() =>
+      service.getUserId(emptyRequestContext({ userId: AUTH0_PHONE_SUB }))
+    ).toThrow(UnauthorizedException);
+    expect(() =>
+      service.getUserId(emptyRequestContext({ userId: VALID_USER_ID }))
+    ).not.toThrow();
   });
 
   it('getUser rejects Auth0-style JWT user ids before querying Hasura', async () => {
