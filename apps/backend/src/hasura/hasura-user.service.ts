@@ -136,7 +136,7 @@ export class HasuraUserService {
 
   /** DB `users.id` from JWT claims (CLS / explicit ctx). */
   get user_id(): string {
-    return this.resolveContext().userId;
+    return this.getUserId();
   }
 
   resolveContext(ctx?: RequestContext): RequestContext {
@@ -615,9 +615,15 @@ export class HasuraUserService {
 
   /**
    * Same as `user_id` (from Hasura JWT claims); use for permission-aligned lookups.
+   * Authenticated ids must be DB UUIDs — Auth0 `sub` values (`auth0|…`, `email|…`)
+   * are rejected so they never reach `$userId: uuid!` Hasura operations.
    */
   getUserId(ctx?: RequestContext): string {
-    return this.resolveContext(ctx).userId;
+    const userId = this.resolveContext(ctx).userId;
+    if (!userId || userId === 'anonymous') {
+      return userId || 'anonymous';
+    }
+    return requireAuthUserUuid(userId);
   }
 
   getActivePersonaHeader(ctx?: RequestContext): string | undefined {
