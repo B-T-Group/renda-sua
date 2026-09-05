@@ -48,6 +48,23 @@ export function busySnoozeCutoffIso(
   return new Date(nowMs - snoozeMinutes * 60 * 1000).toISOString();
 }
 
+/** Snooze the overlay only in awaiting_acceptance — not after SLA escalation. */
+export function isBusyInterruptSnoozed(
+  order: {
+    acceptance_state?: string | null;
+    busy_extra_prep_minutes?: number | null;
+    updated_at?: string | null;
+  },
+  snoozeMinutes: number,
+  nowMs = Date.now()
+): boolean {
+  if ((order.busy_extra_prep_minutes ?? 0) <= 0) return false;
+  if (order.acceptance_state !== 'awaiting_acceptance') return false;
+  const updated = Date.parse(order.updated_at ?? '');
+  if (!Number.isFinite(updated)) return false;
+  return updated >= Date.parse(busySnoozeCutoffIso(snoozeMinutes, nowMs));
+}
+
 export function buildBusySlaPatch(
   order: {
     acceptance_state: string | null;

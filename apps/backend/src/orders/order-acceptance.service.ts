@@ -523,6 +523,7 @@ export class OrderAcceptanceService {
                 acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
                 _not: {
                   _and: [
+                    { acceptance_state: { _eq: awaiting_acceptance } }
                     { busy_extra_prep_minutes: { _gt: 0 } }
                     { updated_at: { _gte: $snoozeCutoff } }
                   ]
@@ -548,6 +549,7 @@ export class OrderAcceptanceService {
                 acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
                 _not: {
                   _and: [
+                    { acceptance_state: { _eq: awaiting_acceptance } }
                     { busy_extra_prep_minutes: { _gt: 0 } }
                     { updated_at: { _gte: $snoozeCutoff } }
                   ]

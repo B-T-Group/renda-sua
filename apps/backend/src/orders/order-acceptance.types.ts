@@ -28,6 +28,7 @@ export interface PendingAcceptanceOrder {
   busy_extra_prep_minutes: number;
   estimated_prep_minutes: number | null;
   created_at: string;
+  updated_at?: string | null;
   total_amount: number;
   currency: string;
   fulfillment_method?: string | null;
