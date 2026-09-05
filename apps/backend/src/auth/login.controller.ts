@@ -17,8 +17,9 @@ export class LoginController {
     summary: 'Send a login OTP to an existing user (email or phone)',
   })
   @ApiResponse({ status: 200, description: 'OTP started successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid or ambiguous identifier' })
+  @ApiResponse({ status: 400, description: 'Invalid identifier or Auth0 rejected OTP start' })
   @ApiResponse({ status: 404, description: 'User not found for email or phone' })
+  @ApiResponse({ status: 429, description: 'Too many OTP start attempts' })
   async startOtp(
     @Body() body: { email?: string; phone_number?: string }
   ): Promise<{ success: boolean }> {
@@ -34,7 +35,7 @@ export class LoginController {
     summary: 'Verify login OTP and return Auth0 tokens (email or phone)',
   })
   @ApiResponse({ status: 200, description: 'OTP verified successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 400, description: 'Invalid request body or OTP' })
   @ApiResponse({ status: 404, description: 'User not found for email or phone' })
   @ApiResponse({ status: 409, description: 'Auth0 identity mismatch for email' })
   async verifyOtp(
