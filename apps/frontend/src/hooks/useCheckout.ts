@@ -30,6 +30,24 @@ interface CreateOrderRequest {
     preferred_date: string;
     special_instructions?: string;
   };
+  payer_country?: string;
+  sending_to_someone_else?: boolean;
+  recipient?: {
+    name: string;
+    phone: string;
+    notify_whatsapp: boolean;
+  };
+}
+
+/** Payer/recipient context for diaspora checkout, sent with preflight and create. */
+export interface DiasporaCheckoutOptions {
+  payerCountry?: string | null;
+  sendingToSomeoneElse?: boolean;
+  recipient?: {
+    name: string;
+    phone: string;
+    notify_whatsapp: boolean;
+  };
 }
 
 interface OrderResult {
@@ -157,7 +175,8 @@ export const useCheckout = () => {
         preferred_date: string;
         special_instructions?: string;
       },
-      fulfillmentMethod: 'delivery' | 'pickup' = 'delivery'
+      fulfillmentMethod: 'delivery' | 'pickup' = 'delivery',
+      diaspora?: DiasporaCheckoutOptions
     ): Promise<OrderResult[]> => {
       if (!apiClient) {
         throw new Error('API client not available');
@@ -182,6 +201,15 @@ export const useCheckout = () => {
         });
         const checkoutEventId = await metaCheckoutEventId(preflightItems);
         const browser = getMetaBrowserContext();
+        const diasporaPayload = {
+          ...(diaspora?.payerCountry
+            ? { payer_country: diaspora.payerCountry }
+            : {}),
+          ...(diaspora?.sendingToSomeoneElse
+            ? { sending_to_someone_else: true }
+            : {}),
+          ...(diaspora?.recipient ? { recipient: diaspora.recipient } : {}),
+        };
 
         const preflightResponse = await apiClient.post('/orders/checkout/preflight', {
           items: preflightItems,
@@ -192,6 +220,7 @@ export const useCheckout = () => {
           phone_number: phoneNumber,
           payment_timing: paymentTiming,
           eventId: checkoutEventId,
+          ...diasporaPayload,
           ...browser,
         });
 
@@ -291,6 +320,7 @@ export const useCheckout = () => {
               fulfillmentMethod === 'pickup' ? false : requiresFastDelivery,
             payment_timing: paymentTiming,
             ...(deliveryWindow ? { delivery_window: deliveryWindow } : {}),
+            ...diasporaPayload,
           };
 
           const response = await apiClient.post('/orders', orderData);
@@ -342,7 +372,15 @@ export const useCheckout = () => {
         }
       }
     },
-    [apiClient, groupItemsByBusiness, clearCart, enqueueSnackbar, t, trackPurchase, trackInitiateCheckout]
+    [
+      apiClient,
+      groupItemsByBusiness,
+      clearCart,
+      enqueueSnackbar,
+      t,
+      trackPurchase,
+      trackInitiateCheckout,
+    ]
   );
 
   const createSingleOrder = useCallback(

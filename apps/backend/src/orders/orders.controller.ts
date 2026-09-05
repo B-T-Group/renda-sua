@@ -202,6 +202,31 @@ export class OrdersController {
             special_instructions: { type: 'string' },
           },
         },
+        payer_country: {
+          type: 'string',
+          description:
+            'ISO 3166-1 alpha-2 billing country of the payer. When it resolves to a Stripe country and the merchant settles in mobile money, the order is routed as a diaspora card payment and must be pay_now.',
+        },
+        sending_to_someone_else: {
+          type: 'boolean',
+          description:
+            'Set when the recipient is a different person from the paying client.',
+        },
+        recipient: {
+          type: 'object',
+          description:
+            'Local recipient contact. Stored on the order and used for SMS/WhatsApp updates and the delivery PIN without a payer login.',
+          properties: {
+            name: { type: 'string' },
+            phone: {
+              type: 'string',
+              description:
+                'Local or E.164 phone; normalized against the delivery country.',
+            },
+            email: { type: 'string' },
+            notify_whatsapp: { type: 'boolean' },
+          },
+        },
       },
       required: ['items'],
     },

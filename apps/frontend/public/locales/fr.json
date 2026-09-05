@@ -5241,7 +5241,12 @@
       "messageBusiness": "Écrire au commerce",
       "cancelOrder": "Annuler la commande",
       "draftMessage": "Bonjour ! Je confirme que je viens toujours récupérer la commande {{orderNumber}}. À bientôt."
-    }
+    },
+    "outForRecipient": "Pour {{name}}",
+    "recipientNotifiedNotice": "{{name}} reçoit le suivi et le code de livraison par SMS. Aucune connexion de votre part n'est nécessaire.",
+    "deliveryContactRecipient": "Destinataire",
+    "orderedBy": "Commandé par {{name}}",
+    "earningsPendingRelease": "Gains en attente · Versés quand le livreur confirme le retrait"
   },
   "items": {
     "brand": "Marque",
@@ -6455,7 +6460,31 @@
     "fulfillmentDelivery": "Livraison",
     "fulfillmentPickup": "Retrait en magasin",
     "pickupNotice": "Pas de frais de livraison. Récupérez votre commande dans chaque magasin dès qu'elle est prête.",
-    "pickupNoFee": "Offert (retrait en magasin)"
+    "pickupNoFee": "Offert (retrait en magasin)",
+    "diaspora": {
+      "title": "Envoyer une commande au pays",
+      "payingFrom": "Paiement depuis {{country}}",
+      "deliveringTo": "Livraison vers {{country}}",
+      "sendingToSomeoneElse": "Une autre personne reçoit cette commande",
+      "sendingToSomeoneElseHelp": "Nous demandons son nom et son numéro pour qu'elle suive la livraison elle-même.",
+      "payerCharge": "Vous paierez ≈ {{amount}}",
+      "merchantPrice": "Prix du vendeur {{amount}}",
+      "fxDisclaimer": "Estimation seulement. Votre carte est débitée dans la devise du vendeur et votre banque fixe le taux final.",
+      "heldForRecipient": "Payé · Retenu jusqu'à la réception par {{name}}",
+      "heldUntilHandover": "Payé · Retenu jusqu'à la livraison ou le retrait"
+    },
+    "recipient": {
+      "title": "Qui reçoit cette commande ?",
+      "subtitle": "Cette personne reçoit le suivi et le code de livraison par SMS — aucun compte Rendasua requis.",
+      "name": "Nom complet du destinataire",
+      "nameRequired": "Le livreur a besoin d'un nom pour remettre la commande.",
+      "phone": "Numéro du destinataire",
+      "phoneRequired": "Un numéro local du pays de livraison est requis.",
+      "phoneHelp": "Le suivi et le code de livraison sont envoyés à ce numéro.",
+      "whatsapp": "Envoyer ses notifications sur WhatsApp",
+      "whatsappHelp": "Nous basculons sur SMS si WhatsApp échoue.",
+      "pinNotice": "Le destinataire reçoit son propre code de livraison et le donne au livreur à la remise. Vous le voyez aussi dans votre commande."
+    }
   },
   "agentOnboarding": {
     "title": "Comment Fonctionnent les Livraisons",

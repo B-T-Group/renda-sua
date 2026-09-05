@@ -48,6 +48,7 @@ import { LocationsModule } from '../locations/locations.module';
 import { MessagesModule } from '../messages/messages.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MobilePaymentsCoreModule } from '../mobile-payments/mobile-payments-core.module';
+import { DiasporaModule } from '../diaspora/diaspora.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
@@ -180,6 +181,7 @@ import { AppService } from './app.service';
     MobilePaymentsModule,
     StripePaymentsModule,
     StripeTaxModule,
+    DiasporaModule,
     AdminModule,
     NotificationsModule,
     BrandsModule,

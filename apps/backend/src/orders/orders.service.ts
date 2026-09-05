@@ -41,6 +41,14 @@ import {
   NotificationData,
   NotificationsService,
 } from '../notifications/notifications.service';
+import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import {
+  assertDiasporaPaymentTiming,
+  normalizeCountryCode,
+  resolveOrderPayer,
+  resolveOrderRecipient,
+} from '../diaspora/diaspora-order.util';
 import { PdfService } from '../pdf/pdf.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
@@ -84,6 +92,10 @@ import {
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 import { GET_ORDERS } from './orders.queries';
+import {
+  withDeliveryContact,
+  withDeliveryContactForFulfiller,
+} from './delivery-contact.util';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
@@ -416,6 +428,8 @@ export class OrdersService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
+    private readonly fxEstimateService: FxEstimateService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
@@ -821,12 +835,12 @@ export class OrdersService {
         return { ...restItem, item: restrictedItem };
       });
 
-      return {
+      return withDeliveryContactForFulfiller({
         ...restOrder,
         delivery_commission: earnings.totalEarnings,
         agent_hold_amount: agentHoldAmount,
         order_items: orderItems,
-      };
+      });
     } catch (error: any) {
       this.logger.warn(
         `Failed to transform order ${order.id} for agent: ${error.message}`
@@ -1908,6 +1922,24 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Pushes the PIN to a third-party recipient's phone. A recipient who never
+   * logs in cannot open the in-app PIN screen, so the code has to reach them
+   * over SMS/WhatsApp for the existing agent handover to work.
+   */
+  private async shareDeliveryPinWithRecipient(
+    orderId: string,
+    pin: string
+  ): Promise<void> {
+    try {
+      await this.orderRecipientNotifications.notifyDeliveryPin(orderId, pin);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to send delivery PIN to recipient for order ${orderId}: ${error?.message ?? error}`
+      );
+    }
+  }
+
   /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
   private async ensurePickupPinIfNeeded(order: Orders): Promise<void> {
     if ((order as any).fulfillment_method !== 'pickup') return;
@@ -1922,6 +1954,7 @@ export class OrdersService {
     const deliveryPinHash = this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
     await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
   }
 
   /**
@@ -5144,6 +5177,11 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          recipient_name
+          recipient_phone
+          is_third_party_recipient
+          is_diaspora_order
+          fulfillment_country
           business {
             name
           }
@@ -5479,6 +5517,11 @@ export class OrdersService {
           shipping_carrier
           shipped_at
           received_at
+          recipient_name
+          recipient_phone
+          is_third_party_recipient
+          is_diaspora_order
+          fulfillment_country
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -5688,6 +5731,20 @@ export class OrdersService {
           shipping_carrier
           shipped_at
           received_at
+          recipient_name
+          recipient_phone
+          recipient_email
+          recipient_notify_whatsapp
+          is_third_party_recipient
+          payer_name
+          payer_country
+          payer_payment_rail
+          fulfillment_country
+          is_diaspora_order
+          presentment_currency
+          presentment_amount
+          presentment_fx_rate
+          presentment_fx_source
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -5950,7 +6007,7 @@ export class OrdersService {
     }
 
     return {
-      ...orderData,
+      ...withDeliveryContact(orderData),
       access_reason: accessReason,
     };
   }
@@ -6804,6 +6861,10 @@ export class OrdersService {
         orderWithDetails.id,
         deliveryPin
       );
+      await this.shareDeliveryPinWithRecipient(
+        orderWithDetails.id,
+        deliveryPin
+      );
       try {
         await this.orderAcceptanceService.startAcceptanceSla(order.id);
       } catch (slaError: any) {
@@ -7254,6 +7315,7 @@ export class OrdersService {
       this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
     await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
 
     await this.sendOrderPlacedNotifications(order, 'pending');
   }
@@ -7341,6 +7403,10 @@ export class OrdersService {
 
       await this.notificationsService.sendOrderCreatedNotifications(
         notificationData
+      );
+      await this.orderRecipientNotifications.notifyStatusChange(
+        order.id,
+        orderStatus
       );
     } catch (error) {
       this.logger.error(
@@ -8706,6 +8772,49 @@ export class OrdersService {
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
+    const itemCountry = resolveItemCountry(
+      businessInventories[0]?.business_location?.address?.country,
+      businessInventories[0]?.business_location?.business?.user?.country
+    );
+
+    const fulfillmentCountry =
+      normalizeCountryCode(
+        fulfillmentMethod === 'pickup'
+          ? businessInventories[0]?.business_location?.address?.country
+          : address?.country
+      ) ?? normalizeCountryCode(itemCountry);
+
+    const payer = resolveOrderPayer({
+      user: {
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        phone_number: user.phone_number,
+      },
+      requestedPayerCountry:
+        normalizeCountryCode(orderData.payer_country) ??
+        (await this.paymentRoutingService.getUserCountryCode(user.id)),
+    });
+    const recipient = resolveOrderRecipient({
+      recipient: orderData.recipient,
+      sendingToSomeoneElse: orderData.sending_to_someone_else,
+      fulfillmentCountry,
+    });
+
+    // The seller country decides the rail as it always has. A payer billing
+    // from a Stripe country may additionally fund a mobile-money merchant —
+    // that is the diaspora path, and the card still charges the platform.
+    const railResolution = await this.paymentRoutingService.resolveOrderRail({
+      sellerCountry: itemCountry ?? undefined,
+      payerCountry: payer.payer_country,
+    });
+    // Checked before the phone and wallet rules below, which all assume a
+    // payer who is standing in the fulfillment market.
+    assertDiasporaPaymentTiming({
+      isDiaspora: railResolution.isDiaspora,
+      paymentTiming,
+    });
+
     if (
       (paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup') &&
@@ -8724,10 +8833,6 @@ export class OrdersService {
       );
     }
 
-    const itemCountry = resolveItemCountry(
-      businessInventories[0]?.business_location?.address?.country,
-      businessInventories[0]?.business_location?.business?.user?.country
-    );
     const provider = this.mobilePaymentsService.getProviderForCountry(itemCountry);
 
     if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
@@ -8742,10 +8847,7 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       availableBalance >= requiredAmountForHold;
 
-    // Resolve the payment rail from the item location country, not the owner user.
-    const paymentRail = await this.paymentRoutingService.resolveRailForCountry(
-      itemCountry ?? undefined
-    );
+    const paymentRail = railResolution.rail;
     const useStripeRail =
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
@@ -8808,6 +8910,20 @@ export class OrdersService {
     const verified_agent_delivery = !!orderData.verified_agent_delivery;
     const requires_fast_delivery =
       fulfillmentMethod === 'pickup' ? false : !!orderData.requires_fast_delivery;
+    const payer_payment_rail =
+      payment_source === 'credit_card'
+        ? 'stripe'
+        : payment_source === 'wallet'
+          ? 'wallet'
+          : 'mobile_money';
+    // Display-only conversion for the payer; settlement stays in `currency`.
+    const fxEstimate = railResolution.isDiaspora
+      ? this.fxEstimateService.estimate({
+          amount: total_amount,
+          merchantCurrency: currency,
+          payerCountry: payer.payer_country,
+        })
+      : null;
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
@@ -8843,7 +8959,23 @@ export class OrdersService {
         $verifiedAgentDelivery: Boolean!,
         $requiresFastDelivery: Boolean!,
         $firstOrderDeliveryFeePromo: Boolean!,
-        $firstOrderBaseDeliveryDiscountAmount: numeric!
+        $firstOrderBaseDeliveryDiscountAmount: numeric!,
+        $recipientName: String,
+        $recipientPhone: String,
+        $recipientEmail: String,
+        $recipientNotifyWhatsapp: Boolean!,
+        $isThirdPartyRecipient: Boolean!,
+        $payerName: String,
+        $payerPhone: String,
+        $payerEmail: String,
+        $payerCountry: String,
+        $payerPaymentRail: String,
+        $fulfillmentCountry: String,
+        $isDiasporaOrder: Boolean!,
+        $presentmentCurrency: String,
+        $presentmentAmount: numeric,
+        $presentmentFxRate: numeric,
+        $presentmentFxSource: String
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -8877,6 +9009,22 @@ export class OrdersService {
           requires_fast_delivery: $requiresFastDelivery,
           first_order_delivery_fee_promo: $firstOrderDeliveryFeePromo,
           first_order_base_delivery_discount_amount: $firstOrderBaseDeliveryDiscountAmount,
+          recipient_name: $recipientName,
+          recipient_phone: $recipientPhone,
+          recipient_email: $recipientEmail,
+          recipient_notify_whatsapp: $recipientNotifyWhatsapp,
+          is_third_party_recipient: $isThirdPartyRecipient,
+          payer_name: $payerName,
+          payer_phone: $payerPhone,
+          payer_email: $payerEmail,
+          payer_country: $payerCountry,
+          payer_payment_rail: $payerPaymentRail,
+          fulfillment_country: $fulfillmentCountry,
+          is_diaspora_order: $isDiasporaOrder,
+          presentment_currency: $presentmentCurrency,
+          presentment_amount: $presentmentAmount,
+          presentment_fx_rate: $presentmentFxRate,
+          presentment_fx_source: $presentmentFxSource,
           order_items: {
             data: $orderItems
           }
@@ -8913,6 +9061,20 @@ export class OrdersService {
           requires_fast_delivery
           first_order_delivery_fee_promo
           first_order_base_delivery_discount_amount
+          recipient_name
+          recipient_phone
+          recipient_email
+          recipient_notify_whatsapp
+          is_third_party_recipient
+          payer_name
+          payer_country
+          payer_payment_rail
+          fulfillment_country
+          is_diaspora_order
+          presentment_currency
+          presentment_amount
+          presentment_fx_rate
+          presentment_fx_source
           order_items {
             id
             business_inventory_id
@@ -9001,6 +9163,22 @@ export class OrdersService {
         firstOrderDeliveryFeePromo: deliveryFeeInfo.firstOrderDeliveryFeePromo,
         firstOrderBaseDeliveryDiscountAmount:
           deliveryFeeInfo.firstOrderBaseDeliveryDiscountAmount,
+        recipientName: recipient.recipient_name,
+        recipientPhone: recipient.recipient_phone,
+        recipientEmail: recipient.recipient_email,
+        recipientNotifyWhatsapp: recipient.recipient_notify_whatsapp,
+        isThirdPartyRecipient: recipient.is_third_party_recipient,
+        payerName: payer.payer_name,
+        payerPhone: payer.payer_phone,
+        payerEmail: payer.payer_email,
+        payerCountry: payer.payer_country,
+        payerPaymentRail: payer_payment_rail,
+        fulfillmentCountry: fulfillmentCountry,
+        isDiasporaOrder: railResolution.isDiaspora,
+        presentmentCurrency: fxEstimate?.currency ?? null,
+        presentmentAmount: fxEstimate?.amount ?? null,
+        presentmentFxRate: fxEstimate?.rate ?? null,
+        presentmentFxSource: fxEstimate?.source ?? null,
       }
     );
 
