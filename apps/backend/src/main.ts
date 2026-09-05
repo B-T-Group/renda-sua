@@ -21,6 +21,7 @@ import { json, raw, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app/app.module';
 import { configureRuntimeDns } from './config/configure-runtime-dns';
+import { isCorsOriginAllowed, parseCorsOrigins } from './config/cors-origin';
 import { initSentry } from './instrument';
 
 // Must run before bootstrap / Nest so Hasura GraphQL clients can resolve hostnames.
@@ -120,26 +121,13 @@ async function bootstrap() {
   // Use Winston as the NestJS logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
-  // CORS configuration with explicit origin allowlist for credentials
-  const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:4200')
-    .split(',')
-    .map(o => o.trim())
-    .filter(Boolean);
+  // CORS: CORS_ORIGIN is a comma list, or * to reflect any browser Origin.
+  // Deny unknown origins without throwing — an Error becomes a 500 and a Sentry event.
+  const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Cookie-setting routes must have explicit Origin header
-      if (!origin) {
-        // Allow requests without Origin for non-browser clients (but they won't get credentials)
-        // Browser requests with credentials MUST have Origin header
-        callback(null, false);
-        return;
-      }
-      if (corsOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
+      callback(null, isCorsOriginAllowed(origin, corsOrigins));
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
