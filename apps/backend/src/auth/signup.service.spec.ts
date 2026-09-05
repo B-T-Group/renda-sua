@@ -241,6 +241,27 @@ describe('SignupService (deferred OTP)', () => {
       );
       expect(auth0Service.startSmsOtp).toHaveBeenCalledWith('+237600000001');
     });
+
+    it('marks the attempt failed when OTP send fails after insert', async () => {
+      const attempt = baseAttempt();
+      attemptStore.insertPending.mockResolvedValue(attempt);
+      auth0Service.startEmailOtp.mockRejectedValue(new Error('smtp down'));
+
+      await expect(
+        service.startSignup({
+          first_name: 'New',
+          last_name: 'User',
+          email: 'new@example.com',
+          personas: ['client'],
+          profile: {},
+        })
+      ).rejects.toThrow('smtp down');
+
+      expect(attemptStore.updateStatus).toHaveBeenCalledWith(
+        'attempt-1',
+        'failed'
+      );
+    });
   });
 
   describe('verifySignupOtp', () => {
@@ -384,6 +405,79 @@ describe('SignupService (deferred OTP)', () => {
         service.verifySignupOtp({ attemptId: 'attempt-1', otp: '123456' })
       ).rejects.toMatchObject({ status: 409 });
       expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
+
+    it('releases the verify claim back to pending when OTP exchange fails', async () => {
+      const pending = baseAttempt();
+      attemptStore.findById.mockResolvedValue(pending);
+      attemptStore.claimForVerify.mockResolvedValue(pending);
+      auth0Service.verifyEmailOtp.mockRejectedValue(new Error('bad otp'));
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-1', otp: '000000' })
+      ).rejects.toThrow('bad otp');
+
+      expect(attemptStore.updateStatus).toHaveBeenCalledWith(
+        'attempt-1',
+        'pending'
+      );
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
+
+    it('persists Auth0 tokens when provisioning fails so retry can resume', async () => {
+      const pending = baseAttempt();
+      attemptStore.findById.mockResolvedValue(pending);
+      attemptStore.claimForVerify.mockResolvedValue(pending);
+      auth0Service.verifyEmailOtp.mockResolvedValue(auth0Token);
+      userProvisioning.createPendingUser.mockRejectedValue(
+        new Error('provision blew up')
+      );
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-1', otp: '123456' })
+      ).rejects.toThrow('provision blew up');
+
+      expect(attemptStore.updateStatus).toHaveBeenCalledWith(
+        'attempt-1',
+        'verifying',
+        expect.objectContaining({
+          auth0VerifiedAt: expect.any(String),
+          completionResult: expect.objectContaining({
+            tokens: auth0Token,
+          }),
+        })
+      );
+      expect(attemptStore.updateStatus).toHaveBeenCalledWith(
+        'attempt-1',
+        'verified_pending_provision',
+        expect.objectContaining({
+          completionResult: expect.objectContaining({
+            tokens: auth0Token,
+          }),
+        })
+      );
+    });
+
+    it('rejects Auth0 tokens that omit the attempt contact claim', async () => {
+      const pending = baseAttempt();
+      attemptStore.findById.mockResolvedValue(pending);
+      attemptStore.claimForVerify.mockResolvedValue(pending);
+      auth0Service.verifyEmailOtp.mockResolvedValue({
+        ...auth0Token,
+        id_token:
+          'eyJhbGciOiJub25lIn0.' +
+          Buffer.from(JSON.stringify({ sub: 'email|1' })).toString('base64url') +
+          '.',
+      });
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-1', otp: '123456' })
+      ).rejects.toMatchObject({ status: 409 });
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+      expect(attemptStore.updateStatus).toHaveBeenCalledWith(
+        'attempt-1',
+        'pending'
+      );
     });
   });
 

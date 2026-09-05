@@ -187,7 +187,10 @@ export class SignupAttemptStore {
   async claimForVerify(id: string): Promise<SignupAttemptRow | null> {
     const nowIso = new Date().toISOString();
     const result = await this.hasura.executeMutation<{
-      update_signup_attempts: { returning: SignupAttemptRow[] };
+      update_signup_attempts: {
+        affected_rows: number;
+        returning: SignupAttemptRow[];
+      };
     }>(
       `
       mutation ClaimSignupAttempt($id: uuid!, $now: timestamptz!) {
@@ -198,6 +201,7 @@ export class SignupAttemptStore {
           }
           _set: { status: "verifying", updated_at: $now }
         ) {
+          affected_rows
           returning {
             ${ATTEMPT_FIELDS}
           }
@@ -206,7 +210,11 @@ export class SignupAttemptStore {
     `,
       { id, now: nowIso }
     );
-    return result.update_signup_attempts?.returning?.[0] ?? null;
+    const updated = result.update_signup_attempts;
+    if (!updated || updated.affected_rows !== 1) {
+      return null;
+    }
+    return updated.returning[0] ?? null;
   }
 
   async purgeExpired(): Promise<number> {

@@ -123,7 +123,12 @@ export class SignupService {
       contactValue: prepared.contactValue,
       payload: prepared.attemptPayload,
     });
-    await this.sendAttemptOtp(attempt);
+    try {
+      await this.sendAttemptOtp(attempt);
+    } catch (error) {
+      await this.attemptStore.updateStatus(attempt.id, 'failed');
+      throw error;
+    }
     return this.toStartResult(attempt);
   }
 
@@ -209,15 +214,22 @@ export class SignupService {
         HttpStatus.TOO_MANY_REQUESTS
       );
     }
-    const tokens = await this.exchangeOtpForTokens(attempt, otp);
-    const interim = { tokens } as SignupCompletionResult;
-    await this.attemptStore.updateStatus(attempt.id, 'verifying', {
-      auth0VerifiedAt: new Date().toISOString(),
-      completionResult: interim,
-    });
-    attempt.auth0_verified_at = new Date().toISOString();
-    attempt.completion_result = interim;
-    return tokens;
+    try {
+      const tokens = await this.exchangeOtpForTokens(attempt, otp);
+      // Persist tokens before provisioning so retries can skip Auth0 re-exchange.
+      const interim = { tokens } as SignupCompletionResult;
+      await this.attemptStore.updateStatus(attempt.id, 'verifying', {
+        auth0VerifiedAt: new Date().toISOString(),
+        completionResult: interim,
+      });
+      attempt.auth0_verified_at = new Date().toISOString();
+      attempt.completion_result = interim;
+      return tokens;
+    } catch (error) {
+      // Release the verify claim so the client can retry with a new OTP.
+      await this.attemptStore.updateStatus(attempt.id, 'pending');
+      throw error;
+    }
   }
 
   private async exchangeOtpForTokens(
@@ -255,7 +267,7 @@ export class SignupService {
     }
     if (attempt.channel === 'email') {
       const email = this.normalizeEmail(claims.email);
-      if (email && email !== attempt.contact_value) {
+      if (!email || email !== attempt.contact_value) {
         throw new HttpException(
           { success: false, error: 'Verified identity does not match signup' },
           HttpStatus.CONFLICT
@@ -264,7 +276,7 @@ export class SignupService {
       return;
     }
     const phone = this.normalizePhone(claims.phone_number);
-    if (phone && phone !== attempt.contact_value) {
+    if (!phone || phone !== attempt.contact_value) {
       throw new HttpException(
         { success: false, error: 'Verified identity does not match signup' },
         HttpStatus.CONFLICT
