@@ -956,7 +956,8 @@ describe('OrdersService', () => {
       });
       expect(compensateSpy).toHaveBeenCalledWith(
         'order-123',
-        'Create failed: inventory reservation error'
+        'Create failed: inventory reservation error',
+        { allowPendingUnpaid: true, releaseInventory: false }
       );
       expect(finalizeSpy).not.toHaveBeenCalled();
     });
