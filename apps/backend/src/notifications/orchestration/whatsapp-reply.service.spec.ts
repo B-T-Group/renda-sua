@@ -12,6 +12,7 @@ describe('WhatsAppReplyService', () => {
     sendSessionText: jest.fn(),
   };
   const assistant = {
+    isEnabled: jest.fn().mockReturnValue(true),
     isWhatsAppRepliesEnabled: jest.fn().mockReturnValue(false),
     detectLocaleFromText: jest.fn().mockReturnValue('en'),
     chat: jest.fn(),

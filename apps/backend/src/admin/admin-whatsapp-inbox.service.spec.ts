@@ -132,6 +132,7 @@ describe('AdminWhatsAppInboxService', () => {
     await service.listConversations({ search: '  Ada  ' });
     expect(hasura.executeQuery.mock.calls[0][1].where).toEqual({
       _and: [
+        { last_customer_message_at: { _is_null: false } },
         { status: { _eq: 'open' } },
         {
           _or: [
@@ -152,7 +153,9 @@ describe('AdminWhatsAppInboxService', () => {
       whatsapp_conversations_aggregate: { aggregate: { count: 0 } },
     });
     await service.listConversations({ status: 'all' });
-    expect(hasura.executeQuery.mock.calls[0][1].where).toEqual({});
+    expect(hasura.executeQuery.mock.calls[0][1].where).toEqual({
+      last_customer_message_at: { _is_null: false },
+    });
   });
 
   it('rejects reply when the last customer message is missing or invalid', async () => {
