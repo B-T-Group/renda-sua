@@ -142,7 +142,7 @@ describe('OrdersService - Saved Recipient Auth', () => {
       expect(callArgs[0].authToken).not.toBe('');
     });
 
-    it('should handle recipient fetch failure gracefully', async () => {
+    it('should handle recipient fetch failure by failing the order', async () => {
       // Setup mocks
       hasuraUserService.getUser.mockResolvedValue(mockClientUser as any);
       hasuraUserService.resolveContext.mockReturnValue(mockRequestContext);
@@ -150,13 +150,13 @@ describe('OrdersService - Saved Recipient Auth', () => {
         new Error('Recipient not found or unauthorized')
       );
 
-      // Simulate the code path with error handling
-      let recipientData = null;
+      // Simulate the code path - error should propagate and fail the order
       try {
         const ctx = hasuraUserService.resolveContext();
-        recipientData = await recipientsService.getRecipient(ctx, 'recipient-789');
+        await recipientsService.getRecipient(ctx, 'recipient-789');
+        fail('Should have thrown error');
       } catch (error: any) {
-        // Error should be caught and logged, but not throw
+        // Error should propagate to fail the order (no soft-fallback)
         expect(error.message).toContain('Recipient not found or unauthorized');
       }
 
@@ -165,9 +165,6 @@ describe('OrdersService - Saved Recipient Auth', () => {
         mockRequestContext,
         'recipient-789'
       );
-
-      // Verify that recipient data is null on failure (fallback behavior)
-      expect(recipientData).toBeNull();
     });
   });
 

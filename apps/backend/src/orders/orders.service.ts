@@ -8918,24 +8918,19 @@ export class OrdersService {
     );
     
     // If recipient_id is provided, fetch the saved recipient and use it
+    // Fail the order if recipient is not found (no soft-fallback after inventory reserve)
     let recipientData = orderData.recipient;
     if (orderData.recipient_id) {
-      try {
-        const ctx = this.hasuraUserService.resolveContext();
-        const savedRecipient = await this.recipientsService.getRecipient(
-          ctx,
-          orderData.recipient_id
-        );
-        recipientData = {
-          name: savedRecipient.name,
-          phone: savedRecipient.phone,
-          notify_whatsapp: savedRecipient.notify_whatsapp,
-        };
-      } catch (error: any) {
-        this.logger.warn(
-          `Failed to fetch saved recipient ${orderData.recipient_id}: ${error.message}`
-        );
-      }
+      const ctx = this.hasuraUserService.resolveContext();
+      const savedRecipient = await this.recipientsService.getRecipient(
+        ctx,
+        orderData.recipient_id
+      );
+      recipientData = {
+        name: savedRecipient.name,
+        phone: savedRecipient.phone,
+        notify_whatsapp: savedRecipient.notify_whatsapp,
+      };
     }
     
     const recipient = resolveOrderRecipient({
