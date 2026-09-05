@@ -15,6 +15,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Item } from '../../../hooks/useItems';
+import ItemCategoryEditor from './ItemCategoryEditor';
 import { formatItemCurrency, formatItemDate } from './itemViewHelpers';
 
 interface ItemDetailsCardProps {
@@ -22,6 +23,7 @@ interface ItemDetailsCardProps {
   canSuperUserActions: boolean;
   onManageCollections: () => void;
   onRefineWithAi: () => void;
+  onCategorySaved: () => void;
 }
 
 interface FieldProps {
@@ -43,6 +45,7 @@ const ItemDetailsCard: React.FC<ItemDetailsCardProps> = ({
   canSuperUserActions,
   onManageCollections,
   onRefineWithAi,
+  onCategorySaved,
 }) => {
   const { t } = useTranslation();
   const hasSpecialHandling =
@@ -100,14 +103,7 @@ const ItemDetailsCard: React.FC<ItemDetailsCardProps> = ({
             </Field>
           )}
 
-          {item.item_sub_category && (
-            <Field label={t('business.items.category', 'Category')}>
-              <Typography variant="body2">
-                {item.item_sub_category.item_category?.name} ›{' '}
-                {item.item_sub_category.name}
-              </Typography>
-            </Field>
-          )}
+          <ItemCategoryEditor item={item} onSaved={onCategorySaved} />
 
           {item.item_tags && item.item_tags.length > 0 && (
             <Field label={t('business.items.tags', 'Tags')}>

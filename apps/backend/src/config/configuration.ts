@@ -123,9 +123,9 @@ export interface OrderConfig {
   paymentTimeoutWaitMinutes?: number;
   /** When true, post-delivery refunds route to Stripe/wallet engine (default true). */
   refundsV2Enabled?: boolean;
-  /** Default merchant accept window in seconds when business.acceptance_timeout_seconds is null (ASAP). Launch default: 900 (15m). */
+  /** Default merchant accept window in seconds when business.acceptance_timeout_seconds is null (ASAP). Launch default: 2700 (45m). */
   acceptanceTimeoutSeconds: number;
-  /** Default confirm window (seconds) after future-order activation. Launch default: 1800 (30m). */
+  /** Default confirm window (seconds) after future-order activation. Launch default: 2700 (45m). */
   futureAcceptanceTimeoutSeconds: number;
   /** Default minutes before prep start to activate acceptance SLA. */
   orderActivationLeadMinutes: number;
@@ -137,6 +137,8 @@ export interface OrderConfig {
   busyExtraPrepMinutes: number;
   /** Cap on busy_extra_prep_minutes. */
   busyExtraPrepCapMinutes: number;
+  /** Minutes to snooze the incoming-order interrupt after Busy. */
+  busyInterruptSnoozeMinutes: number;
   /** Auto-decline count (30d) to enter demote tier. */
   reliabilityDemoteAutoDeclines: number;
   /** Auto-decline count (30d) to enter restrict tier. */
@@ -149,6 +151,12 @@ export interface OrderConfig {
   cleanupBatchLimit: number;
   /** When false, OrderCleanupCronService no-ops. */
   cleanupEnabled: boolean;
+  /** Days a store-pickup order may stay ready_for_pickup before auto-cancel. */
+  storePickupCancelDays: number;
+  /** Hours between client store-pickup reminder pushes. */
+  storePickupReminderHours: number;
+  /** When false, StorePickupReminderCronService no-ops. */
+  storePickupReminderEnabled: boolean;
   /** Travel minutes added to prep for ASAP delivery ETA. */
   asapTravelBufferMinutes: number;
   /** Grace minutes after ready for ASAP pickup-by. */
@@ -185,6 +193,22 @@ export interface BedrockConfig {
   chatModel: string;
   /** Titan embeddings model ID (default amazon.titan-embed-text-v1, 1536d). */
   embeddingModel: string;
+}
+
+/** Channel-agnostic conversational AI assistant (WhatsApp + in-app chat). */
+export interface AssistantConfig {
+  /** Master switch for the assistant service and HTTP chat endpoint. */
+  enabled: boolean;
+  /** Auto-reply to unmatched inbound WhatsApp text via the assistant. */
+  whatsappRepliesEnabled: boolean;
+  /** Optional Converse model override; falls back to bedrock.chatModel. */
+  model: string;
+  /** Max prior messages included in a WhatsApp conversation context. */
+  maxHistoryMessages: number;
+  /** Max tool-use iterations per turn. */
+  maxToolIterations: number;
+  /** Cap on outbound WhatsApp reply length (characters). */
+  whatsappMaxReplyChars: number;
 }
 
 export interface InventorySearchConfig {
@@ -270,6 +294,26 @@ export interface StripeConfig {
 
 export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
+}
+
+/**
+ * Diaspora checkout: a payer in a Stripe country buys for a recipient in a
+ * mobile-money country. Money still lands on the platform Stripe balance and
+ * settles to the merchant from the internal ledger on agent pickup.
+ */
+export interface DiasporaConfig {
+  /** Master switch for payer-aware rail selection and the recipient block at checkout. */
+  enabled: boolean;
+  /**
+   * ISO 3166-1 alpha-2 payer countries allowed to pay by card for a
+   * mobile-money merchant. Empty means "reuse stripe.enabledCountries".
+   */
+  payerCountries: string[];
+  /**
+   * Indicative FX rates for checkout presentment only, keyed `FROM:TO`
+   * (e.g. `XAF:CAD`). Never used for settlement — see issue #178.
+   */
+  fxRates: Record<string, number>;
 }
 
 /** Client rating prompts (rate agent on completion, rate item after delay). */
@@ -444,6 +488,13 @@ export interface WhatsAppConfig {
   apiVersion: string;
   /** App secret for `X-Hub-Signature-256` webhook verification + action tokens. */
   appSecret: string;
+  /**
+   * Send MARKETING templates through the Marketing Messages API
+   * (`/PHONE_NUMBER_ID/marketing_messages`) for better delivery. Requires the
+   * WABA to have signed the MM API Terms of Service; leave false until then, as
+   * Cloud API still carries non-optimized marketing.
+   */
+  marketingMessagesApiEnabled: boolean;
   /** Master switch for product WhatsApp notifications (templates). Default false when unset. */
   notificationsEnabled: boolean;
 }
@@ -475,10 +526,12 @@ export interface Configuration {
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
   bedrock: BedrockConfig;
+  assistant: AssistantConfig;
   inventorySearch: InventorySearchConfig;
   imageValidation: ImageValidationConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
+  diaspora: DiasporaConfig;
   rating: RatingConfig;
   orderOffers: OrderOffersConfig;
   deliveryAvailability: DeliveryAvailabilityConfig;
@@ -508,6 +561,20 @@ function parseImageValidationModerationProvider(
     return normalized;
   }
   return 'none';
+}
+
+/** Parses `XAF:CAD=0.00224,XAF:USD=0.00165` into a rate lookup. */
+function parseDiasporaFxRates(value: string | undefined): Record<string, number> {
+  const rates: Record<string, number> = {};
+  for (const entry of (value || '').split(',')) {
+    const [pair, rate] = entry.split('=');
+    const key = pair?.trim().toUpperCase();
+    const parsed = Number(rate);
+    if (!key || !/^[A-Z]{3}:[A-Z]{3}$/.test(key)) continue;
+    if (!Number.isFinite(parsed) || parsed <= 0) continue;
+    rates[key] = parsed;
+  }
+  return rates;
 }
 
 // Secrets are now loaded in main.ts before NestJS starts
@@ -723,11 +790,11 @@ export default (): Configuration => {
         process.env.REFUNDS_V2_ENABLED !== 'false' &&
         process.env.REFUNDS_V2_ENABLED !== '0',
       acceptanceTimeoutSeconds: parseInt(
-        process.env.ORDER_ACCEPTANCE_TIMEOUT_SECONDS || '900',
+        process.env.ORDER_ACCEPTANCE_TIMEOUT_SECONDS || '2700',
         10
       ),
       futureAcceptanceTimeoutSeconds: parseInt(
-        process.env.ORDER_FUTURE_ACCEPTANCE_TIMEOUT_SECONDS || '1800',
+        process.env.ORDER_FUTURE_ACCEPTANCE_TIMEOUT_SECONDS || '2700',
         10
       ),
       orderActivationLeadMinutes: parseInt(
@@ -735,7 +802,7 @@ export default (): Configuration => {
         10
       ),
       acceptanceGraceSeconds: parseInt(
-        process.env.ORDER_ACCEPTANCE_GRACE_SECONDS || '300',
+        process.env.ORDER_ACCEPTANCE_GRACE_SECONDS || '900',
         10
       ),
       defaultEstimatedPrepMinutes: parseInt(
@@ -748,6 +815,10 @@ export default (): Configuration => {
       ),
       busyExtraPrepCapMinutes: parseInt(
         process.env.ORDER_BUSY_EXTRA_PREP_CAP_MINUTES || '60',
+        10
+      ),
+      busyInterruptSnoozeMinutes: parseInt(
+        process.env.ORDER_BUSY_INTERRUPT_SNOOZE_MINUTES || '15',
         10
       ),
       reliabilityDemoteAutoDeclines: parseInt(
@@ -773,6 +844,17 @@ export default (): Configuration => {
       cleanupEnabled:
         process.env.ORDER_CLEANUP_ENABLED !== 'false' &&
         process.env.ORDER_CLEANUP_ENABLED !== '0',
+      storePickupCancelDays: parseInt(
+        process.env.ORDER_STORE_PICKUP_CANCEL_DAYS || '7',
+        10
+      ),
+      storePickupReminderHours: parseInt(
+        process.env.ORDER_STORE_PICKUP_REMINDER_HOURS || '24',
+        10
+      ),
+      storePickupReminderEnabled:
+        process.env.ORDER_STORE_PICKUP_REMINDER_ENABLED !== 'false' &&
+        process.env.ORDER_STORE_PICKUP_REMINDER_ENABLED !== '0',
       asapTravelBufferMinutes: parseInt(
         process.env.ORDER_ASAP_TRAVEL_BUFFER_MINUTES || '30',
         10
@@ -834,6 +916,24 @@ export default (): Configuration => {
         process.env.BEDROCK_EMBEDDING_MODEL?.trim() ||
         'amazon.titan-embed-text-v1',
     },
+    assistant: {
+      enabled: process.env.ASSISTANT_ENABLED === 'true',
+      whatsappRepliesEnabled:
+        process.env.ASSISTANT_WHATSAPP_REPLIES_ENABLED === 'true',
+      model: process.env.ASSISTANT_MODEL?.trim() || '',
+      maxHistoryMessages: parseInt(
+        process.env.ASSISTANT_MAX_HISTORY_MESSAGES || '10',
+        10
+      ),
+      maxToolIterations: parseInt(
+        process.env.ASSISTANT_MAX_TOOL_ITERATIONS || '5',
+        10
+      ),
+      whatsappMaxReplyChars: parseInt(
+        process.env.ASSISTANT_WHATSAPP_MAX_REPLY_CHARS || '1200',
+        10
+      ),
+    },
     inventorySearch: {
       minSimilarity: parseFloat(
         process.env.INVENTORY_SEARCH_MIN_SIMILARITY || '0.38'
@@ -871,6 +971,14 @@ export default (): Configuration => {
     },
     notificationsInternal: {
       apiKey: process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+    },
+    diaspora: {
+      enabled: process.env.DIASPORA_CHECKOUT_ENABLED !== 'false',
+      payerCountries: (process.env.DIASPORA_PAYER_COUNTRIES || '')
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2),
+      fxRates: parseDiasporaFxRates(process.env.DIASPORA_FX_RATES),
     },
     rating: {
       itemRatingDelayDays: parseInt(
@@ -1025,6 +1133,8 @@ export default (): Configuration => {
       appSecret: process.env.WHATSAPP_APP_SECRET || '',
       notificationsEnabled:
         process.env.WHATSAPP_NOTIFICATIONS_ENABLED === 'true',
+      marketingMessagesApiEnabled:
+        process.env.WHATSAPP_MARKETING_MESSAGES_API_ENABLED === 'true',
     },
   };
 };

@@ -105,6 +105,77 @@ describe('FulfillmentPromiseService', () => {
     );
   });
 
+  it('reanchors an ASAP promise from ready time without adding prep', async () => {
+    const hasura = {
+      executeQuery: jest.fn().mockResolvedValue({
+        orders_by_pk: {
+          id: 'order-1',
+          business_id: 'biz-1',
+          fulfillment_method: 'pickup',
+          fulfillment_timing: 'asap',
+          requires_fast_delivery: false,
+        },
+      }),
+      executeMutation: jest.fn().mockResolvedValue({}),
+    };
+    const anchored = new FulfillmentPromiseService(
+      hasura as any,
+      {
+        get: () => ({
+          defaultEstimatedPrepMinutes: 30,
+          asapTravelBufferMinutes: 30,
+          asapPickupGraceMinutes: 60,
+          asapCloseBufferMinutes: 15,
+          asapFastTravelBufferMinutes: 20,
+        }),
+      } as any,
+      { getTimezone: jest.fn().mockResolvedValue('Africa/Libreville') } as any
+    );
+    const readyAt = new Date('2026-08-02T20:00:00.000Z');
+    await anchored.reanchorAsapAtReady('order-1', readyAt);
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('SetFulfillmentPromise'),
+      expect.objectContaining({
+        id: 'order-1',
+        timing: 'asap',
+        ready: '2026-08-02T20:00:00.000Z',
+        by: '2026-08-02T21:00:00.000Z',
+      })
+    );
+  });
+
+  it('does not reanchor a scheduled order', async () => {
+    const hasura = {
+      executeQuery: jest.fn().mockResolvedValue({
+        orders_by_pk: {
+          id: 'order-2',
+          business_id: 'biz-1',
+          fulfillment_method: 'delivery',
+          fulfillment_timing: 'scheduled',
+          delivery_time_windows: [
+            { preferred_date: '2026-08-03', time_slot_start: '10:00' },
+          ],
+        },
+      }),
+      executeMutation: jest.fn().mockResolvedValue({}),
+    };
+    const anchored = new FulfillmentPromiseService(
+      hasura as any,
+      {
+        get: () => ({
+          defaultEstimatedPrepMinutes: 30,
+          asapTravelBufferMinutes: 30,
+          asapPickupGraceMinutes: 60,
+          asapCloseBufferMinutes: 15,
+          asapFastTravelBufferMinutes: 20,
+        }),
+      } as any,
+      { getTimezone: jest.fn().mockResolvedValue('Africa/Libreville') } as any
+    );
+    await anchored.reanchorAsapAtReady('order-2');
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
   it('extends an existing ASAP promise when prep grows', () => {
     const existing = {
       promisedReadyAt: '2026-08-21T12:30:00.000Z',

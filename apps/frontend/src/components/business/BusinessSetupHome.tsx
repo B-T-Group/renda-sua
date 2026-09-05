@@ -28,12 +28,17 @@ export interface BusinessSetupHomeProps {
   status: BusinessVerificationStatus;
   mainInterest: 'sell_items' | 'rent_items';
   businessId?: string;
+  reachability?: {
+    hasPush: boolean;
+    whatsappReady: boolean;
+    locationAlertPhoneSet: boolean | null;
+  };
   /** Soft catalog progress when the MM rail omits steps.catalog. */
   hasAnyItem?: boolean;
   onRefresh?: () => Promise<void> | void;
 }
 
-type SetupStepId = 'agreement' | 'catalog' | 'previewStore';
+type SetupStepId = 'agreement' | 'catalog' | 'previewStore' | 'reachability';
 
 type SetupStep = {
   id: SetupStepId;
@@ -51,6 +56,7 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
   status,
   mainInterest,
   businessId,
+  reachability,
   hasAnyItem = false,
   onRefresh,
 }) => {
@@ -92,11 +98,12 @@ export const BusinessSetupHome: React.FC<BusinessSetupHomeProps> = ({
       buildSetupSteps({
         status,
         businessId,
+        reachability,
         previewDone,
         hasCatalogItem,
         t,
       }),
-    [status, businessId, previewDone, hasCatalogItem, t]
+    [status, businessId, reachability, previewDone, hasCatalogItem, t]
   );
 
   const current = steps.find((s) => s.current && !s.done) ?? steps.find((s) => !s.done);
@@ -312,6 +319,7 @@ function SetupStepRow({
 type BuildParams = {
   status: BusinessVerificationStatus;
   businessId?: string;
+  reachability?: BusinessSetupHomeProps['reachability'];
   previewDone: boolean;
   hasCatalogItem: boolean;
   t: (key: string, defaultValue: string) => string;
@@ -335,8 +343,58 @@ function buildAgreementStep(params: BuildParams): SetupStep {
   };
 }
 
+function buildReachabilityStep(params: BuildParams): SetupStep | null {
+  const reachability = params.reachability;
+  if (!reachability) return null;
+  const locationMissing = reachability.locationAlertPhoneSet === false;
+  const done =
+    reachability.hasPush &&
+    reachability.whatsappReady &&
+    reachability.locationAlertPhoneSet !== false;
+  let description = params.t(
+    'business.setup.stepReachabilityDesc',
+    'Keep at least one fast alert channel on so your kitchen notices new orders.'
+  );
+  if (!reachability.hasPush && !reachability.whatsappReady) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingBoth',
+      'Turn on push notifications or WhatsApp alerts so you do not miss new orders.'
+    );
+  } else if (!reachability.hasPush) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingPush',
+      'Allow browser notifications on this device for instant order alerts.'
+    );
+  } else if (!reachability.whatsappReady) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingWhatsapp',
+      'Turn on WhatsApp order updates so your team has a backup alert channel.'
+    );
+  } else if (locationMissing) {
+    description = params.t(
+      'business.setup.stepReachabilityMissingLocationPhone',
+      'Add a kitchen or till phone on a location so WhatsApp reminders reach the right device.'
+    );
+  }
+  return {
+    id: 'reachability',
+    label: params.t('business.setup.stepReachability', 'Stay reachable for new orders'),
+    description,
+    done,
+    current: !done,
+    to: locationMissing ? '/business/locations' : '/settings/notifications',
+    cta: locationMissing
+      ? params.t('business.setup.ctaReachabilityLocations', 'Update locations')
+      : params.t('business.setup.ctaReachabilityNotifications', 'Open notification settings'),
+  };
+}
+
 function buildSetupSteps(params: BuildParams): SetupStep[] {
   const steps: SetupStep[] = [buildAgreementStep(params)];
+  const reachability = buildReachabilityStep(params);
+  if (reachability) {
+    steps.push(reachability);
+  }
   // ID (MM) and Stripe Connect are optional post-go-live verified-badge tips,
   // not required setup steps.
   if (params.businessId && params.hasCatalogItem) {

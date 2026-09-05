@@ -60,6 +60,11 @@ export class CreateItemDto {
   @ApiPropertyOptional()
   estimated_delivery_time?: number | null;
 
+  @ApiPropertyOptional({
+    description: 'Typical minutes to cook the dish (cooked food only).',
+  })
+  preparation_minutes?: number | null;
+
   @ApiPropertyOptional()
   min_order_quantity?: number;
 
@@ -71,6 +76,13 @@ export class CreateItemDto {
 
   @ApiPropertyOptional()
   pay_on_delivery_enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'When true, shoppers cannot buy; they submit interest and the business follows up externally.',
+    default: false,
+  })
+  interest_only?: boolean;
 
   @ApiPropertyOptional({
     description: 'When true, this item can be shipped via carrier. Default false.',

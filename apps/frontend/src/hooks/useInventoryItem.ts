@@ -29,6 +29,7 @@ export interface InventoryItem {
   item: {
     id: string;
     name: string;
+    interest_only?: boolean;
     description: string;
     pay_on_delivery_enabled?: boolean;
     pay_at_pickup_enabled?: boolean;

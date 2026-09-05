@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ItemImage } from '../types/image';
+import type { FoodAvailabilitySlot } from '../types/food';
 import { useApiClient } from './useApiClient';
 import { useDistanceMatrix } from './useDistanceMatrix';
 import { useGraphQLRequest } from './useGraphQLRequest';
@@ -27,6 +28,8 @@ export interface Item {
   requires_special_handling: boolean;
   max_delivery_distance: number | null;
   estimated_delivery_time: number | null;
+  /** Typical minutes to cook the dish (cooked food only). */
+  preparation_minutes?: number | null;
   min_order_quantity: number;
   max_order_quantity: number | null;
   is_active: boolean;
@@ -89,6 +92,12 @@ export interface Item {
       name_fr: string;
     };
   }>;
+  /** Serving hours and sold-out state per location (cooked food only). */
+  food_item_settings?: Array<{
+    business_location_id: string;
+    marked_unavailable_at: string | null;
+    availability_slots?: FoodAvailabilitySlot[];
+  }>;
   business_inventories?: {
     id: string;
     item_id: string;
@@ -143,6 +152,7 @@ export interface CreateItemData {
   requires_special_handling?: boolean;
   max_delivery_distance?: number;
   estimated_delivery_time?: number;
+  preparation_minutes?: number | null;
   min_order_quantity?: number;
   max_order_quantity?: number;
   is_active?: boolean;

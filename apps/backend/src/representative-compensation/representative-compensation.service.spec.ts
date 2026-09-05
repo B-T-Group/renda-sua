@@ -113,24 +113,23 @@ describe('RepresentativeCompensationService', () => {
     });
   }
 
-  it('credits 7500 and 1% on the qualifying first sale', async () => {
-    mockBusinessQueries([{ id: 'order-1', subtotal: 20000 }]);
+  function stubSaleCredit() {
     accountsService.findDepositByReference.mockResolvedValue(null);
     accountsService.findDepositByReferenceId.mockResolvedValue(null);
     accountsService.registerTransaction.mockResolvedValue({
       success: true,
       transactionId: 'tx-sale',
     });
+  }
+
+  it('claims pending 7500 and credits 1% on the qualifying first sale', async () => {
+    mockBusinessQueries([{ id: 'order-1', subtotal: 20000 }]);
+    stubSaleCredit();
 
     const result = await service.evaluateForOrder('order-1', 'biz-1');
 
-    expect(result.credited).toBe(2);
-    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalledWith(
-      expect.objectContaining({
-        grossAmount: 7500,
-        compensationEventId: 'evt-1',
-      })
-    );
+    expect(result.credited).toBe(1);
+    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
     expect(accountsService.registerTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 200, transactionType: 'deposit' })
     );
@@ -140,7 +139,78 @@ describe('RepresentativeCompensationService', () => {
     expect(inserts).toEqual([ONBOARDING_10_FIRST_SALE, SALE_PERCENT]);
   });
 
-  it('pays 1% on a later sale after 7500 is already credited', async () => {
+  it('credits only 1% when the first sale is below 2500 XAF', async () => {
+    mockBusinessQueries([{ id: 'order-1', subtotal: 1000 }]);
+    stubSaleCredit();
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.credited).toBe(1);
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([SALE_PERCENT]);
+  });
+
+  it('credits 7500 on a small sale when min sale total is configured to 0', async () => {
+    configurationsService.getConfigurationByKey.mockImplementation(
+      async (key: string, country?: string) => {
+        if (key === 'business_referral_payout_enabled') {
+          return { boolean_value: true, status: 'active' };
+        }
+        if (key === 'onboarding_10_min_sale_total') {
+          return { number_value: 0 };
+        }
+        return null;
+      }
+    );
+    mockBusinessQueries([{ id: 'order-1', subtotal: 1000 }]);
+    accountsService.findDepositByReference.mockResolvedValue(null);
+    accountsService.findDepositByReferenceId.mockResolvedValue(null);
+    accountsService.registerTransaction.mockResolvedValue({
+      success: true,
+      transactionId: 'tx-sale',
+    });
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.credited).toBe(1);
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([ONBOARDING_10_FIRST_SALE, SALE_PERCENT]);
+  });
+
+  it('falls back to 2500 XAF when the min sale config is negative', async () => {
+    configurationsService.getConfigurationByKey.mockImplementation(
+      async (key: string, country?: string) => {
+        if (key === 'business_referral_payout_enabled') {
+          return { boolean_value: true, status: 'active' };
+        }
+        if (key === 'onboarding_10_min_sale_total') {
+          return { number_value: -1 };
+        }
+        return null;
+      }
+    );
+    mockBusinessQueries([{ id: 'order-1', subtotal: 1000 }]);
+    accountsService.findDepositByReference.mockResolvedValue(null);
+    accountsService.findDepositByReferenceId.mockResolvedValue(null);
+    accountsService.registerTransaction.mockResolvedValue({
+      success: true,
+      transactionId: 'tx-sale',
+    });
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.credited).toBe(1);
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([SALE_PERCENT]);
+  });
+
+  it('pays 1% on a later sale after 7500 is already pending', async () => {
     mockBusinessQueries(
       [
         { id: 'order-1', subtotal: 8000 },
@@ -150,63 +220,20 @@ describe('RepresentativeCompensationService', () => {
         {
           rule_code: ONBOARDING_10_FIRST_SALE,
           amount: 7500,
-          status: 'credited',
+          status: 'pending',
           triggering_order_id: 'order-1',
         },
       ]
     );
-    accountsService.findDepositByReference.mockResolvedValue(null);
-    accountsService.findDepositByReferenceId.mockResolvedValue(null);
-    accountsService.registerTransaction.mockResolvedValue({
-      success: true,
-      transactionId: 'tx-sale',
-    });
+    stubSaleCredit();
 
     const result = await service.evaluateForOrder('order-4', 'biz-1');
 
-    expect(result.credited).toBe(1);
+    expect(result.credited).toBe(2);
+    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
     expect(accountsService.registerTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 500, transactionType: 'deposit' })
     );
-    const insert = hasuraSystemService.executeMutation.mock.calls.find(([q]) =>
-      String(q).includes('InsertCompensationEvent')
-    );
-    expect(insert?.[1].object.rule_code).toBe(SALE_PERCENT);
-  });
-
-  it('still pays 1% on sales completed before a catalog-only onboarding credit', async () => {
-    mockBusinessQueries(
-      [
-        {
-          id: 'order-old',
-          subtotal: 20000,
-          completedAt: '2026-06-01T00:00:00.000Z',
-        },
-      ],
-      [
-        {
-          rule_code: ONBOARDING_10_FIRST_SALE,
-          amount: 7500,
-          status: 'credited',
-          triggering_order_id: null,
-          created_at: '2026-06-15T00:00:00.000Z',
-        },
-      ]
-    );
-    accountsService.findDepositByReference.mockResolvedValue(null);
-    accountsService.findDepositByReferenceId.mockResolvedValue(null);
-    accountsService.registerTransaction.mockResolvedValue({
-      success: true,
-      transactionId: 'tx-sale',
-    });
-
-    const result = await service.evaluateForOrder('order-old', 'biz-1');
-
-    expect(result.credited).toBe(1);
-    expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 200, transactionType: 'deposit' })
-    );
-    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
   });
 
   it('still pays 1% on a later retry of the onboarding order', async () => {
@@ -216,17 +243,12 @@ describe('RepresentativeCompensationService', () => {
         {
           rule_code: ONBOARDING_10_FIRST_SALE,
           amount: 7500,
-          status: 'credited',
+          status: 'pending',
           triggering_order_id: 'order-1',
         },
       ]
     );
-    accountsService.findDepositByReference.mockResolvedValue(null);
-    accountsService.findDepositByReferenceId.mockResolvedValue(null);
-    accountsService.registerTransaction.mockResolvedValue({
-      success: true,
-      transactionId: 'tx-sale',
-    });
+    stubSaleCredit();
 
     const result = await service.evaluateForOrder('order-1', 'biz-1');
 
@@ -235,39 +257,7 @@ describe('RepresentativeCompensationService', () => {
     expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
   });
 
-  it('skips a duplicate insert on unique violation', async () => {
-    mockBusinessQueries([{ id: 'order-1', subtotal: 20000 }]);
-    hasuraSystemService.executeMutation.mockRejectedValue(
-      new Error('Uniqueness violation on uq_rce_order_id')
-    );
-    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-      if (query.includes('CompensationBusiness')) return snapshot;
-      if (query.includes('CompensationSales')) {
-        return { orders: [{ id: 'order-1', subtotal: 20000, currency: 'XAF' }] };
-      }
-      if (query.includes('CompensationEventsForBusiness')) {
-        return { representative_compensation_events: [] };
-      }
-      if (query.includes('LegacyReferralPayout')) {
-        return { business_referral_payouts: [] };
-      }
-      if (query.includes('ExistingCompensationEvent')) {
-        return {
-          representative_compensation_events: [
-            { id: 'evt-1', reference_id: 'ref-1', status: 'credited' },
-          ],
-        };
-      }
-      return {};
-    });
-
-    const result = await service.evaluateForOrder('order-1', 'biz-1');
-
-    expect(result.skipped).toBeGreaterThanOrEqual(1);
-    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
-  });
-
-  it('retries an existing pending 7500 and still inserts 1% on the same order', async () => {
+  it('does not fulfill an existing pending 7500 during weekday evaluate', async () => {
     mockBusinessQueries(
       [
         { id: 'order-1', subtotal: 8000 },
@@ -276,28 +266,29 @@ describe('RepresentativeCompensationService', () => {
       [],
       12
     );
-    accountsService.findDepositByReference.mockResolvedValue(null);
-    accountsService.findDepositByReferenceId.mockResolvedValue(null);
-    accountsService.registerTransaction.mockResolvedValue({
-      success: true,
-      transactionId: 'tx-sale',
-    });
-    hasuraSystemService.executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
-      if (String(mutation).includes('InsertCompensationEvent')) {
-        if (vars?.object?.rule_code === ONBOARDING_10_FIRST_SALE) {
-          throw new Error('Uniqueness violation on uq_rce_business_onboarding_rule');
+    stubSaleCredit();
+    hasuraSystemService.executeMutation.mockImplementation(
+      async (mutation: string, vars?: any) => {
+        if (String(mutation).includes('InsertCompensationEvent')) {
+          if (vars?.object?.rule_code === ONBOARDING_10_FIRST_SALE) {
+            throw new Error(
+              'Uniqueness violation on uq_rce_business_onboarding_rule'
+            );
+          }
+          return {
+            insert_representative_compensation_events_one: {
+              id: 'evt-pct',
+              reference_id: 'ref-pct',
+              status: 'pending',
+              rule_code: SALE_PERCENT,
+            },
+          };
         }
         return {
-          insert_representative_compensation_events_one: {
-            id: 'evt-pct',
-            reference_id: 'ref-pct',
-            status: 'pending',
-            rule_code: SALE_PERCENT,
-          },
+          update_representative_compensation_events_by_pk: { id: 'evt-old' },
         };
       }
-      return { update_representative_compensation_events_by_pk: { id: 'evt-old' } };
-    });
+    );
     hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
       if (query.includes('CompensationBusiness')) {
         return {
@@ -361,12 +352,277 @@ describe('RepresentativeCompensationService', () => {
     const result = await service.evaluateForOrder('order-2', 'biz-1');
 
     expect(result.credited).toBe(2);
-    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalled();
+    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
     expect(accountsService.registerTransaction).toHaveBeenCalled();
-    const bind = hasuraSystemService.executeMutation.mock.calls.find(([q]) =>
-      String(q).includes('BindCompensationOrder')
+  });
+
+  it('credits only pending onboarding_10_first_sale rows on Saturday', async () => {
+    configurationsService.getConfigurationByKey.mockResolvedValue({
+      boolean_value: true,
+      status: 'active',
+    });
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('PendingOnboardingCompensation')) {
+        return {
+          representative_compensation_events: [
+            {
+              id: 'evt-bonus',
+              reference_id: 'ref-bonus',
+              status: 'pending',
+              rule_code: ONBOARDING_10_FIRST_SALE,
+              amount: 7500,
+              business_id: 'biz-1',
+              triggering_order_id: 'order-1',
+            },
+          ],
+        };
+      }
+      if (query.includes('CompensationBusiness')) return snapshot;
+      if (query.includes('CompensationSales')) {
+        return {
+          orders: [
+            {
+              id: 'order-1',
+              subtotal: 20000,
+              currency: 'XAF',
+              completed_at: '2026-05-10T00:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (query.includes('CompensationEventsForBusiness')) {
+        return {
+          representative_compensation_events: [
+            {
+              rule_code: ONBOARDING_10_FIRST_SALE,
+              amount: 7500,
+              status: 'pending',
+              triggering_order_id: 'order-1',
+            },
+          ],
+        };
+      }
+      if (query.includes('LegacyReferralPayout')) {
+        return { business_referral_payouts: [] };
+      }
+      return {};
+    });
+
+    const result = await service.sweepPending();
+
+    expect(result.credited).toBe(1);
+    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        grossAmount: 7500,
+        compensationEventId: 'evt-bonus',
+      })
     );
-    expect(bind?.[1]).toEqual({ id: 'evt-old', orderId: 'order-2' });
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+  });
+
+  it('lists pending onboarding rows in Saturday preview', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      representative_compensation_events: [
+        {
+          amount: 7500,
+          currency: 'XAF',
+          country_code: 'CM',
+          item_count: 12,
+          triggering_order_id: 'order-1',
+          business: { id: 'biz-1', name: 'Shop' },
+          earner_agent: {
+            id: 'agent-1',
+            user_id: 'user-1',
+            user: { first_name: 'Ada', last_name: 'Agent' },
+          },
+          earner_business: null,
+        },
+      ],
+    });
+
+    const rows = await service.previewPending('CM');
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        businessId: 'biz-1',
+        ruleCode: ONBOARDING_10_FIRST_SALE,
+        amount: 7500,
+        earnerKind: 'agent',
+        earnerName: 'Ada Agent',
+      }),
+    ]);
+  });
+
+  it('retries a failed onboarding_10_first_sale on Saturday', async () => {
+    configurationsService.getConfigurationByKey.mockResolvedValue({
+      boolean_value: true,
+      status: 'active',
+    });
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('PendingOnboardingCompensation')) {
+        return {
+          representative_compensation_events: [
+            {
+              id: 'evt-failed',
+              reference_id: 'ref-failed',
+              status: 'failed',
+              rule_code: ONBOARDING_10_FIRST_SALE,
+              amount: 7500,
+              business_id: 'biz-1',
+              triggering_order_id: 'order-1',
+            },
+          ],
+        };
+      }
+      if (query.includes('CompensationBusiness')) return snapshot;
+      if (query.includes('CompensationSales')) {
+        return {
+          orders: [
+            {
+              id: 'order-1',
+              subtotal: 20000,
+              currency: 'XAF',
+              completed_at: '2026-05-10T00:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (query.includes('CompensationEventsForBusiness')) {
+        return {
+          representative_compensation_events: [
+            {
+              rule_code: ONBOARDING_10_FIRST_SALE,
+              amount: 7500,
+              status: 'failed',
+              triggering_order_id: 'order-1',
+            },
+          ],
+        };
+      }
+      if (query.includes('LegacyReferralPayout')) {
+        return { business_referral_payouts: [] };
+      }
+      return {};
+    });
+
+    const result = await service.sweepPending();
+
+    expect(result.credited).toBe(1);
+    expect(referralPyramidService.distributeReferralBonus).toHaveBeenCalledWith(
+      expect.objectContaining({ compensationEventId: 'evt-failed' })
+    );
+  });
+
+  it('retries a failed 1% from an earlier order on the next sale', async () => {
+    mockBusinessQueries(
+      [
+        { id: 'order-1', subtotal: 8000 },
+        { id: 'order-2', subtotal: 9000 },
+      ],
+      [
+        {
+          rule_code: ONBOARDING_10_FIRST_SALE,
+          amount: 7500,
+          status: 'pending',
+          triggering_order_id: 'order-1',
+        },
+      ]
+    );
+    stubSaleCredit();
+    hasuraSystemService.executeMutation.mockImplementation(
+      async (mutation: string, vars?: any) => {
+        if (
+          String(mutation).includes('InsertCompensationEvent') &&
+          vars?.object?.triggering_order_id === 'order-1'
+        ) {
+          throw new Error('Uniqueness violation on uq_rce_order_sale_percent');
+        }
+        if (String(mutation).includes('InsertCompensationEvent')) {
+          return {
+            insert_representative_compensation_events_one: {
+              id: 'evt-pct-2',
+              reference_id: 'ref-pct-2',
+              status: 'pending',
+              rule_code: SALE_PERCENT,
+            },
+          };
+        }
+        return {
+          update_representative_compensation_events_by_pk: { id: 'evt-pct-failed' },
+        };
+      }
+    );
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('CompensationBusiness')) {
+        return {
+          businesses_by_pk: {
+            ...snapshot.businesses_by_pk,
+            items_aggregate: { aggregate: { count: 12 } },
+          },
+        };
+      }
+      if (query.includes('CompensationSales')) {
+        return {
+          orders: [
+            {
+              id: 'order-1',
+              subtotal: 8000,
+              currency: 'XAF',
+              completed_at: '2026-05-10T00:00:00.000Z',
+            },
+            {
+              id: 'order-2',
+              subtotal: 9000,
+              currency: 'XAF',
+              completed_at: '2026-05-10T00:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (query.includes('CompensationEventsForBusiness')) {
+        return {
+          representative_compensation_events: [
+            {
+              rule_code: ONBOARDING_10_FIRST_SALE,
+              amount: 7500,
+              status: 'pending',
+              triggering_order_id: 'order-1',
+            },
+          ],
+        };
+      }
+      if (query.includes('LegacyReferralPayout')) {
+        return { business_referral_payouts: [] };
+      }
+      if (
+        query.includes('CompensationPersonalAccount') ||
+        query.includes('CompensationBusinessAccount')
+      ) {
+        return { accounts: [{ id: 'acct-1' }] };
+      }
+      if (query.includes('ExistingCompensationEvent')) {
+        return {
+          representative_compensation_events: [
+            {
+              id: 'evt-pct-failed',
+              reference_id: 'ref-pct-failed',
+              status: 'failed',
+              rule_code: SALE_PERCENT,
+              amount: 80,
+              triggering_order_id: 'order-1',
+              sale_amount: 8000,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const result = await service.evaluateForOrder('order-2', 'biz-1');
+
+    expect(result.credited).toBe(2);
+    expect(accountsService.registerTransaction).toHaveBeenCalledTimes(2);
+    expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
   });
 
   it('does nothing when the payout flag is off', async () => {

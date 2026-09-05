@@ -16,28 +16,49 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { AdminOrderContactService } from './admin-order-contact.service';
-import { OrdersService } from './orders.service';
-import { OrderRiskService } from './order-risk.service';
-import { OrderReassignmentService } from './order-reassignment.service';
-import { OrderEventsService } from './order-events.service';
-import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { AdminOrdersService } from './admin-orders.service';
+import type {
+  AdminOrderDetail,
+  AdminOrdersResponse,
+  AdminOrderStatsResponse,
+} from './admin-orders.types';
 import {
+  AcknowledgeRiskIncidentDto,
+  AddAdminNoteDto,
+  AdminOrderStatsPeriod,
+  GetAdminOrderStatsDto,
   GetAdminOrdersDto,
+  SendOrderContactEmailDto,
+  SendOrderContactMessageDto,
+  SendOrderContactSmsDto,
   UnassignRedispatchDto,
   UpdateOrderStatusDto,
-  AddAdminNoteDto,
-  SendOrderContactMessageDto,
-  OrderStatusFilter,
-  RiskLevelFilter,
+  type OrderContactRecipientType,
 } from './dto/admin-orders.dto';
+import { OrderEventsService } from './order-events.service';
+import { OrderReassignmentService } from './order-reassignment.service';
+import { OrderRiskIncidentsService } from './order-risk-incidents.service';
+import type { OrderRiskIncident } from './order-risk.types';
+import { OrderRiskMonitorService } from './order-risk-monitor.service';
+import { OrdersService } from './orders.service';
+import { CreditsService } from '../credits/credits.service';
+import type {
+  CreditContactChannel,
+  CreditOrderResult,
+} from '../credits/credit.types';
+import { isAdminOperationalStatus } from './admin-order-status.util';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -50,307 +71,226 @@ export class AdminOrdersController {
 
   constructor(
     private readonly ordersService: OrdersService,
-    private readonly orderRiskService: OrderRiskService,
+    private readonly adminOrdersService: AdminOrdersService,
     private readonly orderReassignmentService: OrderReassignmentService,
     private readonly orderEventsService: OrderEventsService,
+    private readonly riskIncidentsService: OrderRiskIncidentsService,
+    private readonly riskMonitorService: OrderRiskMonitorService,
     private readonly hasuraSystemService: HasuraSystemService,
+    private readonly hasuraUserService: HasuraUserService,
     private readonly notificationsService: NotificationsService,
     private readonly adminOrderContactService: AdminOrderContactService,
+    private readonly creditsService: CreditsService
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all active orders with risk scores for admin dashboard' })
+  @ApiOperation({
+    summary: 'Order operations queue',
+    description:
+      'Attention-first list of orders with open risk incidents, contacts, and permitted interventions. Pass queue=all for every active order.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of active orders with risk scores',
+    description: 'Paginated orders with risk incidents and queue counts',
     schema: {
       type: 'object',
       properties: {
-        orders: {
-          type: 'array',
-          items: { type: 'object' },
-        },
+        orders: { type: 'array', items: { type: 'object' } },
         total: { type: 'number' },
+        offset: { type: 'number' },
+        limit: { type: 'number' },
+        counts: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            at_risk: { type: 'number' },
+            critical: { type: 'number' },
+            warning: { type: 'number' },
+          },
+        },
       },
     },
   })
-  async getAdminOrders(@Query() query: GetAdminOrdersDto) {
+  @ApiResponse({ status: 403, description: 'Missing platform.orders.cross_business' })
+  async getAdminOrders(
+    @Query() query: GetAdminOrdersDto
+  ): Promise<AdminOrdersResponse> {
     try {
-      const {
-        status = OrderStatusFilter.ALL,
-        risk_level = RiskLevelFilter.ALL,
-        search,
-        offset = 0,
-        limit = 50,
-      } = query;
-
-      const excludedStatuses = [
-        'delivered',
-        'complete',
-        'cancelled',
-        'failed',
-        'refunded',
-        'refund_processing',
-        'refund_failed',
-        'refund_requested',
-        'refund_approved_full',
-        'refund_approved_partial',
-        'refund_rejected',
-        'refund_approved_replace',
-      ];
-
-      let statusFilter: any = {
-        _nin: excludedStatuses,
-      };
-
-      if (status !== OrderStatusFilter.ALL) {
-        statusFilter = { _eq: status };
-      }
-
-      let whereClause: any = {
-        current_status: statusFilter,
-      };
-
-      if (search) {
-        whereClause = {
-          ...whereClause,
-          _or: [
-            { order_number: { _ilike: `%${search}%` } },
-            { client: { user: { first_name: { _ilike: `%${search}%` } } } },
-            { client: { user: { last_name: { _ilike: `%${search}%` } } } },
-          ],
-        };
-      }
-
-      const ordersQuery = `
-        query GetActiveOrders($where: orders_bool_exp!, $limit: Int!, $offset: Int!) {
-          orders(
-            where: $where
-            order_by: { created_at: desc }
-            limit: $limit
-            offset: $offset
-          ) {
-            id
-            order_number
-            current_status
-            created_at
-            updated_at
-            acceptance_deadline_at
-            pickup_state
-            pickup_due_at
-            estimated_delivery_time
-            total_amount
-            currency
-            fulfillment_method
-            client {
-              id
-              user {
-                id
-                first_name
-                last_name
-                email
-                phone_number
-              }
-            }
-            business {
-              id
-              name
-              user {
-                email
-                phone_number
-              }
-            }
-            business_location {
-              id
-              name
-              phone
-              email
-            }
-            assigned_agent {
-              id
-              user {
-                id
-                first_name
-                last_name
-                email
-                phone_number
-              }
-            }
-            delivery_time_window {
-              id
-              time_slot_start
-              time_slot_end
-              preferred_date
-            }
-            delivery_address {
-              id
-              address_line_1
-              city
-              state
-            }
-          }
-          orders_aggregate(where: $where) {
-            aggregate {
-              count
-            }
-          }
-        }
-      `;
-
-      const result = await this.hasuraSystemService.executeQuery(ordersQuery, {
-        where: whereClause,
-        limit: Number(limit),
-        offset: Number(offset),
-      });
-
-      const orders = result.orders || [];
-      const total = result.orders_aggregate?.aggregate?.count || 0;
-
-      const ordersWithRisk = orders.map((order: any) => {
-        const enriched = this.orderRiskService.enrichOrderWithRisk(order);
-        return {
-          ...enriched,
-          risk_level: this.orderRiskService.getRiskLevel(enriched.risk_score),
-        };
-      });
-
-      let filteredOrders = ordersWithRisk;
-      if (risk_level !== RiskLevelFilter.ALL) {
-        filteredOrders = ordersWithRisk.filter(
-          (order: any) => order.risk_level === risk_level
-        );
-      }
-
-      filteredOrders.sort((a: any, b: any) => {
-        if (b.risk_score !== a.risk_score) {
-          return b.risk_score - a.risk_score;
-        }
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
-
-      return {
-        orders: filteredOrders,
-        total: risk_level === RiskLevelFilter.ALL ? total : filteredOrders.length,
-      };
+      return await this.adminOrdersService.list(query);
     } catch (error: any) {
       this.logger.error('Failed to fetch admin orders', error);
       throw new HttpException(
         error.message || 'Failed to fetch orders',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
 
-  @Post(':orderId/unassign-redispatch')
-  @ApiOperation({ 
-    summary: 'Unassign current agent and redispatch to nearby agents',
-    description: 'Unassigns the current agent, releases their hold, and redispatches to nearby available agents. If no agents are available after exhausting dispatch rounds, the client will be notified with the option to switch to store pickup.'
+  @Get('stats')
+  @ApiOperation({
+    summary: 'Platform-wide order statistics',
+    description:
+      'Status totals, completion and cancellation rates, and average acceptance, prep, delivery, and end-to-end completion times for the selected period.',
   })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Order unassigned and redispatched successfully',
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: AdminOrderStatsPeriod,
+    description: 'Window applied to order creation date. Defaults to 7d.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order statistics for the selected period',
     schema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean' },
-        message: { type: 'string' },
+        period: { type: 'string' },
+        since: { type: 'string', nullable: true },
+        counts: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            completed: { type: 'number' },
+            in_progress: { type: 'number' },
+            cancelled: { type: 'number' },
+            failed: { type: 'number' },
+            refunds: { type: 'number' },
+            pending_payment: { type: 'number' },
+          },
+        },
+        rates: {
+          type: 'object',
+          properties: {
+            completion_rate: { type: 'number', nullable: true },
+            cancellation_rate: { type: 'number', nullable: true },
+          },
+        },
+        averages: {
+          type: 'object',
+          properties: {
+            completion_minutes: { type: 'number', nullable: true },
+            acceptance_minutes: { type: 'number', nullable: true },
+            prep_minutes: { type: 'number', nullable: true },
+            delivery_minutes: { type: 'number', nullable: true },
+            sample_size: { type: 'number' },
+            samples: { type: 'object' },
+          },
+        },
       },
     },
   })
-  async unassignAndRedispatch(
-    @Param('orderId') orderId: string,
-    @Body() dto: UnassignRedispatchDto,
-  ) {
+  @ApiResponse({ status: 403, description: 'Missing platform.orders.cross_business' })
+  async getAdminOrderStats(
+    @Query() query: GetAdminOrderStatsDto
+  ): Promise<AdminOrderStatsResponse> {
     try {
-      const order = await this.ordersService.getOrderById(orderId);
-      if (!order) {
-        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-      }
-
-      if (order.current_status !== 'assigned_to_agent') {
-        throw new HttpException(
-          'Order is not in assigned_to_agent status',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const result = await this.orderReassignmentService.reassignOrder(
-        orderId,
-        dto.reason || 'Admin-initiated reassignment',
-        { skipReliabilityPenalty: true },
-      );
-
-      if (!result.success) {
-        throw new HttpException(result.message, HttpStatus.BAD_REQUEST);
-      }
-
-      return result;
+      return await this.adminOrdersService.getStats(query);
     } catch (error: any) {
-      this.logger.error('Failed to unassign and redispatch', error);
+      this.logger.error('Failed to fetch admin order stats', error);
       throw new HttpException(
-        error.message || 'Failed to unassign and redispatch',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        error.message || 'Failed to fetch order statistics',
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
 
+  @Get(':orderId')
+  @RequirePermissions(
+    PlatformPermissions.ORDERS_CROSS_BUSINESS,
+    PlatformPermissions.OPS_CREDITS
+  )
+  @ApiOperation({
+    summary: 'Superuser order intervention detail',
+    description:
+      'Full order context for cross-business support: risk incidents, SLA timing, operational timeline, message history, and permitted actions.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order id' })
+  @ApiResponse({ status: 200, description: 'Order intervention detail' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getAdminOrderDetail(
+    @Param('orderId') orderId: string
+  ): Promise<AdminOrderDetail> {
+    return this.adminOrdersService.getDetail(orderId);
+  }
+
+  @Post(':orderId/unassign-redispatch')
+  @ApiOperation({
+    summary: 'Redispatch an order to nearby agents',
+    description:
+      'For an assigned order, unassigns the current agent and releases their hold before redispatching. For a delivery order still waiting in ready_for_pickup with no agent, re-opens the dispatch rounds. If no agents are available after exhausting dispatch rounds, the client is offered store pickup.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order id' })
+  @ApiResponse({ status: 200, description: 'Order redispatched' })
+  @ApiResponse({ status: 400, description: 'Order is not in a redispatchable state' })
+  async unassignAndRedispatch(
+    @Param('orderId') orderId: string,
+    @Body() dto: UnassignRedispatchDto
+  ) {
+    const order = await this.requireOrder(orderId);
+    const reason = dto.reason || 'Admin-initiated reassignment';
+    const result = await this.dispatchForStatus(order, orderId, reason);
+    if (!result.success) {
+      throw new HttpException(result.message, HttpStatus.BAD_REQUEST);
+    }
+    await this.recordIntervention(orderId, 'unassign_redispatch', {
+      reason,
+      from_status: order.current_status,
+    });
+    await this.riskMonitorService.evaluateOrderById(orderId);
+    return result;
+  }
+
+  /** Assigned orders drop their agent first; unassigned ready orders just re-dispatch. */
+  private async dispatchForStatus(
+    order: any,
+    orderId: string,
+    reason: string
+  ): Promise<{ success: boolean; message: string }> {
+    if (order.current_status === 'assigned_to_agent') {
+      return this.orderReassignmentService.reassignOrder(orderId, reason, {
+        skipReliabilityPenalty: true,
+      });
+    }
+    if (order.current_status === 'ready_for_pickup') {
+      return this.orderReassignmentService.redispatchUnassignedOrder(
+        orderId,
+        reason
+      );
+    }
+    return {
+      success: false,
+      message: `Order in status "${order.current_status}" cannot be redispatched`,
+    };
+  }
+
   @Patch(':orderId/status')
-  @ApiOperation({ summary: 'Override order status' })
+  @ApiOperation({
+    summary: 'Override order status',
+    description:
+      'cancelled releases payment and restores inventory. Settlement statuses (delivered, picked_up, complete) are rejected.',
+  })
   @ApiResponse({ status: 200, description: 'Status updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Settlement status or invalid transition',
+  })
   async updateStatus(
     @Param('orderId') orderId: string,
     @Body() dto: UpdateOrderStatusDto,
   ) {
     try {
-      const order = await this.ordersService.getOrderById(orderId);
-      if (!order) {
-        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+      if (dto.status === 'cancelled') {
+        return this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
       }
-
-      const updateMutation = `
-        mutation UpdateOrderStatus($orderId: uuid!, $status: order_status_enum!, $notes: String) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: { current_status: $status }
-          ) {
-            id
-            current_status
-          }
-          insert_order_status_history_one(
-            object: {
-              order_id: $orderId
-              from_status: "${order.current_status}"
-              to_status: $status
-              notes: $notes
-            }
-          ) {
-            id
-          }
-        }
-      `;
-
-      await this.hasuraSystemService.executeMutation(updateMutation, {
-        orderId,
-        status: dto.status,
-        notes: dto.notes || 'Admin status override',
-      });
-
-      await this.orderEventsService.recordEvent({
-        orderId,
-        eventType: 'gps_unavailable',
-        actorType: 'support',
-        payload: {
-          old_status: order.current_status,
-          new_status: dto.status,
-          notes: dto.notes,
-        },
-      });
-
+      const order = await this.requireOrder(orderId);
+      this.assertOperationalAdminStatus(dto.status);
+      await this.writeOperationalAdminStatus(order, dto);
       return {
         success: true,
         message: 'Status updated successfully',
       };
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       this.logger.error('Failed to update status', error);
       throw new HttpException(
         error.message || 'Failed to update status',
@@ -359,152 +299,247 @@ export class AdminOrdersController {
     }
   }
 
+  private assertOperationalAdminStatus(status: string): void {
+    if (isAdminOperationalStatus(status)) return;
+    throw new HttpException(
+      'Cannot set delivered, picked up, or complete via status override. Use the fulfillment flow so payment capture and settlement run.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private async writeOperationalAdminStatus(
+    order: { id: string; current_status: string },
+    dto: UpdateOrderStatusDto,
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation AdminOperationalStatus(
+        $orderId: uuid!
+        $status: order_status!
+        $previousStatus: order_status!
+        $notes: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { current_status: $status }
+        ) { id current_status }
+        insert_order_status_history_one(
+          object: {
+            order_id: $orderId
+            status: $status
+            previous_status: $previousStatus
+            changed_by_type: "system"
+            notes: $notes
+          }
+        ) { id }
+      }
+      `,
+      {
+        orderId: order.id,
+        status: dto.status,
+        previousStatus: order.current_status,
+        notes: dto.notes || 'Admin status override',
+      },
+    );
+    await this.orderEventsService.recordEvent({
+      orderId: order.id,
+      eventType: 'gps_unavailable',
+      actorType: 'support',
+      payload: {
+        old_status: order.current_status,
+        new_status: dto.status,
+        notes: dto.notes,
+      },
+    });
+  }
+
   @Post(':orderId/notes')
-  @ApiOperation({ summary: 'Add admin note to order' })
+  @ApiOperation({ summary: 'Add an audited support note to the order timeline' })
+  @ApiParam({ name: 'orderId', description: 'Order id' })
   @ApiResponse({ status: 201, description: 'Note added successfully' })
   async addNote(
     @Param('orderId') orderId: string,
-    @Body() dto: AddAdminNoteDto,
+    @Body() dto: AddAdminNoteDto
   ) {
-    try {
-      const order = await this.ordersService.getOrderById(orderId);
-      if (!order) {
-        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-      }
+    await this.requireOrder(orderId);
+    await this.recordIntervention(orderId, 'note', { note: dto.note });
+    return { success: true, message: 'Note added successfully' };
+  }
 
-      await this.orderEventsService.recordEvent({
-        orderId,
-        eventType: 'gps_unavailable',
-        actorType: 'support',
-        payload: {
-          note: dto.note,
-        },
-      });
-
-      return {
-        success: true,
-        message: 'Note added successfully',
-      };
-    } catch (error: any) {
-      this.logger.error('Failed to add note', error);
-      throw new HttpException(
-        error.message || 'Failed to add note',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+  @Post('risk-incidents/:incidentId/acknowledge')
+  @ApiOperation({
+    summary: 'Acknowledge (or resolve) an order risk incident',
+    description:
+      'Stops repeat superuser alerts for this incident while an operator works it. Escalation to critical still alerts.',
+  })
+  @ApiParam({ name: 'incidentId', description: 'Risk incident id' })
+  @ApiResponse({ status: 200, description: 'Incident acknowledged' })
+  @ApiResponse({ status: 404, description: 'Incident not found' })
+  async acknowledgeIncident(
+    @Param('incidentId') incidentId: string,
+    @Body() dto: AcknowledgeRiskIncidentDto
+  ) {
+    const actor = await this.hasuraUserService.getUser();
+    const { incident, applied } = await this.riskIncidentsService.acknowledge({
+      incidentId,
+      userId: actor.id,
+      note: dto.note,
+      resolve: dto.resolve,
+      contactChannel: dto.contact_channel,
+      orderResult: dto.order_result,
+    });
+    if (!incident) {
+      throw new HttpException('Incident not found', HttpStatus.NOT_FOUND);
     }
+    const credit = applied
+      ? await this.recordAcknowledgeSideEffects(actor.id, incident, dto)
+      : null;
+    return { success: true, incident, credit };
   }
 
   @Post(':orderId/contact/message')
   @ApiOperation({ summary: 'Send in-app message to order participant' })
+  @ApiParam({ name: 'orderId', description: 'Order id' })
   @ApiResponse({ status: 200, description: 'Message sent successfully' })
   @ApiResponse({ status: 400, description: 'Missing message or recipient' })
   async sendMessage(
     @Param('orderId') orderId: string,
-    @Body() body: SendOrderContactMessageDto,
+    @Body() body: SendOrderContactMessageDto
   ) {
-    const order = await this.ordersService.getOrderById(orderId);
-    if (!order) {
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    }
-
+    const order = await this.requireOrder(orderId);
     await this.adminOrderContactService.sendInAppMessage({
       order,
       message: body.message,
       recipientType: body.recipient_type,
     });
-
-    return {
-      success: true,
-      message: 'Message sent successfully',
-    };
+    await this.recordIntervention(orderId, 'message', {
+      recipient: body.recipient_type,
+    });
+    return { success: true, message: 'Message sent successfully' };
   }
 
   @Post(':orderId/contact/email')
   @ApiOperation({ summary: 'Send email to order participant' })
+  @ApiParam({ name: 'orderId', description: 'Order id' })
   @ApiResponse({ status: 200, description: 'Email sent successfully' })
+  @ApiResponse({ status: 400, description: 'Recipient email not found' })
   async sendEmail(
     @Param('orderId') orderId: string,
-    @Body() body: { subject: string; message: string; recipient_type: 'client' | 'business' | 'agent' },
+    @Body() body: SendOrderContactEmailDto
   ) {
-    try {
-      const order = await this.ordersService.getOrderById(orderId);
-      if (!order) {
-        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-      }
-
-      let recipientEmail: string | undefined;
-      if (body.recipient_type === 'client' && order.client?.user?.email) {
-        recipientEmail = order.client.user.email;
-      } else if (body.recipient_type === 'business' && order.business?.user?.email) {
-        recipientEmail = order.business.user.email;
-      } else if (body.recipient_type === 'agent' && order.assigned_agent?.user?.email) {
-        recipientEmail = order.assigned_agent.user.email;
-      }
-
-      if (!recipientEmail) {
-        throw new HttpException('Recipient email not found', HttpStatus.BAD_REQUEST);
-      }
-
-      await this.notificationsService.sendMerchantEngagementHtmlEmail({
-        to: recipientEmail,
-        subject: body.subject,
-        html: body.message,
-      });
-
-      return {
-        success: true,
-        message: 'Email sent successfully',
-      };
-    } catch (error: any) {
-      this.logger.error('Failed to send email', error);
-      throw new HttpException(
-        error.message || 'Failed to send email',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    const order = await this.requireOrder(orderId);
+    const to = this.recipientUser(order, body.recipient_type)?.email;
+    if (!to) {
+      throw new HttpException('Recipient email not found', HttpStatus.BAD_REQUEST);
     }
+    await this.notificationsService.sendMerchantEngagementHtmlEmail({
+      to,
+      subject: body.subject,
+      html: body.message,
+    });
+    await this.recordIntervention(orderId, 'email', {
+      recipient: body.recipient_type,
+    });
+    return { success: true, message: 'Email sent successfully' };
   }
 
   @Post(':orderId/contact/sms')
   @ApiOperation({ summary: 'Send SMS to order participant' })
+  @ApiParam({ name: 'orderId', description: 'Order id' })
   @ApiResponse({ status: 200, description: 'SMS sent successfully' })
+  @ApiResponse({ status: 400, description: 'Recipient phone not found' })
   async sendSms(
     @Param('orderId') orderId: string,
-    @Body() body: { message: string; recipient_type: 'client' | 'business' | 'agent' },
+    @Body() body: SendOrderContactSmsDto
   ) {
-    try {
-      const order = await this.ordersService.getOrderById(orderId);
-      if (!order) {
-        throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-      }
-
-      let recipientPhone: string | undefined;
-      if (body.recipient_type === 'client' && order.client?.user?.phone_number) {
-        recipientPhone = order.client.user.phone_number;
-      } else if (body.recipient_type === 'business' && order.business?.user?.phone_number) {
-        recipientPhone = order.business.user.phone_number;
-      } else if (body.recipient_type === 'agent' && order.assigned_agent?.user?.phone_number) {
-        recipientPhone = order.assigned_agent.user.phone_number;
-      }
-
-      if (!recipientPhone) {
-        throw new HttpException('Recipient phone not found', HttpStatus.BAD_REQUEST);
-      }
-
-      await this.notificationsService.sendInternalSms(
-        recipientPhone,
-        body.message,
-      );
-
-      return {
-        success: true,
-        message: 'SMS sent successfully',
-      };
-    } catch (error: any) {
-      this.logger.error('Failed to send SMS', error);
-      throw new HttpException(
-        error.message || 'Failed to send SMS',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    const order = await this.requireOrder(orderId);
+    const phone = this.recipientUser(order, body.recipient_type)?.phone_number;
+    if (!phone) {
+      throw new HttpException('Recipient phone not found', HttpStatus.BAD_REQUEST);
     }
+    await this.notificationsService.sendInternalSms(phone, body.message);
+    await this.recordIntervention(orderId, 'sms', {
+      recipient: body.recipient_type,
+    });
+    return { success: true, message: 'SMS sent successfully' };
+  }
+
+  private async requireOrder(orderId: string): Promise<any> {
+    const order = await this.ordersService.getOrderById(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    return order;
+  }
+
+  private recipientUser(
+    order: any,
+    recipientType: OrderContactRecipientType
+  ): { email?: string | null; phone_number?: string | null } | null {
+    if (recipientType === 'client') return order.client?.user ?? null;
+    if (recipientType === 'business') return order.business?.user ?? null;
+    return order.assigned_agent?.user ?? null;
+  }
+
+
+  private async recordAcknowledgeSideEffects(
+    actorId: string,
+    incident: OrderRiskIncident,
+    dto: AcknowledgeRiskIncidentDto
+  ) {
+    await this.orderEventsService.recordEvent({
+      orderId: incident.order_id,
+      eventType: dto.resolve
+        ? 'risk_incident_resolved'
+        : 'risk_incident_acknowledged',
+      actorType: 'support',
+      actorId,
+      payload: {
+        incidentId: incident.id,
+        note: dto.note ?? null,
+        contact_channel: dto.contact_channel ?? null,
+        order_result: dto.order_result ?? null,
+      },
+    });
+    return this.awardResolveCredit(actorId, incident, dto);
+  }
+
+  private async awardResolveCredit(
+    actorId: string,
+    incident: OrderRiskIncident,
+    dto: AcknowledgeRiskIncidentDto
+  ) {
+    if (
+      !dto.resolve ||
+      !dto.contact_channel ||
+      !dto.order_result ||
+      !dto.note?.trim()
+    ) {
+      return null;
+    }
+    return this.creditsService.awardEscalationResolved({
+      userId: actorId,
+      incidentId: incident.id,
+      orderId: incident.order_id,
+      contactChannel: dto.contact_channel as CreditContactChannel,
+      orderResult: dto.order_result as CreditOrderResult,
+      notes: dto.note,
+    });
+  }
+
+  /** Every superuser action lands on the order timeline with who and why. */
+  private async recordIntervention(
+    orderId: string,
+    action: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    const actor = await this.hasuraUserService.getUser().catch(() => null);
+    await this.orderEventsService.recordEvent({
+      orderId,
+      eventType: 'admin_intervention',
+      actorType: 'support',
+      actorId: actor?.id ?? null,
+      payload: { action, ...payload },
+    });
   }
 }

@@ -2,7 +2,10 @@ import {
   BUSINESS_REFERRAL_10_ITEMS,
   ONBOARDING_10_FIRST_SALE,
   SALE_PERCENT,
+  defaultOnboardingMinSaleTotal,
   evaluateCompensation,
+  inWindowSaleTotal,
+  onboardingWindowEndsAt,
   salePercentAmount,
   saleWithinOnboardingWindow,
   type CompensationMarketConfig,
@@ -11,6 +14,7 @@ import {
 const XAF: CompensationMarketConfig = {
   currency: 'XAF',
   onboarding10FirstSale: 7500,
+  onboarding10MinSaleTotal: 2500,
   salePercent: 1,
   businessReferral10Items: 1000,
 };
@@ -18,6 +22,7 @@ const XAF: CompensationMarketConfig = {
 const CAD: CompensationMarketConfig = {
   currency: 'CAD',
   onboarding10FirstSale: 25,
+  onboarding10MinSaleTotal: 0,
   salePercent: 1,
   businessReferral10Items: 10,
 };
@@ -72,6 +77,60 @@ describe('compensation-rules', () => {
       expect(
         agentEval({ triggeringOrderId: undefined, completedSales: [sale('o1', 20000)] })
       ).toEqual([]);
+    });
+
+    it('pays only 1% when in-window sales are below 2500 XAF', () => {
+      const actions = agentEval({
+        completedSales: [sale('o1', 1000)],
+      });
+      expect(actions).toEqual([
+        expect.objectContaining({
+          ruleCode: SALE_PERCENT,
+          amount: 10,
+          orderId: 'o1',
+        }),
+      ]);
+    });
+
+    it('pays 7500 when in-window sales reach exactly 2500 XAF', () => {
+      expect(agentEval({ completedSales: [sale('o1', 2500)] })).toEqual([
+        expect.objectContaining({
+          ruleCode: ONBOARDING_10_FIRST_SALE,
+          amount: 7500,
+          orderId: 'o1',
+        }),
+        expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 25 }),
+      ]);
+    });
+
+    it('pays 7500 on the sale that crosses 2500 XAF', () => {
+      const first = sale('o1', 1500, '2026-05-08T00:00:00.000Z');
+      const second = sale('o2', 1500, '2026-05-12T00:00:00.000Z');
+      expect(
+        agentEval({
+          completedSales: [first, second],
+          triggeringOrderId: 'o1',
+        })
+      ).toEqual([
+        expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 15 }),
+      ]);
+      expect(
+        agentEval({
+          completedSales: [first, second],
+          triggeringOrderId: 'o2',
+        })
+      ).toEqual([
+        expect.objectContaining({
+          ruleCode: ONBOARDING_10_FIRST_SALE,
+          amount: 7500,
+          orderId: 'o2',
+        }),
+        expect.objectContaining({
+          ruleCode: SALE_PERCENT,
+          amount: 15,
+          orderId: 'o2',
+        }),
+      ]);
     });
 
     it('pays 7500 and 1% on the qualifying first sale', () => {
@@ -183,6 +242,49 @@ describe('compensation-rules', () => {
           config: XAF,
         })
       ).toEqual([]);
+    });
+  });
+
+  describe('onboarding window helpers', () => {
+    it('defaults the min sale total by payout currency', () => {
+      expect(defaultOnboardingMinSaleTotal('XAF')).toBe(2500);
+      expect(defaultOnboardingMinSaleTotal('CAD')).toBe(0);
+      expect(defaultOnboardingMinSaleTotal('USD')).toBe(0);
+    });
+
+    it('returns the window end or null for missing dates', () => {
+      expect(onboardingWindowEndsAt(onboarded)).toBe('2026-05-31T00:00:00.000Z');
+      expect(onboardingWindowEndsAt(undefined)).toBeNull();
+      expect(onboardingWindowEndsAt('not-a-date')).toBeNull();
+    });
+
+    it('sums only in-window matching-currency sales up to the cap', () => {
+      const second = sale('b', 2000, '2026-05-12T00:00:00.000Z');
+      expect(
+        inWindowSaleTotal({
+          completedSales: [
+            sale('a', 1000, '2026-05-08T00:00:00.000Z'),
+            second,
+            sale('c', 5000, '2026-05-20T00:00:00.000Z'),
+            sale('d', 9000, '2026-06-15T00:00:00.000Z'),
+            sale('e', 800, '2026-05-09T00:00:00.000Z', 'CAD'),
+            { id: 'f', subtotal: 0, currency: 'XAF', completedAt: '2026-05-09T00:00:00.000Z' },
+          ],
+          payoutCurrency: 'XAF',
+          onboardedAt: onboarded,
+          upToSale: second,
+        })
+      ).toBe(3000);
+    });
+
+    it('returns 0 when onboardedAt is missing', () => {
+      expect(
+        inWindowSaleTotal({
+          completedSales: [sale('o1', 2500)],
+          payoutCurrency: 'XAF',
+          onboardedAt: undefined,
+        })
+      ).toBe(0);
     });
   });
 

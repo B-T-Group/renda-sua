@@ -6,7 +6,7 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
@@ -17,6 +17,7 @@ import {
   InventoryItem,
   useInventoryItems,
 } from '../../hooks/useInventoryItems';
+import { useMarket } from '../../hooks/useMarket';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
@@ -29,6 +30,7 @@ import {
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
+import { MarketSelector } from '../market/MarketSelector';
 import { useCollections } from '../../hooks/useCollections';
 
 const ITEMS_PER_PAGE = 24;
@@ -40,6 +42,7 @@ const CollectionLandingPage: React.FC = () => {
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
+  const { selectedMarket } = useMarket();
   const [currentPage, setCurrentPage] = useState(1);
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
   const isClientUser = profile?.user_type_id === 'client';
@@ -52,6 +55,10 @@ const CollectionLandingPage: React.FC = () => {
     () => collections.find((c) => c.slug === slug),
     [collections, slug]
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedMarket?.id, slug]);
 
   const { inventoryItems, loading, error, pagination } = useInventoryItems({
     page: currentPage,
@@ -141,6 +148,9 @@ const CollectionLandingPage: React.FC = () => {
         <Typography variant="h4" fontWeight={800} gutterBottom>
           {title}
         </Typography>
+        <Box sx={{ mb: collectionMeta?.description ? 1.5 : 0 }}>
+          <MarketSelector catalogContext="inventory" />
+        </Box>
         {collectionMeta?.description ? (
           <Typography variant="body1" color="text.secondary">
             {collectionMeta.description}

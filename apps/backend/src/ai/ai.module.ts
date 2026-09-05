@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
+import { CategoriesModule } from '../categories/categories.module';
 import { AiController } from './ai.controller';
 import { AiGenerationModule } from './ai-generation.module';
 
@@ -11,6 +12,7 @@ import { AiGenerationModule } from './ai-generation.module';
     AiGenerationModule,
     BusinessImagesModule,
     BusinessItemsModule,
+    CategoriesModule,
   ],
   controllers: [AiController],
 })

@@ -3,7 +3,7 @@ import { Avatar, Box, Card, CardContent, Grid, Typography, alpha } from '@mui/ma
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 /** TODO_REPLACE_TESTIMONIAL_1..3 with real merchant quotes and photos. */
 const Testimonials: React.FC = () => {
@@ -47,7 +47,7 @@ const Testimonials: React.FC = () => {
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   {/* TODO_REPLACE_TESTIMONIAL photo */}
-                  <Avatar sx={{ bgcolor: alpha(FB_GREEN, 0.2), color: FB_GREEN }}>
+                  <Avatar sx={{ bgcolor: alpha(FB_ACCENT, 0.2), color: FB_ACCENT }}>
                     {t(`forBusiness.testimonials.item${n}.name`, 'Amina K.').charAt(0)}
                   </Avatar>
                   <Box>

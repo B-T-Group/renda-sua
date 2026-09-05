@@ -20,6 +20,7 @@ import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency
 import { useCreateItemFromImage } from '../../hooks/useCreateItemFromImage';
 import { useImageItemSuggestions } from '../../hooks/useImageItemSuggestions';
 import ImageCleanupLoadingAnimation from '../common/ImageCleanupLoadingAnimation';
+import ItemCategoryNamePickers from '../business/ItemCategoryNamePickers';
 
 interface CreateItemFromImageDialogProps {
   open: boolean;
@@ -42,6 +43,7 @@ export const CreateItemFromImageDialog: React.FC<
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState<string>('');
   const [isUsed, setIsUsed] = useState(false);
+  const [dimensions, setDimensions] = useState('');
   const [showSummary, setShowSummary] = useState(false);
   const [createdItem, setCreatedItem] = useState<any | null>(null);
 
@@ -72,6 +74,7 @@ export const CreateItemFromImageDialog: React.FC<
           : ''
       );
       setIsUsed(suggestions.isUsed === true);
+      setDimensions(suggestions.dimensions?.trim() || '');
     } else {
       setName(image.caption || '');
       setCategoryName('');
@@ -80,6 +83,7 @@ export const CreateItemFromImageDialog: React.FC<
       setDescription('');
       setPrice('');
       setIsUsed(false);
+      setDimensions('');
     }
   }, [open, image, suggestions]);
 
@@ -126,6 +130,16 @@ export const CreateItemFromImageDialog: React.FC<
       );
       return;
     }
+    if (suggestions?.isSizeRequired === true && !dimensions.trim()) {
+      enqueueSnackbar(
+        t(
+          'business.images.createItemFromImage.sizeRequired',
+          'Please enter a size for this item'
+        ),
+        { variant: 'warning' }
+      );
+      return;
+    }
     const numericPrice =
       price.trim() === '' ? undefined : Number(price.trim()) || undefined;
 
@@ -142,6 +156,7 @@ export const CreateItemFromImageDialog: React.FC<
           ? lockedCurrency
           : undefined,
       is_used: isUsed,
+      dimensions: dimensions.trim() || undefined,
     });
     if (!result) return;
     setCreatedItem(result);
@@ -216,25 +231,11 @@ export const CreateItemFromImageDialog: React.FC<
         disabled={createLoading || suggestionsLoading}
       />
 
-      <TextField
-        label={t(
-          'business.images.createItemFromImage.fields.category',
-          'Category'
-        )}
-        fullWidth
-        value={categoryName}
-        onChange={(e) => setCategoryName(e.target.value)}
-        disabled={createLoading || suggestionsLoading}
-      />
-
-      <TextField
-        label={t(
-          'business.images.createItemFromImage.fields.subcategory',
-          'Subcategory'
-        )}
-        fullWidth
-        value={subCategoryName}
-        onChange={(e) => setSubCategoryName(e.target.value)}
+      <ItemCategoryNamePickers
+        categoryName={categoryName}
+        subCategoryName={subCategoryName}
+        onCategoryNameChange={setCategoryName}
+        onSubCategoryNameChange={setSubCategoryName}
         disabled={createLoading || suggestionsLoading}
       />
 
@@ -274,6 +275,25 @@ export const CreateItemFromImageDialog: React.FC<
           'Locked to your business country'
         )}
       />
+
+      {suggestions?.isSizeRequired === true ? (
+        <TextField
+          required
+          label={t(
+            'business.images.createItemFromImage.fields.size',
+            'Size'
+          )}
+          fullWidth
+          value={dimensions}
+          onChange={(e) => setDimensions(e.target.value)}
+          disabled={createLoading || suggestionsLoading}
+          helperText={t(
+            'business.images.createItemFromImage.sizeHelper',
+            'e.g. M, 42, 50ml'
+          )}
+          placeholder="M, 42, 50ml"
+        />
+      ) : null}
 
       <TextField
         label={t(

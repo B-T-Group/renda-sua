@@ -26,6 +26,9 @@ permissions:
 jobs:
   deploy-cdk-production:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-cdk-prod
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code

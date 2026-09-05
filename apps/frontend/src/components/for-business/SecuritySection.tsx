@@ -9,7 +9,7 @@ import { Box, Grid, Typography, alpha } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const SecuritySection: React.FC = () => {
   const { t } = useTranslation();
@@ -39,8 +39,8 @@ const SecuritySection: React.FC = () => {
                   width: 40,
                   height: 40,
                   borderRadius: 2,
-                  bgcolor: alpha(FB_GREEN, 0.1),
-                  color: FB_GREEN,
+                  bgcolor: alpha(FB_ACCENT, 0.1),
+                  color: FB_ACCENT,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

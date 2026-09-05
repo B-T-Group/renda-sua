@@ -1,7 +1,6 @@
 import type { AxiosInstance } from 'axios';
 import type { CollectionSummary } from '../hooks/useCollections';
 import type { InventoryItem } from '../hooks/useInventoryItems';
-import { DETECTED_COUNTRY_STORAGE_KEY } from '../hooks/useDetectedCountry';
 import type { PublicBrowserGeo } from '../hooks/usePublicBrowserGeo';
 
 const PREVIEW_SLOT_COUNT = 4;
@@ -14,35 +13,16 @@ function primaryInventoryImageUrl(item: InventoryItem): string | undefined {
   return url || undefined;
 }
 
-function resolveCountryCode(
-  isAuthenticated: boolean,
-  supportedIsos: string[]
-): string | undefined {
-  if (isAuthenticated) return undefined;
-  const detected =
-    typeof window !== 'undefined'
-      ? localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
-      : null;
-  const code = detected?.toUpperCase();
-  if (code && supportedIsos.includes(code)) {
-    return code;
-  }
-  return undefined;
-}
-
 async function fetchCollectionPreviewImageUrls(
   apiClient: AxiosInstance,
   slug: string,
   options: {
     isAuthenticated: boolean;
     anonymousOrigin?: PublicBrowserGeo | null;
-    supportedIsos: string[];
+    country_code?: string;
+    state?: string;
   }
 ): Promise<string[]> {
-  const country_code = resolveCountryCode(
-    options.isAuthenticated,
-    options.supportedIsos
-  );
   const response = await apiClient.get<{
     success: boolean;
     data: { items: InventoryItem[] };
@@ -53,7 +33,8 @@ async function fetchCollectionPreviewImageUrls(
       is_active: true,
       sort: 'relevance',
       collection: slug,
-      ...(country_code && { country_code }),
+      ...(options.country_code && { country_code: options.country_code }),
+      ...(options.state && { state: options.state }),
       ...(!options.isAuthenticated &&
         options.anonymousOrigin && {
           origin_lat: options.anonymousOrigin.lat,
@@ -94,7 +75,8 @@ export async function enrichCollectionsWithPreviewImages(
   options: {
     isAuthenticated: boolean;
     anonymousOrigin?: PublicBrowserGeo | null;
-    supportedIsos: string[];
+    country_code?: string;
+    state?: string;
   }
 ): Promise<CollectionSummary[]> {
   return Promise.all(

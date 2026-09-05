@@ -1,0 +1,3 @@
+function:
+  name: try_reserve_business_inventory
+  schema: public

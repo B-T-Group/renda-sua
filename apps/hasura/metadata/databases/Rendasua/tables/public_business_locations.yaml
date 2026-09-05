@@ -21,6 +21,13 @@ array_relationships:
         remote_table:
           name: business_inventory
           schema: public
+  - name: food_item_settings
+    using:
+      foreign_key_constraint_on:
+        column: business_location_id
+        table:
+          name: food_item_settings
+          schema: public
   - name: location_delegation_invites
     using:
       foreign_key_constraint_on:
@@ -71,6 +78,7 @@ insert_permissions:
         - is_active
         - email
         - phone
+        - order_alert_phone
         - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
@@ -131,6 +139,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - order_alert_phone
         - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
@@ -194,6 +203,7 @@ update_permissions:
         - is_active
         - email
         - phone
+        - order_alert_phone
         - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage

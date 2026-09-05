@@ -35,7 +35,8 @@ describe('BusinessReferralsService', () => {
       hasuraSystemService as never,
       notificationsService as never,
       paymentRoutingService as never,
-      configService as never
+      configService as never,
+      { getConfigurationByKey: jest.fn() } as never
     );
     // Default: no user-level code match
     hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });

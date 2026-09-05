@@ -27,15 +27,17 @@ function applyActiveContextHeaders(
   }
 }
 
-/** AI cleanup can exceed the default axios 30s client timeout; force a longer limit. */
-function applyImageCleanupTimeout(config: InternalAxiosRequestConfig) {
+/** AI cleanup / assistant chat can exceed the default axios 30s timeout. */
+function applyLongRunningTimeout(config: InternalAxiosRequestConfig) {
   const url = config.url ?? '';
   const method = (config.method ?? 'get').toLowerCase();
-  if (
-    method === 'post' &&
-    (url.includes('/cleanup') || url.includes('/ai-image-cleanup'))
-  ) {
+  if (method !== 'post') return;
+  if (url.includes('/cleanup') || url.includes('/ai-image-cleanup')) {
     config.timeout = environment.imageCleanupRequestTimeoutMs;
+    return;
+  }
+  if (url.includes('/assistant/chat')) {
+    config.timeout = 120_000;
   }
 }
 
@@ -55,9 +57,11 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/pdf/shipping-labels',
     '/locations/',
     '/notifications/',
+    '/assistant/chat',
     '/item-likes',
     '/ai/image-item-suggestions',
     '/ai/item-refinement-suggestions',
+    '/ai/variant-suggestions',
     '/business-items/create-from-image',
     '/business-items/ai-image-cleanup',
     '/aws/presigned-url/image',
@@ -127,7 +131,7 @@ export const useApiClient = (): AxiosInstance => {
         config.headers['X-Hasura-Role'] = 'anonymous';
       }
 
-      applyImageCleanupTimeout(config);
+      applyLongRunningTimeout(config);
 
       if (showLoading && !shouldSkipGlobalLoadingForUrl(config.url)) {
         showLoading();

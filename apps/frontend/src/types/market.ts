@@ -26,12 +26,30 @@ export interface StoredMarket {
 export const MARKET_STORAGE_KEY = 'rendasua_market_v1';
 export const DEFAULT_MARKET_CODE = 'CM';
 
+export function pickSupportedCountryCode(
+  preferred: string | null | undefined,
+  supportedIsos: string[],
+  fallback = DEFAULT_MARKET_CODE
+): string {
+  const upper = preferred?.toUpperCase();
+  if (upper && supportedIsos.includes(upper)) return upper;
+  if (supportedIsos.includes(fallback)) return fallback;
+  return supportedIsos[0] ?? fallback;
+}
+
 export function isoToFlagEmoji(iso: string): string {
   const code = iso.toUpperCase();
   if (code.length !== 2) return '??';
   return String.fromCodePoint(
     ...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)
   );
+}
+
+/** Middle dot separator. Unicode escape so it cannot be saved as a Latin-1 `0xB7` byte. */
+export const MARKET_CAPTION_SEPARATOR = '\u00b7';
+
+export function formatMarketCaption(countryName: string, stateLabel: string): string {
+  return `${countryName} ${MARKET_CAPTION_SEPARATOR} ${stateLabel}`;
 }
 
 export function toMarket(country: {

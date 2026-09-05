@@ -34,6 +34,7 @@ import {
 import { useApiClient } from '../../hooks/useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from '../../hooks/useDetectedCountry';
 import { getMetaBrowserContext } from '../../utils/metaBrowserIds';
+import { useMarket } from '../../contexts/MarketContext';
 import {
   SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT,
   SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK,
@@ -103,6 +104,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const navigate = useNavigate();
   const { loginWithRedirect } = useAuth0();
   const { trackSiteEvent } = useTrackSiteEvent();
+  const { selectedMarket } = useMarket();
 
   const [contactMethod, setContactMethod] = useState<'phone' | 'email'>('phone');
   const [email, setEmail] = useState('');
@@ -150,6 +152,11 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   }, [inventoryItemId, variantId]);
 
   useEffect(() => {
+    const marketCountry = normalizeCountryCode(selectedMarket?.countryCode);
+    if (marketCountry && isActivePhoneCountry(marketCountry)) {
+      setPhoneCountry(marketCountry);
+      return;
+    }
     if (typeof window === 'undefined' || !window.localStorage) return;
     const detected = normalizeCountryCode(
       localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
@@ -157,13 +164,14 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     if (isActivePhoneCountry(detected)) {
       setPhoneCountry(detected);
     }
-  }, []);
+  }, [selectedMarket]);
 
   const redirectToOtp = useCallback(
     async (
       screenHint: 'login' | 'signup',
       loginHint: string,
-      connection: 'email' | 'sms'
+      connection: 'email' | 'sms',
+      attemptId?: string
     ) => {
       try {
         void trackSiteEvent({
@@ -178,6 +186,23 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
             phone: phoneE164 || null,
           },
         });
+        if (screenHint === 'signup' && attemptId) {
+          sessionStorage.setItem('pendingSignupAttemptId', attemptId);
+          sessionStorage.setItem('pendingSignupOtpChannel', connection);
+          sessionStorage.setItem(
+            'pendingSignupOtpExpiresAtMs',
+            String(Date.now() + 15 * 60 * 1000)
+          );
+          if (connection === 'sms') {
+            sessionStorage.setItem('pendingSignupPhone', loginHint);
+            sessionStorage.setItem('pendingSignupEmail', emailNormalized || '');
+          } else {
+            sessionStorage.setItem('pendingSignupEmail', loginHint);
+            sessionStorage.removeItem('pendingSignupPhone');
+          }
+          navigate(`/auth/otp?flow=signup`);
+          return;
+        }
         await loginWithRedirect({
           authorizationParams: {
             connection,
@@ -262,11 +287,18 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           personas: ['client'],
           user_type_id: 'client',
           profile: {},
+          verification_channel: 'sms',
           ...getMetaBrowserContext(),
           eventSourceUrl:
             typeof window !== 'undefined' ? window.location.href : undefined,
+        }).then(async (res) => {
+          await redirectToOtp(
+            'signup',
+            phoneE164,
+            'sms',
+            res.data?.attemptId
+          );
         });
-        await redirectToOtp('signup', phoneE164, 'sms');
         return;
       }
 
@@ -280,7 +312,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         return;
       }
 
-      await apiClient.post('/auth/signup/start', {
+      const signupRes = await apiClient.post('/auth/signup/start', {
         first_name: firstNameTrimmed,
         last_name: lastNameTrimmed,
         email: emailNormalized,
@@ -288,12 +320,18 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         personas: ['client'],
         user_type_id: 'client',
         profile: {},
+        verification_channel: 'email',
         ...getMetaBrowserContext(),
         eventSourceUrl:
           typeof window !== 'undefined' ? window.location.href : undefined,
       });
 
-      await redirectToOtp('signup', emailNormalized, 'email');
+      await redirectToOtp(
+        'signup',
+        emailNormalized,
+        'email',
+        signupRes.data?.attemptId
+      );
     } catch (err: unknown) {
       const msg =
         getApiErrorMessage(err) ||
@@ -667,6 +705,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           <Button
             fullWidth
             variant="contained"
+            color="cta"
             size="large"
             onClick={handleContinue}
             disabled={!canSubmit}

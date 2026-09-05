@@ -95,6 +95,8 @@ import {
 import VariantSelector from '../common/VariantSelector';
 import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
 import PhoneInput from '../common/PhoneInput';
+import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -123,7 +125,7 @@ const getConfirmOrderAttentionSx = (enabled: boolean) => (theme: Theme) => ({
   ...(enabled
     ? {
         '--confirm-order-ring-color': alpha(
-          theme.palette.primary.main,
+          theme.palette.cta.main,
           theme.palette.mode === 'dark' ? 0.38 : 0.26
         ),
         animation: `${confirmOrderPulse} 2.8s ease-in-out infinite`,
@@ -513,7 +515,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                           )
                         : t(
                             'orders.pickup.payAtPickupHint',
-                            'You will pay when you arrive; the business will send a payment request to your phone.'
+                            'You will pay when you arrive. Tap Pay in the app and approve the request on your phone.'
                           )}
                     </Typography>
                   </Box>
@@ -704,6 +706,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         <Button
           onClick={onSubmit}
           variant="contained"
+          color="cta"
           size="large"
           fullWidth
           disabled={disabled || loading}
@@ -761,6 +764,7 @@ const PlaceOrderPage: React.FC = () => {
 
   // State
   const [loading, setLoading] = useState(false);
+  const placingOrderRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const {
     appliedCode: appliedDiscountCode,
@@ -1306,6 +1310,7 @@ const PlaceOrderPage: React.FC = () => {
   const handleSubmit = useCallback(async () => {
     if (!selectedItem || !apiClient) return;
     if (!isPickupOrder && !selectedAddressId) return;
+    if (placingOrderRef.current) return;
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
@@ -1318,6 +1323,7 @@ const PlaceOrderPage: React.FC = () => {
       return;
     }
 
+    placingOrderRef.current = true;
     setLoading(true);
     setError(null); // Clear any previous errors
     try {
@@ -1394,6 +1400,34 @@ const PlaceOrderPage: React.FC = () => {
         );
       }
 
+      const effectiveTiming = isPickupOrder
+        ? itemCountrySupportsStripe
+          ? 'pay_now'
+          : 'pay_at_pickup'
+        : paymentTiming;
+      const momoAwaiting =
+        !itemCountrySupportsStripe &&
+        effectiveTiming === 'pay_now' &&
+        order.payment_status !== 'paid' &&
+        order.payment_source !== 'wallet';
+      if (momoAwaiting) {
+        const phoneE164 = (
+          useDifferentPhone
+            ? overridePhoneNumber
+            : profile?.phone_number || ''
+        ).trim();
+        navigate(
+          buildMomoAwaitingPaymentTo({
+            orderIds: [order.id],
+            phoneE164,
+            source: 'checkout',
+            orderNumbers: [order.order_number],
+            confirmationState: { order },
+          })
+        );
+        return;
+      }
+
       // Navigate to order confirmation page
       navigate('/orders/confirmation', {
         state: {
@@ -1424,7 +1458,7 @@ const PlaceOrderPage: React.FC = () => {
       }
 
       setError(errorMessage);
-    } finally {
+      placingOrderRef.current = false;
       setLoading(false);
     }
   }, [
@@ -1446,6 +1480,7 @@ const PlaceOrderPage: React.FC = () => {
     trackPurchase,
     useDifferentPhone,
     overridePhoneNumber,
+    profile?.phone_number,
   ]);
 
   const submitWithPhoneGate = useCallback(async () => {
@@ -1504,6 +1539,7 @@ const PlaceOrderPage: React.FC = () => {
   }, [refetchProfile, submitWithPhoneGate]);
 
   const handleSubmitWithPhoneGate = useCallback(async () => {
+    if (loading || placingOrderRef.current) return;
     if (isPickupOrder) {
       await submitWithEmailGate();
       return;
@@ -1513,7 +1549,7 @@ const PlaceOrderPage: React.FC = () => {
       return;
     }
     await submitWithEmailGate();
-  }, [isPayAtDeliveryEligible, isPickupOrder, submitWithEmailGate]);
+  }, [isPayAtDeliveryEligible, isPickupOrder, loading, submitWithEmailGate]);
 
   const handleChoosePaymentTimingAndSubmit = useCallback(
     async (timing: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup') => {
@@ -2062,7 +2098,7 @@ const PlaceOrderPage: React.FC = () => {
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
                     {t(
                       'orders.pickup.payAtPickupHint',
-                      'You will pay when you arrive; the business will send a payment request to your phone.'
+                      'You will pay when you arrive. Tap Pay in the app and approve the request on your phone.'
                     )}
                   </Typography>
                 </Paper>
@@ -2823,7 +2859,7 @@ const PlaceOrderPage: React.FC = () => {
                         {isPickupOrder
                           ? t(
                               'orders.pickup.clientPaymentHint',
-                              'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                              'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
                             )
                           : t(
                               'orders.paymentRequestMessage',
@@ -2884,9 +2920,11 @@ const PlaceOrderPage: React.FC = () => {
                             'orders.overridePhoneNumber',
                             'Phone Number for Payment'
                           )}
-                          defaultCountry="GA"
+                          defaultCountry={pickMobileMoneyDefaultCountry(
+                            itemOriginCountryIso
+                          )}
                           fullWidth
-                          onlyCountries={supportedCountries}
+                          onlyCountries={['CM', 'GA']}
                           error={
                             !phoneValidation.isValid &&
                             overridePhoneNumber.trim() !== '' &&
@@ -3113,6 +3151,7 @@ const PlaceOrderPage: React.FC = () => {
                   <Button
                     onClick={handleSubmitWithPhoneGate}
                     variant="contained"
+                    color="cta"
                     fullWidth
                     disabled={!isStepValid(activeStep) || loading}
                     startIcon={
@@ -3802,12 +3841,12 @@ const PlaceOrderPage: React.FC = () => {
                           {paymentTiming === 'pay_at_delivery'
                             ? t(
                                 'orders.payAtDelivery.info',
-                                'You will pay at delivery in the app when the agent arrives. Please keep your phone available to approve the payment request.'
+                                'When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.'
                               )
                             : paymentTiming === 'pay_at_pickup'
                               ? t(
                                   'orders.pickup.clientPaymentHint',
-                                  'The store will send a mobile payment request to your phone when your order is ready for pickup. Please approve it to complete your order.'
+                                  'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
                                 )
                               : t(
                                   'orders.paymentRequestMessage',
@@ -3868,9 +3907,11 @@ const PlaceOrderPage: React.FC = () => {
                               'orders.overridePhoneNumber',
                               'Phone Number for Payment'
                             )}
-                            defaultCountry="GA"
+                            defaultCountry={pickMobileMoneyDefaultCountry(
+                              itemOriginCountryIso
+                            )}
                             fullWidth
-                            onlyCountries={supportedCountries}
+                            onlyCountries={['CM', 'GA']}
                             error={
                               !phoneValidation.isValid &&
                               overridePhoneNumber.trim() !== '' &&
@@ -4102,7 +4143,7 @@ const PlaceOrderPage: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" noWrap>
                       {t(
                         'orders.paymentTiming.payAtDeliveryShort',
-                        'Pay in the app when the agent arrives.'
+                        'The agent will send a payment request when they arrive.'
                       )}
                     </Typography>
                   </Box>
@@ -4131,7 +4172,7 @@ const PlaceOrderPage: React.FC = () => {
                   )
                 : t(
                     'orders.paymentTiming.payAtDeliveryDescription',
-                    'You will place the order now and pay at delivery in the app when the agent arrives.'
+                    'You will place the order now. When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
                   )}
             </Typography>
           </Alert>

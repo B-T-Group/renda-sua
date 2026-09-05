@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.rendasua.agent",
+      "sha256_cert_fingerprints": [
+        "E6:66:13:B0:97:B5:6C:F5:25:22:C4:C8:B0:F1:DA:BA:95:00:00:D8:35:77:7D:2F:AD:C5:07:D3:72:59:14:E4"
+      ]
+    }
+  }
+]

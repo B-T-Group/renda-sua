@@ -1,0 +1,8 @@
+{
+  "env": "prod",
+  "action": "set_interest_only_true",
+  "source_report": "multi-africa-products-insert-report.json",
+  "items_updated": 5412,
+  "schema": "applied_product_interest_mode_via_sql_then_hasura_migrate_skip_execution",
+  "metadata": "applied_to_hasura.rendasua.com_and_hasura-dev"
+}

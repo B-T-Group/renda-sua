@@ -3,12 +3,13 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { WinstonModule } from 'nest-winston';
 import { ClsModule } from 'nestjs-cls';
 import { AllExceptionsFilter } from '../common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from '../common/interceptors/logging.interceptor';
+import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
@@ -16,6 +17,7 @@ import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { AiModule } from '../ai/ai.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { AssistantModule } from '../assistant/assistant.module';
 import { AuthModule } from '../auth/auth.module';
 import { setupRequestContextCls } from '../auth/request-context-cls.setup';
 import { AwsModule } from '../aws/aws.module';
@@ -47,6 +49,7 @@ import { LocationsModule } from '../locations/locations.module';
 import { MessagesModule } from '../messages/messages.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MobilePaymentsCoreModule } from '../mobile-payments/mobile-payments-core.module';
+import { DiasporaModule } from '../diaspora/diaspora.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
@@ -56,6 +59,7 @@ import { OrangeMomoModule } from '../orange-momo/orange-momo.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
+import { RecipientsModule } from '../recipients/recipients.module';
 import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
@@ -66,6 +70,7 @@ import { RentalsModule } from '../rentals/rentals.module';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
 import { ItemLikesModule } from '../item-likes/item-likes.module';
+import { ProductInterestModule } from '../product-interest/product-interest.module';
 import { MarketplacePublicModule } from '../marketplace-public/marketplace-public.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
@@ -80,6 +85,7 @@ import { UsersModule } from '../users/users.module';
 import { ThreadsModule } from '../threads/threads.module';
 import { BusinessReferralPayoutsModule } from '../business-referral-payouts/business-referral-payouts.module';
 import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
+import { CreditsModule } from '../credits/credits.module';
 import { AccountRechargeModule } from '../admin/account-recharge/account-recharge.module';
 import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payment-phones.module';
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
@@ -113,7 +119,7 @@ import { AppService } from './app.service';
       {
         name: 'short',
         ttl: 60000,
-        limit: 100,
+        limit: parseInt(process.env.THROTTLE_SHORT_LIMIT || '100', 10),
       },
     ]),
     WinstonModule.forRootAsync({
@@ -153,6 +159,7 @@ import { AppService } from './app.service';
     UsersModule,
     OrdersModule,
     RatingsModule,
+    RecipientsModule,
     RentalsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,
@@ -163,6 +170,7 @@ import { AppService } from './app.service';
     ItemVariantsModule,
     ItemViewsModule,
     ItemLikesModule,
+    ProductInterestModule,
     MetaConversionsModule,
     MarketplacePublicModule,
     FacebookCatalogFeedModule,
@@ -176,6 +184,7 @@ import { AppService } from './app.service';
     MobilePaymentsModule,
     StripePaymentsModule,
     StripeTaxModule,
+    DiasporaModule,
     AdminModule,
     NotificationsModule,
     BrandsModule,
@@ -190,6 +199,7 @@ import { AppService } from './app.service';
     CategoriesModule,
     SubcategoriesModule,
     AiModule,
+    AssistantModule,
     DashboardModule,
     MerchantEngagementModule,
     DeliveryModule,
@@ -198,6 +208,7 @@ import { AppService } from './app.service';
     ThreadsModule,
     BusinessReferralPayoutsModule,
     RepresentativeCompensationModule,
+    CreditsModule,
     LaunchPromoModule,
     BusinessesModule,
     DelegationsModule,
@@ -214,7 +225,7 @@ import { AppService } from './app.service';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: UserThrottlerGuard,
     },
     {
       provide: APP_FILTER,

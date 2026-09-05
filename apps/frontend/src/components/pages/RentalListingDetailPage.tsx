@@ -42,6 +42,10 @@ import {
   RentalListingRequestSection,
 } from '../rentals/RentalListingRequestSection';
 import SEOHead from '../seo/SEOHead';
+import { DeliveryExpectationsCard } from '../common/DeliveryExpectationsCard';
+import { useDeliveryEstimate } from '../../hooks/useDeliveryEstimate';
+import { useMarket } from '../../contexts/MarketContext';
+import { MarketPickerDialog } from '../market/MarketPickerDialog';
 
 function formatMoney(amount: string | number, currency: string): string {
   const n = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -460,6 +464,8 @@ const RentalListingDetailPage: React.FC = () => {
   const [row, setRow] = useState<RentalListingRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [marketPickerOpen, setMarketPickerOpen] = useState(false);
+  const { selectedMarket, markets, setMarket } = useMarket();
 
   const load = useCallback(async () => {
     if (!listingId) return;
@@ -554,6 +560,19 @@ const RentalListingDetailPage: React.FC = () => {
     Number(row.base_price_per_day ?? 0),
     row.rental_item.currency
   );
+
+  const deliveryEstimateParams = React.useMemo(() => {
+    if (!selectedMarket) return null;
+    return {
+      marketId: selectedMarket.countryCode,
+      areaId: selectedMarket.stateCode || undefined,
+      category: 'rental' as const,
+      sellerId: row.rental_item.business.id,
+      skuId: row.rental_item.id,
+    };
+  }, [selectedMarket, row.rental_item.business.id, row.rental_item.id]);
+
+  const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } = useDeliveryEstimate(deliveryEstimateParams);
 
   return (
     <>
@@ -854,6 +873,18 @@ const RentalListingDetailPage: React.FC = () => {
               <HowItWorksNotes />
             </Grid>
 
+            <Grid item xs={12}>
+              <DeliveryExpectationsCard
+                estimate={deliveryEstimate}
+                loading={deliveryEstimateLoading}
+                itemId={listingId}
+                category="rental"
+                marketId={selectedMarket?.countryCode}
+                areaId={selectedMarket?.stateCode || undefined}
+                onAreaChange={() => setMarketPickerOpen(true)}
+              />
+            </Grid>
+
             <Grid
               item
               xs={12}
@@ -886,7 +917,18 @@ const RentalListingDetailPage: React.FC = () => {
           </Grid>
         </Container>
       </Box>
-
+      <MarketPickerDialog
+        open={marketPickerOpen}
+        markets={markets}
+        selectedCode={selectedMarket?.countryCode || 'CM'}
+        selectedStateCode={selectedMarket?.stateCode || null}
+        catalogContext="rentals"
+        onSelect={(countryCode, stateCode) => {
+          setMarket(countryCode, stateCode);
+          setMarketPickerOpen(false);
+        }}
+        onClose={() => setMarketPickerOpen(false)}
+      />
     </>
   );
 };

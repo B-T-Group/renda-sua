@@ -22,12 +22,22 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { BusinessImagesService } from '../business-images/business-images.service';
 import { BusinessItemsService } from '../business-items/business-items.service';
 import { ItemRefinementDto } from './dto/item-refinement.dto';
+import { VariantSuggestionsDto } from './dto/variant-suggestions.dto';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import {
   computeListingQuality,
   nameSimilarity,
 } from './listing-quality.util';
+import { CategoriesService } from '../categories/categories.service';
+import {
+  formatCatalogForVisionPrompt,
+  remapImageItemSuggestionCategories,
+} from '../categories/match-item-category';
+import {
+  buildVariantParentSnapshot,
+  sanitizeVariantImageIds,
+} from './variant-parent-snapshot.util';
 
 @ApiTags('ai')
 @Controller('ai')
@@ -39,7 +49,8 @@ export class AiController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly businessImagesService: BusinessImagesService,
-    private readonly businessItemsService: BusinessItemsService
+    private readonly businessItemsService: BusinessItemsService,
+    private readonly categoriesService: CategoriesService
   ) {}
 
   @Post('generate-description')
@@ -187,10 +198,11 @@ export class AiController {
       .map((img) => img!.alt_text)
       .filter((a): a is string => !!a?.trim());
 
-    const [currency, country, catalogItems] = await Promise.all([
+    const [currency, country, catalogItems, categoryTree] = await Promise.all([
       this.hasuraSystemService.resolveBusinessCurrency(businessId),
       this.hasuraSystemService.getBusinessPrimaryAddressCountry(businessId),
       this.businessItemsService.getItems(businessId),
+      this.categoriesService.listCategoryTree(),
     ]);
 
     const linkedItemIds = new Set(
@@ -223,7 +235,7 @@ export class AiController {
       ),
     ];
 
-    const suggestion = await this.aiService.generateImageItemSuggestions({
+    const suggestionRaw = await this.aiService.generateImageItemSuggestions({
       imageUrls: images.map((img) => img!.image_url),
       caption: captions.length ? captions.join(' | ') : null,
       altText: alts.length ? alts.join(' | ') : null,
@@ -233,7 +245,13 @@ export class AiController {
       country,
       existingCatalogNames,
       existingBrandNames,
+      existingCatalogPrompt: formatCatalogForVisionPrompt(categoryTree),
+      isFoodItem: body.isFoodItem === true ? true : undefined,
     });
+    const suggestion = remapImageItemSuggestionCategories(
+      suggestionRaw,
+      categoryTree
+    );
 
     if (suggestion.barcodeValues?.length) {
       await this.businessImagesService.storeBarcodeValuesOnImage(
@@ -291,7 +309,9 @@ export class AiController {
         weight: suggestion.weight ?? undefined,
         weightUnit: suggestion.weightUnit ?? undefined,
         dimensions: suggestion.dimensions ?? undefined,
+        isSizeRequired: suggestion.isSizeRequired ?? false,
         isUsed: suggestion.isUsed ?? undefined,
+        isFoodItem: suggestion.isFoodItem ?? undefined,
         confidence: suggestion.confidence,
         categoryAlternates: suggestion.categoryAlternates ?? [],
         subCategoryAlternates: suggestion.subCategoryAlternates ?? [],
@@ -404,6 +424,112 @@ export class AiController {
         maxOrderQuantity: suggestion.maxOrderQuantity ?? undefined,
         price: item.price,
         currency: item.currency,
+      },
+    };
+  }
+
+  @Post('variant-suggestions')
+  @ApiOperation({
+    summary:
+      'Get AI suggestions for a new variant using parent catalog fields and variant photos',
+  })
+  @ApiBody({ type: VariantSuggestionsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Variant suggestions generated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing variant images or invalid body',
+  })
+  async getVariantSuggestions(
+    @ReqContext() ctx: RequestContext,
+    @Body() body: VariantSuggestionsDto
+  ) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const businessId = user?.business?.id;
+    if (!businessId) {
+      throw new HttpException(
+        { success: false, error: 'User has no business' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (!body?.itemId) {
+      throw new HttpException(
+        { success: false, error: 'itemId is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const imageIds = sanitizeVariantImageIds(body.imageIds);
+    if (!imageIds.length) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'At least one variant image is required',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    let item: Awaited<ReturnType<BusinessItemsService['getSingleItem']>>;
+    try {
+      item = await this.businessItemsService.getSingleItem(
+        businessId,
+        body.itemId
+      );
+    } catch {
+      throw new HttpException(
+        { success: false, error: 'Item not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const images = await Promise.all(
+      imageIds.map((id) =>
+        this.businessImagesService.getImageForBusiness(businessId, id)
+      )
+    );
+    if (images.some((img) => !img)) {
+      throw new HttpException(
+        { success: false, error: 'One or more images not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    const imageUrls = images
+      .map((img) => img!.image_url)
+      .filter((url): url is string => Boolean(url));
+    if (!imageUrls.length) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Variant images must have valid URLs',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const parentSnapshot = buildVariantParentSnapshot(
+      item as Record<string, unknown>
+    );
+    const suggestion = await this.aiService.generateVariantSuggestions({
+      parentSnapshot,
+      imageUrls,
+      preferredLanguage: user?.preferred_language ?? 'en',
+    });
+
+    return {
+      success: true,
+      data: {
+        name: suggestion.name,
+        color: suggestion.color,
+        sku: suggestion.sku,
+        price: suggestion.price ?? item.price,
+        currency: suggestion.currency ?? item.currency,
+        weight: suggestion.weight ?? item.weight ?? undefined,
+        weightUnit: suggestion.weightUnit ?? item.weight_unit ?? undefined,
+        dimensions: suggestion.dimensions ?? item.dimensions ?? undefined,
       },
     };
   }

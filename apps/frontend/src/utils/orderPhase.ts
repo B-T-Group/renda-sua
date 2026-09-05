@@ -107,6 +107,26 @@ function isPickupPinReady(input: OrderPhaseInput): boolean {
   return payment === 'authorized' || payment === 'paid';
 }
 
+function readyPickupClientNextStepKey(input: OrderPhaseInput): string {
+  if (input.paymentTiming === 'pay_at_pickup') {
+    return 'orders.nextStep.readyPickupPayAtPickupClient';
+  }
+  return 'orders.nextStep.readyPickupClient';
+}
+
+function isPayAtPickupPending(input: OrderPhaseInput): boolean {
+  if (input.paymentTiming !== 'pay_at_pickup') return false;
+  const payment = input.paymentStatus;
+  return payment !== 'paid' && payment !== 'authorized';
+}
+
+function readyPickupBusinessNextStepKey(input: OrderPhaseInput): string {
+  if (input.paymentTiming === 'pay_at_pickup') {
+    return 'orders.nextStep.readyPickupWaitClientPayBusiness';
+  }
+  return 'orders.nextStep.readyPickupBusiness';
+}
+
 function resolvePhase(input: OrderPhaseInput): OrderPhase {
   const s = input.status ?? '';
   if (DONE_STATUSES.has(s) || REFUND_STATUSES.has(s)) return 'done';
@@ -166,9 +186,9 @@ function nextStepKeyFor(
   if (phase === 'ready') {
     if (pickup) {
       return role === 'client'
-        ? 'orders.nextStep.readyPickupClient'
+        ? readyPickupClientNextStepKey(input)
         : role === 'business'
-          ? 'orders.nextStep.readyPickupBusiness'
+          ? readyPickupBusinessNextStepKey(input)
           : null;
     }
     return role === 'client'
@@ -224,6 +244,9 @@ function hubGroupFor(
 
   if (role === 'client') {
     if (phase === 'pay') return 'action_needed';
+    if (phase === 'ready' && isPickup(input) && isPayAtPickupPending(input)) {
+      return 'action_needed';
+    }
     if (
       phase === 'in_delivery' &&
       input.status === 'out_for_delivery' &&
@@ -284,6 +307,7 @@ function primaryActionFor(
 
   if (role === 'client') {
     if (phase === 'pay') return 'pay';
+    if (phase === 'ready' && pickup && isPayAtPickupPending(input)) return 'pay';
     if (phase === 'ready' && pickup && isPickupPinReady(input)) return 'send_pin';
     if (s === 'out_for_delivery' && isPinEligible(input)) return 'send_pin';
     if (s === 'delivered') return 'complete';
@@ -296,10 +320,7 @@ function primaryActionFor(
     if (phase === 'confirm') return 'confirm';
     if (phase === 'prepare') return 'mark_ready';
     if (phase === 'ready' && pickup) {
-      if (
-        input.paymentTiming === 'pay_at_pickup' &&
-        input.paymentStatus === 'pending'
-      ) {
+      if (isPayAtPickupPending(input)) {
         return 'collect_pickup_payment';
       }
       if (

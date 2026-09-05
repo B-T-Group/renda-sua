@@ -13,6 +13,7 @@ import {
   BUSINESS_REFERRAL_10_ITEMS,
   evaluateCompensation,
   ONBOARDING_10_FIRST_SALE,
+  ONBOARDING_10_MIN_SALE_TOTAL_KEY,
   ONBOARDING_RULES,
   SALE_PERCENT,
   type CompensationAction,
@@ -35,18 +36,21 @@ const DEFAULTS: Record<string, CompensationMarketConfig> = {
   CM: {
     currency: 'XAF',
     onboarding10FirstSale: 7500,
+    onboarding10MinSaleTotal: 2500,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   GA: {
     currency: 'XAF',
     onboarding10FirstSale: 7500,
+    onboarding10MinSaleTotal: 2500,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   CA: {
     currency: 'CAD',
     onboarding10FirstSale: 25,
+    onboarding10MinSaleTotal: 0,
     salePercent: 1,
     businessReferral10Items: 10,
   },
@@ -121,6 +125,7 @@ interface EventClaim {
   gross_milestone_amount?: number | null;
   triggering_order_id?: string | null;
   sale_amount?: number | null;
+  business_id?: string | null;
 }
 
 interface EarnerInfo {
@@ -185,25 +190,22 @@ export class RepresentativeCompensationService {
   async sweepPending(): Promise<CompensationCreditResult> {
     const totals = this.emptyResult();
     if (!(await this.isEnabled())) return totals;
-    this.addTotals(totals, await this.retryOpenEvents());
-    for (const businessId of await this.listCandidateBusinessIds()) {
-      this.addTotals(totals, await this.evaluate(businessId));
-    }
-    for (const order of await this.listUnpaidCompletedOrders()) {
-      this.addTotals(totals, await this.evaluate(order.business_id, order.id));
+    for (const event of await this.loadPendingOnboardingClaims()) {
+      const credited = await this.settlePendingOnboarding(event);
+      if (credited === true) totals.credited += 1;
+      else if (credited === false) totals.failed += 1;
+      else totals.skipped += 1;
     }
     return totals;
   }
 
   async previewPending(countryCode?: string): Promise<CompensationPreviewRow[]> {
     if (!(await this.isEnabled())) return [];
-    const rows: CompensationPreviewRow[] = [];
     const wanted = countryCode?.toUpperCase();
-    for (const businessId of await this.listCandidateBusinessIds()) {
-      for (const row of await this.previewBusiness(businessId)) {
-        if (wanted && row.countryCode !== wanted) continue;
-        rows.push(row);
-      }
+    const rows: CompensationPreviewRow[] = [];
+    for (const row of await this.loadPendingOnboardingPreviewRows()) {
+      if (wanted && row.countryCode !== wanted) continue;
+      rows.push(row);
     }
     return rows;
   }
@@ -296,23 +298,38 @@ export class RepresentativeCompensationService {
       result.skipped += 1;
       return result;
     }
-    const actions = triggeringOrderId
-      ? evaluateCompensation(context.input)
-      : [
-          ...evaluateCompensation(context.input),
-          ...this.pendingOrderActions(context),
-        ];
-    if (actions.length === 0) {
-      result.skipped += 1;
-      return result;
-    }
+    const actions = this.actionsForEvaluate(context, triggeringOrderId);
+    await this.creditActions(result, snapshot, context, actions);
+    if (actions.length === 0) result.skipped += 1;
+    return result;
+  }
+
+  private actionsForEvaluate(
+    context: NonNullable<
+      Awaited<ReturnType<RepresentativeCompensationService['buildContext']>>
+    >,
+    triggeringOrderId?: string
+  ): CompensationAction[] {
+    return [
+      ...evaluateCompensation(context.input),
+      ...this.pendingOrderActions(context, triggeringOrderId),
+    ];
+  }
+
+  private async creditActions(
+    result: CompensationCreditResult,
+    snapshot: BusinessSnapshot,
+    context: NonNullable<
+      Awaited<ReturnType<RepresentativeCompensationService['buildContext']>>
+    >,
+    actions: CompensationAction[]
+  ): Promise<void> {
     for (const action of actions) {
       const credited = await this.creditAction(snapshot, context, action);
       if (credited === true) result.credited += 1;
       else if (credited === false) result.failed += 1;
       else result.skipped += 1;
     }
-    return result;
   }
 
   private async previewBusiness(
@@ -326,7 +343,46 @@ export class RepresentativeCompensationService {
       ...evaluateCompensation(context.input),
       ...this.pendingOrderActions(context),
     ];
-    return actions.map((action) => ({
+    return [
+      ...(await this.pendingOnboardingPreviewRows(snapshot, context)),
+      ...actions.map((action) =>
+        this.toPreviewRow(snapshot, context, action)
+      ),
+    ];
+  }
+
+  private async pendingOnboardingPreviewRows(
+    snapshot: BusinessSnapshot,
+    context: NonNullable<
+      Awaited<ReturnType<RepresentativeCompensationService['buildContext']>>
+    >
+  ): Promise<CompensationPreviewRow[]> {
+    const events = await this.loadEvents(snapshot.id);
+    return events
+      .filter(
+        (event) =>
+          event.rule_code === ONBOARDING_10_FIRST_SALE &&
+          event.status === 'pending'
+      )
+      .map((event) =>
+        this.toPreviewRow(snapshot, context, {
+          ruleCode: ONBOARDING_10_FIRST_SALE,
+          amount: Number(event.amount),
+          grossMilestoneAmount: null,
+          orderId: event.triggering_order_id,
+          saleAmount: null,
+        })
+      );
+  }
+
+  private toPreviewRow(
+    snapshot: BusinessSnapshot,
+    context: NonNullable<
+      Awaited<ReturnType<RepresentativeCompensationService['buildContext']>>
+    >,
+    action: CompensationAction
+  ): CompensationPreviewRow {
+    return {
       businessId: snapshot.id,
       businessName: snapshot.name,
       ruleCode: action.ruleCode,
@@ -339,13 +395,16 @@ export class RepresentativeCompensationService {
       earnerId: context.eval.earner.id,
       earnerUserId: context.eval.earner.userId,
       earnerName: context.eval.earner.name,
-    }));
+    };
   }
 
-  private pendingOrderActions(context: {
-    input: Parameters<typeof evaluateCompensation>[0];
-    eval: EvalContext;
-  }): CompensationAction[] {
+  private pendingOrderActions(
+    context: {
+      input: Parameters<typeof evaluateCompensation>[0];
+      eval: EvalContext;
+    },
+    excludeOrderId?: string
+  ): CompensationAction[] {
     const paidPercent = new Set(context.input.paidSalePercentOrderIds ?? []);
     const paidRules = [...(context.input.paidOnboardingRules ?? [])];
     const sales = [...context.input.completedSales].sort((a, b) =>
@@ -353,6 +412,7 @@ export class RepresentativeCompensationService {
     );
     const actions: CompensationAction[] = [];
     for (const sale of sales) {
+      if (sale.id === excludeOrderId) continue;
       if (sale.currency !== context.input.payoutCurrency) continue;
       const extra = evaluateCompensation({
         ...context.input,
@@ -415,8 +475,11 @@ export class RepresentativeCompensationService {
       this.loadMarketConfig(countryCode, currency),
       this.paymentRoutingService.resolveRailForUser(earner.userId),
     ]);
+    const claimedEvents = events.filter((event) =>
+      ['credited', 'pending', 'failed'].includes(event.status)
+    );
     const creditedEvents = events.filter((event) => event.status === 'credited');
-    const paidOnboardingRules = creditedEvents
+    const paidOnboardingRules = claimedEvents
       .filter((event) =>
         (ONBOARDING_RULES as readonly string[]).includes(event.rule_code)
       )
@@ -491,12 +554,21 @@ export class RepresentativeCompensationService {
     if (claimed.status === 'credited') return null;
     const event = await this.bindOrderIfMissing(claimed, action.orderId);
     if (!event || event.status === 'credited') return null;
+    if (this.isDeferredOnboarding(event, action)) return null;
     return this.fulfillEvent(
       event,
       snapshot,
       context,
       this.actionForExisting(event, action)
     );
+  }
+
+  private isDeferredOnboarding(
+    event: EventClaim,
+    action: CompensationAction
+  ): boolean {
+    const rule = event.rule_code ?? action.ruleCode;
+    return rule === ONBOARDING_10_FIRST_SALE;
   }
 
   private actionForExisting(
@@ -759,32 +831,102 @@ export class RepresentativeCompensationService {
     });
   }
 
-  private async retryOpenEvents(): Promise<CompensationCreditResult> {
-    const result = this.emptyResult();
+  private async loadPendingOnboardingClaims(): Promise<EventClaim[]> {
     const query = `
-      query OpenCompensationEvents {
+      query PendingOnboardingCompensation {
         representative_compensation_events(
-          where: { status: { _in: ["pending", "failed"] } }
+          where: {
+            rule_code: { _eq: "${ONBOARDING_10_FIRST_SALE}" }
+            status: { _in: ["pending", "failed"] }
+          }
           limit: 200
         ) {
-          business_id triggering_order_id
+          id reference_id status rule_code amount
+          gross_milestone_amount triggering_order_id sale_amount
+          business_id
         }
       }
     `;
-    const rows =
-      (await this.hasuraSystemService.executeQuery(query))
-        ?.representative_compensation_events ?? [];
-    for (const row of rows) {
-      if (!row.business_id) {
-        result.skipped += 1;
-        continue;
+    const result = await this.hasuraSystemService.executeQuery(query);
+    return result?.representative_compensation_events ?? [];
+  }
+
+  private async settlePendingOnboarding(
+    event: EventClaim
+  ): Promise<boolean | null> {
+    if (!event.business_id) return null;
+    const snapshot = await this.loadSnapshot(event.business_id);
+    if (!this.isEligible(snapshot)) return null;
+    const context = await this.buildContext(snapshot);
+    if (!context) return null;
+    return this.fulfillEvent(
+      event,
+      snapshot,
+      context,
+      this.onboardingActionFromClaim(event)
+    );
+  }
+
+  private onboardingActionFromClaim(event: EventClaim): CompensationAction {
+    return {
+      ruleCode: ONBOARDING_10_FIRST_SALE,
+      amount: Number(event.amount ?? 0),
+      grossMilestoneAmount: event.gross_milestone_amount ?? null,
+      orderId: event.triggering_order_id ?? null,
+      saleAmount: event.sale_amount ?? null,
+    };
+  }
+
+  private async loadPendingOnboardingPreviewRows(): Promise<
+    CompensationPreviewRow[]
+  > {
+    const query = `
+      query PendingOnboardingCompensationPreview {
+        representative_compensation_events(
+          where: {
+            rule_code: { _eq: "${ONBOARDING_10_FIRST_SALE}" }
+            status: { _eq: "pending" }
+          }
+          limit: 200
+        ) {
+          rule_code amount currency country_code item_count
+          triggering_order_id
+          business { id name }
+          earner_agent {
+            id user_id
+            user { first_name last_name }
+          }
+          earner_business { id name user_id }
+        }
       }
-      this.addTotals(
-        result,
-        await this.evaluate(row.business_id, row.triggering_order_id ?? undefined)
-      );
-    }
-    return result;
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query);
+    return (result?.representative_compensation_events ?? []).map(
+      (row: Record<string, any>) => this.previewRowFromPendingEvent(row)
+    );
+  }
+
+  private previewRowFromPendingEvent(row: Record<string, any>): CompensationPreviewRow {
+    const agent = row.earner_agent;
+    const business = row.earner_business;
+    const agentName =
+      `${agent?.user?.first_name ?? ''} ${agent?.user?.last_name ?? ''}`.trim();
+    return {
+      businessId: row.business?.id ?? '',
+      businessName: row.business?.name ?? '',
+      ruleCode: ONBOARDING_10_FIRST_SALE,
+      amount: Number(row.amount ?? 0),
+      currency: String(row.currency ?? 'XAF'),
+      countryCode: String(row.country_code ?? ''),
+      itemCount: Number(row.item_count ?? 0),
+      orderId: row.triggering_order_id ?? null,
+      earnerKind: agent ? 'agent' : 'business',
+      earnerId: agent?.id ?? business?.id ?? '',
+      earnerUserId: agent?.user_id ?? business?.user_id ?? '',
+      earnerName: agent
+        ? agentName || 'Agent'
+        : business?.name || 'Business',
+    };
   }
 
   private async loadSnapshot(businessId: string): Promise<BusinessSnapshot | null> {
@@ -883,14 +1025,16 @@ export class RepresentativeCompensationService {
     currency: string
   ): Promise<CompensationMarketConfig> {
     const fallback = DEFAULTS[countryCode] ?? { ...DEFAULTS.CM, currency };
-    const read = async (key: string, fallbackValue: number) => {
+    const read = async (key: string, fallbackValue: number, allowZero = false) => {
       try {
         const config = await this.configurationsService.getConfigurationByKey(
           key,
           countryCode
         );
         const value = Number(config?.number_value);
-        return Number.isFinite(value) && value > 0 ? value : fallbackValue;
+        if (!Number.isFinite(value)) return fallbackValue;
+        if (allowZero ? value < 0 : value <= 0) return fallbackValue;
+        return value;
       } catch {
         return fallbackValue;
       }
@@ -900,6 +1044,11 @@ export class RepresentativeCompensationService {
       onboarding10FirstSale: await read(
         'onboarding_10_first_sale_amount',
         fallback.onboarding10FirstSale
+      ),
+      onboarding10MinSaleTotal: await read(
+        ONBOARDING_10_MIN_SALE_TOTAL_KEY,
+        fallback.onboarding10MinSaleTotal,
+        true
       ),
       salePercent: await read(
         'sale_only_commission_percent',
@@ -921,55 +1070,6 @@ export class RepresentativeCompensationService {
     } catch {
       return false;
     }
-  }
-
-  private async listCandidateBusinessIds(): Promise<string[]> {
-    const query = `
-      query CompensationCandidateBusinesses($cutoff: timestamptz!) {
-        businesses(
-          where: {
-            created_at: { _gte: $cutoff }
-            _or: [
-              { referred_by_agent_id: { _is_null: false } }
-              { referred_by_business_id: { _is_null: false } }
-            ]
-          }
-          limit: 500
-        ) { id }
-      }
-    `;
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
-    });
-    return (result?.businesses ?? []).map((row: { id: string }) => row.id);
-  }
-
-  private async listUnpaidCompletedOrders(): Promise<
-    Array<{ id: string; business_id: string }>
-  > {
-    const query = `
-      query CompensationUnpaidOrders($cutoff: timestamptz!) {
-        orders(
-          where: {
-            current_status: { _in: [complete, delivered] }
-            business: {
-              referred_by_agent_id: { _is_null: false }
-              created_at: { _gte: $cutoff }
-            }
-            _not: {
-              representative_compensation_events: {
-                rule_code: { _eq: "sale_percent" }
-              }
-            }
-          }
-          limit: 200
-        ) { id business_id }
-      }
-    `;
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
-    });
-    return result?.orders ?? [];
   }
 
   private async listReferredBusinessIds(params: {
@@ -1066,15 +1166,6 @@ export class RepresentativeCompensationService {
 
   private emptyResult(): CompensationCreditResult {
     return { credited: 0, skipped: 0, failed: 0 };
-  }
-
-  private addTotals(
-    target: CompensationCreditResult,
-    extra: CompensationCreditResult
-  ): void {
-    target.credited += extra.credited;
-    target.skipped += extra.skipped;
-    target.failed += extra.failed;
   }
 
   private isUniqueViolation(error: any): boolean {
