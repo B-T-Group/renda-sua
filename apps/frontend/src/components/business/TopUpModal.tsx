@@ -302,6 +302,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
           <Button
             onClick={handleConfirm}
             variant="contained"
+            color="cta"
             disabled={
               loading || !phoneNumber.trim() || !amount.trim() || !topUpAmountOk
             }

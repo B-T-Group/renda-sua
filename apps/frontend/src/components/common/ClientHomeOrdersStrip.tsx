@@ -32,7 +32,17 @@ function ctaFor(order: Order, action: OrderPrimaryActionId): {
   key: string;
   defaultValue: string;
   icon: React.ReactElement;
+  /** Payment steps carry the purchase accent; everything else stays blue. */
+  color: 'primary' | 'cta';
 } {
+  if (action === 'pay' && order.payment_timing === 'pay_at_pickup') {
+    return {
+      key: 'orders.payAtPickup.cta',
+      defaultValue: 'Pay now',
+      icon: <Payment />,
+      color: 'cta',
+    };
+  }
   if (action !== 'none' && ORDER_PRIMARY_ACTION_LABEL[action]?.[1]) {
     const [key, defaultValue] = ORDER_PRIMARY_ACTION_LABEL[action];
     const icon =
@@ -43,19 +53,21 @@ function ctaFor(order: Order, action: OrderPrimaryActionId): {
       ) : (
         <ShoppingBag />
       );
-    return { key, defaultValue, icon };
+    return { key, defaultValue, icon, color: action === 'pay' ? 'cta' : 'primary' };
   }
   if (TRACK_STATUSES.has(order.current_status || '')) {
     return {
       key: 'client.home.liveOrders.ctaTrack',
       defaultValue: 'Track order',
       icon: <LocalShipping />,
+      color: 'primary',
     };
   }
   return {
     key: 'client.home.liveOrders.ctaView',
     defaultValue: 'View order',
     icon: <ShoppingBag />,
+    color: 'primary',
   };
 }
 
@@ -123,6 +135,7 @@ const ClientHomeOrdersStrip: React.FC<ClientHomeOrdersStripProps> = ({
                 <Button
                   fullWidth
                   variant="contained"
+                  color={cta.color}
                   startIcon={cta.icon}
                   onClick={() => {
                     if (isTrack && onTrackOrder) {

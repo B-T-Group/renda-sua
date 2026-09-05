@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AssistantModule } from '../assistant/assistant.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { SmsModule } from '../sms/sms.module';
@@ -15,10 +16,12 @@ import { NotificationOrchestrator } from './orchestration/notification-orchestra
 import { NotificationPolicyService } from './orchestration/notification-policy.service';
 import { NotificationPreferenceService } from './orchestration/notification-preference.service';
 import { WhatsAppInboundService } from './orchestration/whatsapp-inbound.service';
+import { WhatsAppInboxPersistenceService } from './orchestration/whatsapp-inbox-persistence.service';
 import { WhatsAppReplyService } from './orchestration/whatsapp-reply.service';
 import { WhatsAppTemplateService } from './orchestration/whatsapp-template.service';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
+import { OrderRecipientNotificationsService } from './order-recipient-notifications.service';
 
 @Module({
   imports: [
@@ -26,7 +29,10 @@ import { NotificationsService } from './notifications.service';
     HasuraModule,
     SmsModule,
     RbacModule,
+    forwardRef(() => AssistantModule),
     forwardRef(() => WhatsAppModule),
+    // Lazy require avoids TDZ with OrdersModule <-> NotificationsModule cycle.
+    forwardRef(() => require('../orders/orders.module').OrdersModule),
   ],
   providers: [
     NotificationsService,
@@ -42,17 +48,21 @@ import { NotificationsService } from './notifications.service';
     NotificationOrchestrator,
     NotificationActionTokenService,
     WhatsAppReplyService,
+    WhatsAppInboxPersistenceService,
     WhatsAppInboundService,
+    OrderRecipientNotificationsService,
   ],
   controllers: [NotificationsController],
   exports: [
     NotificationsService,
+    OrderRecipientNotificationsService,
     DeepLinkService,
     NotificationOrchestrator,
     NotificationPreferenceService,
     NotificationAnalyticsService,
     WhatsAppInboundService,
     WhatsAppReplyService,
+    WhatsAppInboxPersistenceService,
     NotificationActionTokenService,
     WhatsAppTemplateService,
     WhatsAppChannel,

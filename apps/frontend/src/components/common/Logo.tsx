@@ -3,6 +3,7 @@ import { styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import rendasuaLogo from '../../assets/rendasua.svg';
+import { brandTokens } from '../../theme/brandTokens';
 
 interface LogoProps {
   variant?: 'default' | 'compact' | 'with-tagline';
@@ -57,7 +58,7 @@ const LogoContainer = styled(Box)<LogoContainerProps>(({ theme, size }) => ({
 }));
 
 const LogoText = styled(Typography)(({ theme }) => ({
-  background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+  background: `linear-gradient(135deg, ${brandTokens.primary.light} 0%, ${brandTokens.primary.main} 100%)`,
   backgroundClip: 'text',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',

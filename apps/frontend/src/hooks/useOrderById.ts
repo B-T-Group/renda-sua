@@ -38,6 +38,9 @@ export interface OrderData {
   acceptance_state?: string | null;
   acceptance_deadline_at?: string | null;
   acceptance_activates_at?: string | null;
+  grace_deadline_at?: string | null;
+  busy_extra_prep_minutes?: number | null;
+  estimated_prep_minutes?: number | null;
   estimated_delivery_time?: string;
   actual_delivery_time?: string;
   special_instructions?: string;

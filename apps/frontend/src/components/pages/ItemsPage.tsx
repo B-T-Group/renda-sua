@@ -64,6 +64,7 @@ import ItemsPageFilter, {
     ItemsPageFilterState,
 } from '../common/ItemsPageFilter';
 import ClientHomeOrdersStrip from '../common/ClientHomeOrdersStrip';
+import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import OrderActionCard from '../common/OrderActionCard';
 import StatusBadge from '../common/StatusBadge';
 import { TrackOrderModal } from '../dialogs/TrackOrderModal';
@@ -710,6 +711,7 @@ const ItemsPage: React.FC = () => {
               }}
             >
               <MarketSelector catalogContext="inventory" />
+              <AssistantHomeEntry compact />
               {isClient && nearbyAgentsCount > 0 && (
                 <Chip
                   size="small"

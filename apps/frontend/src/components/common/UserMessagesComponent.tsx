@@ -44,6 +44,8 @@ interface UserMessagesComponentProps {
   variant?: 'embed' | 'page';
   highlightMessageId?: string | null;
   emptyPrompt?: string;
+  /** Optional draft text to prefill the composer once. */
+  initialDraft?: string | null;
 }
 
 export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
@@ -57,6 +59,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
   variant = 'embed',
   highlightMessageId = null,
   emptyPrompt,
+  initialDraft = null,
 }) => {
   const { t } = useTranslation();
   const isPage = variant === 'page';
@@ -79,7 +82,7 @@ export const UserMessagesComponent: React.FC<UserMessagesComponentProps> = ({
     : orderParticipants.loading;
 
   const [expanded, setExpanded] = useState(isPage || defaultExpanded);
-  const [newMessage, setNewMessage] = useState('');
+  const [newMessage, setNewMessage] = useState(initialDraft?.trim() || '');
   const [sending, setSending] = useState(false);
   const [viewAllDialog, setViewAllDialog] = useState(false);
   const [snackbar, setSnackbar] = useState<{

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AgentsModule } from '../agents/agents.module';
 import { HasuraModule } from '../hasura/hasura.module';
@@ -11,7 +11,7 @@ import { BusinessReferralsService } from './business-referrals.service';
   imports: [
     ConfigModule,
     HasuraModule,
-    AgentsModule,
+    forwardRef(() => AgentsModule),
     NotificationsModule,
     StripePaymentsModule,
   ],

@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../../../config/configuration';
 import { WhatsAppService } from '../../../whatsapp/whatsapp.service';
-import type { ChannelAttemptResult, WhatsAppChannelPayload } from '../notification.types';
+import type {
+  ChannelAttemptResult,
+  WhatsAppChannelPayload,
+} from '../notification.types';
 import { WhatsAppTemplateService } from '../whatsapp-template.service';
 
 @Injectable()
@@ -35,6 +38,8 @@ export class WhatsAppChannel {
     to: string;
     locale?: string;
     payload: WhatsAppChannelPayload;
+    entityId?: string;
+    entityType?: string;
     /** Admin/ops test sends skip the product WHATSAPP_NOTIFICATIONS_ENABLED flag. */
     ignoreFeatureFlag?: boolean;
   }): Promise<ChannelAttemptResult> {
@@ -77,6 +82,8 @@ export class WhatsAppChannel {
       to: string;
       locale?: string;
       payload: WhatsAppChannelPayload;
+      entityId?: string;
+      entityType?: string;
     },
     templateName: string
   ): Promise<ChannelAttemptResult> {
@@ -90,18 +97,22 @@ export class WhatsAppChannel {
         components,
         category: this.templateService.category(params.payload.templateKey),
       });
+      const providerMessageId = result.messages[0]?.id;
       return {
         channel: 'whatsapp',
         status: 'sent',
-        providerMessageId: result.messages[0]?.id,
+        providerMessageId,
       };
     } catch (error: any) {
-      this.logger.warn(`WhatsApp send failed: ${error?.message ?? String(error)}`, {
-        templateName,
-        templateKey: params.payload.templateKey,
-        languageCode,
-        components,
-      });
+      this.logger.warn(
+        `WhatsApp send failed: ${error?.message ?? String(error)}`,
+        {
+          templateName,
+          templateKey: params.payload.templateKey,
+          languageCode,
+          components,
+        }
+      );
       return {
         channel: 'whatsapp',
         status: 'failed',

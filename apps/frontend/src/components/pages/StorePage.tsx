@@ -188,18 +188,21 @@ const StorePage: React.FC = () => {
   const handleShare = async () => {
     const shareId =
       store?.business_location_id ?? locationOrBusinessId;
-    const url = `${window.location.origin}/store/${shareId}`;
     const name = store?.name?.trim() || t('stores.unnamed', 'Store');
-    const text = t(
-      'stores.shareMessage',
-      'Check out {{name}} on Rendasua: {{url}}',
-      { name, url }
-    );
-    if (navigator.share) {
-      await navigator.share({ title: name, text, url });
-      return;
+    const { shareStorefront } = await import('../../utils/shareStorefront');
+    try {
+      await shareStorefront({
+        businessId: shareId,
+        name,
+        shareMessage: t(
+          'stores.shareMessage',
+          'Check out {{name}} on Rendasua: {{url}}',
+          { name, url: `${window.location.origin}/store/${shareId}` }
+        ),
+      });
+    } catch {
+      // user cancelled
     }
-    await navigator.clipboard.writeText(url);
   };
 
   const name = store?.name?.trim() || t('stores.unnamed', 'Store');

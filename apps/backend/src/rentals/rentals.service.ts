@@ -11,6 +11,7 @@ import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -218,6 +219,7 @@ interface RentalRequestRowForClientNotification {
     base_price_per_hour?: number | string;
     base_price_per_day?: number | string;
     weekly_availability?: WeeklyAvailabilityRow[];
+    business_location?: { address?: { country?: string | null } | null } | null;
   } | null;
   rental_selection_windows?: unknown;
 }
@@ -1184,7 +1186,12 @@ export class RentalsService {
       user.id,
       snap.currency
     );
-    const rail = await this.paymentRoutingService.resolveRailForUser(user.id);
+    const listingCountry = resolveItemCountry(
+      booking.rental_location_listing?.business_location?.address?.country
+    );
+    const rail = listingCountry
+      ? await this.paymentRoutingService.resolveRailForCountry(listingCountry)
+      : await this.paymentRoutingService.resolveRailForUser(user.id);
     if (rail === 'stripe') {
       this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string);
       const deposit =
@@ -1233,6 +1240,7 @@ export class RentalsService {
       userId: user.id,
       phoneNumber: user.phone_number || '',
       email: user.email,
+      itemCountry: listingCountry,
     });
   }
 
@@ -1985,7 +1993,12 @@ export class RentalsService {
     stripePaymentMethod?: 'payment_sheet';
   }): Promise<RentalBookingActionResult> {
     const snap = params.req.rental_pricing_snapshot as RentalPricingSnapshotDto;
-    const rail = await this.paymentRoutingService.resolveRailForUser(params.userId);
+    const listingCountry = resolveItemCountry(
+      params.req.rental_location_listing?.business_location?.address?.country
+    );
+    const rail = listingCountry
+      ? await this.paymentRoutingService.resolveRailForCountry(listingCountry)
+      : await this.paymentRoutingService.resolveRailForUser(params.userId);
     if (rail !== 'stripe') {
       return this.reserveRentalBookingForPickup(
         params.bookingId,
@@ -2139,6 +2152,7 @@ export class RentalsService {
     userId: string;
     phoneNumber: string;
     email?: string | null;
+    itemCountry?: string | null;
   }): Promise<RentalBookingActionResult> {
     const momoPending =
       await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
@@ -2163,6 +2177,7 @@ export class RentalsService {
       email: params.email,
       reference: paymentReference,
       paymentEntity: 'rental_booking',
+      itemCountry: params.itemCountry,
     });
     return {
       success: true,
@@ -2352,6 +2367,7 @@ export class RentalsService {
     email?: string | null;
     reference: string;
     paymentEntity: 'rental_booking';
+    itemCountry?: string | null;
   }): Promise<void> {
     if (!params.phoneNumber.trim()) {
       throw new HttpException(
@@ -2360,7 +2376,9 @@ export class RentalsService {
       );
     }
 
-    const provider = this.mobilePaymentsService.getProvider(params.phoneNumber);
+    const provider = params.itemCountry
+      ? this.mobilePaymentsService.getProviderForCountry(params.itemCountry)
+      : this.mobilePaymentsService.getProvider(params.phoneNumber);
 
     const isMyPVitLike = provider === 'mypvit';
 
@@ -2396,6 +2414,7 @@ export class RentalsService {
       description: descriptionShort,
       customerPhone: params.phoneNumber,
       provider,
+      itemCountry: params.itemCountry ?? undefined,
       ownerCharge: 'CUSTOMER' as const,
       transactionType: 'PAYMENT' as const,
       payment_entity: params.paymentEntity,
@@ -3045,6 +3064,9 @@ export class RentalsService {
       email: clientUser?.email,
       reference: this.createRentalPaymentReference(),
       paymentEntity: 'rental_booking',
+      itemCountry: resolveItemCountry(
+        booking.rental_location_listing?.business_location?.address?.country
+      ),
     });
   }
 
@@ -3159,6 +3181,9 @@ export class RentalsService {
         email: clientUser?.email,
         reference: this.createRentalPaymentReference(),
         paymentEntity: 'rental_booking',
+        itemCountry: resolveItemCountry(
+          booking.rental_location_listing?.business_location?.address?.country
+        ),
       });
     }
     return {

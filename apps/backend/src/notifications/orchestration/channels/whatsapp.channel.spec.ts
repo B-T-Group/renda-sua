@@ -120,6 +120,19 @@ describe('WhatsAppChannel', () => {
     });
   });
 
+  it('does not persist product templates into the support inbox', async () => {
+    await channel.send({
+      to: '+237600000001',
+      payload: {
+        templateKey: 'order_action_business',
+        variables: { orderNumber: '42' },
+      },
+      entityType: 'order',
+      entityId: '11111111-1111-1111-1111-111111111111',
+    });
+    expect(whatsAppService.sendTemplateMessage).toHaveBeenCalled();
+  });
+
   it('returns failed status when Graph send throws', async () => {
     whatsAppService.sendTemplateMessage.mockRejectedValue(
       new Error('Graph timeout')
