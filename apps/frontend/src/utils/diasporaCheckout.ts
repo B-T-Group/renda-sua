@@ -21,6 +21,7 @@ export interface RecipientDraft {
   name: string;
   phone: string;
   notifyWhatsapp: boolean;
+  recipient_id?: string;
 }
 
 export const EMPTY_RECIPIENT_DRAFT: RecipientDraft = {
@@ -59,7 +60,7 @@ export function buildRecipientPayload(params: {
   sendingToSomeoneElse: boolean;
   recipient: RecipientDraft;
 }):
-  | { name: string; phone: string; notify_whatsapp: boolean }
+  | { name: string; phone: string; notify_whatsapp: boolean; recipient_id?: string }
   | undefined {
   if (!params.sendingToSomeoneElse) return undefined;
   const name = params.recipient.name.trim();
@@ -69,6 +70,7 @@ export function buildRecipientPayload(params: {
     name,
     phone,
     notify_whatsapp: params.recipient.notifyWhatsapp,
+    ...(params.recipient.recipient_id && { recipient_id: params.recipient.recipient_id }),
   };
 }
 

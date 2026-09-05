@@ -1,23 +1,25 @@
-import { Lock } from '@mui/icons-material';
+import { Lock, Person, Add } from '@mui/icons-material';
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
-  FormControlLabel,
+  Chip,
   Stack,
-  Switch,
-  TextField,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RecipientDraft } from '../../utils/diasporaCheckout';
-import PhoneInput from '../common/PhoneInput';
+import RecipientPickerDialog from '../dialogs/RecipientPickerDialog';
+import RecipientFormDialog from '../dialogs/RecipientFormDialog';
+import type { SavedRecipient, CreateRecipientDto } from '../../hooks/useRecipients';
+import { useCreateRecipient } from '../../hooks/useRecipients';
 
 interface RecipientDetailsSectionProps {
   recipient: RecipientDraft;
-  onChange: (recipient: RecipientDraft) => void;
+  onChange: (recipient: RecipientDraft & { recipient_id?: string }) => void;
   /** Delivery country, used to default the phone country selector. */
   fulfillmentCountry?: string | null;
   /** Server-side blocker for the recipient block, when preflight rejected it. */
@@ -26,8 +28,8 @@ interface RecipientDetailsSectionProps {
 }
 
 /**
- * Collects the local recipient. Their phone is the only channel they have —
- * they never sign in — so it is required and the copy says why.
+ * Picker-first recipient selector for diaspora orders.
+ * User must select from saved recipients OR add new before placing order.
  */
 const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
   recipient,
@@ -37,8 +39,48 @@ const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
   disabled,
 }) => {
   const { t } = useTranslation();
-  const nameMissing = !recipient.name.trim();
-  const phoneMissing = !recipient.phone.trim();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const createMutation = useCreateRecipient();
+
+  const hasSelectedRecipient = Boolean(
+    recipient.name.trim() && recipient.phone.trim()
+  );
+
+  const handleSelectRecipient = (saved: SavedRecipient | null) => {
+    if (saved) {
+      // User selected an existing saved recipient
+      onChange({
+        name: saved.name,
+        phone: saved.phone,
+        notifyWhatsapp: saved.notify_whatsapp,
+        recipient_id: saved.id,
+      });
+    } else {
+      // User wants to add a new recipient
+      setFormDialogOpen(true);
+    }
+  };
+
+  const handleSaveNewRecipient = async (data: CreateRecipientDto) => {
+    try {
+      const saved = await createMutation.mutateAsync(data);
+      // After creating, select the newly saved recipient
+      onChange({
+        name: saved.name,
+        phone: saved.phone,
+        notifyWhatsapp: saved.notify_whatsapp,
+        recipient_id: saved.id,
+      });
+      setFormDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to create recipient:', error);
+    }
+  };
+
+  const handleChangeRecipient = () => {
+    setPickerOpen(true);
+  };
 
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
@@ -59,86 +101,92 @@ const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
           </Alert>
         )}
 
-        <Stack spacing={2}>
-          <TextField
-            fullWidth
-            required
-            label={t('checkout.recipient.name', 'Recipient full name')}
-            value={recipient.name}
-            disabled={disabled}
-            onChange={(e) => onChange({ ...recipient, name: e.target.value })}
-            error={nameMissing}
-            helperText={
-              nameMissing
-                ? t(
-                    'checkout.recipient.nameRequired',
-                    'The agent needs a name to hand the order to.'
-                  )
-                : undefined
-            }
-          />
-
-          <Box>
-            <PhoneInput
-              required
-              value={recipient.phone}
-              onChange={(value) => onChange({ ...recipient, phone: value || '' })}
-              label={t('checkout.recipient.phone', 'Recipient phone number')}
-              defaultCountry={fulfillmentCountry?.trim().toUpperCase() || 'GA'}
-              disabled={disabled}
-              error={phoneMissing}
-              helperText={
-                phoneMissing
-                  ? t(
-                      'checkout.recipient.phoneRequired',
-                      'A local number in the delivery country is required.'
-                    )
-                  : t(
-                      'checkout.recipient.phoneHelp',
-                      'Updates and the delivery code are sent to this number.'
-                    )
-              }
-            />
-          </Box>
-
-          <FormControlLabel
-            sx={{ alignItems: 'flex-start' }}
-            control={
-              <Switch
-                checked={recipient.notifyWhatsapp}
+        {!hasSelectedRecipient ? (
+          // No recipient selected yet - show selection prompt
+          <Box textAlign="center" py={3}>
+            <Person sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+            <Typography variant="body1" fontWeight={500} gutterBottom>
+              {t('checkout.recipient.selectPrompt', 'Select a recipient for this order')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>
+              {t(
+                'checkout.recipient.selectRequired',
+                'Required before you can place your order'
+              )}
+            </Typography>
+            <Stack direction="row" spacing={2} justifyContent="center">
+              <Button
+                variant="contained"
+                startIcon={<Person />}
+                onClick={() => setPickerOpen(true)}
                 disabled={disabled}
-                onChange={(e) =>
-                  onChange({ ...recipient, notifyWhatsapp: e.target.checked })
-                }
-                color="primary"
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body2" fontWeight={500}>
-                  {t(
-                    'checkout.recipient.whatsapp',
-                    'Send their updates on WhatsApp'
+              >
+                {t('checkout.recipient.selectSaved', 'Select saved recipient')}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Add />}
+                onClick={() => setFormDialogOpen(true)}
+                disabled={disabled}
+              >
+                {t('checkout.recipient.addNew', 'Add new')}
+              </Button>
+            </Stack>
+          </Box>
+        ) : (
+          // Recipient selected - show summary with change option
+          <Box>
+            <Card variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'action.hover' }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                    {recipient.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {recipient.phone}
+                  </Typography>
+                  {recipient.notifyWhatsapp && (
+                    <Chip
+                      label={t('checkout.recipient.whatsappEnabled', 'WhatsApp')}
+                      size="small"
+                      color="primary"
+                      sx={{ mt: 1 }}
+                    />
                   )}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {t(
-                    'checkout.recipient.whatsappHelp',
-                    'We fall back to SMS if WhatsApp cannot be delivered.'
-                  )}
-                </Typography>
-              </Box>
-            }
-          />
-        </Stack>
-
-        <Alert severity="info" icon={<Lock fontSize="inherit" />} sx={{ mt: 2 }}>
-          {t(
-            'checkout.recipient.pinNotice',
-            'The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order.'
-          )}
-        </Alert>
+                </Box>
+                <Button
+                  size="small"
+                  onClick={handleChangeRecipient}
+                  disabled={disabled}
+                >
+                  {t('common.change', 'Change')}
+                </Button>
+              </Stack>
+            </Card>
+            <Alert severity="info" icon={<Lock fontSize="inherit" />}>
+              {t(
+                'checkout.recipient.pinNotice',
+                'The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order.'
+              )}
+            </Alert>
+          </Box>
+        )}
       </CardContent>
+
+      <RecipientPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSelectRecipient}
+        fulfillmentCountry={fulfillmentCountry}
+      />
+
+      <RecipientFormDialog
+        open={formDialogOpen}
+        onClose={() => setFormDialogOpen(false)}
+        onSave={handleSaveNewRecipient}
+        recipient={null}
+        loading={createMutation.isPending}
+      />
     </Card>
   );
 };

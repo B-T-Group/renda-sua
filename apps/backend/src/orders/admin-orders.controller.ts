@@ -58,23 +58,7 @@ import type {
   CreditContactChannel,
   CreditOrderResult,
 } from '../credits/credit.types';
-
-/** Statuses support may correct manually; refunds stay on the refund flow. */
-const CORRECTABLE_STATUSES = [
-  'pending',
-  'confirmed',
-  'preparing',
-  'ready_for_pickup',
-  'assigned_to_agent',
-  'picked_up',
-  'in_transit',
-  'out_for_delivery',
-  'in_delivery',
-  'delivered',
-  'complete',
-  'cancelled',
-  'failed',
-];
+import { isAdminOperationalStatus } from './admin-order-status.util';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -281,33 +265,92 @@ export class AdminOrdersController {
 
   @Patch(':orderId/status')
   @ApiOperation({
-    summary: 'Manually correct an order status',
+    summary: 'Override order status',
     description:
-      'Last-resort correction for stuck orders. The target status must be a supported operational status and the reason is recorded on the order timeline.',
+      'cancelled releases payment and restores inventory. Settlement statuses (delivered, picked_up, complete) are rejected.',
   })
-  @ApiParam({ name: 'orderId', description: 'Order id' })
-  @ApiResponse({ status: 200, description: 'Status corrected' })
-  @ApiResponse({ status: 400, description: 'Unsupported target status' })
+  @ApiResponse({ status: 200, description: 'Status updated successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Settlement status or invalid transition',
+  })
   async updateStatus(
     @Param('orderId') orderId: string,
-    @Body() dto: UpdateOrderStatusDto
+    @Body() dto: UpdateOrderStatusDto,
   ) {
-    const order = await this.requireOrder(orderId);
-    if (!CORRECTABLE_STATUSES.includes(dto.status)) {
+    try {
+      if (dto.status === 'cancelled') {
+        return this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
+      }
+      const order = await this.requireOrder(orderId);
+      this.assertOperationalAdminStatus(dto.status);
+      await this.writeOperationalAdminStatus(order, dto);
+      return {
+        success: true,
+        message: 'Status updated successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error('Failed to update status', error);
       throw new HttpException(
-        `Status "${dto.status}" cannot be set manually`,
-        HttpStatus.BAD_REQUEST
+        error.message || 'Failed to update status',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-    if (order.current_status === dto.status) {
-      throw new HttpException(
-        'Order is already in that status',
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    await this.applyStatusCorrection(orderId, order.current_status, dto);
-    await this.riskMonitorService.evaluateOrderById(orderId);
-    return { success: true, message: 'Status updated successfully' };
+  }
+
+  private assertOperationalAdminStatus(status: string): void {
+    if (isAdminOperationalStatus(status)) return;
+    throw new HttpException(
+      'Cannot set delivered, picked up, or complete via status override. Use the fulfillment flow so payment capture and settlement run.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private async writeOperationalAdminStatus(
+    order: { id: string; current_status: string },
+    dto: UpdateOrderStatusDto,
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation AdminOperationalStatus(
+        $orderId: uuid!
+        $status: order_status!
+        $previousStatus: order_status!
+        $notes: String
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { current_status: $status }
+        ) { id current_status }
+        insert_order_status_history_one(
+          object: {
+            order_id: $orderId
+            status: $status
+            previous_status: $previousStatus
+            changed_by_type: "system"
+            notes: $notes
+          }
+        ) { id }
+      }
+      `,
+      {
+        orderId: order.id,
+        status: dto.status,
+        previousStatus: order.current_status,
+        notes: dto.notes || 'Admin status override',
+      },
+    );
+    await this.orderEventsService.recordEvent({
+      orderId: order.id,
+      eventType: 'gps_unavailable',
+      actorType: 'support',
+      payload: {
+        old_status: order.current_status,
+        new_status: dto.status,
+        notes: dto.notes,
+      },
+    });
   }
 
   @Post(':orderId/notes')
@@ -438,45 +481,6 @@ export class AdminOrdersController {
     return order.assigned_agent?.user ?? null;
   }
 
-  private async applyStatusCorrection(
-    orderId: string,
-    fromStatus: string,
-    dto: UpdateOrderStatusDto
-  ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(
-      `mutation AdminCorrectOrderStatus(
-        $orderId: uuid!
-        $status: order_status!
-        $fromStatus: order_status!
-        $notes: String
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: { current_status: $status }
-        ) { id current_status }
-        insert_order_status_history_one(
-          object: {
-            order_id: $orderId
-            status: $status
-            previous_status: $fromStatus
-            notes: $notes
-            changed_by_type: "system"
-          }
-        ) { id }
-      }`,
-      {
-        orderId,
-        status: dto.status,
-        fromStatus,
-        notes: `Admin correction: ${dto.reason}`,
-      }
-    );
-    await this.recordIntervention(orderId, 'status_correction', {
-      from_status: fromStatus,
-      to_status: dto.status,
-      reason: dto.reason,
-    });
-  }
 
   private async recordAcknowledgeSideEffects(
     actorId: string,

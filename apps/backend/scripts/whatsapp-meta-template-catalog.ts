@@ -347,6 +347,29 @@ Ouvrez le panneau d’administration pour contacter le client, le commerçant ou
     },
   },
   authTemplate('rs_login_code'),
+  {
+    kind: 'content',
+    name: 'rs_recipient_order_update',
+    category: 'UTILITY',
+    exampleValues: ['ORD-1001', 'confirmed'],
+    button: {
+      text: { en: 'View order', fr: 'Voir la commande' },
+      url: `${APP}/app/orders/{{1}}`,
+      dynamic: true,
+    },
+    body: {
+      en: `Rendasua order update for you.
+
+Order number {{1}} status: {{2}}.
+
+The person who placed this order for you will receive full details.`,
+      fr: `Mise à jour de commande Rendasua pour vous.
+
+Numéro de commande {{1}}, statut : {{2}}.
+
+La personne qui a passé cette commande pour vous recevra tous les détails.`,
+    },
+  },
 ];
 
 function authTemplate(name: string): AuthTemplate {

@@ -25,8 +25,12 @@ permissions:
   contents: read
 
 jobs:
-  build-and-deploy:
+  build-and-deploy-dev:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-backend-dev
+      cancel-in-progress: true
 
     steps:
       - name: Checkout code
@@ -42,25 +46,15 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Set deployment target
-        id: set-target
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
-            echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-production-service" >> $GITHUB_ENV
-            echo "DEPLOYMENT_ENV=production" >> $GITHUB_ENV
-          else
-            echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-service" >> $GITHUB_ENV
-            echo "DEPLOYMENT_ENV=development" >> $GITHUB_ENV
-          fi
+          echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-service" >> $GITHUB_ENV
+          echo "DEPLOYMENT_ENV=development" >> $GITHUB_ENV
           echo "Deploying to: ${{ env.LIGHTSAIL_CONTAINER_SERVICE }}"
           echo "Environment: ${{ env.DEPLOYMENT_ENV }}"
 
       - name: Build backend
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
-            cp apps/backend/.env.production ./apps/backend/.env
-          else
-            cp apps/backend/.env.development ./apps/backend/.env
-          fi
+          cp apps/backend/.env.development ./apps/backend/.env
           # Use build script to ensure proper exit
           ./scripts/build-backend.sh
           cp apps/backend/.env dist/apps/backend/.env
@@ -82,16 +76,9 @@ jobs:
 
       - name: Build and push container to ECR
         run: |
-          # Generate image tag and Dockerfile based on branch
-          if [[ "${{ github.ref }}" == "refs/heads/prod" ]]; then
-            IMAGE_TAG="production-latest"
-            LATEST_TAG="production-latest"
-            DOCKERFILE="Dockerfile.backend.prod"
-          else
-            IMAGE_TAG="${{ github.sha }}"
-            LATEST_TAG="latest"
-            DOCKERFILE="Dockerfile.backend"
-          fi
+          IMAGE_TAG="${{ github.sha }}"
+          LATEST_TAG="latest"
+          DOCKERFILE="Dockerfile.backend"
 
           # Build the Docker image
           docker build -f $DOCKERFILE -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
@@ -105,39 +92,268 @@ jobs:
           echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-      - name: Deploy to Lightsail using ECR image
+      - name: Deploy to Lightsail using ECR image (with retry)
         run: |
-          aws lightsail create-container-service-deployment \
+          max_attempts=3
+          attempt=1
+          
+          while [ $attempt -le $max_attempts ]; do
+            echo "Deployment attempt $attempt/$max_attempts..."
+            
+            if aws lightsail create-container-service-deployment \
+              --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+              --containers '{
+                "backend": {
+                  "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}'",
+                  "ports": {
+                    "3000": "HTTP"
+                  },
+                            "environment": {
+              "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
+              "DEPLOYMENT_ENV": "${{ env.DEPLOYMENT_ENV }}",
+              "GIT_SHA": "${{ github.sha }}",
+              "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
+              "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
+              "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+              "AWS_REGION": "${{ env.AWS_REGION }}"
+            }
+                }
+              }' \
+              --public-endpoint '{
+                "containerName": "backend",
+                "containerPort": 3000,
+                "healthCheck": {
+                  "healthyThreshold": 2,
+                  "unhealthyThreshold": 2,
+                  "timeoutSeconds": 5,
+                  "intervalSeconds": 10,
+                  "path": "/api/health",
+                  "successCodes": "200-399"
+                }
+              }'; then
+              echo "✅ Deployment initiated successfully!"
+              break
+            else
+              exit_code=$?
+              echo "⚠️ Deployment attempt $attempt failed with exit code $exit_code"
+              
+              if [ $attempt -lt $max_attempts ]; then
+                sleep_time=$((attempt * 15))
+                echo "Waiting ${sleep_time}s before retry..."
+                sleep $sleep_time
+              else
+                echo "❌ All deployment attempts failed"
+                exit 1
+              fi
+            fi
+            
+            attempt=$((attempt + 1))
+          done
+
+      - name: Wait for deployment to complete
+        run: |
+          echo "Waiting for deployment to complete..."
+
+          # Poll the deployment status until it's stable
+          max_attempts=20
+          attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Checking deployment status (attempt $attempt/$max_attempts)..."
+            
+            DEPLOYMENT_STATUS=$(aws lightsail get-container-services \
+              --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+              --query 'containerServices[0].state' \
+              --output text)
+            
+            echo "Current deployment status: $DEPLOYMENT_STATUS"
+            
+            if [ "$DEPLOYMENT_STATUS" = "RUNNING" ]; then
+              echo "✅ Deployment completed successfully!"
+              break
+            elif [ "$DEPLOYMENT_STATUS" = "FAILED" ]; then
+              echo "❌ Deployment failed!"
+              exit 1
+            fi
+            
+            if [ $attempt -lt $max_attempts ]; then
+              echo "Waiting 30 seconds before next check..."
+              sleep 30
+            fi
+            
+            attempt=$((attempt + 1))
+          done
+
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ Deployment timeout after $max_attempts attempts"
+            exit 1
+          fi
+
+      - name: Get service URL
+        id: get-url
+        run: |
+          SERVICE_URL=$(aws lightsail get-container-services \
             --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
-            --containers '{
-              "backend": {
-                "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}'",
-                "ports": {
-                  "3000": "HTTP"
-                },
-                          "environment": {
-            "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
-            "DEPLOYMENT_ENV": "${{ env.DEPLOYMENT_ENV }}",
-            "GIT_SHA": "${{ github.sha }}",
-            "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
-            "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
-            "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
-            "AWS_REGION": "${{ env.AWS_REGION }}"
+            --query 'containerServices[0].url' \
+            --output text)
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+          echo "service-url=$SERVICE_URL" >> $GITHUB_OUTPUT
+
+      - name: Health check
+        run: |
+          echo "Waiting for service to be ready..."
+          sleep 30
+
+          # Test the health endpoint  
+          curl -f ${{ env.SERVICE_URL }}api/health || {
+            echo "Health check failed"
+            exit 1
           }
-              }
-            }' \
-            --public-endpoint '{
-              "containerName": "backend",
-              "containerPort": 3000,
-              "healthCheck": {
-                "healthyThreshold": 2,
-                "unhealthyThreshold": 2,
-                "timeoutSeconds": 5,
-                "intervalSeconds": 10,
-                "path": "/api/health",
-                "successCodes": "200-399"
-              }
-            }'
+
+          echo "Deployment successful! Service is available at: ${{ env.SERVICE_URL }}"
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Backend deployed successfully!
+              
+              **Service URL:** ${{ env.SERVICE_URL }}
+              **Image:** ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+              **Environment:** ${{ env.DEPLOYMENT_ENV }}
+              **Dockerfile:** ${{ env.DOCKERFILE }}
+              **Deployment Time:** ${{ github.event.head_commit.timestamp }}`
+            })
+
+  build-and-deploy-prod:
+    if: github.ref == 'refs/heads/prod'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-backend-prod
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Set deployment target
+        run: |
+          echo "LIGHTSAIL_CONTAINER_SERVICE=rendasua-production-service" >> $GITHUB_ENV
+          echo "DEPLOYMENT_ENV=production" >> $GITHUB_ENV
+          echo "Deploying to: ${{ env.LIGHTSAIL_CONTAINER_SERVICE }}"
+          echo "Environment: ${{ env.DEPLOYMENT_ENV }}"
+
+      - name: Build backend
+        run: |
+          cp apps/backend/.env.production ./apps/backend/.env
+          # Use build script to ensure proper exit
+          ./scripts/build-backend.sh
+          cp apps/backend/.env dist/apps/backend/.env
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR repository if it doesn't exist
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} || \
+          aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }}
+
+      - name: Build and push container to ECR
+        run: |
+          IMAGE_TAG="production-latest"
+          LATEST_TAG="production-latest"
+          DOCKERFILE="Dockerfile.backend.prod"
+
+          # Build the Docker image
+          docker build -f $DOCKERFILE -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
+          docker tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$LATEST_TAG
+
+          # Push to ECR
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$LATEST_TAG
+
+          # Store the image URI and tag for deployment
+          echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Deploy to Lightsail using ECR image (with retry)
+        run: |
+          max_attempts=3
+          attempt=1
+          
+          while [ $attempt -le $max_attempts ]; do
+            echo "Deployment attempt $attempt/$max_attempts..."
+            
+            if aws lightsail create-container-service-deployment \
+              --service-name ${{ env.LIGHTSAIL_CONTAINER_SERVICE }} \
+              --containers '{
+                "backend": {
+                  "image": "'${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}'",
+                  "ports": {
+                    "3000": "HTTP"
+                  },
+                            "environment": {
+              "NODE_ENV": "${{ env.DEPLOYMENT_ENV }}",
+              "DEPLOYMENT_ENV": "${{ env.DEPLOYMENT_ENV }}",
+              "GIT_SHA": "${{ github.sha }}",
+              "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
+              "AWS_ACCESS_KEY_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}",
+              "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+              "AWS_REGION": "${{ env.AWS_REGION }}"
+            }
+                }
+              }' \
+              --public-endpoint '{
+                "containerName": "backend",
+                "containerPort": 3000,
+                "healthCheck": {
+                  "healthyThreshold": 2,
+                  "unhealthyThreshold": 2,
+                  "timeoutSeconds": 5,
+                  "intervalSeconds": 10,
+                  "path": "/api/health",
+                  "successCodes": "200-399"
+                }
+              }'; then
+              echo "✅ Deployment initiated successfully!"
+              break
+            else
+              exit_code=$?
+              echo "⚠️ Deployment attempt $attempt failed with exit code $exit_code"
+              
+              if [ $attempt -lt $max_attempts ]; then
+                sleep_time=$((attempt * 15))
+                echo "Waiting ${sleep_time}s before retry..."
+                sleep $sleep_time
+              else
+                echo "❌ All deployment attempts failed"
+                exit 1
+              fi
+            fi
+            
+            attempt=$((attempt + 1))
+          done
 
       - name: Wait for deployment to complete
         run: |

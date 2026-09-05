@@ -1,4 +1,4 @@
-import { ArrowBack, Security } from '@mui/icons-material';
+import { ArrowBack, Lock, Security } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -60,6 +60,7 @@ import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import DiasporaCheckoutBanner from '../checkout/DiasporaCheckoutBanner';
 import PayerChargeSummary from '../checkout/PayerChargeSummary';
 import RecipientDetailsSection from '../checkout/RecipientDetailsSection';
+import CheckoutProgressStepper from '../common/CheckoutProgressStepper';
 import {
   EMPTY_RECIPIENT_DRAFT,
   buildRecipientPayload,
@@ -1091,7 +1092,7 @@ const CheckoutPage: React.FC = () => {
         sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
       >
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <IconButton onClick={handleBack} sx={{ mr: 2 }}>
           <ArrowBack />
         </IconButton>
@@ -1099,6 +1100,9 @@ const CheckoutPage: React.FC = () => {
           {t('checkout.title', 'Checkout')}
         </Typography>
       </Box>
+
+      {/* Progress Stepper */}
+      <CheckoutProgressStepper activeStep={1} />
 
       <Grid container spacing={3}>
         {/* Main Content */}
@@ -1311,13 +1315,64 @@ const CheckoutPage: React.FC = () => {
                 {t('checkout.paymentInformation', 'Payment Information')}
               </Typography>
 
-              {/* Mobile Payment Method */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" gutterBottom fontWeight={600}>
-                  {t('checkout.mobilePaymentMethod', 'Mobile Payment Method')}
-                </Typography>
+              {/* Locked Payment Method Display */}
+              {checkoutPreflight?.checkout_method && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                    {t('checkout.paymentMethod', 'Payment method')}
+                  </Typography>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      bgcolor: 'grey.50',
+                      borderColor: 'grey.300',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        bgcolor: 'warning.light',
+                        borderRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Typography variant="h6" fontWeight="bold">
+                        {checkoutPreflight.checkout_method === 'MOBILE_MONEY' ? 'MoMo' : 'Card'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body1" fontWeight={600}>
+                        {checkoutPreflight.checkout_method === 'MOBILE_MONEY'
+                          ? t('checkout.mobileMoneyMethod', 'Mobile Money · Cameroon')
+                          : t('checkout.stripeMethod', 'Credit or Debit Card')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('checkout.basedOnYourCountry', 'Based on your country')}
+                      </Typography>
+                    </Box>
+                    <Lock sx={{ color: 'action.disabled', fontSize: 20 }} />
+                  </Card>
+                </Box>
+              )}
 
-                {/* Primary Phone Number Display */}
+              {/* Mobile Payment Method - MoMo only */}
+              {checkoutPreflight?.checkout_method === 'MOBILE_MONEY' && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                    {t('checkout.yourMoMoNumber', 'Your MoMo number')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
+                  </Typography>
+
+                  {/* Primary Phone Number Display */}
                 <Card
                   variant="outlined"
                   sx={{
@@ -1466,17 +1521,31 @@ const CheckoutPage: React.FC = () => {
                     )}
                   </Card>
                 )}
-              </Box>
+                </Box>
+              )}
 
-              {/* Payment Security Notice */}
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
+              {/* Held Until Store Accepts Trust Banner - shown for all payment methods */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  mt: 3,
+                  p: 2,
+                  bgcolor: 'info.50',
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'info.200',
+                }}
+              >
+                <Lock sx={{ color: 'info.main', fontSize: 20 }} />
+                <Typography variant="caption" color="info.main">
                   {t(
-                    'checkout.paymentSecurityNotice',
-                    'Your payment will be processed securely through mobile money. The phone number above will be used to initiate the payment transaction.'
+                    'checkout.heldUntilAccepted',
+                    'Held until store accepts'
                   )}
                 </Typography>
-              </Alert>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

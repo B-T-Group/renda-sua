@@ -72,7 +72,7 @@ describe('OrderRecipientNotificationsService', () => {
           to: '+24177123456',
           locale: 'fr',
           payload: {
-            templateKey: 'order_status_client',
+            templateKey: 'recipient_order_update',
             variables: {
               orderNumber: 'ORD-20260905-000001',
               statusLabel: 'en cours de livraison',
@@ -83,14 +83,29 @@ describe('OrderRecipientNotificationsService', () => {
       expect(sms.sendSms).not.toHaveBeenCalled();
     });
 
-    it('reuses the approved ready template for store pickup', async () => {
+    it('uses the approved recipient_order_update template for all statuses', async () => {
       build({ ...THIRD_PARTY_ORDER, recipient_notify_whatsapp: true });
 
       await service.notifyStatusChange('order-1', 'ready_for_pickup');
 
       expect(whatsApp.send.mock.calls[0][0].payload.templateKey).toBe(
-        'order_ready'
+        'recipient_order_update'
       );
+    });
+
+
+    it('uses the recipient update template for confirmed/delivered/cancelled', async () => {
+      build({ ...THIRD_PARTY_ORDER, recipient_notify_whatsapp: true });
+
+      await service.notifyStatusChange('order-1', 'confirmed');
+
+      expect(whatsApp.send.mock.calls[0][0].payload).toEqual({
+        templateKey: 'recipient_order_update',
+        variables: {
+          orderNumber: 'ORD-20260905-000001',
+          statusLabel: 'confirmée',
+        },
+      });
     });
 
     it('falls back to SMS when the WhatsApp send fails', async () => {

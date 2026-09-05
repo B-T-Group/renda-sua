@@ -21,6 +21,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `payment_failed` | `rs_payment_failed` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `ai_proposal_ready` | `rs_ai_proposal` | UTILITY | itemName | URL CTA → `/app/items/{{1}}` |
 | `admin_order_risk` | `rs_admin_order_risk` | UTILITY | orderNumber, riskLabel, reason | URL CTA → `/app/admin/orders/{{1}}` |
+| `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
 
 ## Meta body rules (important)
 
@@ -376,6 +377,47 @@ Auth0 sends this login OTP. It is **not** mapped in `WhatsAppTemplateService` an
 **Create flags (match WhatsApp Manager):** security recommendation **on**, no code-expiry footer, message validity **10 minutes** (`message_send_ttl_seconds: 600`)
 
 Meta owns the body copy. Do not submit custom en/fr strings.
+
+---
+
+## 13. `rs_recipient_order_update`
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` statusLabel  
+**Button:** View order → `https://rendasua.com/app/orders/{{1}}`
+
+Recipient order status update for diaspora recipients (third-party recipients who do not have a Rendasua account). Meta **rejected** dedicated recipient UTILITY names (`rs_recipient_order_placed`, `rs_rcpt_out_for_delivery`, `rs_recipient_order_ready`) with INCORRECT_CATEGORY, so all recipient status notifications now use this single template. SMS remains the fallback channel.
+
+**en**
+```
+Rendasua order update for you.
+
+Order number {{1}} status: {{2}}.
+
+The person who placed this order for you will receive full details.
+```
+
+**fr**
+```
+Mise à jour de commande Rendasua pour vous.
+
+Numéro de commande {{1}}, statut : {{2}}.
+
+La personne qui a passé cette commande pour vous recevra tous les détails.
+```
+
+---
+
+## Rejected templates (do not submit)
+
+Meta rejected the following template names with **INCORRECT_CATEGORY**. Do **not** create or submit these in Meta Business Manager:
+
+- `rs_recipient_order_placed`
+- `rs_rcpt_out_for_delivery` 
+- `rs_recipient_order_ready`
+
+These were intended as dedicated UTILITY templates for diaspora recipient order notifications (placed, out for delivery, ready for pickup). Meta's rejection reason suggests they should be MARKETING instead, which is not appropriate for transactional order status updates.
+
+**Workaround:** Use `rs_recipient_order_update` (approved UTILITY) with appropriate `statusLabel` values for all recipient order status notifications. Keep SMS as the fallback channel.
 
 ---
 
