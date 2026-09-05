@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import {
-  ThrottlerGuard,
+import { ThrottlerGuard } from '@nestjs/throttler';
+import type {
   ThrottlerModuleOptions,
   ThrottlerStorage,
 } from '@nestjs/throttler';
