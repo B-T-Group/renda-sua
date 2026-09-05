@@ -63,30 +63,31 @@ export class CatalogStopsService {
     // Future: resolve user primary address and calculate distance
 
     // Build where clause for category/subcategory
-    const categoryWhere: Record<string, unknown> = {};
-    if (subcategory) {
-      categoryWhere.name = { _ilike: subcategory };
-      if (category) {
-        categoryWhere.item_category = { name: { _ilike: category } };
-      }
-    } else if (category) {
-      categoryWhere.item_category = { name: { _ilike: category } };
+    const itemWhere: Record<string, unknown> = {
+      is_active: { _eq: true },
+    };
+
+    if (subcategory?.trim()) {
+      itemWhere.item_sub_category = { name: { _eq: subcategory.trim() } };
+    } else if (category?.trim()) {
+      // When only category is specified, match on category name
+      itemWhere.item_sub_category = {
+        item_category: { name: { _ilike: `%${category.trim()}%` } },
+      };
     }
 
     const query = `
       query GetTopInCategory(
         $countryCode: String
         $state: String
+        $itemWhere: items_bool_exp!
         $limit: Int!
       ) {
         business_inventory(
           where: {
             is_active: { _eq: true }
             computed_available_quantity: { _gt: 0 }
-            item: {
-              is_active: { _eq: true }
-              ${Object.keys(categoryWhere).length > 0 ? 'item_sub_category: { _placeholder: true }' : ''}
-            }
+            item: $itemWhere
             business_location: {
               is_active: { _eq: true }
               storefront_visible: { _eq: true }
@@ -152,6 +153,7 @@ export class CatalogStopsService {
 
     const variables: Record<string, unknown> = {
       limit,
+      itemWhere,
     };
     if (country_code) variables.countryCode = country_code;
     if (state) variables.state = state;
@@ -163,6 +165,7 @@ export class CatalogStopsService {
     const categoryName = 
       listings[0]?.item?.item_sub_category?.item_category?.name ||
       category ||
+      subcategory ||
       'All';
 
     // Enrich with ratings and sort by relevance/top_rated

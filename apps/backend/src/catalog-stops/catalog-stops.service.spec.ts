@@ -45,6 +45,76 @@ describe('CatalogStopsService', () => {
       expect(result.category_name).toBe('Electronics');
     });
 
+    it('should apply category filter to itemWhere variable', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_inventory: [],
+      });
+
+      await service.getTopInCategory({
+        category: 'Electronics',
+        country_code: 'GA',
+      });
+
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          itemWhere: expect.objectContaining({
+            item_sub_category: expect.objectContaining({
+              item_category: expect.objectContaining({
+                name: expect.objectContaining({
+                  _ilike: expect.stringContaining('Electronics'),
+                }),
+              }),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should apply subcategory filter to itemWhere variable', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_inventory: [],
+      });
+
+      await service.getTopInCategory({
+        category: 'Electronics',
+        subcategory: 'Smartphones',
+        country_code: 'GA',
+      });
+
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          itemWhere: expect.objectContaining({
+            item_sub_category: expect.objectContaining({
+              name: { _eq: 'Smartphones' },
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should work without category filters', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_inventory: [],
+      });
+
+      const result = await service.getTopInCategory({
+        country_code: 'GA',
+      });
+
+      expect(result.items).toEqual([]);
+      expect(result.category_name).toBe('All');
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          itemWhere: expect.objectContaining({
+            is_active: { _eq: true },
+          }),
+        })
+      );
+    });
+
     it('should enrich items with ratings', async () => {
       const mockInventory = [
         {
