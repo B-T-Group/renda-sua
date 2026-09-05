@@ -189,7 +189,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
             : phase === 'failed'
               ? t(
                   'orders.momoAwaiting.failedBody',
-                  'We couldn't complete your payment via MoMo. Please check and try again.'
+                  'We could not complete your payment via MoMo. Please check and try again.'
                 )
               : phase === 'timeout'
                 ? t(
@@ -431,7 +431,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
                 {t('orders.momoAwaiting.orderReserved', 'Good news: your order is still reserved!')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {t('orders.momoAwaiting.orderReservedDesc', 'We've saved your items while you complete your payment.')}
+                {t('orders.momoAwaiting.orderReservedDesc', 'We have saved your items while you complete your payment.')}
               </Typography>
             </Box>
           </Box>
