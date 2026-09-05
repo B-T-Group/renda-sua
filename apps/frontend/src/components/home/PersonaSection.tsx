@@ -7,6 +7,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import AppStoreBadges from '../common/AppStoreBadges';
 import { personaContentData } from './data/personaContent';
 import { useTrackSiteEvent, SITE_EVENT_INVENTORY_BROWSE_MORE_CLICK } from '../../hooks/useTrackSiteEvent';
+import { HOME_ACCENTS } from './homeTheme';
 
 const PersonaIllustration: React.FC<{ id: 'client' | 'business' | 'agent'; color: string }> = ({ id, color }) => {
   return (
@@ -51,11 +52,11 @@ const PersonaIllustration: React.FC<{ id: 'client' | 'business' | 'agent'; color
           <path d="M 80 130 Q 130 90 190 80 Q 230 75 240 60" stroke={color} strokeWidth="3" fill="none" strokeLinecap="round" />
           <circle cx="80" cy="130" r="14" fill={color} />
           <text x="74" y="135" fill="white" fontSize="12">🛵</text>
-          <circle cx="240" cy="60" r="14" fill="#16a34a" />
+          <circle cx="240" cy="60" r="14" fill={HOME_ACCENTS.delivery} />
           <text x="234" y="65" fill="white" fontSize="12">📦</text>
           <rect x="60" y="152" width="180" height="30" rx="10" fill="white" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} />
-          <text x="90" y="165" fill="#1d1d1f" fontSize="10" fontWeight="bold">Delivery #4821</text>
-          <text x="90" y="178" fill="#86868b" fontSize="9">ETA 5 min</text>
+          <text x="90" y="165" fill={HOME_ACCENTS.ink} fontSize="10" fontWeight="bold">Delivery #4821</text>
+          <text x="90" y="178" fill={HOME_ACCENTS.muted} fontSize="9">ETA 5 min</text>
           <rect x="205" y="157" width="28" height="20" rx="5" fill={color} />
           <text x="219" y="170" textAnchor="middle" fill="white" fontSize="8" fontWeight="bold">NAV</text>
         </>
@@ -115,7 +116,7 @@ const PersonaSection: React.FC = () => {
             }}
             aria-label={t('home.personas.tabsLabel', 'Persona tabs')}
             sx={{
-              bgcolor: alpha('#1e40af', 0.05),
+              bgcolor: alpha(HOME_ACCENTS.primary, 0.05),
               borderRadius: 3,
               p: 0.5,
               '& .MuiTabs-indicator': { display: 'none' },

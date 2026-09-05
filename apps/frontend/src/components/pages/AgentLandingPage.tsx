@@ -7,6 +7,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { SEOHead } from '../seo';
 import { useSEO } from '../../hooks/useSEO';
 import AppStoreBadges from '../common/AppStoreBadges';
+import { brandTokens } from '../../theme/brandTokens';
 
 const benefits = [
   { key: 'becomeAgent.benefits.flexible', defaultLabel: 'Flexible hours — work when it suits you' },
@@ -43,7 +44,7 @@ const AgentLandingPage: React.FC = () => {
       <Box
         component="section"
         sx={{
-          background: 'linear-gradient(135deg, #0c4a6e 0%, #075985 40%, #0369a1 70%, #0284c7 100%)',
+          background: `linear-gradient(135deg, ${brandTokens.text.primary} 0%, ${brandTokens.secondary.dark} 40%, ${brandTokens.secondary.main} 75%, ${brandTokens.secondary.light} 100%)`,
           position: 'relative',
           overflow: 'hidden',
           py: { xs: 10, md: 16 },
@@ -100,13 +101,13 @@ const AgentLandingPage: React.FC = () => {
               >
                 <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                   <svg viewBox="0 0 300 260" style={{ width: '100%', maxWidth: 280 }} aria-hidden="true">
-                    <rect width="300" height="260" rx="16" fill={alpha('#0891b2', 0.1)} />
+                    <rect width="300" height="260" rx="16" fill={alpha(brandTokens.secondary.main, 0.1)} />
                     <line x1="0" y1="130" x2="300" y2="130" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
                     <line x1="150" y1="0" x2="150" y2="260" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
                     <path d="M 40 200 Q 100 150 180 140 Q 240 132 270 80" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" fill="none" strokeDasharray="6,4" />
-                    <circle cx="40" cy="200" r="20" fill="#0891b2" />
+                    <circle cx="40" cy="200" r="20" fill={brandTokens.secondary.main} />
                     <text x="28" y="207" fill="white" fontSize="16">🛵</text>
-                    <circle cx="270" cy="80" r="18" fill="#16a34a" />
+                    <circle cx="270" cy="80" r="18" fill={brandTokens.success.main} />
                     <text x="258" y="87" fill="white" fontSize="14">📦</text>
                     <rect x="50" y="20" width="140" height="60" rx="10" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
                     <text x="65" y="42" fill="rgba(255,255,255,0.6)" fontSize="9">Today's earnings</text>
@@ -114,7 +115,7 @@ const AgentLandingPage: React.FC = () => {
                     <rect x="60" y="150" width="180" height="60" rx="10" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
                     <text x="80" y="172" fill="white" fontSize="11" fontWeight="bold">New delivery request!</text>
                     <text x="80" y="188" fill="rgba(255,255,255,0.65)" fontSize="9">2.1 km away · Est. 12 min</text>
-                    <rect x="160" y="160" width="64" height="28" rx="8" fill="#16a34a" />
+                    <rect x="160" y="160" width="64" height="28" rx="8" fill={brandTokens.success.main} />
                     <text x="192" y="178" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">Accept</text>
                   </svg>
                 </Box>
@@ -142,7 +143,7 @@ const AgentLandingPage: React.FC = () => {
                   transition={{ duration: 0.4, delay: i * 0.07 }}
                 >
                   <Stack direction="row" spacing={1.5} alignItems="center" sx={{ p: 2, border: '1.5px solid', borderColor: 'divider', borderRadius: 2.5 }}>
-                    <CheckCircle sx={{ fontSize: 20, color: '#0891b2', flexShrink: 0 }} />
+                    <CheckCircle sx={{ fontSize: 20, color: brandTokens.secondary.main, flexShrink: 0 }} />
                     <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {t(b.key, b.defaultLabel)}
                     </Typography>
@@ -166,7 +167,7 @@ const AgentLandingPage: React.FC = () => {
             {steps.map((s, i) => (
               <Grid key={s.step} size={{ xs: 12, md: 4 }}>
                 <Box sx={{ textAlign: 'center' }}>
-                  <Box sx={{ width: 52, height: 52, borderRadius: '50%', bgcolor: '#0891b2', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.25rem', mx: 'auto', mb: 2 }}>
+                  <Box sx={{ width: 52, height: 52, borderRadius: '50%', bgcolor: brandTokens.secondary.main, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.25rem', mx: 'auto', mb: 2 }}>
                     {s.step}
                   </Box>
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{t(s.titleKey, s.defaultTitle)}</Typography>
@@ -179,7 +180,7 @@ const AgentLandingPage: React.FC = () => {
       </Box>
 
       {/* Final CTA */}
-      <Box component="section" sx={{ py: { xs: 8, md: 12 }, bgcolor: alpha('#0891b2', 0.05) }}>
+      <Box component="section" sx={{ py: { xs: 8, md: 12 }, bgcolor: alpha(brandTokens.secondary.main, 0.05) }}>
         <Container maxWidth="md">
           <Box sx={{ textAlign: 'center' }}>
             <Typography component="h2" sx={{ fontSize: { xs: '1.875rem', md: '2.5rem' }, fontWeight: 800, letterSpacing: '-0.02em', mb: 2 }}>
