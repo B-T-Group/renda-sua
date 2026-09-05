@@ -48,10 +48,9 @@ describe('CatalogStopsController', () => {
 
       service.getTopInCategory.mockResolvedValue(mockResponse as any);
 
-      const result = await controller.getTopInCategory(
-        { category: 'Electronics' },
-        undefined
-      );
+      const result = await controller.getTopInCategory({
+        category: 'Electronics',
+      });
 
       expect(result.success).toBe(true);
       expect(result.data.category_name).toBe('Electronics');
@@ -64,10 +63,9 @@ describe('CatalogStopsController', () => {
         items: [],
       });
 
-      const result = await controller.getTopInCategory(
-        { category: 'Electronics' },
-        undefined
-      );
+      const result = await controller.getTopInCategory({
+        category: 'Electronics',
+      });
 
       expect(result.success).toBe(true);
       expect(result.data.items).toEqual([]);
@@ -88,7 +86,7 @@ describe('CatalogStopsController', () => {
 
       service.getDeals.mockResolvedValue(mockResponse as any);
 
-      const result = await controller.getDeals({}, undefined);
+      const result = await controller.getDeals({});
 
       expect(result.success).toBe(true);
       expect(result.data.items.length).toBeGreaterThan(0);
@@ -97,7 +95,7 @@ describe('CatalogStopsController', () => {
     it('should return empty items array when no deals', async () => {
       service.getDeals.mockResolvedValue({ items: [] });
 
-      const result = await controller.getDeals({}, undefined);
+      const result = await controller.getDeals({});
 
       expect(result.success).toBe(true);
       expect(result.data.items).toEqual([]);
@@ -148,7 +146,7 @@ describe('CatalogStopsController', () => {
 
       service.getFeaturedStore.mockResolvedValue(mockResponse as any);
 
-      const result = await controller.getFeaturedStore({}, undefined);
+      const result = await controller.getFeaturedStore({});
 
       expect(result.success).toBe(true);
       expect(result.data.stores.length).toBeGreaterThan(0);
@@ -157,7 +155,7 @@ describe('CatalogStopsController', () => {
     it('should return empty stores array when none found', async () => {
       service.getFeaturedStore.mockResolvedValue({ stores: [] });
 
-      const result = await controller.getFeaturedStore({}, undefined);
+      const result = await controller.getFeaturedStore({});
 
       expect(result.success).toBe(true);
       expect(result.data.stores).toEqual([]);

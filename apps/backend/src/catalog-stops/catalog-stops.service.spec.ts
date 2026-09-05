@@ -1,6 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CatalogStopsService } from './catalog-stops.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import {
+  GET_ACTIVE_DEALS,
+  GET_COMPLEMENT_ITEMS,
+  GET_FEATURED_STORES,
+  GET_TOP_IN_CATEGORY,
+  visibleStoreLocationWhere,
+} from './catalog-stops-graphql';
 
 describe('CatalogStopsService', () => {
   let service: CatalogStopsService;
@@ -56,7 +63,7 @@ describe('CatalogStopsService', () => {
       });
 
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.any(String),
+        GET_TOP_IN_CATEGORY,
         expect.objectContaining({
           itemWhere: expect.objectContaining({
             item_sub_category: expect.objectContaining({
@@ -67,6 +74,7 @@ describe('CatalogStopsService', () => {
               }),
             }),
           }),
+          locationWhere: visibleStoreLocationWhere('GA'),
         })
       );
     });
@@ -106,11 +114,12 @@ describe('CatalogStopsService', () => {
       expect(result.items).toEqual([]);
       expect(result.category_name).toBe('All');
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
-        expect.any(String),
+        GET_TOP_IN_CATEGORY,
         expect.objectContaining({
           itemWhere: expect.objectContaining({
             is_active: { _eq: true },
           }),
+          locationWhere: visibleStoreLocationWhere('GA'),
         })
       );
     });
@@ -153,6 +162,12 @@ describe('CatalogStopsService', () => {
 
       const result = await service.getDeals({ country_code: 'GA' });
 
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        GET_ACTIVE_DEALS,
+        expect.objectContaining({
+          locationWhere: visibleStoreLocationWhere('GA'),
+        })
+      );
       expect(result.items).toEqual([]);
     });
 
@@ -232,13 +247,16 @@ describe('CatalogStopsService', () => {
       const mockLocations = [
         {
           id: 'loc-1',
-          location_name: 'Test Store',
+          name: 'Test Store',
           logo_url: 'https://...',
-          country_code: 'GA',
           business: {
             id: 'biz-1',
-            business_name: 'Test Business',
+            name: 'Test Business',
+            is_verified: true,
+            can_accept_orders: true,
+            is_storefront_visible: true,
           },
+          address: { city: 'Libreville' },
           business_inventory_aggregate: {
             aggregate: { count: 50 },
           },
@@ -251,9 +269,39 @@ describe('CatalogStopsService', () => {
 
       const result = await service.getFeaturedStore({ country_code: 'GA' });
 
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        GET_FEATURED_STORES,
+        expect.objectContaining({
+          where: expect.objectContaining({
+            is_active: { _eq: true },
+            business: { is_storefront_visible: { _eq: true } },
+            address: { country: { _eq: 'GA' } },
+          }),
+        })
+      );
       expect(result.stores.length).toBe(1);
       expect(result.stores[0].business_location_id).toBe('loc-1');
+      expect(result.stores[0].name).toBe('Test Store');
+      expect(result.stores[0].city).toBe('Libreville');
       expect(result.stores[0].item_count).toBe(50);
+      expect(result.stores[0].is_verified).toBe(true);
+    });
+
+    it('should not put country_code on business_locations', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_locations: [],
+      });
+
+      await service.getFeaturedStore({ country_code: 'GA', state: 'Estuaire' });
+
+      const [query, variables] = hasuraSystemService.executeQuery.mock.calls[0];
+      expect(query).not.toMatch(/country_code/);
+      expect(query).not.toMatch(/storefront_visible:/);
+      expect(query).not.toMatch(/location_name/);
+      expect(variables.where.address).toEqual({
+        country: { _eq: 'GA' },
+        state: { _eq: 'Estuaire' },
+      });
     });
   });
 
@@ -311,6 +359,29 @@ describe('CatalogStopsService', () => {
       });
 
       expect(result.items[0].reason_label).toBeDefined();
+      expect(hasuraSystemService.executeQuery).toHaveBeenLastCalledWith(
+        GET_COMPLEMENT_ITEMS,
+        expect.objectContaining({
+          locationWhere: visibleStoreLocationWhere('GA'),
+        })
+      );
+    });
+  });
+});
+
+describe('visibleStoreLocationWhere', () => {
+  it('scopes country and state through address, not location columns', () => {
+    expect(visibleStoreLocationWhere('CM', 'Centre')).toEqual({
+      is_active: { _eq: true },
+      business: { is_storefront_visible: { _eq: true } },
+      address: { country: { _eq: 'CM' }, state: { _eq: 'Centre' } },
+    });
+  });
+
+  it('omits address when no geo is provided', () => {
+    expect(visibleStoreLocationWhere()).toEqual({
+      is_active: { _eq: true },
+      business: { is_storefront_visible: { _eq: true } },
     });
   });
 });
