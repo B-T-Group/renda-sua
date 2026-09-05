@@ -1,3 +1,4 @@
+import { HttpStatus } from '@nestjs/common';
 import { OrderAcceptanceService } from './order-acceptance.service';
 
 describe('OrderAcceptanceService helpers', () => {
@@ -151,5 +152,37 @@ describe('OrderAcceptanceService.onAcceptanceDeadline', () => {
 
     expect(result.skipped).toBe(true);
     expect(svc.riskMonitor.evaluateOrderById).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrderAcceptanceService.assertCanMarkBusy', () => {
+  const svc = Object.create(
+    OrderAcceptanceService.prototype
+  ) as OrderAcceptanceService & Record<string, any>;
+
+  it('allows a verified till phone without checking owner or delegate grants', async () => {
+    await expect(
+      svc.assertCanMarkBusy(
+        { business_id: 'b1', business_location_id: 'loc1' },
+        {
+          userId: 'owner-1',
+          locationAlertAuthorized: true,
+          asDelegateLocationId: 'loc1',
+        }
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a till-phone Busy for a different location', async () => {
+    await expect(
+      svc.assertCanMarkBusy(
+        { business_id: 'b1', business_location_id: 'loc1' },
+        {
+          userId: 'owner-1',
+          locationAlertAuthorized: true,
+          asDelegateLocationId: 'loc2',
+        }
+      )
+    ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
   });
 });

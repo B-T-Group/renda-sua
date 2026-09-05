@@ -96,7 +96,6 @@ const LIST_CLIENT = `
 
 const LIST_BUSINESS = `
   query ListBusinessProductInterest(
-    $businessId: uuid!
     $where: product_interest_requests_bool_exp!
     $limit: Int!
     $offset: Int!
@@ -214,7 +213,6 @@ export class ProductInterestService {
       product_interest_requests_aggregate: { aggregate: { count: number } };
       product_interest_requests: unknown[];
     }>(LIST_BUSINESS, {
-      businessId,
       where,
       limit: safe.limit,
       offset: safe.offset,

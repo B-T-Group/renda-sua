@@ -32,6 +32,7 @@ import type { BusinessDashboardModule } from '../components/business/BusinessDas
 import type { DashboardAggregates } from './useDashboardAggregates';
 import { PlatformPermissions } from '../constants/platformPermissions';
 import { usePermissions } from './usePermissions';
+import { brandTokens } from '../theme/brandTokens';
 
 interface UseBusinessDashboardModulesOptions {
   aggregates: DashboardAggregates | null;
@@ -122,7 +123,7 @@ export function useBusinessDashboardModules({
         description: t('business.dashboard.locationsDescription'),
         icon: <LocationsIcon sx={{ fontSize: 40 }} />,
         count: locationCount,
-        color: '#f57c00',
+        color: brandTokens.info.main,
         path: '/business/locations',
       },
       {
@@ -198,7 +199,7 @@ export function useBusinessDashboardModules({
         ),
         icon: <OrdersIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#1565c0',
+        color: brandTokens.primary.main,
         path: '/orders/batch',
       },
       {
@@ -300,7 +301,7 @@ export function useBusinessDashboardModules({
                 otherLabel: t('business.dashboard.unverified', 'Unverified'),
               }
             : undefined,
-        color: '#2e7d32',
+        color: brandTokens.secondary.main,
         requiredPermission: PlatformPermissions.MANAGE_AGENTS,
         path: '/admin/agents',
       },
@@ -344,7 +345,7 @@ export function useBusinessDashboardModules({
         ),
         icon: <BizIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#bf360c',
+        color: brandTokens.cta.main,
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
         path: '/admin/business-reliability',
       },
@@ -401,7 +402,7 @@ export function useBusinessDashboardModules({
         description: t('business.dashboard.manageCategoriesDescription'),
         icon: <CategoryIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#ff9800',
+        color: brandTokens.secondary.light,
         requiredPermission: PlatformPermissions.CONTENT_TAXONOMY,
         path: '/content-management/categories',
       },
@@ -531,7 +532,7 @@ export function useBusinessDashboardModules({
         ),
         icon: <RechargeIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#1565c0',
+        color: brandTokens.primary.main,
         requiredPermission: PlatformPermissions.RECHARGE_ACCOUNT,
         path: '/admin/account-recharge',
       },
@@ -543,7 +544,7 @@ export function useBusinessDashboardModules({
         ),
         icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
         count: null,
-        color: '#f9a825',
+        color: brandTokens.warning.main,
         requiredPermission: PlatformPermissions.OPS_CREDITS,
         path: '/admin/follow-ups',
       },

@@ -3,6 +3,15 @@ import { useApiClient } from './useApiClient';
 import { businessItemsApiParams } from '../utils/businessItemsApiParams';
 import { OperatingHours } from '../utils/operatingHours';
 
+function normalizeOrderAlertPhone(
+  value: string | null | undefined
+): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const digits = raw.replace(/^\+/, '').replace(/\D/g, '');
+  return digits ? `+${digits}` : null;
+}
+
 export interface BusinessLocation {
   id: string;
   name: string;
@@ -17,6 +26,7 @@ export interface BusinessLocation {
     instructions?: string;
   };
   phone?: string;
+  order_alert_phone?: string | null;
   mobile_payment_phone_id?: string | null;
   mobile_payment_phone?: {
     id: string;
@@ -46,6 +56,7 @@ export interface AddBusinessLocationData {
   name: string;
   address_id?: string;
   phone?: string;
+  order_alert_phone?: string | null;
   mobile_payment_phone_id?: string | null;
   email?: string;
   operating_hours?: OperatingHours;
@@ -69,6 +80,7 @@ export interface UpdateBusinessLocationData {
   name?: string;
   address_id?: string;
   phone?: string;
+  order_alert_phone?: string | null;
   mobile_payment_phone_id?: string | null;
   email?: string;
   operating_hours?: OperatingHours;
@@ -176,6 +188,9 @@ export const useBusinessLocations = (
             mobile_payment_phone_id: data.mobile_payment_phone_id,
           }),
           ...(data.phone !== undefined && { phone: data.phone }),
+          ...(data.order_alert_phone !== undefined && {
+            order_alert_phone: normalizeOrderAlertPhone(data.order_alert_phone),
+          }),
           email: data.email,
           location_type: data.location_type ?? 'store',
           is_primary: data.is_primary ?? false,
@@ -249,8 +264,14 @@ export const useBusinessLocations = (
         // Update location fields via backend PATCH (name, phone, email, etc.)
         const locationFields = {
           ...(locationData.name !== undefined && { name: locationData.name }),
+          ...(locationData.phone !== undefined && { phone: locationData.phone }),
           ...(locationData.mobile_payment_phone_id !== undefined && {
             mobile_payment_phone_id: locationData.mobile_payment_phone_id,
+          }),
+          ...(locationData.order_alert_phone !== undefined && {
+            order_alert_phone: normalizeOrderAlertPhone(
+              locationData.order_alert_phone
+            ),
           }),
           ...(locationData.email !== undefined && { email: locationData.email }),
           ...(locationData.location_type !== undefined && {

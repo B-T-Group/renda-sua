@@ -79,6 +79,16 @@ export const useTheme = (): any => {
         withOpacity: (opacity: number) =>
           getColorWithOpacity(muiTheme, 'secondary', opacity),
       },
+      // Purchase accent — Buy / Pay / Checkout only
+      cta: {
+        main: muiTheme.palette.cta.main,
+        light: muiTheme.palette.cta.light,
+        dark: muiTheme.palette.cta.dark,
+        soft: muiTheme.palette.cta.soft,
+        contrast: muiTheme.palette.cta.contrastText,
+        withOpacity: (opacity: number) =>
+          getColorWithOpacity(muiTheme, 'cta', opacity),
+      },
       success: {
         main: muiTheme.palette.success.main,
         light: muiTheme.palette.success.light,

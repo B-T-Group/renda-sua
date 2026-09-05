@@ -1,31 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
-export interface DistanceCacheEntry {
-  origin_address_id: string;
+export interface CachedDistanceElement {
   destination_address_id: string;
-  origin_address_formatted: string;
   destination_address_formatted: string;
-  distance_value: number;
-  distance_text: string;
-  duration_value: number;
-  duration_text: string;
+  origin_address_formatted: string;
   status: string;
+  distance?: { text: string; value: number };
+  duration?: { text: string; value: number };
 }
 
-export interface CachedDistanceResult {
-  origin_id: string;
-  destination_ids: string[];
-  destination_addresses: string[];
-  origin_addresses: string[];
-  rows: Array<{
-    elements: Array<{
-      status: string;
-      distance?: { text: string; value: number };
-      duration?: { text: string; value: number };
-    }>;
-  }>;
-  status: string;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
 }
 
 @Injectable()
@@ -69,14 +58,28 @@ export class GoogleCacheService {
   }
 
   /**
-   * Get cached distance matrix results for specific origin-destination pairs.
-   * Cache is invalidated (burst) when any origin or destination address has
-   * updated_at after the cache entry's created_at.
+   * Valid (unexpired, not busted) cache hits. Partial results are OK — callers
+   * should fetch only the missing destination IDs from Google.
    */
-  async getCachedDistanceMatrix(
+  async getValidCachedDistanceElements(
     originAddressId: string,
     destinationAddressIds: string[]
-  ): Promise<CachedDistanceResult | null> {
+  ): Promise<CachedDistanceElement[]> {
+    const destIds = destinationAddressIds.filter((id) => isUuid(id));
+    if (!isUuid(originAddressId) || destIds.length === 0) return [];
+    try {
+      const rows = await this.queryDistanceCacheRows(originAddressId, destIds);
+      return this.keepFreshCacheRows(originAddressId, destIds, rows);
+    } catch (error) {
+      console.error('Error fetching cached distance matrix:', error);
+      return [];
+    }
+  }
+
+  private async queryDistanceCacheRows(
+    originAddressId: string,
+    destinationAddressIds: string[]
+  ): Promise<any[]> {
     const query = `
       query GetCachedDistanceMatrix($originId: uuid!, $destinationIds: [uuid!]!) {
         google_distance_cache(
@@ -99,102 +102,67 @@ export class GoogleCacheService {
         }
       }
     `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      originId: originAddressId,
+      destinationIds: destinationAddressIds,
+    });
+    return result.google_distance_cache || [];
+  }
 
-    try {
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        originId: originAddressId,
-        destinationIds: destinationAddressIds,
-      });
+  private async keepFreshCacheRows(
+    originAddressId: string,
+    destinationAddressIds: string[],
+    cachedEntries: any[]
+  ): Promise<CachedDistanceElement[]> {
+    const addressIds = [
+      originAddressId,
+      ...destinationAddressIds.filter((id) => id !== originAddressId),
+    ];
+    const addressUpdatedAts = await this.getAddressUpdatedAts(addressIds);
+    if (!addressUpdatedAts) return [];
+    const originUpdatedAt = addressUpdatedAts.get(originAddressId);
+    if (originUpdatedAt === undefined) return [];
+    return cachedEntries
+      .filter((entry) =>
+        this.isCacheEntryFresh(entry, originUpdatedAt, addressUpdatedAts)
+      )
+      .map((entry) => this.toCachedElement(entry));
+  }
 
-      const cachedEntries = result.google_distance_cache || [];
+  private isCacheEntryFresh(
+    entry: any,
+    originUpdatedAt: string,
+    addressUpdatedAts: Map<string, string>
+  ): boolean {
+    const destUpdatedAt = addressUpdatedAts.get(entry.destination_address_id);
+    if (destUpdatedAt === undefined) return false;
+    const cacheCreated = new Date(entry.created_at).getTime();
+    return (
+      cacheCreated >= new Date(originUpdatedAt).getTime() &&
+      cacheCreated >= new Date(destUpdatedAt).getTime()
+    );
+  }
 
-      // Fetch updated_at for origin and all destination addresses for cache busting
-      const addressIds = [
-        originAddressId,
-        ...destinationAddressIds.filter((id) => id !== originAddressId),
-      ];
-      const addressUpdatedAts = await this.getAddressUpdatedAts(addressIds);
-      if (!addressUpdatedAts) {
-        return null;
-      }
-
-      const originUpdatedAt = addressUpdatedAts.get(originAddressId);
-      if (originUpdatedAt === undefined) {
-        return null;
-      }
-
-      // Keep only cache entries where both origin and destination were not updated after cache
-      const validEntries = cachedEntries.filter((entry: any) => {
-        const destUpdatedAt = addressUpdatedAts.get(entry.destination_address_id);
-        if (destUpdatedAt === undefined) return false;
-        const cacheCreated = new Date(entry.created_at).getTime();
-        return (
-          cacheCreated >= new Date(originUpdatedAt).getTime() &&
-          cacheCreated >= new Date(destUpdatedAt).getTime()
-        );
-      });
-
-      const validDestinationIds = new Set(
-        validEntries.map((e: any) => e.destination_address_id)
-      );
-      const allCached = destinationAddressIds.every((id) =>
-        validDestinationIds.has(id)
-      );
-
-      if (!allCached) {
-        return null;
-      }
-
-      // Build the response in the same format as Google API (use validEntries)
-      const elements = destinationAddressIds.map((destId) => {
-        const cachedEntry = validEntries.find(
-          (entry: any) => entry.destination_address_id === destId
-        );
-
-        if (!cachedEntry) {
-          return {
-            status: 'NOT_FOUND',
-          };
-        }
-
-        const element: any = {
-          status: cachedEntry.status,
-        };
-
-        if (cachedEntry.distance_value && cachedEntry.distance_text) {
-          element.distance = {
-            text: cachedEntry.distance_text,
-            value: cachedEntry.distance_value,
-          };
-        }
-
-        if (cachedEntry.duration_value && cachedEntry.duration_text) {
-          element.duration = {
-            text: cachedEntry.duration_text,
-            value: cachedEntry.duration_value,
-          };
-        }
-
-        return element;
-      });
-
-      return {
-        origin_id: originAddressId,
-        destination_ids: destinationAddressIds,
-        destination_addresses: destinationAddressIds.map((id) => {
-          const cachedEntry = validEntries.find(
-            (entry: any) => entry.destination_address_id === id
-          );
-          return cachedEntry?.destination_address_formatted || '';
-        }),
-        origin_addresses: [validEntries[0]?.origin_address_formatted || ''],
-        rows: [{ elements }],
-        status: 'OK',
+  private toCachedElement(entry: any): CachedDistanceElement {
+    const element: CachedDistanceElement = {
+      destination_address_id: entry.destination_address_id,
+      destination_address_formatted: entry.destination_address_formatted,
+      origin_address_formatted: entry.origin_address_formatted,
+      status: entry.status,
+    };
+    if (entry.distance_value && entry.distance_text) {
+      element.distance = {
+        text: entry.distance_text,
+        value: entry.distance_value,
       };
-    } catch (error) {
-      console.error('Error fetching cached distance matrix:', error);
-      return null;
     }
+    if (entry.duration_value && entry.duration_text) {
+      element.duration = {
+        text: entry.duration_text,
+        value: entry.duration_value,
+      };
+    }
+    return element;
   }
 
   /**

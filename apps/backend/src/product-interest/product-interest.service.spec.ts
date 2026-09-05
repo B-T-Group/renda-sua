@@ -275,4 +275,56 @@ describe('ProductInterestService', () => {
       offset: 0,
     });
   });
+
+  it('rejects non-business users listing leads', async () => {
+    hasuraUser.getUser.mockResolvedValue({ id: 'u1', business: null });
+    await expect(service.listForBusiness()).rejects.toBeInstanceOf(HttpException);
+    expect(hasuraSystem.executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('lists business leads without unused GraphQL variables', async () => {
+    hasuraUser.getUser.mockResolvedValue({
+      id: 'u1',
+      business: { id: 'biz-1' },
+    });
+    hasuraSystem.executeQuery.mockResolvedValue({
+      product_interest_requests_aggregate: { aggregate: { count: 0 } },
+      product_interest_requests: [],
+    });
+
+    const actual = await service.listForBusiness(1, 20);
+    const [query, variables] = hasuraSystem.executeQuery.mock.calls[0];
+
+    expect(actual.items).toEqual([]);
+    expect(query).toContain('ListBusinessProductInterest');
+    expect(query).not.toMatch(/\$businessId/);
+    expect(variables).toEqual({
+      where: { business_id: { _eq: 'biz-1' } },
+      limit: 20,
+      offset: 0,
+    });
+  });
+
+  it('adds a location filter when listing leads for one store', async () => {
+    hasuraUser.getUser.mockResolvedValue({
+      id: 'u1',
+      business: { id: 'biz-1' },
+    });
+    hasuraSystem.executeQuery.mockResolvedValue({
+      product_interest_requests_aggregate: { aggregate: { count: 1 } },
+      product_interest_requests: [{ id: 'req-1' }],
+    });
+
+    await service.listForBusiness(1, 20, 'loc-1');
+    const [, variables] = hasuraSystem.executeQuery.mock.calls[0];
+
+    expect(variables).toEqual({
+      where: {
+        business_id: { _eq: 'biz-1' },
+        business_location_id: { _eq: 'loc-1' },
+      },
+      limit: 20,
+      offset: 0,
+    });
+  });
 });

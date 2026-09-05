@@ -202,6 +202,31 @@ export class OrdersController {
             special_instructions: { type: 'string' },
           },
         },
+        payer_country: {
+          type: 'string',
+          description:
+            'ISO 3166-1 alpha-2 billing country of the payer. When it resolves to a Stripe country and the merchant settles in mobile money, the order is routed as a diaspora card payment and must be pay_now.',
+        },
+        sending_to_someone_else: {
+          type: 'boolean',
+          description:
+            'Set when the recipient is a different person from the paying client.',
+        },
+        recipient: {
+          type: 'object',
+          description:
+            'Local recipient contact. Stored on the order and used for SMS/WhatsApp updates and the delivery PIN without a payer login.',
+          properties: {
+            name: { type: 'string' },
+            phone: {
+              type: 'string',
+              description:
+                'Local or E.164 phone; normalized against the delivery country.',
+            },
+            email: { type: 'string' },
+            notify_whatsapp: { type: 'boolean' },
+          },
+        },
       },
       required: ['items'],
     },
@@ -595,9 +620,9 @@ export class OrdersController {
 
   @Post(':id/initiate-pay-at-pickup-payment')
   @ApiOperation({
-    summary: 'Initiate pay-at-pickup mobile payment (business only)',
+    summary: 'Initiate pay-at-pickup mobile payment (client or business)',
     description:
-      'For pay-at-pickup orders in ready_for_pickup, the business triggers a mobile payment request to the client. On successful payment callback, the order is settled and marked complete.',
+      'For pay-at-pickup orders in ready_for_pickup, the customer (or the store as fallback) triggers a mobile payment request. On successful payment callback, the order is settled and marked complete.',
   })
   @ApiResponse({ status: 200, description: 'Payment request initiated' })
   @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
