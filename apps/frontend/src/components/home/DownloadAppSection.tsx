@@ -139,6 +139,18 @@ const DownloadAppSection: React.FC = () => {
                     <text key={i} x={38 + i * 56} y="484" fontSize="14" textAnchor="middle">{icon}</text>
                   ))}
                 </svg>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    textAlign: 'center',
+                    color: 'rgba(255,255,255,0.55)',
+                    mt: 1.5,
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {t('home.download.mockupCaption', 'Example while out for delivery')}
+                </Typography>
               </motion.div>
             </motion.div>
           </Grid>

@@ -235,6 +235,18 @@ const HeroSection: React.FC = () => {
               transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
               <PhoneMockupIllustration />
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  textAlign: 'center',
+                  color: 'rgba(255,255,255,0.65)',
+                  mt: 1.5,
+                  fontStyle: 'italic',
+                }}
+              >
+                {t('home.hero.mockupCaption', 'Example while out for delivery')}
+              </Typography>
             </motion.div>
           </Grid>
         </Grid>

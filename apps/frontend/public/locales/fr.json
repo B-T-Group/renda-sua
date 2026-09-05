@@ -4127,7 +4127,8 @@
       "trustSignals": {
         "deliveryTime": "Livraison 24-48h",
         "securePayment": "Paiements sécurisés (MTN, Orange, Moov, Airtel Money)"
-      }
+      },
+      "mockupCaption": "Exemple en cours de livraison"
     },
     "howItWorks": {
       "steps": {
@@ -5369,7 +5370,7 @@
         "paymentQ": "Comment payer ?",
         "paymentA": "Payez avec MTN MoMo, Orange Money ou un autre mobile money pris en charge au paiement.",
         "deliveryQ": "Quand vais-je recevoir ma commande ?",
-        "deliveryA": "La livraison est en général sous 6–24 h selon l’heure de commande et la disponibilité locale.",
+        "deliveryA": "Les produits de magasin sont habituellement livrés sous 24–48 h après confirmation de commande. Une fois un agent assigné et en livraison, vous pouvez suivre la position en direct et voir les mises à jour d'ETA en minutes sur le web ou dans l'app.",
         "issueQ": "Et si quelque chose ne va pas ?",
         "issueA": "Contactez le support avec les détails de la commande. Nous vous aidons à résoudre les problèmes de livraison ou de produit.",
         "sellerQ": "Qui vend cet article ?",
@@ -6277,7 +6278,7 @@
         "deliveryFees": "Comment les frais de livraison sont-ils calculés ?",
         "deliveryFeesAnswer": "Les frais de livraison sont calculés en fonction de la distance, du poids des articles et de l'urgence de la livraison. Vous verrez le montant exact avant de confirmer votre commande.",
         "deliveryTime": "Combien de temps prend la livraison ?",
-        "deliveryTimeAnswer": "Delivery times vary by location and item. Most orders are delivered within 2-4 hours for same-day delivery, or 24-48 hours for standard delivery.",
+        "deliveryTimeAnswer": "Les produits de magasin sont habituellement livrés sous 24–48 h après confirmation de commande. Les commandes alimentaires sont prêtes pendant les heures d'ouverture. Une fois un agent assigné et en livraison, vous verrez les mises à jour d'ETA en minutes.",
         "title": "Delivery & Tracking",
         "trackOrder": "How do I track my order?",
         "trackOrderAnswer": "You can track your order in real-time through your dashboard or by clicking the tracking link sent to your email."
@@ -6850,7 +6851,8 @@
         "notifications": "Notifications push instantanées pour chaque mise à jour",
         "pin": "Vérification PIN de livraison sécurisée",
         "checkout": "Paiement plus rapide avec les adresses enregistrées"
-      }
+      },
+      "mockupCaption": "Exemple en cours de livraison"
     },
     "faq": {
       "title": "Questions fréquemment posées",
@@ -6866,7 +6868,7 @@
       },
       "canITrack": {
         "question": "Puis-je suivre ma livraison en temps réel?",
-        "answer": "Oui! L'application Rendasua fournit un suivi en direct."
+        "answer": "Oui ! Suivez votre commande sur le web ou dans l'app. Une fois en livraison, vous pouvez voir exactement où se trouve votre agent de livraison et obtenir une heure d'arrivée estimée."
       },
       "howSellBusiness": {
         "question": "Comment commencer à vendre en tant qu'entreprise?",
