@@ -18,7 +18,6 @@ import { LoginService } from './login.service';
 import { PermissionService } from './permission.service';
 import { SignupController } from './signup.controller';
 import { SignupService } from './signup.service';
-import { SignupAttemptStore } from './signup-attempt.store';
 import { SignupAttemptCleanupService } from './signup-attempt-cleanup.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
@@ -45,7 +44,6 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     LoginService,
     PermissionService,
     SignupService,
-    SignupAttemptStore,
     SignupAttemptCleanupService,
     UserProvisioningService,
     BusinessProvisioningService,

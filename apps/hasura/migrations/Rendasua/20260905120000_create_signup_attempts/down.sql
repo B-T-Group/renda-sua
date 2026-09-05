@@ -1,1 +1,2 @@
-DROP TABLE IF EXISTS public.signup_attempts;
+-- No-op: table lifecycle owned by 20260905010000_create_signup_attempts.
+SELECT 1;

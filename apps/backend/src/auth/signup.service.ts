@@ -1252,9 +1252,15 @@ export class SignupService {
     }
   }
 
-  private async cleanupExpiredAttempts(): Promise<void> {
+  async purgeExpiredAttempts(): Promise<number> {
+    return this.cleanupExpiredAttempts();
+  }
+
+  private async cleanupExpiredAttempts(): Promise<number> {
     try {
-      await this.hasuraSystemService.executeMutation(
+      const result = await this.hasuraSystemService.executeMutation<{
+        update_signup_attempts: { affected_rows: number };
+      }>(
         `
         mutation CleanupExpiredSignupAttempts($now: timestamptz!) {
           update_signup_attempts(
@@ -1274,8 +1280,10 @@ export class SignupService {
       `,
         { now: new Date().toISOString() }
       );
+      return result.update_signup_attempts?.affected_rows || 0;
     } catch (error: any) {
       this.logger.warn(`Signup attempt cleanup failed: ${error?.message}`);
+      return 0;
     }
   }
 
