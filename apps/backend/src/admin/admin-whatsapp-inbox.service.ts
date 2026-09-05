@@ -7,6 +7,11 @@ import {
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { WhatsAppInboxPersistenceService } from '../notifications/orchestration/whatsapp-inbox-persistence.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import {
+  inboxDisplayMessage,
+  inboxMediaFromPayload,
+  mediaContentDisposition,
+} from '../whatsapp/whatsapp-inbox-media.util';
 import type {
   ListWhatsAppInboxMessagesQueryDto,
   ListWhatsAppInboxQueryDto,
@@ -42,6 +47,7 @@ interface MessageRow {
   source: string;
   type: string;
   body: string;
+  raw_payload?: unknown;
   sender_user_id: string | null;
   status: string;
   error: string | null;
@@ -109,16 +115,24 @@ export class AdminWhatsAppInboxService {
     }>(
       `query ListMsgs($id: uuid!, $limit: Int!, $offset: Int!) {
         whatsapp_messages(
-          where: { conversation_id: { _eq: $id } }
+          where: {
+            conversation_id: { _eq: $id }
+            source: { _neq: "template" }
+          }
           order_by: { created_at: asc }
           limit: $limit
           offset: $offset
         ) {
-          id conversation_id wamid direction source type body
+          id conversation_id wamid direction source type body raw_payload
           sender_user_id status error created_at
           sender_user { id first_name last_name }
         }
-        whatsapp_messages_aggregate(where: { conversation_id: { _eq: $id } }) {
+        whatsapp_messages_aggregate(
+          where: {
+            conversation_id: { _eq: $id }
+            source: { _neq: "template" }
+          }
+        ) {
           aggregate { count }
         }
       }`,
@@ -196,10 +210,32 @@ export class AdminWhatsAppInboxService {
     };
   }
 
+  async downloadMessageMedia(messageId: string): Promise<{
+    buffer: Buffer;
+    mimeType: string;
+    filename: string | null;
+    contentDisposition: string | null;
+  }> {
+    const row = await this.requireMessage(messageId);
+    const media = inboxMediaFromPayload(row.type, row.raw_payload);
+    if (!media?.id) {
+      throw new NotFoundException('Message has no downloadable attachment');
+    }
+    const file = await this.whatsApp.downloadMedia(media.id);
+    return {
+      buffer: file.buffer,
+      mimeType: media.mimeType || file.mimeType,
+      filename: media.filename,
+      contentDisposition: mediaContentDisposition(media.filename),
+    };
+  }
+
   private buildListWhere(
     query: ListWhatsAppInboxQueryDto
   ): Record<string, unknown> {
-    const clauses: Record<string, unknown>[] = [];
+    const clauses: Record<string, unknown>[] = [
+      { last_customer_message_at: { _is_null: false } },
+    ];
     const status = query.status ?? 'open';
     if (status !== 'all') clauses.push({ status: { _eq: status } });
     const search = query.search?.trim();
@@ -215,7 +251,6 @@ export class AdminWhatsAppInboxService {
         ],
       });
     }
-    if (!clauses.length) return {};
     return clauses.length === 1 ? clauses[0] : { _and: clauses };
   }
 
@@ -234,6 +269,22 @@ export class AdminWhatsAppInboxService {
     );
     const row = res.whatsapp_conversations_by_pk;
     if (!row) throw new NotFoundException('Conversation not found');
+    return row;
+  }
+
+  private async requireMessage(id: string): Promise<MessageRow> {
+    const res = await this.hasura.executeQuery<{
+      whatsapp_messages_by_pk: MessageRow | null;
+    }>(
+      `query GetInboxMsg($id: uuid!) {
+        whatsapp_messages_by_pk(id: $id) {
+          id conversation_id type raw_payload
+        }
+      }`,
+      { id }
+    );
+    const row = res.whatsapp_messages_by_pk;
+    if (!row) throw new NotFoundException('Message not found');
     return row;
   }
 
@@ -280,19 +331,21 @@ export class AdminWhatsAppInboxService {
       .filter(Boolean)
       .join(' ')
       .trim();
+    const display = inboxDisplayMessage(row.type, row.body, row.raw_payload);
     return {
       id: row.id,
       conversationId: row.conversation_id,
       wamid: row.wamid,
       direction: row.direction,
       source: row.source,
-      type: row.type,
-      body: row.body,
+      type: display.type,
+      body: display.body,
       senderUserId: row.sender_user_id,
       senderDisplayName: senderName || null,
       status: row.status,
       error: row.error,
       createdAt: row.created_at,
+      media: inboxMediaFromPayload(row.type, row.raw_payload),
     };
   }
 }

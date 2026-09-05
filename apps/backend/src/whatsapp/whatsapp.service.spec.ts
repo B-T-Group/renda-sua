@@ -1,16 +1,17 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { WhatsAppService } from './whatsapp.service';
 
 jest.mock('axios', () => {
   const post = jest.fn();
+  const get = jest.fn();
   const isAxiosError = (error: unknown) =>
     !!(error as { isAxiosError?: boolean })?.isAxiosError;
   return {
     __esModule: true,
     default: {
-      create: jest.fn(() => ({ post })),
+      create: jest.fn(() => ({ post, get })),
       isAxiosError,
     },
     isAxiosError,
@@ -22,6 +23,7 @@ describe('WhatsAppService', () => {
   const phoneNumberId = '1234567890';
   let service: WhatsAppService;
   let post: jest.Mock;
+  let get: jest.Mock;
 
   beforeEach(() => {
     (axios.create as jest.Mock).mockClear();
@@ -38,7 +40,9 @@ describe('WhatsAppService', () => {
     service = new WhatsAppService(configService);
     const created = (axios.create as jest.Mock).mock.results.at(-1)?.value;
     post = created.post as jest.Mock;
+    get = created.get as jest.Mock;
     post.mockReset();
+    get.mockReset();
   });
 
   it('isConfigured when token, phone number id, and app secret are set', () => {
@@ -191,5 +195,45 @@ describe('WhatsAppService', () => {
       expect.any(Object)
     );
     expect(result.messages[0]?.id).toBe('wamid.TEXT');
+  });
+
+  it('downloads media via Graph meta then the temporary file URL', async () => {
+    const fileUrl = 'https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1';
+    get
+      .mockResolvedValueOnce({
+        data: { url: fileUrl, mime_type: 'image/jpeg', id: 'media-1' },
+      })
+      .mockResolvedValueOnce({
+        data: Buffer.from('jpeg-bytes'),
+      });
+
+    const result = await service.downloadMedia('media-1');
+
+    expect(get).toHaveBeenNthCalledWith(
+      1,
+      '/media-1',
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    expect(get).toHaveBeenNthCalledWith(
+      2,
+      fileUrl,
+      expect.objectContaining({
+        responseType: 'arraybuffer',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+    );
+    expect(result.mimeType).toBe('image/jpeg');
+    expect(result.buffer.toString()).toBe('jpeg-bytes');
+  });
+
+  it('maps missing Graph media to NotFoundException', async () => {
+    get.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 404, data: { error: { message: 'gone' } } },
+      message: 'Request failed',
+    });
+    await expect(service.downloadMedia('expired')).rejects.toBeInstanceOf(
+      NotFoundException
+    );
   });
 });

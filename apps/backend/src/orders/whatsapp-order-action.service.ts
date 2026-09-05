@@ -37,6 +37,23 @@ type PendingWaOrder = PendingAcceptanceOrder & {
   } | null;
 };
 
+type WaUserRow = {
+  id: string;
+  business?: { id: string } | null;
+  location_delegations?: Array<{
+    business_location_id: string;
+    business_location?: { business_id: string } | null;
+    role?: {
+      role_permissions?: Array<{ permission?: { key?: string } | null }>;
+    } | null;
+  }>;
+};
+
+type WaManageDelegation = {
+  business_location_id: string;
+  business_id: string;
+};
+
 const CONFIRMABLE_ACCEPTANCE = [
   'awaiting_acceptance',
   'no_response',
@@ -349,14 +366,29 @@ export class WhatsAppOrderActionService {
     order: PendingWaOrder
   ): Promise<WaActor | null> {
     const normalized = this.normalizePhone(fromPhone);
-    const userActor = await this.resolveUserActor(normalized);
-    if (userActor && this.actorMatchesOrder(userActor, order)) return userActor;
+    const user = await this.loadUserByPhone(normalized);
+    const matched = user ? this.userActorForOrder(user, order) : null;
+    if (matched) return matched;
     return this.locationAlertActorForOrder(normalized, order);
   }
 
-  private actorMatchesOrder(actor: WaActor, order: PendingWaOrder): boolean {
-    if (actor.kind === 'owner') return actor.businessId === order.business_id;
-    return actor.locationId === order.business_location_id;
+  private userActorForOrder(
+    user: WaUserRow,
+    order: PendingWaOrder
+  ): WaActor | null {
+    if (user.business?.id && user.business.id === order.business_id) {
+      return { kind: 'owner', userId: user.id, businessId: user.business.id };
+    }
+    const match = this.manageDelegations(user).find(
+      (row) => row.business_location_id === order.business_location_id
+    );
+    if (!match) return null;
+    return {
+      kind: 'delegate',
+      userId: user.id,
+      businessId: match.business_id,
+      locationId: match.business_location_id,
+    };
   }
 
   private locationAlertActorForOrder(
@@ -399,20 +431,24 @@ export class WhatsAppOrderActionService {
   }
 
   private async resolveUserActor(normalized: string): Promise<WaActor | null> {
+    const user = await this.loadUserByPhone(normalized);
+    if (!user) return null;
+    if (user.business?.id) {
+      return { kind: 'owner', userId: user.id, businessId: user.business.id };
+    }
+    const manage = this.manageDelegations(user)[0];
+    if (!manage) return null;
+    return {
+      kind: 'delegate',
+      userId: user.id,
+      businessId: manage.business_id,
+      locationId: manage.business_location_id,
+    };
+  }
+
+  private async loadUserByPhone(normalized: string): Promise<WaUserRow | null> {
     const withPlus = `+${normalized}`;
-    const res = await this.hasura.executeQuery<{
-      users: Array<{
-        id: string;
-        business?: { id: string } | null;
-        location_delegations?: Array<{
-          business_location_id: string;
-          business_location?: { business_id: string } | null;
-          role?: {
-            role_permissions?: Array<{ permission?: { key?: string } | null }>;
-          } | null;
-        }>;
-      }>;
-    }>(
+    const res = await this.hasura.executeQuery<{ users: WaUserRow[] }>(
       `query WaActor($a: String!, $b: String!) {
         users(where: { _or: [
           { phone_number: { _eq: $a } },
@@ -429,23 +465,28 @@ export class WhatsAppOrderActionService {
       }`,
       { a: normalized, b: withPlus }
     );
-    const user = res.users?.[0];
-    if (!user) return null;
-    if (user.business?.id) {
-      return { kind: 'owner', userId: user.id, businessId: user.business.id };
+    return res.users?.[0] ?? null;
+  }
+
+  private manageDelegations(user: WaUserRow): WaManageDelegation[] {
+    const rows: WaManageDelegation[] = [];
+    for (const delegation of user.location_delegations ?? []) {
+      const businessId = delegation.business_location?.business_id;
+      if (!businessId || !this.hasOrdersManage(delegation)) continue;
+      rows.push({
+        business_location_id: delegation.business_location_id,
+        business_id: businessId,
+      });
     }
-    const manage = (user.location_delegations ?? []).find((d) =>
-      (d.role?.role_permissions ?? []).some(
-        (rp) => rp.permission?.key === DELEGATION_PERMISSIONS.ORDERS_MANAGE
-      )
+    return rows;
+  }
+
+  private hasOrdersManage(
+    delegation: NonNullable<WaUserRow['location_delegations']>[number]
+  ): boolean {
+    return (delegation.role?.role_permissions ?? []).some(
+      (rp) => rp.permission?.key === DELEGATION_PERMISSIONS.ORDERS_MANAGE
     );
-    if (!manage?.business_location?.business_id) return null;
-    return {
-      kind: 'delegate',
-      userId: user.id,
-      businessId: manage.business_location.business_id,
-      locationId: manage.business_location_id,
-    };
   }
 
   private async resolveLocationAlertActor(

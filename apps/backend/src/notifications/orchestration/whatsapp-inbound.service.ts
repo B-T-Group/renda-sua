@@ -9,6 +9,11 @@ import {
   type WhatsAppMessageType,
 } from './whatsapp-inbox-persistence.service';
 import { WhatsAppReplyService } from './whatsapp-reply.service';
+import { NotificationsService } from '../notifications.service';
+import {
+  inboxAttachmentPreview,
+  inboxButtonReplyFromPayload,
+} from '../../whatsapp/whatsapp-inbox-media.util';
 
 interface WhatsAppStatusEvent {
   id?: string;
@@ -42,7 +47,8 @@ export class WhatsAppInboundService {
     private readonly configService: ConfigService<Configuration>,
     private readonly analytics: NotificationAnalyticsService,
     private readonly replyService: WhatsAppReplyService,
-    private readonly inbox: WhatsAppInboxPersistenceService
+    private readonly inbox: WhatsAppInboxPersistenceService,
+    private readonly notifications: NotificationsService
   ) {}
 
   assertValidSignature(
@@ -77,10 +83,20 @@ export class WhatsAppInboundService {
         (entry as { changes?: Array<{ value?: WhatsAppChangeValue }> })
           ?.changes ?? [];
       for (const change of changes) {
-        await this.processValue(change.value);
+        await this.safeProcessValue(change.value);
       }
     }
     return { received: true };
+  }
+
+  private async safeProcessValue(value?: WhatsAppChangeValue): Promise<void> {
+    try {
+      await this.processValue(value);
+    } catch (error: any) {
+      this.logger.warn(
+        `WhatsApp webhook processing failed: ${error?.message ?? String(error)}`
+      );
+    }
   }
 
   private async processValue(value?: WhatsAppChangeValue): Promise<void> {
@@ -127,21 +143,7 @@ export class WhatsAppInboundService {
     if (!from) return;
     const type = this.mapMessageType(message.type);
     const body = this.extractBody(message, type);
-    try {
-      await this.inbox.persistInbound({
-        waId: from,
-        customerPhone: from,
-        wamid: message.id,
-        type,
-        body,
-        rawPayload: message as Record<string, unknown>,
-        bumpUnread: true,
-      });
-    } catch (error: any) {
-      this.logger.warn(
-        `Inbox persist failed for ${from}: ${error?.message ?? String(error)}`
-      );
-    }
+    await this.persistAndNotifyInbound(from, message, type, body);
     if (type === 'interactive') {
       await this.routeInteractive(from, message);
       return;
@@ -156,27 +158,51 @@ export class WhatsAppInboundService {
     void value;
   }
 
+  private async persistAndNotifyInbound(
+    from: string,
+    message: WhatsAppInboundMessage,
+    type: WhatsAppMessageType,
+    body: string
+  ): Promise<void> {
+    try {
+      const persisted = await this.inbox.persistInbound({
+        waId: from,
+        customerPhone: from,
+        wamid: message.id,
+        type,
+        body,
+        rawPayload: message as Record<string, unknown>,
+        bumpUnread: true,
+      });
+      if (!persisted) return;
+      await this.notifications.notifyWhatsAppInboxInbound({
+        conversationId: persisted.conversationId,
+        preview: body,
+        customerPhone: from,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Inbox persist failed for ${from}: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   private async routeInteractive(
     from: string,
     message: WhatsAppInboundMessage
   ): Promise<void> {
-    const interactive = message.interactive as
-      | {
-          button_reply?: { id?: string; title?: string };
-          list_reply?: { id?: string; title?: string };
-        }
-      | undefined;
-    const reply = interactive?.button_reply || interactive?.list_reply;
+    const reply = inboxButtonReplyFromPayload(message);
     await this.replyService.handleInteractiveReply({
       fromPhone: from,
-      buttonId: reply?.id,
-      buttonTitle: reply?.title,
+      buttonId: reply?.buttonId,
+      buttonTitle: reply?.buttonTitle,
       messageId: message.id,
       contextMessageId: message.context?.id?.trim() || undefined,
     });
   }
 
   private mapMessageType(type?: string): WhatsAppMessageType {
+    if (type === 'button') return 'interactive';
     const allowed: WhatsAppMessageType[] = [
       'text',
       'image',
@@ -197,20 +223,6 @@ export class WhatsAppInboundService {
     type: WhatsAppMessageType
   ): string {
     if (type === 'text') return message.text?.body?.trim() || '';
-    if (type === 'location') return '[Location]';
-    if (type === 'interactive') {
-      const interactive = message.interactive as
-        | { button_reply?: { title?: string; id?: string } }
-        | undefined;
-      const title = interactive?.button_reply?.title?.trim();
-      const id = interactive?.button_reply?.id?.trim();
-      if (title && id) return `${title} (${id})`;
-      return title || id || '[Interactive reply]';
-    }
-    if (type === 'image') return '[Image]';
-    if (type === 'audio') return '[Audio]';
-    if (type === 'video') return '[Video]';
-    if (type === 'document') return '[Document]';
-    return `[${type}]`;
+    return inboxAttachmentPreview(type, message);
   }
 }

@@ -1,3 +1,5 @@
+import { brandTokens } from '../../../theme/brandTokens';
+
 export interface PersonaFeature {
   key: string;
   defaultLabel: string;
@@ -44,7 +46,7 @@ export const personaContentData: PersonaContent[] = [
     secondaryCtaKey: 'home.personas.client.secondaryCta',
     defaultSecondaryCta: 'Browse Items',
     secondaryCtaPath: '/items',
-    accentColor: '#1e40af',
+    accentColor: brandTokens.primary.main,
   },
   {
     id: 'business',
@@ -69,7 +71,7 @@ export const personaContentData: PersonaContent[] = [
     secondaryCtaKey: 'home.personas.business.secondaryCta',
     defaultSecondaryCta: 'Learn more',
     secondaryCtaPath: '/for-business',
-    accentColor: '#16a34a',
+    accentColor: brandTokens.cta.main,
   },
   {
     id: 'agent',
@@ -93,6 +95,6 @@ export const personaContentData: PersonaContent[] = [
     secondaryCtaKey: 'home.personas.agent.secondaryCta',
     defaultSecondaryCta: 'Learn more',
     secondaryCtaPath: '/become-a-delivery-agent',
-    accentColor: '#0891b2',
+    accentColor: brandTokens.secondary.main,
   },
 ];

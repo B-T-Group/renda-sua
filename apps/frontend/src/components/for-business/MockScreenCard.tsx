@@ -1,6 +1,6 @@
 import { Box, Typography, alpha } from '@mui/material';
 import React from 'react';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 export type MockScreenKind =
   | 'dashboard'
@@ -77,13 +77,13 @@ function MockBody({ kind }: { kind: MockScreenKind }) {
       <>
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }} aria-hidden>
           {[1, 2, 3, 4].map((i) => (
-            <Box key={i} sx={{ p: 1, borderRadius: 1.5, bgcolor: alpha(FB_GREEN, 0.08) }}>
-              <Box sx={{ height: 8, width: '40%', bgcolor: alpha(FB_GREEN, 0.35), borderRadius: 1, mb: 1 }} />
+            <Box key={i} sx={{ p: 1, borderRadius: 1.5, bgcolor: alpha(FB_ACCENT, 0.08) }}>
+              <Box sx={{ height: 8, width: '40%', bgcolor: alpha(FB_ACCENT, 0.35), borderRadius: 1, mb: 1 }} />
               <Box sx={{ height: 14, width: '70%', bgcolor: alpha('#0f172a', 0.12), borderRadius: 1 }} />
             </Box>
           ))}
         </Box>
-        {bars(6, FB_GREEN)}
+        {bars(6, FB_ACCENT)}
       </>
     );
   }
@@ -95,7 +95,7 @@ function MockBody({ kind }: { kind: MockScreenKind }) {
             <Box sx={{ width: 36, height: 36, borderRadius: 1, bgcolor: alpha('#64748b', 0.15) }} />
             <Box sx={{ flex: 1 }}>
               <Box sx={{ height: 8, width: '55%', bgcolor: alpha('#0f172a', 0.14), borderRadius: 1, mb: 0.5 }} />
-              <Box sx={{ height: 6, width: '30%', bgcolor: alpha(FB_GREEN, 0.35), borderRadius: 1 }} />
+              <Box sx={{ height: 6, width: '30%', bgcolor: alpha(FB_ACCENT, 0.35), borderRadius: 1 }} />
             </Box>
           </Box>
         ))}
@@ -105,7 +105,7 @@ function MockBody({ kind }: { kind: MockScreenKind }) {
   if (kind === 'orders') {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }} aria-hidden>
-        {[FB_GREEN, '#f59e0b', '#3b82f6'].map((c, i) => (
+        {[FB_ACCENT, '#f59e0b', '#3b82f6'].map((c, i) => (
           <Box
             key={i}
             sx={{
@@ -133,7 +133,7 @@ function MockBody({ kind }: { kind: MockScreenKind }) {
       <Box sx={{ height: 64, borderRadius: 1.5, bgcolor: alpha('#0f172a', 0.06), mb: 1 }} />
       <Box sx={{ height: 8, width: '90%', bgcolor: alpha('#0f172a', 0.1), borderRadius: 1, mb: 0.5 }} />
       <Box sx={{ height: 8, width: '75%', bgcolor: alpha('#0f172a', 0.08), borderRadius: 1, mb: 0.5 }} />
-      <Box sx={{ height: 8, width: '60%', bgcolor: alpha(FB_GREEN, 0.25), borderRadius: 1 }} />
+      <Box sx={{ height: 8, width: '60%', bgcolor: alpha(FB_ACCENT, 0.25), borderRadius: 1 }} />
     </Box>
   );
 }

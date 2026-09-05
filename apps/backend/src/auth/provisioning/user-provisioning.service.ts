@@ -42,6 +42,7 @@ export interface UserProvisioningInput {
   last_name: string;
   phone_number?: string | null;
   email_verified?: boolean;
+  phone_number_verified?: boolean;
   /** ISO 3166-1 alpha-2 country code persisted on the users row. */
   country?: string | null;
   personas: PersonaId[];
@@ -110,6 +111,7 @@ export class UserProvisioningService {
       '$last_name: String!',
       '$phone_number: String',
       '$email_verified: Boolean!',
+      '$phone_number_verified: Boolean!',
       '$country: String',
       '$user_type_id: user_types_enum!',
     ];
@@ -119,6 +121,7 @@ export class UserProvisioningService {
       last_name: input.last_name,
       phone_number: input.phone_number ?? null,
       email_verified: input.email_verified ?? false,
+      phone_number_verified: input.phone_number_verified ?? false,
       country: input.country ?? null,
       user_type_id: legacyUserTypeIdForPersonas(input.personas),
     };
@@ -128,6 +131,7 @@ export class UserProvisioningService {
       'last_name: $last_name',
       'phone_number: $phone_number',
       'email_verified: $email_verified',
+      'phone_number_verified: $phone_number_verified',
       'country: $country',
       'user_type_id: $user_type_id',
     ];

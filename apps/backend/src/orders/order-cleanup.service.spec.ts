@@ -432,6 +432,71 @@ describe('OrderCleanupService', () => {
       );
     });
 
+    it('releases reserved inventory atomically instead of writing reserved_quantity', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'P1',
+              current_status: 'ready_for_pickup',
+              fulfillment_method: 'pickup',
+              payment_status: 'authorized',
+              payment_source: 'credit_card',
+              updated_at: '2026-08-01T12:00:00.000Z',
+              client: { user_id: 'c1', user: { timezone: 'UTC' } },
+              business: { user_id: 'b1' },
+              order_items: [
+                { id: 'oi1', business_inventory_id: 'inv-1', quantity: 2 },
+              ],
+              order_status_history: [
+                {
+                  status: 'ready_for_pickup',
+                  created_at: '2026-08-01T12:00:00.000Z',
+                },
+              ],
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'authorized',
+            payment_source: 'credit_card',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        if (String(mutation).includes('try_release_business_inventory')) {
+          return Promise.resolve({
+            try_release_business_inventory: [{ id: 'inv-1' }],
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-09T13:00:00.000Z'));
+      const n = await service.cancelStaleStorePickupOrders(7, 100);
+      jest.useRealTimers();
+
+      expect(n).toBe(1);
+      const release = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('try_release_business_inventory')
+      );
+      expect(release?.[1]).toEqual({ inventoryId: 'inv-1', qty: 2 });
+      expect(
+        hasura.executeQuery.mock.calls.some((c) =>
+          String(c[0]).includes('reserved_quantity')
+        )
+      ).toBe(false);
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('reserved_quantity:')
+        )
+      ).toBe(false);
+    });
+
     it('does not cancel store pickup before 7 days even if window+grace elapsed', async () => {
       hasura.executeQuery.mockResolvedValueOnce({
         orders: [

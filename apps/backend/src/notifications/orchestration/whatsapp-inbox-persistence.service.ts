@@ -47,6 +47,11 @@ export interface PersistInboundParams {
   bumpUnread: boolean;
 }
 
+export interface PersistInboundResult {
+  messageId: string;
+  conversationId: string;
+}
+
 export interface PersistOutboundParams {
   waId: string;
   customerPhone: string;
@@ -69,7 +74,9 @@ export class WhatsAppInboxPersistenceService {
     private readonly prefs: NotificationPreferenceService
   ) {}
 
-  async persistInbound(params: PersistInboundParams): Promise<string | null> {
+  async persistInbound(
+    params: PersistInboundParams
+  ): Promise<PersistInboundResult | null> {
     if (params.wamid && (await this.findMessageIdByWamid(params.wamid))) {
       return null;
     }
@@ -80,7 +87,7 @@ export class WhatsAppInboxPersistenceService {
       isCustomerMessage: true,
       bumpUnread: params.bumpUnread,
     });
-    return this.insertMessage({
+    const messageId = await this.insertMessage({
       conversationId: conversation.id,
       wamid: params.wamid,
       direction: 'inbound',
@@ -90,9 +97,13 @@ export class WhatsAppInboxPersistenceService {
       rawPayload: params.rawPayload,
       status: 'delivered',
     });
+    return { messageId, conversationId: conversation.id };
   }
 
   async persistOutbound(params: PersistOutboundParams): Promise<string | null> {
+    if (params.source === 'template' || params.type === 'template') {
+      return null;
+    }
     if (params.wamid && (await this.findMessageIdByWamid(params.wamid))) {
       return null;
     }
@@ -290,6 +301,37 @@ export class WhatsAppInboxPersistenceService {
       );
       throw error;
     }
+  }
+
+  async listRecentMessages(
+    waId: string,
+    limit: number
+  ): Promise<Array<{ direction: string; body: string }>> {
+    const cappedLimit = Math.max(1, Math.min(limit, 40));
+    const res = await this.hasura.executeQuery<{
+      whatsapp_messages: Array<{
+        direction: WhatsAppMessageDirection;
+        body: string;
+      }>;
+    }>(
+      `query WaHistory($waId: String!, $limit: Int!) {
+        whatsapp_messages(
+          where: {
+            conversation: { wa_id: { _eq: $waId } }
+            type: { _eq: "text" }
+            body: { _is_null: false }
+          }
+          order_by: { created_at: desc }
+          limit: $limit
+        ) {
+          direction body
+        }
+      }`,
+      { waId, limit: cappedLimit }
+    );
+    return (res.whatsapp_messages ?? [])
+      .reverse()
+      .filter((message) => !!message.body?.trim());
   }
 
   private clipPreview(body: string): string {

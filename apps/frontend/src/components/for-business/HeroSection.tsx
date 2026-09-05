@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import MockScreenCard from './MockScreenCard';
 import {
-  FB_GREEN,
+  FB_ACCENT,
   FB_HERO_GRADIENT,
   SIGNUP_RENT,
   SIGNUP_SELL,
@@ -124,7 +124,7 @@ const HeroSection: React.FC = () => {
                   endIcon={<ArrowForward />}
                   sx={{
                     bgcolor: 'white',
-                    color: FB_GREEN,
+                    color: FB_ACCENT,
                     fontWeight: 700,
                     px: 3.5,
                     '&:hover': { bgcolor: 'grey.50' },

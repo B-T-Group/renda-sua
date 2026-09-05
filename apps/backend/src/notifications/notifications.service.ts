@@ -63,6 +63,10 @@ import {
   type OrderRiskRecipient,
 } from './order-risk-recipients.util';
 import {
+  WHATSAPP_INBOX_STAFF_ROLES,
+  buildWhatsAppInboxPushCopy,
+} from './whatsapp-inbox-push.util';
+import {
   excludeActorFromOrderStatusRecipients,
   type OrderStatusRecipient,
 } from './order-status-recipients.util';
@@ -2924,21 +2928,6 @@ export class NotificationsService {
     return r.users_by_pk ?? null;
   }
 
-  private logPushSent(
-    userId: string,
-    channel: 'web' | 'expo',
-    data?: Record<string, unknown>,
-    messageCount?: number
-  ): void {
-    const orderId = data?.orderId ?? data?.order_id;
-    const orderNumber = data?.orderNumber ?? data?.order_number;
-    const countPart =
-      messageCount != null && messageCount > 0 ? ` messageCount=${messageCount}` : '';
-    this.logger.log(
-      `Push sent channel=${channel} userId=${userId} orderId=${String(orderId ?? 'n/a')} orderNumber=${String(orderNumber ?? 'n/a')}${countPart}`
-    );
-  }
-
   private async shouldUsePushOnlyForUser(
     userId: string | undefined
   ): Promise<boolean> {
@@ -3272,6 +3261,23 @@ export class NotificationsService {
     };
   }
 
+  private payAtPickupReadyPush(
+    orderNumber: string,
+    language?: string | null
+  ): { title: string; body: string } {
+    const isFr = (language || '').toLowerCase().startsWith('fr');
+    if (isFr) {
+      return {
+        title: 'Prête pour le retrait',
+        body: `La commande ${orderNumber} est prête. À votre arrivée, appuyez sur Payer dans l'application et approuvez la demande sur votre téléphone, puis récupérez vos articles.`,
+      };
+    }
+    return {
+      title: 'Ready for pickup',
+      body: `Order ${orderNumber} is ready. When you arrive, tap Pay in the app and approve the request on your phone, then collect your items.`,
+    };
+  }
+
   /**
    * Get title and body for push notification by order status.
    */
@@ -3283,10 +3289,10 @@ export class NotificationsService {
     if (status === 'ready_for_pickup') {
       if (data?.fulfillmentMethod === 'pickup') {
         if (data.paymentTiming === 'pay_at_pickup') {
-          return {
-            title: 'Ready for pickup',
-            body: `Order ${orderNumber} is ready at the store. Pay with mobile money when you pick up.`,
-          };
+          return this.payAtPickupReadyPush(
+            orderNumber,
+            data.clientPreferredLanguage
+          );
         }
         return {
           title: 'Ready for pickup',
@@ -3428,7 +3434,7 @@ export class NotificationsService {
     const payload = JSON.stringify({ title, body, ...data });
     let sent = 0;
     for (const sub of subs) {
-      if (await this.sendOneWebPush(sub, payload, userId, data)) sent += 1;
+      if (await this.sendOneWebPush(sub, payload)) sent += 1;
     }
     return sent;
   }
@@ -3464,9 +3470,7 @@ export class NotificationsService {
 
   private async sendOneWebPush(
     sub: { id: string; endpoint: string; p256dh_key: string; auth_key: string },
-    payload: string,
-    userId: string,
-    data?: Record<string, unknown>
+    payload: string
   ): Promise<boolean> {
     try {
       await webPush.sendNotification(
@@ -3477,7 +3481,6 @@ export class NotificationsService {
         payload,
         { TTL: 86400 }
       );
-      this.logPushSent(userId, 'web', data);
       return true;
     } catch (sendErr: any) {
       await this.handleWebPushSendFailure(sub.id, sub.endpoint, sendErr);
@@ -3856,7 +3859,7 @@ export class NotificationsService {
       const chunks = expo.chunkPushNotifications(messages);
       let sent = 0;
       for (const chunk of chunks) {
-        sent += await this.sendExpoPushChunk(chunk, userId, data);
+        sent += await this.sendExpoPushChunk(chunk);
       }
       return sent;
     } catch (err) {
@@ -3867,16 +3870,12 @@ export class NotificationsService {
     }
   }
 
-  private async sendExpoPushChunk(
-    chunk: ExpoPushMessage[],
-    userId: string,
-    data?: Record<string, unknown>
-  ): Promise<number> {
+  private async sendExpoPushChunk(chunk: ExpoPushMessage[]): Promise<number> {
     const expo = this.getExpoClient();
     if (!expo) return 0;
     try {
       const tickets = await expo.sendPushNotificationsAsync(chunk);
-      return this.applyExpoPushTickets(chunk, tickets, userId, data);
+      return this.applyExpoPushTickets(chunk, tickets);
     } catch (sendErr: any) {
       this.logger.warn(
         `Expo push chunk failed: ${
@@ -3889,15 +3888,12 @@ export class NotificationsService {
 
   private async applyExpoPushTickets(
     chunk: ExpoPushMessage[],
-    tickets: ExpoPushTicket[],
-    userId: string,
-    data?: Record<string, unknown>
+    tickets: ExpoPushTicket[]
   ): Promise<number> {
     let sent = 0;
     for (let i = 0; i < tickets.length; i++) {
       sent += await this.applyOneExpoTicket(this.expoTokenFromMessage(chunk[i]), tickets[i]);
     }
-    if (sent > 0) this.logPushSent(userId, 'expo', data, sent);
     return sent;
   }
 
@@ -4700,6 +4696,53 @@ export class NotificationsService {
           : undefined,
       },
     };
+  }
+
+  async notifyWhatsAppInboxInbound(params: {
+    conversationId: string;
+    preview: string;
+    customerPhone: string;
+  }): Promise<void> {
+    try {
+      await this.deliverWhatsAppInboxPush(params);
+    } catch (error: any) {
+      this.logger.error(
+        `notifyWhatsAppInboxInbound: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async deliverWhatsAppInboxPush(params: {
+    conversationId: string;
+    preview: string;
+    customerPhone: string;
+  }): Promise<void> {
+    const recipients = await this.listWhatsAppInboxRecipients();
+    const links = this.deepLinkService.whatsAppInbox(params.conversationId);
+    for (const recipient of recipients) {
+      const copy = buildWhatsAppInboxPushCopy({
+        preview: params.preview,
+        customerPhone: params.customerPhone,
+        preferredLanguage: recipient.preferredLanguage,
+      });
+      await this.sendPushNotificationByUserId(
+        recipient.userId,
+        copy.title,
+        copy.body,
+        {
+          type: 'whatsapp_inbox_message',
+          conversationId: params.conversationId,
+          url: links.path,
+        }
+      );
+    }
+  }
+
+  private async listWhatsAppInboxRecipients(): Promise<OrderRiskRecipient[]> {
+    return buildOrderRiskRecipients({
+      staff: await this.rbacService.listUsersWithRoles(),
+      roleKeys: WHATSAPP_INBOX_STAFF_ROLES,
+    });
   }
 
   async notifySuperusersItemAiReviewFailed(params: {
