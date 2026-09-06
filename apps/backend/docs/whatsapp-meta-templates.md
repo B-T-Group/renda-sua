@@ -21,7 +21,10 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `payment_failed` | `rs_payment_failed` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
 | `ai_proposal_ready` | `rs_ai_proposal` | UTILITY | itemName | URL CTA → `/app/items/{{1}}` |
 | `admin_order_risk` | `rs_admin_order_risk` | UTILITY | orderNumber, riskLabel, reason | URL CTA → `/app/admin/orders/{{1}}` |
-| `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
+| `recipient_order_placed` | `rs_recipient_order_placed` | UTILITY (IN_APPEAL) | payerName, storeName, orderNumber | none |
+| `recipient_out_for_delivery` | `rs_recipient_out_for_delivery` | UTILITY (IN_APPEAL) | orderNumber | none |
+| `recipient_order_ready` | `rs_recipient_order_ready` | UTILITY (IN_APPEAL) | orderNumber, storeName | none |
+| `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | none |
 
 ## Meta body rules (important)
 
@@ -380,44 +383,67 @@ Meta owns the body copy. Do not submit custom en/fr strings.
 
 ---
 
-## 13. `rs_recipient_order_update`
+## 13. `rs_recipient_order_placed` (IN_APPEAL)
+
+**Vars:** `{{1}}` payerName · `{{2}}` storeName · `{{3}}` orderNumber  
+**Button:** none  
+**Consent:** only send when `recipient_notify_whatsapp` is true.
+
+**en** / **fr** match Meta Manager (appealed Utility copies).
+
+---
+
+## 14. `rs_recipient_out_for_delivery` (IN_APPEAL)
+
+**Vars:** `{{1}}` orderNumber  
+**Button:** none
+
+---
+
+## 15. `rs_recipient_order_ready` (IN_APPEAL)
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` storeName  
+**Button:** none
+
+---
+
+## 16. `rs_recipient_order_update`
 
 **Vars:** `{{1}}` orderNumber · `{{2}}` statusLabel  
-**Button:** View order → `https://rendasua.com/app/orders/{{1}}`
+**Button:** none  
 
-Recipient order status update for diaspora recipients (third-party recipients who do not have a Rendasua account). Meta **rejected** dedicated recipient UTILITY names (`rs_recipient_order_placed`, `rs_rcpt_out_for_delivery`, `rs_recipient_order_ready`) with INCORRECT_CATEGORY, so all recipient status notifications now use this single template. SMS remains the fallback channel.
+Approved fallback for confirmed / delivered / cancelled.
 
 **en**
 ```
-Rendasua order update for you.
+Rendasua order update.
 
-Order number {{1}} status: {{2}}.
+Order {{1}} status: {{2}}.
 
-The person who placed this order for you will receive full details.
+You will get further updates here if anything changes.
 ```
 
 **fr**
 ```
-Mise à jour de commande Rendasua pour vous.
+Mise à jour de commande Rendasua.
 
-Numéro de commande {{1}}, statut : {{2}}.
+Statut de la commande {{1}} : {{2}}.
 
-La personne qui a passé cette commande pour vous recevra tous les détails.
+Vous recevrez d'autres mises à jour ici si quelque chose change.
 ```
 
 ---
 
-## Rejected templates (do not submit)
+## Rejected / do-not-reuse names
 
-Meta rejected the following template names with **INCORRECT_CATEGORY**. Do **not** create or submit these in Meta Business Manager:
+Do **not** recreate these alternate names (also rejected). Prefer the appealed `rs_recipient_*` names above:
 
-- `rs_recipient_order_placed`
-- `rs_rcpt_out_for_delivery` 
-- `rs_recipient_order_ready`
+- `rs_rcpt_delivery_notice`, `rs_rcpt_dlv_notice_mkt`
+- `rs_rcpt_out_for_delivery`, `rs_rcpt_delivery_enroute`, `rs_rcpt_dlv_enroute_mkt`
+- `rs_rcpt_ready_pickup`, `rs_rcpt_pickup_ready`, `rs_rcpt_pickup_rdy_mkt`
+- `rs_rcpt_order_contact` (separate contact template; also IN_APPEAL)
 
-These were intended as dedicated UTILITY templates for diaspora recipient order notifications (placed, out for delivery, ready for pickup). Meta's rejection reason suggests they should be MARKETING instead, which is not appropriate for transactional order status updates.
-
-**Workaround:** Use `rs_recipient_order_update` (approved UTILITY) with appropriate `statusLabel` values for all recipient order status notifications. Keep SMS as the fallback channel.
+Until appeals are approved, WhatsApp sends for placed / out-for-delivery / ready may fail and fall back to SMS.
 
 ---
 

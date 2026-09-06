@@ -349,25 +349,68 @@ Ouvrez le panneau d’administration pour contacter le client, le commerçant ou
   authTemplate('rs_login_code'),
   {
     kind: 'content',
+    name: 'rs_recipient_order_placed',
+    category: 'UTILITY',
+    exampleValues: ['Jane Doe', 'Acme Store', 'ORD-1001'],
+    body: {
+      en: `Rendasua: someone placed an order for you.
+
+{{1}} ordered for you at {{2}}.
+Order number: {{3}}.
+
+You will receive tracking updates and your delivery code on WhatsApp.`,
+      fr: `Rendasua : quelqu'un a commandé pour vous.
+
+{{1}} a commandé pour vous chez {{2}}.
+Numéro de commande : {{3}}.
+
+Vous recevrez les mises à jour de suivi et votre code de livraison sur WhatsApp.`,
+    },
+  },
+  {
+    kind: 'content',
+    name: 'rs_recipient_out_for_delivery',
+    category: 'UTILITY',
+    exampleValues: ['ORD-1001'],
+    body: {
+      en: `Rendasua: your order is out for delivery.
+
+Order {{1}} is on the way. Give your delivery code only to the Rendasua agent at handover.`,
+      fr: `Rendasua : votre commande est en cours de livraison.
+
+La commande {{1}} est en route. Donnez votre code de livraison uniquement au livreur Rendasua lors de la remise.`,
+    },
+  },
+  {
+    kind: 'content',
+    name: 'rs_recipient_order_ready',
+    category: 'UTILITY',
+    exampleValues: ['ORD-1001', 'Acme Store'],
+    body: {
+      en: `Rendasua: your order is ready for pickup.
+
+Order {{1}} can be collected at {{2}}. Show your pickup code when you arrive.`,
+      fr: `Rendasua : votre commande est prête pour le retrait.
+
+La commande {{1}} peut être récupérée chez {{2}}. Présentez votre code de retrait à votre arrivée.`,
+    },
+  },
+  {
+    kind: 'content',
     name: 'rs_recipient_order_update',
     category: 'UTILITY',
     exampleValues: ['ORD-1001', 'confirmed'],
-    button: {
-      text: { en: 'View order', fr: 'Voir la commande' },
-      url: `${APP}/app/orders/{{1}}`,
-      dynamic: true,
-    },
     body: {
-      en: `Rendasua order update for you.
+      en: `Rendasua order update.
 
-Order number {{1}} status: {{2}}.
+Order {{1}} status: {{2}}.
 
-The person who placed this order for you will receive full details.`,
-      fr: `Mise à jour de commande Rendasua pour vous.
+You will get further updates here if anything changes.`,
+      fr: `Mise à jour de commande Rendasua.
 
-Numéro de commande {{1}}, statut : {{2}}.
+Statut de la commande {{1}} : {{2}}.
 
-La personne qui a passé cette commande pour vous recevra tous les détails.`,
+Vous recevrez d'autres mises à jour ici si quelque chose change.`,
     },
   },
 ];
@@ -443,7 +486,10 @@ function contentComponents(
   template: ContentTemplate,
   language: TemplateLanguage
 ): GraphComponent[] {
-  return [bodyComponent(template, language), buttonsComponent(template, language)];
+  const components: GraphComponent[] = [bodyComponent(template, language)];
+  const buttons = buttonsComponent(template, language);
+  if (buttons) components.push(buttons);
+  return components;
 }
 
 function bodyComponent(
@@ -460,7 +506,7 @@ function bodyComponent(
 function buttonsComponent(
   template: ContentTemplate,
   language: TemplateLanguage
-): GraphComponent {
+): GraphComponent | null {
   if (template.quickReplies?.length) {
     return {
       type: 'BUTTONS',
@@ -470,9 +516,7 @@ function buttonsComponent(
       })),
     };
   }
-  if (!template.button) {
-    return { type: 'BUTTONS', buttons: [] };
-  }
+  if (!template.button) return null;
   return {
     type: 'BUTTONS',
     buttons: [urlButton(template, language)],
@@ -539,8 +583,9 @@ function urlButtonNeedsUpdate(
       );
     });
   }
+  if (!template.button) return buttons.length > 0;
   const first = buttons[0];
-  if (!first || !template.button) return true;
+  if (!first) return true;
   return (
     (first.text ?? '') !== template.button.text[language] ||
     (first.url ?? '') !== template.button.url

@@ -183,6 +183,18 @@ describe('WhatsAppTemplateService — recipient templates', () => {
     expect(service.needsDynamicCta('recipient_order_update')).toBe(false);
   });
 
+  it('maps to the appealed Meta template names', () => {
+    expect(service.resolveMetaName('recipient_order_placed', 'en')).toBe(
+      'rs_recipient_order_placed'
+    );
+    expect(service.resolveMetaName('recipient_out_for_delivery', 'fr')).toBe(
+      'rs_recipient_out_for_delivery'
+    );
+    expect(service.resolveMetaName('recipient_order_ready', 'en')).toBe(
+      'rs_recipient_order_ready'
+    );
+  });
+
   it('builds recipient placed template with payer, store, and order', () => {
     const components = service.buildComponents({
       templateKey: 'recipient_order_placed',

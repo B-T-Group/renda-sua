@@ -137,7 +137,10 @@ const RecipientFormDialog: React.FC<RecipientFormDialogProps> = ({
                   {t('recipients.whatsapp', 'Send updates on WhatsApp')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {t('recipients.whatsappHelp', 'Falls back to SMS if needed')}
+                  {t(
+                    'recipients.whatsappHelp',
+                    'Only if they agreed to receive Rendasua WhatsApp messages about this delivery. Falls back to SMS if needed.'
+                  )}
                 </Typography>
               </Box>
             }
