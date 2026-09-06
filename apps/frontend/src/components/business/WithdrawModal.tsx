@@ -15,22 +15,12 @@ import {
 import { alpha } from '@mui/material/styles';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isCmOrGaPhone } from '../../utils/withdrawPhone';
 import PhoneInput from '../common/PhoneInput';
 
 type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
 
 const MIN_WITHDRAW_AMOUNT = 150;
-
-function isCmOrGaPhone(phone: string): boolean {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('237')) {
-    return digits.length >= 12;
-  }
-  if (digits.startsWith('241')) {
-    return digits.length >= 11;
-  }
-  return false;
-}
 
 interface WithdrawModalProps {
   open: boolean;
