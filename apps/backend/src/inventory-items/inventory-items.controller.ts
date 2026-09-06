@@ -596,14 +596,14 @@ export class InventoryItemsController {
 
       const requestedLimit = processedQuery.limit || 20;
       const clampedLimit = Math.min(Math.max(requestedLimit, 1), 50);
+      const hasOrigin = Number.isFinite(oLat) && Number.isFinite(oLng);
       const isCacheable =
         !processedQuery.owner_preview &&
-        !processedQuery.business_id;
+        !processedQuery.business_id &&
+        !hasOrigin;
 
       if (isCacheable) {
-        const generation = await this.catalogCacheService.getGeneration(
-          processedQuery.country_code || 'global'
-        );
+        const generation = await this.catalogCacheService.getGeneration('global');
         const cacheKey = [
           'items',
           generation,

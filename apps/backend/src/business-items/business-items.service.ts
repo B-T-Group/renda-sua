@@ -830,9 +830,9 @@ export class BusinessItemsService {
     private readonly catalogCacheService: CatalogCacheService
   ) {}
 
-  private async invalidateCatalogCache(countryCode?: string): Promise<void> {
+  private async invalidateCatalogCache(): Promise<void> {
     try {
-      await this.catalogCacheService.incrementGeneration(countryCode || 'global');
+      await this.catalogCacheService.incrementGeneration('global');
     } catch (error: any) {
       this.logger.warn(`Failed to invalidate catalog cache: ${error.message}`);
     }
