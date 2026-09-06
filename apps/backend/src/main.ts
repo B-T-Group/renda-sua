@@ -179,6 +179,9 @@ async function bootstrap() {
       'Authorization',
       'X-Client-Platform',
       'X-Requested-With',
+      'X-Hasura-Role',
+      'X-Active-Delegation',
+      'X-Active-Persona',
     ],
   });
 
