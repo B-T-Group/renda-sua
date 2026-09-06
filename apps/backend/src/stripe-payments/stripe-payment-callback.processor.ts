@@ -361,10 +361,9 @@ export class StripePaymentCallbackProcessor {
     ) {
       return;
     }
-    const result = await this.accountsService.registerTransaction({
+    const result = await this.accountsService.registerDepositIfNotExists({
       accountId: tx.account_id,
       amount: tx.amount,
-      transactionType: 'deposit',
       memo: `Stripe payment deposit - ${tx.reference}`,
       referenceId: tx.id,
     });
@@ -374,9 +373,11 @@ export class StripePaymentCallbackProcessor {
       );
       return;
     }
-    this.logger.log(
-      `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
-    );
+    if (!result.alreadyExists) {
+      this.logger.log(
+        `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
+      );
+    }
   }
 
   private async runHandlerAuthorized(

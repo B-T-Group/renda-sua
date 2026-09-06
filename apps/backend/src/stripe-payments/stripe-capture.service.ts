@@ -232,7 +232,7 @@ export class StripeCaptureService {
     });
   }
 
-  /** Credit client wallet after synchronous capture (webhook skips when tx is already success). */
+  /** Credit client wallet after capture. Idempotent if the webhook already deposited. */
   async creditWalletForCapturedOrder(
     orderNumber: string
   ): Promise<string | null> {
@@ -240,10 +240,9 @@ export class StripeCaptureService {
     if (!tx?.account_id || tx.transaction_type !== 'PAYMENT') {
       return tx?.account_id ?? null;
     }
-    const result = await this.accountsService.registerTransaction({
+    const result = await this.accountsService.registerDepositIfNotExists({
       accountId: tx.account_id,
       amount: tx.amount,
-      transactionType: 'deposit',
       memo: `Stripe payment deposit - ${tx.reference}`,
       referenceId: tx.id,
     });
@@ -253,9 +252,11 @@ export class StripeCaptureService {
       );
       return null;
     }
-    this.logger.log(
-      `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
-    );
+    if (!result.alreadyExists) {
+      this.logger.log(
+        `Credited account ${tx.account_id} with ${tx.amount} ${tx.currency}`
+      );
+    }
     return tx.account_id;
   }
 

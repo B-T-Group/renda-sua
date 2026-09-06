@@ -115,6 +115,59 @@ describe('AccountsService', () => {
     });
   });
 
+  describe('registerDepositIfNotExists', () => {
+    it('skips insert when a deposit already exists for the reference', async () => {
+      executeQuery.mockResolvedValue({
+        account_transactions: [{ id: 'dep-1' }],
+      });
+
+      await expect(
+        service.registerDepositIfNotExists({
+          accountId,
+          amount: 125,
+          memo: 'Stripe payment deposit - ref',
+          referenceId,
+        })
+      ).resolves.toEqual({ success: true, alreadyExists: true });
+
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('inserts a deposit when none exists for the reference', async () => {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('HasAccountTransaction')) {
+          return { account_transactions: [] };
+        }
+        if (query.includes('GetAccountById')) {
+          return { accounts_by_pk: activeAccount };
+        }
+        return {};
+      });
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx-new' } };
+        }
+        if (mutation.includes('UpdateAccountBalances')) {
+          return { update_accounts_by_pk: { id: accountId } };
+        }
+        return {};
+      });
+
+      await expect(
+        service.registerDepositIfNotExists({
+          accountId,
+          amount: 125,
+          memo: 'Stripe payment deposit - ref',
+          referenceId,
+        })
+      ).resolves.toMatchObject({
+        success: true,
+        alreadyExists: false,
+        transactionId: 'tx-new',
+      });
+    });
+  });
+
   describe('registerTransaction', () => {
     beforeEach(() => {
       mockAccount(activeAccount);
