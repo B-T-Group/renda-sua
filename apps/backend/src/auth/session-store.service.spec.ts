@@ -116,6 +116,29 @@ describe('SessionStoreService', () => {
     expect((store as any).inMemoryStore.has('sid-bad')).toBe(false);
   });
 
+  it('deletes an undecryptable Redis session without recursing through getSession', async () => {
+    const { store, redisApi } = await redisStore();
+    redisApi.get.mockResolvedValue('not:valid:ciphertext');
+
+    await expect(store.getSession('sid-bad')).resolves.toBeNull();
+
+    expect(redisApi.del).toHaveBeenCalledWith('session:sid-bad');
+    expect(redisApi.get.mock.calls.length).toBeLessThan(5);
+    expect(redisApi.sRem).not.toHaveBeenCalled();
+  });
+
+  it('removes a readable Redis session from its family set on delete', async () => {
+    const { store, redisApi } = await redisStore();
+    await store.createSession('sid-1', sessionData({ familyId: 'fam-1' }));
+    const stored = redisApi.setEx.mock.calls[0][2] as string;
+    redisApi.get.mockResolvedValue(stored);
+
+    await store.deleteSession('sid-1');
+
+    expect(redisApi.del).toHaveBeenCalledWith('session:sid-1');
+    expect(redisApi.sRem).toHaveBeenCalledWith('session-family:fam-1', 'sid-1');
+  });
+
   it('rotates a live session and retires the previous id', async () => {
     const store = memoryStore();
     await store.createSession('sid-old', sessionData({ familyId: 'fam-1' }));
