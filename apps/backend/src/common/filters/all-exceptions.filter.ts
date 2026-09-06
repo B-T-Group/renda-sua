@@ -11,6 +11,10 @@ import { Request, Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
 import {
+  REDIS_UNAVAILABLE_MESSAGE,
+  isTransientRedisError,
+} from '../redis-error.util';
+import {
   HASURA_UNAVAILABLE_MESSAGE,
   hasuraUnavailableResponse,
   isTransientHasuraNetworkError,
@@ -47,6 +51,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (isTransientHasuraNetworkError(exception)) {
       return HttpStatus.SERVICE_UNAVAILABLE;
     }
+    if (isTransientRedisError(exception)) {
+      return HttpStatus.SERVICE_UNAVAILABLE;
+    }
     return HttpStatus.INTERNAL_SERVER_ERROR;
   }
 
@@ -66,6 +73,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         success: false,
         statusCode: status,
         message: HASURA_UNAVAILABLE_MESSAGE,
+      };
+    }
+    if (isTransientRedisError(exception)) {
+      return {
+        success: false,
+        statusCode: status,
+        message: REDIS_UNAVAILABLE_MESSAGE,
       };
     }
     return {

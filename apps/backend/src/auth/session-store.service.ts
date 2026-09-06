@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, RedisClientType } from 'redis';
 import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
 import { Configuration } from '../config/configuration';
+import { redisCommandOrFallback } from '../common/redis-error.util';
 
 export interface SessionData {
   userId: string;
@@ -21,6 +22,7 @@ export interface SessionData {
 export class SessionStoreService implements OnModuleDestroy {
   private readonly logger = new Logger(SessionStoreService.name);
   private redisClient: RedisClientType | null = null;
+  private redisUnhealthy = false;
   private readonly inMemoryStore = new Map<string, string>();
   private readonly encryptionKey: Buffer;
   private readonly SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
@@ -76,6 +78,7 @@ export class SessionStoreService implements OnModuleDestroy {
         socket: {
           host: redis.host,
           port: redis.port,
+          connectTimeout: 5000,
         },
         password: redis.password,
       });
@@ -113,6 +116,35 @@ export class SessionStoreService implements OnModuleDestroy {
     return randomBytes(32).toString('base64url');
   }
 
+  private isProduction(): boolean {
+    return (process.env.NODE_ENV || 'development') === 'production';
+  }
+
+  private canUseRedis(): boolean {
+    return !this.redisUnhealthy && Boolean(this.redisClient?.isReady);
+  }
+
+  private markRedisUnhealthy(error: unknown): void {
+    if (!this.isProduction()) this.redisUnhealthy = true;
+    const err = error as { message?: string; name?: string };
+    this.logger.warn(
+      `Redis session command failed: ${err?.message || err?.name || 'unknown'}`
+    );
+  }
+
+  private withStore<T>(
+    redisOp: () => Promise<T>,
+    fallbackOp: () => T | Promise<T>
+  ): Promise<T> {
+    return redisCommandOrFallback({
+      canUseRedis: this.canUseRedis(),
+      failClosed: this.isProduction(),
+      redisOp,
+      fallbackOp,
+      onError: (error) => this.markRedisUnhealthy(error),
+    });
+  }
+
   private encrypt(text: string): string {
     const iv = randomBytes(16);
     const cipher = createCipheriv(this.ALGORITHM, this.encryptionKey, iv);
@@ -141,36 +173,43 @@ export class SessionStoreService implements OnModuleDestroy {
     data: SessionData
   ): Promise<void> {
     const encrypted = this.encrypt(JSON.stringify(data));
+    const familyId = data.familyId || sessionId;
+    await this.withStore(
+      () => this.writeRedisSession(sessionId, familyId, encrypted),
+      () => this.writeMemorySession(sessionId, encrypted)
+    );
+  }
 
-    if (this.redisClient?.isOpen) {
-      await this.redisClient.setEx(
-        `session:${sessionId}`,
-        this.SESSION_TTL_SECONDS,
-        encrypted
-      );
-      
-      // Track session in family SET for reuse detection
-      const familyId = data.familyId || sessionId;
-      await this.redisClient.sAdd(`session-family:${familyId}`, sessionId);
-      // Set TTL on family SET to auto-cleanup
-      await this.redisClient.expire(`session-family:${familyId}`, this.SESSION_TTL_SECONDS);
-    } else {
-      this.inMemoryStore.set(sessionId, encrypted);
-      setTimeout(
-        () => this.inMemoryStore.delete(sessionId),
-        this.SESSION_TTL_SECONDS * 1000
-      );
-    }
+  private async writeRedisSession(
+    sessionId: string,
+    familyId: string,
+    encrypted: string
+  ): Promise<void> {
+    await this.redisClient!.setEx(
+      `session:${sessionId}`,
+      this.SESSION_TTL_SECONDS,
+      encrypted
+    );
+    await this.redisClient!.sAdd(`session-family:${familyId}`, sessionId);
+    await this.redisClient!.expire(
+      `session-family:${familyId}`,
+      this.SESSION_TTL_SECONDS
+    );
+  }
+
+  private writeMemorySession(sessionId: string, encrypted: string): void {
+    this.inMemoryStore.set(sessionId, encrypted);
+    setTimeout(
+      () => this.inMemoryStore.delete(sessionId),
+      this.SESSION_TTL_SECONDS * 1000
+    );
   }
 
   async getSession(sessionId: string): Promise<SessionData | null> {
-    let encrypted: string | null = null;
-
-    if (this.redisClient?.isOpen) {
-      encrypted = await this.redisClient.get(`session:${sessionId}`);
-    } else {
-      encrypted = this.inMemoryStore.get(sessionId) || null;
-    }
+    const encrypted = await this.withStore(
+      () => this.redisClient!.get(`session:${sessionId}`),
+      () => this.inMemoryStore.get(sessionId) || null
+    );
 
     if (!encrypted) return null;
 
@@ -197,20 +236,20 @@ export class SessionStoreService implements OnModuleDestroy {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    if (this.redisClient?.isOpen) {
-      // Get session data to find family before deleting
-      const data = await this.getSession(sessionId);
-      
-      await this.redisClient.del(`session:${sessionId}`);
-      
-      // Remove from family SET
-      if (data) {
-        const familyId = data.familyId || sessionId;
-        await this.redisClient.sRem(`session-family:${familyId}`, sessionId);
+    await this.withStore(
+      () => this.deleteRedisSession(sessionId),
+      () => {
+        this.inMemoryStore.delete(sessionId);
       }
-    } else {
-      this.inMemoryStore.delete(sessionId);
-    }
+    );
+  }
+
+  private async deleteRedisSession(sessionId: string): Promise<void> {
+    const data = await this.getSession(sessionId);
+    await this.redisClient!.del(`session:${sessionId}`);
+    if (!data) return;
+    const familyId = data.familyId || sessionId;
+    await this.redisClient!.sRem(`session-family:${familyId}`, sessionId);
   }
 
   async rotateSession(oldSessionId: string): Promise<string | null> {
@@ -248,35 +287,36 @@ export class SessionStoreService implements OnModuleDestroy {
   }
 
   private async invalidateSessionFamily(familyId: string): Promise<void> {
-    this.logger.warn(`Invalidating session family ${familyId.slice(0, 8)}... due to reuse detection`);
-    
-    if (this.redisClient?.isOpen) {
-      // Get all session IDs in this family from Redis SET
-      const sessionIds = await this.redisClient.sMembers(`session-family:${familyId}`);
-      
-      if (sessionIds.length > 0) {
-        this.logger.warn(`Deleting ${sessionIds.length} sessions in family ${familyId.slice(0, 8)}...`);
-        
-        // Delete all sessions in the family
-        const pipeline = this.redisClient.multi();
-        for (const sessionId of sessionIds) {
-          pipeline.del(`session:${sessionId}`);
+    this.logger.warn(
+      `Invalidating session family ${familyId.slice(0, 8)}... due to reuse detection`
+    );
+    await this.withStore(
+      () => this.invalidateRedisFamily(familyId),
+      () => this.invalidateMemoryFamily(familyId)
+    );
+  }
+
+  private async invalidateRedisFamily(familyId: string): Promise<void> {
+    const sessionIds = await this.redisClient!.sMembers(`session-family:${familyId}`);
+    if (sessionIds.length === 0) return;
+    this.logger.warn(`Deleting ${sessionIds.length} sessions in family`);
+    const pipeline = this.redisClient!.multi();
+    for (const sessionId of sessionIds) {
+      pipeline.del(`session:${sessionId}`);
+    }
+    pipeline.del(`session-family:${familyId}`);
+    await pipeline.exec();
+  }
+
+  private async invalidateMemoryFamily(familyId: string): Promise<void> {
+    for (const [sessionId, encryptedData] of this.inMemoryStore.entries()) {
+      try {
+        const data = JSON.parse(this.decrypt(encryptedData)) as SessionData;
+        if (data.familyId === familyId || sessionId === familyId) {
+          this.inMemoryStore.delete(sessionId);
         }
-        // Delete the family SET itself
-        pipeline.del(`session-family:${familyId}`);
-        await pipeline.exec();
-      }
-    } else {
-      // For in-memory store, scan all sessions
-      for (const [sessionId, encryptedData] of this.inMemoryStore.entries()) {
-        try {
-          const data = JSON.parse(this.decrypt(encryptedData)) as SessionData;
-          if (data.familyId === familyId || sessionId === familyId) {
-            await this.deleteSession(sessionId);
-          }
-        } catch {
-          // Skip invalid sessions
-        }
+      } catch {
+        // Skip invalid sessions
       }
     }
   }
