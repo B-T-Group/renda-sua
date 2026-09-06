@@ -291,6 +291,71 @@ describe('OrdersService carrier shipping', () => {
     );
   });
 
+  it('rejects completePreparation so shipping orders cannot enter agent dispatch', async () => {
+    hasuraUserService.getUser.mockResolvedValue(businessUser);
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(shippingOrder);
+    const schedule = jest.spyOn(service as any, 'scheduleAgentDispatchGate');
+
+    await expect(
+      service.completePreparation({ orderId: 'order-123' })
+    ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it('rejects pickUpOrder before Stripe capture for shipping orders', async () => {
+    hasuraUserService.sessionPersonaContext.mockReturnValue({
+      jwtDefaultRole: 'agent',
+      jwtAllowedRoles: ['agent'],
+    });
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'agent-user',
+      active_persona: 'agent',
+      agent: { id: 'agent-1' },
+    });
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+      ...shippingOrder,
+      current_status: 'assigned_to_agent',
+      assigned_agent_id: 'agent-1',
+    });
+    const capture = jest.spyOn(
+      service as any,
+      'captureStripeAuthorizedOrderIfNeeded'
+    );
+
+    await expect(
+      service.pickUpOrder({ orderId: 'order-123' })
+    ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('rejects claiming a shipping order for agent delivery', async () => {
+    expect(() =>
+      (service as any).assertClaimableFulfillment(shippingOrder)
+    ).toThrow(
+      expect.objectContaining({
+        response: expect.objectContaining({
+          error: 'SHIPPING_ORDER_NOT_CLAIMABLE',
+        }),
+      })
+    );
+  });
+
+  it('can mark a misrouted ready_for_pickup shipping order as shipped', async () => {
+    hasuraUserService.getUser.mockResolvedValue(businessUser);
+    jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+      ...shippingOrder,
+      current_status: 'ready_for_pickup',
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_orders_by_pk: { ...shippingOrder, current_status: 'shipped' },
+    });
+
+    const result = await service.markOrderAsShipped('order-123');
+
+    expect(result.success).toBe(true);
+    expect(result.order.current_status).toBe('shipped');
+  });
+
   it('uses the customer ship-to address for shipping Stripe tax retry params', async () => {
     const shipTo = {
       address_line_1: '1 King St',

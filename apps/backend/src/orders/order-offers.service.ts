@@ -222,7 +222,7 @@ export class OrderOffersService {
     return (
       order.current_status === 'ready_for_pickup' &&
       !order.assigned_agent_id &&
-      order.fulfillment_method !== 'pickup'
+      order.fulfillment_method === 'delivery'
     );
   }
 

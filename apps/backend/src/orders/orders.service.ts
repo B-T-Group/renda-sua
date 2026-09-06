@@ -1486,6 +1486,10 @@ export class OrdersService {
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+    this.assertNotCarrierShipping(
+      order,
+      'Carrier shipping orders must be marked as shipped, not set ready for pickup'
+    );
     await this.ensurePickupPinIfNeeded(order);
     await this.fulfillmentPromiseService.reanchorAsapAtReady(request.orderId);
     // Persist the dispatch gate BEFORE flipping the status: the status write
@@ -1516,18 +1520,17 @@ export class OrdersService {
   }
 
   /**
-   * Persist ready-time pickup_by and, for delivery, the agent dispatch gate.
-   * Pickup orders are never dispatched (returns null after writing pickup_by).
+   * Compute when agent dispatch/open-order visibility should open for a newly
+   * ready_for_pickup order (dispatch lead time before the scheduled delivery/
+   * pickup window) and persist it. Delivery orders only; pickup orders are
+   * never dispatched. Returns null for pickup/shipping orders or on failure.
    */
   private async scheduleAgentDispatchGate(
     order: Orders
   ): Promise<{ dispatchReadyAt: Date; pickupBy: Date | null } | null> {
+    if (this.isStorePickup(order) || this.isCarrierShipping(order)) return null;
     try {
       const schedule = await this.computeDispatchSchedule(order);
-      if ((order as any).fulfillment_method === 'pickup') {
-        await this.persistPickupBy(order.id, schedule.pickupBy);
-        return null;
-      }
       await this.persistDispatchSchedule(
         order.id,
         schedule.dispatchReadyAt,
@@ -1618,24 +1621,6 @@ export class OrdersService {
         ) { id }
       }`,
       { id: orderId }
-    );
-  }
-
-  private async persistPickupBy(
-    orderId: string,
-    pickupBy: Date | null
-  ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(
-      `mutation SetPickupBy($id: uuid!, $pickupBy: timestamptz) {
-        update_orders_by_pk(
-          pk_columns: { id: $id }
-          _set: { pickup_by: $pickupBy, updated_at: "now()" }
-        ) { id }
-      }`,
-      {
-        id: orderId,
-        pickupBy: pickupBy ? pickupBy.toISOString() : null,
-      }
     );
   }
 
@@ -2147,16 +2132,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    if ((order as any).fulfillment_method === 'pickup') {
-      throw new HttpException(
-        {
-          message:
-            'This order is for customer pickup at the store and cannot be claimed for delivery.',
-          error: 'PICKUP_ORDER_NOT_CLAIMABLE',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    this.assertClaimableFulfillment(order);
 
     // Check if order requires internal agent (high-value orders)
     if (order.verified_agent_delivery && !agent.is_internal) {
@@ -2376,16 +2352,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    if ((order as any).fulfillment_method === 'pickup') {
-      throw new HttpException(
-        {
-          message:
-            'This order is for customer pickup at the store and cannot be claimed for delivery.',
-          error: 'PICKUP_ORDER_NOT_CLAIMABLE',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    this.assertClaimableFulfillment(order);
 
     // Check if order requires internal agent (high-value orders)
     if (order.verified_agent_delivery && !agent.is_internal) {
@@ -2691,6 +2658,10 @@ export class OrdersService {
         'Only the assigned agent can pick up this order',
         HttpStatus.FORBIDDEN
       );
+    this.assertNotCarrierShipping(
+      order,
+      'Carrier shipping orders cannot be picked up by delivery agents'
+    );
     if (order.current_status !== 'assigned_to_agent')
       throw new HttpException(
         `Cannot pick up order in ${order.current_status} status`,
@@ -5272,7 +5243,7 @@ export class OrdersService {
     // order_holds, and order item prices are excluded.
     const query = `
       query OpenOrders($now: timestamptz!) {
-        orders(where: {_and: [{current_status: {_eq: "ready_for_pickup"}}, {assigned_agent_id: {_is_null: true}}, {fulfillment_method: {_neq: pickup}}, {_or: [{dispatch_ready_at: {_is_null: true}}, {dispatch_ready_at: {_lte: $now}}]}]}) {
+        orders(where: {_and: [{current_status: {_eq: "ready_for_pickup"}}, {assigned_agent_id: {_is_null: true}}, {fulfillment_method: {_eq: delivery}}, {_or: [{dispatch_ready_at: {_is_null: true}}, {dispatch_ready_at: {_lte: $now}}]}]}) {
           id
           order_number
           subtotal
@@ -11823,6 +11794,36 @@ export class OrdersService {
     });
   }
 
+  private isCarrierShipping(order: any): boolean {
+    return order?.fulfillment_method === 'shipping';
+  }
+
+  private isStorePickup(order: any): boolean {
+    return order?.fulfillment_method === 'pickup';
+  }
+
+  private assertNotCarrierShipping(order: any, message: string): void {
+    if (this.isCarrierShipping(order)) {
+      throw new HttpException(message, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  private assertClaimableFulfillment(order: any): void {
+    if (!this.isStorePickup(order) && !this.isCarrierShipping(order)) return;
+    const shipping = this.isCarrierShipping(order);
+    throw new HttpException(
+      {
+        message: shipping
+          ? 'This order ships by carrier and cannot be claimed for delivery.'
+          : 'This order is for customer pickup at the store and cannot be claimed for delivery.',
+        error: shipping
+          ? 'SHIPPING_ORDER_NOT_CLAIMABLE'
+          : 'PICKUP_ORDER_NOT_CLAIMABLE',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
   private assertShippingFulfillment(order: any, message: string): void {
     if (order.fulfillment_method !== 'shipping') {
       throw new HttpException(message, HttpStatus.BAD_REQUEST);
@@ -11855,7 +11856,12 @@ export class OrdersService {
       'Only shipping orders can be marked as shipped'
     );
 
-    const validStatuses = ['confirmed', 'preparing', 'awaiting_shipment'];
+    const validStatuses = [
+      'confirmed',
+      'preparing',
+      'awaiting_shipment',
+      'ready_for_pickup',
+    ];
     if (!validStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Order must be in ${validStatuses.join(' or ')} status to mark as shipped`,

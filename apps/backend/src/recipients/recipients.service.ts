@@ -27,6 +27,36 @@ interface UserRecipient {
   updated_at: string;
 }
 
+const RECIPIENT_FIELDS = `
+  id
+  user_id
+  country
+  name
+  phone
+  notify_whatsapp
+  created_at
+  updated_at
+`;
+
+/** Country is only declared when filtered — unused vars fail Hasura validation. */
+function buildListRecipientsQuery(hasCountry: boolean): string {
+  const countryVar = hasCountry ? ', $country: String!' : '';
+  const countryFilter = hasCountry ? 'country: { _eq: $country }' : '';
+  return `
+    query ListRecipients($userId: uuid!${countryVar}) {
+      user_recipients(
+        where: {
+          user_id: { _eq: $userId }
+          ${countryFilter}
+        }
+        order_by: { created_at: desc }
+      ) {
+        ${RECIPIENT_FIELDS}
+      }
+    }
+  `;
+}
+
 @Injectable()
 export class RecipientsService {
   private readonly logger = new Logger(RecipientsService.name);
@@ -53,35 +83,14 @@ export class RecipientsService {
       ? normalizeCountryCode(country)
       : null;
 
-    const query = `
-      query ListRecipients($userId: uuid!, $country: String) {
-        user_recipients(
-          where: {
-            user_id: { _eq: $userId }
-            ${normalizedCountry ? 'country: { _eq: $country }' : ''}
-          }
-          order_by: { created_at: desc }
-        ) {
-          id
-          user_id
-          country
-          name
-          phone
-          notify_whatsapp
-          created_at
-          updated_at
-        }
-      }
-    `;
-
     try {
       const response = await this.hasuraUserService.executeQuery<{
         user_recipients: UserRecipient[];
       }>(
-        query,
+        buildListRecipientsQuery(Boolean(normalizedCountry)),
         {
           userId,
-          country: normalizedCountry,
+          ...(normalizedCountry ? { country: normalizedCountry } : {}),
         },
         ctx
       );

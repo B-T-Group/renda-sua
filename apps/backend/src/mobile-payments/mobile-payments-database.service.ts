@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
 
 export interface MobilePaymentTransaction {
   id: string;
@@ -262,6 +263,76 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get mobile payment transaction by reference:',
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Find MyPVIT transaction by short reference (from callback).
+   * MyPVIT sends back a short reference (≤15 chars) but we store the long reference.
+   * This method finds the transaction by matching the short reference against all pending MyPVIT transactions.
+   */
+  async findMyPVitTransactionByShortReference(
+    shortReference: string
+  ): Promise<MobilePaymentTransaction | null> {
+    try {
+      // Get recent pending transactions (last 24 hours) from MyPVIT providers
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+      
+      const query = `
+        query FindMyPVitTransactionByShortRef($startDate: timestamptz!) {
+          mobile_payment_transactions(
+            where: {
+              provider: { _eq: "mypvit" }
+              created_at: { _gte: $startDate }
+            }
+            order_by: { created_at: desc }
+            limit: 100
+          ) {
+            id
+            reference
+            amount
+            currency
+            description
+            provider
+            payment_method
+            status
+            transaction_id
+            account_id
+            transaction_type
+            payment_entity
+            customer_phone
+            customer_email
+            error_message
+            error_code
+            created_at
+            updated_at
+            entity_id
+          }
+        }
+      `;
+
+      const response = await this.hasuraService.executeQuery(query, {
+        startDate: twentyFourHoursAgo.toISOString(),
+      });
+      
+      const transactions = response.mobile_payment_transactions || [];
+      
+      // Find the transaction whose long reference generates the matching short reference
+      for (const tx of transactions) {
+        const derivedShortRef = buildShortReferenceForMyPVit(tx.reference);
+        if (derivedShortRef === shortReference) {
+          return tx;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      this.logger.error(
+        'Failed to find MyPVIT transaction by short reference:',
         error
       );
       throw error;

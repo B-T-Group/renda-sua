@@ -41,6 +41,29 @@ export function sanitizeFreeInfo(value?: string): string | undefined {
   return cleaned || undefined;
 }
 
+/**
+ * Generate a short reference (≤15 chars) for MyPVIT API from a long DB reference.
+ * MyPVIT documents `reference` max 15 characters.
+ * Uses a deterministic hash of the long reference to ensure uniqueness and enable lookup.
+ */
+export function buildShortReferenceForMyPVit(longReference: string): string {
+  // Create a deterministic hash from the long reference (no timestamps)
+  // Format: M{13-char-hash} = 14 chars total
+  
+  let hash = 0;
+  for (let i = 0; i < longReference.length; i++) {
+    const char = longReference.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Convert to base36 (alphanumeric) and ensure we get exactly 13 characters
+  const absHash = Math.abs(hash);
+  const hashStr = absHash.toString(36).padStart(13, '0').slice(-13);
+  
+  return `M${hashStr}`;
+}
+
 export interface MyPVitPaymentResponse {
   success: boolean;
   transactionId?: string;

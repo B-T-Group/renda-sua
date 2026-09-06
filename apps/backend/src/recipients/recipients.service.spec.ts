@@ -43,11 +43,10 @@ describe('RecipientsService', () => {
       const result = await service.listRecipients(mockCtx);
 
       expect(result).toEqual([mockRecipient]);
-      expect(executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('ListRecipients'),
-        { userId, country: null },
-        mockCtx
-      );
+      const [query, variables] = executeQuery.mock.calls[0];
+      expect(query).toContain('ListRecipients');
+      expect(query).not.toMatch(/\$country/);
+      expect(variables).toEqual({ userId });
     });
 
     it('filters recipients by country when provided', async () => {
@@ -57,11 +56,21 @@ describe('RecipientsService', () => {
 
       await service.listRecipients(mockCtx, 'GA');
 
-      expect(executeQuery).toHaveBeenCalledWith(
-        expect.any(String),
-        { userId, country: 'GA' },
-        mockCtx
-      );
+      const [query, variables] = executeQuery.mock.calls[0];
+      expect(query).toContain('$country: String!');
+      expect(query).toContain('country: { _eq: $country }');
+      expect(variables).toEqual({ userId, country: 'GA' });
+    });
+
+    it('does not declare unused $country when the filter is omitted', async () => {
+      executeQuery.mockResolvedValue({ user_recipients: [] });
+
+      await service.listRecipients(mockCtx);
+
+      const [query, variables] = executeQuery.mock.calls[0];
+      expect(query).not.toMatch(/\$country/);
+      expect(variables).toEqual({ userId });
+      expect(variables).not.toHaveProperty('country');
     });
 
     it('throws unauthorized when user is not authenticated', async () => {
@@ -279,9 +288,10 @@ describe('RecipientsService', () => {
 
       expect(executeQuery).toHaveBeenCalledWith(
         expect.stringContaining('user_id: { _eq: $userId }'),
-        expect.objectContaining({ userId, country: null }),
+        expect.objectContaining({ userId }),
         mockCtx
       );
+      expect(executeQuery.mock.calls[0][1]).not.toHaveProperty('country');
     });
 
     it('should verify RequestContext has authToken for user-scoped queries', async () => {

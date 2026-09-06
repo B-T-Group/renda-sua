@@ -19,6 +19,7 @@ import {
   FreemopayWithdrawalRequest,
 } from './providers/freemopay.service';
 import {
+  buildShortReferenceForMyPVit,
   MyPVitPaymentRequest,
   MyPVitService,
 } from './providers/mypvit.service';
@@ -325,9 +326,14 @@ export class MobilePaymentsService {
             paymentRequest.customerPhone || '',
             phoneRegion
           );
+          // Generate short reference for MyPVIT (max 15 chars)
+          const shortReference = reference 
+            ? buildShortReferenceForMyPVit(reference)
+            : undefined;
+          
           const mypvitResponse = await this.myPVitService.initiatePayment(
             providerRequest as MyPVitPaymentRequest,
-            reference,
+            shortReference,
             phoneNumber
           );
 
