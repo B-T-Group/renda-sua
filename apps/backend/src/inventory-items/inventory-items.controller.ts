@@ -594,9 +594,9 @@ export class InventoryItemsController {
         food_only: query.food_only === 'true',
       };
 
-      const limit = processedQuery.limit || 20;
+      const requestedLimit = processedQuery.limit || 20;
+      const clampedLimit = Math.min(Math.max(requestedLimit, 1), 50);
       const isCacheable =
-        limit <= 250 &&
         !processedQuery.owner_preview &&
         !processedQuery.business_id;
 
@@ -608,7 +608,7 @@ export class InventoryItemsController {
           'items',
           generation,
           processedQuery.page || 1,
-          limit,
+          clampedLimit,
           sort || 'relevance',
           processedQuery.search || '',
           processedQuery.category || '',
