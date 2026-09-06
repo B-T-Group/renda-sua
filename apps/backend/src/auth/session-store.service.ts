@@ -1,8 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient, RedisClientType } from 'redis';
+import { RedisClientType } from 'redis';
 import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
 import { Configuration } from '../config/configuration';
+import {
+  connectRedisWithRetry,
+  createAppRedisClient,
+  waitForRedisReady,
+} from '../common/redis-client.util';
 import { redisCommandOrFallback } from '../common/redis-error.util';
 
 export interface SessionData {
@@ -61,55 +66,85 @@ export class SessionStoreService implements OnModuleDestroy {
 
   private async initializeRedis() {
     const redis = this.configService.get('redis');
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    
     if (!redis?.host) {
-      if (nodeEnv === 'production') {
-        throw new Error(
-          'Redis is required in production for session storage. In-memory fallback is disabled in prod.'
-        );
-      }
-      this.logger.log('Redis not configured, using in-memory store (dev only)');
+      this.assertRedisConfigured();
       return;
     }
+    await this.connectWithRetry(redis);
+  }
 
-    try {
-      this.redisClient = createClient({
-        socket: {
-          host: redis.host,
-          port: redis.port,
-          connectTimeout: 5000,
-        },
-        password: redis.password,
-      });
-
-      this.redisClient.on('error', (err: any) => {
-        this.logger.error(
-          `Redis client error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
-        );
-        if (nodeEnv === 'production') {
-          throw new Error('Redis connection failed in production');
-        }
-      });
-
-      await this.redisClient.connect();
-      this.logger.log(`Redis session store connected (${redis.host}:${redis.port})`);
-    } catch (error: any) {
-      if (nodeEnv === 'production') {
-        throw new Error(`Redis connection failed in production: ${error.message}`);
-      }
-      this.logger.warn(
-        'Failed to connect to Redis, using in-memory store (dev only):',
-        error.message
+  private assertRedisConfigured(): void {
+    if (this.isProduction()) {
+      throw new Error(
+        'Redis is required in production for session storage. In-memory fallback is disabled in prod.'
       );
-      this.redisClient = null;
+    }
+    this.logger.log('Redis not configured, using in-memory store (dev only)');
+  }
+
+  private async connectWithRetry(redis: {
+    host: string;
+    port: number;
+    password?: string;
+  }): Promise<void> {
+    try {
+      await connectRedisWithRetry({
+        connect: () => this.connectRedis(redis),
+        onRetry: (attempt, error) => this.logConnectRetry(attempt, error),
+      });
+    } catch (error: any) {
+      this.handleConnectFailure(error);
     }
   }
 
-  async onModuleDestroy() {
-    if (this.redisClient) {
-      await this.redisClient.quit().catch(() => {});
+  private logConnectRetry(attempt: number, error: unknown): void {
+    const err = error as { message?: string };
+    this.logger.warn(
+      `Redis session connect retry ${attempt}: ${err?.message || 'unknown'}`
+    );
+  }
+
+  private async connectRedis(redis: {
+    host: string;
+    port: number;
+    password?: string;
+  }): Promise<void> {
+    await this.disconnectClient();
+    this.redisClient = createAppRedisClient(redis);
+    this.redisClient.on('error', (err: any) => this.onRedisError(err, redis));
+    await this.redisClient.connect();
+    this.logger.log(`Redis session store connected (${redis.host}:${redis.port})`);
+  }
+
+  private onRedisError(
+    err: any,
+    redis: { host: string; port: number }
+  ): void {
+    this.logger.error(
+      `Redis client error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
+    );
+  }
+
+  private handleConnectFailure(error: any): void {
+    if (this.isProduction()) {
+      throw new Error(`Redis connection failed in production: ${error.message}`);
     }
+    this.logger.warn(
+      'Failed to connect to Redis, using in-memory store (dev only):',
+      error.message
+    );
+    void this.disconnectClient();
+  }
+
+  private async disconnectClient(): Promise<void> {
+    if (!this.redisClient) return;
+    const client = this.redisClient;
+    this.redisClient = null;
+    await client.quit().catch(() => undefined);
+  }
+
+  async onModuleDestroy() {
+    await this.disconnectClient();
   }
 
   generateSessionId(): string {
@@ -118,6 +153,10 @@ export class SessionStoreService implements OnModuleDestroy {
 
   private isProduction(): boolean {
     return (process.env.NODE_ENV || 'development') === 'production';
+  }
+
+  isStoreReady(): boolean {
+    return this.canUseRedis();
   }
 
   private canUseRedis(): boolean {
@@ -142,7 +181,23 @@ export class SessionStoreService implements OnModuleDestroy {
       redisOp,
       fallbackOp,
       onError: (error) => this.markRedisUnhealthy(error),
+      waitForReady: () => this.waitUntilReady(),
     });
+  }
+
+  private waitUntilReady(): Promise<boolean> {
+    if (!this.redisClient) return Promise.resolve(false);
+    return waitForRedisReady({
+      isReady: () => this.canUseRedis(),
+      subscribe: (onReady) => this.subscribeReady(onReady),
+    });
+  }
+
+  private subscribeReady(onReady: () => void): () => void {
+    const client = this.redisClient;
+    if (!client) return () => undefined;
+    client.on('ready', onReady);
+    return () => client.off('ready', onReady);
   }
 
   private encrypt(text: string): string {

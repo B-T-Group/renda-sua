@@ -56,7 +56,9 @@ describe('redis-error.util', () => {
       expect(error.getResponse()).toEqual({
         success: false,
         error: REDIS_UNAVAILABLE_MESSAGE,
+        message: REDIS_UNAVAILABLE_MESSAGE,
       });
+      expect(error.message).toBe(REDIS_UNAVAILABLE_MESSAGE);
     }
   });
 
@@ -84,6 +86,31 @@ describe('redis-error.util', () => {
           throw redisAbortError();
         },
         fallbackOp: () => 'memory',
+      })
+    ).rejects.toMatchObject({ status: HttpStatus.SERVICE_UNAVAILABLE });
+  });
+
+  it('waits for Redis ready before running the command', async () => {
+    const redisOp = jest.fn().mockResolvedValue('ok');
+    const actual = await redisCommandOrFallback({
+      canUseRedis: false,
+      failClosed: true,
+      redisOp,
+      fallbackOp: () => 'memory',
+      waitForReady: async () => true,
+    });
+    expect(actual).toBe('ok');
+    expect(redisOp).toHaveBeenCalled();
+  });
+
+  it('fails closed when waitForReady times out', async () => {
+    await expect(
+      redisCommandOrFallback({
+        canUseRedis: false,
+        failClosed: true,
+        redisOp: async () => 'ok',
+        fallbackOp: () => 'memory',
+        waitForReady: async () => false,
       })
     ).rejects.toMatchObject({ status: HttpStatus.SERVICE_UNAVAILABLE });
   });

@@ -17,16 +17,26 @@ function redisAbortError(): Error {
   return error;
 }
 
-function createRedisApi() {
+function createRedisApi(ready = true) {
+  const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
   return {
-    isReady: true,
-    isOpen: true,
+    isReady: ready,
+    isOpen: ready,
     get: jest.fn().mockResolvedValue(null),
     setEx: jest.fn().mockResolvedValue('OK'),
     del: jest.fn().mockResolvedValue(1),
     connect: jest.fn().mockResolvedValue(undefined),
     quit: jest.fn().mockResolvedValue(undefined),
-    on: jest.fn(),
+    on: jest.fn((event: string, cb: (...args: unknown[]) => void) => {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event)!.add(cb);
+    }),
+    off: jest.fn((event: string, cb: (...args: unknown[]) => void) => {
+      listeners.get(event)?.delete(cb);
+    }),
+    emit(event: string) {
+      listeners.get(event)?.forEach((cb) => cb());
+    },
   };
 }
 
@@ -69,6 +79,28 @@ describe('LockoutService Redis abort handling', () => {
     const { service, redisApi } = await createService();
     redisApi.get.mockRejectedValue(redisAbortError());
 
+    await expect(service.isLockedOut('user@example.com')).rejects.toMatchObject({
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+    });
+  });
+
+  it('waits for Redis ready in production before reading lockout', async () => {
+    process.env.NODE_ENV = 'production';
+    const redisApi = createRedisApi(false);
+    const { service } = await createService(redisApi);
+    const pending = service.isLockedOut('user@example.com');
+    await Promise.resolve();
+    redisApi.isReady = true;
+    redisApi.emit('ready');
+    await expect(pending).resolves.toBe(false);
+  });
+
+  it('returns 503 in production when Redis is not configured', async () => {
+    process.env.NODE_ENV = 'production';
+    const service = new LockoutService({
+      get: jest.fn(() => undefined),
+    } as any);
+    services.push(service);
     await expect(service.isLockedOut('user@example.com')).rejects.toMatchObject({
       status: HttpStatus.SERVICE_UNAVAILABLE,
     });

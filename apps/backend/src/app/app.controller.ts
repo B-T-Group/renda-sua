@@ -11,19 +11,24 @@ import {
 import type { Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
+import { LockoutService } from '../auth/lockout.service';
 import { Public } from '../auth/public.decorator';
+import { SessionStoreService } from '../auth/session-store.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
 import { AppService } from './app.service';
 
 type HealthHasura = { status: string; latencyMs?: number };
+type HealthRedis = { status: string };
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly hasuraSystemService: HasuraSystemService,
+    private readonly lockout: LockoutService,
+    private readonly sessionStore: SessionStoreService,
     @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger
   ) {}
 
@@ -33,15 +38,16 @@ export class AppController {
     status: string;
     timestamp: string;
     hasura?: HealthHasura;
+    redis?: HealthRedis;
   }> {
-
     const base = this.appService.getHealth();
     const hasura = await this.checkHasuraHealth();
-    if (hasura.status === 'down') {
+    const redis = this.checkRedisHealth();
+    if (hasura.status === 'down' || redis.status === 'down') {
       res.status(HttpStatus.SERVICE_UNAVAILABLE);
-      return { status: 'unhealthy', timestamp: base.timestamp, hasura };
+      return { status: 'unhealthy', timestamp: base.timestamp, hasura, redis };
     }
-    return { ...base, hasura };
+    return { ...base, hasura, redis };
   }
 
   private async checkHasuraHealth(): Promise<HealthHasura> {
@@ -70,6 +76,19 @@ export class AppController {
     return new Promise((_, reject) => {
       setTimeout(() => reject(new Error(message)), ms);
     });
+  }
+
+  private checkRedisHealth(): HealthRedis {
+    if (!this.requiresRedisHealth()) return { status: 'skipped' };
+    if (this.lockout.isStoreReady() && this.sessionStore.isStoreReady()) {
+      return { status: 'up' };
+    }
+    this.logger.warn('Health check: Redis not ready');
+    return { status: 'down' };
+  }
+
+  private requiresRedisHealth(): boolean {
+    return (process.env.NODE_ENV || 'development') === 'production';
   }
 
   @Public()
