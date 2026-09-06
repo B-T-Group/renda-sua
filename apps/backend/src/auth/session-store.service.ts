@@ -199,10 +199,6 @@ export class SessionStoreService implements OnModuleDestroy {
 
   private writeMemorySession(sessionId: string, encrypted: string): void {
     this.inMemoryStore.set(sessionId, encrypted);
-    setTimeout(
-      () => this.inMemoryStore.delete(sessionId),
-      this.SESSION_TTL_SECONDS * 1000
-    );
   }
 
   async getSession(sessionId: string): Promise<SessionData | null> {
