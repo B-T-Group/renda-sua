@@ -48,6 +48,10 @@ export interface RedisConfig {
   password?: string;
 }
 
+export interface CatalogCacheConfig {
+  enabled: boolean;
+}
+
 export interface ExternalApiConfig {
   googleMapsApiKey?: string;
   stripeSecretKey?: string;
@@ -513,6 +517,7 @@ export interface Configuration {
   cors: CorsConfig;
   email: EmailConfig;
   redis: RedisConfig;
+  catalogCache: CatalogCacheConfig;
   externalApi: ExternalApiConfig;
   mtnMomo: MtnMomoConfig;
   orangeMomo: OrangeMomoConfig;
@@ -732,6 +737,9 @@ export default (): Configuration => {
       host: process.env.REDIS_HOST || (process.env.NODE_ENV === 'development' && !process.env.DEPLOYMENT_ENV ? 'localhost' : ''),
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD,
+    },
+    catalogCache: {
+      enabled: process.env.CATALOG_REDIS_CACHE_ENABLED === 'true',
     },
     externalApi: {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,

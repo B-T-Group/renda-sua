@@ -10,6 +10,7 @@ import {
 import { ApiOperation, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
+import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import type {
   GetInventoryItemsQuery,
   InventoryItem,
@@ -55,7 +56,10 @@ interface GetInventorySearchSuggestionsQueryParams
 @ApiTags('Inventory Items')
 @Controller('inventory-items')
 export class InventoryItemsController {
-  constructor(private readonly inventoryItemsService: InventoryItemsService) {}
+  constructor(
+    private readonly inventoryItemsService: InventoryItemsService,
+    private readonly catalogCacheService: CatalogCacheService
+  ) {}
 
   @Public()
   @Get('top-locations')
@@ -210,6 +214,51 @@ export class InventoryItemsController {
       origin_lat !== undefined ? Number.parseFloat(origin_lat) : undefined;
     const lng =
       origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
+    const hasOrigin = Number.isFinite(lat) && Number.isFinite(lng);
+    const activeFilter = is_active === 'true' ? 'true' : is_active === 'false' ? 'false' : 'any';
+    const includeUnavail = include_unavailable === 'true' ? 'true' : 'false';
+
+    const cacheKey = hasOrigin
+      ? null
+      : [
+          'stores',
+          search || 'all',
+          country_code || 'global',
+          state || 'all',
+          activeFilter,
+          includeUnavail,
+          n,
+        ].join(':');
+
+    if (cacheKey) {
+      return await this.catalogCacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          const stores = await this.inventoryItemsService.getTopInventoryStores(n, {
+            search,
+            country_code,
+            state,
+            is_active:
+              is_active === 'true'
+                ? true
+                : is_active === 'false'
+                  ? false
+                  : undefined,
+            include_unavailable:
+              include_unavailable !== undefined
+                ? include_unavailable === 'true'
+                : undefined,
+          });
+          return {
+            success: true,
+            data: { stores },
+            message: 'Stores retrieved successfully',
+          };
+        },
+        { ttlSeconds: 180 }
+      );
+    }
+
     const stores = await this.inventoryItemsService.getTopInventoryStores(n, {
       search,
       country_code,
@@ -224,8 +273,7 @@ export class InventoryItemsController {
         include_unavailable !== undefined
           ? include_unavailable === 'true'
           : undefined,
-      ...(Number.isFinite(lat) && { origin_lat: lat }),
-      ...(Number.isFinite(lng) && { origin_lng: lng }),
+      ...(hasOrigin && { origin_lat: lat, origin_lng: lng }),
     });
     return {
       success: true,
@@ -494,7 +542,6 @@ export class InventoryItemsController {
     message: string;
   }> {
     try {
-      // Convert string query parameters to proper types
       const validSorts = [
         'relevance',
         'fastest',
@@ -546,6 +593,58 @@ export class InventoryItemsController {
         collection: query.collection?.trim() || undefined,
         food_only: query.food_only === 'true',
       };
+
+      const limit = processedQuery.limit || 20;
+      const isCacheable =
+        limit <= 250 &&
+        !processedQuery.owner_preview &&
+        !processedQuery.business_id;
+
+      if (isCacheable) {
+        const generation = await this.catalogCacheService.getGeneration(
+          processedQuery.country_code || 'global'
+        );
+        const cacheKey = [
+          'items',
+          generation,
+          processedQuery.page || 1,
+          limit,
+          sort || 'relevance',
+          processedQuery.search || '',
+          processedQuery.category || '',
+          processedQuery.subcategory || '',
+          processedQuery.location_name || '',
+          processedQuery.business_name || '',
+          processedQuery.brand || '',
+          processedQuery.min_price || '',
+          processedQuery.max_price || '',
+          processedQuery.currency || '',
+          processedQuery.is_active === false ? 'inactive' : 'active',
+          processedQuery.country_code || 'global',
+          processedQuery.state || '',
+          processedQuery.include_unavailable ? 'incl' : 'avail',
+          processedQuery.business_location_id || '',
+          processedQuery.collection || '',
+          processedQuery.food_only ? 'food' : 'all',
+        ].join(':');
+
+        const ttl = processedQuery.search || sort === 'deals' ? 30 : sort === 'relevance' || !sort ? 120 : 60;
+
+        return await this.catalogCacheService.getOrCompute(
+          cacheKey,
+          async () => {
+            const data = await this.inventoryItemsService.getInventoryItems(
+              processedQuery
+            );
+            return {
+              success: true,
+              data,
+              message: 'Inventory items retrieved successfully',
+            };
+          },
+          { ttlSeconds: ttl }
+        );
+      }
 
       const data = await this.inventoryItemsService.getInventoryItems(
         processedQuery
