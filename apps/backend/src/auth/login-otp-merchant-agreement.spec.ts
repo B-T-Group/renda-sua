@@ -47,6 +47,16 @@ describe('LoginService OTP merchant agreement gating', () => {
     ensureContractForUser: jest.Mock;
   };
   let service: LoginService;
+  const lockout = {
+    isLockedOut: jest.fn().mockResolvedValue(false),
+    getRemainingLockoutMs: jest.fn().mockResolvedValue(0),
+    recordFailure: jest.fn().mockResolvedValue(undefined),
+    recordSuccess: jest.fn().mockResolvedValue(undefined),
+  };
+  const sessionStore = {
+    generateSessionId: jest.fn().mockReturnValue('sid-1'),
+    createSession: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -70,7 +80,9 @@ describe('LoginService OTP merchant agreement gating', () => {
     service = new LoginService(
       hasuraSystemService as never,
       auth0Service as never,
-      businessProvisioning as never
+      businessProvisioning as never,
+      sessionStore as never,
+      lockout as never
     );
   });
 
@@ -85,9 +97,11 @@ describe('LoginService OTP merchant agreement gating', () => {
       ],
     });
 
-    await expect(
-      service.verifyLoginOtp({ email: ' Shop@Example.COM ', otp: '123456' })
-    ).resolves.toEqual(tokenData);
+    const result = await service.verifyLoginOtp(
+      { email: ' Shop@Example.COM ', otp: '123456' },
+      'mobile'
+    );
+    expect(result.response.access_token).toBe('access');
 
     expect(businessProvisioning.ensureContractForUser).toHaveBeenCalledWith(
       'user-1'
@@ -102,7 +116,7 @@ describe('LoginService OTP merchant agreement gating', () => {
     );
   });
 
-  it('does not mark email verified when contract ensure fails', async () => {
+  it('still marks email verified when contract ensure fails', async () => {
     hasuraSystemService.executeQuery.mockResolvedValue({
       users: [
         {
@@ -116,14 +130,18 @@ describe('LoginService OTP merchant agreement gating', () => {
       new Error('BoldSign unavailable')
     );
 
-    await expect(
-      service.verifyLoginOtp({ email: 'shop@example.com', otp: '123456' })
-    ).resolves.toEqual(tokenData);
+    await service.verifyLoginOtp(
+      { email: 'shop@example.com', otp: '123456' },
+      'mobile'
+    );
 
     expect(businessProvisioning.ensureContractForUser).toHaveBeenCalledWith(
       'user-1'
     );
-    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('VerifyLoginEmail'),
+      { id: 'user-1' }
+    );
   });
 
   it('skips contract ensure when email is already verified', async () => {
@@ -137,7 +155,10 @@ describe('LoginService OTP merchant agreement gating', () => {
       ],
     });
 
-    await service.verifyLoginOtp({ email: 'shop@example.com', otp: '123456' });
+    await service.verifyLoginOtp(
+      { email: 'shop@example.com', otp: '123456' },
+      'mobile'
+    );
 
     expect(businessProvisioning.ensureContractForUser).not.toHaveBeenCalled();
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
@@ -156,10 +177,13 @@ describe('LoginService OTP merchant agreement gating', () => {
       ],
     });
 
-    await service.verifyLoginOtp({
-      phone_number: '+237600000001',
-      otp: '654321',
-    });
+    await service.verifyLoginOtp(
+      {
+        phone_number: '+237600000001',
+        otp: '654321',
+      },
+      'mobile'
+    );
 
     expect(businessProvisioning.ensureContractForUser).toHaveBeenCalledWith(
       'user-2'
@@ -170,7 +194,7 @@ describe('LoginService OTP merchant agreement gating', () => {
     );
   });
 
-  it('does not mark phone verified when contract ensure fails', async () => {
+  it('still marks phone verified when contract ensure fails', async () => {
     hasuraSystemService.executeQuery.mockResolvedValue({
       users: [
         {
@@ -186,11 +210,17 @@ describe('LoginService OTP merchant agreement gating', () => {
       new Error('contract failed')
     );
 
-    await service.verifyLoginOtp({
-      phone_number: '+237600000001',
-      otp: '654321',
-    });
+    await service.verifyLoginOtp(
+      {
+        phone_number: '+237600000001',
+        otp: '654321',
+      },
+      'mobile'
+    );
 
-    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('VerifyLoginPhone'),
+      { id: 'user-2' }
+    );
   });
 });

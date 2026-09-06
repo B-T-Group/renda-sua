@@ -214,6 +214,15 @@ export class AccountsService {
     return this.registerLedgerEntryIfNotExists(request, 'withdrawal');
   }
 
+  async registerDepositIfNotExists(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'amount' | 'memo' | 'referenceId'
+    >
+  ): Promise<IdempotentTransactionResult> {
+    return this.registerLedgerEntryIfNotExists(request, 'deposit');
+  }
+
   async registerHoldIfNotExists(
     request: Pick<
       TransactionRequest,
@@ -237,7 +246,7 @@ export class AccountsService {
       TransactionRequest,
       'accountId' | 'amount' | 'memo' | 'referenceId'
     >,
-    transactionType: 'withdrawal' | 'hold' | 'release'
+    transactionType: 'deposit' | 'withdrawal' | 'hold' | 'release'
   ): Promise<IdempotentTransactionResult> {
     if (!request.referenceId) {
       return { success: false, error: 'referenceId is required' };

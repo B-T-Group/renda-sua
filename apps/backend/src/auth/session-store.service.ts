@@ -199,10 +199,6 @@ export class SessionStoreService implements OnModuleDestroy {
 
   private writeMemorySession(sessionId: string, encrypted: string): void {
     this.inMemoryStore.set(sessionId, encrypted);
-    setTimeout(
-      () => this.inMemoryStore.delete(sessionId),
-      this.SESSION_TTL_SECONDS * 1000
-    );
   }
 
   async getSession(sessionId: string): Promise<SessionData | null> {
@@ -244,12 +240,18 @@ export class SessionStoreService implements OnModuleDestroy {
     );
   }
 
+  /** Deletes a Redis session without calling getSession (avoids decrypt-fail recursion). */
   private async deleteRedisSession(sessionId: string): Promise<void> {
-    const data = await this.getSession(sessionId);
+    const encrypted = await this.redisClient!.get(`session:${sessionId}`);
     await this.redisClient!.del(`session:${sessionId}`);
-    if (!data) return;
-    const familyId = data.familyId || sessionId;
-    await this.redisClient!.sRem(`session-family:${familyId}`, sessionId);
+    if (!encrypted) return;
+    try {
+      const data = JSON.parse(this.decrypt(encrypted)) as SessionData;
+      const familyId = data.familyId || sessionId;
+      await this.redisClient!.sRem(`session-family:${familyId}`, sessionId);
+    } catch {
+      // Key is already gone; skip family cleanup for unreadable payloads.
+    }
   }
 
   async rotateSession(oldSessionId: string): Promise<string | null> {

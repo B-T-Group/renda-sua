@@ -204,7 +204,11 @@ export class LockoutService implements OnModuleDestroy {
       this.inMemoryStore.get(key) || { attempts: 0 }
     );
     this.inMemoryStore.set(key, entry);
-    setTimeout(() => this.expireMemoryIfUnlocked(key), this.ATTEMPT_WINDOW_MS);
+    const expireTimer = setTimeout(
+      () => this.expireMemoryIfUnlocked(key),
+      this.ATTEMPT_WINDOW_MS
+    );
+    expireTimer.unref();
   }
 
   private incrementAttempts(entry: LockoutEntry): LockoutEntry {

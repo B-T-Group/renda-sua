@@ -52,13 +52,11 @@ describe('MerchantAgreementProviderService', () => {
       );
     });
 
-    it('defaults to boldsign when config is missing or not in_app', async () => {
+    it('defaults to in_app when config is missing; boldsign only when explicit', async () => {
       hasura.executeQuery.mockResolvedValueOnce({
         application_configurations: [],
       });
-      await expect(service.getProviderForCountry('CA')).resolves.toBe(
-        'boldsign'
-      );
+      await expect(service.getProviderForCountry('CA')).resolves.toBe('in_app');
 
       hasura.executeQuery.mockResolvedValueOnce({
         application_configurations: [{ string_value: 'BoldSign' }],
@@ -68,11 +66,9 @@ describe('MerchantAgreementProviderService', () => {
       );
     });
 
-    it('fails closed to boldsign when config lookup throws', async () => {
+    it('fails closed to in_app when config lookup throws', async () => {
       hasura.executeQuery.mockRejectedValue(new Error('hasura down'));
-      await expect(service.getProviderForCountry('GA')).resolves.toBe(
-        'boldsign'
-      );
+      await expect(service.getProviderForCountry('GA')).resolves.toBe('in_app');
     });
   });
 
@@ -134,7 +130,7 @@ describe('MerchantAgreementProviderService', () => {
           },
         })
         .mockResolvedValueOnce({
-          application_configurations: [],
+          application_configurations: [{ string_value: 'boldsign' }],
         });
 
       await expect(service.usesInAppAgreement('biz-ca')).resolves.toBe(false);

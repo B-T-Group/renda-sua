@@ -19,7 +19,7 @@ describe('StripeCaptureService', () => {
     updateTransaction: jest.Mock;
   };
   let accountsService: {
-    registerTransaction: jest.Mock;
+    registerDepositIfNotExists: jest.Mock;
   };
 
   beforeEach(() => {
@@ -37,7 +37,7 @@ describe('StripeCaptureService', () => {
       updateTransaction: jest.fn(),
     };
     accountsService = {
-      registerTransaction: jest.fn(),
+      registerDepositIfNotExists: jest.fn(),
     };
     service = new StripeCaptureService(
       stripeService as never,
@@ -266,17 +266,41 @@ describe('StripeCaptureService', () => {
     databaseService.getTransactionByEntityId.mockResolvedValue(
       makeTransaction({ status: 'success', amount: 100 })
     );
-    accountsService.registerTransaction.mockResolvedValue({ success: true });
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+    });
 
     await expect(
       service.creditWalletForCapturedOrder('ORDER-1001')
     ).resolves.toBe('account-123');
 
-    expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId: 'account-123',
         amount: 100,
-        transactionType: 'deposit',
+        referenceId: 'tx-123',
+      })
+    );
+  });
+
+  it('skips a second wallet credit when the webhook already deposited', async () => {
+    databaseService.getTransactionByEntityId.mockResolvedValue(
+      makeTransaction({ status: 'success', amount: 125 })
+    );
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+      alreadyExists: true,
+    });
+
+    await expect(
+      service.creditWalletForCapturedOrder('ORDER-1001')
+    ).resolves.toBe('account-123');
+
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 'account-123',
+        amount: 125,
+        referenceId: 'tx-123',
       })
     );
   });

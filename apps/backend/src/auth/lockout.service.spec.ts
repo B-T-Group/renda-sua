@@ -74,3 +74,44 @@ describe('LockoutService Redis abort handling', () => {
     });
   });
 });
+
+describe('LockoutService in-memory thresholds', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  let service: LockoutService;
+
+  beforeEach(() => {
+    process.env.NODE_ENV = 'development';
+    service = new LockoutService({
+      get: jest.fn(() => undefined),
+    } as any);
+  });
+
+  afterEach(async () => {
+    process.env.NODE_ENV = originalNodeEnv;
+    await service.onModuleDestroy();
+  });
+
+  it('locks after five failures and reports remaining time', async () => {
+    for (let i = 0; i < 4; i += 1) {
+      await service.recordFailure(' Shop@Example.COM ');
+    }
+    await expect(service.isLockedOut('shop@example.com')).resolves.toBe(false);
+
+    await service.recordFailure('shop@example.com');
+    await expect(service.isLockedOut('shop@example.com')).resolves.toBe(true);
+    await expect(
+      service.getRemainingLockoutMs('shop@example.com')
+    ).resolves.toBeGreaterThan(0);
+  });
+
+  it('clears lockout after a successful login', async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await service.recordFailure('shop@example.com');
+    }
+    await service.recordSuccess('shop@example.com');
+    await expect(service.isLockedOut('shop@example.com')).resolves.toBe(false);
+    await expect(
+      service.getRemainingLockoutMs('shop@example.com')
+    ).resolves.toBe(0);
+  });
+});

@@ -15,6 +15,7 @@ describe('StripePaymentCallbackProcessor', () => {
   };
   let accountsService: {
     registerTransaction: jest.Mock;
+    registerDepositIfNotExists: jest.Mock;
   };
   let callbackHandler: {
     supportsPaymentEntity: jest.Mock;
@@ -43,7 +44,10 @@ describe('StripePaymentCallbackProcessor', () => {
       getTransactionById: jest.fn(),
       updateTransaction: jest.fn(),
     };
-    accountsService = { registerTransaction: jest.fn() };
+    accountsService = {
+      registerTransaction: jest.fn(),
+      registerDepositIfNotExists: jest.fn(),
+    };
     callbackHandler = {
       supportsPaymentEntity: jest.fn((entity) => entity === 'order'),
       finalizeCashReconciliationAfterPayment: jest.fn(),
@@ -122,7 +126,7 @@ describe('StripePaymentCallbackProcessor', () => {
         status: 'pending',
       })
     );
-    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
     expect(callbackHandler.onPaymentSuccess).not.toHaveBeenCalled();
   });
 
@@ -133,7 +137,9 @@ describe('StripePaymentCallbackProcessor', () => {
     databaseService.getTransactionById.mockResolvedValue(
       makeTransaction({ status: 'success' })
     );
-    accountsService.registerTransaction.mockResolvedValue({ success: true });
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+    });
 
     await processor.onPaymentIntentSucceeded(
       {
@@ -148,10 +154,9 @@ describe('StripePaymentCallbackProcessor', () => {
       stripe_payment_intent_id: 'pi_123',
       captured_at: now.toISOString(),
     });
-    expect(accountsService.registerTransaction).toHaveBeenCalledWith({
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
       accountId: 'account-123',
       amount: 125,
-      transactionType: 'deposit',
       memo: 'Stripe payment deposit - stripe-ref-123',
       referenceId: 'tx-123',
     });
@@ -159,6 +164,35 @@ describe('StripePaymentCallbackProcessor', () => {
       expect.objectContaining({ id: 'tx-123', reference: 'stripe-ref-123' })
     );
     expect(callbackHandler.onPaymentFailure).not.toHaveBeenCalled();
+  });
+
+  it('credits capture_pending webhooks through the idempotent deposit path', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue(
+      makeTransaction({ status: 'capture_pending' })
+    );
+    databaseService.getTransactionById.mockResolvedValue(
+      makeTransaction({ status: 'success' })
+    );
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+      alreadyExists: true,
+    });
+
+    await processor.onPaymentIntentSucceeded(
+      {
+        id: 'pi_123',
+        metadata: { reference: 'stripe-ref-123' },
+      } as never,
+      req
+    );
+
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
+      accountId: 'account-123',
+      amount: 125,
+      memo: 'Stripe payment deposit - stripe-ref-123',
+      referenceId: 'tx-123',
+    });
+    expect(callbackHandler.onPaymentSuccess).toHaveBeenCalled();
   });
 
   it('skips order failure side effects when cancellation is already recorded', async () => {
