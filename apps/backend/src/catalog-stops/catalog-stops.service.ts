@@ -67,7 +67,11 @@ const INVENTORY_ITEM_SELECTION = `
   business_location_id
   item_id
   promotion
-  variant_price_overrides
+  variant_price_overrides {
+    id
+    item_variant_id
+    selling_price
+  }
   item {
     id
     name

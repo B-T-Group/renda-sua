@@ -230,6 +230,25 @@ describe('CatalogStopsService', () => {
       expect(result.items.length).toBeGreaterThan(0);
       expect(result.category_name).toBe('Electronics');
     });
+
+    it('should include nested selection set for variant_price_overrides', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        business_inventory: [],
+      });
+
+      await service.getTopInCategory({
+        category: 'Electronics',
+        country_code: 'GA',
+      });
+
+      const query = hasuraSystemService.executeQuery.mock.calls[0][0] as string;
+      
+      // Assert that variant_price_overrides has a nested selection set, not bare field
+      expect(query).toMatch(/variant_price_overrides\s*\{/);
+      expect(query).toMatch(/variant_price_overrides\s*\{\s*id/);
+      expect(query).toMatch(/item_variant_id/);
+      expect(query).toMatch(/selling_price/);
+    });
   });
 
   describe('getDeals', () => {
