@@ -252,6 +252,8 @@ export class CatalogStopsController {
   @Get('essentials')
   @ApiOperation({
     summary: 'Get featured/essentials collections',
+    description:
+      'Returns featured collections that have at least 4 in-area listings, with preview image URLs.',
   })
   @ApiQuery({
     name: 'country_code',

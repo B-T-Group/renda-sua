@@ -67,7 +67,7 @@ All endpoints are **public** (`@Public()`), return empty arrays on empty state, 
 
 **Endpoint:** `GET /catalog/stops/essentials`
 
-**Query Parameters:** `country_code`, `state`, `limit` (default 8, max 20)
+**Query Parameters:** `country_code`, `state`, `origin_lat`, `origin_lng`, `limit` (default 8, max 20)
 
 **Response:**
 ```json
@@ -81,6 +81,8 @@ All endpoints are **public** (`@Public()`), return empty arrays on empty state, 
 ```
 
 **Type:** Reuses `CollectionSummary` from `collections.service.ts`.
+
+**Notes:** Same rules as `GET /collections`: only featured collections with **at least 4 in-area listings**, including `preview_image_urls` and `listing_count`. The mobile/web rail hides the whole stop when the array is empty.
 
 ---
 
@@ -290,7 +292,6 @@ if (complements.data.items.length > 0) {
 1. **Distance calculation:** Not implemented in v1 (reserved params for future)
 2. **Bag complements:** Simple category-based heuristic (ML-based "frequently bought together" is v1.5+)
 3. **Store verification:** `is_verified` returns `false` (verification system TBD)
-4. **Collection counts:** `listing_count` returns `0` (requires separate query to count)
 
 ---
 

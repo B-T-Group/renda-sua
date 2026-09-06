@@ -1,15 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CatalogStopsService } from './catalog-stops.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { CollectionsService } from '../collections/collections.service';
 
 describe('CatalogStopsService', () => {
   let service: CatalogStopsService;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
+  let collectionsService: jest.Mocked<Pick<CollectionsService, 'listCollections'>>;
 
   beforeEach(async () => {
     const mockHasuraSystemService = {
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),
+    };
+    const mockCollectionsService = {
+      listCollections: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -19,11 +24,16 @@ describe('CatalogStopsService', () => {
           provide: HasuraSystemService,
           useValue: mockHasuraSystemService,
         },
+        {
+          provide: CollectionsService,
+          useValue: mockCollectionsService,
+        },
       ],
     }).compile();
 
     service = module.get<CatalogStopsService>(CatalogStopsService);
     hasuraSystemService = module.get(HasuraSystemService);
+    collectionsService = module.get(CollectionsService);
   });
 
   it('should be defined', () => {
@@ -334,37 +344,66 @@ describe('CatalogStopsService', () => {
 
   describe('getEssentials', () => {
     it('should return empty collections array when none found', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        collections: [],
-      });
+      collectionsService.listCollections.mockResolvedValue([]);
 
       const result = await service.getEssentials({ country_code: 'GA' });
 
       expect(result.collections).toEqual([]);
+      expect(collectionsService.listCollections).toHaveBeenCalledWith(
+        expect.objectContaining({
+          featured: true,
+          country_code: 'GA',
+        })
+      );
     });
 
-    it('should transform collections to CollectionSummary shape', async () => {
-      const mockCollections = [
+    it('should return featured collections with previews from CollectionsService', async () => {
+      collectionsService.listCollections.mockResolvedValue([
         {
           id: 'col-1',
-          slug: 'essentials',
-          name_en: 'Essentials',
-          name_fr: 'Essentiels',
-          description_en: 'Test',
-          image_url: 'https://...',
+          slug: 'office-essentials',
+          name: 'Office Essentials',
+          description: null,
+          image_url: null,
+          preview_image_urls: ['https://a.jpg', 'https://b.jpg', 'https://c.jpg', 'https://d.jpg'],
           is_featured: true,
           sort_order: 1,
+          listing_count: 6,
         },
-      ];
+      ]);
 
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        collections: mockCollections,
-      });
-
-      const result = await service.getEssentials({ country_code: 'GA' });
+      const result = await service.getEssentials({ country_code: 'CM', state: 'Centre' });
 
       expect(result.collections.length).toBe(1);
-      expect(result.collections[0].slug).toBe('essentials');
+      expect(result.collections[0].slug).toBe('office-essentials');
+      expect(result.collections[0].preview_image_urls).toHaveLength(4);
+      expect(collectionsService.listCollections).toHaveBeenCalledWith(
+        expect.objectContaining({
+          featured: true,
+          country_code: 'CM',
+          state: 'Centre',
+        })
+      );
+    });
+
+    it('should cap collections by limit', async () => {
+      collectionsService.listCollections.mockResolvedValue(
+        Array.from({ length: 10 }, (_, i) => ({
+          id: `col-${i}`,
+          slug: `c-${i}`,
+          name: `C${i}`,
+          description: null,
+          image_url: null,
+          preview_image_urls: [],
+          is_featured: true,
+          sort_order: i,
+          listing_count: 4,
+        }))
+      );
+
+      const result = await service.getEssentials({ limit: 3 });
+
+      expect(result.collections).toHaveLength(3);
     });
   });
 

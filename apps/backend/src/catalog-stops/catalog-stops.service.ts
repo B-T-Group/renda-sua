@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { InventoryItem } from '../inventory-items/inventory-items.service';
-import type { CollectionSummary } from '../collections/collections.service';
+import {
+  CollectionsService,
+  type CollectionSummary,
+} from '../collections/collections.service';
 import type { TopInventoryStoreRow } from '../inventory-items/inventory-items.service';
 
 export interface TopInCategoryResponse {
@@ -123,7 +126,10 @@ const INVENTORY_ITEM_SELECTION = `
 
 @Injectable()
 export class CatalogStopsService {
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly collectionsService: CollectionsService
+  ) {}
 
   /**
    * Get top items in category (reuses inventory item shape from GET /inventory-items).
@@ -233,59 +239,19 @@ export class CatalogStopsService {
   }
 
   /**
-   * Get essentials/featured collections.
+   * Featured/essentials collections with in-area listings.
+   * Reuses CollectionsService (preview images + min 4 listings filter).
    */
   async getEssentials(options: StopQueryOptions): Promise<EssentialsResponse> {
     const limit = Math.min(options.limit ?? 8, 20);
-
-    const query = `
-      query GetFeaturedCollections($limit: Int!) {
-        collections(
-          where: { is_featured: { _eq: true } }
-          order_by: { sort_order: asc }
-          limit: $limit
-        ) {
-          id
-          slug
-          name_en
-          name_fr
-          description_en
-          description_fr
-          image_url
-          is_featured
-          sort_order
-        }
-      }
-    `;
-
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      limit,
+    const collections = await this.collectionsService.listCollections({
+      featured: true,
+      country_code: options.country_code,
+      state: options.state,
+      origin_lat: options.origin_lat,
+      origin_lng: options.origin_lng,
     });
-    const collections = (result.collections || []) as Array<{
-      id: string;
-      slug: string;
-      name_en: string;
-      name_fr: string | null;
-      description_en: string | null;
-      description_fr: string | null;
-      image_url: string | null;
-      is_featured: boolean;
-      sort_order: number;
-    }>;
-
-    const summaries: CollectionSummary[] = collections.map((c) => ({
-      id: c.id,
-      slug: c.slug,
-      name: c.name_en,
-      description: c.description_en,
-      image_url: c.image_url,
-      preview_image_urls: c.image_url ? [c.image_url] : [],
-      is_featured: c.is_featured,
-      sort_order: c.sort_order,
-      listing_count: 0,
-    }));
-
-    return { collections: summaries };
+    return { collections: collections.slice(0, limit) };
   }
 
   /**
