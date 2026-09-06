@@ -14,6 +14,7 @@ insert_permissions:
         user_id:
           _eq: X-Hasura-User-Id
       columns:
+        - user_id
         - country
         - name
         - notify_whatsapp
@@ -25,6 +26,7 @@ insert_permissions:
         user_id:
           _eq: X-Hasura-User-Id
       columns:
+        - user_id
         - country
         - name
         - notify_whatsapp
@@ -36,6 +38,7 @@ insert_permissions:
         user_id:
           _eq: X-Hasura-User-Id
       columns:
+        - user_id
         - country
         - name
         - notify_whatsapp
@@ -47,6 +50,7 @@ insert_permissions:
         user_id:
           _eq: X-Hasura-User-Id
       columns:
+        - user_id
         - country
         - name
         - notify_whatsapp

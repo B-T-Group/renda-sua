@@ -149,16 +149,16 @@ describe('RecipientsService', () => {
       const result = await service.createRecipient(mockCtx, createDto);
 
       expect(result).toEqual(mockRecipient);
-      expect(executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('CreateRecipient'),
+      const [mutation, variables] = executeMutation.mock.calls[0];
+      expect(mutation).toContain('user_id: $userId');
+      expect(variables).toEqual(
         expect.objectContaining({
           userId,
           country: 'GA',
           name: 'Jane Smith',
-          phone: expect.stringMatching(/^\+241\d+$/), // Normalized Gabon phone
+          phone: expect.stringMatching(/^\+241\d+$/),
           notifyWhatsapp: false,
-        }),
-        mockCtx
+        })
       );
     });
 
