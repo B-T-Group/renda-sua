@@ -90,7 +90,26 @@ describe('OrdersController', () => {
 
       ordersService.createOrder.mockRejectedValue(error);
 
-      await expect(controller.createOrder(orderData)).rejects.toThrow();
+      await expect(controller.createOrder(orderData)).rejects.toMatchObject({
+        status: 400,
+        message: 'No valid items found',
+      });
+    });
+
+    it('maps Stripe PaymentIntent 400s to HTTP 400 with the Stripe message', async () => {
+      const orderData = {
+        item: { business_inventory_id: 'inv-123', quantity: 2 },
+        delivery_address_id: 'addr-123',
+      };
+      ordersService.createOrder.mockRejectedValue({
+        message: 'Amount must be at least $0.50 cad',
+        statusCode: 400,
+      });
+
+      await expect(controller.createOrder(orderData)).rejects.toMatchObject({
+        status: 400,
+        message: 'Amount must be at least $0.50 cad',
+      });
     });
   });
 
