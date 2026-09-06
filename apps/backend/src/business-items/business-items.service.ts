@@ -27,6 +27,7 @@ import { CollectionAutoAssignService } from '../collections/collection-auto-assi
 import { resolveSaleItemRejectionReason } from '../common/moderation-rejection-reason';
 import { resolvePayOnDeliveryDefault } from './item-payment-defaults.util';
 import { resolveInitialInventoryQuantity } from '../food/food-inventory-quantity.util';
+import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -825,8 +826,17 @@ export class BusinessItemsService {
     private readonly stripeTaxCodesService: StripeTaxCodesService,
     private readonly imageThumbnailsService: ImageThumbnailsService,
     private readonly categoriesService: CategoriesService,
-    private readonly collectionAutoAssignService: CollectionAutoAssignService
+    private readonly collectionAutoAssignService: CollectionAutoAssignService,
+    private readonly catalogCacheService: CatalogCacheService
   ) {}
+
+  private async invalidateCatalogCache(): Promise<void> {
+    try {
+      await this.catalogCacheService.incrementGeneration('global');
+    } catch (error: any) {
+      this.logger.warn(`Failed to invalidate catalog cache: ${error.message}`);
+    }
+  }
 
   private triggerLifecycleRecompute(businessId: string): void {
     void this.merchantLifecycleService.recompute(
@@ -1854,6 +1864,7 @@ export class BusinessItemsService {
 
     const updated = result.update_business_inventory_by_pk;
     this.triggerLifecycleRecompute(businessId);
+    void this.invalidateCatalogCache();
     return updated;
   }
 
@@ -1964,6 +1975,7 @@ export class BusinessItemsService {
       );
     }
     this.triggerLifecycleRecompute(businessId);
+    void this.invalidateCatalogCache();
     return created;
   }
 
@@ -2001,6 +2013,7 @@ export class BusinessItemsService {
       itemId,
       promotion,
     });
+    void this.invalidateCatalogCache();
     return {
       affected_rows: result.update_business_inventory?.affected_rows ?? 0,
     };
@@ -2575,6 +2588,7 @@ export class BusinessItemsService {
       status: 'deleted',
     });
     this.triggerLifecycleRecompute(businessId);
+    void this.invalidateCatalogCache();
   }
 
   async processCsvRows(

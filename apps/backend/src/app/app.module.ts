@@ -92,6 +92,7 @@ import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { DelegationsModule } from '../delegations/delegations.module';
 import { CatalogStopsModule } from '../catalog-stops/catalog-stops.module';
+import { CatalogCacheModule } from '../catalog-cache/catalog-cache.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -143,6 +144,7 @@ import { AppService } from './app.service';
     DatabaseModule,
     DeliveryPinModule,
     HasuraModule,
+    CatalogCacheModule,
     AccountsModule,
     AddressesModule,
     GoogleModule,

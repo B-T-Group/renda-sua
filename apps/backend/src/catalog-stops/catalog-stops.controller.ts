@@ -15,6 +15,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import {
   CatalogStopsService,
   type TopInCategoryResponse,
@@ -46,7 +47,8 @@ interface BagComplementsBody {
 @Controller('catalog/stops')
 export class CatalogStopsController {
   constructor(
-    private readonly catalogStopsService: CatalogStopsService
+    private readonly catalogStopsService: CatalogStopsService,
+    private readonly catalogCacheService: CatalogCacheService
   ) {}
 
   @Public()
@@ -297,18 +299,30 @@ export class CatalogStopsController {
   }> {
     try {
       const limit = query.limit ? Number(query.limit) : undefined;
+      const cacheKey = [
+        'essentials',
+        query.country_code || 'global',
+        query.state || 'all',
+        limit || 8,
+      ].join(':');
 
-      const data = await this.catalogStopsService.getEssentials({
-        country_code: query.country_code,
-        state: query.state,
-        limit,
-      });
+      return await this.catalogCacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          const data = await this.catalogStopsService.getEssentials({
+            country_code: query.country_code,
+            state: query.state,
+            limit,
+          });
 
-      return {
-        success: true,
-        data,
-        message: 'Featured collections retrieved successfully',
-      };
+          return {
+            success: true,
+            data,
+            message: 'Featured collections retrieved successfully',
+          };
+        },
+        { ttlSeconds: 180 }
+      );
     } catch (error: any) {
       throw new HttpException(
         {
