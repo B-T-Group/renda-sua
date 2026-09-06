@@ -73,8 +73,9 @@ export class MerchantAgreementProviderService {
   /**
    * Resolve agreement provider for a country.
    * - Missing country → in_app (do not send BoldSign until country is known)
-   * - Absence of a config row → boldsign
-   * - Lookup errors with a known country → boldsign (fail closed to existing path)
+   * - Absence of a config row → in_app
+   * - Explicit boldsign string_value → boldsign
+   * - Lookup errors with a known country → in_app
    */
   async getProviderForCountry(
     countryCode: string | null | undefined
@@ -103,12 +104,12 @@ export class MerchantAgreementProviderService {
       });
       const value =
         response.application_configurations?.[0]?.string_value?.toLowerCase();
-      return value === 'in_app' ? 'in_app' : 'boldsign';
+      return value === 'boldsign' ? 'boldsign' : 'in_app';
     } catch (error: any) {
       this.logger.warn(
         `Failed to load merchant_agreement_provider for ${code}: ${error?.message}`
       );
-      return 'boldsign';
+      return 'in_app';
     }
   }
 

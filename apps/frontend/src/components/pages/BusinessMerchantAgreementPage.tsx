@@ -360,7 +360,19 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
         onScroll={checkScrollEnd}
         sx={{ p: 2, mb: 2, maxHeight: 420, overflow: 'auto' }}
       >
-        <Box dangerouslySetInnerHTML={{ __html: html }} />
+        <Box
+          dangerouslySetInnerHTML={{ __html: html }}
+          sx={{
+            fontSize: '1rem',
+            lineHeight: 1.55,
+            color: 'text.primary',
+            '& h1': { fontSize: '1.375rem', lineHeight: 1.3, mb: 1.25 },
+            '& h2': { fontSize: '1.125rem', lineHeight: 1.35, mt: 2.5, mb: 1.25 },
+            '& p, & li': { fontSize: '1rem', lineHeight: 1.55 },
+            '& table': { fontSize: '0.9375rem' },
+            '& .meta': { fontSize: '0.875rem', color: 'text.secondary' },
+          }}
+        />
       </Paper>
       {!hasScrolledToEnd ? (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
