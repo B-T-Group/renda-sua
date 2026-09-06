@@ -34,6 +34,7 @@ import { CountryOnboardingService } from './country-onboarding.service';
 import { LocationsService } from './locations.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 
 interface RequestWithUser extends Request {
   user?: { sub?: string; id?: string };
@@ -106,6 +107,7 @@ export class LocationsController {
   constructor(
     private readonly hasuraService: HasuraSystemService,
     private readonly hasuraUserService: HasuraUserService,
+    private readonly catalogCacheService: CatalogCacheService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly locationsService: LocationsService,
     private readonly countryOnboardingService: CountryOnboardingService
@@ -476,33 +478,39 @@ export class LocationsController {
     }>;
   }> {
     try {
-      const query = `
-        query GetSupportedCountriesPublic {
-          supported_country_states(
-            where: { service_status: { _in: ["active", "coming_soon"] } }
-            order_by: { country_code: asc }
-          ) {
-            country_code
-            country_name
-            currency_code
-            service_status
-            delivery_enabled
-          }
-        }
-      `;
+      return await this.catalogCacheService.getOrCompute(
+        'supported-countries',
+        async () => {
+          const query = `
+            query GetSupportedCountriesPublic {
+              supported_country_states(
+                where: { service_status: { _in: ["active", "coming_soon"] } }
+                order_by: { country_code: asc }
+              ) {
+                country_code
+                country_name
+                currency_code
+                service_status
+                delivery_enabled
+              }
+            }
+          `;
 
-      const response = await this.hasuraService.executeQuery(query);
-      const paymentMethodsByCountry =
-        await this.getActivePaymentMethodsByCountry();
-      const onboardingMap =
-        await this.countryOnboardingService.getConfigMap();
-      const countries = this.aggregateSupportedCountries(
-        response.supported_country_states || [],
-        paymentMethodsByCountry,
-        onboardingMap
+          const response = await this.hasuraService.executeQuery(query);
+          const paymentMethodsByCountry =
+            await this.getActivePaymentMethodsByCountry();
+          const onboardingMap =
+            await this.countryOnboardingService.getConfigMap();
+          const countries = this.aggregateSupportedCountries(
+            response.supported_country_states || [],
+            paymentMethodsByCountry,
+            onboardingMap
+          );
+
+          return { success: true, countries };
+        },
+        { ttlSeconds: 3600 }
       );
-
-      return { success: true, countries };
     } catch (error: any) {
       this.logger.error('Failed to fetch supported countries (public)', error);
       throw new HttpException(
