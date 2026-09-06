@@ -17,15 +17,48 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { config as loadDotenv } from 'dotenv';
+import { existsSync } from 'fs';
 import { json, raw, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { join } from 'path';
 import { AppModule } from './app/app.module';
 import { configureRuntimeDns } from './config/configure-runtime-dns';
 import { isCorsOriginAllowed, parseCorsOrigins } from './config/cors-origin';
 import { initSentry } from './instrument';
 
+/** Load apps/backend .env files before Secrets Manager so local overrides can win. */
+function loadLocalEnvFiles(): void {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const baseCandidates = [
+    join(process.cwd(), 'apps/backend'),
+    join(__dirname, '..', '..'),
+  ];
+  // Base env first, then .env.local with override so machine-specific values win.
+  for (const dir of baseCandidates) {
+    for (const name of [`.env.${nodeEnv}`, '.env']) {
+      const path = join(dir, name);
+      if (existsSync(path)) {
+        loadDotenv({ path, override: false });
+      }
+    }
+  }
+  for (const dir of baseCandidates) {
+    const localPath = join(dir, '.env.local');
+    if (existsSync(localPath)) {
+      loadDotenv({ path: localPath, override: true });
+    }
+  }
+}
+
+loadLocalEnvFiles();
+
 // Must run before bootstrap / Nest so Hasura GraphQL clients can resolve hostnames.
 configureRuntimeDns();
+
+function usesLocalRedis(): boolean {
+  return process.env.USE_LOCAL_REDIS === 'true';
+}
 
 async function loadSecrets() {
   const client = new SecretsManagerClient({
@@ -72,9 +105,6 @@ async function loadSecrets() {
       'GOOGLE_MAPS_API_KEY',
       'DATABASE_URL',
       'SESSION_ENCRYPTION_KEY',
-      'REDIS_HOST',
-      'REDIS_PORT',
-      'REDIS_PASSWORD',
       'ASSISTANT_ENABLED',
       'ASSISTANT_WHATSAPP_REPLIES_ENABLED',
       'ASSISTANT_MODEL',
@@ -82,6 +112,16 @@ async function loadSecrets() {
       'ASSISTANT_MAX_TOOL_ITERATIONS',
       'ASSISTANT_WHATSAPP_MAX_REPLY_CHARS',
     ]);
+    // Local Docker Redis (yarn redis:up) — do not overwrite with ECS service DNS.
+    if (!usesLocalRedis()) {
+      forceFromSecrets.add('REDIS_HOST');
+      forceFromSecrets.add('REDIS_PORT');
+      forceFromSecrets.add('REDIS_PASSWORD');
+    } else {
+      console.log(
+        `USE_LOCAL_REDIS=true — keeping Redis at ${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`
+      );
+    }
     for (const [key, value] of Object.entries(secrets)) {
       if (!process.env[key] || forceFromSecrets.has(key)) {
         process.env[key] = String(value);

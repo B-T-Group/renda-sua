@@ -83,8 +83,10 @@ const INVENTORY_ITEM_SELECTION = `
     dimensions
     item_sub_category_id
     is_active
-    brand
-    condition
+    brand {
+      id
+      name
+    }
     sku
     item_sub_category {
       id

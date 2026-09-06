@@ -25,7 +25,7 @@ Handles user signup, login, and session management. The web in-app authenticatio
 ### Session Management (Web Only)
 
 - **Opaque session cookie**: Contains a randomly generated session ID (not a JWT)
-- **Server-side encrypted storage**: Auth0 refresh tokens are encrypted with AES-256-GCM and stored in Redis (or in-memory for local dev)
+- **Server-side encrypted storage**: Auth0 refresh tokens are encrypted with AES-256-GCM and stored in Redis (or in-memory for local dev). For local Redis: `yarn redis:up` and set `USE_LOCAL_REDIS=true` + `REDIS_HOST=localhost` in `.env.local` (not `.env.development` — that file is shared)
 - **Memory-only access tokens**: Access tokens are never persisted in browser storage, only in memory
 - **Silent refresh**: Frontend refreshes tokens via `/auth/login/refresh` using the session cookie
 - **Session rotation**: Each refresh generates a new session ID and invalidates the old one

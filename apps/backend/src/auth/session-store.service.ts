@@ -81,14 +81,16 @@ export class SessionStoreService implements OnModuleDestroy {
       });
 
       this.redisClient.on('error', (err: any) => {
-        this.logger.error('Redis client error:', err);
+        this.logger.error(
+          `Redis client error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
+        );
         if (nodeEnv === 'production') {
           throw new Error('Redis connection failed in production');
         }
       });
 
       await this.redisClient.connect();
-      this.logger.log('Redis session store connected');
+      this.logger.log(`Redis session store connected (${redis.host}:${redis.port})`);
     } catch (error: any) {
       if (nodeEnv === 'production') {
         throw new Error(`Redis connection failed in production: ${error.message}`);
