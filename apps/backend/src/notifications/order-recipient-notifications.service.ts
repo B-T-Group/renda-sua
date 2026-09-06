@@ -279,37 +279,60 @@ export class OrderRecipientNotificationsService {
   }
 
   /**
-   * Uses the approved `rs_recipient_order_update` template for all status
-   * notifications. Meta rejected dedicated recipient UTILITY names
-   * (rs_recipient_order_placed, rs_rcpt_out_for_delivery, rs_recipient_order_ready).
+   * Dedicated appealed Meta templates for key milestones; other statuses use
+   * approved `rs_recipient_order_update`. WhatsApp only when
+   * `recipient_notify_whatsapp` is true.
    */
   private whatsAppPayloadForStatus(
     status: string,
     contact: OrderRecipientContact,
     locale: EmailLocale
-  ): { templateKey: string; variables: Record<string, string> } {
-    return {
-      templateKey: 'recipient_order_update',
-      variables: {
-        orderNumber: contact.orderNumber,
-        statusLabel: this.statusLabel(status, locale),
-      },
-    };
+  ): { templateKey: string; variables: Record<string, string> } | null {
+    const orderNumber = contact.orderNumber;
+    const payerName = (contact.payerName || '').trim() || '-';
+    const storeName = (contact.businessName || '').trim() || '-';
+
+    switch (status) {
+      case 'pending':
+        return {
+          templateKey: 'recipient_order_placed',
+          variables: { payerName, storeName, orderNumber },
+        };
+      case 'out_for_delivery':
+        return {
+          templateKey: 'recipient_out_for_delivery',
+          variables: { orderNumber },
+        };
+      case 'ready_for_pickup':
+        return {
+          templateKey: 'recipient_order_ready',
+          variables: { orderNumber, storeName },
+        };
+      case 'confirmed':
+      case 'delivered':
+      case 'complete':
+      case 'cancelled':
+        return {
+          templateKey: 'recipient_order_update',
+          variables: {
+            orderNumber,
+            statusLabel: this.statusLabel(status, locale),
+          },
+        };
+      default:
+        return null;
+    }
   }
 
   private statusLabel(status: string, locale: EmailLocale): string {
     const en: Record<string, string> = {
-      pending: 'placed for you',
       confirmed: 'confirmed',
-      out_for_delivery: 'out for delivery',
       delivered: 'delivered',
       complete: 'delivered',
       cancelled: 'cancelled',
     };
     const fr: Record<string, string> = {
-      pending: 'passée pour vous',
       confirmed: 'confirmée',
-      out_for_delivery: 'en cours de livraison',
       delivered: 'livrée',
       complete: 'livrée',
       cancelled: 'annulée',
