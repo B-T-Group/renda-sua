@@ -50,7 +50,11 @@ export function isTransientRedisError(error: unknown): boolean {
 
 export function throwRedisUnavailable(): never {
   throw new HttpException(
-    { success: false, error: REDIS_UNAVAILABLE_MESSAGE },
+    {
+      success: false,
+      error: REDIS_UNAVAILABLE_MESSAGE,
+      message: REDIS_UNAVAILABLE_MESSAGE,
+    },
     HttpStatus.SERVICE_UNAVAILABLE
   );
 }
@@ -61,8 +65,10 @@ export async function redisCommandOrFallback<T>(options: {
   redisOp: () => Promise<T>;
   fallbackOp: () => Promise<T> | T;
   onError?: (error: unknown) => void;
+  waitForReady?: () => Promise<boolean>;
 }): Promise<T> {
-  if (!options.canUseRedis) {
+  const ready = options.canUseRedis || (await becameReady(options.waitForReady));
+  if (!ready) {
     return options.failClosed ? throwRedisUnavailable() : options.fallbackOp();
   }
   try {
@@ -71,6 +77,12 @@ export async function redisCommandOrFallback<T>(options: {
     options.onError?.(error);
     return options.failClosed ? throwRedisUnavailable() : options.fallbackOp();
   }
+}
+
+async function becameReady(
+  waitForReady?: () => Promise<boolean>
+): Promise<boolean> {
+  return waitForReady ? waitForReady() : false;
 }
 
 function asErrorFields(error: unknown): ErrorFields | null {

@@ -1,7 +1,12 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient, RedisClientType } from 'redis';
+import { RedisClientType } from 'redis';
 import { Configuration } from '../config/configuration';
+import {
+  connectRedisWithRetry,
+  createAppRedisClient,
+  waitForRedisReady,
+} from '../common/redis-client.util';
 import { redisCommandOrFallback } from '../common/redis-error.util';
 
 interface LockoutEntry {
@@ -39,6 +44,10 @@ export class LockoutService implements OnModuleDestroy {
     return (process.env.NODE_ENV || 'development') === 'production';
   }
 
+  isStoreReady(): boolean {
+    return this.canUseRedis();
+  }
+
   private canUseRedis(): boolean {
     return !this.redisUnhealthy && Boolean(this.redisClient?.isReady);
   }
@@ -61,7 +70,23 @@ export class LockoutService implements OnModuleDestroy {
       redisOp,
       fallbackOp,
       onError: (error) => this.markRedisUnhealthy(error),
+      waitForReady: () => this.waitUntilReady(),
     });
+  }
+
+  private waitUntilReady(): Promise<boolean> {
+    if (!this.redisClient) return Promise.resolve(false);
+    return waitForRedisReady({
+      isReady: () => this.canUseRedis(),
+      subscribe: (onReady) => this.subscribeReady(onReady),
+    });
+  }
+
+  private subscribeReady(onReady: () => void): () => void {
+    const client = this.redisClient;
+    if (!client) return () => undefined;
+    client.on('ready', onReady);
+    return () => client.off('ready', onReady);
   }
 
   private async initializeRedis() {
@@ -70,7 +95,29 @@ export class LockoutService implements OnModuleDestroy {
       this.assertRedisConfigured();
       return;
     }
-    await this.connectRedis(redis);
+    await this.connectWithRetry(redis);
+  }
+
+  private async connectWithRetry(redis: {
+    host: string;
+    port: number;
+    password?: string;
+  }): Promise<void> {
+    try {
+      await connectRedisWithRetry({
+        connect: () => this.connectRedis(redis),
+        onRetry: (attempt, error) => this.logConnectRetry(attempt, error),
+      });
+    } catch (error: any) {
+      this.handleConnectFailure(error);
+    }
+  }
+
+  private logConnectRetry(attempt: number, error: unknown): void {
+    const err = error as { message?: string };
+    this.logger.warn(
+      `Redis lockout connect retry ${attempt}: ${err?.message || 'unknown'}`
+    );
   }
 
   private assertRedisConfigured(): void {
@@ -87,25 +134,11 @@ export class LockoutService implements OnModuleDestroy {
     port: number;
     password?: string;
   }): Promise<void> {
-    try {
-      this.redisClient = this.createRedisClient(redis);
-      this.redisClient.on('error', (err: any) => this.onRedisError(err, redis));
-      await this.redisClient.connect();
-      this.logger.log(`Redis lockout service connected (${redis.host}:${redis.port})`);
-    } catch (error: any) {
-      this.handleConnectFailure(error);
-    }
-  }
-
-  private createRedisClient(redis: {
-    host: string;
-    port: number;
-    password?: string;
-  }): RedisClientType {
-    return createClient({
-      socket: { host: redis.host, port: redis.port, connectTimeout: 5000 },
-      password: redis.password,
-    });
+    await this.disconnectClient();
+    this.redisClient = createAppRedisClient(redis);
+    this.redisClient.on('error', (err: any) => this.onRedisError(err, redis));
+    await this.redisClient.connect();
+    this.logger.log(`Redis lockout service connected (${redis.host}:${redis.port})`);
   }
 
   private onRedisError(
@@ -115,9 +148,6 @@ export class LockoutService implements OnModuleDestroy {
     this.logger.error(
       `Redis client error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
     );
-    if (this.isProduction()) {
-      throw new Error('Redis connection failed in production');
-    }
   }
 
   private handleConnectFailure(error: any): void {
@@ -128,14 +158,19 @@ export class LockoutService implements OnModuleDestroy {
       'Failed to connect to Redis for lockout service, using in-memory store (dev only):',
       error.message
     );
+    void this.disconnectClient();
+  }
+
+  private async disconnectClient(): Promise<void> {
+    if (!this.redisClient) return;
+    const client = this.redisClient;
     this.redisClient = null;
+    await client.quit().catch(() => undefined);
   }
 
   async onModuleDestroy() {
     clearInterval(this.cleanupTimer);
-    if (this.redisClient) {
-      await this.redisClient.quit().catch(() => {});
-    }
+    await this.disconnectClient();
   }
 
   async isLockedOut(identifier: string): Promise<boolean> {

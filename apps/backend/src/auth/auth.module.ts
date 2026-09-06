@@ -63,6 +63,8 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     Auth0Service,
     SignupService,
     LoginService,
+    SessionStoreService,
+    LockoutService,
     RbacModule,
   ],
 })

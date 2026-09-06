@@ -34,6 +34,7 @@ function createRedisApi() {
     connect: jest.fn().mockResolvedValue(undefined),
     quit: jest.fn().mockResolvedValue(undefined),
     on: jest.fn(),
+    off: jest.fn(),
   };
 }
 
