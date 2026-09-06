@@ -23,6 +23,7 @@ import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../stripe-tax/stripe-tax.const
 import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
+import { CollectionAutoAssignService } from '../collections/collection-auto-assign.service';
 import { resolveSaleItemRejectionReason } from '../common/moderation-rejection-reason';
 import { resolvePayOnDeliveryDefault } from './item-payment-defaults.util';
 import { resolveInitialInventoryQuantity } from '../food/food-inventory-quantity.util';
@@ -823,7 +824,8 @@ export class BusinessItemsService {
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly stripeTaxCodesService: StripeTaxCodesService,
     private readonly imageThumbnailsService: ImageThumbnailsService,
-    private readonly categoriesService: CategoriesService
+    private readonly categoriesService: CategoriesService,
+    private readonly collectionAutoAssignService: CollectionAutoAssignService
   ) {}
 
   private triggerLifecycleRecompute(businessId: string): void {
@@ -2203,6 +2205,7 @@ export class BusinessItemsService {
     );
 
     const published = await this.publishBusinessItem(businessId, itemId);
+    void this.collectionAutoAssignService.autoAssignCollectionsIfFit(itemId);
     return {
       item: published,
       inventory: { id: inventoryId },

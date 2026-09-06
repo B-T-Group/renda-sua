@@ -72,7 +72,8 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       merchantLifecycleService as any,
       {} as any,
       {} as any,
-      categoriesService as any
+      categoriesService as any,
+      { autoAssignCollectionsIfFit: jest.fn() } as any
     );
 
     return {
