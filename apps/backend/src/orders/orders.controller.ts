@@ -46,6 +46,7 @@ import type {
   GetOrderRequest,
   OrderStatusChangeRequest,
 } from './orders.service';
+import { toCreateOrderHttpException } from './create-order-http-error';
 import { OrdersService } from './orders.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -292,33 +293,7 @@ export class OrdersController {
         message: 'Order created successfully',
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      // Convert service errors to appropriate HTTP exceptions
-      const errorMessage = error.message || 'Internal server error';
-      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-
-      if (errorMessage.includes('User not found')) {
-        statusCode = HttpStatus.NOT_FOUND;
-      } else if (
-        errorMessage.includes('MERCHANT_NOT_ACCEPTING_ORDERS') ||
-        errorMessage.includes('No valid items found') ||
-        errorMessage.includes('Item') ||
-        errorMessage.includes('No account found') ||
-        errorMessage.includes('Insufficient')
-      ) {
-        statusCode = HttpStatus.BAD_REQUEST;
-      }
-
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        statusCode
-      );
+      throw toCreateOrderHttpException(error);
     }
   }
 
