@@ -16,14 +16,49 @@ import {
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import { config as loadDotenv } from 'dotenv';
+import { existsSync } from 'fs';
 import { json, raw, urlencoded } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { join } from 'path';
 import { AppModule } from './app/app.module';
 import { configureRuntimeDns } from './config/configure-runtime-dns';
+import { isCorsOriginAllowed, parseCorsOrigins } from './config/cors-origin';
 import { initSentry } from './instrument';
+
+/** Load apps/backend .env files before Secrets Manager so local overrides can win. */
+function loadLocalEnvFiles(): void {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const baseCandidates = [
+    join(process.cwd(), 'apps/backend'),
+    join(__dirname, '..', '..'),
+  ];
+  // Base env first, then .env.local with override so machine-specific values win.
+  for (const dir of baseCandidates) {
+    for (const name of [`.env.${nodeEnv}`, '.env']) {
+      const path = join(dir, name);
+      if (existsSync(path)) {
+        loadDotenv({ path, override: false });
+      }
+    }
+  }
+  for (const dir of baseCandidates) {
+    const localPath = join(dir, '.env.local');
+    if (existsSync(localPath)) {
+      loadDotenv({ path: localPath, override: true });
+    }
+  }
+}
+
+loadLocalEnvFiles();
 
 // Must run before bootstrap / Nest so Hasura GraphQL clients can resolve hostnames.
 configureRuntimeDns();
+
+function usesLocalRedis(): boolean {
+  return process.env.USE_LOCAL_REDIS === 'true';
+}
 
 async function loadSecrets() {
   const client = new SecretsManagerClient({
@@ -69,6 +104,7 @@ async function loadSecrets() {
       'HASURA_GRAPHQL_ENDPOINT',
       'GOOGLE_MAPS_API_KEY',
       'DATABASE_URL',
+      'SESSION_ENCRYPTION_KEY',
       'ASSISTANT_ENABLED',
       'ASSISTANT_WHATSAPP_REPLIES_ENABLED',
       'ASSISTANT_MODEL',
@@ -76,6 +112,16 @@ async function loadSecrets() {
       'ASSISTANT_MAX_TOOL_ITERATIONS',
       'ASSISTANT_WHATSAPP_MAX_REPLY_CHARS',
     ]);
+    // Local Docker Redis (yarn redis:up) — do not overwrite with ECS service DNS.
+    if (!usesLocalRedis()) {
+      forceFromSecrets.add('REDIS_HOST');
+      forceFromSecrets.add('REDIS_PORT');
+      forceFromSecrets.add('REDIS_PASSWORD');
+    } else {
+      console.log(
+        `USE_LOCAL_REDIS=true — keeping Redis at ${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`
+      );
+    }
     for (const [key, value] of Object.entries(secrets)) {
       if (!process.env[key] || forceFromSecrets.has(key)) {
         process.env[key] = String(value);
@@ -113,15 +159,27 @@ async function bootstrap() {
   app.use('/api/whatsapp/webhook', raw({ type: '*/*' }));
   app.use(json({ limit: JSON_BODY_LIMIT }));
   app.use(urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+  app.use(cookieParser());
 
   // Use Winston as the NestJS logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
-  // Enable CORS for all origins
+  // CORS: CORS_ORIGIN is a comma list, or * to reflect any browser Origin.
+  // Deny unknown origins without throwing — an Error becomes a 500 and a Sentry event.
+  const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
+
   app.enableCors({
-    origin: '*',
+    origin: (origin, callback) => {
+      callback(null, isCorsOriginAllowed(origin, corsOrigins));
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Client-Platform',
+      'X-Requested-With',
+    ],
   });
 
   const globalPrefix = 'api';

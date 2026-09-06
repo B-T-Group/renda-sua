@@ -19,6 +19,7 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
   payment_failed: { en: 'rs_payment_failed', fr: 'rs_payment_failed' },
   ai_proposal_ready: { en: 'rs_ai_proposal', fr: 'rs_ai_proposal' },
   admin_order_risk: { en: 'rs_admin_order_risk', fr: 'rs_admin_order_risk' },
+  recipient_order_update: { en: 'rs_recipient_order_update', fr: 'rs_recipient_order_update' },
 };
 
 /** Ordered body variables per template (Meta positional params). */
@@ -35,6 +36,7 @@ const BODY_VARS: Record<string, string[]> = {
   payment_failed: ['orderNumber'],
   ai_proposal_ready: ['itemName'],
   admin_order_risk: ['orderNumber', 'riskLabel', 'reason'],
+  recipient_order_update: ['orderNumber', 'statusLabel'],
 };
 
 /**

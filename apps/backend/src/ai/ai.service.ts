@@ -1641,6 +1641,9 @@ No markdown, no explanation outside JSON.`;
       name_en: string;
       name_fr: string;
     }>;
+    /** Prefer empty over weak matches (auto-assign). */
+    strictFitOnly?: boolean;
+    maxSuggestions?: number;
   }): Promise<
     Array<{
       collectionId: string;
@@ -1651,6 +1654,10 @@ No markdown, no explanation outside JSON.`;
     }>
   > {
     if (!input.availableCollections.length) return [];
+    const maxSuggestions = Math.min(
+      Math.max(input.maxSuggestions ?? 5, 1),
+      5
+    );
     const catalogJson = JSON.stringify(
       input.availableCollections.map((c) => ({
         id: c.id,
@@ -1659,6 +1666,14 @@ No markdown, no explanation outside JSON.`;
         name_fr: c.name_fr,
       }))
     );
+    const strictGuidance = input.strictFitOnly
+      ? `
+Strict mode:
+- Only suggest a collection when the product CLEARLY belongs there.
+- Prefer returning an empty suggestions array over a weak or speculative match.
+- At most ${maxSuggestions} suggestions.`
+      : `
+- Suggest up to ${maxSuggestions} collections that are a reasonable fit.`;
     const userText = `
 Product:
 - name: ${input.itemName}
@@ -1667,8 +1682,9 @@ Product:
 - subcategory: ${input.subCategoryName ?? ''}
 - brand: ${input.brandName ?? ''}
 
-Platform collections (pick only from this list, max 5):
+Platform collections (pick only from this list):
 ${catalogJson}
+${strictGuidance}
 
 Return ONLY JSON: { "suggestions": [ { "collectionId": "uuid", "reason": "short" } ] }
 Use collectionId values exactly from the list.`;
@@ -1680,13 +1696,14 @@ Use collectionId values exactly from the list.`;
       messages: [
         {
           role: 'system',
-          content:
-            'You assign e-commerce products to curated shopping collections. Only use collection IDs from the provided list.',
+          content: input.strictFitOnly
+            ? 'You assign e-commerce products to curated shopping collections only when the fit is clear. Prefer no suggestions over weak matches. Only use collection IDs from the provided list.'
+            : 'You assign e-commerce products to curated shopping collections. Only use collection IDs from the provided list.',
         },
         { role: 'user', content: `${userText}${imageUrlsText}` },
       ],
       max_tokens: 400,
-      temperature: 0.2,
+      temperature: input.strictFitOnly ? 0.1 : 0.2,
       response_format: { type: 'json_object' },
     };
     try {
@@ -1723,7 +1740,7 @@ Use collectionId values exactly from the list.`;
           reason: s.reason,
         });
       }
-      return out.slice(0, 5);
+      return out.slice(0, maxSuggestions);
     } catch (error: unknown) {
       this.logger.warn('Collection AI suggestions failed', error);
       return [];

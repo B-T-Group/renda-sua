@@ -247,6 +247,7 @@ export default function RequestPayAtPickupPaymentDialog({
         </Button>
         <Button
           variant="contained"
+          color="cta"
           onClick={handleSubmit}
           disabled={
             loading || !isPayAtPickup || !isPickupOrder || !canSubmitPhone

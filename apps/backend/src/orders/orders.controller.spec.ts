@@ -90,7 +90,26 @@ describe('OrdersController', () => {
 
       ordersService.createOrder.mockRejectedValue(error);
 
-      await expect(controller.createOrder(orderData)).rejects.toThrow();
+      await expect(controller.createOrder(orderData)).rejects.toMatchObject({
+        status: 400,
+        message: 'No valid items found',
+      });
+    });
+
+    it('maps Stripe PaymentIntent 400s to HTTP 400 with the Stripe message', async () => {
+      const orderData = {
+        item: { business_inventory_id: 'inv-123', quantity: 2 },
+        delivery_address_id: 'addr-123',
+      };
+      ordersService.createOrder.mockRejectedValue({
+        message: 'Amount must be at least $0.50 cad',
+        statusCode: 400,
+      });
+
+      await expect(controller.createOrder(orderData)).rejects.toMatchObject({
+        status: 400,
+        message: 'Amount must be at least $0.50 cad',
+      });
     });
   });
 
@@ -339,7 +358,11 @@ describe('OrdersController', () => {
 
   describe('cancelOrder', () => {
     it('should cancel order successfully', async () => {
-      const request = { orderId: 'order-123', notes: 'Cancelled by business' };
+      const request = {
+        orderId: 'order-123',
+        cancellationReasonId: 13, // business: cannot_fulfill_order
+        notes: 'Cancelled by business',
+      };
       const expectedResult = {
         success: true,
         order: { id: 'order-123', current_status: 'cancelled' },
@@ -392,7 +415,11 @@ describe('OrdersController', () => {
       });
 
       expect(result).toEqual(expectedResult);
-      expect(ordersService.cancelOrder).toHaveBeenCalledWith({ orderId });
+      expect(ordersService.cancelOrder).toHaveBeenCalledWith({
+        orderId,
+        cancellationReasonId: 1, // "other" fallback for legacy path
+        notes: 'Cancelled via legacy PATCH endpoint',
+      });
     });
   });
 });

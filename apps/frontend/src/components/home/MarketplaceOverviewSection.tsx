@@ -3,6 +3,7 @@ import { Box, Card, CardContent, Container, Grid, Typography, alpha } from '@mui
 import { motion, useReducedMotion } from 'framer-motion';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { HOME_ACCENTS } from './homeTheme';
 
 interface PersonaCard {
   icon: React.ReactNode;
@@ -20,30 +21,30 @@ const MarketplaceOverviewSection: React.FC = () => {
 
   const personas: PersonaCard[] = [
     {
-      icon: <ShoppingBag sx={{ fontSize: 32, color: '#1e40af' }} />,
+      icon: <ShoppingBag sx={{ fontSize: 32, color: HOME_ACCENTS.primary }} />,
       titleKey: 'home.overview.client.title',
       defaultTitle: 'Shoppers',
       descKey: 'home.overview.client.desc',
       defaultDesc: 'Buy what you want to own, or rent what you only need for a while — delivered from local businesses to your door.',
-      color: '#1e40af',
+      color: HOME_ACCENTS.primary,
       anchor: '#persona-client',
     },
     {
-      icon: <BusinessCenter sx={{ fontSize: 32, color: '#16a34a' }} />,
+      icon: <BusinessCenter sx={{ fontSize: 32, color: HOME_ACCENTS.business }} />,
       titleKey: 'home.overview.business.title',
       defaultTitle: 'Businesses',
       descKey: 'home.overview.business.desc',
       defaultDesc: 'Create a storefront, list products and rentals, and reach customers in your city.',
-      color: '#16a34a',
+      color: HOME_ACCENTS.business,
       anchor: '#persona-business',
     },
     {
-      icon: <DirectionsBike sx={{ fontSize: 32, color: '#0891b2' }} />,
+      icon: <DirectionsBike sx={{ fontSize: 32, color: HOME_ACCENTS.delivery }} />,
       titleKey: 'home.overview.agent.title',
       defaultTitle: 'Delivery Agents',
       descKey: 'home.overview.agent.desc',
       defaultDesc: 'Earn money by delivering orders on your own schedule.',
-      color: '#0891b2',
+      color: HOME_ACCENTS.delivery,
       anchor: '#persona-agent',
     },
   ];
@@ -104,40 +105,40 @@ const MarketplaceOverviewSection: React.FC = () => {
           >
             <svg viewBox="0 0 560 220" style={{ width: '100%', maxWidth: 560 }} aria-hidden="true">
               {/* Center Rendasua hub */}
-              <circle cx="280" cy="110" r="52" fill={alpha('#1e40af', 0.08)} stroke="#1e40af" strokeWidth="2" />
-              <text x="280" y="105" textAnchor="middle" fill="#1e40af" fontSize="13" fontWeight="bold">Rendasua</text>
+              <circle cx="280" cy="110" r="52" fill={alpha(HOME_ACCENTS.primary, 0.08)} stroke={HOME_ACCENTS.primary} strokeWidth="2" />
+              <text x="280" y="105" textAnchor="middle" fill={HOME_ACCENTS.primary} fontSize="13" fontWeight="bold">Rendasua</text>
               <text x="280" y="122" textAnchor="middle" fill="#64748b" fontSize="10">Marketplace</text>
 
               {/* Client node */}
-              <circle cx="80" cy="110" r="38" fill={alpha('#1e40af', 0.07)} stroke="#1e40af" strokeWidth="1.5" />
-              <text x="80" y="105" textAnchor="middle" fill="#1e40af" fontSize="11" fontWeight="bold">Shopper</text>
+              <circle cx="80" cy="110" r="38" fill={alpha(HOME_ACCENTS.primary, 0.07)} stroke={HOME_ACCENTS.primary} strokeWidth="1.5" />
+              <text x="80" y="105" textAnchor="middle" fill={HOME_ACCENTS.primary} fontSize="11" fontWeight="bold">Shopper</text>
               <text x="80" y="120" textAnchor="middle" fill="#64748b" fontSize="9">Places order</text>
               {/* Client → Hub */}
-              <path d="M 118 110 L 228 110" stroke="#1e40af" strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowBlue)" />
+              <path d="M 118 110 L 228 110" stroke={HOME_ACCENTS.primary} strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowBlue)" />
 
               {/* Business node */}
-              <circle cx="480" cy="60" r="38" fill={alpha('#16a34a', 0.07)} stroke="#16a34a" strokeWidth="1.5" />
-              <text x="480" y="55" textAnchor="middle" fill="#16a34a" fontSize="11" fontWeight="bold">Business</text>
+              <circle cx="480" cy="60" r="38" fill={alpha(HOME_ACCENTS.business, 0.07)} stroke={HOME_ACCENTS.business} strokeWidth="1.5" />
+              <text x="480" y="55" textAnchor="middle" fill={HOME_ACCENTS.business} fontSize="11" fontWeight="bold">Business</text>
               <text x="480" y="70" textAnchor="middle" fill="#64748b" fontSize="9">Fulfils order</text>
               {/* Business → Hub */}
-              <path d="M 444 72 L 326 98" stroke="#16a34a" strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowGreen)" />
+              <path d="M 444 72 L 326 98" stroke={HOME_ACCENTS.business} strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowGreen)" />
 
               {/* Agent node */}
-              <circle cx="480" cy="160" r="38" fill={alpha('#0891b2', 0.07)} stroke="#0891b2" strokeWidth="1.5" />
-              <text x="480" y="155" textAnchor="middle" fill="#0891b2" fontSize="11" fontWeight="bold">Agent</text>
+              <circle cx="480" cy="160" r="38" fill={alpha(HOME_ACCENTS.delivery, 0.07)} stroke={HOME_ACCENTS.delivery} strokeWidth="1.5" />
+              <text x="480" y="155" textAnchor="middle" fill={HOME_ACCENTS.delivery} fontSize="11" fontWeight="bold">Agent</text>
               <text x="480" y="170" textAnchor="middle" fill="#64748b" fontSize="9">Delivers</text>
               {/* Agent → Hub */}
-              <path d="M 444 148 L 326 122" stroke="#0891b2" strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowCyan)" />
+              <path d="M 444 148 L 326 122" stroke={HOME_ACCENTS.delivery} strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowCyan)" />
 
               <defs>
                 <marker id="arrowBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L8,3 z" fill="#1e40af" />
+                  <path d="M0,0 L0,6 L8,3 z" fill={HOME_ACCENTS.primary} />
                 </marker>
                 <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L8,3 z" fill="#16a34a" />
+                  <path d="M0,0 L0,6 L8,3 z" fill={HOME_ACCENTS.business} />
                 </marker>
                 <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L8,3 z" fill="#0891b2" />
+                  <path d="M0,0 L0,6 L8,3 z" fill={HOME_ACCENTS.delivery} />
                 </marker>
               </defs>
             </svg>

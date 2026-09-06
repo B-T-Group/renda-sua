@@ -1,6 +1,84 @@
-# Authentication Implementation
+# Authentication Module
 
-This directory contains the authentication implementation for the Rendasua backend API using Auth0.
+Handles user signup, login, and session management. The web in-app authentication flow replaces Auth0 Universal Login with a custom modal-based experience for desktop and full-page for mobile.
+
+## Architecture
+
+### Signup Flow
+
+1. User submits email or phone number via `LoginMethodDialog`
+2. Backend sends OTP via email (4 digits) or SMS
+3. User enters OTP on `OtpAuthPage`
+4. Backend verifies OTP with Auth0, provisions user if needed
+5. For web: backend creates encrypted session, returns HttpOnly cookie
+6. For mobile: backend returns tokens in JSON response
+
+### Login Flow
+
+1. User submits email or phone number via `LoginMethodDialog`
+2. Backend sends OTP via email (4 digits) or SMS
+3. User enters OTP on `OtpAuthPage`
+4. Backend verifies OTP with Auth0
+5. For web: backend creates encrypted session, returns HttpOnly cookie
+6. For mobile: backend returns tokens in JSON response
+
+### Session Management (Web Only)
+
+- **Opaque session cookie**: Contains a randomly generated session ID (not a JWT)
+- **Server-side encrypted storage**: Auth0 refresh tokens are encrypted with AES-256-GCM and stored in Redis (or in-memory for local dev). For local Redis: `yarn redis:up` and set `USE_LOCAL_REDIS=true` + `REDIS_HOST=localhost` in `.env.local` (not `.env.development` — that file is shared)
+- **Memory-only access tokens**: Access tokens are never persisted in browser storage, only in memory
+- **Silent refresh**: Frontend refreshes tokens via `/auth/login/refresh` using the session cookie
+- **Session rotation**: Each refresh generates a new session ID and invalidates the old one
+- **Reuse detection**: If a retired session cookie is used, the entire session family is invalidated
+
+### Platform Detection
+
+The backend distinguishes between web and mobile clients using the `X-Client-Platform` header:
+- `web`: Returns session cookie, no `refresh_token` in JSON
+- `mobile`: Returns full token response in JSON
+- Unknown platforms default to `web` behavior (fail closed)
+
+### Security Features
+
+- **HttpOnly, Secure, SameSite=Lax cookies** for CSRF protection
+- **`X-Requested-With: XMLHttpRequest`** header required for refresh/logout to prevent CSRF
+- **Strict CORS** with explicit origin allowlist for credentialed requests
+- **`returnTo` validation** on both frontend and backend to prevent open redirects
+- **Login rate limiting**: Per-identifier lockout (5 attempts, 15-minute lockout) backed by Redis in production
+- **Session family tracking**: Redis SETs track related sessions for invalidation on reuse
+- **Encrypted Auth0 tokens**: AES-256-GCM encryption for refresh tokens stored server-side
+
+## Required Environment Variables
+
+### SESSION_ENCRYPTION_KEY
+
+**REQUIRED in production.** Must be exactly **32 raw bytes** (not base64, not hex — raw binary 32-byte key).
+
+Generate a secure key:
+```bash
+openssl rand -base64 32 | head -c 32
+```
+
+Add to AWS Secrets Manager (or your secrets store):
+- **Development**: Can fall back to `JWT_SECRET` (auto-padded to 32 bytes)
+- **Production**: Hard-required, no fallback, fails startup if missing or wrong length
+
+The key encrypts Auth0 refresh tokens stored in Redis. Without it:
+- Existing sessions cannot be decrypted
+- Silent refresh will fail for all users
+- Users will be logged out
+
+### AUTH0_TEST_USERS_ENABLED
+
+**Security**: Test user bypass is ONLY enabled when:
+- Explicitly set to `'true'` via environment variable AND
+- `NODE_ENV !== 'production'`
+
+This prevents test users from being enabled in production even if `NODE_ENV` is misconfigured.
+
+### AUTH0_TEST_USER_PASSWORD
+
+**Security**: Must be set explicitly via environment variable. No hardcoded default in production.
 
 ## Components
 
@@ -26,19 +104,40 @@ This directory contains the authentication implementation for the Rendasua backe
 - **Usage**: `@Public()`
 - **Example**: Health check endpoints, public APIs
 
-### AuthModule (`auth.module.ts`)
+### SessionStoreService (`session-store.service.ts`)
 
-- **Purpose**: Organizes authentication components
-- **Features**: Provides AuthGuard as a global guard
+- **Purpose**: Manages encrypted server-side sessions for web clients
+- **Features**:
+  - Encrypts Auth0 refresh tokens with AES-256-GCM
+  - Stores sessions in Redis (production) or in-memory (development)
+  - Session rotation and reuse detection
+  - Session family tracking for invalidation on reuse
 
-## Configuration
+### LockoutService (`lockout.service.ts`)
 
-The AuthGuard requires the following environment variables:
+- **Purpose**: Per-identifier login attempt tracking and lockout
+- **Features**:
+  - 5 attempts per identifier
+  - 15-minute lockout duration
+  - Backed by Redis in production (multi-pod safe)
+  - Falls back to in-memory in development
 
-```env
-AUTH0_DOMAIN=your-domain.auth0.com
-AUTH0_AUDIENCE=your-api-audience
-```
+### LoginService (`login.service.ts`)
+
+- **Purpose**: Handles login flow and OTP verification
+- **Features**:
+  - Email and phone OTP login
+  - Platform-aware token delivery (cookie for web, JSON for mobile)
+  - Lockout enforcement
+
+### SignupService (`signup.service.ts`)
+
+- **Purpose**: Handles signup flow and OTP verification
+- **Features**:
+  - Email and phone OTP signup
+  - User provisioning with Auth0
+  - Platform-aware token delivery
+  - Replay-safe session reuse for completed signups
 
 ## Usage Examples
 
@@ -77,55 +176,19 @@ export class AppController {
 }
 ```
 
-### Route with Custom Authentication Logic
-
-```typescript
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard';
-
-@Controller('admin')
-@UseGuards(AuthGuard) // Apply to specific controller
-export class AdminController {
-  @Get('dashboard')
-  async getDashboard(@CurrentUser() user: any) {
-    // Custom admin logic here
-    return { message: 'Admin dashboard' };
-  }
-}
-```
-
-## Token Validation Process
-
-1. **Extract Token**: Gets Bearer token from Authorization header
-2. **Check Public Route**: Skips validation if route is marked as public
-3. **Validate JWT**: Verifies token signature using Auth0 JWKS
-4. **Check Claims**: Validates audience and issuer claims
-5. **Extract User**: Adds decoded payload to request object
-6. **Handle Errors**: Returns 401 for invalid/expired tokens
-
-## Error Handling
-
-- **No Token**: Returns 401 Unauthorized
-- **Invalid Token**: Returns 401 Unauthorized
-- **Expired Token**: Returns 401 Unauthorized
-- **Missing Configuration**: Throws error during startup
-
-## Security Features
-
-- **JWKS Caching**: Reduces API calls to Auth0
-- **Token Validation**: Full JWT validation with RS256 algorithm
-- **Audience Validation**: Ensures tokens are for the correct API
-- **Issuer Validation**: Verifies tokens come from Auth0
-- **Public Route Support**: Allows unauthenticated access where needed
-
 ## Frontend Integration
 
-The frontend implements automatic token refresh:
+### Session Hydration
 
-- **Automatic Refresh**: Attempts to refresh expired tokens
-- **Retry Logic**: Retries failed requests with new tokens
-- **Login Redirect**: Redirects to login if refresh fails
-- **Error Handling**: Graceful handling of authentication errors
+On app load, the frontend makes a silent refresh call to `/auth/login/refresh` with its session cookie to obtain a fresh access token. This token is stored only in memory (React state).
+
+### CSRF Protection
+
+All state-changing requests (refresh, logout) must include the `X-Requested-With: XMLHttpRequest` header to prevent CSRF attacks.
+
+### Platform Header
+
+The frontend must set `X-Client-Platform: web` on all auth-related requests to ensure correct token delivery.
 
 ## Testing
 
@@ -135,6 +198,8 @@ To test the authentication:
 2. **Protected Routes**: Should require valid Auth0 token
 3. **Invalid Tokens**: Should return 401 Unauthorized
 4. **Expired Tokens**: Should trigger token refresh in frontend
+5. **Session Reuse**: Retired session cookies should invalidate the entire session family
+6. **Login Lockout**: 5+ failed attempts should lock out for 15 minutes
 
 ## Environment Setup
 

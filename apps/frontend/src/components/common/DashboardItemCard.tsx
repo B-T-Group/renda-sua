@@ -1181,6 +1181,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           ) : isPublicView ? (
             <Button
               variant="contained"
+              color="cta"
               startIcon={<ShoppingCart />}
               onClick={() => {
                 void trackSiteEvent({
@@ -1245,6 +1246,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               ) : (
               <Button
                 variant="contained"
+                color="cta"
                 onClick={() => {
                   void trackSiteEvent({
                     eventType: SITE_EVENT_INVENTORY_BUY_NOW_CLICK,
@@ -1269,6 +1271,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           ) : (
             <Button
               variant="contained"
+              color="cta"
               startIcon={<ShoppingCart />}
               onClick={() => {
                 void trackSiteEvent({

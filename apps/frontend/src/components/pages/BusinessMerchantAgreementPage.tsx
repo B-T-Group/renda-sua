@@ -18,12 +18,10 @@ import {
   merchantAgreementPreviewVars,
   renderMerchantAgreementHtml,
 } from '../../utils/renderMerchantAgreementHtml';
+import { resolveSignedPdfUrl } from '../../utils/signedContractPdf';
 import type { MerchantContractStatus } from '../../hooks/useBusinessVerification';
 
 const SCROLL_END_THRESHOLD_PX = 24;
-const CONTRACT_DOC_TYPE = 'rendasua_contract_agreement';
-
-type ApiClient = NonNullable<ReturnType<typeof useApiClient>>;
 
 function buildWebDeviceInfo() {
   return {
@@ -36,76 +34,12 @@ function buildWebDeviceInfo() {
   };
 }
 
-async function fetchBoldSignPdfUrl(
-  apiClient: ApiClient,
-  contract: MerchantContractStatus | null
-): Promise<string | null> {
-  if (!contract?.canDownload || !contract.contractId) return null;
-  const bold = await apiClient.get<{
-    success: boolean;
-    data: { url?: string };
-  }>(`/business-contracts/${contract.contractId}/download`);
-  return bold.data.data?.url ?? null;
-}
-
-async function findLatestContractUploadId(
-  apiClient: ApiClient
-): Promise<string | null> {
-  const res = await apiClient.get<{
-    success: boolean;
-    data: {
-      uploads: Array<{
-        id: string;
-        created_at?: string;
-        document_type?: { name?: string };
-      }>;
-    };
-  }>('/uploads/me');
-  const matches = (res.data.data.uploads ?? []).filter(
-    (u) => u.document_type?.name === CONTRACT_DOC_TYPE
-  );
-  matches.sort((a, b) =>
-    (b.created_at ?? '').localeCompare(a.created_at ?? '')
-  );
-  return matches[0]?.id ?? null;
-}
-
-async function fetchUploadContractPdfUrl(
-  apiClient: ApiClient
-): Promise<string | null> {
-  const uploadId = await findLatestContractUploadId(apiClient);
-  if (!uploadId) return null;
-  const view = await apiClient.get<{
-    success?: boolean;
-    presigned_url?: string;
-    data?: { presigned_url?: string; url?: string };
-  }>(`/uploads/${uploadId}/view`);
-  return (
-    view.data.presigned_url ||
-    view.data.data?.presigned_url ||
-    view.data.data?.url ||
-    null
-  );
-}
-
 function navigateToSignedPdf(popup: Window | null, url: string) {
   if (popup) {
     popup.location.href = url;
     return;
   }
   window.location.assign(url);
-}
-
-async function resolveSignedPdfUrl(
-  apiClient: ApiClient,
-  contract: MerchantContractStatus | null
-): Promise<string | null> {
-  if (contract?.canDownload && contract.contractId) {
-    return fetchBoldSignPdfUrl(apiClient, contract);
-  }
-  // BoldSign rail without a downloadable PDF yet — do not open a stale upload.
-  if (contract?.boldSignEnabled) return null;
-  return fetchUploadContractPdfUrl(apiClient);
 }
 
 export const BusinessMerchantAgreementPage: React.FC = () => {

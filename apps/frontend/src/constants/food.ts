@@ -15,14 +15,36 @@ export function isFoodCategoryName(name?: string | null): boolean {
   return (name ?? '').trim() === FOOD_CATEGORY_NAME;
 }
 
-export function isFoodCatalogItem(item: {
+export type FoodCatalogRow = {
   item_sub_category?: { item_category?: { name?: string | null } | null } | null;
   item?: {
     item_sub_category?: { item_category?: { name?: string | null } | null } | null;
   } | null;
-}): boolean {
+};
+
+export function isFoodCatalogItem(item: FoodCatalogRow): boolean {
   const name =
     item.item_sub_category?.item_category?.name ??
     item.item?.item_sub_category?.item_category?.name;
   return isFoodCategoryName(name);
+}
+
+/** Drops non-food rows that leak into a Foods browse page and fixes paging. */
+export function applyFoodOnlyCatalogFilter<T extends FoodCatalogRow>(
+  rawItems: T[],
+  foodOnly: boolean,
+  pagination: { total: number; totalPages: number }
+): { items: T[]; total: number; totalPages: number } {
+  if (!foodOnly) {
+    return {
+      items: rawItems,
+      total: pagination.total,
+      totalPages: pagination.totalPages,
+    };
+  }
+  const items = rawItems.filter(isFoodCatalogItem);
+  if (items.length === rawItems.length) {
+    return { items, total: pagination.total, totalPages: pagination.totalPages };
+  }
+  return { items, total: items.length, totalPages: 1 };
 }

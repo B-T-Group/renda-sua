@@ -13,6 +13,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
+import { CollectionAutoAssignService } from '../collections/collection-auto-assign.service';
 import { ItemAiReviewModelService } from './item-ai-review-model.service';
 import { ItemAiReviewQueueService } from './item-ai-review-queue.service';
 import * as Q from './item-ai-review.queries';
@@ -35,6 +36,7 @@ export class ItemAiReviewService {
     private readonly configService: ConfigService<Configuration>,
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly collectionAutoAssignService: CollectionAutoAssignService,
     @Optional()
     private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
@@ -457,6 +459,7 @@ export class ItemAiReviewService {
       item.business_id,
       'item_ai_approved'
     );
+    void this.collectionAutoAssignService.autoAssignCollectionsIfFit(item.id);
     void this.representativeCompensationService?.evaluateForBusinessSafe(
       item.business_id
     );

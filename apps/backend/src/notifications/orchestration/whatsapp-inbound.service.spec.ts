@@ -247,6 +247,39 @@ describe('WhatsAppInboundService', () => {
     });
   });
 
+  it('acknowledges the webhook when command routing hits Hasura 404', async () => {
+    const service = buildService();
+    replyService.handleInboundText.mockRejectedValue(
+      new Error(
+        'GraphQL Error (Code: 404): {"response":{"error":"<html><title>404 Not Found</title></html>","status":404}}'
+      )
+    );
+
+    await expect(
+      service.handleWebhookBody({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: '15557654321',
+                      id: 'wamid.in.404',
+                      type: 'text',
+                      text: { body: 'CONFIRM' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      })
+    ).resolves.toEqual({ received: true });
+    expect(replyService.handleInboundText).toHaveBeenCalled();
+  });
+
   it('routes template quick-reply button taps', async () => {
     const service = buildService();
     replyService.handleInteractiveReply = jest.fn();
@@ -284,5 +317,68 @@ describe('WhatsAppInboundService', () => {
       messageId: 'wamid.tpl.btn',
       contextMessageId: 'wamid.out.order-c',
     });
+  });
+
+  it('still routes merchant text when inbox persist fails', async () => {
+    const service = buildService();
+    inbox.persistInbound.mockRejectedValueOnce(new Error('unique wamid'));
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '15557654321',
+                    id: 'wamid.in.2',
+                    type: 'text',
+                    text: { body: 'CONFIRM' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(replyService.handleInboundText).toHaveBeenCalledWith({
+      fromPhone: '15557654321',
+      text: 'CONFIRM',
+      messageId: 'wamid.in.2',
+    });
+  });
+
+  it('maps a failed delivery status and inbox error', async () => {
+    const service = buildService();
+    await service.handleWebhookBody({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [
+                  {
+                    id: 'wamid.fail',
+                    status: 'failed',
+                    errors: [{ message: '131026' }],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(analytics.markByProviderMessageId).toHaveBeenCalledWith(
+      'wamid.fail',
+      'failed',
+      expect.any(Object)
+    );
+    expect(inbox.markByWamid).toHaveBeenCalledWith(
+      'wamid.fail',
+      'failed',
+      '131026'
+    );
   });
 });

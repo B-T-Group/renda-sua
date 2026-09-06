@@ -42,7 +42,8 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   deliveryPinFullWidth = false,
 }) => {
   const { t } = useTranslation();
-  const { completeOrder, switchToPickup } = useBackendOrders();
+  const { completeOrder, confirmOrderReceipt, switchToPickup } =
+    useBackendOrders();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [payPickupOpen, setPayPickupOpen] = useState(false);
@@ -85,6 +86,26 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     }
   };
 
+  const handleConfirmReceipt = async () => {
+    setCompleting(true);
+    try {
+      await confirmOrderReceipt(order.id);
+      onShowNotification?.(
+        t('messages.orderConfirmReceiptSuccess', 'Receipt confirmed'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t('messages.orderConfirmReceiptError', 'Failed to confirm receipt'),
+        'error'
+      );
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   const handleSwitchToPickup = async () => {
     setSwitchingToPickup(true);
     try {
@@ -112,7 +133,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     const actions: Array<{
       label: string;
       action: () => void;
-      color: 'error' | 'warning' | 'success';
+      color: 'error' | 'warning' | 'success' | 'cta';
       icon: React.ReactNode;
       variant?: 'outlined' | 'contained';
       loading?: boolean;
@@ -122,9 +143,23 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       actions.push({
         label: t('orders.payAtPickup.cta', 'Pay now'),
         action: () => setPayPickupOpen(true),
-        color: 'success',
+        color: 'cta',
         icon: <Payments />,
         variant: 'contained',
+      });
+    }
+
+    if (
+      order.fulfillment_method === 'shipping' &&
+      ['shipped', 'in_delivery'].includes(order.current_status)
+    ) {
+      actions.push({
+        label: t('orderActions.confirmReceipt', 'Confirm receipt'),
+        action: () => void handleConfirmReceipt(),
+        color: 'success',
+        icon: <CheckCircle />,
+        variant: 'contained',
+        loading: completing,
       });
     }
 

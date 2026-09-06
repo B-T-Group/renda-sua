@@ -17,6 +17,7 @@ import { CreditsModule } from '../credits/credits.module';
 import { FoodModule } from '../food/food.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { RbacModule } from '../rbac/rbac.module';
+import { RecipientsModule } from '../recipients/recipients.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { StripeAuthReconcilerService } from '../stripe-payments/stripe-auth-reconciler.service';
@@ -82,6 +83,7 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
     LocationsModule,
     GoogleModule,
     RbacModule,
+    RecipientsModule,
     CommerceIntegrationsModule,
     MetaConversionsModule,
     MerchantLifecycleModule,

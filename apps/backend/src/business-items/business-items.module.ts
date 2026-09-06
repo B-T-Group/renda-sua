@@ -18,12 +18,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { BusinessAccountTypeService } from './business-account-type.service';
 import { FoodModule } from '../food/food.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { CollectionsModule } from '../collections/collections.module';
 
 @Module({
   imports: [
     AuthModule,
     FoodModule,
     CategoriesModule,
+    CollectionsModule,
     BusinessContractsModule,
     BusinessImagesModule,
     ImageThumbnailsModule,

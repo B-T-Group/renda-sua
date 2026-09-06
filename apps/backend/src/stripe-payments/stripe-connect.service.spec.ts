@@ -36,6 +36,7 @@ describe('StripeConnectService', () => {
   it('creates a Connect account with user profile prefill and persists status', async () => {
     hasuraService.executeQuery
       .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
       .mockResolvedValueOnce({
         users_by_pk: {
           email: 'owner@example.com',
@@ -96,50 +97,6 @@ describe('StripeConnectService', () => {
     expect(hasuraService.executeMutation).not.toHaveBeenCalled();
   });
 
-  it('returns the existing row when a concurrent insert races', async () => {
-    const existingRow = { id: 'row-existing', stripe_account_id: 'acct_123' };
-    hasuraService.executeQuery
-      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
-      .mockResolvedValueOnce({ users_by_pk: null })
-      .mockResolvedValueOnce({ stripe_connect_accounts: [existingRow] });
-    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
-    stripeService.createExpressAccount.mockResolvedValue({
-      id: 'acct_123',
-      default_currency: 'cad',
-      charges_enabled: false,
-      payouts_enabled: false,
-      details_submitted: false,
-    });
-    hasuraService.executeMutation.mockRejectedValue(
-      new Error(
-        'Uniqueness violation. duplicate key value violates unique constraint "stripe_connect_accounts_user_id_key"'
-      )
-    );
-
-    await expect(service.ensureAccount('user-123')).resolves.toEqual(existingRow);
-  });
-
-  it('returns the existing row when Hasura on_conflict yields null', async () => {
-    const existingRow = { id: 'row-existing', stripe_account_id: 'acct_123' };
-    hasuraService.executeQuery
-      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
-      .mockResolvedValueOnce({ users_by_pk: null })
-      .mockResolvedValueOnce({ stripe_connect_accounts: [existingRow] });
-    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
-    stripeService.createExpressAccount.mockResolvedValue({
-      id: 'acct_123',
-      default_currency: 'cad',
-      charges_enabled: false,
-      payouts_enabled: false,
-      details_submitted: false,
-    });
-    hasuraService.executeMutation.mockResolvedValue({
-      insert_stripe_connect_accounts_one: null,
-    });
-
-    await expect(service.ensureAccount('user-123')).resolves.toEqual(existingRow);
-  });
-
   it('coalesces concurrent ensureAccount calls for the same user', async () => {
     let releaseLookup: (value: unknown) => void;
     hasuraService.executeQuery.mockImplementationOnce(
@@ -159,5 +116,104 @@ describe('StripeConnectService', () => {
       { id: 'row-1' },
     ]);
     expect(stripeService.createExpressAccount).not.toHaveBeenCalled();
+  });
+
+  it('returns the existing row when a concurrent insert hits a unique constraint', async () => {
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: { email: 'owner@example.com' } })
+      .mockResolvedValueOnce({
+        stripe_connect_accounts: [{ id: 'row-existing' }],
+      });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockResolvedValue({
+      id: 'acct_123',
+      default_currency: 'cad',
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+    });
+    hasuraService.executeMutation.mockRejectedValue(
+      new Error('Uniqueness violation on stripe_connect_accounts_user_id_key')
+    );
+
+    await expect(service.ensureAccount('user-123')).resolves.toEqual({
+      id: 'row-existing',
+    });
+  });
+
+  it('returns the existing row when Hasura on_conflict yields null', async () => {
+    const existingRow = { id: 'row-existing', stripe_account_id: 'acct_123' };
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: null })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [existingRow] });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockResolvedValue({
+      id: 'acct_123',
+      default_currency: 'cad',
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+    });
+    hasuraService.executeMutation.mockResolvedValue({
+      insert_stripe_connect_accounts_one: null,
+    });
+
+    await expect(service.ensureAccount('user-123')).resolves.toEqual(existingRow);
+  });
+
+  it('maps exhausted Stripe idempotency conflicts to HTTP 409', async () => {
+    hasuraService.executeQuery
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ stripe_connect_accounts: [] })
+      .mockResolvedValueOnce({ users_by_pk: { email: 'owner@example.com' } });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CA');
+    stripeService.createExpressAccount.mockRejectedValue({
+      message:
+        'There is currently another in-progress request using this Idempotent Key: connect_account_user-123',
+    });
+
+    try {
+      await service.ensureAccount('user-123');
+      fail('Expected ensureAccount to reject in-progress onboarding');
+    } catch (error: any) {
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+    }
+  });
+
+  describe('isPayoutReady', () => {
+    it('is false when the user has no Connect account', async () => {
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [],
+      });
+
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(false);
+    });
+
+    it('requires both charges and payouts to be enabled', async () => {
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [
+          { charges_enabled: true, payouts_enabled: false },
+        ],
+      });
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(false);
+
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [
+          { charges_enabled: false, payouts_enabled: true },
+        ],
+      });
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(false);
+
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_connect_accounts: [
+          { charges_enabled: true, payouts_enabled: true },
+        ],
+      });
+      await expect(service.isPayoutReady('user-123')).resolves.toBe(true);
+    });
   });
 });

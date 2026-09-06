@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import CheckCross from './CheckCross';
 import SectionCTA from './SectionCTA';
 import SectionShell from './SectionShell';
-import { FB_GREEN } from './forBusinessTheme';
+import { FB_ACCENT } from './forBusinessTheme';
 
 const rows = [
   { key: 'storefront', label: 'Online storefront' },
@@ -73,8 +73,8 @@ const ComparisonTable: React.FC = () => {
                   align="center"
                   sx={{
                     fontWeight: 700,
-                    bgcolor: i === 2 ? alpha(FB_GREEN, 0.08) : undefined,
-                    color: i === 2 ? FB_GREEN : 'text.primary',
+                    bgcolor: i === 2 ? alpha(FB_ACCENT, 0.08) : undefined,
+                    color: i === 2 ? FB_ACCENT : 'text.primary',
                   }}
                 >
                   {c}
@@ -92,7 +92,7 @@ const ComparisonTable: React.FC = () => {
                   <TableCell
                     key={i}
                     align="center"
-                    sx={{ bgcolor: i === 2 ? alpha(FB_GREEN, 0.04) : undefined }}
+                    sx={{ bgcolor: i === 2 ? alpha(FB_ACCENT, 0.04) : undefined }}
                   >
                     <CheckCross available={ok} emphasize={i === 2 && ok} />
                   </TableCell>
@@ -120,7 +120,7 @@ const ComparisonTable: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
               {cols.map((c, i) => (
                 <Box key={c} sx={{ textAlign: 'center', flex: 1 }}>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.75, color: i === 2 ? FB_GREEN : 'text.secondary', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.75, color: i === 2 ? FB_ACCENT : 'text.secondary', fontWeight: 600 }}>
                     {i === 2 ? 'Rendasua' : c.split(' ')[0]}
                   </Typography>
                   <CheckCross available={matrix[r.key][i]} emphasize={i === 2} />

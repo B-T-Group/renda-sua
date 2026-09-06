@@ -12,7 +12,8 @@
       "subheadline": "Want to own something? Rendasua's got your back. Just want to rent it? We've still got your back. Browse local businesses, order or book in minutes, and track every delivery in real time.",
       "browseItems": "Browse Items",
       "browseRentals": "Browse Rentals",
-      "sellOnRendasua": "Sell on Rendasua"
+      "sellOnRendasua": "Sell on Rendasua",
+      "mockupCaption": "Example while out for delivery"
     },
     "trust": {
       "fastDelivery": "Fast local delivery",
@@ -201,7 +202,8 @@
         "notifications": "Instant push notifications for every update",
         "pin": "Secure delivery PIN verification",
         "checkout": "Faster checkout with saved addresses"
-      }
+      },
+      "mockupCaption": "Example while out for delivery"
     },
     "faq": {
       "title": "Frequently asked questions",
@@ -217,7 +219,7 @@
       },
       "canITrack": {
         "question": "Can I track my delivery in real time?",
-        "answer": "Yes! The Rendasua app provides live tracking so you can see exactly where your delivery agent is and get an estimated arrival time."
+        "answer": "Yes! Track your order on web or in the app. Once out for delivery, you can see exactly where your delivery agent is and get an estimated arrival time."
       },
       "howSellBusiness": {
         "question": "How do I start selling as a business?",
@@ -694,7 +696,11 @@
       "unassignRedispatch": "Unassign & Redispatch",
       "redispatch": "Redispatch to agents",
       "redispatchInfo": "Re-opens the dispatch rounds so nearby agents are offered this order again. If none accept, the client is offered store pickup.",
-      "statusWarning": "Manual corrections bypass the fulfillment workflow. Use only when the order is stuck, and always say why.",
+      "reassignInfo": "Reassign this order to a different delivery agent",
+      "selectAgent": "Select Agent",
+      "reassignReason": "Reason for reassignment",
+      "reassignAgent": "Reassign Agent",
+      "statusWarning": "Cancellation releases payment holds and restores inventory. Picked up and delivered must use the fulfillment flow so capture and settlement run.",
       "newStatus": "New Status",
       "statusNotes": "Notes (optional)",
       "updateStatusButton": "Correct status",
@@ -4063,6 +4069,7 @@
     "business": "Business",
     "cancel": "Cancel",
     "category": "Category",
+    "change": "Change",
     "clear": "Clear",
     "clearFilters": "Clear Filters",
     "close": "Close",
@@ -4268,7 +4275,7 @@
       },
       "deliveryTime": {
         "q": "How long does delivery take?",
-        "a": "Delivery times depend on your location and the seller. Standard delivery is typically within 24–48 hours. Fast delivery options may be available at checkout for quicker delivery."
+        "a": "Store products are usually delivered within 24–48 hours after order confirmation. Food orders are ready during business operating hours. Once an agent is assigned and out for delivery, you can track live location and see minute-level ETA updates on web or in the app."
       },
       "cancelOrder": {
         "q": "Can I cancel my order?",
@@ -4435,7 +4442,11 @@
     "orderCompletePreparationError": "Failed to complete preparation",
     "orderCompletePreparationSuccess": "Order preparation completed successfully",
     "orderCompleteSuccess": "Order completed successfully",
+    "orderConfirmReceiptError": "Failed to confirm receipt",
+    "orderConfirmReceiptSuccess": "Receipt confirmed",
     "orderConfirmError": "Failed to confirm order",
+    "orderMarkShippedError": "Failed to mark order as shipped",
+    "orderMarkShippedSuccess": "Order marked as shipped",
     "orderConfirmSuccess": "Order confirmed successfully",
     "orderDropError": "Failed to drop order",
     "orderDropSuccess": "Order ${result.order_number} dropped successfully",
@@ -4484,6 +4495,8 @@
     "completePreparation": "Complete Preparation",
     "confirmOrder": "Confirm Order",
     "dropOrder": "Drop Order",
+    "confirmReceipt": "Confirm receipt",
+    "markAsShipped": "Mark as shipped",
     "markAsDelivered": "Mark as Delivered",
     "markAsFailed": "Mark as Failed",
     "markAsInTransit": "Mark as In Transit",
@@ -4629,9 +4642,27 @@
       "paidTitle": "Payment confirmed",
       "paidBodyCheckout": "Your payment went through. The merchant will confirm your order next.",
       "paidBodyPickup": "Your payment went through. You can collect your order at the store.",
-      "failedTitle": "Payment failed",
-      "failedBody": "The mobile money request did not succeed. You can try again or go back to your order.",
+      "failedTitle": "Payment didn't go through",
+      "failedBody": "We couldn't complete your payment via MoMo. Please check and try again.",
       "timeoutTitle": "Still waiting",
+      "tipsToResolve": "Tips to resolve this",
+      "checkBalance": "Check your MoMo balance",
+      "checkBalanceDesc": "Top up your MoMo wallet and try again.",
+      "confirmNumber": "Confirm your phone number",
+      "confirmNumberDesc": "Make sure +237 6XX XXX XXX matches the number linked to your MoMo wallet.",
+      "editPhone": "Edit phone number",
+      "editPhoneTitle": "Edit phone number",
+      "editPhoneDesc": "Make sure this matches your MoMo number",
+      "phoneLabel": "Phone number",
+      "orderReserved": "Good news: your order is still reserved!",
+      "orderReservedDesc": "We've saved your items while you complete your payment.",
+      "step1Title": "Store accepts",
+      "step1Desc": "Usually within 15 min",
+      "step2Title": "Preparing",
+      "step2Desc": "Store gets your order ready",
+      "step3Title": "On the way",
+      "step3Desc": "Track your delivery in real time",
+      "refundGuarantee": "If not accepted, you get a refund.",
       "timeoutBody": "We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.",
       "retry": "Try again",
       "retryError": "Could not send another payment request.",
@@ -5508,7 +5539,12 @@
       "messageBusiness": "Message the business",
       "cancelOrder": "Cancel order",
       "draftMessage": "Hi! Just confirming I'm still coming to pick up order {{orderNumber}}. See you soon."
-    }
+    },
+    "outForRecipient": "Out for {{name}}",
+    "recipientNotifiedNotice": "{{name}} gets tracking updates and the delivery code by text. They do not need your login.",
+    "deliveryContactRecipient": "Recipient",
+    "orderedBy": "Ordered by {{name}}",
+    "earningsPendingRelease": "Earnings pending · Releases when agent confirms pickup"
   },
   "items": {
     "brand": "Brand",
@@ -5631,7 +5667,7 @@
         "paymentQ": "How do I pay?",
         "paymentA": "Pay with MTN MoMo, Orange Money, or other supported mobile money at checkout.",
         "deliveryQ": "When will I receive my order?",
-        "deliveryA": "Delivery is typically within 6–24 hours depending on when you order and local availability.",
+        "deliveryA": "Store products are usually delivered within 24–48 hours after order confirmation. Once an agent is assigned and out for delivery, you can track live location and see minute-level ETA updates on web or in the app.",
         "issueQ": "What if something goes wrong?",
         "issueA": "Contact support with your order details. We will help you resolve delivery or product issues.",
         "sellerQ": "Who is selling this item?",
@@ -6539,7 +6575,7 @@
         "deliveryFees": "How are delivery fees calculated?",
         "deliveryFeesAnswer": "Delivery fees are calculated based on distance, item weight, and delivery urgency. You'll see the exact fee before confirming your order.",
         "deliveryTime": "How long does delivery take?",
-        "deliveryTimeAnswer": "Delivery times vary by location and item. Most orders are delivered within 2-4 hours for same-day delivery, or 24-48 hours for standard delivery.",
+        "deliveryTimeAnswer": "Store products are usually delivered within 24–48 hours after order confirmation. Food orders are ready during business operating hours. Once an agent is assigned and out for delivery, you'll see minute-level ETA updates.",
         "title": "Delivery & Tracking",
         "trackOrder": "How do I track my order?",
         "trackOrderAnswer": "You can track your order in real-time through your dashboard or by clicking the tracking link sent to your email."
@@ -6651,6 +6687,13 @@
     "emptyDescription": "Add some items to get started",
     "continueShopping": "Continue Shopping",
     "itemCount": "{{count}} item(s)",
+    "steps": {
+      "cart": "Cart",
+      "checkout": "Checkout",
+      "pay": "Pay"
+    },
+    "deliveryEstimate": "Usually 1–3 hrs · fee shown at checkout",
+    "placeOrder": "Place order",
     "subtotal": "Subtotal",
     "total": "Total",
     "totalBeforeTax": "Total (before tax)",
@@ -6687,6 +6730,13 @@
     "deliveryAddress": "Delivery Address",
     "selectAddress": "Select Address",
     "addNewAddress": "Add New Address",
+    "paymentMethod": "Payment method",
+    "mobileMoneyMethod": "Mobile Money · Cameroon",
+    "stripeMethod": "Credit or Debit Card",
+    "basedOnYourCountry": "Based on your country",
+    "yourMoMoNumber": "Your MoMo number",
+    "momoPhoneHelper": "Must match your MoMo number",
+    "heldUntilAccepted": "Held until store accepts",
     "contactNumber": "Contact Number",
     "useDifferentPhone": "Use different phone number",
     "phoneNumber": "Phone Number",
@@ -6722,7 +6772,57 @@
     "fulfillmentDelivery": "Delivery",
     "fulfillmentPickup": "Store pickup",
     "pickupNotice": "No delivery fee. Collect your order at each store once it is ready.",
-    "pickupNoFee": "Waived (store pickup)"
+    "pickupNoFee": "Waived (store pickup)",
+    "diaspora": {
+      "title": "Sending an order home",
+      "payingFrom": "Paying from {{country}}",
+      "deliveringTo": "Delivering to {{country}}",
+      "sendingToSomeoneElse": "Someone else is receiving this order",
+      "sendingToSomeoneElseHelp": "We will collect their name and phone so they can follow the delivery themselves.",
+      "payerCharge": "You'll pay ≈ {{amount}}",
+      "merchantPrice": "Merchant price {{amount}}",
+      "fxDisclaimer": "Estimate only. Your card is charged in the merchant currency and your bank sets the final rate.",
+      "heldForRecipient": "Paid · Held until {{name}} receives the order",
+      "heldUntilHandover": "Paid · Held until delivery or pickup"
+    },
+    "recipient": {
+      "title": "Who is receiving this order?",
+      "subtitle": "They get tracking updates and the delivery code by text — no Rendasua account needed.",
+      "name": "Recipient full name",
+      "nameRequired": "The agent needs a name to hand the order to.",
+      "phone": "Recipient phone number",
+      "phoneRequired": "A local number in the delivery country is required.",
+      "phoneHelp": "Updates and the delivery code are sent to this number.",
+      "whatsapp": "Send their updates on WhatsApp",
+      "whatsappHelp": "We fall back to SMS if WhatsApp cannot be delivered.",
+      "pinNotice": "The recipient receives their own delivery code and gives it to the agent at handover. You can still see it in your order.",
+      "selectSaved": "Select saved recipient",
+      "addNew": "Add new",
+      "noSaved": "No saved recipients yet. Add one below.",
+      "loadError": "Failed to load saved recipients",
+      "whatsappEnabled": "WhatsApp",
+      "selectPrompt": "Select a recipient for this order",
+      "selectRequired": "Required before you can place your order"
+    }
+  },
+  "recipients": {
+    "title": "Saved Recipients",
+    "subtitle": "Manage your saved recipients for diaspora orders",
+    "addButton": "Add Recipient",
+    "addFirst": "Add Your First Recipient",
+    "addTitle": "Add New Recipient",
+    "editTitle": "Edit Recipient",
+    "deleteTitle": "Delete Recipient?",
+    "deleteConfirm": "Are you sure you want to delete {{name}}? This action cannot be undone.",
+    "country": "Country",
+    "name": "Full Name",
+    "phone": "Phone Number",
+    "whatsapp": "Send updates on WhatsApp",
+    "whatsappHelp": "Falls back to SMS if needed",
+    "whatsappChip": "WhatsApp",
+    "empty": "No saved recipients yet",
+    "emptySubtitle": "Add recipients to quickly fill checkout forms",
+    "loadError": "Failed to load recipients"
   },
   "agentOnboarding": {
     "title": "How Deliveries Work",
@@ -7387,6 +7487,7 @@
     },
     "homeEntryTitle": "Ask the AI assistant",
     "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
-    "homeEntryCta": "Open assistant"
+    "homeEntryCta": "Open assistant",
+    "headerLabel": "Ask Rendasua assistant"
   }
 }

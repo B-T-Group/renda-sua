@@ -16,6 +16,11 @@ import { resolveOrderNotificationAddress } from './order-notification-address.ut
 import { isActivePersona } from '../users/persona.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 
+export type OrderStatusUpdateOptions = {
+  viaCancelEndpoint?: boolean;
+  viaSystem?: boolean;
+};
+
 @Injectable()
 export class OrderStatusService {
   private readonly logger = new Logger(OrderStatusService.name);
@@ -38,22 +43,14 @@ export class OrderStatusService {
   async updateOrderStatus(
     orderId: string,
     newStatus: string,
-    actorOrOptions?: AuthorizedBusinessActor | { viaCancelEndpoint?: boolean },
-    explicitOptions?: { viaCancelEndpoint?: boolean }
+    actorOrOptions?: AuthorizedBusinessActor | OrderStatusUpdateOptions,
+    explicitOptions?: OrderStatusUpdateOptions
   ): Promise<any> {
-    const actor = this.isAuthorizedBusinessActor(actorOrOptions)
-      ? actorOrOptions
-      : undefined;
-    const options: { viaCancelEndpoint?: boolean } | undefined =
-      explicitOptions ??
-      (actor ? undefined : (actorOrOptions as { viaCancelEndpoint?: boolean }));
-    const user = actor
-      ? ({
-          id: actor.userId,
-          business: { id: actor.businessId },
-          active_persona: 'business',
-        } as any)
-      : await this.hasuraUserService.getUser();
+    const { actor, options } = this.parseStatusUpdateArgs(
+      actorOrOptions,
+      explicitOptions
+    );
+    const user = await this.resolveStatusUser(actor, options);
 
     // Get the order to validate ownership and current status
     const getOrderQuery = `
@@ -62,6 +59,7 @@ export class OrderStatusService {
           id
           order_number
           current_status
+          fulfillment_method
           business_id
           business {
             user_id
@@ -109,7 +107,12 @@ export class OrderStatusService {
       isAnyAgent
     ) {
       // This is allowed - agent is assigning order to themselves
-    } else if (!isBusinessOwner && !isAssignedAgent && !isClient) {
+    } else if (
+      !options?.viaSystem &&
+      !isBusinessOwner &&
+      !isAssignedAgent &&
+      !isClient
+    ) {
       throw new Error('Unauthorized to update this order');
     }
 
@@ -118,7 +121,8 @@ export class OrderStatusService {
       order.current_status,
       isBusinessOwner,
       isAssignedAgent,
-      isClient
+      isClient,
+      order.fulfillment_method
     );
 
     // Special case: Any agent can assign ready_for_pickup orders
@@ -210,8 +214,39 @@ export class OrderStatusService {
     }
   }
 
+  private parseStatusUpdateArgs(
+    actorOrOptions?: AuthorizedBusinessActor | OrderStatusUpdateOptions,
+    explicitOptions?: OrderStatusUpdateOptions
+  ): {
+    actor?: AuthorizedBusinessActor;
+    options?: OrderStatusUpdateOptions;
+  } {
+    const actor = this.isAuthorizedBusinessActor(actorOrOptions)
+      ? actorOrOptions
+      : undefined;
+    const options =
+      explicitOptions ??
+      (actor ? undefined : (actorOrOptions as OrderStatusUpdateOptions));
+    return { actor, options };
+  }
+
+  private async resolveStatusUser(
+    actor?: AuthorizedBusinessActor,
+    options?: OrderStatusUpdateOptions
+  ): Promise<any> {
+    if (options?.viaSystem) return { id: 'system' };
+    if (actor) {
+      return {
+        id: actor.userId,
+        business: { id: actor.businessId },
+        active_persona: 'business',
+      };
+    }
+    return this.hasuraUserService.getUser();
+  }
+
   private isAuthorizedBusinessActor(
-    value: AuthorizedBusinessActor | { viaCancelEndpoint?: boolean } | undefined
+    value: AuthorizedBusinessActor | OrderStatusUpdateOptions | undefined
   ): value is AuthorizedBusinessActor {
     return !!value && 'businessId' in value && 'userId' in value;
   }
@@ -357,13 +392,16 @@ export class OrderStatusService {
     currentStatus: string,
     isBusinessOwner: boolean,
     isAssignedAgent: boolean,
-    isClient: boolean
+    isClient: boolean,
+    fulfillmentMethod?: string
   ): string[] {
+    const canReadyForPickup =
+      isBusinessOwner && fulfillmentMethod !== 'shipping';
     const transitions: { [key: string]: string[] } = {
       pending_payment: [],
       pending: isBusinessOwner ? ['confirmed'] : [],
-      confirmed: isBusinessOwner ? ['ready_for_pickup'] : [],
-      preparing: isBusinessOwner ? ['ready_for_pickup'] : [],
+      confirmed: canReadyForPickup ? ['ready_for_pickup'] : [],
+      preparing: canReadyForPickup ? ['ready_for_pickup'] : [],
       // Pickup completion must go through POST /orders/:id/confirm-pickup so
       // capture/settlement run; the generic status endpoint cannot complete it.
       // Client cancel until agent assignment uses POST /orders/cancel.

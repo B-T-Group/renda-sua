@@ -35,6 +35,10 @@ export class AwsService {
         accessKeyId: awsConfig?.accessKeyId || '',
         secretAccessKey: awsConfig?.secretAccessKey || '',
       },
+      // AWS SDK v3.729+ signs flexible checksums into PutObject presigned URLs
+      // (empty-body CRC). Axios/XHR PUTs then get 403. Only checksum when required.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     });
   }
 

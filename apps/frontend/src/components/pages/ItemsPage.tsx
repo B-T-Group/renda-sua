@@ -312,6 +312,44 @@ const ItemsPage: React.FC = () => {
       filters.collection.trim() || collectionSlug.trim() || undefined,
   });
 
+  // Check if any filters are active
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+      filters.category ||
+      filters.subcategory ||
+      filters.brand ||
+      filters.business ||
+      filters.collection ||
+      collectionSlug ||
+      businessLocationId
+  );
+
+  const theme = useTheme();
+  const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
+
+  // Defer curated rail fetches until after main grid starts (reduces initial stampede)
+  const [curatedEnabled, setCuratedEnabled] = useState(false);
+  useEffect(() => {
+    if (!loading && inventoryItems.length > 0) {
+      const timer = requestIdleCallback
+        ? requestIdleCallback(() => setCuratedEnabled(true), { timeout: 100 })
+        : setTimeout(() => setCuratedEnabled(true), 0);
+      return () => {
+        if (typeof timer === 'number') {
+          clearTimeout(timer);
+        } else {
+          cancelIdleCallback(timer);
+        }
+      };
+    }
+  }, [loading, inventoryItems.length]);
+
+  // Only fetch curated sections when they will be shown
+  const shouldFetchCurated = showCuratedSections && !hasActiveFilters && curatedEnabled;
+
+  // Popular relevance duplicates main grid when sort=relevance and no filters
+  const popularDuplicatesMain = sort === 'relevance' && !hasActiveFilters;
+
   const { inventoryItems: dealsItems, loading: dealsLoading } = useInventoryItems({
     page: 1,
     limit: 24,
@@ -319,6 +357,7 @@ const ItemsPage: React.FC = () => {
     sort: 'deals',
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
+    enabled: shouldFetchCurated,
   });
 
   const { inventoryItems: topRatedItems, loading: topRatedLoading } = useInventoryItems({
@@ -328,6 +367,7 @@ const ItemsPage: React.FC = () => {
     sort: 'top_rated',
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
+    enabled: shouldFetchCurated,
   });
 
   const { inventoryItems: popularItems, loading: popularLoading } = useInventoryItems({
@@ -337,6 +377,7 @@ const ItemsPage: React.FC = () => {
     sort: 'relevance',
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
+    enabled: shouldFetchCurated && !popularDuplicatesMain,
   });
 
   const { collections: featuredCollections, loading: collectionsLoading } =
@@ -552,20 +593,7 @@ const ItemsPage: React.FC = () => {
     }).format(amount);
   };
 
-  // Check if any filters are active
-  const hasActiveFilters = Boolean(
-    searchTerm ||
-      filters.category ||
-      filters.subcategory ||
-      filters.brand ||
-      filters.business ||
-      filters.collection ||
-      collectionSlug ||
-      businessLocationId
-  );
 
-  const theme = useTheme();
-  const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
 
   const {
     dealsDisplay,
@@ -585,7 +613,10 @@ const ItemsPage: React.FC = () => {
     const seen = new Set<string>();
     const dealsDisplay = pickUniqueCatalogItems(dealsItems, seen, 8);
     const topRatedDisplay = pickUniqueCatalogItems(topRatedItems, seen, 8);
-    const popularDisplay = pickUniqueCatalogItems(popularItems, seen, 8);
+
+    // When popular would duplicate main grid, derive from inventoryItems instead
+    const popularSource = popularDuplicatesMain ? inventoryItems : popularItems;
+    const popularDisplay = pickUniqueCatalogItems(popularSource, seen, 8);
     const catalogDisplay = filterExcludedCatalogItems(inventoryItems, seen);
 
     return { dealsDisplay, topRatedDisplay, popularDisplay, catalogDisplay };
@@ -596,6 +627,7 @@ const ItemsPage: React.FC = () => {
     topRatedItems,
     popularItems,
     inventoryItems,
+    popularDuplicatesMain,
   ]);
 
   const handleClearAllFilters = () => {

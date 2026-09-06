@@ -80,4 +80,71 @@ describe('StripeService', () => {
     );
     expect(createAccount.mock.calls[0][0].individual.phone).toBeUndefined();
   });
+
+  it('maps PaymentIntent 4xx to HttpException 400 and omits invalid receipt email', async () => {
+    const create = jest.fn().mockRejectedValue({
+      statusCode: 400,
+      message: 'Amount must be at least $0.50 cad',
+    });
+    (service as any).client = { paymentIntents: { create } };
+
+    await expect(
+      service.createPaymentIntent({
+        amount: 0.25,
+        currency: 'CAD',
+        description: 'Order RS123',
+        reference: 'pi_ref_1',
+        customerEmail: '',
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Amount must be at least $0.50 cad',
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ receipt_email: expect.anything() }),
+      { idempotencyKey: 'pi_pi_ref_1' }
+    );
+  });
+
+  it('passes a valid receipt_email through to PaymentIntent create', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'pi_123' });
+    (service as any).client = { paymentIntents: { create } };
+
+    await expect(
+      service.createPaymentIntent({
+        amount: 12.5,
+        currency: 'CAD',
+        description: 'Order RS123',
+        reference: 'pi_ref_2',
+        customerEmail: 'buyer@example.com',
+      })
+    ).resolves.toEqual({ id: 'pi_123' });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 1250,
+        currency: 'cad',
+        receipt_email: 'buyer@example.com',
+      }),
+      { idempotencyKey: 'pi_pi_ref_2' }
+    );
+  });
+
+  it('retries Express account create when Stripe reports an in-progress idempotency key', async () => {
+    jest.spyOn(service as any, 'delay').mockResolvedValue(undefined);
+    createAccount
+      .mockRejectedValueOnce({
+        message:
+          'There is currently another in-progress request using this Idempotent Key: connect_account_user-123',
+      })
+      .mockResolvedValueOnce({ id: 'acct_123' });
+
+    await expect(
+      service.createExpressAccount({
+        country: 'CA',
+        email: 'owner@example.com',
+        userId: 'user-123',
+      })
+    ).resolves.toEqual({ id: 'acct_123' });
+    expect(createAccount).toHaveBeenCalledTimes(2);
+  });
 });

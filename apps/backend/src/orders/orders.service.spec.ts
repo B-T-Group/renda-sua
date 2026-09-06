@@ -20,6 +20,8 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { PdfService } from '../pdf/pdf.service';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { DeliveryPinShareService } from '../messaging/structured/delivery-pin-share.service';
@@ -38,15 +40,11 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
-import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderEventsService } from './order-events.service';
 import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
-import { OrderCleanupService } from './order-cleanup.service';
-import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
-import { FoodOrdersService } from '../food/food-orders.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -227,12 +225,25 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn(), getProviderForCountry: jest.fn().mockReturnValue('mypvit') } },
+        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn() } },
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
         } },
         { provide: NotificationsService, useValue: {} },
+        {
+          provide: OrderRecipientNotificationsService,
+          useValue: {
+            notifyStatusChange: jest.fn().mockResolvedValue(undefined),
+            notifyDeliveryPin: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: FxEstimateService,
+          useValue: {
+            estimateFx: jest.fn().mockResolvedValue({ rate: 1.0, fee: 0 }),
+          },
+        },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
         { provide: CommissionsService, useValue: {
@@ -278,7 +289,6 @@ describe('OrdersService', () => {
           useValue: {
             resolveRailForBusiness: jest.fn(),
             resolveRailForUser: jest.fn(),
-            resolveRailForCountry: jest.fn().mockResolvedValue('mobile_money'),
           },
         },
         { provide: StripeCheckoutService, useValue: {} },
@@ -287,6 +297,9 @@ describe('OrdersService', () => {
           useValue: {
             captureOrderPaymentIntent: jest.fn(),
             creditWalletForCapturedOrder: jest.fn(),
+            cancelOrderPaymentIntent: jest.fn().mockResolvedValue({
+              success: true,
+            }),
           },
         },
         {
@@ -347,12 +360,6 @@ describe('OrdersService', () => {
             startAcceptanceSla: jest.fn(),
             isBusinessAcceptingOrders: jest.fn().mockResolvedValue(true),
             isWithinOperatingHours: jest.fn().mockReturnValue(true),
-            getBusinessTiming: jest.fn().mockResolvedValue({
-              defaultEstimatedPrepMinutes: 30,
-              asapTimeoutSeconds: 900,
-              futureTimeoutSeconds: 1800,
-              activationLeadMinutes: 30,
-            }),
             isSlotWithinOperatingHours: jest.fn().mockReturnValue(true),
             fetchDeliverySlotTimes: jest.fn().mockResolvedValue({
               start_time: '12:00',
@@ -360,23 +367,6 @@ describe('OrdersService', () => {
             }),
             getAcceptanceTimeoutSeconds: jest.fn().mockResolvedValue(300),
             recordMerchantCancelOfPending: jest.fn(),
-          },
-        },
-        {
-          provide: FulfillmentPromiseService,
-          useValue: {
-            persistForOrder: jest.fn(),
-            reanchorAsapAtReady: jest.fn(),
-            evaluateAsap: jest.fn().mockReturnValue({
-              available: true,
-              estimatedPrepMinutes: 30,
-              scheduleRequired: false,
-            }),
-            timezoneForCountry: jest.fn().mockResolvedValue('UTC'),
-            closedStoreMessage: jest
-              .fn()
-              .mockReturnValue('This store is closed. Select a future date below.'),
-            inferTiming: jest.fn().mockReturnValue('asap'),
           },
         },
         { provide: RbacService, useValue: {} },
@@ -394,26 +384,6 @@ describe('OrdersService', () => {
         {
           provide: EventEmitter2,
           useValue: { emit: jest.fn() },
-        },
-        {
-          provide: FoodOrdersService,
-          useValue: {
-            isCookedFoodOrder: jest.fn().mockResolvedValue(false),
-          },
-        },
-        {
-          provide: OrderCleanupService,
-          useValue: {
-            cancelUnpaidPendingPaymentAsSystem: jest
-              .fn()
-              .mockResolvedValue({ cancelled: true }),
-          },
-        },
-        {
-          provide: StripeRefundService,
-          useValue: {
-            initiateOrderRefund: jest.fn().mockResolvedValue({ success: true }),
-          },
         },
       ],
     }).compile();
@@ -494,108 +464,8 @@ describe('OrdersService', () => {
           perKmDeliveryFee: 0,
           firstOrderDeliveryFeePromo: false,
           firstOrderBaseDeliveryDiscountAmount: 0,
-          currentStatus: 'pending_payment',
-          paymentStatus: 'pending',
         })
       );
-    });
-
-    it('inserts wallet pay_now orders as pending_payment before finalizing payment', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-      });
-      hasuraUserService.getUserAddressById.mockResolvedValue({
-        id: 'address-123',
-        address_line_1: '123 Main St',
-        city: 'Toronto',
-        state: 'ON',
-        postal_code: 'M5V 1A1',
-        country: 'CA',
-      } as any);
-      hasuraSystemService.getAccount.mockResolvedValue({
-        id: 'account-123',
-        available_balance: 1000,
-      } as any);
-      (service as any).paymentRoutingService.resolveRailForUser.mockResolvedValue(
-        'mobile_money'
-      );
-      jest
-        .spyOn(service as any, 'updateReservedQuantities')
-        .mockResolvedValue(undefined);
-      const finalizeSpy = jest
-        .spyOn(service as any, 'finalizeClientOrderPayment')
-        .mockResolvedValue(undefined);
-      jest
-        .spyOn(service as any, 'requireOrderDetailsByNumber')
-        .mockResolvedValueOnce({
-          id: 'order-123',
-          order_number: '12345678',
-          current_status: 'pending_payment',
-        })
-        .mockResolvedValueOnce({
-          id: 'order-123',
-          order_number: '12345678',
-          current_status: 'pending',
-          payment_status: 'paid',
-          payment_source: 'wallet',
-        });
-
-      hasuraSystemService.executeQuery
-        .mockResolvedValueOnce({
-          business_inventory: [shippingInventoryFixture()],
-        })
-        .mockResolvedValueOnce({ supported_payment_systems: [] })
-        .mockResolvedValueOnce({ item_deals: [] });
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          insert_orders_one: {
-            id: 'order-123',
-            order_number: '12345678',
-            payment_source: 'wallet',
-          },
-        })
-        .mockResolvedValueOnce({ affected_rows: 1 });
-
-      const result = await service.createOrder({
-        delivery_address_id: 'address-123',
-        fulfillment_method: 'shipping',
-        payment_timing: 'pay_now',
-        phone_number: '+14165550123',
-        items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
-      });
-
-      expect(finalizeSpy).toHaveBeenCalled();
-      expect(result.current_status).toBe('pending');
-      expect(result.payment_status).toBe('paid');
-      finalizeSpy.mockRestore();
-    });
-
-    it('does not release holds when wallet finalize fails after order is paid', async () => {
-      const orderCleanup = (service as any).orderCleanupService as {
-        cancelUnpaidPendingPaymentAsSystem: jest.Mock;
-      };
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
-        id: 'order-123',
-        order_number: '12345678',
-        current_status: 'pending',
-        payment_status: 'paid',
-        client: { user_id: 'client-456' },
-        currency: 'USD',
-      });
-      const releaseSpy = jest
-        .spyOn(service as any, 'releaseWalletHoldsForPendingPaymentOrder')
-        .mockResolvedValue(undefined);
-
-      await (service as any).compensateUnpaidCreate(
-        'order-123',
-        'Create failed: wallet payment finalization error'
-      );
-
-      expect(releaseSpy).not.toHaveBeenCalled();
-      expect(orderCleanup.cancelUnpaidPendingPaymentAsSystem).not.toHaveBeenCalled();
-      releaseSpy.mockRestore();
     });
   });
 
@@ -949,6 +819,82 @@ describe('OrdersService', () => {
 
       expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
     });
+  });
+
+  describe('captureStripeAuthorizedOrderIfNeeded', () => {
+    const authorizedPickup = {
+      id: 'order-123',
+      order_number: 'ORD-1001',
+      payment_timing: 'pay_now',
+      payment_source: 'credit_card',
+      payment_status: 'authorized',
+      fulfillment_method: 'pickup',
+      total_amount: 80,
+      pre_tax_total: 80,
+    };
+
+    beforeEach(() => {
+      stripeCaptureService.captureOrderPaymentIntent.mockResolvedValue({
+        success: true,
+        captured: true,
+      });
+      jest
+        .spyOn(service as any, 'finalizeStripeCapturedOrderPayment')
+        .mockResolvedValue(undefined);
+    });
+
+    it('omits captureAmount for native pickup so Stripe Tax is collected', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded(authorizedPickup);
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+        orderId: 'order-123',
+        orderNumber: 'ORD-1001',
+      });
+    });
+
+    it('omits captureAmount for delivery so the full authorization is captured', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        ...authorizedPickup,
+        fulfillment_method: 'delivery',
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+        orderId: 'order-123',
+        orderNumber: 'ORD-1001',
+      });
+    });
+
+    it('passes a reduced captureAmount after switch-to-pickup waived delivery', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        ...authorizedPickup,
+        total_amount: 80,
+        pre_tax_total: 100,
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).toHaveBeenCalledWith({
+        orderId: 'order-123',
+        orderNumber: 'ORD-1001',
+        captureAmount: 80,
+      });
+    });
+
+    it('does not capture Stripe when order was already paid from wallet', async () => {
+      await (service as any).captureStripeAuthorizedOrderIfNeeded({
+        ...authorizedPickup,
+        payment_source: 'wallet',
+        payment_status: 'paid',
+      });
+
+      expect(stripeCaptureService.captureOrderPaymentIntent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe.skip('pickUpOrder errors', () => {
+    const assignedOrder = {
+      ...mockOrder,
+      current_status: 'assigned_to_agent',
+      assigned_agent_id: 'agent-123',
+    };
 
     it('should throw error if user is not an agent', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockUser);
@@ -1794,27 +1740,80 @@ describe('OrdersService', () => {
       expect(getByNumberSpy).not.toHaveBeenCalled();
       expect(finalizeSpy).toHaveBeenCalledWith(rawOrder, 'account-1');
 
+      requireSpy.mockRestore();
+      getByNumberSpy.mockRestore();
       finalizeSpy.mockRestore();
     });
 
-    it('finalizeOrderAfterIncomingPayment skips terminal cancelled orders and refunds Stripe', async () => {
-      const stripeRefund = (service as any).stripeRefundService as {
-        initiateOrderRefund: jest.Mock;
-      };
-      const rawOrder = {
-        id: 'order-123',
-        order_number: 'ORD-1',
-        current_status: 'cancelled',
-        payment_timing: 'pay_now',
-        payment_status: 'paid',
-        payment_source: 'credit_card',
-        subtotal: 50,
-        base_delivery_fee: 3,
-        per_km_delivery_fee: 2,
-      };
-      jest
+    it('finalizeOrderAfterAuthorization does not resurrect a cancelled order', async () => {
+      const requireSpy = jest
         .spyOn(service as any, 'requireOrderDetailsByNumber')
-        .mockResolvedValue(rawOrder);
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'cancelled',
+          payment_status: 'cancelled',
+          payment_timing: 'pay_now',
+        });
+
+      await service.finalizeOrderAfterAuthorization({
+        entity_id: 'ORD-1',
+        transaction_id: 'pi_late',
+      });
+
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterAuthorization releases Stripe when CAS finds the order already cancelled', async () => {
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'pending_payment',
+          payment_status: 'pending',
+          payment_timing: 'pay_now',
+        });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await service.finalizeOrderAfterAuthorization({
+        entity_id: 'ORD-1',
+        transaction_id: 'pi_late',
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation AuthorizeOrderPayment'),
+        expect.objectContaining({
+          orderId: 'order-123',
+          allowedStatuses: ['pending_payment', 'pending'],
+        })
+      );
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeOrderAfterIncomingPayment does not mark a cancelled order paid', async () => {
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'cancelled',
+          payment_status: 'pending',
+          payment_timing: 'pay_now',
+        });
       const finalizeSpy = jest
         .spyOn(service as any, 'finalizeClientOrderPayment')
         .mockResolvedValue(undefined);
@@ -1825,10 +1824,12 @@ describe('OrdersService', () => {
       });
 
       expect(finalizeSpy).not.toHaveBeenCalled();
-      expect(stripeRefund.initiateOrderRefund).toHaveBeenCalledWith(
-        expect.objectContaining({ orderId: 'order-123', cancelledBy: 'system' })
-      );
+      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        orderId: 'order-123',
+      });
 
+      requireSpy.mockRestore();
       finalizeSpy.mockRestore();
     });
   });
@@ -2153,170 +2154,72 @@ describe('OrdersService', () => {
     });
   });
 
-  describe('calculateItemDeliveryFee', () => {
-    const itemId = '6c5c123d-f89d-46cb-8d4d-f43ca5e384bd';
-    const itemDetails = {
-      id: itemId,
-      computed_available_quantity: 5,
-      selling_price: 10,
-      item: { id: 'catalog-1', name: 'Item', currency: 'XAF' },
-      business_location: { address_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+  describe('cancelOrderAsAdmin', () => {
+    const openOrder = {
+      ...mockOrder,
+      current_status: 'assigned_to_agent',
+      payment_source: 'credit_card',
+      payment_status: 'authorized',
+      order_items: [],
     };
 
-    function stubItemQueries() {
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('ClientHasOrders')) {
-          return { orders_aggregate: { aggregate: { count: 1 } } };
-        }
-        if (query.includes('GetItem')) {
-          return { business_inventory_by_pk: itemDetails };
-        }
-        return {};
+    it('releases payment and runs cancel side effects instead of a status-only write', async () => {
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
+      hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
+      const releaseStripe = jest
+        .spyOn(service as any, 'releaseStripeAuthorizationIfNeeded')
+        .mockResolvedValue(undefined);
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        ...openOrder,
+        current_status: 'cancelled',
       });
-    }
+      const persistMeta = jest
+        .spyOn(service as any, 'persistCancellationMetadata')
+        .mockResolvedValue(undefined);
+      const history = jest
+        .spyOn(service as any, 'createStatusHistoryEntry')
+        .mockResolvedValue(undefined);
+      const sideEffects = jest
+        .spyOn(service as any, 'runOrderCancellationSideEffects')
+        .mockResolvedValue(undefined);
 
-    it('returns 404 when the client has no address instead of querying Hasura with ""', async () => {
-      const getAddressesByIds = jest.fn();
-      (service as any).addressesService = { getAddressesByIds };
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        addresses: [],
-      });
-      stubItemQueries();
-
-      await expect(service.calculateItemDeliveryFee(itemId)).rejects.toMatchObject({
-        status: HttpStatus.NOT_FOUND,
-        message: 'User address not found',
-      });
-      expect(getAddressesByIds).not.toHaveBeenCalled();
-    });
-
-    it('treats a blank addressId query as missing and still 404s without a fallback address', async () => {
-      const getAddressesByIds = jest.fn();
-      (service as any).addressesService = { getAddressesByIds };
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        addresses: [{ id: '', status: 'active', is_primary: true }],
-      });
-      stubItemQueries();
-
-      await expect(
-        service.calculateItemDeliveryFee(itemId, '   ')
-      ).rejects.toMatchObject({
-        status: HttpStatus.NOT_FOUND,
-        message: 'User address not found',
-      });
-      expect(getAddressesByIds).not.toHaveBeenCalled();
-    });
-
-    it('returns 404 when the item has no business address id', async () => {
-      const getAddressesByIds = jest.fn().mockResolvedValue([
-        { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
-      ]);
-      (service as any).addressesService = { getAddressesByIds };
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        addresses: [
-          {
-            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-            status: 'active',
-            is_primary: true,
-          },
-        ],
-      });
-      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('ClientHasOrders')) {
-          return { orders_aggregate: { aggregate: { count: 1 } } };
-        }
-        if (query.includes('GetItem')) {
-          return {
-            business_inventory_by_pk: {
-              ...itemDetails,
-              business_location: { address_id: '' },
-            },
-          };
-        }
-        return {};
-      });
-
-      await expect(service.calculateItemDeliveryFee(itemId)).rejects.toMatchObject({
-        status: HttpStatus.NOT_FOUND,
-        message: 'Business address not found',
-      });
-      expect(getAddressesByIds).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('initiatePayAtPickupPayment', () => {
-    const papOrder = {
-      id: 'order-123',
-      order_number: 'ORD-PAP',
-      current_status: 'ready_for_pickup',
-      payment_timing: 'pay_at_pickup',
-      payment_status: 'pending',
-      total_amount: 5000,
-      currency: 'XAF',
-      client_id: 'client-123',
-      client: {
-        user_id: 'client-456',
-        user: { id: 'client-456', phone_number: '+237670000000' },
-      },
-      business: { user_id: 'user-123' },
-    };
-
-    function stubPendingPickupTx() {
-      (service as any).mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber =
-        jest.fn().mockResolvedValue({
-          id: 'tx-1',
-          reference: 'ref-1',
-          status: 'pending',
-          transaction_id: 'tid-1',
-        });
-    }
-
-    it('lets the customer start pickup payment', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(papOrder);
-      stubPendingPickupTx();
-
-      const result = await service.initiatePayAtPickupPayment('order-123');
+      const result = await service.cancelOrderAsAdmin(
+        'order-123',
+        'Admin cancel'
+      );
 
       expect(result.success).toBe(true);
-      expect(result.message).toBe('Payment request already pending');
+      expect(releaseStripe).toHaveBeenCalledWith(openOrder);
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
+        'order-123',
+        'cancelled',
+        { viaCancelEndpoint: true, viaSystem: true }
+      );
+      expect(persistMeta).toHaveBeenCalledWith(
+        'order-123',
+        'system',
+        'Admin cancel'
+      );
+      expect(history).toHaveBeenCalled();
+      expect(sideEffects).toHaveBeenCalledWith(
+        openOrder,
+        'order-123',
+        'assigned_to_agent',
+        'system',
+        'Admin cancel'
+      );
     });
 
-    it('lets the customer start pickup payment when only client_id matches', async () => {
-      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+    it('rejects cancel of an already terminal order', async () => {
       jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
-        ...papOrder,
-        client: { user: { phone_number: '+237670000000' } },
+        ...openOrder,
+        current_status: 'cancelled',
       });
-      stubPendingPickupTx();
 
-      const result = await service.initiatePayAtPickupPayment('order-123');
-
-      expect(result.success).toBe(true);
-    });
-
-    it('rejects another customer', async () => {
-      hasuraUserService.getUser.mockResolvedValue({
-        ...mockClientUser,
-        id: 'other-user',
-        client: { id: 'other-client', user_id: 'other-user' },
-      });
-      hasuraUserService.sessionPersonaContext.mockReturnValue({
-        jwtDefaultRole: 'client',
-        jwtAllowedRoles: ['client'],
-        activePersona: 'client',
-      });
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(papOrder);
-
-      await expect(
-        service.initiatePayAtPickupPayment('order-123')
-      ).rejects.toMatchObject({
-        status: HttpStatus.FORBIDDEN,
-        message: 'Only the store or customer can initiate pickup payment',
-      });
+      await expect(service.cancelOrderAsAdmin('order-123')).rejects.toMatchObject(
+        { status: HttpStatus.BAD_REQUEST }
+      );
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
   });
 });

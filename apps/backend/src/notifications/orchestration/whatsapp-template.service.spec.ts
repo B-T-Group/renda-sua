@@ -172,3 +172,90 @@ describe('WhatsAppTemplateService — authentication templates', () => {
     expect(service.category('order_status_client')).toBe('UTILITY');
   });
 });
+
+describe('WhatsAppTemplateService — recipient templates', () => {
+  const service = new WhatsAppTemplateService();
+
+  it('flags recipient templates as having no dynamic CTA', () => {
+    expect(service.needsDynamicCta('recipient_order_placed')).toBe(false);
+    expect(service.needsDynamicCta('recipient_out_for_delivery')).toBe(false);
+    expect(service.needsDynamicCta('recipient_order_ready')).toBe(false);
+    expect(service.needsDynamicCta('recipient_order_update')).toBe(false);
+  });
+
+  it('builds recipient placed template with payer, store, and order', () => {
+    const components = service.buildComponents({
+      templateKey: 'recipient_order_placed',
+      variables: {
+        payerName: 'Jane Doe',
+        storeName: 'Acme Store',
+        orderNumber: 'ORD-1001',
+      },
+    });
+
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: 'Jane Doe' },
+          { type: 'text', text: 'Acme Store' },
+          { type: 'text', text: 'ORD-1001' },
+        ],
+      },
+    ]);
+  });
+
+  it('builds recipient out for delivery template with order only', () => {
+    const components = service.buildComponents({
+      templateKey: 'recipient_out_for_delivery',
+      variables: { orderNumber: 'ORD-1001' },
+    });
+
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [{ type: 'text', text: 'ORD-1001' }],
+      },
+    ]);
+  });
+
+  it('builds recipient ready template with order and store', () => {
+    const components = service.buildComponents({
+      templateKey: 'recipient_order_ready',
+      variables: {
+        orderNumber: 'ORD-1001',
+        storeName: 'Acme Store',
+      },
+    });
+
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: 'ORD-1001' },
+          { type: 'text', text: 'Acme Store' },
+        ],
+      },
+    ]);
+  });
+
+  it('builds recipient update template with order and status label', () => {
+    const components = service.buildComponents({
+      templateKey: 'recipient_order_update',
+      variables: {
+        orderNumber: 'ORD-1001',
+        statusLabel: 'Confirmed',
+      },
+    });
+
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: 'ORD-1001' },
+          { type: 'text', text: 'Confirmed' },
+        ],
+      },
+    ]);
+  });
+});

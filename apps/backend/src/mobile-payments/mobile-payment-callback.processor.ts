@@ -47,9 +47,19 @@ export class MobilePaymentCallbackProcessor {
     callbackData: MyPVitCallbackDto,
     _req?: Request
   ): Promise<MypvitCallbackProcessResult> {
-    const tx = await this.databaseService.getTransactionByReference(
+    // Try exact match first (backward compatibility or if full reference was sent)
+    let tx = await this.databaseService.getTransactionByReference(
       callbackData.merchantReferenceId
     );
+    
+    // If not found by exact match, try finding by short reference
+    // (MyPVIT may have received a shortened reference ≤15 chars)
+    if (!tx) {
+      tx = await this.databaseService.findMyPVitTransactionByShortReference(
+        callbackData.merchantReferenceId
+      );
+    }
+    
     if (tx?.status !== 'pending') {
       return this.handleNonPendingMypvit(tx, callbackData);
     }

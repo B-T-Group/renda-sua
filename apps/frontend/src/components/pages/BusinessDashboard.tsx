@@ -40,7 +40,8 @@ import {
   shouldShowGoLiveCelebration,
 } from '../../utils/businessSetup';
 import { resolveCatalogHealth } from '../../utils/catalogHealth';
-import { resolveQuietHomeNextAction } from '../../utils/resolveQuietHomeNextAction';
+import { resolveQuietHomeNextAction, resolveQuietHomeGating } from '../../utils/resolveQuietHomeNextAction';
+import { pickQuietHomeCatalogModules } from '../../utils/pickQuietHomeCatalogModules';
 import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
 import AssistantHomeEntry from '../common/AssistantHomeEntry';
 import SEOHead from '../seo/SEOHead';
@@ -146,12 +147,13 @@ const BusinessDashboard: React.FC = () => {
   const isLoading = aggregatesLoading;
   const itemCount = aggregates?.itemCount ?? 0;
   const rentalItemCount = aggregates?.rentalItemCount ?? 0;
-  const ordersTotal = aggregates?.ordersTotal ?? 0;
   const aggregatesReady = !aggregatesLoading && !!aggregates && !aggregatesError;
-  const quietHomeMode =
-    showOperationalModules && aggregatesReady && ordersTotal === 0;
-  // Show day-to-day modules whenever we are not in quiet home (incl. loading/error).
-  const fulfillmentMode = showOperationalModules && !quietHomeMode;
+  const { quietHomeMode, fulfillmentMode } = resolveQuietHomeGating({
+    showOperationalModules,
+    aggregatesLoading,
+    aggregates,
+    aggregatesError,
+  });
 
   const {
     primaryOrderModules,
@@ -163,40 +165,23 @@ const BusinessDashboard: React.FC = () => {
     rentalModules,
   } = useBusinessDashboardModules({ aggregates, isRentalFocused });
 
-  const quietCatalogModules = useMemo(() => {
-    const locations = primaryCatalogModules.filter((m) =>
-      m.path.includes('location')
-    );
-    const rentalCatalog = rentalModules.filter((m) =>
-      m.path.includes('/rentals/catalog')
-    );
-    const saleItems = primaryCatalogModules.filter(
-      (m) =>
-        m.path.includes('/business/items') || m.path === '/business/items'
-    );
-    const secondaryCount = isRentalFocused
-      ? aggregates?.itemCount ?? 0
-      : aggregates?.rentalItemCount ?? 0;
-    const primary = isRentalFocused ? rentalCatalog : saleItems;
-    const secondary =
-      secondaryCount > 0
-        ? isRentalFocused
-          ? saleItems
-          : rentalCatalog
-        : [];
-    const picked = [...primary, ...secondary, ...locations];
-    return picked.length > 0
-      ? picked
-      : isRentalFocused
-        ? [...rentalModules.slice(0, 1), ...locations]
-        : primaryCatalogModules.slice(0, 2);
-  }, [
-    primaryCatalogModules,
-    rentalModules,
-    isRentalFocused,
-    aggregates?.itemCount,
-    aggregates?.rentalItemCount,
-  ]);
+  const quietCatalogModules = useMemo(
+    () =>
+      pickQuietHomeCatalogModules({
+        primaryCatalogModules,
+        rentalModules,
+        isRentalFocused,
+        itemCount: aggregates?.itemCount ?? 0,
+        rentalItemCount: aggregates?.rentalItemCount ?? 0,
+      }),
+    [
+      primaryCatalogModules,
+      rentalModules,
+      isRentalFocused,
+      aggregates?.itemCount,
+      aggregates?.rentalItemCount,
+    ]
+  );
 
   const catalogHealth = useMemo(
     () => resolveCatalogHealth(aggregates, mainInterest),

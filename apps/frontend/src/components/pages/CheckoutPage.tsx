@@ -1,4 +1,4 @@
-import { ArrowBack, Security } from '@mui/icons-material';
+import { ArrowBack, Lock, Security } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -57,6 +57,17 @@ import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import DiasporaCheckoutBanner from '../checkout/DiasporaCheckoutBanner';
+import PayerChargeSummary from '../checkout/PayerChargeSummary';
+import RecipientDetailsSection from '../checkout/RecipientDetailsSection';
+import CheckoutProgressStepper from '../common/CheckoutProgressStepper';
+import {
+  EMPTY_RECIPIENT_DRAFT,
+  buildRecipientPayload,
+  isCrossBorderCheckout,
+  isRecipientDraftIncomplete,
+  type RecipientDraft,
+} from '../../utils/diasporaCheckout';
 
 // Loading Skeleton Component
 const CheckoutPageSkeleton: React.FC = () => (
@@ -548,6 +559,10 @@ const CheckoutPage: React.FC = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [sendingToSomeoneElse, setSendingToSomeoneElse] = useState(false);
+  const [recipient, setRecipient] = useState<RecipientDraft>(
+    EMPTY_RECIPIENT_DRAFT
+  );
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
@@ -605,6 +620,11 @@ const CheckoutPage: React.FC = () => {
     (addr) => addr.address.id === selectedAddressId
   )?.address;
 
+  const recipientPayload = useMemo(
+    () => buildRecipientPayload({ sendingToSomeoneElse, recipient }),
+    [sendingToSomeoneElse, recipient]
+  );
+
   const checkoutPreflightRequest = useMemo(() => {
     if (cartItems.length === 0) return null;
     return {
@@ -621,13 +641,32 @@ const CheckoutPage: React.FC = () => {
         ? { delivery_address_id: selectedAddressId }
         : {}),
       payment_timing: 'pay_now' as const,
+      ...(sendingToSomeoneElse ? { sending_to_someone_else: true } : {}),
+      ...(recipientPayload ? { recipient: recipientPayload } : {}),
     };
-  }, [cartItems, fulfillment, selectedAddressId]);
+  }, [
+    cartItems,
+    fulfillment,
+    selectedAddressId,
+    sendingToSomeoneElse,
+    recipientPayload,
+  ]);
 
   const checkoutPreflight = useCheckoutPreflight(
     checkoutPreflightRequest,
     cartItems.length > 0
   );
+
+  const diaspora = checkoutPreflight?.diaspora ?? null;
+  const crossBorderCheckout = isCrossBorderCheckout(diaspora);
+  const recipientIncomplete = isRecipientDraftIncomplete({
+    sendingToSomeoneElse,
+    recipient,
+  });
+  const recipientBlockerMessage =
+    checkoutPreflight?.blocking_errors?.find((b) =>
+      b.code.startsWith('RECIPIENT_')
+    )?.message ?? null;
 
   const showTaxAtCheckoutNotice =
     checkoutPreflight?.tax_notice === 'calculated_at_checkout';
@@ -851,6 +890,16 @@ const CheckoutPage: React.FC = () => {
     }).format(amount);
   };
 
+  // Merchant-currency total for the payer FX line. Preflight is authoritative;
+  // the cart subtotal is only a fallback while preflight is still resolving.
+  const merchantTotal =
+    preflightGroups.length > 0
+      ? preflightGroups.reduce((sum, g) => sum + (g.total ?? 0), 0)
+      : cartItems.reduce(
+          (sum, item) => sum + item.itemData.price * item.quantity,
+          0
+        );
+
   const handleSubmit = async () => {
     if (cartItems.length === 0) return;
     if (placingOrderRef.current) return;
@@ -860,6 +909,11 @@ const CheckoutPage: React.FC = () => {
 
     // Validate phone number if override is enabled
     if (useDifferentPhone && !overridePhoneNumber.trim()) {
+      return;
+    }
+
+    // A recipient with no phone cannot be reached or verified at handover.
+    if (recipientIncomplete) {
       return;
     }
 
@@ -891,7 +945,12 @@ const CheckoutPage: React.FC = () => {
               special_instructions: deliveryWindow.special_instructions,
             }
           : undefined,
-        fulfillment
+        fulfillment,
+        {
+          payerCountry: diaspora?.payer_country ?? undefined,
+          sendingToSomeoneElse,
+          recipient: recipientPayload,
+        }
       );
 
       if (isPickup) {
@@ -1033,7 +1092,7 @@ const CheckoutPage: React.FC = () => {
         sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, sm: 2 } }}
       >
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <IconButton onClick={handleBack} sx={{ mr: 2 }}>
           <ArrowBack />
         </IconButton>
@@ -1042,9 +1101,39 @@ const CheckoutPage: React.FC = () => {
         </Typography>
       </Box>
 
+      {/* Progress Stepper */}
+      <CheckoutProgressStepper activeStep={1} />
+
       <Grid container spacing={3}>
         {/* Main Content */}
         <Grid size={{ xs: 12, lg: 8 }}>
+          <DiasporaCheckoutBanner
+            payerCountry={diaspora?.payer_country}
+            fulfillmentCountry={
+              diaspora?.fulfillment_country ||
+              selectedAddress?.country ||
+              preflightGroups[0]?.seller_country
+            }
+            crossBorder={crossBorderCheckout}
+            sendingToSomeoneElse={sendingToSomeoneElse}
+            onSendingToSomeoneElseChange={setSendingToSomeoneElse}
+            disabled={checkoutLoading || isCheckoutInProgress}
+          />
+
+          {sendingToSomeoneElse && (
+            <RecipientDetailsSection
+              recipient={recipient}
+              onChange={setRecipient}
+              fulfillmentCountry={
+                diaspora?.fulfillment_country ||
+                selectedAddress?.country ||
+                preflightGroups[0]?.seller_country
+              }
+              errorMessage={recipientBlockerMessage}
+              disabled={checkoutLoading || isCheckoutInProgress}
+            />
+          )}
+
           {/* Delivery Information */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
@@ -1226,13 +1315,64 @@ const CheckoutPage: React.FC = () => {
                 {t('checkout.paymentInformation', 'Payment Information')}
               </Typography>
 
-              {/* Mobile Payment Method */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" gutterBottom fontWeight={600}>
-                  {t('checkout.mobilePaymentMethod', 'Mobile Payment Method')}
-                </Typography>
+              {/* Locked Payment Method Display */}
+              {checkoutPreflight?.checkout_method && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                    {t('checkout.paymentMethod', 'Payment method')}
+                  </Typography>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      bgcolor: 'grey.50',
+                      borderColor: 'grey.300',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        bgcolor: 'warning.light',
+                        borderRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Typography variant="h6" fontWeight="bold">
+                        {checkoutPreflight.checkout_method === 'MOBILE_MONEY' ? 'MoMo' : 'Card'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body1" fontWeight={600}>
+                        {checkoutPreflight.checkout_method === 'MOBILE_MONEY'
+                          ? t('checkout.mobileMoneyMethod', 'Mobile Money · Cameroon')
+                          : t('checkout.stripeMethod', 'Credit or Debit Card')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('checkout.basedOnYourCountry', 'Based on your country')}
+                      </Typography>
+                    </Box>
+                    <Lock sx={{ color: 'action.disabled', fontSize: 20 }} />
+                  </Card>
+                </Box>
+              )}
 
-                {/* Primary Phone Number Display */}
+              {/* Mobile Payment Method - MoMo only */}
+              {checkoutPreflight?.checkout_method === 'MOBILE_MONEY' && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom fontWeight={600}>
+                    {t('checkout.yourMoMoNumber', 'Your MoMo number')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
+                  </Typography>
+
+                  {/* Primary Phone Number Display */}
                 <Card
                   variant="outlined"
                   sx={{
@@ -1381,17 +1521,31 @@ const CheckoutPage: React.FC = () => {
                     )}
                   </Card>
                 )}
-              </Box>
+                </Box>
+              )}
 
-              {/* Payment Security Notice */}
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
+              {/* Held Until Store Accepts Trust Banner - shown for all payment methods */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  mt: 3,
+                  p: 2,
+                  bgcolor: 'info.50',
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'info.200',
+                }}
+              >
+                <Lock sx={{ color: 'info.main', fontSize: 20 }} />
+                <Typography variant="caption" color="info.main">
                   {t(
-                    'checkout.paymentSecurityNotice',
-                    'Your payment will be processed securely through mobile money. The phone number above will be used to initiate the payment transaction.'
+                    'checkout.heldUntilAccepted',
+                    'Held until store accepts'
                   )}
                 </Typography>
-              </Alert>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -1422,15 +1576,32 @@ const CheckoutPage: React.FC = () => {
             showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
           />
 
+          {(crossBorderCheckout || sendingToSomeoneElse) && (
+            <Box sx={{ px: 2 }}>
+              <PayerChargeSummary
+                estimate={diaspora?.payer_charge_estimate}
+                merchantPriceLabel={formatCurrency(
+                  merchantTotal,
+                  preflightGroups[0]?.currency
+                )}
+                recipientName={
+                  sendingToSomeoneElse ? recipient.name : undefined
+                }
+              />
+            </Box>
+          )}
+
           {/* Place Order Button */}
           <Button
             variant="contained"
+            color="cta"
             fullWidth
             size="large"
             onClick={handleSubmit}
             disabled={
               checkoutLoading ||
               isCheckoutInProgress ||
+              recipientIncomplete ||
               (fulfillment === 'delivery' &&
                 (!selectedAddressId || deliveryUnavailable))
             }

@@ -3,6 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { StripeConfig } from '../config/configuration';
 import { STRIPE_TAX_CODE_SHIPPING } from '../stripe-tax/stripe-tax.constants';
+import {
+  httpExceptionFromStripeError,
+  usableCustomerEmail,
+} from './stripe-http-error';
+import { retryStripeIdempotencyInProgress } from './stripe-idempotency';
 
 export interface CreateCheckoutSessionParams {
   amount: number;
@@ -145,7 +150,7 @@ export class StripeService {
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       client_reference_id: params.reference,
-      customer_email: params.customerEmail,
+      customer_email: usableCustomerEmail(params.customerEmail),
       line_items: lineItems,
       metadata: { reference: params.reference, ...params.metadata },
     };
@@ -192,10 +197,20 @@ export class StripeService {
 
     sessionParams.payment_intent_data = paymentIntentData;
 
-    return this.getClient().checkout.sessions.create(
-      sessionParams,
-      { idempotencyKey: `checkout_${params.reference}` }
-    );
+    return this.createCheckoutSessionOnStripe(sessionParams, params.reference);
+  }
+
+  private async createCheckoutSessionOnStripe(
+    sessionParams: Stripe.Checkout.SessionCreateParams,
+    reference: string
+  ): Promise<Stripe.Checkout.Session> {
+    try {
+      return await this.getClient().checkout.sessions.create(sessionParams, {
+        idempotencyKey: `checkout_${reference}`,
+      });
+    } catch (error: any) {
+      throw httpExceptionFromStripeError(error);
+    }
   }
 
   async listAllTaxCodes(): Promise<Stripe.TaxCode[]> {
@@ -300,19 +315,29 @@ export class StripeService {
   async createPaymentIntent(
     params: CreatePaymentIntentParams
   ): Promise<Stripe.PaymentIntent> {
-    const captureMethod = params.captureMethod ?? 'automatic';
-    return this.getClient().paymentIntents.create(
-      {
-        amount: this.toMinorUnits(params.amount, params.currency),
-        currency: params.currency.toLowerCase(),
-        description: params.description,
-        receipt_email: params.customerEmail,
-        capture_method: captureMethod,
-        automatic_payment_methods: { enabled: true },
-        metadata: { reference: params.reference, ...params.metadata },
-      },
-      { idempotencyKey: `pi_${params.reference}` }
-    );
+    try {
+      return await this.getClient().paymentIntents.create(
+        this.buildPaymentIntentCreateParams(params),
+        { idempotencyKey: `pi_${params.reference}` }
+      );
+    } catch (error: any) {
+      throw httpExceptionFromStripeError(error);
+    }
+  }
+
+  private buildPaymentIntentCreateParams(
+    params: CreatePaymentIntentParams
+  ): Stripe.PaymentIntentCreateParams {
+    const receiptEmail = usableCustomerEmail(params.customerEmail);
+    return {
+      amount: this.toMinorUnits(params.amount, params.currency),
+      currency: params.currency.toLowerCase(),
+      description: params.description,
+      ...(receiptEmail ? { receipt_email: receiptEmail } : {}),
+      capture_method: params.captureMethod ?? 'automatic',
+      automatic_payment_methods: { enabled: true },
+      metadata: { reference: params.reference, ...params.metadata },
+    };
   }
 
   async capturePaymentIntent(
@@ -387,9 +412,17 @@ export class StripeService {
     businessName?: string;
   }): Promise<Stripe.Account> {
     const createParams = this.buildExpressAccountCreateParams(params);
-    return this.getClient().accounts.create(createParams, {
-      idempotencyKey: `connect_account_${params.userId}`,
-    });
+    return retryStripeIdempotencyInProgress(
+      () =>
+        this.getClient().accounts.create(createParams, {
+          idempotencyKey: `connect_account_${params.userId}`,
+        }),
+      (ms) => this.delay(ms)
+    );
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private buildExpressAccountCreateParams(params: {

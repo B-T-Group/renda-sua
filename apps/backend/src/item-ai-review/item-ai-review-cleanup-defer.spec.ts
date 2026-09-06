@@ -102,7 +102,8 @@ describe('ItemAiReviewService cleanup deferral', () => {
       notifications as never,
       configService as never,
       activationValidation as never,
-      merchantLifecycleService as never
+      merchantLifecycleService as never,
+      { autoAssignCollectionsIfFit: jest.fn() } as never
     );
     if (overrides.requestReview) {
       jest

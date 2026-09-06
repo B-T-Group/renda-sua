@@ -10,6 +10,16 @@ import * as Sentry from '@sentry/nestjs';
 import { Request, Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
+import {
+  REDIS_UNAVAILABLE_MESSAGE,
+  isTransientRedisError,
+} from '../redis-error.util';
+import {
+  HASURA_UNAVAILABLE_MESSAGE,
+  hasuraUnavailableResponse,
+  isTransientHasuraNetworkError,
+  isWrappedTransientHasuraHttpException,
+} from '../../hasura/hasura-request.util';
 import { getRequestLogContext } from '../request-context-log.util';
 
 @Catch()
@@ -32,19 +42,45 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private resolveStatus(exception: unknown): number {
+    if (isWrappedTransientHasuraHttpException(exception)) {
+      return HttpStatus.SERVICE_UNAVAILABLE;
+    }
     if (exception instanceof HttpException) {
       return exception.getStatus();
+    }
+    if (isTransientHasuraNetworkError(exception)) {
+      return HttpStatus.SERVICE_UNAVAILABLE;
+    }
+    if (isTransientRedisError(exception)) {
+      return HttpStatus.SERVICE_UNAVAILABLE;
     }
     return HttpStatus.INTERNAL_SERVER_ERROR;
   }
 
   private resolveBody(exception: unknown, status: number): object {
+    if (isWrappedTransientHasuraHttpException(exception)) {
+      return hasuraUnavailableResponse();
+    }
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
       if (typeof response === 'string') {
         return { statusCode: status, message: response };
       }
       return response as object;
+    }
+    if (isTransientHasuraNetworkError(exception)) {
+      return {
+        success: false,
+        statusCode: status,
+        message: HASURA_UNAVAILABLE_MESSAGE,
+      };
+    }
+    if (isTransientRedisError(exception)) {
+      return {
+        success: false,
+        statusCode: status,
+        message: REDIS_UNAVAILABLE_MESSAGE,
+      };
     }
     return {
       success: false,

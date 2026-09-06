@@ -127,3 +127,59 @@ describe('AgentReferralsService.creditAfterFirstDelivery', () => {
     expect(creditSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('AgentReferralsService.listReferredBusinesses', () => {
+  const hasura = { executeQuery: jest.fn(), executeMutation: jest.fn() };
+  const configurationsService = { getConfigurationByKey: jest.fn() };
+  let service: AgentReferralsService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new AgentReferralsService(
+      hasura as unknown as HasuraSystemService,
+      {} as ReferralPyramidService,
+      configurationsService as never
+    );
+  });
+
+  it('applies country min-sale config and falls back when config fails', async () => {
+    configurationsService.getConfigurationByKey.mockImplementation(
+      async (_key: string, country: string) => {
+        if (country === 'CM') return { number_value: 3000 };
+        if (country === 'CA') throw new Error('config down');
+        return { number_value: 'nope' };
+      }
+    );
+    hasura.executeQuery.mockResolvedValue({
+      businesses: [
+        {
+          id: 'cm',
+          name: 'CM Shop',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'agent-1',
+          user: { country: 'CM' },
+        },
+        {
+          id: 'ca',
+          name: 'CA Shop',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'agent-1',
+          user: { country: 'CA' },
+        },
+        {
+          id: 'ga',
+          name: 'GA Shop',
+          created_at: '2026-08-10T00:00:00.000Z',
+          referred_by_agent_id: 'agent-1',
+          user: { country: 'GA' },
+        },
+      ],
+    });
+
+    const items = await service.listReferredBusinesses('agent-1');
+
+    expect(items.map((row) => row.commission.requirements.minSalesTotal)).toEqual(
+      [3000, 0, 2500]
+    );
+  });
+});

@@ -92,6 +92,10 @@ import { orderedVariantImages } from '../../types/itemVariant';
 import FoodAvailabilityChip from '../common/FoodAvailabilityChip';
 import FoodScheduleList from '../common/FoodScheduleList';
 import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
+import { DeliveryExpectationsCard } from '../common/DeliveryExpectationsCard';
+import { useDeliveryEstimate } from '../../hooks/useDeliveryEstimate';
+import { useMarket } from '../../contexts/MarketContext';
+import { MarketPickerDialog } from '../market/MarketPickerDialog';
 
 const formatCurrency = (amount: number, currency = 'USD') => {
   return new Intl.NumberFormat('en-US', {
@@ -329,6 +333,7 @@ function ItemDetailMobileOrderBar({
           </Box>
           <Button
             variant="contained"
+            color="cta"
             size="medium"
             startIcon={<MobileMoneyOrderIcon />}
             onClick={onOrder}
@@ -344,20 +349,20 @@ function ItemDetailMobileOrderBar({
               textTransform: 'none',
               letterSpacing: 0.02,
               borderRadius: 2.5,
-              boxShadow: `0 4px 18px ${alpha(theme.palette.primary.main, 0.45)}`,
-              background: `linear-gradient(160deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 45%, ${theme.palette.primary.dark} 100%)`,
+              boxShadow: `0 4px 18px ${alpha(theme.palette.cta.main, 0.45)}`,
+              background: `linear-gradient(160deg, ${theme.palette.cta.light} 0%, ${theme.palette.cta.main} 45%, ${theme.palette.cta.dark} 100%)`,
               transition: theme.transitions.create(
                 ['box-shadow', 'transform', 'background-color'],
                 { duration: 200 }
               ),
               '&:hover': {
-                boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.55)}`,
-                background: `linear-gradient(160deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                boxShadow: `0 6px 24px ${alpha(theme.palette.cta.main, 0.55)}`,
+                background: `linear-gradient(160deg, ${theme.palette.cta.main} 0%, ${theme.palette.cta.dark} 100%)`,
                 transform: 'translateY(-2px)',
               },
               '&:active': {
                 transform: 'translateY(0)',
-                boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
+                boxShadow: `0 2px 12px ${alpha(theme.palette.cta.main, 0.4)}`,
               },
               ...(shouldPulse
                 ? { animation: 'rendaCtaPulse 700ms cubic-bezier(0.2, 0.8, 0.2, 1) 1' }
@@ -425,8 +430,10 @@ export default function ItemDetailPage() {
   const [interestSubmitting, setInterestSubmitting] = React.useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
+  const [marketPickerOpen, setMarketPickerOpen] = React.useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
+  const { selectedMarket, markets, setMarket } = useMarket();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const { isStripeRail } = useIsStripeRail();
@@ -583,6 +590,9 @@ export default function ItemDetailPage() {
         eventType: SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
         subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
         subjectId: id,
+        metadata: {
+          hadEstimate: deliveryEstimate != null,
+        },
       });
       trackView(id);
       if (!isAuthenticated) {
@@ -806,10 +816,45 @@ export default function ItemDetailPage() {
   const foodAvailability = inventoryItem.food_availability;
   const foodStatus = resolveFoodAvailabilityStatus(foodAvailability);
   const isFoodClosed = foodStatus != null && foodStatus !== 'available';
+
+  const deliveryEstimateParams = React.useMemo(() => {
+    if (!selectedMarket || !inventoryItem) return null;
+    return {
+      marketId: selectedMarket.countryCode,
+      areaId: selectedMarket.stateCode || undefined,
+      category: (foodAvailability ? 'food' : 'store') as 'store' | 'food' | 'rental',
+      sellerId: inventoryItem.business_location?.business_id,
+      skuId: inventoryItem.item_id,
+    };
+  }, [selectedMarket, inventoryItem, foodAvailability]);
+
+  const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } = useDeliveryEstimate(deliveryEstimateParams);
+
+  const deliveryBlocked = React.useMemo(() => {
+    if (!deliveryEstimate) return { blocked: false, reason: null };
+    
+    if (deliveryEstimate.coverage === 'out') {
+      return { 
+        blocked: true, 
+        reason: t('delivery.outOfCoverage', 'Delivery not available in this area') 
+      };
+    }
+    
+    if (deliveryEstimate.servingStatus && deliveryEstimate.servingStatus !== 'available') {
+      const reason = deliveryEstimate.servingStatus === 'sold_out'
+        ? t('foods.status.soldOutToday', 'Sold out today')
+        : t('foods.status.notServingNow', 'Not serving now');
+      return { blocked: true, reason };
+    }
+    
+    return { blocked: false, reason: null };
+  }, [deliveryEstimate, t]);
+
   const hasStock =
     inventoryItem.computed_available_quantity > 0 &&
     inventoryItem.is_active &&
-    !isFoodClosed;
+    !isFoodClosed &&
+    !deliveryBlocked.blocked;
   const variantSelectionReady = variantSel.selectionComplete;
   const cartLineVariantId = toCartVariantId(variantSel.selectedVariantId);
   const inCartQuantity = cartLineVariantId
@@ -1322,6 +1367,18 @@ export default function ItemDetailPage() {
             />
 
             <ItemDetailHowItWorks />
+
+            {/* Delivery Expectations Card (pre-checkout) */}
+            <DeliveryExpectationsCard
+              estimate={deliveryEstimate}
+              loading={deliveryEstimateLoading}
+              itemId={id}
+              category={foodAvailability ? 'food' : 'store'}
+              marketId={selectedMarket?.countryCode}
+              areaId={selectedMarket?.stateCode || undefined}
+              onAreaChange={() => setMarketPickerOpen(true)}
+            />
+
             {showMobileStickyOrderBar ? (
               <Typography
                 variant="body2"
@@ -1421,15 +1478,17 @@ export default function ItemDetailPage() {
                   >
                     {t('productInterest.cta', 'I’m interested')}
                   </Button>
-                ) : !hasStock ? (
+                ) : !hasStock || deliveryBlocked.blocked ? (
                   <Button variant="outlined" disabled size="medium">
-                    {isFoodClosed
-                      ? foodStatus === 'sold_out'
-                        ? t('foods.status.soldOutToday', 'Sold out today')
-                        : t('foods.status.notServingNow', 'Not serving now')
-                      : inventoryItem.computed_available_quantity === 0
-                        ? t('items.outOfStock', 'Out of Stock')
-                        : t('items.notAvailable', 'Not Available')}
+                    {deliveryBlocked.blocked
+                      ? deliveryBlocked.reason
+                      : isFoodClosed
+                        ? foodStatus === 'sold_out'
+                          ? t('foods.status.soldOutToday', 'Sold out today')
+                          : t('foods.status.notServingNow', 'Not serving now')
+                        : inventoryItem.computed_available_quantity === 0
+                          ? t('items.outOfStock', 'Out of Stock')
+                          : t('items.notAvailable', 'Not Available')}
                   </Button>
                 ) : !paymentsEnabled || !merchantCanAcceptOrders ? (
                   <Button variant="outlined" disabled size="medium" fullWidth>
@@ -1472,21 +1531,22 @@ export default function ItemDetailPage() {
                     {showInlineOrderNow ? (
                       <Button
                         variant="contained"
+                        color="cta"
                         startIcon={<MobileMoneyOrderIcon />}
                         onClick={handleOrderClick}
                         size="medium"
                         fullWidth
-                        disabled={!variantSelectionReady}
+                        disabled={!variantSelectionReady || deliveryBlocked.blocked}
                         sx={(btnTheme) => ({
                           minHeight: 48,
                           fontWeight: 800,
                           textTransform: 'none',
                           borderRadius: 2.5,
-                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.primary.main, 0.45)}`,
-                          background: `linear-gradient(160deg, ${btnTheme.palette.primary.light} 0%, ${btnTheme.palette.primary.main} 45%, ${btnTheme.palette.primary.dark} 100%)`,
+                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.cta.main, 0.45)}`,
+                          background: `linear-gradient(160deg, ${btnTheme.palette.cta.light} 0%, ${btnTheme.palette.cta.main} 45%, ${btnTheme.palette.cta.dark} 100%)`,
                           '&:hover': {
-                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.primary.main, 0.55)}`,
-                            background: `linear-gradient(160deg, ${btnTheme.palette.primary.main} 0%, ${btnTheme.palette.primary.dark} 100%)`,
+                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.cta.main, 0.55)}`,
+                            background: `linear-gradient(160deg, ${btnTheme.palette.cta.main} 0%, ${btnTheme.palette.cta.dark} 100%)`,
                           },
                         })}
                       >
@@ -1500,28 +1560,6 @@ export default function ItemDetailPage() {
           </Stack>
         </Grid>
       </Grid>
-
-      {/* App download note — shown to guests below the order CTAs */}
-      {!isAuthenticated && (
-        <Box
-          sx={{
-            mt: 2,
-            px: 2,
-            py: 1.5,
-            borderRadius: 2,
-            bgcolor: 'rgba(30,64,175,0.04)',
-            border: '1px solid rgba(30,64,175,0.12)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-          }}
-        >
-          <span style={{ fontSize: '1.1rem' }} aria-hidden="true">📱</span>
-          <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-            {t('items.appTrackingNote', 'Track your order in real time — available in the Rendasua app.')}
-          </Typography>
-        </Box>
-      )}
 
       {/* Product information - full width, dense layout */}
       <Card variant="outlined" sx={{ mt: 3, borderColor: 'divider' }}>
@@ -1780,7 +1818,7 @@ export default function ItemDetailPage() {
         visible={showMobileStickyOrderBar}
         priceText={checkoutPriceText}
         orderLabel={t('common.orderNow', 'Order Now')}
-        orderDisabled={!variantSelectionReady}
+        orderDisabled={!variantSelectionReady || deliveryBlocked.blocked}
         topRow={
           stickyRatingLabel ? (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ width: 'max-content', pr: 1 }}>
@@ -1968,6 +2006,18 @@ export default function ItemDetailPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+      <MarketPickerDialog
+        open={marketPickerOpen}
+        markets={markets}
+        selectedCode={selectedMarket?.countryCode || 'CM'}
+        selectedStateCode={selectedMarket?.stateCode || null}
+        catalogContext="inventory"
+        onSelect={(countryCode, stateCode) => {
+          setMarket(countryCode, stateCode);
+          setMarketPickerOpen(false);
+        }}
+        onClose={() => setMarketPickerOpen(false)}
+      />
     </>
   );
 }

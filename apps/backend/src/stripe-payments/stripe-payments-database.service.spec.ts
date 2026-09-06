@@ -1,4 +1,54 @@
-import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
+import {
+  preferLiveStripeTransaction,
+  StripePaymentTransaction,
+  StripePaymentsDatabaseService,
+} from './stripe-payments-database.service';
+
+function tx(
+  overrides: Partial<StripePaymentTransaction> &
+    Pick<StripePaymentTransaction, 'id' | 'status'>
+): StripePaymentTransaction {
+  return {
+    reference: overrides.id,
+    amount: 10,
+    currency: 'usd',
+    ...overrides,
+  } as StripePaymentTransaction;
+}
+
+describe('preferLiveStripeTransaction', () => {
+  it('prefers an older authorized payment over a newer pending retry', () => {
+    const pendingRetry = tx({ id: 'tx-pending', status: 'pending' });
+    const authorized = tx({ id: 'tx-authorized', status: 'authorized' });
+
+    expect(preferLiveStripeTransaction([pendingRetry, authorized])).toEqual(
+      authorized
+    );
+  });
+
+  it('treats capture_pending and success as live over pending', () => {
+    const pending = tx({ id: 'tx-pending', status: 'pending' });
+    const capturePending = tx({
+      id: 'tx-capture',
+      status: 'capture_pending',
+    });
+    const success = tx({ id: 'tx-success', status: 'success' });
+
+    expect(preferLiveStripeTransaction([pending, capturePending])).toEqual(
+      capturePending
+    );
+    expect(preferLiveStripeTransaction([pending, success])).toEqual(success);
+  });
+
+  it('falls back to pending, then the first row, then null', () => {
+    const pending = tx({ id: 'tx-pending', status: 'pending' });
+    const failed = tx({ id: 'tx-failed', status: 'failed' });
+
+    expect(preferLiveStripeTransaction([pending])).toEqual(pending);
+    expect(preferLiveStripeTransaction([failed])).toEqual(failed);
+    expect(preferLiveStripeTransaction([])).toBeNull();
+  });
+});
 
 describe('StripePaymentsDatabaseService', () => {
   const hasuraService = {
@@ -43,6 +93,18 @@ describe('StripePaymentsDatabaseService', () => {
       await expect(
         service.getTransactionByEntityId('ORDER-1001')
       ).resolves.toBeNull();
+    });
+
+    it('selects the live payment when a newer pending retry is first', async () => {
+      const pendingRetry = tx({ id: 'tx-pending', status: 'pending' });
+      const authorized = tx({ id: 'tx-authorized', status: 'authorized' });
+      hasuraService.executeQuery.mockResolvedValue({
+        stripe_payment_transactions: [pendingRetry, authorized],
+      });
+
+      await expect(service.getTransactionByEntityId('ORDER-1001')).resolves.toEqual(
+        authorized
+      );
     });
   });
 });

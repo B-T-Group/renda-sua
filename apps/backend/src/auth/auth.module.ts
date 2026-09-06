@@ -19,6 +19,8 @@ import { PermissionService } from './permission.service';
 import { SignupController } from './signup.controller';
 import { SignupService } from './signup.service';
 import { SignupAttemptCleanupService } from './signup-attempt-cleanup.service';
+import { SessionStoreService } from './session-store.service';
+import { LockoutService } from './lockout.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
@@ -42,6 +44,8 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     AuthGuard,
     Auth0Service,
     LoginService,
+    SessionStoreService,
+    LockoutService,
     PermissionService,
     SignupService,
     SignupAttemptCleanupService,

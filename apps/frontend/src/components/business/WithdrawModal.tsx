@@ -12,24 +12,15 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isCmOrGaPhone } from '../../utils/withdrawPhone';
 import PhoneInput from '../common/PhoneInput';
 
 type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
 
 const MIN_WITHDRAW_AMOUNT = 150;
-
-function isCmOrGaPhone(phone: string): boolean {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('237')) {
-    return digits.length >= 12;
-  }
-  if (digits.startsWith('241')) {
-    return digits.length >= 11;
-  }
-  return false;
-}
 
 interface WithdrawModalProps {
   open: boolean;
@@ -377,21 +368,21 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
           variant="contained"
           disabled={!canSubmit}
           startIcon={loading ? <CircularProgress size={16} /> : null}
-          sx={{
-            background: 'linear-gradient(45deg, #FF5722 30%, #FF7043 90%)',
-            color: 'white',
+          sx={(theme) => ({
+            background: `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.primary.light} 90%)`,
+            color: theme.palette.primary.contrastText,
             fontWeight: 600,
             textTransform: 'none',
-            boxShadow: '0 3px 5px 2px rgba(255, 87, 34, .3)',
+            boxShadow: `0 3px 5px 2px ${alpha(theme.palette.primary.main, 0.3)}`,
             '&:hover': {
-              background: 'linear-gradient(45deg, #D84315 30%, #FF5722 90%)',
-              boxShadow: '0 4px 8px 2px rgba(255, 87, 34, .4)',
+              background: `linear-gradient(45deg, ${theme.palette.primary.dark} 30%, ${theme.palette.primary.main} 90%)`,
+              boxShadow: `0 4px 8px 2px ${alpha(theme.palette.primary.main, 0.4)}`,
             },
             '&:disabled': {
-              background: 'linear-gradient(45deg, #9E9E9E 30%, #BDBDBD 90%)',
+              background: theme.palette.action.disabledBackground,
               boxShadow: 'none',
             },
-          }}
+          })}
         >
           {loading ? t('common.processing') : t('accounts.withdraw')}
         </Button>

@@ -34,6 +34,7 @@ import {
 import { useApiClient } from '../../hooks/useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from '../../hooks/useDetectedCountry';
 import { getMetaBrowserContext } from '../../utils/metaBrowserIds';
+import { useMarket } from '../../contexts/MarketContext';
 import {
   SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT,
   SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_CONTINUE_CLICK,
@@ -103,6 +104,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const navigate = useNavigate();
   const { loginWithRedirect } = useAuth0();
   const { trackSiteEvent } = useTrackSiteEvent();
+  const { selectedMarket } = useMarket();
 
   const [contactMethod, setContactMethod] = useState<'phone' | 'email'>('phone');
   const [email, setEmail] = useState('');
@@ -150,6 +152,11 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   }, [inventoryItemId, variantId]);
 
   useEffect(() => {
+    const marketCountry = normalizeCountryCode(selectedMarket?.countryCode);
+    if (marketCountry && isActivePhoneCountry(marketCountry)) {
+      setPhoneCountry(marketCountry);
+      return;
+    }
     if (typeof window === 'undefined' || !window.localStorage) return;
     const detected = normalizeCountryCode(
       localStorage.getItem(DETECTED_COUNTRY_STORAGE_KEY)
@@ -157,7 +164,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     if (isActivePhoneCountry(detected)) {
       setPhoneCountry(detected);
     }
-  }, []);
+  }, [selectedMarket]);
 
   const redirectToOtp = useCallback(
     async (
@@ -698,6 +705,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           <Button
             fullWidth
             variant="contained"
+            color="cta"
             size="large"
             onClick={handleContinue}
             disabled={!canSubmit}

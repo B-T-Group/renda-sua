@@ -5,6 +5,7 @@ import {
   Headers,
   HttpException,
   HttpStatus,
+  Logger,
   Param,
   Patch,
   Post,
@@ -45,6 +46,7 @@ import type {
   GetOrderRequest,
   OrderStatusChangeRequest,
 } from './orders.service';
+import { toCreateOrderHttpException } from './create-order-http-error';
 import { OrdersService } from './orders.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -58,6 +60,8 @@ export interface UpdateOrderStatusRequest {
 @Controller('orders')
 @Throttle({ short: { limit: 30, ttl: 60000 } })
 export class OrdersController {
+  private readonly logger = new Logger(OrdersController.name);
+
   constructor(
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
@@ -202,6 +206,37 @@ export class OrdersController {
             special_instructions: { type: 'string' },
           },
         },
+        payer_country: {
+          type: 'string',
+          description:
+            'ISO 3166-1 alpha-2 billing country of the payer. When it resolves to a Stripe country and the merchant settles in mobile money, the order is routed as a diaspora card payment and must be pay_now.',
+        },
+        sending_to_someone_else: {
+          type: 'boolean',
+          description:
+            'Set when the recipient is a different person from the paying client.',
+        },
+        recipient_id: {
+          type: 'string',
+          format: 'uuid',
+          description:
+            'UUID of a saved recipient. When provided, overrides inline recipient fields.',
+        },
+        recipient: {
+          type: 'object',
+          description:
+            'Local recipient contact. Stored on the order and used for SMS/WhatsApp updates and the delivery PIN without a payer login.',
+          properties: {
+            name: { type: 'string' },
+            phone: {
+              type: 'string',
+              description:
+                'Local or E.164 phone; normalized against the delivery country.',
+            },
+            email: { type: 'string' },
+            notify_whatsapp: { type: 'boolean' },
+          },
+        },
       },
       required: ['items'],
     },
@@ -258,33 +293,7 @@ export class OrdersController {
         message: 'Order created successfully',
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      // Convert service errors to appropriate HTTP exceptions
-      const errorMessage = error.message || 'Internal server error';
-      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-
-      if (errorMessage.includes('User not found')) {
-        statusCode = HttpStatus.NOT_FOUND;
-      } else if (
-        errorMessage.includes('MERCHANT_NOT_ACCEPTING_ORDERS') ||
-        errorMessage.includes('No valid items found') ||
-        errorMessage.includes('Item') ||
-        errorMessage.includes('No account found') ||
-        errorMessage.includes('Insufficient')
-      ) {
-        statusCode = HttpStatus.BAD_REQUEST;
-      }
-
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        statusCode
-      );
+      throw toCreateOrderHttpException(error);
     }
   }
 
@@ -306,7 +315,15 @@ export class OrdersController {
     // Never apply cancelled via the generic status path — that skips payment
     // release and inventory restore. Route to the dedicated cancel flow.
     if (updateData.status === 'cancelled') {
-      return this.ordersService.cancelOrder({ orderId });
+      // Legacy PATCH path without collected reason; use "other" as fallback
+      this.logger.warn(
+        `Order ${orderId} cancelled via legacy PATCH without reason - use POST /orders/cancel instead`
+      );
+      return this.ordersService.cancelOrder({
+        orderId,
+        cancellationReasonId: 1, // "other" fallback for legacy path
+        notes: 'Cancelled via legacy PATCH endpoint',
+      });
     }
 
     try {
@@ -805,7 +822,7 @@ export class OrdersController {
         },
         cancellationReasonId: {
           type: 'number',
-          description: 'ID from order_cancellation_reasons lookup table',
+          description: 'ID from order_cancellation_reasons lookup table (required)',
           example: 1,
         },
         notes: {
@@ -814,7 +831,7 @@ export class OrdersController {
           example: 'Changed my mind after thinking it over',
         },
       },
-      required: ['orderId'],
+      required: ['orderId', 'cancellationReasonId'],
     },
   })
   @ApiResponse({

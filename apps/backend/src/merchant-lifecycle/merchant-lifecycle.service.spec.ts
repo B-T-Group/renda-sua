@@ -38,11 +38,27 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     sendMerchantActivatedEmail: jest.Mock;
   };
   let contractsService: { hasValidSignedContract: jest.Mock };
+  let paymentRouting: { resolveRailForUser: jest.Mock };
+  let launchPromo: { confirmSlot: jest.Mock };
+  let stripeAccounts: Array<{
+    provider: string;
+    capability_status: string;
+  }>;
   let service: MerchantLifecycleService;
 
   const upsertAccountCalls = () =>
     hasuraSystemService.executeMutation.mock.calls.filter(([mutation]) =>
       mutation.includes('UpsertPaymentAccount')
+    );
+
+  const mutationVars = (name: string) =>
+    hasuraSystemService.executeMutation.mock.calls.find(([mutation]) =>
+      mutation.includes(name)
+    )?.[1];
+
+  const queriedCatalog = () =>
+    hasuraSystemService.executeQuery.mock.calls.some(([query]) =>
+      query.includes('CatalogInventory')
     );
 
   beforeEach(() => {
@@ -59,6 +75,7 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     };
     uploads = [];
     momoAccounts = [];
+    stripeAccounts = [];
     hasuraSystemService = {
       executeQuery: jest.fn(async (query: string) => {
         if (query.includes('BusinessLifecycle')) {
@@ -69,6 +86,9 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
         }
         if (query.includes('MoMoIdCapability')) {
           return { user_uploads: uploads };
+        }
+        if (query.includes('query PaymentAccounts')) {
+          return { business_payment_accounts: stripeAccounts };
         }
         if (query.includes('PaymentAccountStatus')) {
           return { business_payment_accounts: momoAccounts };
@@ -94,12 +114,16 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     contractsService = {
       hasValidSignedContract: jest.fn().mockResolvedValue(true),
     };
+    paymentRouting = {
+      resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+    };
+    launchPromo = { confirmSlot: jest.fn() };
     service = new MerchantLifecycleService(
       hasuraSystemService as any,
       notificationsService as any,
-      { resolveRailForUser: jest.fn().mockResolvedValue('mobile_money') } as any,
+      paymentRouting as any,
       contractsService as any,
-      { confirmSlot: jest.fn() } as any
+      launchPromo as any
     );
   });
 
@@ -289,6 +313,101 @@ describe('MerchantLifecycleService (MoMo capability sync)', () => {
     expect(
       notificationsService.sendMerchantPaymentVerificationFailedEmail
     ).not.toHaveBeenCalled();
+  });
+
+  it('promotes created to active without a verified badge after the contract is signed', async () => {
+    businessSnapshot.lifecycle_status = 'created';
+    businessSnapshot.is_storefront_visible = false;
+
+    await service.recompute('biz-1');
+
+    expect(mutationVars('SetLifecycleVisibilityAndVerified')).toMatchObject({
+      status: 'active',
+      visible: true,
+      verified: false,
+    });
+    expect(queriedCatalog()).toBe(false);
+    expect(launchPromo.confirmSlot).toHaveBeenCalledWith('biz-1');
+    expect(notificationsService.sendMerchantActivatedEmail).toHaveBeenCalled();
+  });
+
+  it('grants the verified badge without activating when ID is approved but unsigned', async () => {
+    businessSnapshot.lifecycle_status = 'created';
+    contractsService.hasValidSignedContract.mockResolvedValue(false);
+    uploads = [{ is_approved: true, note: null }];
+
+    await service.recompute('biz-1');
+
+    expect(mutationVars('SetLifecycleVisibilityAndVerified')).toBeUndefined();
+    expect(mutationVars('SetVerifiedAndVisibility')).toMatchObject({
+      visible: false,
+      verified: true,
+    });
+    expect(launchPromo.confirmSlot).not.toHaveBeenCalled();
+    expect(
+      notificationsService.sendMerchantActivatedEmail
+    ).not.toHaveBeenCalled();
+  });
+
+  it('activates Stripe merchants without Connect and keeps the badge off', async () => {
+    paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
+    businessSnapshot.lifecycle_status = 'created';
+
+    await service.recompute('biz-1');
+
+    expect(mutationVars('SetLifecycleVisibilityAndVerified')).toMatchObject({
+      status: 'active',
+      visible: true,
+      verified: false,
+    });
+  });
+
+  it('sets the Stripe verified badge only when Connect is verified', async () => {
+    paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
+    businessSnapshot.lifecycle_status = 'active';
+    businessSnapshot.can_accept_orders = true;
+    stripeAccounts = [
+      { provider: 'stripe', capability_status: 'verified' },
+      { provider: 'mobile_money', capability_status: 'not_started' },
+    ];
+
+    await service.recompute('biz-1');
+
+    expect(mutationVars('SetVerifiedAndVisibility')).toMatchObject({
+      visible: true,
+      verified: true,
+    });
+  });
+
+  it('does not promote a suspended merchant even with a signed contract', async () => {
+    businessSnapshot.lifecycle_status = 'suspended';
+
+    await service.recompute('biz-1');
+
+    expect(mutationVars('SetLifecycleVisibilityAndVerified')).toBeUndefined();
+    expect(mutationVars('SetStorefrontVisible')).toMatchObject({
+      visible: false,
+    });
+    expect(launchPromo.confirmSlot).not.toHaveBeenCalled();
+  });
+
+  it('reinstates a signed merchant to active and an unsigned one to created', async () => {
+    businessSnapshot.lifecycle_status = 'suspended';
+    await service.reinstate('biz-1', 'admin-1');
+    expect(mutationVars('SetLifecycleVisibilityAndVerified')).toMatchObject({
+      status: 'active',
+      visible: true,
+      verified: false,
+    });
+
+    hasuraSystemService.executeMutation.mockClear();
+    contractsService.hasValidSignedContract.mockResolvedValue(false);
+    await service.reinstate('biz-1', 'admin-1');
+    expect(mutationVars('SetLifecycleVisibilityAndVerified')).toMatchObject({
+      status: 'created',
+      visible: false,
+      verified: false,
+    });
   });
 
   it('upsertPaymentAccount recomputes once without recursion or double emails', async () => {

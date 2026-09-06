@@ -6,6 +6,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
+import {
+  buildMypvitStatusPath,
+  isNotFoundHttpError,
+  resolveMypvitOperator,
+} from './mypvit-status.util';
 
 export interface MyPVitPaymentRequest {
   amount: number;
@@ -34,6 +39,29 @@ export function sanitizeFreeInfo(value?: string): string | undefined {
     .slice(0, 15)
     .trim();
   return cleaned || undefined;
+}
+
+/**
+ * Generate a short reference (≤15 chars) for MyPVIT API from a long DB reference.
+ * MyPVIT documents `reference` max 15 characters.
+ * Uses a deterministic hash of the long reference to ensure uniqueness and enable lookup.
+ */
+export function buildShortReferenceForMyPVit(longReference: string): string {
+  // Create a deterministic hash from the long reference (no timestamps)
+  // Format: M{13-char-hash} = 14 chars total
+  
+  let hash = 0;
+  for (let i = 0; i < longReference.length; i++) {
+    const char = longReference.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Convert to base36 (alphanumeric) and ensure we get exactly 13 characters
+  const absHash = Math.abs(hash);
+  const hashStr = absHash.toString(36).padStart(13, '0').slice(-13);
+  
+  return `M${hashStr}`;
 }
 
 export interface MyPVitPaymentResponse {
@@ -274,34 +302,67 @@ export class MyPVitService {
   }
 
   /**
-   * Check transaction status using STATUS API (query params per MyPVit docs).
+   * Check transaction status. Prefer GET `/{code}/status/{id}` (original API);
+   * fall back to query-param form if that path 404s.
    */
   async checkTransactionStatus(
     transactionId: string,
     phoneNumber?: string
   ): Promise<MyPVitTransactionStatus> {
+    this.logger.log(`Checking transaction status for: ${transactionId}`);
+    const secretKey = await this.getCurrentSecretKey(phoneNumber);
+    const accountOperationCode = this.getMerchantOperationAccountCode(
+      phoneNumber ?? ''
+    );
+    const data = await this.fetchStatusApiBody(
+      transactionId,
+      accountOperationCode,
+      secretKey
+    );
+    return this.mapStatusApiResponse(data, transactionId);
+  }
+
+  private async fetchStatusApiBody(
+    transactionId: string,
+    accountOperationCode: string,
+    secretKey: string
+  ): Promise<MyPVitStatusApiBody> {
     try {
-      this.logger.log(`Checking transaction status for: ${transactionId}`);
-      const secretKey = await this.getCurrentSecretKey(phoneNumber);
-      const accountOperationCode = this.getMerchantOperationAccountCode(
-        phoneNumber ?? ''
-      );
       const response = await this.httpClient.get(
-        `/${this.config.statusEndpointCode}/status`,
-        {
-          params: {
-            transactionId,
-            accountOperationCode,
-            transactionOperation: 'PAYMENT',
-          },
-          headers: { 'X-Secret': secretKey },
-        }
+        buildMypvitStatusPath(this.config.statusEndpointCode, transactionId),
+        { headers: { 'X-Secret': secretKey } }
       );
-      return this.mapStatusApiResponse(response.data, transactionId);
+      return response.data;
     } catch (error: any) {
-      this.logger.error('Failed to check transaction status:', error);
-      throw error;
+      if (!isNotFoundHttpError(error)) {
+        this.logger.error('Failed to check transaction status:', error);
+        throw error;
+      }
+      return this.fetchStatusApiByQuery(
+        transactionId,
+        accountOperationCode,
+        secretKey
+      );
     }
+  }
+
+  private async fetchStatusApiByQuery(
+    transactionId: string,
+    accountOperationCode: string,
+    secretKey: string
+  ): Promise<MyPVitStatusApiBody> {
+    const response = await this.httpClient.get(
+      `/${this.config.statusEndpointCode}/status`,
+      {
+        params: {
+          transactionId,
+          accountOperationCode,
+          transactionOperation: 'PAYMENT',
+        },
+        headers: { 'X-Secret': secretKey },
+      }
+    );
+    return response.data;
   }
 
   private mapStatusApiResponse(
@@ -558,84 +619,23 @@ export class MyPVitService {
   }
 
   /**
-   * Get merchant operation account code based on phone number
-   * @param phoneNumber - Phone number without country code
-   * @returns Account code for Airtel or MOOV
+   * Merchant operation account for Airtel or MOOV.
+   * Accepts E.164 or national digits.
    */
   getMerchantOperationAccountCode(phoneNumber: string): string {
-    if (!phoneNumber) {
-      return this.config.airtelMerchantOperationAccountCode;
-    }
-
-    // Remove any leading zeros or country code remnants
-    const cleanNumber = phoneNumber.replace(/^0+/, '');
-
-    // Extract first 2-3 digits
-    const prefix = cleanNumber.substring(0, 3);
-    const prefixTwo = cleanNumber.substring(0, 2);
-
-    // MOOV prefixes: 062, 065, 066 (or 62, 65, 66)
-    if (
-      prefix === '062' ||
-      prefix === '065' ||
-      prefix === '066' ||
-      prefixTwo === '62' ||
-      prefixTwo === '65' ||
-      prefixTwo === '66'
-    ) {
+    if (resolveMypvitOperator(phoneNumber) === 'moov') {
       return this.config.moovMerchantOperationAccountCode;
     }
-
-    // Airtel prefixes: 074, 077 (or 74, 77)
-    if (
-      prefix === '074' ||
-      prefix === '077' ||
-      prefixTwo === '74' ||
-      prefixTwo === '77'
-    ) {
-      return this.config.airtelMerchantOperationAccountCode;
-    }
-
-    // Default to Airtel account
     return this.config.airtelMerchantOperationAccountCode;
   }
 
   /**
-   * Get secret key based on phone number provider
-   * @param phoneNumber - Phone number without country code
-   * @returns Secret key for Airtel or MOOV
+   * Cached secret key for Airtel or MOOV. Accepts E.164 or national digits.
    */
   getSecretKeyForProvider(phoneNumber: string): string {
-    if (!phoneNumber) {
-      this.logger.log('No phone number provided, using Airtel secret key');
-      return this.config.airtelSecretKey;
-    }
-
-    const cleanNumber = phoneNumber.replace(/^0+/, '');
-    const prefix = cleanNumber.substring(0, 3);
-    const prefixTwo = cleanNumber.substring(0, 2);
-
-    this.logger.log(
-      `Phone number analysis: ${phoneNumber} -> ${cleanNumber} (prefix: ${prefix}, prefixTwo: ${prefixTwo})`
-    );
-
-    // MOOV prefixes
-    if (
-      prefix === '062' ||
-      prefix === '065' ||
-      prefix === '066' ||
-      prefixTwo === '62' ||
-      prefixTwo === '65' ||
-      prefixTwo === '66'
-    ) {
-      this.logger.log('Detected MOOV provider, using MOOV secret key');
+    if (resolveMypvitOperator(phoneNumber) === 'moov') {
       return this.config.moovSecretKey;
     }
-
-    // Airtel or default
-    this.logger.log(
-      'Detected Airtel provider (or default), using Airtel secret key'
-    );
     return this.config.airtelSecretKey;
   }
 
@@ -663,34 +663,9 @@ export class MyPVitService {
       }
 
       const secretValue = JSON.parse(response.SecretString);
-
-      // Determine which secret key to use based on phone number
-      if (!phoneNumber) {
-        this.logger.log('No phone number provided, using Airtel secret key');
-        return secretValue.AIRTEL_MYPVIT_SECRET_KEY || '';
-      }
-
-      const cleanNumber = phoneNumber.replace(/^0+/, '');
-      const prefix = cleanNumber.substring(0, 3);
-      const prefixTwo = cleanNumber.substring(0, 2);
-
-      // MOOV prefixes
-      if (
-        prefix === '062' ||
-        prefix === '065' ||
-        prefix === '066' ||
-        prefixTwo === '62' ||
-        prefixTwo === '65' ||
-        prefixTwo === '66'
-      ) {
-        this.logger.log('Detected MOOV provider, fetching MOOV secret key');
+      if (resolveMypvitOperator(phoneNumber) === 'moov') {
         return secretValue.MOOV_MYPVIT_SECRET_KEY || '';
       }
-
-      // Airtel or default
-      this.logger.log(
-        'Detected Airtel provider (or default), fetching Airtel secret key'
-      );
       return secretValue.AIRTEL_MYPVIT_SECRET_KEY || '';
     } catch (error: any) {
       this.logger.error(`Failed to fetch current secret key: ${error.message}`);

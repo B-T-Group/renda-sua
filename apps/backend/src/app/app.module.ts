@@ -3,12 +3,13 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { WinstonModule } from 'nest-winston';
 import { ClsModule } from 'nestjs-cls';
 import { AllExceptionsFilter } from '../common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from '../common/interceptors/logging.interceptor';
+import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
 import { AccountsController } from '../accounts/accounts.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AddressesModule } from '../addresses/addresses.module';
@@ -48,6 +49,7 @@ import { LocationsModule } from '../locations/locations.module';
 import { MessagesModule } from '../messages/messages.module';
 import { MobilePaymentsModule } from '../mobile-payments/mobile-payments.module';
 import { MobilePaymentsCoreModule } from '../mobile-payments/mobile-payments-core.module';
+import { DiasporaModule } from '../diaspora/diaspora.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { MtnMomoController } from '../mtn-momo/mtn-momo.controller';
@@ -57,6 +59,7 @@ import { OrangeMomoModule } from '../orange-momo/orange-momo.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
 import { RatingsModule } from '../ratings/ratings.module';
+import { RecipientsModule } from '../recipients/recipients.module';
 import { RentalItemImagesModule } from '../rental-item-images/rental-item-images.module';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
@@ -88,6 +91,7 @@ import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payme
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { DelegationsModule } from '../delegations/delegations.module';
+import { CatalogStopsModule } from '../catalog-stops/catalog-stops.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -116,7 +120,7 @@ import { AppService } from './app.service';
       {
         name: 'short',
         ttl: 60000,
-        limit: 100,
+        limit: parseInt(process.env.THROTTLE_SHORT_LIMIT || '100', 10),
       },
     ]),
     WinstonModule.forRootAsync({
@@ -156,6 +160,7 @@ import { AppService } from './app.service';
     UsersModule,
     OrdersModule,
     RatingsModule,
+    RecipientsModule,
     RentalsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,
@@ -180,6 +185,7 @@ import { AppService } from './app.service';
     MobilePaymentsModule,
     StripePaymentsModule,
     StripeTaxModule,
+    DiasporaModule,
     AdminModule,
     NotificationsModule,
     BrandsModule,
@@ -207,6 +213,7 @@ import { AppService } from './app.service';
     LaunchPromoModule,
     BusinessesModule,
     DelegationsModule,
+    CatalogStopsModule,
     AccountRechargeModule,
     MobilePaymentPhonesModule,
   ],
@@ -220,7 +227,7 @@ import { AppService } from './app.service';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: UserThrottlerGuard,
     },
     {
       provide: APP_FILTER,

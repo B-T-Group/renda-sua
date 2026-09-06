@@ -296,6 +296,26 @@ export interface NotificationConfig {
   orderStatusChangeEnabled: boolean;
 }
 
+/**
+ * Diaspora checkout: a payer in a Stripe country buys for a recipient in a
+ * mobile-money country. Money still lands on the platform Stripe balance and
+ * settles to the merchant from the internal ledger on agent pickup.
+ */
+export interface DiasporaConfig {
+  /** Master switch for payer-aware rail selection and the recipient block at checkout. */
+  enabled: boolean;
+  /**
+   * ISO 3166-1 alpha-2 payer countries allowed to pay by card for a
+   * mobile-money merchant. Empty means "reuse stripe.enabledCountries".
+   */
+  payerCountries: string[];
+  /**
+   * Indicative FX rates for checkout presentment only, keyed `FROM:TO`
+   * (e.g. `XAF:CAD`). Never used for settlement — see issue #178.
+   */
+  fxRates: Record<string, number>;
+}
+
 /** Client rating prompts (rate agent on completion, rate item after delay). */
 export interface RatingConfig {
   /** Days after order completion before the client is prompted to rate the item(s). */
@@ -511,6 +531,7 @@ export interface Configuration {
   imageValidation: ImageValidationConfig;
   notification: NotificationConfig;
   notificationsInternal: NotificationsInternalConfig;
+  diaspora: DiasporaConfig;
   rating: RatingConfig;
   orderOffers: OrderOffersConfig;
   deliveryAvailability: DeliveryAvailabilityConfig;
@@ -540,6 +561,20 @@ function parseImageValidationModerationProvider(
     return normalized;
   }
   return 'none';
+}
+
+/** Parses `XAF:CAD=0.00224,XAF:USD=0.00165` into a rate lookup. */
+function parseDiasporaFxRates(value: string | undefined): Record<string, number> {
+  const rates: Record<string, number> = {};
+  for (const entry of (value || '').split(',')) {
+    const [pair, rate] = entry.split('=');
+    const key = pair?.trim().toUpperCase();
+    const parsed = Number(rate);
+    if (!key || !/^[A-Z]{3}:[A-Z]{3}$/.test(key)) continue;
+    if (!Number.isFinite(parsed) || parsed <= 0) continue;
+    rates[key] = parsed;
+  }
+  return rates;
 }
 
 // Secrets are now loaded in main.ts before NestJS starts
@@ -694,7 +729,7 @@ export default (): Configuration => {
         process.env.RESEND_FROM_EMAIL || 'Rendasua <noreply@rendasua.com>',
     },
     redis: {
-      host: process.env.REDIS_HOST || 'localhost',
+      host: process.env.REDIS_HOST || (process.env.NODE_ENV === 'development' && !process.env.DEPLOYMENT_ENV ? 'localhost' : ''),
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD,
     },
@@ -852,15 +887,18 @@ export default (): Configuration => {
       managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
       testUsers: {
+        // SECURITY: Test users are ONLY enabled when explicitly set to 'true'
+        // Never enable by default in production, even if NODE_ENV is misconfigured
         enabled:
-          process.env.AUTH0_TEST_USERS_ENABLED !== undefined
-            ? process.env.AUTH0_TEST_USERS_ENABLED === 'true'
-            : process.env.NODE_ENV !== 'production',
+          process.env.AUTH0_TEST_USERS_ENABLED === 'true' &&
+          process.env.NODE_ENV !== 'production',
         emailConnection:
           process.env.AUTH0_TEST_USERS_EMAIL_CONNECTION || 'Email-Test-Users',
         phoneConnection:
           process.env.AUTH0_TEST_USERS_PHONE_CONNECTION || 'Phone-Test-Users',
-        password: process.env.AUTH0_TEST_USER_PASSWORD || 'Rendasu@21',
+        // SECURITY: Hardcoded default password removed
+        // Must be set explicitly via AUTH0_TEST_USER_PASSWORD env var
+        password: process.env.AUTH0_TEST_USER_PASSWORD || '',
         emailDomain: process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
         phoneSuffix: process.env.AUTH0_TEST_PHONE_SUFFIX || '0000',
       },
@@ -936,6 +974,14 @@ export default (): Configuration => {
     },
     notificationsInternal: {
       apiKey: process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+    },
+    diaspora: {
+      enabled: process.env.DIASPORA_CHECKOUT_ENABLED !== 'false',
+      payerCountries: (process.env.DIASPORA_PAYER_COUNTRIES || '')
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => c.length === 2),
+      fxRates: parseDiasporaFxRates(process.env.DIASPORA_FX_RATES),
     },
     rating: {
       itemRatingDelayDays: parseInt(

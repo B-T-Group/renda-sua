@@ -28,6 +28,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { resolveOrderNotificationAddress } from './order-notification-address.util';
+import { resetOrderPaymentFailure as writePaymentFailureReset } from './reset-order-payment-failure.util';
 import {
   MobilePaymentsDatabaseService,
   type MobilePaymentTransaction,
@@ -41,6 +42,15 @@ import {
   NotificationData,
   NotificationsService,
 } from '../notifications/notifications.service';
+import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import { RecipientsService } from '../recipients/recipients.service';
+import {
+  assertDiasporaPaymentTiming,
+  normalizeCountryCode,
+  resolveOrderPayer,
+  resolveOrderRecipient,
+} from '../diaspora/diaspora-order.util';
 import { PdfService } from '../pdf/pdf.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
@@ -78,12 +88,18 @@ import {
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
 import {
   resolveShopperVariant,
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
+import { isAdminTerminalStatus } from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
+import {
+  withDeliveryContact,
+  withDeliveryContactForFulfiller,
+} from './delivery-contact.util';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
@@ -99,6 +115,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
+import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
 
@@ -106,7 +123,7 @@ export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
-  cancellationReasonId?: number; // FK to order_cancellation_reasons
+  cancellationReasonId?: number; // Required by cancelOrder, optional for other operations
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -416,6 +433,9 @@ export class OrdersService {
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
+    private readonly fxEstimateService: FxEstimateService,
+    private readonly recipientsService: RecipientsService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly deliveryWindowsService: DeliveryWindowsService,
     private readonly commissionsService: CommissionsService,
@@ -821,12 +841,12 @@ export class OrdersService {
         return { ...restItem, item: restrictedItem };
       });
 
-      return {
+      return withDeliveryContactForFulfiller({
         ...restOrder,
         delivery_commission: earnings.totalEarnings,
         agent_hold_amount: agentHoldAmount,
         order_items: orderItems,
-      };
+      });
     } catch (error: any) {
       this.logger.warn(
         `Failed to transform order ${order.id} for agent: ${error.message}`
@@ -1051,11 +1071,14 @@ export class OrdersService {
       );
     }
 
-    if (window.is_confirmed) {
-      throw new HttpException(
-        'Delivery time window is already confirmed',
-        HttpStatus.BAD_REQUEST
-      );
+    if (
+      shouldReuseConfirmedDeliveryWindow({
+        windowOrderId: window.order_id,
+        requestOrderId: orderId,
+        isConfirmed: window.is_confirmed,
+      })
+    ) {
+      return window.id;
     }
 
     const now = this.getCurrentTimeInTimezone(timezone);
@@ -1463,6 +1486,10 @@ export class OrdersService {
         `Cannot complete preparation for order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
       );
+    this.assertNotCarrierShipping(
+      order,
+      'Carrier shipping orders must be marked as shipped, not set ready for pickup'
+    );
     await this.ensurePickupPinIfNeeded(order);
     await this.fulfillmentPromiseService.reanchorAsapAtReady(request.orderId);
     // Persist the dispatch gate BEFORE flipping the status: the status write
@@ -1493,18 +1520,17 @@ export class OrdersService {
   }
 
   /**
-   * Persist ready-time pickup_by and, for delivery, the agent dispatch gate.
-   * Pickup orders are never dispatched (returns null after writing pickup_by).
+   * Compute when agent dispatch/open-order visibility should open for a newly
+   * ready_for_pickup order (dispatch lead time before the scheduled delivery/
+   * pickup window) and persist it. Delivery orders only; pickup orders are
+   * never dispatched. Returns null for pickup/shipping orders or on failure.
    */
   private async scheduleAgentDispatchGate(
     order: Orders
   ): Promise<{ dispatchReadyAt: Date; pickupBy: Date | null } | null> {
+    if (this.isStorePickup(order) || this.isCarrierShipping(order)) return null;
     try {
       const schedule = await this.computeDispatchSchedule(order);
-      if ((order as any).fulfillment_method === 'pickup') {
-        await this.persistPickupBy(order.id, schedule.pickupBy);
-        return null;
-      }
       await this.persistDispatchSchedule(
         order.id,
         schedule.dispatchReadyAt,
@@ -1595,24 +1621,6 @@ export class OrdersService {
         ) { id }
       }`,
       { id: orderId }
-    );
-  }
-
-  private async persistPickupBy(
-    orderId: string,
-    pickupBy: Date | null
-  ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(
-      `mutation SetPickupBy($id: uuid!, $pickupBy: timestamptz) {
-        update_orders_by_pk(
-          pk_columns: { id: $id }
-          _set: { pickup_by: $pickupBy, updated_at: "now()" }
-        ) { id }
-      }`,
-      {
-        id: orderId,
-        pickupBy: pickupBy ? pickupBy.toISOString() : null,
-      }
     );
   }
 
@@ -1908,6 +1916,24 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Pushes the PIN to a third-party recipient's phone. A recipient who never
+   * logs in cannot open the in-app PIN screen, so the code has to reach them
+   * over SMS/WhatsApp for the existing agent handover to work.
+   */
+  private async shareDeliveryPinWithRecipient(
+    orderId: string,
+    pin: string
+  ): Promise<void> {
+    try {
+      await this.orderRecipientNotifications.notifyDeliveryPin(orderId, pin);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to send delivery PIN to recipient for order ${orderId}: ${error?.message ?? error}`
+      );
+    }
+  }
+
   /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
   private async ensurePickupPinIfNeeded(order: Orders): Promise<void> {
     if ((order as any).fulfillment_method !== 'pickup') return;
@@ -1922,6 +1948,7 @@ export class OrdersService {
     const deliveryPinHash = this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
     await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
   }
 
   /**
@@ -2105,16 +2132,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    if ((order as any).fulfillment_method === 'pickup') {
-      throw new HttpException(
-        {
-          message:
-            'This order is for customer pickup at the store and cannot be claimed for delivery.',
-          error: 'PICKUP_ORDER_NOT_CLAIMABLE',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    this.assertClaimableFulfillment(order);
 
     // Check if order requires internal agent (high-value orders)
     if (order.verified_agent_delivery && !agent.is_internal) {
@@ -2334,16 +2352,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
 
-    if ((order as any).fulfillment_method === 'pickup') {
-      throw new HttpException(
-        {
-          message:
-            'This order is for customer pickup at the store and cannot be claimed for delivery.',
-          error: 'PICKUP_ORDER_NOT_CLAIMABLE',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    this.assertClaimableFulfillment(order);
 
     // Check if order requires internal agent (high-value orders)
     if (order.verified_agent_delivery && !agent.is_internal) {
@@ -2649,6 +2658,10 @@ export class OrdersService {
         'Only the assigned agent can pick up this order',
         HttpStatus.FORBIDDEN
       );
+    this.assertNotCarrierShipping(
+      order,
+      'Carrier shipping orders cannot be picked up by delivery agents'
+    );
     if (order.current_status !== 'assigned_to_agent')
       throw new HttpException(
         `Cannot pick up order in ${order.current_status} status`,
@@ -4005,32 +4018,7 @@ export class OrdersService {
   }
 
   private async resetOrderPaymentFailure(orderId: string): Promise<void> {
-    const at = new Date().toISOString();
-    const mutation = `
-      mutation ResetPaymentFailure(
-        $orderId: uuid!
-        $paymentStatus: String!
-        $at: timestamptz!
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            payment_status: $paymentStatus
-            payment_failed_at: null
-            payment_failure_message: null
-            updated_at: $at
-          }
-        ) {
-          id
-          payment_status
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      paymentStatus: 'pending',
-      at,
-    });
+    await writePaymentFailureReset(this.hasuraSystemService, orderId);
   }
 
   private buildOrderPaymentAttemptReference(orderNumber: string): string {
@@ -4588,6 +4576,14 @@ export class OrdersService {
     request: OrderStatusChangeRequest,
     actor?: AuthorizedBusinessActor
   ) {
+    // Validate required cancellation reason
+    if (!request.cancellationReasonId) {
+      throw new HttpException(
+        'cancellationReasonId is required for order cancellation',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     if (actor) {
       await this.requireBusinessOrderAccess(
         request.orderId,
@@ -4680,7 +4676,7 @@ export class OrdersService {
           $orderId: uuid!,
           $cancelledBy: String!,
           $cancelledAt: timestamptz!,
-          $cancellationReasonId: Int,
+          $cancellationReasonId: Int!,
           $cancellationNotes: String
         ) {
           update_orders_by_pk(
@@ -4698,7 +4694,7 @@ export class OrdersService {
           orderId: request.orderId,
           cancelledBy,
           cancelledAt: new Date().toISOString(),
-          cancellationReasonId: request.cancellationReasonId ?? null,
+          cancellationReasonId: request.cancellationReasonId,
           cancellationNotes: request.notes ?? null,
         }
       );
@@ -4744,6 +4740,115 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Order cancelled successfully',
     };
+  }
+
+  async cancelOrderAsAdmin(orderId: string, notes?: string) {
+    const order = await this.requireCancellableAdminOrder(orderId);
+    const adminUserId = await this.resolveOptionalUserId();
+    await this.releaseStripeAuthorizationIfNeeded(order);
+    const updatedOrder = await this.markOrderCancelledAsSystem(orderId);
+    await this.finishAdminCancellation(order, adminUserId, notes);
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order cancelled successfully',
+    };
+  }
+
+  private async requireCancellableAdminOrder(orderId: string): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (isAdminTerminalStatus(order.current_status)) {
+      throw new HttpException(
+        `Cannot cancel order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return order;
+  }
+
+  private async resolveOptionalUserId(): Promise<string | null> {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      return user?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async markOrderCancelledAsSystem(orderId: string) {
+    return this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
+      viaCancelEndpoint: true,
+      viaSystem: true,
+    });
+  }
+
+  private async finishAdminCancellation(
+    order: Orders,
+    adminUserId: string | null,
+    notes?: string
+  ): Promise<void> {
+    await this.persistCancellationMetadata(order.id, 'system', notes);
+    if (adminUserId) {
+      await this.createStatusHistoryEntry(
+        order.id,
+        'cancelled',
+        'Order cancelled by admin',
+        'system',
+        adminUserId,
+        notes
+      );
+    }
+    await this.runOrderCancellationSideEffects(
+      order,
+      order.id,
+      order.current_status,
+      'system',
+      notes
+    );
+  }
+
+  private async persistCancellationMetadata(
+    orderId: string,
+    cancelledBy: string,
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation SetCancellationFields(
+          $orderId: uuid!,
+          $cancelledBy: String!,
+          $cancelledAt: timestamptz!,
+          $cancellationReasonId: Int,
+          $cancellationNotes: String
+        ) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId },
+            _set: {
+              cancelled_by: $cancelledBy,
+              cancelled_at: $cancelledAt,
+              cancellation_reason_id: $cancellationReasonId,
+              cancellation_notes: $cancellationNotes
+            }
+          ) { id }
+        }
+        `,
+        {
+          orderId,
+          cancelledBy,
+          cancelledAt: new Date().toISOString(),
+          cancellationReasonId: null,
+          cancellationNotes: notes ?? null,
+        }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to persist cancellation metadata: ${error.message}`
+      );
+    }
   }
 
   async getCancellationPreview(
@@ -5138,12 +5243,17 @@ export class OrdersService {
     // order_holds, and order item prices are excluded.
     const query = `
       query OpenOrders($now: timestamptz!) {
-        orders(where: {_and: [{current_status: {_eq: "ready_for_pickup"}}, {assigned_agent_id: {_is_null: true}}, {fulfillment_method: {_neq: pickup}}, {_or: [{dispatch_ready_at: {_is_null: true}}, {dispatch_ready_at: {_lte: $now}}]}]}) {
+        orders(where: {_and: [{current_status: {_eq: "ready_for_pickup"}}, {assigned_agent_id: {_is_null: true}}, {fulfillment_method: {_eq: delivery}}, {_or: [{dispatch_ready_at: {_is_null: true}}, {dispatch_ready_at: {_lte: $now}}]}]}) {
           id
           order_number
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          recipient_name
+          recipient_phone
+          is_third_party_recipient
+          is_diaspora_order
+          fulfillment_country
           business {
             name
           }
@@ -5479,6 +5589,11 @@ export class OrdersService {
           shipping_carrier
           shipped_at
           received_at
+          recipient_name
+          recipient_phone
+          is_third_party_recipient
+          is_diaspora_order
+          fulfillment_country
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -5688,6 +5803,20 @@ export class OrdersService {
           shipping_carrier
           shipped_at
           received_at
+          recipient_name
+          recipient_phone
+          recipient_email
+          recipient_notify_whatsapp
+          is_third_party_recipient
+          payer_name
+          payer_country
+          payer_payment_rail
+          fulfillment_country
+          is_diaspora_order
+          presentment_currency
+          presentment_amount
+          presentment_fx_rate
+          presentment_fx_source
           subtotal
           base_delivery_fee
           per_km_delivery_fee
@@ -5950,7 +6079,7 @@ export class OrdersService {
     }
 
     return {
-      ...orderData,
+      ...withDeliveryContact(orderData),
       access_reason: accessReason,
     };
   }
@@ -6751,36 +6880,22 @@ export class OrdersService {
         | undefined;
       if (paymentTiming !== 'pay_now') return;
       if ((order as any).payment_status === 'authorized') return;
+      if (this.isTerminalOrderForPaymentFinalize(order)) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
 
       const at = new Date().toISOString();
       const paymentIntentId = transaction.transaction_id ?? null;
-      await this.hasuraSystemService.executeMutation(
-        `
-        mutation AuthorizeOrderPayment(
-          $orderId: uuid!
-          $at: timestamptz!
-          $paymentIntentId: String
-        ) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: {
-              current_status: pending
-              payment_status: "authorized"
-              payment_authorized_at: $at
-              stripe_payment_intent_id: $paymentIntentId
-              updated_at: $at
-            }
-          ) {
-            id
-          }
-        }
-      `,
-        {
-          orderId: order.id,
-          at,
-          paymentIntentId,
-        }
-      );
+      const authorized = await this.tryAuthorizePendingOrder({
+        orderId: order.id,
+        at,
+        paymentIntentId,
+      });
+      if (!authorized) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
 
       await this.createStatusHistoryEntry(
         order.id,
@@ -6801,6 +6916,10 @@ export class OrdersService {
       );
       await this.setOrderDeliveryPinHash(orderWithDetails.id, deliveryPinHash);
       await this.deliveryPinService.setPinForClient(
+        orderWithDetails.id,
+        deliveryPin
+      );
+      await this.shareDeliveryPinWithRecipient(
         orderWithDetails.id,
         deliveryPin
       );
@@ -6835,6 +6954,11 @@ export class OrdersService {
         | 'pay_at_pickup'
         | undefined;
 
+      if (this.isTerminalOrderForPaymentFinalize(order)) {
+        await this.rejectLateStripePaymentForOrder(order);
+        return;
+      }
+
       if (
         paymentTiming === 'pay_now' &&
         (order as any).payment_status === 'paid'
@@ -6859,6 +6983,74 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  private isTerminalOrderForPaymentFinalize(order: {
+    current_status?: string;
+    payment_status?: string | null;
+  }): boolean {
+    const paymentStatus = order.payment_status;
+    return (
+      order.current_status === 'cancelled' ||
+      order.current_status === 'failed' ||
+      order.current_status === 'refunded' ||
+      paymentStatus === 'cancelled' ||
+      paymentStatus === 'refunded'
+    );
+  }
+
+  private async rejectLateStripePaymentForOrder(order: Orders): Promise<void> {
+    this.logger.warn(
+      `Ignoring late Stripe payment for ${order.current_status} order ${order.order_number}`
+    );
+    await this.stripeCaptureService.cancelOrderPaymentIntent({
+      orderNumber: order.order_number,
+      orderId: order.id,
+    });
+  }
+
+  private async tryAuthorizePendingOrder(params: {
+    orderId: string;
+    at: string;
+    paymentIntentId: string | null;
+  }): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation AuthorizeOrderPayment(
+        $orderId: uuid!
+        $at: timestamptz!
+        $paymentIntentId: String
+        $allowedStatuses: [order_status!]!
+      ) {
+        update_orders(
+          where: {
+            _and: [
+              { id: { _eq: $orderId } }
+              { current_status: { _in: $allowedStatuses } }
+            ]
+          }
+          _set: {
+            current_status: pending
+            payment_status: "authorized"
+            payment_authorized_at: $at
+            stripe_payment_intent_id: $paymentIntentId
+            updated_at: $at
+          }
+        ) {
+          affected_rows
+        }
+      }
+    `,
+      {
+        orderId: params.orderId,
+        at: params.at,
+        paymentIntentId: params.paymentIntentId,
+        allowedStatuses: ['pending_payment', 'pending'],
+      }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
   /**
@@ -7254,6 +7446,7 @@ export class OrdersService {
       this.deliveryPinService.hashPin(order.id, deliveryPin);
     await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
     await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
 
     await this.sendOrderPlacedNotifications(order, 'pending');
   }
@@ -7342,6 +7535,10 @@ export class OrdersService {
       await this.notificationsService.sendOrderCreatedNotifications(
         notificationData
       );
+      await this.orderRecipientNotifications.notifyStatusChange(
+        order.id,
+        orderStatus
+      );
     } catch (error) {
       this.logger.error(
         `Failed to send order creation notifications: ${
@@ -7359,32 +7556,12 @@ export class OrdersService {
   private async captureStripeAuthorizedOrderIfNeeded(
     order: Orders
   ): Promise<void> {
-    const paymentSource = (order as any).payment_source as string | undefined;
-    const paymentTiming = (order as any).payment_timing as string | undefined;
-    const paymentStatus = (order as any).payment_status as string | undefined;
+    if (!this.shouldCaptureAuthorizedStripeOrder(order)) return;
 
-    // Wallet / mobile / already-captured orders must never hit Stripe capture.
-    if (paymentStatus === 'paid') {
-      return;
-    }
-    if (paymentSource === 'wallet' || paymentSource === 'mobile_payment') {
-      return;
-    }
-    if (paymentSource !== 'credit_card' || paymentTiming !== 'pay_now') {
-      return;
-    }
-    if (paymentStatus !== 'authorized') {
-      return;
-    }
-
-    const isPickup = (order as any).fulfillment_method === 'pickup';
     const result = await this.stripeCaptureService.captureOrderPaymentIntent({
       orderId: order.id,
       orderNumber: order.order_number,
-      // Pickup orders may have switched from delivery with a waived delivery
-      // fee after the Stripe authorization was placed; capture only the
-      // current (possibly lower) total so Stripe releases the difference.
-      ...(isPickup ? { captureAmount: Number(order.total_amount) } : {}),
+      ...this.pickupStripeCaptureAmountFields(order),
     });
     if (!result.success) {
       throw new HttpException(
@@ -7395,6 +7572,40 @@ export class OrdersService {
     if (result.captured) {
       await this.finalizeStripeCapturedOrderPayment(order.order_number);
     }
+  }
+
+  private shouldCaptureAuthorizedStripeOrder(order: Orders): boolean {
+    const paymentSource = (order as any).payment_source as string | undefined;
+    const paymentTiming = (order as any).payment_timing as string | undefined;
+    const paymentStatus = (order as any).payment_status as string | undefined;
+    if (paymentStatus === 'paid') return false;
+    if (paymentSource === 'wallet' || paymentSource === 'mobile_payment') {
+      return false;
+    }
+    return (
+      paymentSource === 'credit_card' &&
+      paymentTiming === 'pay_now' &&
+      paymentStatus === 'authorized'
+    );
+  }
+
+  /**
+   * Partial capture only after switch-to-pickup waived the delivery fee.
+   * Native pickup must omit captureAmount so Stripe collects authorized tax.
+   */
+  private pickupStripeCaptureAmountFields(
+    order: Orders
+  ): { captureAmount?: number } {
+    const captureAmount = this.resolvePickupStripeCaptureAmount(order);
+    return captureAmount == null ? {} : { captureAmount };
+  }
+
+  private resolvePickupStripeCaptureAmount(order: Orders): number | undefined {
+    if ((order as any).fulfillment_method !== 'pickup') return undefined;
+    const currentTotal = Number(order.total_amount);
+    const originalPreTax = Number((order as any).pre_tax_total ?? currentTotal);
+    if (!(currentTotal + 0.0001 < originalPreTax)) return undefined;
+    return currentTotal;
   }
 
   private async finalizeStripeCapturedOrderPayment(
@@ -8168,6 +8379,33 @@ export class OrdersService {
   }
 
   /**
+   * Snapshot the payer after refusing a client-supplied local-country spoof.
+   */
+  private async resolveTrustedOrderPayer(
+    user: {
+      id: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      email?: string | null;
+      phone_number?: string | null;
+    },
+    requestedPayerCountry?: string | null
+  ) {
+    const profileCountry = await this.paymentRoutingService.getUserCountryCode(
+      user.id
+    );
+    const payerCountry =
+      await this.paymentRoutingService.resolveTrustedPayerCountry({
+        profileCountry,
+        requestedCountry: requestedPayerCountry,
+      });
+    return resolveOrderPayer({
+      user: { ...user, country: profileCountry },
+      requestedPayerCountry: payerCountry,
+    });
+  }
+
+  /**
    * Create a new order with validation and fund withholding
    */
   async createOrder(orderData: any): Promise<any> {
@@ -8706,6 +8944,59 @@ export class OrdersService {
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
+    const itemCountry = resolveItemCountry(
+      businessInventories[0]?.business_location?.address?.country,
+      businessInventories[0]?.business_location?.business?.user?.country
+    );
+
+    const fulfillmentCountry =
+      normalizeCountryCode(
+        fulfillmentMethod === 'pickup'
+          ? businessInventories[0]?.business_location?.address?.country
+          : address?.country
+      ) ?? normalizeCountryCode(itemCountry);
+
+    const payer = await this.resolveTrustedOrderPayer(
+      user,
+      orderData.payer_country
+    );
+    
+    // If recipient_id is provided, fetch the saved recipient and use it
+    // Fail the order if recipient is not found (no soft-fallback after inventory reserve)
+    let recipientData = orderData.recipient;
+    if (orderData.recipient_id) {
+      const ctx = this.hasuraUserService.resolveContext();
+      const savedRecipient = await this.recipientsService.getRecipient(
+        ctx,
+        orderData.recipient_id
+      );
+      recipientData = {
+        name: savedRecipient.name,
+        phone: savedRecipient.phone,
+        notify_whatsapp: savedRecipient.notify_whatsapp,
+      };
+    }
+    
+    const recipient = resolveOrderRecipient({
+      recipient: recipientData,
+      sendingToSomeoneElse: orderData.sending_to_someone_else,
+      fulfillmentCountry,
+    });
+
+    // The seller country decides the rail as it always has. A payer billing
+    // from a Stripe country may additionally fund a mobile-money merchant —
+    // that is the diaspora path, and the card still charges the platform.
+    const railResolution = await this.paymentRoutingService.resolveOrderRail({
+      sellerCountry: itemCountry ?? undefined,
+      payerCountry: payer.payer_country,
+    });
+    // Checked before the phone and wallet rules below, which all assume a
+    // payer who is standing in the fulfillment market.
+    assertDiasporaPaymentTiming({
+      isDiaspora: railResolution.isDiaspora,
+      paymentTiming,
+    });
+
     if (
       (paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup') &&
@@ -8724,10 +9015,6 @@ export class OrdersService {
       );
     }
 
-    const itemCountry = resolveItemCountry(
-      businessInventories[0]?.business_location?.address?.country,
-      businessInventories[0]?.business_location?.business?.user?.country
-    );
     const provider = this.mobilePaymentsService.getProviderForCountry(itemCountry);
 
     if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
@@ -8742,10 +9029,7 @@ export class OrdersService {
       !isZeroOrNegativeOrder &&
       availableBalance >= requiredAmountForHold;
 
-    // Resolve the payment rail from the item location country, not the owner user.
-    const paymentRail = await this.paymentRoutingService.resolveRailForCountry(
-      itemCountry ?? undefined
-    );
+    const paymentRail = railResolution.rail;
     const useStripeRail =
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
@@ -8808,6 +9092,20 @@ export class OrdersService {
     const verified_agent_delivery = !!orderData.verified_agent_delivery;
     const requires_fast_delivery =
       fulfillmentMethod === 'pickup' ? false : !!orderData.requires_fast_delivery;
+    const payer_payment_rail =
+      payment_source === 'credit_card'
+        ? 'stripe'
+        : payment_source === 'wallet'
+          ? 'wallet'
+          : 'mobile_money';
+    // Display-only conversion for the payer; settlement stays in `currency`.
+    const fxEstimate = railResolution.isDiaspora
+      ? this.fxEstimateService.estimate({
+          amount: total_amount,
+          merchantCurrency: currency,
+          payerCountry: payer.payer_country,
+        })
+      : null;
 
     // Create order with all related data in a transaction
     const createOrderMutation = `
@@ -8843,7 +9141,23 @@ export class OrdersService {
         $verifiedAgentDelivery: Boolean!,
         $requiresFastDelivery: Boolean!,
         $firstOrderDeliveryFeePromo: Boolean!,
-        $firstOrderBaseDeliveryDiscountAmount: numeric!
+        $firstOrderBaseDeliveryDiscountAmount: numeric!,
+        $recipientName: String,
+        $recipientPhone: String,
+        $recipientEmail: String,
+        $recipientNotifyWhatsapp: Boolean!,
+        $isThirdPartyRecipient: Boolean!,
+        $payerName: String,
+        $payerPhone: String,
+        $payerEmail: String,
+        $payerCountry: String,
+        $payerPaymentRail: String,
+        $fulfillmentCountry: String,
+        $isDiasporaOrder: Boolean!,
+        $presentmentCurrency: String,
+        $presentmentAmount: numeric,
+        $presentmentFxRate: numeric,
+        $presentmentFxSource: String
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -8877,6 +9191,22 @@ export class OrdersService {
           requires_fast_delivery: $requiresFastDelivery,
           first_order_delivery_fee_promo: $firstOrderDeliveryFeePromo,
           first_order_base_delivery_discount_amount: $firstOrderBaseDeliveryDiscountAmount,
+          recipient_name: $recipientName,
+          recipient_phone: $recipientPhone,
+          recipient_email: $recipientEmail,
+          recipient_notify_whatsapp: $recipientNotifyWhatsapp,
+          is_third_party_recipient: $isThirdPartyRecipient,
+          payer_name: $payerName,
+          payer_phone: $payerPhone,
+          payer_email: $payerEmail,
+          payer_country: $payerCountry,
+          payer_payment_rail: $payerPaymentRail,
+          fulfillment_country: $fulfillmentCountry,
+          is_diaspora_order: $isDiasporaOrder,
+          presentment_currency: $presentmentCurrency,
+          presentment_amount: $presentmentAmount,
+          presentment_fx_rate: $presentmentFxRate,
+          presentment_fx_source: $presentmentFxSource,
           order_items: {
             data: $orderItems
           }
@@ -8913,6 +9243,20 @@ export class OrdersService {
           requires_fast_delivery
           first_order_delivery_fee_promo
           first_order_base_delivery_discount_amount
+          recipient_name
+          recipient_phone
+          recipient_email
+          recipient_notify_whatsapp
+          is_third_party_recipient
+          payer_name
+          payer_country
+          payer_payment_rail
+          fulfillment_country
+          is_diaspora_order
+          presentment_currency
+          presentment_amount
+          presentment_fx_rate
+          presentment_fx_source
           order_items {
             id
             business_inventory_id
@@ -9001,6 +9345,22 @@ export class OrdersService {
         firstOrderDeliveryFeePromo: deliveryFeeInfo.firstOrderDeliveryFeePromo,
         firstOrderBaseDeliveryDiscountAmount:
           deliveryFeeInfo.firstOrderBaseDeliveryDiscountAmount,
+        recipientName: recipient.recipient_name,
+        recipientPhone: recipient.recipient_phone,
+        recipientEmail: recipient.recipient_email,
+        recipientNotifyWhatsapp: recipient.recipient_notify_whatsapp,
+        isThirdPartyRecipient: recipient.is_third_party_recipient,
+        payerName: payer.payer_name,
+        payerPhone: payer.payer_phone,
+        payerEmail: payer.payer_email,
+        payerCountry: payer.payer_country,
+        payerPaymentRail: payer_payment_rail,
+        fulfillmentCountry: fulfillmentCountry,
+        isDiasporaOrder: railResolution.isDiaspora,
+        presentmentCurrency: fxEstimate?.currency ?? null,
+        presentmentAmount: fxEstimate?.amount ?? null,
+        presentmentFxRate: fxEstimate?.rate ?? null,
+        presentmentFxSource: fxEstimate?.source ?? null,
       }
     );
 
@@ -9011,7 +9371,8 @@ export class OrdersService {
     } catch (error: any) {
       await this.compensateUnpaidCreate(
         order.id,
-        'Create failed: inventory reservation error'
+        'Create failed: inventory reservation error',
+        { releaseInventory: false, allowPendingUnpaid: true }
       );
       throw error;
     }
@@ -9409,14 +9770,15 @@ export class OrdersService {
 
   private async compensateUnpaidCreate(
     orderId: string,
-    notes: string
+    notes: string,
+    options?: { releaseInventory?: boolean; allowPendingUnpaid?: boolean }
   ): Promise<void> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       return;
     }
     const paymentStatus = String((order as any).payment_status || '').toLowerCase();
-    if (order.current_status !== 'pending_payment' || paymentStatus === 'paid') {
+    if (!this.canCompensateUnpaidCreate(order, paymentStatus, options)) {
       this.logger.warn(
         `Skipping create compensation for ${order.order_number}: status=${order.current_status} payment_status=${paymentStatus}`
       );
@@ -9433,13 +9795,33 @@ export class OrdersService {
     try {
       await this.orderCleanupService.cancelUnpaidPendingPaymentAsSystem(
         orderId,
-        notes
+        notes,
+        {
+          allowPendingUnpaid: options?.allowPendingUnpaid === true,
+          releaseInventory: options?.releaseInventory !== false,
+        }
       );
     } catch (error: any) {
       this.logger.error(
         `System cancel during create compensation failed for ${orderId}: ${error?.message}`
       );
     }
+  }
+
+  private canCompensateUnpaidCreate(
+    order: { current_status: string },
+    paymentStatus: string,
+    options?: { allowPendingUnpaid?: boolean }
+  ): boolean {
+    if (paymentStatus === 'paid') {
+      return false;
+    }
+    if (order.current_status === 'pending_payment') {
+      return true;
+    }
+    return (
+      options?.allowPendingUnpaid === true && order.current_status === 'pending'
+    );
   }
 
   private async releaseWalletHoldsForPendingPaymentOrder(
@@ -11141,26 +11523,11 @@ export class OrdersService {
         error
       );
 
-      const isCfaMarket = ['CM', 'GA', 'TG', 'BJ', 'CI', 'CG'].includes(
-        countryCode
-      );
-      // Fallback to hardcoded CFA values if configuration lookup fails
-      const fallbackConfig = {
-        baseFee: requiresFastDelivery ? 1500 : 1000,
-        ratePerKm: isCfaMarket ? 100 : 200,
-        maxPerKmFee: isCfaMarket ? 1500 : 0,
-        minFee: 1000,
-      };
-      const perKmCalculated = distanceKm * fallbackConfig.ratePerKm;
-      const perKmFee = Math.min(fallbackConfig.maxPerKmFee, perKmCalculated);
-      const calculatedFee = fallbackConfig.baseFee + perKmFee;
-      const totalFee = Math.max(fallbackConfig.minFee, calculatedFee);
-
-      return {
-        baseFee: fallbackConfig.baseFee,
-        perKmFee,
-        totalFee,
-      };
+      return calculateDeliveryFeeFallback({
+        distanceKm,
+        countryCode,
+        requiresFastDelivery,
+      });
     }
   }
 
@@ -11224,55 +11591,115 @@ export class OrdersService {
     const validItems = orderItems.filter(
       (item) => item.business_inventory_id && item.quantity
     );
-
     if (validItems.length === 0) {
       this.logger.warn('No valid items to update reserved quantities for');
       return;
     }
-
-    const invalidItems = orderItems.filter(
-      (item) => !item.business_inventory_id || !item.quantity
-    );
-    if (invalidItems.length > 0) {
+    const skipped = orderItems.length - validItems.length;
+    if (skipped > 0) {
       this.logger.warn(
-        `Skipping ${invalidItems.length} items with missing reserved-quantity data`
+        `Skipping ${skipped} items with missing reserved-quantity data`
       );
     }
-
     const quantityChanges = this.getRequestedQuantitiesByInventory(validItems);
-    const fn =
-      operation === 'increment'
-        ? 'try_reserve_business_inventory'
-        : 'try_release_business_inventory';
+    if (operation === 'increment') {
+      await this.reserveInventoryAtomically(quantityChanges);
+      return;
+    }
+    await this.applyAtomicInventoryMap(
+      'try_release_business_inventory',
+      quantityChanges,
+      'decrement'
+    );
+  }
 
-    for (const [inventoryId, quantity] of quantityChanges) {
-      const result = await this.hasuraSystemService.executeMutation<{
-        [key: string]: Array<{ id: string }>;
-      }>(
-        `mutation AtomicReserve($inventoryId: uuid!, $qty: Int!) {
-          ${fn}(args: { p_inventory_id: $inventoryId, p_qty: $qty }) {
-            id
-          }
-        }`,
-        { inventoryId, qty: quantity }
-      );
-      if (!result[fn]?.length) {
-        throw new HttpException(
-          {
-            success: false,
-            message:
-              operation === 'increment'
-                ? 'Insufficient stock to reserve for this order'
-                : 'Could not release reserved inventory',
-            error: 'INVENTORY_RESERVATION_FAILED',
-          },
-          HttpStatus.BAD_REQUEST
+  private async reserveInventoryAtomically(
+    quantityChanges: Map<string, number>
+  ): Promise<void> {
+    const reserved: Array<[string, number]> = [];
+    try {
+      for (const [inventoryId, quantity] of quantityChanges) {
+        await this.applyAtomicInventoryChange(
+          'try_reserve_business_inventory',
+          inventoryId,
+          quantity,
+          'increment'
+        );
+        reserved.push([inventoryId, quantity]);
+      }
+    } catch (error: any) {
+      await this.releaseReservedAfterPartialFailure(reserved);
+      throw error;
+    }
+  }
+
+  private async releaseReservedAfterPartialFailure(
+    reserved: Array<[string, number]>
+  ): Promise<void> {
+    for (const [inventoryId, quantity] of reserved) {
+      try {
+        await this.applyAtomicInventoryChange(
+          'try_release_business_inventory',
+          inventoryId,
+          quantity,
+          'decrement'
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to roll back reserve for ${inventoryId}: ${error?.message}`
         );
       }
-      this.logger.log(
-        `${operation === 'increment' ? 'Reserved' : 'Released'} ${quantity} for inventory ${inventoryId}`
-      );
     }
+  }
+
+  private async applyAtomicInventoryMap(
+    fn: string,
+    quantityChanges: Map<string, number>,
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
+    for (const [inventoryId, quantity] of quantityChanges) {
+      await this.applyAtomicInventoryChange(fn, inventoryId, quantity, operation);
+    }
+  }
+
+  private async applyAtomicInventoryChange(
+    fn: string,
+    inventoryId: string,
+    quantity: number,
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      [key: string]: Array<{ id: string }>;
+    }>(
+      `mutation AtomicReserve($inventoryId: uuid!, $qty: Int!) {
+        ${fn}(args: { p_inventory_id: $inventoryId, p_qty: $qty }) {
+          id
+        }
+      }`,
+      { inventoryId, qty: quantity }
+    );
+    if (!result[fn]?.length) {
+      throw this.reservationFailure(operation);
+    }
+    this.logger.log(
+      `${operation === 'increment' ? 'Reserved' : 'Released'} ${quantity} for inventory ${inventoryId}`
+    );
+  }
+
+  private reservationFailure(
+    operation: 'increment' | 'decrement'
+  ): HttpException {
+    return new HttpException(
+      {
+        success: false,
+        message:
+          operation === 'increment'
+            ? 'Insufficient stock to reserve for this order'
+            : 'Could not release reserved inventory',
+        error: 'INVENTORY_RESERVATION_FAILED',
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   /**
@@ -11367,6 +11794,36 @@ export class OrdersService {
     });
   }
 
+  private isCarrierShipping(order: any): boolean {
+    return order?.fulfillment_method === 'shipping';
+  }
+
+  private isStorePickup(order: any): boolean {
+    return order?.fulfillment_method === 'pickup';
+  }
+
+  private assertNotCarrierShipping(order: any, message: string): void {
+    if (this.isCarrierShipping(order)) {
+      throw new HttpException(message, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  private assertClaimableFulfillment(order: any): void {
+    if (!this.isStorePickup(order) && !this.isCarrierShipping(order)) return;
+    const shipping = this.isCarrierShipping(order);
+    throw new HttpException(
+      {
+        message: shipping
+          ? 'This order ships by carrier and cannot be claimed for delivery.'
+          : 'This order is for customer pickup at the store and cannot be claimed for delivery.',
+        error: shipping
+          ? 'SHIPPING_ORDER_NOT_CLAIMABLE'
+          : 'PICKUP_ORDER_NOT_CLAIMABLE',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
   private assertShippingFulfillment(order: any, message: string): void {
     if (order.fulfillment_method !== 'shipping') {
       throw new HttpException(message, HttpStatus.BAD_REQUEST);
@@ -11399,7 +11856,12 @@ export class OrdersService {
       'Only shipping orders can be marked as shipped'
     );
 
-    const validStatuses = ['confirmed', 'preparing', 'awaiting_shipment'];
+    const validStatuses = [
+      'confirmed',
+      'preparing',
+      'awaiting_shipment',
+      'ready_for_pickup',
+    ];
     if (!validStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Order must be in ${validStatuses.join(' or ')} status to mark as shipped`,
