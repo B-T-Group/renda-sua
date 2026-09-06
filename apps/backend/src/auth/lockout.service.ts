@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, RedisClientType } from 'redis';
 import { Configuration } from '../config/configuration';
+import { redisCommandOrFallback } from '../common/redis-error.util';
 
 interface LockoutEntry {
   attempts: number;
@@ -17,257 +18,241 @@ interface LockoutEntry {
 export class LockoutService implements OnModuleDestroy {
   private readonly logger = new Logger(LockoutService.name);
   private redisClient: RedisClientType | null = null;
+  private redisUnhealthy = false;
   private readonly inMemoryStore = new Map<string, LockoutEntry>();
-  
+  private readonly cleanupTimer: NodeJS.Timeout;
+
   private readonly MAX_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
   private readonly ATTEMPT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-  private readonly LOCKOUT_TTL_SECONDS = Math.ceil((this.ATTEMPT_WINDOW_MS) / 1000); // 1 hour TTL for attempt tracking
-  
+  private readonly LOCKOUT_TTL_SECONDS = Math.ceil(this.ATTEMPT_WINDOW_MS / 1000);
+
   constructor(private readonly configService: ConfigService<Configuration>) {
     this.initializeRedis().catch((err) =>
       this.logger.warn('Redis unavailable for lockout service, using in-memory store', err)
     );
-    
-    // Clean up expired in-memory entries every 5 minutes
-    setInterval(() => this.cleanupInMemory(), 5 * 60 * 1000);
+    this.cleanupTimer = setInterval(() => this.cleanupInMemory(), 5 * 60 * 1000);
+    this.cleanupTimer.unref();
+  }
+
+  private isProduction(): boolean {
+    return (process.env.NODE_ENV || 'development') === 'production';
+  }
+
+  private canUseRedis(): boolean {
+    return !this.redisUnhealthy && Boolean(this.redisClient?.isReady);
+  }
+
+  private markRedisUnhealthy(error: unknown): void {
+    if (!this.isProduction()) this.redisUnhealthy = true;
+    const err = error as { message?: string; name?: string };
+    this.logger.warn(
+      `Redis lockout command failed: ${err?.message || err?.name || 'unknown'}`
+    );
+  }
+
+  private withStore<T>(
+    redisOp: () => Promise<T>,
+    fallbackOp: () => T | Promise<T>
+  ): Promise<T> {
+    return redisCommandOrFallback({
+      canUseRedis: this.canUseRedis(),
+      failClosed: this.isProduction(),
+      redisOp,
+      fallbackOp,
+      onError: (error) => this.markRedisUnhealthy(error),
+    });
   }
 
   private async initializeRedis() {
     const redis = this.configService.get('redis');
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    
     if (!redis?.host) {
-      if (nodeEnv === 'production') {
-        throw new Error(
-          'Redis is required in production for lockout service. In-memory fallback is disabled in prod.'
-        );
-      }
-      this.logger.log('Redis not configured, using in-memory lockout store (dev only)');
+      this.assertRedisConfigured();
       return;
     }
+    await this.connectRedis(redis);
+  }
 
+  private assertRedisConfigured(): void {
+    if (this.isProduction()) {
+      throw new Error(
+        'Redis is required in production for lockout service. In-memory fallback is disabled in prod.'
+      );
+    }
+    this.logger.log('Redis not configured, using in-memory lockout store (dev only)');
+  }
+
+  private async connectRedis(redis: {
+    host: string;
+    port: number;
+    password?: string;
+  }): Promise<void> {
     try {
-      this.redisClient = createClient({
-        socket: {
-          host: redis.host,
-          port: redis.port,
-        },
-        password: redis.password,
-      });
-
-      this.redisClient.on('error', (err: any) => {
-        this.logger.error(
-          `Redis client error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
-        );
-        if (nodeEnv === 'production') {
-          throw new Error('Redis connection failed in production');
-        }
-      });
-
+      this.redisClient = this.createRedisClient(redis);
+      this.redisClient.on('error', (err: any) => this.onRedisError(err, redis));
       await this.redisClient.connect();
       this.logger.log(`Redis lockout service connected (${redis.host}:${redis.port})`);
     } catch (error: any) {
-      if (nodeEnv === 'production') {
-        throw new Error(`Redis connection failed in production: ${error.message}`);
-      }
-      this.logger.warn(
-        'Failed to connect to Redis for lockout service, using in-memory store (dev only):',
-        error.message
-      );
-      this.redisClient = null;
+      this.handleConnectFailure(error);
     }
   }
 
+  private createRedisClient(redis: {
+    host: string;
+    port: number;
+    password?: string;
+  }): RedisClientType {
+    return createClient({
+      socket: { host: redis.host, port: redis.port, connectTimeout: 5000 },
+      password: redis.password,
+    });
+  }
+
+  private onRedisError(
+    err: any,
+    redis: { host: string; port: number }
+  ): void {
+    this.logger.error(
+      `Redis client error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
+    );
+    if (this.isProduction()) {
+      throw new Error('Redis connection failed in production');
+    }
+  }
+
+  private handleConnectFailure(error: any): void {
+    if (this.isProduction()) {
+      throw new Error(`Redis connection failed in production: ${error.message}`);
+    }
+    this.logger.warn(
+      'Failed to connect to Redis for lockout service, using in-memory store (dev only):',
+      error.message
+    );
+    this.redisClient = null;
+  }
+
   async onModuleDestroy() {
+    clearInterval(this.cleanupTimer);
     if (this.redisClient) {
       await this.redisClient.quit().catch(() => {});
     }
   }
 
-  /**
-   * Check if identifier is currently locked out
-   */
   async isLockedOut(identifier: string): Promise<boolean> {
     const key = this.normalizeKey(identifier);
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    
-    if (this.redisClient?.isOpen) {
-      const data = await this.redisClient.get(`lockout:${key}`);
-      if (!data) return false;
-      
-      try {
-        const entry: LockoutEntry = JSON.parse(data);
-        if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
-          return true;
-        }
-        // Expired, clean up
-        await this.redisClient.del(`lockout:${key}`);
-        return false;
-      } catch {
-        return false;
-      }
-    } else {
-      // SECURITY: In production, fail closed if Redis is unavailable
-      if (nodeEnv === 'production') {
-        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
-        throw new Error('Lockout service unavailable');
-      }
-      
-      // Development: fall back to in-memory
-      const entry = this.inMemoryStore.get(key);
-      if (!entry) return false;
-      
-      if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
-        return true;
-      }
-      
-      // Lockout expired, clean up
-      if (entry.lockedUntil) {
-        this.inMemoryStore.delete(key);
-      }
-      
-      return false;
+    return this.withStore(
+      () => this.lockedOutFromRedis(key),
+      () => this.lockedOutFromMemory(key)
+    );
+  }
+
+  private async lockedOutFromRedis(key: string): Promise<boolean> {
+    const data = await this.redisClient!.get(`lockout:${key}`);
+    if (!data) return false;
+    return this.entryIsLocked(this.parseEntry(data), async () => {
+      await this.redisClient!.del(`lockout:${key}`);
+    });
+  }
+
+  private lockedOutFromMemory(key: string): boolean {
+    const entry = this.inMemoryStore.get(key);
+    if (!entry) return false;
+    return this.entryIsLocked(entry, () => {
+      this.inMemoryStore.delete(key);
+    });
+  }
+
+  private entryIsLocked(
+    entry: LockoutEntry | null,
+    onExpired: () => void | Promise<void>
+  ): boolean {
+    if (!entry?.lockedUntil) return false;
+    if (Date.now() < entry.lockedUntil) return true;
+    void onExpired();
+    return false;
+  }
+
+  private parseEntry(data: string): LockoutEntry | null {
+    try {
+      return JSON.parse(data) as LockoutEntry;
+    } catch {
+      return null;
     }
   }
 
-  /**
-   * Record a failed attempt
-   */
   async recordFailure(identifier: string): Promise<void> {
     const key = this.normalizeKey(identifier);
-    const now = Date.now();
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    
-    if (this.redisClient?.isOpen) {
-      const data = await this.redisClient.get(`lockout:${key}`);
-      const entry: LockoutEntry = data ? JSON.parse(data) : { attempts: 0 };
-      
-      entry.attempts += 1;
-      
-      if (entry.attempts >= this.MAX_ATTEMPTS) {
-        entry.lockedUntil = now + this.LOCKOUT_DURATION_MS;
-        this.logger.warn(`Identifier locked out: ${key} (${entry.attempts} attempts)`);
-      }
-      
-      await this.redisClient.setEx(
-        `lockout:${key}`,
-        this.LOCKOUT_TTL_SECONDS,
-        JSON.stringify(entry)
-      );
-    } else {
-      // SECURITY: In production, fail closed if Redis is unavailable
-      if (nodeEnv === 'production') {
-        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
-        throw new Error('Lockout service unavailable');
-      }
-      
-      // Development: fall back to in-memory
-      const entry = this.inMemoryStore.get(key) || { attempts: 0 };
-      
-      entry.attempts += 1;
-      
-      if (entry.attempts >= this.MAX_ATTEMPTS) {
-        entry.lockedUntil = now + this.LOCKOUT_DURATION_MS;
-        this.logger.warn(`Identifier locked out: ${key} (${entry.attempts} attempts)`);
-      }
-      
-      this.inMemoryStore.set(key, entry);
-      
-      // Schedule cleanup of this entry after attempt window
-      setTimeout(() => {
-        const current = this.inMemoryStore.get(key);
-        if (current && !current.lockedUntil) {
-          this.inMemoryStore.delete(key);
-        }
-      }, this.ATTEMPT_WINDOW_MS);
-    }
+    await this.withStore(
+      () => this.recordFailureRedis(key),
+      () => this.recordFailureMemory(key)
+    );
   }
 
-  /**
-   * Record a successful attempt (clears lockout)
-   */
+  private async recordFailureRedis(key: string): Promise<void> {
+    const data = await this.redisClient!.get(`lockout:${key}`);
+    const existing = data ? this.parseEntry(data) : null;
+    const entry = this.incrementAttempts(existing || { attempts: 0 });
+    await this.redisClient!.setEx(
+      `lockout:${key}`,
+      this.LOCKOUT_TTL_SECONDS,
+      JSON.stringify(entry)
+    );
+  }
+
+  private recordFailureMemory(key: string): void {
+    const entry = this.incrementAttempts(
+      this.inMemoryStore.get(key) || { attempts: 0 }
+    );
+    this.inMemoryStore.set(key, entry);
+    setTimeout(() => this.expireMemoryIfUnlocked(key), this.ATTEMPT_WINDOW_MS);
+  }
+
+  private incrementAttempts(entry: LockoutEntry): LockoutEntry {
+    entry.attempts += 1;
+    if (entry.attempts >= this.MAX_ATTEMPTS) {
+      entry.lockedUntil = Date.now() + this.LOCKOUT_DURATION_MS;
+      this.logger.warn(`Identifier locked out after ${entry.attempts} attempts`);
+    }
+    return entry;
+  }
+
+  private expireMemoryIfUnlocked(key: string): void {
+    const current = this.inMemoryStore.get(key);
+    if (current && !current.lockedUntil) this.inMemoryStore.delete(key);
+  }
+
   async recordSuccess(identifier: string): Promise<void> {
     const key = this.normalizeKey(identifier);
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    
-    if (this.redisClient?.isOpen) {
-      await this.redisClient.del(`lockout:${key}`);
-    } else {
-      // SECURITY: In production, fail closed if Redis is unavailable
-      if (nodeEnv === 'production') {
-        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
-        throw new Error('Lockout service unavailable');
+    await this.withStore(
+      async () => {
+        await this.redisClient!.del(`lockout:${key}`);
+      },
+      () => {
+        this.inMemoryStore.delete(key);
       }
-      
-      // Development: fall back to in-memory
-      this.inMemoryStore.delete(key);
-    }
+    );
   }
 
-  /**
-   * Get remaining lockout time in ms (0 if not locked)
-   */
   async getRemainingLockoutMs(identifier: string): Promise<number> {
     const key = this.normalizeKey(identifier);
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    
-    if (this.redisClient?.isOpen) {
-      const data = await this.redisClient.get(`lockout:${key}`);
-      if (!data) return 0;
-      
-      try {
-        const entry: LockoutEntry = JSON.parse(data);
-        if (!entry.lockedUntil) return 0;
-        
-        const remaining = entry.lockedUntil - Date.now();
-        return Math.max(0, remaining);
-      } catch {
-        return 0;
-      }
-    } else {
-      // SECURITY: In production, fail closed if Redis is unavailable
-      if (nodeEnv === 'production') {
-        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
-        throw new Error('Lockout service unavailable');
-      }
-      
-      // Development: fall back to in-memory
-      const entry = this.inMemoryStore.get(key);
-      if (!entry?.lockedUntil) return 0;
-      
-      const remaining = entry.lockedUntil - Date.now();
-      return Math.max(0, remaining);
-    }
+    return this.withStore(
+      () => this.remainingMsFromRedis(key),
+      () => this.remainingMsFromMemory(key)
+    );
   }
 
-  /**
-   * Get current attempt count
-   */
-  async getAttemptCount(identifier: string): Promise<number> {
-    const key = this.normalizeKey(identifier);
-    const nodeEnv = process.env.NODE_ENV || 'development';
-    
-    if (this.redisClient?.isOpen) {
-      const data = await this.redisClient.get(`lockout:${key}`);
-      if (!data) return 0;
-      
-      try {
-        const entry: LockoutEntry = JSON.parse(data);
-        return entry.attempts || 0;
-      } catch {
-        return 0;
-      }
-    } else {
-      // SECURITY: In production, fail closed if Redis is unavailable
-      if (nodeEnv === 'production') {
-        this.logger.error(`Lockout service Redis unavailable in production for ${key}`);
-        throw new Error('Lockout service unavailable');
-      }
-      
-      // Development: fall back to in-memory
-      return this.inMemoryStore.get(key)?.attempts || 0;
-    }
+  private async remainingMsFromRedis(key: string): Promise<number> {
+    const data = await this.redisClient!.get(`lockout:${key}`);
+    return data ? this.remainingMs(this.parseEntry(data)) : 0;
+  }
+
+  private remainingMsFromMemory(key: string): number {
+    return this.remainingMs(this.inMemoryStore.get(key) || null);
+  }
+
+  private remainingMs(entry: LockoutEntry | null): number {
+    if (!entry?.lockedUntil) return 0;
+    return Math.max(0, entry.lockedUntil - Date.now());
   }
 
   private normalizeKey(identifier: string): string {
@@ -277,14 +262,12 @@ export class LockoutService implements OnModuleDestroy {
   private cleanupInMemory(): void {
     const now = Date.now();
     let cleaned = 0;
-    
     for (const [key, entry] of this.inMemoryStore.entries()) {
       if (entry.lockedUntil && entry.lockedUntil < now) {
         this.inMemoryStore.delete(key);
         cleaned++;
       }
     }
-    
     if (cleaned > 0) {
       this.logger.debug(`Cleaned up ${cleaned} expired in-memory lockout entries`);
     }

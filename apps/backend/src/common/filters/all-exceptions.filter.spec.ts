@@ -145,6 +145,25 @@ describe('AllExceptionsFilter', () => {
     });
   });
 
+  it('maps Redis AbortSignal timeout errors to 503', () => {
+    (Sentry.getClient as jest.Mock).mockReturnValue({});
+    const exception = new Error();
+    exception.stack = [
+      'Error',
+      '    at AbortSignal.? (node_modules/redis/node_modules/@redis/client/lib/client/commands-queue.ts:298:13)',
+    ].join('\n');
+
+    filter.catch(exception, host);
+
+    expect(response.status).toHaveBeenCalledWith(503);
+    expect(response.json).toHaveBeenCalledWith({
+      success: false,
+      statusCode: 503,
+      message: 'Temporarily unable to complete this request',
+    });
+    expect(Sentry.captureException).toHaveBeenCalledWith(exception);
+  });
+
   it('remaps controller-wrapped Hasura 503s from 500 to 503', () => {
     (Sentry.getClient as jest.Mock).mockReturnValue({});
     const exception = new HttpException(
