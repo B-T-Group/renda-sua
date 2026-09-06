@@ -11,6 +11,7 @@ import { ApiOperation, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nest
 import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import type {
   GetInventoryItemsQuery,
   InventoryItem,
@@ -58,7 +59,8 @@ interface GetInventorySearchSuggestionsQueryParams
 export class InventoryItemsController {
   constructor(
     private readonly inventoryItemsService: InventoryItemsService,
-    private readonly catalogCacheService: CatalogCacheService
+    private readonly catalogCacheService: CatalogCacheService,
+    private readonly hasuraUserService: HasuraUserService
   ) {}
 
   @Public()
@@ -597,10 +599,20 @@ export class InventoryItemsController {
       const requestedLimit = processedQuery.limit || 20;
       const clampedLimit = Math.min(Math.max(requestedLimit, 1), 50);
       const hasOrigin = Number.isFinite(oLat) && Number.isFinite(oLng);
+      
+      let isAuthenticated = false;
+      try {
+        const userId = this.hasuraUserService.getUserId();
+        isAuthenticated = Boolean(userId && userId !== 'anonymous');
+      } catch {
+        isAuthenticated = false;
+      }
+      
       const isCacheable =
         !processedQuery.owner_preview &&
         !processedQuery.business_id &&
-        !hasOrigin;
+        !hasOrigin &&
+        !isAuthenticated;
 
       if (isCacheable) {
         const generation = await this.catalogCacheService.getGeneration('global');
