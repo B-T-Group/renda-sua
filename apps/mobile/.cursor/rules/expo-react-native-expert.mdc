@@ -1,0 +1,49 @@
+---
+description: JavaScript/React Native/Expo expert defaults—style, naming, performance, UI, and platform practices for this mobile app
+alwaysApply: true
+---
+
+# Expo + React Native expert practices
+
+Use these conventions together with `mobile-project.mdc` and `react-native-paper.mdc`. This app is **Expo SDK 55**, **TypeScript strict**, **MobX**, **Apollo GraphQL**, and **React Navigation v7** (see `navigation/`), not Expo Router.
+
+## Code style and structure
+
+- **Readable code**: Prefer clear names (`isFetchingData`, `handleSubmit`) over abbreviations; keep control flow easy to follow.
+- **Functional components**: Use function components and hooks (`useState`, `useEffect`, custom hooks in `src/hooks/`). Do not add class components.
+- **Single responsibility**: Split large UI into smaller, reusable pieces; extract hooks when logic grows (see size targets in `mobile-project.mdc`).
+- **Feature-oriented layout**: When adding substantial features, group related screens, components, hooks, and types under a feature folder (e.g. `screens/client/`, `components/browse/`) instead of dumping unrelated files at the root of `src/`.
+
+## Naming conventions
+
+- **Variables and functions**: `camelCase` (e.g. `isFetchingData`, `handleUserInput`).
+- **Components**: `PascalCase` (e.g. `UserProfile`, `ChatScreen`).
+- **Directories**: `kebab-case` or lowercase segments (e.g. `user-profile`, `chat-screen`) consistent with existing folders.
+
+## TypeScript and JavaScript
+
+- **No globals**: Avoid module-level mutable singletons for app state; use stores, context, or hooks as already defined in this project.
+- **Modern syntax**: Prefer arrow functions, destructuring, template literals, and optional chaining where it improves clarity.
+- **Types, not PropTypes**: Use TypeScript interfaces/types and exported types from `src/types/`; do not introduce `prop-types` for new code.
+
+## Performance
+
+- **State**: Avoid redundant state; derive values with `useMemo` / MobX `computed` when appropriate; do not mirror props into state without a clear reason.
+- **Memoization**: Use `React.memo` for expensive leaf components when profiling or when props are stable; pair with stable callbacks from parents.
+- **Lists**: For long lists use `FlatList` (or `SectionList`) with sensible defaults: tune `windowSize`, `maxToRenderPerBatch`, `removeClippedSubviews` (where safe on target platforms), and `keyExtractor`. Prefer **stable** `renderItem` / handlers (`useCallback` or top-level functions) instead of inline lambdas that recreate every render when it causes measurable churn.
+- **Threading**: Keep heavy work off the JS thread (batch updates, avoid huge synchronous work in render); use async boundaries in services/stores.
+
+## UI and styling
+
+- **Consistency**: Use `StyleSheet.create` and **theme tokens** from `src/theme/`; prefer `react-native-paper` primitives for chrome (see `react-native-paper.mdc`).
+- **Responsive layout**: Account for safe areas, small/large screens, and orientation via flex layouts, `useWindowDimensions`, and Paper theming—not ad-hoc magic numbers. Do not add libraries like `react-native-responsive-screen` unless the team explicitly adopts them.
+- **Images**: Use supported Expo/React Native approaches (`Image`, Expo modules); optimize asset size and caching where relevant. Do not add `react-native-fast-image` unless product requirements justify the dependency.
+
+## Expo and shipping
+
+- **EAS Build and EAS Update**: Prefer existing scripts and profiles in `package.json` / `eas.json` for builds and OTA updates (`expo-updates`).
+- **Routing**: Implement navigation with **React Navigation** and typed param lists in `navigation/types.ts`. **Do not assume Expo Router** (`expo-router`): this repository does not use file-based routing today. If the project later adopts Expo Router, follow the official guide: https://docs.expo.dev/router/introduction/
+
+## Conflicts between rules
+
+If guidance here conflicts with `mobile-project.mdc` (layers, MobX, Paper-first, path aliases), **follow `mobile-project.mdc`**.

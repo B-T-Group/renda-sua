@@ -1,0 +1,86 @@
+{
+  "expo": {
+    "name": "Rendasua",
+    "slug": "agent-mobile",
+    "version": "1.0.12",
+    "owner": "rendasua-org",
+    "scheme": "rendasua",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/rendasua.png",
+    "splash": {
+      "image": "./assets/rendasua.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#fbfbfd"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/ee97ea4d-518f-4fe5-a7e9-e6aadef4bf46"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "cli": {
+      "appVersionSource": "remote"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rendasua.agent",
+      "appleTeamId": "A289B23AXW",
+      "associatedDomains": [
+        "applinks:rendasua.com",
+        "applinks:www.rendasua.com",
+        "applinks:dev.rendasua.com"
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Rendasua uses Face ID to unlock your saved accounts on this device."
+      }
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/rendasua.png",
+        "backgroundColor": "#fbfbfd"
+      },
+      "package": "com.rendasua.agent",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "rendasua.com",
+              "pathPrefix": "/app"
+            },
+            {
+              "scheme": "https",
+              "host": "www.rendasua.com",
+              "pathPrefix": "/app"
+            },
+            {
+              "scheme": "https",
+              "host": "dev.rendasua.com",
+              "pathPrefix": "/app"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "extra": {
+      "apiUrl": "https://prod.api.rendasua.com/api",
+      "auth0Domain": "rendasua-prod.ca.auth0.com",
+      "eas": {
+        "projectId": "ee97ea4d-518f-4fe5-a7e9-e6aadef4bf46"
+      }
+    }
+  }
+}

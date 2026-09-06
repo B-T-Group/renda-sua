@@ -1,0 +1,72 @@
+---
+description: How to collect Stripe card/wallet payments in the mobile app using the native PaymentSheet
+globs: src/hooks/useOrderStripePayment.ts,src/hooks/useIsStripeRail.ts,src/screens/client/PlaceOrderScreen.tsx,src/config/environment.ts,App.tsx
+alwaysApply: false
+---
+
+# Mobile Stripe payments (PaymentSheet)
+
+This app collects in-app Stripe payments with the native `@stripe/stripe-react-native`
+PaymentSheet. Reference: https://docs.stripe.com/sdks/react-native
+
+## Detecting a Stripe-enabled client
+
+- Use `useIsStripeRail()` (`src/hooks/useIsStripeRail.ts`). It wraps `useStripeConnect`,
+  which reads `GET /stripe-connect/status`; the backend resolves `paymentRail` from the
+  user's address country. `isStripeRail === true` means the client pays by card.
+- When `isStripeRail` is true, hide the Mobile Money UI and do not require a payment
+  phone number (see `PlaceOrderScreen` `wizardPhase` / `canSubmit` and
+  `PlaceOrderPaymentBlock`).
+
+## Publishable key
+
+- At runtime, `StripeAppProvider` loads `GET /stripe-payments/config` (public) and uses
+  the backend `STRIPE_PUBLISHABLE_KEY` so PaymentSheet always matches PaymentIntents
+  from the active API. Env fallbacks in `src/config/auth0.ts` (`stripePublishableKey`)
+  are used only until that call succeeds.
+- The key MUST be from the **same Stripe account** as the backend secret key.
+  Never hardcode a key from a different account.
+- `App.tsx` wraps the tree in `<StripeAppProvider>`.
+
+## Order payment flow
+
+1. Create the order via `POST /orders` with `stripe_payment_method: 'payment_sheet'`
+   and `payment_timing: 'pay_now'`.
+2. The backend returns `order.payment_intent_client_secret` (+ `payment_transaction.transaction_id`)
+   for Stripe-rail orders.
+3. Present the sheet with `useOrderStripePayment().pay({ clientSecret, transactionId, merchantCountryCode })`.
+   It calls `initPaymentSheet`/`presentPaymentSheet` and then polls the transaction
+   status until the backend marks the tx `authorized` (manual capture) or `success`
+   (legacy automatic capture). Manual capture: the card is authorized at checkout;
+   capture happens when an agent accepts the delivery assignment.
+   `pay` returns `{ status, message? }` — on failure, surface `message` in the snackbar
+   (do not replace it with a generic "Card payment failed").
+4. Result handling: `status === 'success' | 'pending'` -> navigate to success; `'authorized'` from polling
+   maps to success navigation with `cardAuthorized: true` (not fully paid). `'cancelled'`/`'failed'`
+   -> show a Snackbar with the Stripe/`message` when present (the order stays `pending_payment` and is retryable).
+
+## Manual capture (when `STRIPE_MANUAL_CAPTURE_ENABLED=true`)
+
+- PaymentSheet authorizes the card only; tx status becomes `authorized` and the order
+  moves to `pending` / `payment_status: authorized`.
+- The customer is **not charged** until capture: delivery → agent picks up from the business;
+  store pickup → customer collects and business confirms with PIN. Copy should say
+  "card authorized", not "payment successful", and use pickup-specific wording for pickup orders.
+- Poll for `authorized`, `capture_pending`, or `success` in `useOrderStripePayment`.
+
+## Wallets
+
+- Google Pay and Apple Pay are currently DISABLED (card only). `app.config.ts` sets
+  `enableGooglePay: false`, and `useOrderStripePayment` does not pass `googlePay`/
+  `applePay` to `initPaymentSheet`. To re-enable, set `enableGooglePay: true` and pass
+  `googlePay`/`applePay` (with `merchantCountryCode`) back into `initPaymentSheet`.
+
+## Native build
+
+- Adding/upgrading the Stripe native module requires a dev-client rebuild
+  (`yarn ios` / `expo run`). It does not work in Expo Go.
+
+## Do not
+
+- Do not finalize orders client-side; the backend webhook is the source of truth.
+- Do not collect a Mobile Money phone number for Stripe-rail clients.
