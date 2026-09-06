@@ -1,0 +1,57 @@
+---
+description: Use View (not Paper Surface) for bordered cards/containers to avoid the iOS doubled-border artifact
+globs: src/**/*.tsx
+alwaysApply: false
+---
+
+# No `Surface` for bordered cards (iOS double-border)
+
+`react-native-paper`'s `Surface` renders its elevation in an extra layer on iOS.
+When a `Surface` also has a visible border (`borderWidth` / `borderColor` /
+`borderLeftWidth` / etc.), iOS draws a doubled/offset edge — most visible as a
+faint second border on the right/bottom of the card.
+
+## Rule
+
+- **Do NOT use `Surface` for a bordered card or container.** Use a plain
+  `View` instead, and draw the border yourself.
+- For elevation, apply a **theme shadow token** (`shadows.sm | md | lg` from
+  `useTheme()` / `import { shadows } from '@/theme'`) on the `View`. These tokens
+  set `shadow*` (iOS) and `elevation` (Android) together.
+- Always set an explicit `backgroundColor` on the `View` (e.g.
+  `colors.background.paper`) since `Surface` previously provided the surface color.
+
+### Bad
+
+```tsx
+<Surface
+  style={[styles.card, { borderColor: colors.divider }]} // styles.card has borderWidth: 1
+  elevation={1}
+>
+  {children}
+</Surface>
+```
+
+### Good
+
+```tsx
+const { colors, shadows } = useTheme();
+
+<View
+  style={[
+    styles.card, // borderWidth: 1
+    shadows.sm,
+    { borderColor: colors.divider, backgroundColor: colors.background.paper },
+  ]}
+>
+  {children}
+</View>
+```
+
+## When `Surface` is still fine
+
+- A **borderless** elevated card that relies only on Paper's shadow (no
+  `border*` in its resolved style) can stay a `Surface`.
+- This rule is a deliberate exception to `react-native-paper.mdc` ("Paper
+  first"): for **bordered** surfaces, prefer `View` for correct cross-platform
+  rendering (see `cross-platform-ux.mdc`).

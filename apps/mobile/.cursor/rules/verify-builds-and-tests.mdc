@@ -1,0 +1,15 @@
+---
+description: Always verify that the app compiles and tests pass before completing any task
+alwaysApply: true
+---
+
+# Mandatory verification: builds and tests
+
+After making any substantive code change (feature, refactor, bug fix), you MUST verify before considering the task complete:
+
+1. **Run the test suite** — `yarn test` (Vitest; this is the CI gate). All tests must pass.
+2. **Check for new TypeScript errors** — `npx tsc --noEmit` reports pre-existing errors in this repo, so it is not a clean gate; however, you MUST confirm that no NEW errors were introduced in the files you touched (compare against the error list before your change if needed).
+3. **Fix all failures you introduced** before ending the task. Do not report work as done with failing tests or new type errors.
+4. If a failure is pre-existing, say so explicitly in your summary instead of silently skipping it.
+
+For multi-phase refactors, run this verification **at the end of every phase**, not only at the very end.

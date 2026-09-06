@@ -1,0 +1,33 @@
+---
+description: Prefer react-native-paper UI primitives for consistency with app theme and Material Design
+alwaysApply: true
+---
+
+# React Native Paper first
+
+When building or editing UI in this Expo app, **prefer `react-native-paper` components** whenever they cover the use case, instead of raw React Native primitives or ad-hoc styling.
+
+## Default choices
+
+| Need | Prefer | Avoid when Paper fits |
+|------|--------|------------------------|
+| Text | `Text` from `react-native-paper` (variants) | `Text` from `react-native` for app chrome |
+| Buttons | `Button`, `IconButton`, `FAB` | `Pressable` + styled `Text` for standard actions |
+| Surfaces / cards | `Surface`, `Card` | Plain `View` with manual elevation/shadow |
+| Text fields | `TextInput` from Paper (outlined / flat) | `TextInput` from `react-native` for forms unless Paper blocks behavior |
+| Dialogs / modals | `Dialog`, `Portal`, `Modal` from Paper where appropriate | Custom full-screen `Modal` only when Paper layout is insufficient |
+| Lists / menus | `List.*`, `Menu`, `Divider`, `Chip`, `Badge` | Reimplementing the same patterns |
+| Feedback | `Snackbar`, `Banner`, `ActivityIndicator` (Paper) | One-off toast stacks |
+
+## Theme
+
+- Respect the app’s `PaperProvider` / `paperTheme` integration: use Paper components so **colors, elevation, and roundness** stay aligned with the design system.
+
+## Exceptions
+
+- Use React Native or other libraries when Paper **does not support** the interaction, platform API, or layout (e.g. some maps, camera, or highly custom gestures).
+- **Performance-sensitive** lists may still use `FlatList` / `SectionList` from RN; compose rows with Paper `List.Item` or themed cells as needed.
+
+## Imports
+
+- Import from `react-native-paper` in one line per file convention already used in the project (e.g. `import { Button, Text, Card } from 'react-native-paper'`).
