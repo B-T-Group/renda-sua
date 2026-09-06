@@ -1,6 +1,30 @@
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { RecipientsService } from './recipients.service';
 import type { RequestContext } from '../auth/request-context';
+
+function loadUserRecipientsMetadata(): string {
+  const candidates = [
+    join(
+      process.cwd(),
+      'apps/hasura/metadata/databases/Rendasua/tables/public_user_recipients.yaml'
+    ),
+    join(
+      process.cwd(),
+      '../hasura/metadata/databases/Rendasua/tables/public_user_recipients.yaml'
+    ),
+    join(
+      __dirname,
+      '../../../hasura/metadata/databases/Rendasua/tables/public_user_recipients.yaml'
+    ),
+  ];
+  const path = candidates.find((candidate) => existsSync(candidate));
+  if (!path) {
+    throw new Error('user_recipients Hasura metadata yaml not found');
+  }
+  return readFileSync(path, 'utf8');
+}
 
 describe('RecipientsService', () => {
   const userId = 'user-123';
@@ -150,6 +174,65 @@ describe('RecipientsService', () => {
       await expect(service.createRecipient(mockCtx, createDto)).rejects.toThrow(
         HttpException
       );
+    });
+
+    it('includes user_id in the insert object for Hasura RLS', async () => {
+      executeMutation.mockResolvedValue({
+        insert_user_recipients_one: mockRecipient,
+      });
+
+      await service.createRecipient(mockCtx, createDto);
+
+      const [mutation, variables] = executeMutation.mock.calls[0];
+      expect(mutation).toContain('user_id: $userId');
+      expect(mutation).toContain('$userId: uuid!');
+      expect(variables).toEqual(
+        expect.objectContaining({
+          userId,
+        })
+      );
+    });
+
+    it('wraps unexpected Hasura errors as HTTP 500', async () => {
+      executeMutation.mockRejectedValue(
+        new Error('field "user_id" not found in type: "user_recipients_insert_input"')
+      );
+
+      try {
+        await service.createRecipient(mockCtx, createDto);
+        fail('expected HttpException');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+        expect(error.getResponse()).toEqual(
+          expect.objectContaining({
+            success: false,
+            message: 'Failed to create recipient',
+          })
+        );
+      }
+    });
+
+    it('maps unique constraint violations to HTTP 409', async () => {
+      executeMutation.mockRejectedValue(
+        new Error(
+          'Uniqueness violation. duplicate key value violates unique constraint "user_recipients_user_country_phone_key"'
+        )
+      );
+
+      try {
+        await service.createRecipient(mockCtx, createDto);
+        fail('expected HttpException');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+        expect(error.getResponse()).toEqual(
+          expect.objectContaining({
+            success: false,
+            error: 'RECIPIENT_EXISTS',
+          })
+        );
+      }
     });
   });
 
@@ -313,6 +396,17 @@ describe('RecipientsService', () => {
       );
       expect(ctxWithAuth.authToken).toBeDefined();
       expect(ctxWithAuth.authToken).not.toBe('');
+    });
+
+    it('Hasura insert permissions include user_id for user-scoped roles', () => {
+      const yaml = loadUserRecipientsMetadata();
+      const insertSection = yaml.split('insert_permissions:')[1];
+      const insertOnly = insertSection.split('select_permissions:')[0];
+      for (const role of ['agent', 'business', 'client', 'user']) {
+        const roleBlock = insertOnly.split(`- role: ${role}`)[1];
+        const columns = roleBlock.split('columns:')[1].split('- role:')[0];
+        expect(columns).toContain('- user_id');
+      }
     });
 
     it('should NOT accept fake RequestContext with empty authToken', async () => {

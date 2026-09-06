@@ -122,6 +122,18 @@ export class RecipientsController {
     status: 401,
     description: 'Authentication required',
   })
+  @ApiResponse({
+    status: 409,
+    description: 'Recipient with this country and phone already exists',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'RECIPIENT_EXISTS' },
+        message: { type: 'string' },
+      },
+    },
+  })
   async createRecipient(
     @ReqContext() ctx: RequestContext,
     @Body() dto: CreateRecipientDto

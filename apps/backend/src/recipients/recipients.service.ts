@@ -265,15 +265,38 @@ export class RecipientsService {
 
       return response.insert_user_recipients_one;
     } catch (error: any) {
-      this.logger.error('Failed to create recipient', error);
-      throw new HttpException(
+      throw this.toCreateRecipientHttpException(error);
+    }
+  }
+
+  private isUniqueRecipientConflict(error: any): boolean {
+    const message = String(error?.message ?? '');
+    return (
+      message.includes('Uniqueness violation') ||
+      message.includes('user_recipients_user_country_phone_key')
+    );
+  }
+
+  private toCreateRecipientHttpException(error: any): HttpException {
+    if (this.isUniqueRecipientConflict(error)) {
+      return new HttpException(
         {
           success: false,
-          message: 'Failed to create recipient',
+          error: 'RECIPIENT_EXISTS',
+          message:
+            'A recipient with this phone already exists for this country',
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.CONFLICT
       );
     }
+    this.logger.error('Failed to create recipient', error);
+    return new HttpException(
+      {
+        success: false,
+        message: 'Failed to create recipient',
+      },
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
 
   async updateRecipient(
