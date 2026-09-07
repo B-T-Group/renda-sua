@@ -77,6 +77,20 @@ describe('resolveQuietHomeNextAction', () => {
     expect(action?.kind).toBe('blocker');
   });
 
+  it('returns cannot_accept_orders for setup_stripe_connect even when can_accept_orders', () => {
+    const action = resolveQuietHomeNextAction(
+      baseInput({
+        verification: verification({
+          can_accept_orders: true,
+          nextAction: 'setup_stripe_connect',
+          paymentRail: 'stripe',
+        }),
+      })
+    );
+    expect(action?.id).toBe('cannot_accept_orders');
+    expect(action?.kind).toBe('blocker');
+  });
+
   it('returns id_review before mm phone', () => {
     const action = resolveQuietHomeNextAction(
       baseInput({

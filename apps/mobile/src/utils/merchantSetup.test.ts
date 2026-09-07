@@ -60,7 +60,7 @@ describe('requiresMerchantAction', () => {
     );
     expect(
       requiresMerchantAction(baseStatus({ nextAction: 'setup_stripe_connect' }))
-    ).toBe(false);
+    ).toBe(true);
     expect(requiresMerchantAction(baseStatus({ nextAction: 'upload_id' }))).toBe(
       false
     );

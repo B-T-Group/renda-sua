@@ -4,8 +4,10 @@ import type {
 } from '../services/businessVerificationApi';
 import StorageService from '../services/storage/StorageService';
 
-const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
-  new Set(['sign_agreement']);
+const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> = new Set([
+  'sign_agreement',
+  'setup_stripe_connect',
+] as const);
 
 export const goLiveStorageKey = (businessId: string) =>
   `rendasua:business:${businessId}:go-live-celebrated`;

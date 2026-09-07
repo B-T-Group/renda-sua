@@ -66,6 +66,12 @@ export function resolveQuietHomeNextAction(
 ): QuietHomeNextAction | null {
   const verification = input.verification;
   const canAccept = verification?.can_accept_orders === true;
+  const nextAction = verification?.nextAction;
+
+  // Stripe Connect setup needed (even after go-live / can_accept_orders).
+  if (nextAction === 'setup_stripe_connect') {
+    return { id: 'cannot_accept_orders', kind: 'blocker' };
+  }
 
   if (verification && !canAccept) {
     return { id: 'cannot_accept_orders', kind: 'blocker' };
