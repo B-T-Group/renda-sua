@@ -7,6 +7,17 @@ const REQUIRED_PRODUCTION_ORIGINS = [
   'https://rendasua.com',
 ] as const;
 
+/** Browser request headers that must survive CORS preflight. */
+export const CORS_ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'X-Client-Platform',
+  'X-Requested-With',
+  'X-Hasura-Role',
+  'X-Active-Delegation',
+  'X-Active-Persona',
+] as const;
+
 const DEFAULT_LOCAL_ORIGIN = 'http://localhost:4200';
 
 export function parseCorsOrigins(raw: string | undefined): string[] {

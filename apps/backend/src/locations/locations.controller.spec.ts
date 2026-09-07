@@ -1,4 +1,9 @@
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
+import {
+  SUPPORTED_COUNTRIES_CACHE_KEY,
+  SUPPORTED_COUNTRIES_TTL_SECONDS,
+} from '../catalog-cache/catalog-cache-keys';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -9,6 +14,7 @@ import { LocationsService } from './locations.service';
 describe('LocationsController', () => {
   let controller: LocationsController;
   let hasuraService: { executeQuery: jest.Mock };
+  let catalogCacheService: { getOrCompute: jest.Mock };
   let loggerErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
@@ -16,9 +22,15 @@ describe('LocationsController', () => {
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
     hasuraService = { executeQuery: jest.fn() };
+    catalogCacheService = {
+      getOrCompute: jest.fn(async (_key: string, compute: () => Promise<unknown>) =>
+        compute()
+      ),
+    };
     controller = new LocationsController(
       hasuraService as unknown as HasuraSystemService,
       { getUser: jest.fn(), getUserId: jest.fn() } as unknown as HasuraUserService,
+      catalogCacheService as unknown as CatalogCacheService,
       {
         getFastDeliveryConfig: jest.fn(),
         isFastDeliveryEnabled: jest.fn(),
@@ -132,6 +144,11 @@ describe('LocationsController', () => {
       expect(hasuraService.executeQuery).toHaveBeenNthCalledWith(
         2,
         expect.stringContaining('active: { _eq: true }')
+      );
+      expect(catalogCacheService.getOrCompute).toHaveBeenCalledWith(
+        SUPPORTED_COUNTRIES_CACHE_KEY,
+        expect.any(Function),
+        { ttlSeconds: SUPPORTED_COUNTRIES_TTL_SECONDS }
       );
     });
 

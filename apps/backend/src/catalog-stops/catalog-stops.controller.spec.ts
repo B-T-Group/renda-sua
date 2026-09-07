@@ -1,10 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
+import {
+  buildEssentialsCacheKey,
+  ESSENTIALS_TTL_SECONDS,
+} from '../catalog-cache/catalog-cache-keys';
 import { CatalogStopsController } from './catalog-stops.controller';
 import { CatalogStopsService } from './catalog-stops.service';
 
 describe('CatalogStopsController', () => {
   let controller: CatalogStopsController;
   let service: jest.Mocked<CatalogStopsService>;
+  let catalogCache: { getOrCompute: jest.Mock };
 
   beforeEach(async () => {
     const mockService = {
@@ -14,6 +20,11 @@ describe('CatalogStopsController', () => {
       getFeaturedStore: jest.fn(),
       getBagComplements: jest.fn(),
     };
+    catalogCache = {
+      getOrCompute: jest.fn(async (_key: string, compute: () => Promise<unknown>) =>
+        compute()
+      ),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CatalogStopsController],
@@ -21,6 +32,10 @@ describe('CatalogStopsController', () => {
         {
           provide: CatalogStopsService,
           useValue: mockService,
+        },
+        {
+          provide: CatalogCacheService,
+          useValue: catalogCache,
         },
       ],
     }).compile();
@@ -116,10 +131,18 @@ describe('CatalogStopsController', () => {
 
       service.getEssentials.mockResolvedValue(mockResponse as any);
 
-      const result = await controller.getEssentials({});
+      const result = await controller.getEssentials({
+        country_code: 'CM',
+        state: 'Littoral',
+      });
 
       expect(result.success).toBe(true);
       expect(result.data.collections.length).toBeGreaterThan(0);
+      expect(catalogCache.getOrCompute).toHaveBeenCalledWith(
+        buildEssentialsCacheKey('CM', 'Littoral', undefined),
+        expect.any(Function),
+        { ttlSeconds: ESSENTIALS_TTL_SECONDS }
+      );
     });
 
     it('should return empty collections array when none found', async () => {

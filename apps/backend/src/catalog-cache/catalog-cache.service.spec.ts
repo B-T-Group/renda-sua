@@ -1,11 +1,34 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { CatalogCacheService } from './catalog-cache.service';
-import type { Configuration } from '../config/configuration';
+
+function enableRedis(
+  service: CatalogCacheService,
+  redis: { get?: jest.Mock; setEx?: jest.Mock; del?: jest.Mock; incr?: jest.Mock }
+) {
+  const client = {
+    isReady: true,
+    get: jest.fn(),
+    setEx: jest.fn(),
+    del: jest.fn(),
+    incr: jest.fn(),
+    ...redis,
+  };
+  Object.assign(service as any, {
+    enabled: true,
+    redisUnhealthy: false,
+    redisClient: client,
+  });
+  return client;
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 describe('CatalogCacheService', () => {
   let service: CatalogCacheService;
-  let configService: ConfigService<Configuration>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -29,7 +52,6 @@ describe('CatalogCacheService', () => {
     }).compile();
 
     service = module.get<CatalogCacheService>(CatalogCacheService);
-    configService = module.get<ConfigService<Configuration>>(ConfigService);
   });
 
   it('should be defined', () => {
@@ -70,86 +92,6 @@ describe('CatalogCacheService', () => {
     });
   });
 
-  describe('cache key building', () => {
-    it('should build correct cache key for supported-countries', () => {
-      const key = 'supported-countries';
-      expect(key).toBe('supported-countries');
-    });
-
-    it('should build correct cache key for essentials with country/state', () => {
-      const key = ['essentials', 'CM', 'Littoral', 8].join(':');
-      expect(key).toBe('essentials:CM:Littoral:8');
-    });
-
-    it('should build correct cache key for essentials with global scope', () => {
-      const key = ['essentials', 'global', 'all', 8].join(':');
-      expect(key).toBe('essentials:global:all:8');
-    });
-
-    it('should build correct cache key for stores with filters', () => {
-      const key = ['stores', 'all', 'CM', 'Littoral', 'true', 'false', 20].join(':');
-      expect(key).toBe('stores:all:CM:Littoral:true:false:20');
-    });
-
-    it('should build correct cache key for inventory items with all params', () => {
-      const generation = 5;
-      const key = [
-        'items',
-        generation,
-        1,
-        20,
-        'relevance',
-        '',
-        'Electronics',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        'active',
-        'CM',
-        '',
-        'avail',
-        '',
-        '',
-        'all',
-      ].join(':');
-      expect(key).toContain('items:5:1:20:relevance');
-      expect(key).toContain(':Electronics:');
-      expect(key).toContain(':CM:');
-    });
-
-    it('should build correct cache key for search queries', () => {
-      const generation = 3;
-      const key = [
-        'items',
-        generation,
-        1,
-        20,
-        'relevance',
-        'laptop',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        'active',
-        'global',
-        '',
-        'avail',
-        '',
-        '',
-        'all',
-      ].join(':');
-      expect(key).toContain('items:3:1:20:relevance:laptop');
-    });
-  });
-
   describe('getOrCompute', () => {
     it('should call compute function and return result when cache is disabled', async () => {
       const computeFn = jest.fn().mockResolvedValue({ success: true, data: [] });
@@ -166,6 +108,64 @@ describe('CatalogCacheService', () => {
       await expect(
         service.getOrCompute('test-key', computeFn, { ttlSeconds: 60 })
       ).rejects.toThrow('Compute failed');
+    });
+
+    it('returns a parsed cache hit without recomputing', async () => {
+      const redis = enableRedis(service, {
+        get: jest.fn().mockResolvedValue(JSON.stringify({ cached: true })),
+      });
+      const computeFn = jest.fn();
+
+      await expect(
+        service.getOrCompute('items:1', computeFn, { ttlSeconds: 60 })
+      ).resolves.toEqual({ cached: true });
+      expect(computeFn).not.toHaveBeenCalled();
+      expect(redis.get).toHaveBeenCalledWith('catalog:items:1');
+    });
+
+    it('recomputes when cached JSON is corrupt', async () => {
+      const redis = enableRedis(service, {
+        get: jest.fn().mockResolvedValue('{not-json'),
+        setEx: jest.fn().mockResolvedValue('OK'),
+      });
+      const computeFn = jest.fn().mockResolvedValue({ fresh: true });
+
+      await expect(
+        service.getOrCompute('items:1', computeFn, { ttlSeconds: 45 })
+      ).resolves.toEqual({ fresh: true });
+      expect(computeFn).toHaveBeenCalledTimes(1);
+      expect(redis.setEx).toHaveBeenCalledWith(
+        'catalog:items:1',
+        45,
+        JSON.stringify({ fresh: true })
+      );
+    });
+
+    it('coalesces concurrent misses onto a single compute', async () => {
+      enableRedis(service, {
+        get: jest.fn().mockResolvedValue(null),
+        setEx: jest.fn().mockResolvedValue('OK'),
+      });
+      let resolveCompute: (value: { id: string }) => void = () => undefined;
+      const computeFn = jest.fn(
+        () =>
+          new Promise<{ id: string }>((resolve) => {
+            resolveCompute = resolve;
+          })
+      );
+
+      const first = service.getOrCompute('items:1', computeFn, { ttlSeconds: 60 });
+      await flushMicrotasks();
+      const second = service.getOrCompute('items:1', computeFn, {
+        ttlSeconds: 60,
+      });
+      resolveCompute({ id: 'shared' });
+
+      await expect(Promise.all([first, second])).resolves.toEqual([
+        { id: 'shared' },
+        { id: 'shared' },
+      ]);
+      expect(computeFn).toHaveBeenCalledTimes(1);
     });
   });
 
