@@ -1,0 +1,141 @@
+name: Deploy Mobile Native (Production)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+        default: all
+      submit:
+        description: Submit to App Store and Google Play after build
+        type: boolean
+        default: true
+      app_version:
+        description: User-facing semver (e.g. 1.0.7). Leave empty to keep current version.
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+          cache-dependency-path: apps/mobile/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run tests
+        run: yarn test
+
+  android:
+    needs: prepare
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+          cache-dependency-path: apps/mobile/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Set user-facing app version
+        env:
+          APP_VERSION_INPUT: ${{ github.event.inputs.app_version }}
+        run: bash ${{ github.workspace }}/.github/scripts/set-app-version.sh
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          working-directory: apps/mobile
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android (production-aab)
+        run: eas build --platform android --profile production-aab --non-interactive --wait
+
+      - name: Submit Android to Google Play
+        if: github.event_name == 'push' || github.event.inputs.submit == 'true'
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::GOOGLE_PLAY_SERVICE_ACCOUNT_JSON repository secret is missing."
+            echo "Add the full Google Play service account JSON under Settings → Secrets → Actions."
+            echo "Or upload the key once on expo.dev → Project → Credentials → Android → Google Service Account."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" > google-service-account.json
+          eas submit --platform android --profile production --latest --non-interactive
+          rm -f google-service-account.json
+
+  ios:
+    needs: prepare
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+          cache-dependency-path: apps/mobile/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Set user-facing app version
+        env:
+          APP_VERSION_INPUT: ${{ github.event.inputs.app_version }}
+        run: bash ${{ github.workspace }}/.github/scripts/set-app-version.sh
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          working-directory: apps/mobile
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS (production)
+        run: eas build --platform ios --profile production --non-interactive --wait
+
+      - name: Submit iOS to App Store Connect
+        if: github.event_name == 'push' || github.event.inputs.submit == 'true'
+        run: eas submit --platform ios --profile production --latest --non-interactive

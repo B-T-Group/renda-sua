@@ -1,27 +1,36 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Promote main to prod: checkout prod, merge main, push, return to main.
+set -euo pipefail
 
-# Find the git repository root
+# Find the git repository root (monorepo root)
 REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
 
-if [ -z "$REPO_ROOT" ]; then
-  echo "Error: Not in a git repository"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Working tree has uncommitted changes. Commit or stash before running." >&2
   exit 1
 fi
 
-echo "Found repository root: $REPO_ROOT"
-cd "$REPO_ROOT"
+original_branch="$(git rev-parse --abbrev-ref HEAD)"
 
-echo "Checking out prod branch..."
+on_error() {
+  echo "merge-main-into-prod failed." >&2
+  git checkout "${original_branch}" 2>/dev/null || true
+  exit 1
+}
+trap on_error ERR
+
+echo "→ checkout prod"
 git checkout prod
 
-echo "Merging main into prod..."
-git merge main
+echo "→ merge main into prod"
+git merge main --no-edit
 
-echo "Pushing prod to origin..."
+echo "→ push prod to origin"
 git push origin prod
 
-echo "Checking out main branch..."
+echo "→ checkout main"
 git checkout main
 
-echo "✅ Successfully merged main into prod and pushed changes"
+trap - ERR
+echo "Done. prod is updated on origin; you are on main."

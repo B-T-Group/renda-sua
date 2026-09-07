@@ -1,0 +1,48 @@
+# Actions Needed surface — app-wide pattern
+
+## Rule
+
+Any state a persona must action (AI suggestions, pending orders, cleaned images, incoming transfers, rejected listings, verification steps, available deliveries, action-required bookings, etc.) **MUST** be surfaced via the `ActionsNeededSection` at the top of that persona's home screen.
+
+## How it works
+
+1. **Backend**: The `GET /dashboard/actions` endpoint returns a prioritised list of `ActionItemDto` objects, one per actionable kind, with `priority: 'critical' | 'high' | 'normal'` and a `count`. Methods in `dashboard.service.ts` (one per persona: `getBusinessActions`, `getAgentActions`, `getClientActions`) power this endpoint.
+2. **Hook**: `src/hooks/useActionsNeeded.ts` calls the endpoint on focus (`useFocusEffect`), maps each `kind` → `{ title, icon, priority, onPress }` per persona, and exposes `items: ActionNeededItemProps[]` + `totalCount`.
+3. **Components**:
+   - `src/components/common/ActionNeededItem.tsx` — a single pressable card (icon chip + title + count badge + chevron). Color-codes by priority: `critical` → red, `high` → amber, `normal` → primary blue.
+   - `src/components/common/ActionsNeededSection.tsx` — renders all items in a card, hides when empty, sorts by priority.
+4. **Rendering**: `ActionsNeededSection` is placed at the top of each home scroll:
+   - Business: `BusinessDashboardView` (prop `actionsNeededItems`).
+   - Agent: `HomeScreen` (agent tab).
+   - Client: `ClientBrowseHomeScreen`.
+5. **tabBarBadge**: `totalCount` from `useActionsNeeded` is shown as a red badge on the home/dashboard tab.
+
+## Extending
+
+When adding a new actionable state:
+1. Add a new Hasura query method in `dashboard.service.ts` for the relevant persona.
+2. Add the new `kind` string to the persona's branch in `getActionsNeeded`.
+3. Add a `case` in `useActionsNeeded.ts` to map it to title + icon + `onPress`.
+4. Add i18n keys under `actionsNeeded.<persona>.<kindCamelCase>.title` and `.subtitle` in `en.json` and `fr.json`.
+5. Write a `user_messages` row from the backend when the state is created so it also appears in the notification center.
+
+## Notification center
+
+- `GET /messages` + `GET /messages/unread-count` + `POST /messages/:id/read` + `POST /messages/read-all` (backed by `MessagesService` + `MessagesController`).
+- `src/services/messagesApi.ts` wraps these endpoints.
+- `src/hooks/useNotifications.ts` manages feed + unread count.
+- `src/screens/shared/NotificationsScreen.tsx` renders the feed with unread styling and mark-as-read actions. Registered as `NotificationsCenter` in all three root navigators.
+- A bell icon button (filled when unread) in each home screen header navigates to `NotificationsCenter`.
+
+## Push notifications
+
+- AI suggestion pushes: `sendSaleItemAiProposalPush` and `sendRentalListingAiProposalPush` in `NotificationsService`.
+- Push builders: `src/notifications/ai-proposal-push.messages.ts`.
+- Deep-link hook: `src/hooks/useNotificationOpenedAiProposalNavigation.ts` — parses `data.type: 'ai_item_proposal' | 'ai_rental_proposal'` and navigates to the appropriate review screen. Registered in `App.tsx`.
+
+## i18n keys
+
+All user-facing text lives under:
+- `actionsNeeded.*` — section title, dismiss all, per-kind labels for all personas.
+- `notifications.center.*` — notification center title, empty state, mark-all-read.
+- `notifications.aiProposal.*` — push notification title + body (used by backend builder functions).

@@ -1,0 +1,82 @@
+---
+description: Never use Paper Dialog.ScrollArea/Dialog.Actions — they add iOS double borders; use native Modal sheets instead
+globs: src/**/*Dialog*.tsx,src/**/*Sheet*.tsx,src/**/*Modal*.tsx
+alwaysApply: true
+---
+
+# Avoid React Native Paper Dialog borders on iOS
+
+## Problem
+
+`react-native-paper` `Dialog` sub-components paint hard-coded separator borders that are visible on iOS:
+
+| Component | Border added |
+|---|---|
+| `Dialog.ScrollArea` | `borderTopWidth: 1` + `borderBottomWidth: 1` |
+| `Dialog.Actions` | Can stack with ScrollArea’s bottom hairline above the action row |
+
+These stack with the `Dialog`’s own shadow/elevation and with iOS sheet rendering, producing a **double-border** or unexpected separator line at the top of action buttons or around the scroll area (classic symptom: Cancel + contained primary button look “boxed” twice).
+
+## Rule
+
+**Never use `Dialog.ScrollArea` or `Dialog.Actions` in this project.**
+
+Do **not** “fix” this by zeroing `borderTopWidth` / `borderBottomWidth` on Paper `Dialog.ScrollArea` as the default pattern — prefer a native sheet so the bug cannot regress when Paper updates defaults.
+
+Instead, build every modal/dialog as a native RN `Modal` (transparent + `animationType="fade"`) with a fully custom sheet `View`:
+
+```tsx
+// ✅ Correct — native Modal, no hidden borders
+import { Modal, Pressable, ScrollView, View } from 'react-native';
+
+<Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss} statusBarTranslucent>
+  <Pressable style={styles.scrim} onPress={onDismiss}>
+    <Pressable style={[styles.sheet, { borderRadius: borderRadius.xl }]} onPress={e => e.stopPropagation()}>
+      <Text variant="titleLarge" style={styles.title}>{title}</Text>
+
+      <ScrollView contentContainerStyle={{ padding: spacing.md }}>
+        {/* content */}
+      </ScrollView>
+
+      <View style={styles.actions}>
+        <Button mode="text" onPress={onDismiss}>Cancel</Button>
+        <Button mode="contained" onPress={onAccept}>Confirm</Button>
+      </View>
+    </Pressable>
+  </Pressable>
+</Modal>
+```
+
+```tsx
+// ❌ Incorrect — Dialog.ScrollArea and Dialog.Actions add iOS borders
+import { Dialog, Portal } from 'react-native-paper';
+
+<Portal>
+  <Dialog visible={visible} onDismiss={onDismiss}>
+    <Dialog.Title>{title}</Dialog.Title>
+    <Dialog.ScrollArea>
+      <ScrollView>...</ScrollView>
+    </Dialog.ScrollArea>
+    <Dialog.Actions>
+      <Button onPress={onDismiss}>Cancel</Button>
+    </Dialog.Actions>
+  </Dialog>
+</Portal>
+```
+
+## Pattern checklist
+
+When creating any dialog/bottom-sheet/modal in this app:
+
+- [ ] Use `Modal` from `react-native` (not Paper `Dialog` + `Portal` with ScrollArea/Actions)
+- [ ] Apply `useSafeAreaInsets()` for `paddingBottom` on the sheet
+- [ ] Cap sheet height with `useWindowDimensions()` (e.g. `maxHeight: screenHeight * 0.85`)
+- [ ] Use `shadows` from `useTheme()` for elevation — not Paper’s built-in `elevation` prop on bordered surfaces
+- [ ] Place action buttons in a plain `View` with `flexDirection: 'row' | 'column'` — no Paper `Dialog.Actions`
+- [ ] Paper `Button` inside that `View` is fine; prefer `mode="text"` for secondary and `mode="contained"` for primary
+
+## Existing fixed files (reference implementations)
+
+- `src/components/dialogs/ImageCleanupPreviewDialog.tsx`
+- `src/components/business/item-form/ItemFormOptionDialog.tsx`
+- `src/components/browse/CatalogVariantPickerDialog.tsx`

@@ -1,0 +1,208 @@
+---
+description: Expo + React Native architecture, layers, MobX, Apollo, navigation, i18n, and code quality for this mobile app
+alwaysApply: true
+---
+
+# Mobile project (Expo + React Native)
+
+Expert defaults: Expo SDK 55, React Native 0.83, React 19, TypeScript strict, Apollo Client + GraphQL, MobX + mobx-react-lite, React Navigation v7, i18next, Expo Notifications / Auth Session / Location / Image Picker.
+
+## Separation of concerns
+
+| Area | Responsibility |
+|------|----------------|
+| `screens/` | Page UI + orchestration |
+| `components/` | Reusable presentational UI |
+| `stores/` | MobX state |
+| `services/` | API + platform integrations |
+| `hooks/` | Reusable logic |
+| `navigation/` | Routing |
+| `theme/` | Design tokens |
+| `types/` | Shared TS types |
+| `utils/` | Pure helpers |
+| `constants/` | App constants |
+| `i18n/` | Localization |
+| `config/` | Env + runtime config |
+| `contexts/` | React context |
+
+## Typing & file size
+
+- TypeScript strict; avoid `any` unless unavoidable.
+- Prefer `type` for unions, `interface` for extensible objects; export shared types from `types/`.
+- Target: components under ~200 lines, screens under ~300 lines; extract hooks, stores, or services when logic grows.
+
+## Naming
+
+- Files: `UserCard.tsx`, `ProfileScreen.tsx`, `useAuth.ts`, `AuthStore.ts`, `AuthService.ts`, `formatPhone.ts`, `storageKeys.ts`, `auth.ts` (types).
+- Symbols: PascalCase components/enums, `use*` hooks, camelCase functions, `UPPER_SNAKE_CASE` for immutable exported constants.
+
+## Imports (order)
+
+1. React → 2. React Native → 3. Third-party → 4. Navigation → 5. Services → 6. Stores → 7. Hooks → 8. Components → 9. Theme → 10. Types → 11. Utils → 12. Relative.
+
+Prefer path aliases: `@/components`, `@/screens`, `@/services`, `@/stores`, `@/hooks`, `@/theme`, `@/types`, `@/utils`, `@/constants`, `@/config`, `@/navigation`.
+
+## Folder layout (reference)
+
+```text
+src/
+  components/   (common/, forms/, feedback/, layout/, feature-name/)
+  config/       env.ts, apollo.ts
+  constants/    routes.ts, storageKeys.ts
+  contexts/     e.g. RootStoreContext.ts
+  hooks/
+  i18n/         index.ts, locales/en.json, fr.json
+  navigation/   AppNavigator.tsx, types.ts, …
+  screens/      FeatureScreen.tsx, optional FeatureView.tsx
+  services/     api/, auth/, storage/, notifications/, location/, …
+  stores/       RootStore.ts, feature stores
+  theme/        colors, spacing, typography, index
+  types/
+  utils/
+App.tsx
+```
+
+## Components (`components/`)
+
+- Reusable, props-driven; no direct store access; no API calls.
+- `StyleSheet.create`; theme tokens only; avoid raw hex/spacing/font strings unless dynamic and trivial.
+
+## Screens (`screens/`)
+
+- Navigation, store/hook wiring, props for child components; keep heavy logic out (use hooks / stores).
+- If large: extract `*View.tsx` + orchestration hook.
+
+## Hooks (`hooks/`)
+
+- Reusable logic; may use stores/services; no UI rendering.
+
+## MobX
+
+- Stores: observables, computed, actions, async; no UI, no React imports.
+- Root store composes feature stores; `makeAutoObservable(this, {}, { autoBind: true })`.
+- Persist via `StorageService`, not raw AsyncStorage.
+
+## Apollo / GraphQL
+
+- Calls from `services/api/`, hooks, or stores—not raw operations embedded in screens.
+- Organize `queries/`, `mutations/`, `ApolloClientService.ts`; use codegen types when available; normalize errors for UX.
+
+## Services
+
+- Wrap Auth, Storage, Notifications, Location, Image Picker, Updates, etc.; typed results, meaningful errors, no UI.
+
+## Navigation
+
+- Param lists in `navigation/types.ts`; type `useNavigation` / route props.
+
+## Theme
+
+- Tokens in `theme/` (colors, spacing, typography, radii, shadows)—no magic literals in UI.
+
+## i18n
+
+- All user-visible strings via `useTranslation` / `t('namespace.key')`; namespaced keys (`auth.login`, `errors.network`).
+
+## Errors & security
+
+- Catch at service/store boundaries; user-facing copy via `t()`; centralize logging.
+- No secrets in source; validate external input; sanitize URLs/files; secure token storage when required.
+
+## AsyncStorage
+
+- Only through `StorageService` (`getString`, `getObject<T>`, `setObject`, `remove`).
+
+## Utils & constants
+
+- Utils: pure, side-effect-free, testable.
+- Constants: routes, storage keys, timeouts, pagination defaults (`as const` objects).
+
+## Config
+
+- URLs, flags, build metadata in `config/`—no hardcoded secrets or env-specific URLs in random files.
+
+## Performance
+
+- `observer` on stateful screens; `React.memo` / `useCallback` / `useMemo` when justified; `FlatList` for long lists; avoid redundant observable reads.
+
+## Testing priority
+
+- Utilities, services, stores, custom hooks first; UI tests secondary.
+
+## When generating code
+
+1. Match folder roles above. 2. Small focused files. 3. Strict types. 4. Theme tokens. 5. Translation keys. 6. Typed navigation. 7. Logic in stores/hooks/services. 8. No duplication. 9. No magic strings/numbers in UI. 10. Error handling at boundaries. 11. Path aliases. 12. Respect existing patterns in the repo.
+
+## Screen pattern
+
+```tsx
+import React from 'react';
+import { observer } from 'mobx-react-lite';
+import { HomeView } from './HomeView';
+import { useHomeScreen } from '@/hooks/useHomeScreen';
+
+export const HomeScreen = observer(() => {
+  const props = useHomeScreen();
+  return <HomeView {...props} />;
+});
+```
+
+## Store pattern
+
+```ts
+import { makeAutoObservable } from 'mobx';
+
+export class AuthStore {
+  token: string | null = null;
+  isLoading = false;
+
+  constructor() {
+    makeAutoObservable(this, {}, { autoBind: true });
+  }
+
+  get isAuthenticated() {
+    return !!this.token;
+  }
+
+  async login(email: string, password: string) {
+    this.isLoading = true;
+    try {
+      // AuthService
+    } finally {
+      this.isLoading = false;
+    }
+  }
+}
+```
+
+## Anti-patterns
+
+- API calls inside dumb components; AsyncStorage outside `StorageService`; hardcoded copy/colors; unjustified `any`; huge monolith files; duplicated domain logic; inline-only navigation types; mixing UI and domain; reusable components reaching into stores.
+
+## New feature workflow
+
+1. Domain types → 2. GraphQL ops → 3. Services → 4. Stores → 5. Hooks → 6. Components → 7. Screen + view → 8. Translations → 9. Routes → 10. Tests.
+
+## Architecture map
+
+| Concern | Where |
+|---------|--------|
+| API | `services/api/` |
+| OAuth | `services/auth/` |
+| Notifications | `services/notifications/` |
+| Persistence | `services/storage/` |
+| Business state | `stores/` |
+| Reusable logic | `hooks/` |
+| Widgets | `components/` |
+| Pages | `screens/` |
+| Routes | `navigation/` |
+| Types | `types/` |
+| Helpers | `utils/` |
+| Tokens | `theme/` |
+| Copy | `i18n/` |
+
+Style: feature-oriented subfolders where helpful; MVVM-ish—screen = controller, view = presentation, store/hook = view model, service = infrastructure.
+
+## Summary
+
+Strict TypeScript, clear layers, reusable UI, service-backed integrations, MobX state, Apollo for GraphQL, typed navigation, themed styles, full i18n, low duplication, production maintainability.
