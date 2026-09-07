@@ -194,58 +194,189 @@ If business is in a **MoMo country** (CM, CI, SN, etc.) without verified phone:
 
 ---
 
-## Mobile-Specific Concerns (Cannot Verify)
+## Mobile-Specific Analysis (Verified)
 
-**Mobile app not present in this workspace.** The following must be verified in `mobile-rendasua`:
+**Mobile app located at**: `apps/mobile/` (Phase 1 import, commit 7170ff29)
 
-### 1. **Place Order Button**: Does mobile check preflight blockers?
+### 1. ✅ **Place Order Button**: Correctly Checks Both Gates
 
-**Expected**: Mobile PDP/checkout should call `/orders/checkout/preflight` and respect:
-- `can_proceed = false` → disable Place Order
-- `blocking_errors` containing `MERCHANT_NOT_ACCEPTING_ORDERS` or `LOCATION_PAYMENTS_COMING_SOON`
-
-**Web Implementation** (`apps/frontend/src/hooks/useCheckout.ts:228-234`):
+**Mobile PDP Implementation** (`apps/mobile/src/screens/shared/InventoryItemDetailScreen.tsx:467-469, 1022, 1040-1042`):
 
 ```typescript
-const paymentsBlocker = preflight?.blocking_errors?.find(
-  (b: { code?: string }) => b.code === 'LOCATION_PAYMENTS_COMING_SOON'
-);
-const merchantBlocker = preflight?.blocking_errors?.find(
-  (b: { code?: string }) => b.code === 'MERCHANT_NOT_ACCEPTING_ORDERS'
-);
-if (paymentsBlocker || merchantBlocker || preflight?.can_proceed === false) {
-  throw Error(...); // Blocks checkout
+const acceptsOrders = merchantCanAcceptOrders(loc.business);  // Line 467
+const paymentsEnabled = item.payments_enabled !== false;      // Line 469
+
+// Buy button (lines 1020-1043)
+<Button
+  mode="contained"
+  onPress={onBuy}
+  disabled={orderBlocked || !acceptsOrders || !paymentsEnabled || !variantSelectionReady}
+  // ...
+>
+  {foodBlocked
+    ? t('foods.status.notServingNow', 'Not serving now')
+    : !outOfStock && (!acceptsOrders || !paymentsEnabled)
+    ? t('catalog.paymentsComingSoon', 'Coming soon')  // ← Shows "Coming soon"
+    : t('public.items.buyNow', 'Buy')}
+</Button>
+```
+
+**Helper Function** (`apps/mobile/src/utils/merchantLifecycle.ts:17-21`):
+
+```typescript
+export function merchantCanAcceptOrders(
+  business?: MerchantLifecycleFields | null
+): boolean {
+  return business?.can_accept_orders ?? business?.is_verified ?? false;
 }
 ```
 
-**🔍 VERIFY**: Does mobile have equivalent logic, or does it skip preflight validation?
+**Catalog Card** (`apps/mobile/src/components/browse/InventoryCatalogCard.tsx:162-164`):
+
+```typescript
+const acceptsOrders = merchantCanAcceptOrders(loc.business);
+const paymentsEnabled = item.payments_enabled !== false;
+// Uses same logic for catalog grid
+```
+
+**✅ CORRECT**: Mobile checks:
+1. `can_accept_orders` (agreement-based) via `merchantCanAcceptOrders()`
+2. `payments_enabled` (MoMo phone gate / Stripe country exempt)
+3. Shows **"Coming soon"** when either is false
+4. Does **NOT** check Stripe Connect readiness
+
+**Preflight Integration** (`apps/mobile/src/screens/shared/InventoryItemDetailScreen.tsx:94-119`):
+
+```typescript
+const preflightRequest = useMemo(
+  () =>
+    checkoutOpen && item
+      ? {
+          items: [
+            {
+              business_inventory_id: item.id,
+              quantity: 1,
+              ...(toOrderItemVariantId(variantId)
+                ? { item_variant_id: toOrderItemVariantId(variantId) }
+                : {}),
+            },
+          ],
+          provisional_country: itemCountryCode,
+        }
+      : null,
+  [checkoutOpen, item, itemCountryCode, variantId]
+);
+
+const { config: preflightConfig, loading: preflightLoading } = useResolvedCheckout({
+  request: preflightRequest,
+  enabled: checkoutOpen && !!item,
+});
+```
+
+**PlaceOrderScreen** (`apps/mobile/src/screens/client/PlaceOrderScreen.tsx`):
+- Uses `useCheckoutOrchestrator` hook
+- Calls `/orders/checkout/preflight` via backend
+- Respects `blocking_errors` from backend
+
+**✅ MATCHES WEB**: Mobile uses same backend preflight API and respects blockers.
 
 ---
 
-### 2. **Business Dashboard CTA**: Stripe onboarding prompt
+### 2. ⚠️ **Business Dashboard CTA**: Stripe Card Only Shows for Stripe-Rail Merchants
 
-**Expected**: Mobile business dashboard should:
-- Call `/stripe-connect/status` to get `chargesEnabled` / `payoutsEnabled`
-- Show "Set up payouts" / "Continue setup" CTA when incomplete
-- Link to Stripe Connect onboarding flow
+**Dashboard Implementation** (`apps/mobile/src/screens/business/BusinessDashboardView.tsx:305-312`):
 
-**Web Implementation** (`apps/frontend/src/components/business/StripeConnectOnboardingCard.tsx:77-82`):
+```typescript
+{/* Suspension / Stripe setup — also in quiet home (not only fulfillment). */}
+{!showSkeleton && !setupMode && verificationStatus ? (
+  <BusinessVerificationBanner
+    statusOverride={verificationStatus}
+    loadingOverride={verificationLoading}
+    onRefreshStatus={onRefreshVerification}
+    mainInterest={mainInterest}
+  />
+) : null}
+```
 
-```tsx
-{!isReady && (
-  <Button variant="contained" onClick={startOnboarding}>
+**BusinessVerificationBanner Logic** (`apps/mobile/src/components/business/BusinessVerificationBanner.tsx:90-102`):
+
+```typescript
+if (loading || !status || status.can_accept_orders) {
+  return null;  // ← Hides banner when can_accept_orders = true
+}
+
+// MM merchants use dedicated dashboard cards (ID review + phone reminder +
+// verified-badge tip). Keep this banner for Stripe setup and suspended stores.
+if (
+  status.lifecycle_status !== 'suspended' &&
+  status.paymentRail === 'mobile_money'
+) {
+  return null;  // ← Hides banner for MoMo merchants (unless suspended)
+}
+```
+
+**⚠️ KEY FINDING**: Mobile business dashboard **does NOT show Stripe Connect CTA** when:
+- `can_accept_orders = true` (agreement signed)
+- `paymentRail = 'mobile_money'`
+
+**Stripe Connect Card Exists** (`apps/mobile/src/components/payments/StripeConnectCard.tsx:109-121`):
+
+```typescript
+{!isReady ? (
+  <Button
+    mode="contained"
+    onPress={onStartOnboarding}
+    loading={onboarding}
+    disabled={onboarding}
+    style={styles.actionBtn}
+  >
     {status?.connected
       ? t('stripe.connect.continueSetup', 'Continue setup')
       : t('stripe.connect.setup', 'Set up payouts')}
   </Button>
-)}
+) : null}
 ```
 
-**🔍 VERIFY**: Does mobile business dashboard surface this CTA, or is it missing/buried?
+**Used In** (`apps/mobile/src/screens/shared/ConfigurePaymentsScreen.tsx:66`):
+
+```typescript
+<StripeConnectCard
+  status={status}
+  loading={loading}
+  onboarding={onboarding}
+  onStartOnboarding={startOnboarding}
+  onOpenDashboard={openDashboard}
+/>
+```
+
+**⚠️ BUT**: Only accessible via **"Configure Payments"** screen, not surfaced on main dashboard when Connect incomplete.
+
+**Comparison to Web** (`apps/frontend/src/components/business/BusinessDashboard.tsx` + `StripeConnectOnboardingCard.tsx`):
+- Web shows Stripe Connect card **prominently on dashboard** when payouts not enabled
+- Mobile hides it when `can_accept_orders = true`, requiring manual navigation to settings
 
 ---
 
-### 3. **Stripe Connect Onboarding Flow**
+### 3. ✅ **Stripe Connect Onboarding Flow**: Fully Integrated
+
+**Mobile API Integration** (`apps/mobile/src/services/agentApi.ts:771-780`):
+
+```typescript
+connectStatus: (): Promise<StripeConnectStatusResponse> =>
+  api.get<StripeConnectStatusResponse>('/stripe-connect/status'),
+
+connectAccountLink: (body?: {
+  returnUrl?: string;
+  refreshUrl?: string;
+  platform?: 'mobile' | 'web';
+}): Promise<StripeConnectLinkResponse> =>
+  api.post<StripeConnectLinkResponse>('/stripe-connect/account-link', body ?? {}),
+```
+
+**Hook Implementation** (`apps/mobile/src/hooks/useStripeConnect.ts`):
+- Fetches Connect status
+- Opens onboarding link with `platform: 'mobile'`
+- Handles deep-link return flow
 
 **Backend Support** (`apps/backend/src/stripe-payments/stripe-connect.service.ts:277-285`):
 
@@ -260,44 +391,65 @@ const link = await this.stripeService.createAccountLink(
 );
 ```
 
-**Web Landing Page** (`apps/frontend/src/components/pages/ConnectOnboardingReturnPage.tsx`):
-- Handles `?app=mobile` query param
-- Deep-links back to mobile app after Stripe onboarding
-
-**🔍 VERIFY**: Does mobile correctly invoke `/stripe-connect/onboarding-link` with `platform: 'mobile'`?
+**✅ CORRECT**: Mobile has full Stripe Connect onboarding integration with deep-linking.
 
 ---
 
-## Summary: Intended vs Actual (Backend)
+## Summary: Backend vs Web vs Mobile
 
-| Rule | Intended | Backend Implementation | Status |
-|------|----------|----------------------|--------|
-| Place Order gate | Agreement signed (`can_accept_orders`) | ✅ Checked in preflight | ✅ Correct |
-| Payments "Coming soon" | MoMo: phone gate; Stripe: exempt | ✅ `isLocationPaymentsEnabled` | ✅ Correct |
-| Stripe Connect for orders | NOT required | ✅ Not checked in preflight | ✅ Correct |
-| Stripe Connect for badge | `charges_enabled ∧ payouts_enabled` | ✅ `deriveVerifiedBadge` | ✅ Correct |
-| Stripe Connect for payouts | `charges_enabled ∧ payouts_enabled` | ✅ `isPayoutReady` | ✅ Correct |
+| Rule | Intended | Backend | Web | Mobile | Status |
+|------|----------|---------|-----|--------|--------|
+| Place Order gate | Agreement signed (`can_accept_orders`) | ✅ Preflight | ✅ Preflight | ✅ `merchantCanAcceptOrders()` | ✅ All Correct |
+| Payments "Coming soon" | MoMo: phone gate; Stripe: exempt | ✅ `isLocationPaymentsEnabled` | ✅ Preflight | ✅ `payments_enabled` field | ✅ All Correct |
+| Stripe Connect for orders | NOT required | ✅ Not checked | ✅ Not checked | ✅ Not checked | ✅ All Correct |
+| Stripe Connect for badge | `charges_enabled ∧ payouts_enabled` | ✅ `deriveVerifiedBadge` | ✅ Badge | ✅ Badge | ✅ All Correct |
+| Stripe Connect dashboard CTA | Show when incomplete | N/A | ✅ Prominent card | ⚠️ Hidden for MoMo | ⚠️ **Mobile Gap** |
 
-**✅ Backend implements intended product rules correctly.**
+**✅ Backend and order-placement logic implement intended rules correctly across all platforms.**
+
+**⚠️ Mobile Dashboard UX Gap**: Stripe Connect CTA not surfaced when `paymentRail = 'mobile_money'` AND `can_accept_orders = true`.
 
 ---
 
-## Mobile-Specific Gaps (Hypotheses)
+## Mobile-Specific Findings
 
-### Hypothesis 1: Mobile Skips Preflight Validation
-**Symptom**: Place Order always enabled, ignoring `can_proceed = false`  
-**Impact**: Orders placeable even when backend would block  
-**Likelihood**: Medium (common mobile shortcut)
+### ✅ **No Order-Placement Gap** (Works As Intended)
 
-### Hypothesis 2: Mobile Dashboard Missing Stripe CTA
-**Symptom**: No "Set up payouts" prompt when Connect incomplete  
-**Impact**: Merchants don't know to complete Stripe onboarding  
-**Likelihood**: High (if dashboard is minimal/different from web)
+Mobile PDP correctly enforces both gates:
+1. **`can_accept_orders`** (agreement-based, via `merchantCanAcceptOrders()`)
+2. **`payments_enabled`** (MoMo phone gate / Stripe country exempt)
+3. Shows **"Coming soon"** when either is false
+4. Uses backend preflight API for checkout validation
 
-### Hypothesis 3: Mobile Has Stale/Incorrect can_accept_orders Check
-**Symptom**: Mobile checks Stripe Connect instead of lifecycle status  
-**Impact**: False negatives (blocks valid orders) or false positives (allows invalid)  
-**Likelihood**: Low (would diverge from backend schema)
+**Verified Files**:
+- `apps/mobile/src/screens/shared/InventoryItemDetailScreen.tsx:467-469, 1040-1042`
+- `apps/mobile/src/utils/merchantLifecycle.ts:17-21`
+- `apps/mobile/src/components/browse/InventoryCatalogCard.tsx:162-164`
+
+### ⚠️ **Dashboard CTA Gap** (Mobile-Specific UX Issue)
+
+**Issue**: Mobile business dashboard hides Stripe Connect setup card when:
+- `can_accept_orders = true` (agreement signed)
+- `paymentRail = 'mobile_money'`
+
+**Impact**: Stripe-rail merchants with signed agreements but incomplete Connect won't see dashboard prompt to complete setup.
+
+**Web Behavior**: Always shows `StripeConnectOnboardingCard` when payouts not enabled (regardless of `can_accept_orders`).
+
+**Mobile Behavior**: `BusinessVerificationBanner` returns early for MoMo merchants (`apps/mobile/src/components/business/BusinessVerificationBanner.tsx:97-102`):
+
+```typescript
+if (
+  status.lifecycle_status !== 'suspended' &&
+  status.paymentRail === 'mobile_money'
+) {
+  return null;  // Hides banner
+}
+```
+
+**Workaround**: Stripe Connect card exists at `ConfigurePaymentsScreen` but requires manual navigation.
+
+**Recommended Fix**: Show Stripe Connect card on dashboard when `paymentRail = 'stripe'` AND Connect incomplete, similar to web.
 
 ---
 
@@ -398,17 +550,34 @@ If the product decision changes to **require Stripe Connect for orders**:
 
 ## Conclusion
 
-**No backend gap found.** The intended product rules are correctly implemented:
-- ✅ Place Order = agreement signed only
-- ✅ "Coming soon" = MoMo phone gate (Stripe countries exempt)
-- ✅ Stripe Connect = badge + payouts only (not order eligibility)
+**✅ No backend or order-placement gap.** All platforms (web + mobile) correctly implement intended product rules:
+- ✅ Place Order = agreement signed only (`can_accept_orders`)
+- ✅ "Coming soon" = MoMo phone gate (Stripe countries exempt via `payments_enabled`)
+- ✅ Stripe Connect = badge + payouts only (NOT order eligibility)
 
-**Cannot verify mobile app** (not in this workspace). Likely scenarios:
-1. **No gap**: Business is in Stripe country → working as intended
-2. **Mobile skips preflight**: Place Order enabled without checking backend blockers
-3. **Mobile missing dashboard CTA**: No prompt to complete Stripe Connect
+**⚠️ One mobile dashboard UX gap**: Stripe Connect setup CTA not surfaced for MoMo-rail merchants when `can_accept_orders = true`.
 
-**Next steps**:
-1. Query prod DB for business country + phone verification status
-2. Audit mobile app checkout + dashboard screens
-3. If mobile diverges from web, create alignment PR (not a bug fix)
+### Likely Explanation for Reported Issue
+
+If business `03e3ee73-86a3-4323-bc3a-336e67dce9d6`:
+- ✅ Has signed merchant agreement → `can_accept_orders = true`
+- ✅ Is in Stripe-enabled country (US, CA, UK, FR, etc.) → `payments_enabled = true`
+- ❌ Has incomplete Stripe Connect → `charges_enabled = false`, `payouts_enabled = false`
+
+**Then**:
+- ✅ **Orders are placeable** on mobile (and web) — **working as intended per confirmed rules**
+- ✅ Mobile Place Order button shows "Buy" (not "Coming soon")
+- ⚠️ Mobile dashboard **does NOT** prominently show "Complete Stripe payouts" CTA (differs from web)
+- ✅ Backend allows orders (Stripe Connect readiness not required for checkout)
+
+### If This Is a Problem
+
+**Not a product rule violation** — the current behavior matches the confirmed intended design.
+
+**If product wants Stripe Connect required for orders**, this would be a **separate feature request** requiring:
+1. Update `deriveLifecycleStatus` to check payment capability
+2. Update `can_accept_orders` generated column
+3. Update preflight to block when Connect incomplete for Stripe-rail sellers
+4. Recalculate all business lifecycle states
+
+**Do NOT implement** unless explicitly requested by product/payments team.
