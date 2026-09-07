@@ -2,7 +2,9 @@
 # Promote main to prod: checkout prod, merge main, push, return to main.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# Find the git repository root (monorepo root)
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "Working tree has uncommitted changes. Commit or stash before running." >&2
