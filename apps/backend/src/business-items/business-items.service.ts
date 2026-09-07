@@ -931,8 +931,10 @@ export class BusinessItemsService {
   }
 
   async getBusinessLocations(businessId: string) {
+    // Admin schema includes order_alert_phone. User-role GraphQL omits it
+    // unless the JWT is `business`, which 500s locations/page-data.
     const result =
-      await this.hasuraUserService.executeQuery<{
+      await this.hasuraSystemService.executeQuery<{
         business_locations: any[];
       }>(GET_BUSINESS_LOCATIONS, { businessId });
     return result.business_locations ?? [];
@@ -1198,7 +1200,7 @@ export class BusinessItemsService {
         }
       }
     `;
-    const result = await this.hasuraUserService.executeMutation(updateMutation, {
+    const result = await this.hasuraSystemService.executeMutation(updateMutation, {
       id: locationId,
       data: setInput,
     });

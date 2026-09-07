@@ -99,6 +99,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - order_alert_phone
         - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
@@ -164,6 +165,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - order_alert_phone
         - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
@@ -184,6 +186,7 @@ select_permissions:
         - is_active
         - email
         - phone
+        - order_alert_phone
         - mobile_payment_phone_id
         - operating_hours
         - rendasua_item_commission_percentage
