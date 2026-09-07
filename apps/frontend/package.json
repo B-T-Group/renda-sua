@@ -45,6 +45,7 @@
     "i18next": "^25.2.1",
     "i18next-browser-languagedetector": "^8.2.0",
     "i18next-http-backend": "^3.0.2",
+    "libphonenumber-js": "^1.11.20",
     "notistack": "^3.0.2",
     "react": "19.0.0",
     "react-apexcharts": "^1.7.0",
