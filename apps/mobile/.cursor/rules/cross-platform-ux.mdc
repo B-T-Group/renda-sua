@@ -1,0 +1,36 @@
+---
+description: Always prioritize UX/UI that renders and behaves correctly on BOTH iOS and Android for this Expo app
+alwaysApply: true
+---
+
+# Cross-platform UX/UI first (iOS + Android)
+
+Every UI change in this Expo app must look and behave well on **both iOS and Android**. Never tune layout for one platform in a way that breaks the other. When in doubt, verify on an iOS simulator and an Android emulator before considering the work done.
+
+## Core principles
+
+- **Design for both platforms by default.** Prefer layouts that adapt (flex, `gap`, `useWindowDimensions`) over hardcoded pixel sizes that only fit one device.
+- **Respect safe areas.** Use `useSafeAreaInsets()` (from `react-native-safe-area-context`) for headers, footers, pinned actions, and fullscreen modals so content clears the notch, status bar, and home indicator on iOS, and the navigation/status bars on Android.
+- **Prefer `react-native-paper` primitives** (see `react-native-paper.mdc`) so colors, elevation, and roundness stay consistent across platforms.
+- **Use theme tokens** (`src/theme/`) for spacing, colors, radii, and typography—no magic numbers or raw hex in UI.
+- **All copy via i18n** (`useTranslation` / `t('key', 'Default')`)—never hardcode user-visible strings.
+
+## Known cross-platform pitfalls (avoid these)
+
+- **Do not use `react-native-paper` `Chip` for short status labels.** Its fixed height + single-line text container **clips/truncates text on iOS** (especially with `compact` or `maxWidth`). Use the self-sizing `StatusPill` (`src/components/common/StatusPill.tsx`) — a `View` + `Text` pill that sizes to its content — for status/badge labels.
+- **Do not use Paper `Dialog.ScrollArea` / `Dialog.Actions`.** They paint hard-coded hairlines that read as a **double border** above action buttons on iOS. Use a native `Modal` sheet instead (see `react-native-dialog-borders.mdc`).
+- **Text truncation:** when text can overflow, set explicit `numberOfLines` and let the container flex (`flex: 1, minWidth: 0`) instead of relying on percentage `maxWidth`, which truncates inconsistently across platforms.
+- **Fullscreen modals:** size the modal explicitly with `useWindowDimensions()` (`width`/`height`) and apply safe-area insets to top/bottom; do not rely on percentage `maxHeight` to fill the screen on native.
+- **Lists:** use `FlatList`/`SectionList` for long lists; verify scroll, momentum, and overscroll feel right on both platforms.
+- **Images:** always provide a graceful fallback (placeholder/icon) when a remote image URL is missing or fails, and set `resizeMode` explicitly.
+- **Touch targets:** keep interactive elements at least ~44pt so they are comfortable on both platforms.
+- **Keyboard:** use `KeyboardAvoidingView` / `keyboardShouldPersistTaps` where forms can be covered by the keyboard; behavior differs between iOS and Android, so test both.
+- **Platform branches:** when behavior must differ, use `Platform.OS` / `Platform.select` deliberately and ensure BOTH branches are implemented and tested—never leave one platform visibly broken.
+
+## Definition of done for UI work
+
+1. Renders correctly on iOS and Android (no clipped text, overlap, or off-screen content).
+2. Respects safe areas and does not collide with system bars/notch/home indicator.
+3. Uses theme tokens, Paper components, and i18n keys.
+4. Handles loading, empty, and error states.
+5. Long/edge-case content (long names, large numbers, missing images) degrades gracefully.

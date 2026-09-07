@@ -1,0 +1,28 @@
+---
+description: Terminal success screens must offer Return to dashboard and hide the header back button
+globs: src/{screens,navigation,components}/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# Terminal-state screens (no back, return to dashboard)
+
+A **terminal state** is a screen reached after a completed flow where going “back” into the wizard/checkout would be confusing or broken — e.g. request submitted, order placed, setup step success, payment confirmed.
+
+## Required UX
+
+1. **No header back button** — set `headerBackVisible: false`, `headerLeft: () => null` (and/or `headerShown: false` when the screen owns its chrome).
+2. **Disable swipe-back** — `gestureEnabled: false` on the stack screen options.
+3. **Pinned primary CTA: “Return to dashboard”** — always visible (footer outside the scroll area when content is long). Navigate to that role’s home/dashboard tab (e.g. client `ClientBrowse`, business dashboard).
+4. **Optional secondary** — text/outlined actions for related lists (“My orders”, “My rental requests”) are fine; they must not replace the dashboard CTA.
+
+## Do not
+
+- Leave users with only a top-left chevron (or no exit at all) on terminal screens
+- Put the only exit control below a long scroll without pinning it
+- Allow iOS/Android gesture back into a completed multi-step flow
+
+## Reference implementations
+
+- `src/screens/client/RentalRequestSubmittedScreen.tsx`
+- `src/screens/client/OrderPlacedSuccessScreen.tsx`
+- `src/components/business/SetupStepSuccessView.tsx` + `BusinessSetupStepSuccess` navigator options

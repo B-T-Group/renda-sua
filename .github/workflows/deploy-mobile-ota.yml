@@ -1,0 +1,51 @@
+name: Deploy Mobile OTA (Production)
+
+on:
+  push:
+    branches: [prod]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/deploy-mobile-ota.yml'
+
+concurrency:
+  group: mobile-ota-prod
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+          cache-dependency-path: apps/mobile/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          working-directory: apps/mobile
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish EAS Update (iOS → production)
+        run: eas update --branch production --platform ios --non-interactive --message "prod ${{ github.sha }}"
+
+      - name: Publish EAS Update (Android → production)
+        run: eas update --branch production --platform android --non-interactive --message "prod ${{ github.sha }}"
