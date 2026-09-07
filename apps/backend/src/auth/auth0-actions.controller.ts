@@ -16,6 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { timingSafeEqual } from 'crypto';
 import { Public } from './public.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { Configuration } from '../config/configuration';
@@ -55,7 +56,24 @@ export class Auth0ActionsController {
         'Auth0 Actions endpoints are not configured'
       );
     }
-    if (!providedSecret || providedSecret !== this.requiredSecret) {
+    if (!providedSecret) {
+      throw new UnauthorizedException('Invalid or missing action secret');
+    }
+    // Use timingSafeEqual to prevent timing attacks
+    try {
+      const providedBuf = Buffer.from(providedSecret, 'utf8');
+      const requiredBuf = Buffer.from(this.requiredSecret, 'utf8');
+      if (
+        providedBuf.length !== requiredBuf.length ||
+        !timingSafeEqual(providedBuf, requiredBuf)
+      ) {
+        throw new UnauthorizedException('Invalid or missing action secret');
+      }
+    } catch (error: any) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      // timingSafeEqual throws if buffers have different lengths
       throw new UnauthorizedException('Invalid or missing action secret');
     }
   }

@@ -400,9 +400,9 @@ export class SignupService {
       const sessionId = this.sessionStore.generateSessionId();
       await this.sessionStore.createSession(sessionId, {
         userId: result.user.id,
-        auth0RefreshToken: tokens.refresh_token!,
-        auth0AccessToken: tokens.access_token,
-        auth0IdToken: tokens.id_token,
+        auth0RefreshToken: result.tokens.refresh_token!,
+        auth0AccessToken: result.tokens.access_token,
+        auth0IdToken: result.tokens.id_token,
         createdAt: Date.now(),
         lastRefreshedAt: Date.now(),
         userAgent,
@@ -420,10 +420,10 @@ export class SignupService {
           attemptId: body.attemptId,
           user: result.user,
           launchPromo: result.launchPromo,
-          access_token: tokens.access_token,
-          id_token: tokens.id_token,
-          token_type: tokens.token_type,
-          expires_in: tokens.expires_in,
+          access_token: result.tokens.access_token,
+          id_token: result.tokens.id_token,
+          token_type: result.tokens.token_type,
+          expires_in: result.tokens.expires_in,
         },
       };
     }
@@ -435,7 +435,7 @@ export class SignupService {
         attemptId: body.attemptId,
         user: result.user,
         launchPromo: result.launchPromo,
-        ...tokens,
+        ...result.tokens,
       },
     };
   }
@@ -983,12 +983,17 @@ export class SignupService {
     // Set Auth0 app_metadata with user UUID and refresh tokens for proper JWT claims
     let finalTokens = authTokens;
     if (authTokens.id_token && authTokens.refresh_token) {
-      try {
-        const idClaims = jwt.decode(authTokens.id_token) as Auth0IdTokenClaims | null;
-        if (idClaims?.sub) {
-          // Derive personas from user_type_id for Auth0 metadata
-          const defaultRole = this.deriveDefaultRole(provisioned.user.user_type_id);
-          const allowedRoles = this.deriveAllowedRoles(provisioned.user.user_type_id);
+      const idClaims = jwt.decode(authTokens.id_token) as Auth0IdTokenClaims | null;
+      if (!idClaims?.sub) {
+        this.logger.warn(
+          `No Auth0 sub in id_token for user ${provisioned.user.id} - cannot set metadata`
+        );
+      } else {
+        try {
+          // Derive roles from payload.personas (preferred) or user_type_id (fallback)
+          const personas = this.normalizeSignupPersonas(payload);
+          const defaultRole = this.deriveDefaultRole(personas, provisioned.user.user_type_id);
+          const allowedRoles = this.deriveAllowedRoles(personas);
 
           await this.auth0Service.setRendasuaUserMetadata({
             auth0Sub: idClaims.sub,
@@ -1004,13 +1009,20 @@ export class SignupService {
           this.logger.log(
             `Refreshed tokens for new user ${provisioned.user.id} with Auth0 metadata`
           );
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to set Auth0 metadata or refresh tokens for user ${provisioned.user.id}: ${error?.message}`,
+            error?.stack
+          );
+          // Metadata/refresh failure means tokens won't have UUID claims - throw to prevent bad UX
+          throw new HttpException(
+            {
+              success: false,
+              error: 'Account created but authentication setup failed. Please contact support.',
+            },
+            HttpStatus.INTERNAL_SERVER_ERROR
+          );
         }
-      } catch (error: any) {
-        this.logger.error(
-          `Failed to set Auth0 metadata or refresh tokens: ${error?.message}`,
-          error?.stack
-        );
-        // Continue with original tokens - user can refresh manually
       }
     }
 
@@ -1029,19 +1041,26 @@ export class SignupService {
     };
   }
 
-  private deriveDefaultRole(userTypeId: string): string {
-    // Map legacy user_type_id to Hasura role
-    if (userTypeId === 'client') return 'client';
-    if (userTypeId === 'agent') return 'agent';
-    if (userTypeId === 'business') return 'business';
-    return 'user';
+  private deriveDefaultRole(personas: PersonaId[], userTypeId: string): string {
+    // Prefer personas array, fall back to user_type_id
+    if (personas.length === 1) {
+      return personas[0];
+    }
+    // Multiple personas: use user_type_id as tie-breaker
+    if (userTypeId === 'client' && personas.includes('client')) return 'client';
+    if (userTypeId === 'agent' && personas.includes('agent')) return 'agent';
+    if (userTypeId === 'business' && personas.includes('business')) return 'business';
+    // Fallback: first persona or 'user'
+    return personas[0] || 'user';
   }
 
-  private deriveAllowedRoles(userTypeId: string): string[] {
-    const roles = ['user'];
-    if (userTypeId === 'client') roles.push('client');
-    if (userTypeId === 'agent') roles.push('agent');
-    if (userTypeId === 'business') roles.push('business');
+  private deriveAllowedRoles(personas: PersonaId[]): string[] {
+    const roles: string[] = ['user'];
+    for (const persona of personas) {
+      if (!roles.includes(persona)) {
+        roles.push(persona);
+      }
+    }
     return roles;
   }
 
