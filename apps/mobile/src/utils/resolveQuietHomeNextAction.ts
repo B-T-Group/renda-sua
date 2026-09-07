@@ -14,6 +14,7 @@ import {
 
 export type QuietHomeNextActionId =
   | 'cannot_accept_orders'
+  | 'setup_stripe_connect'
   | 'id_review'
   | 'confirm_mm_phone'
   | 'actions_needed'
@@ -69,6 +70,11 @@ export function resolveQuietHomeNextAction(
 
   if (verification && !canAccept) {
     return { id: 'cannot_accept_orders', kind: 'blocker' };
+  }
+
+  // Post go-live: still surface Connect when backend asks for it.
+  if (verification?.nextAction === 'setup_stripe_connect') {
+    return { id: 'setup_stripe_connect', kind: 'blocker' };
   }
 
   if (input.showIdReview) {

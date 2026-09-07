@@ -60,7 +60,7 @@ describe('requiresMerchantAction', () => {
     );
     expect(
       requiresMerchantAction(baseStatus({ nextAction: 'setup_stripe_connect' }))
-    ).toBe(false);
+    ).toBe(true);
     expect(requiresMerchantAction(baseStatus({ nextAction: 'upload_id' }))).toBe(
       false
     );
@@ -117,6 +117,20 @@ describe('isSetupMode', () => {
       isSetupMode(
         baseStatus({
           nextAction: 'complete',
+          isOnboarding: false,
+          can_accept_orders: true,
+          lifecycle_status: 'active',
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('stays false after go-live even if setup_stripe_connect remains', () => {
+    expect(
+      isSetupMode(
+        baseStatus({
+          nextAction: 'setup_stripe_connect',
+          requiresMerchantAction: true,
           isOnboarding: false,
           can_accept_orders: true,
           lifecycle_status: 'active',
