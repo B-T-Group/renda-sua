@@ -985,44 +985,59 @@ export class SignupService {
     if (authTokens.id_token && authTokens.refresh_token) {
       const idClaims = jwt.decode(authTokens.id_token) as Auth0IdTokenClaims | null;
       if (!idClaims?.sub) {
-        this.logger.warn(
+        // Missing sub means we can't set metadata, tokens will lack UUID claims
+        this.logger.error(
           `No Auth0 sub in id_token for user ${provisioned.user.id} - cannot set metadata`
         );
-      } else {
-        try {
-          // Derive roles from payload.personas (preferred) or user_type_id (fallback)
-          const personas = this.normalizeSignupPersonas(payload);
-          const defaultRole = this.deriveDefaultRole(personas, provisioned.user.user_type_id);
-          const allowedRoles = this.deriveAllowedRoles(personas);
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Account created but authentication setup failed. Please contact support.',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+      
+      try {
+        // Derive roles from payload.personas (preferred) or user_type_id (fallback)
+        const personas = this.normalizeSignupPersonas(payload);
+        const defaultRole = this.deriveDefaultRole(personas, provisioned.user.user_type_id);
+        const allowedRoles = this.deriveAllowedRoles(personas);
 
-          await this.auth0Service.setRendasuaUserMetadata({
-            auth0Sub: idClaims.sub,
-            userId: provisioned.user.id,
-            defaultRole,
-            allowedRoles,
-          });
+        await this.auth0Service.setRendasuaUserMetadata({
+          auth0Sub: idClaims.sub,
+          userId: provisioned.user.id,
+          defaultRole,
+          allowedRoles,
+        });
 
-          // Refresh tokens to get JWT with proper x-hasura-user-id claims
-          finalTokens = await this.auth0Service.refreshTokensForNewUser(
-            authTokens.refresh_token
-          );
-          this.logger.log(
-            `Refreshed tokens for new user ${provisioned.user.id} with Auth0 metadata`
-          );
-        } catch (error: any) {
-          this.logger.error(
-            `Failed to set Auth0 metadata or refresh tokens for user ${provisioned.user.id}: ${error?.message}`,
-            error?.stack
-          );
-          // Metadata/refresh failure means tokens won't have UUID claims - throw to prevent bad UX
-          throw new HttpException(
-            {
-              success: false,
-              error: 'Account created but authentication setup failed. Please contact support.',
-            },
-            HttpStatus.INTERNAL_SERVER_ERROR
-          );
-        }
+        // Refresh tokens to get JWT with proper x-hasura-user-id claims
+        // Auth0 refresh typically omits refresh_token in response - preserve original
+        const refreshed = await this.auth0Service.refreshTokensForNewUser(
+          authTokens.refresh_token
+        );
+        finalTokens = {
+          ...authTokens,
+          ...refreshed,
+          refresh_token: refreshed.refresh_token ?? authTokens.refresh_token,
+        };
+        this.logger.log(
+          `Refreshed tokens for new user ${provisioned.user.id} with Auth0 metadata`
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to set Auth0 metadata or refresh tokens for user ${provisioned.user.id}: ${error?.message}`,
+          error?.stack
+        );
+        // NOTE: Metadata/refresh failure leaves orphaned DB user - acceptable trade-off
+        // User can contact support to fix. Alternative would be complex rollback saga.
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Account created but authentication setup failed. Please contact support.',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
       }
     }
 
