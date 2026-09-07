@@ -1,14 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { UnauthorizedException } from '@nestjs/common';
 import { Auth0ActionsController } from './auth0-actions.controller';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 describe('Auth0ActionsController', () => {
   let controller: Auth0ActionsController;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
+  const testSecret = 'test-secret-key-12345';
 
   beforeEach(async () => {
     const mockHasuraSystemService = {
       executeQuery: jest.fn(),
+    };
+
+    const mockConfigService = {
+      get: jest.fn((key: string) => {
+        if (key === 'AUTH0_ACTIONS_SHARED_SECRET') {
+          return testSecret;
+        }
+        return undefined;
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -17,6 +29,10 @@ describe('Auth0ActionsController', () => {
         {
           provide: HasuraSystemService,
           useValue: mockHasuraSystemService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();
@@ -28,12 +44,24 @@ describe('Auth0ActionsController', () => {
   describe('resolveUserId', () => {
     const testUserId = '550e8400-e29b-41d4-a716-446655440000';
 
-    it('should resolve user by email', async () => {
+    it('should reject request without secret', async () => {
+      await expect(
+        controller.resolveUserId(undefined, { email: 'test@example.com' })
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should reject request with wrong secret', async () => {
+      await expect(
+        controller.resolveUserId('wrong-secret', { email: 'test@example.com' })
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should resolve user by email with valid secret', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         users: [{ id: testUserId }],
       });
 
-      const result = await controller.resolveUserId({
+      const result = await controller.resolveUserId(testSecret, {
         email: 'test@example.com',
       });
 
@@ -47,12 +75,12 @@ describe('Auth0ActionsController', () => {
       );
     });
 
-    it('should resolve user by phone number', async () => {
+    it('should resolve user by phone number with valid secret', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         users: [{ id: testUserId }],
       });
 
-      const result = await controller.resolveUserId({
+      const result = await controller.resolveUserId(testSecret, {
         phone_number: '+237670000000',
       });
 
@@ -71,7 +99,7 @@ describe('Auth0ActionsController', () => {
         users: [{ id: testUserId }],
       });
 
-      await controller.resolveUserId({
+      await controller.resolveUserId(testSecret, {
         email: 'Test@Example.COM',
       });
 
@@ -86,7 +114,7 @@ describe('Auth0ActionsController', () => {
         users: [],
       });
 
-      const result = await controller.resolveUserId({
+      const result = await controller.resolveUserId(testSecret, {
         email: 'nonexistent@example.com',
       });
 
@@ -97,7 +125,7 @@ describe('Auth0ActionsController', () => {
     });
 
     it('should return not found when no email or phone provided', async () => {
-      const result = await controller.resolveUserId({});
+      const result = await controller.resolveUserId(testSecret, {});
 
       expect(result).toEqual({
         user_id: null,
@@ -111,7 +139,7 @@ describe('Auth0ActionsController', () => {
         users: [{ id: testUserId }],
       });
 
-      await controller.resolveUserId({
+      await controller.resolveUserId(testSecret, {
         email: 'test@example.com',
         phone_number: '+237670000000',
       });
@@ -127,7 +155,7 @@ describe('Auth0ActionsController', () => {
         new Error('Hasura connection failed')
       );
 
-      const result = await controller.resolveUserId({
+      const result = await controller.resolveUserId(testSecret, {
         email: 'test@example.com',
       });
 
@@ -142,7 +170,7 @@ describe('Auth0ActionsController', () => {
         users: [{ id: testUserId }],
       });
 
-      await controller.resolveUserId({
+      await controller.resolveUserId(testSecret, {
         email: '  test@example.com  ',
       });
 
@@ -157,7 +185,7 @@ describe('Auth0ActionsController', () => {
         users: [{ id: testUserId }],
       });
 
-      await controller.resolveUserId({
+      await controller.resolveUserId(testSecret, {
         phone_number: '  +237670000000  ',
       });
 
@@ -172,7 +200,7 @@ describe('Auth0ActionsController', () => {
         users: [],
       });
 
-      const result = await controller.resolveUserId({
+      const result = await controller.resolveUserId(testSecret, {
         email: 'test@example.com',
       });
 
@@ -187,7 +215,7 @@ describe('Auth0ActionsController', () => {
         users: null as any,
       });
 
-      const result = await controller.resolveUserId({
+      const result = await controller.resolveUserId(testSecret, {
         email: 'test@example.com',
       });
 

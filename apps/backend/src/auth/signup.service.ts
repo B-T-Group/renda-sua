@@ -979,19 +979,70 @@ export class SignupService {
           phoneNumber,
           payload
         );
+
+    // Set Auth0 app_metadata with user UUID and refresh tokens for proper JWT claims
+    let finalTokens = authTokens;
+    if (authTokens.id_token && authTokens.refresh_token) {
+      try {
+        const idClaims = jwt.decode(authTokens.id_token) as Auth0IdTokenClaims | null;
+        if (idClaims?.sub) {
+          // Derive personas from user_type_id for Auth0 metadata
+          const defaultRole = this.deriveDefaultRole(provisioned.user.user_type_id);
+          const allowedRoles = this.deriveAllowedRoles(provisioned.user.user_type_id);
+
+          await this.auth0Service.setRendasuaUserMetadata({
+            auth0Sub: idClaims.sub,
+            userId: provisioned.user.id,
+            defaultRole,
+            allowedRoles,
+          });
+
+          // Refresh tokens to get JWT with proper x-hasura-user-id claims
+          finalTokens = await this.auth0Service.refreshTokensForNewUser(
+            authTokens.refresh_token
+          );
+          this.logger.log(
+            `Refreshed tokens for new user ${provisioned.user.id} with Auth0 metadata`
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to set Auth0 metadata or refresh tokens: ${error?.message}`,
+          error?.stack
+        );
+        // Continue with original tokens - user can refresh manually
+      }
+    }
+
     const snapshot: SignupCompletionSnapshot = {
       user: provisioned.user,
       launchPromo: provisioned.launchPromo,
-      tokens: authTokens,
+      tokens: finalTokens,
       completedAt: new Date().toISOString(),
       sessionId: undefined, // Will be set in verifySignupOtp for web clients
     };
     await this.markAttemptCompleted(attempt.id, provisioned.user.id, snapshot);
     return {
-      tokens: authTokens,
+      tokens: finalTokens,
       user: provisioned.user,
       launchPromo: provisioned.launchPromo,
     };
+  }
+
+  private deriveDefaultRole(userTypeId: string): string {
+    // Map legacy user_type_id to Hasura role
+    if (userTypeId === 'client') return 'client';
+    if (userTypeId === 'agent') return 'agent';
+    if (userTypeId === 'business') return 'business';
+    return 'user';
+  }
+
+  private deriveAllowedRoles(userTypeId: string): string[] {
+    const roles = ['user'];
+    if (userTypeId === 'client') roles.push('client');
+    if (userTypeId === 'agent') roles.push('agent');
+    if (userTypeId === 'business') roles.push('business');
+    return roles;
   }
 
   private async createFreshProvisionedUser(

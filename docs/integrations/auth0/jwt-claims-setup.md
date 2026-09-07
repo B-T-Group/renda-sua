@@ -35,116 +35,87 @@ Create an Auth0 **Post-Login Action** (or Credentials Exchange for M2M) that:
 
 ```javascript
 /**
- * Auth0 Post-Login Action for Hasura JWT Claims
+ * Auth0 Post-Login / Credentials Exchange Action for Hasura JWT Claims
  * 
- * This action runs after successful authentication and sets custom JWT claims
+ * This action runs after authentication and token refresh to set custom JWT claims
  * that Hasura uses for authorization.
+ * 
+ * IMPORTANT: Must be configured for BOTH:
+ * - Post-Login flow (authentication)
+ * - Credentials Exchange flow (token refresh)
  */
 
 exports.onExecutePostLogin = async (event, api) => {
+  await setHasuraClaimsFromMetadata(event, api);
+};
+
+exports.onExecuteCredentialsExchange = async (event, api) => {
+  await setHasuraClaimsFromMetadata(event, api);
+};
+
+async function setHasuraClaimsFromMetadata(event, api) {
   const namespace = 'https://hasura.io/jwt/claims';
   
-  // Get user's email or phone from Auth0 profile
-  const email = event.user.email;
-  const phoneNumber = event.user.phone_number;
+  // Read Rendasua user data from app_metadata (set by backend after signup)
+  const userId = event.user.app_metadata?.rendasua_user_id;
+  const defaultRole = event.user.app_metadata?.rendasua_default_role || 'user';
+  const allowedRoles = event.user.app_metadata?.rendasua_allowed_roles || ['user'];
   
-  if (!email && !phoneNumber) {
-    console.log('No email or phone number found for user', event.user.user_id);
-    return api.access.deny('User must have email or phone number');
-  }
-  
-  // Look up the database user UUID
-  let userId = null;
-  try {
-    const response = await fetch(`${event.secrets.BACKEND_URL}/api/auth0-actions/resolve-user-id`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(
-        email ? { email } : { phone_number: phoneNumber }
-      ),
-    });
+  if (!userId) {
+    console.log('No rendasua_user_id in app_metadata for user', event.user.user_id);
     
-    const data = await response.json();
+    // For returning users who signed up before metadata was set, look up via API
+    const email = event.user.email;
+    const phoneNumber = event.user.phone_number;
     
-    if (data.found && data.user_id) {
-      userId = data.user_id;
-      console.log(`Resolved user ${userId} for ${email || phoneNumber}`);
-    } else {
-      console.log(`User not found in database for ${email || phoneNumber} (likely new signup)`);
-      // For new signups, the user will be created after OTP verification
-      // Skip setting claims for now - the signup flow handles this
-      return;
+    if (email || phoneNumber) {
+      try {
+        const response = await fetch(
+          `${event.secrets.BACKEND_URL}/api/auth0-actions/resolve-user-id`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Auth0-Action-Secret': event.secrets.AUTH0_ACTION_SECRET,
+            },
+            body: JSON.stringify(
+              email ? { email } : { phone_number: phoneNumber }
+            ),
+          }
+        );
+        
+        const data = await response.json();
+        
+        if (data.found && data.user_id) {
+          console.log('Resolved user via API for migration');
+          const claims = {
+            'x-hasura-user-id': data.user_id,
+            'x-hasura-default-role': defaultRole,
+            'x-hasura-allowed-roles': allowedRoles,
+          };
+          api.accessToken.setCustomClaim(namespace, claims);
+          api.idToken.setCustomClaim(namespace, claims);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to resolve user ID via API:', error.message);
+      }
     }
-  } catch (error) {
-    console.error('Failed to resolve user ID:', error.message);
-    // Continue without claims - signup flow will handle new users
+    
+    // New signup - backend will set metadata and refresh token
+    console.log('New signup - skipping claims (backend will set metadata)');
     return;
   }
   
-  // Query Hasura to get user's personas (client, agent, business)
-  // This determines which roles the user can assume
-  const personas = await getUserPersonas(userId, event.secrets);
-  
-  // Set Hasura JWT claims
+  // Set Hasura JWT claims from app_metadata
   const claims = {
     'x-hasura-user-id': userId,
-    'x-hasura-default-role': personas.defaultRole || 'user',
-    'x-hasura-allowed-roles': personas.allowedRoles || ['user'],
+    'x-hasura-default-role': defaultRole,
+    'x-hasura-allowed-roles': allowedRoles,
   };
   
   api.accessToken.setCustomClaim(namespace, claims);
   api.idToken.setCustomClaim(namespace, claims);
-};
-
-async function getUserPersonas(userId, secrets) {
-  // Query Hasura to get user's personas
-  const query = `
-    query GetUserPersonas($userId: uuid!) {
-      users_by_pk(id: $userId) {
-        user_type_id
-        client { id }
-        agent { id }
-        business { id }
-      }
-    }
-  `;
-  
-  try {
-    const response = await fetch(`${secrets.HASURA_URL}/v1/graphql`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-hasura-admin-secret': secrets.HASURA_ADMIN_SECRET,
-      },
-      body: JSON.stringify({ query, variables: { userId } }),
-    });
-    
-    const result = await response.json();
-    const user = result.data?.users_by_pk;
-    
-    if (!user) {
-      return { defaultRole: 'user', allowedRoles: ['user'] };
-    }
-    
-    // Build allowed roles based on which persona rows exist
-    const allowedRoles = ['user']; // Always include 'user' role
-    if (user.client?.id) allowedRoles.push('client');
-    if (user.agent?.id) allowedRoles.push('agent');
-    if (user.business?.id) allowedRoles.push('business');
-    
-    // Determine default role
-    let defaultRole = 'user';
-    if (user.user_type_id === 'client' && user.client?.id) defaultRole = 'client';
-    else if (user.user_type_id === 'agent' && user.agent?.id) defaultRole = 'agent';
-    else if (user.user_type_id === 'business' && user.business?.id) defaultRole = 'business';
-    
-    return { defaultRole, allowedRoles };
-  } catch (error) {
-    console.error('Failed to get user personas:', error.message);
-    return { defaultRole: 'user', allowedRoles: ['user'] };
-  }
 }
 ```
 
@@ -153,47 +124,69 @@ async function getUserPersonas(userId, secrets) {
 Configure these secrets in your Auth0 Action:
 
 - `BACKEND_URL`: Your Rendasua backend URL (e.g., `https://api.rendasua.com`)
-- `HASURA_URL`: Your Hasura GraphQL endpoint (e.g., `https://hasura.rendasua.com`)
-- `HASURA_ADMIN_SECRET`: Hasura admin secret for querying user personas
+- `AUTH0_ACTION_SECRET`: Shared secret for authenticating API calls (matches backend `AUTH0_ACTIONS_SHARED_SECRET`)
 
-## Signup Flow Timing
+## How New Signup Gets Proper UUID Claims
 
-### Important: User Creation Happens After Token Generation
+### The Challenge
 
-During the signup flow:
+During signup, Auth0 creates JWT tokens **before** the user exists in the database, so the Auth0 Action cannot look up the UUID.
 
+### The Solution
+
+The backend sets Auth0 `app_metadata` after creating the user, then refreshes the tokens:
+
+```
+New Signup Flow:
 1. User submits phone/email for signup
 2. Auth0 sends OTP
 3. User verifies OTP
-4. **Auth0 generates JWT tokens** (Auth0 Action runs here)
-5. Backend receives tokens and **creates user in database**
-
-This means:
-- For **new signups**, the user doesn't exist when the Auth0 Action runs
-- The Action should gracefully handle this by returning early
-- The backend signup flow creates the user with a proper UUID
-- On subsequent logins, the user exists and the Action can set proper claims
+4. Auth0 generates initial JWT tokens
+   └─> Auth0 Action runs (no app_metadata yet)
+   └─> Action skips setting claims (user doesn't exist)
+5. Backend receives tokens
+6. Backend creates user in database with UUID
+7. ✅ Backend sets Auth0 app_metadata:
+   └─> rendasua_user_id: <uuid>
+   └─> rendasua_default_role: 'client'/'agent'/'business'
+   └─> rendasua_allowed_roles: ['user', 'client', ...]
+8. ✅ Backend refreshes tokens using refresh_token
+   └─> Auth0 Action runs again (Credentials Exchange)
+   └─> Action reads app_metadata and sets proper claims
+9. Backend returns refreshed tokens to client
+10. Client uses tokens with proper x-hasura-user-id UUID ✅
+```
 
 ### Login Flow
 
-For returning users:
+For returning users, `app_metadata` already exists:
 
 1. User submits email/phone for login
-2. Backend verifies user exists (returns 404 if not)
-3. Auth0 sends OTP
-4. User verifies OTP
-5. Auth0 generates JWT tokens (Auth0 Action runs here)
-6. Action successfully resolves user UUID
-7. JWT claims are set correctly
+2. Auth0 sends OTP
+3. User verifies OTP
+4. Auth0 generates JWT tokens (Auth0 Action runs)
+5. Action reads `app_metadata.rendasua_user_id`
+6. Action sets proper JWT claims immediately
+7. Tokens work on first try ✅
+
+### Migration: Existing Users
+
+For users who signed up before `app_metadata` was implemented:
+
+- Auth0 Action calls `/api/auth0-actions/resolve-user-id` (fallback)
+- Looks up user by email/phone
+- Sets claims from lookup result
+- (Optional) Backend can backfill `app_metadata` for all users)
 
 ## Testing
 
-### Test with curl
+### Test the resolve-user-id endpoint (Auth0 Action helper)
 
 ```bash
-# Test the resolve-user-id endpoint
+# Test with shared secret header
 curl -X POST https://api.rendasua.com/api/auth0-actions/resolve-user-id \
   -H "Content-Type: application/json" \
+  -H "X-Auth0-Action-Secret: your-secret-here" \
   -d '{"email": "test@example.com"}'
 
 # Expected response for existing user:
@@ -201,6 +194,12 @@ curl -X POST https://api.rendasua.com/api/auth0-actions/resolve-user-id \
 
 # Expected response for new user:
 # {"user_id": null, "found": false}
+
+# Without secret header - should get 401:
+curl -X POST https://api.rendasua.com/api/auth0-actions/resolve-user-id \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com"}'
+# Expected: {"statusCode": 401, "message": "Invalid or missing action secret"}
 ```
 
 ### Verify JWT Claims

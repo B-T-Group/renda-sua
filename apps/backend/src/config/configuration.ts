@@ -509,6 +509,8 @@ export interface Configuration {
   GOOGLE_CACHE_TTL: number;
   /** Public web app origin (no trailing slash); OG canonical URLs and share HTML. */
   publicWebAppUrl: string;
+  /** Shared secret for Auth0 Actions to authenticate API calls. */
+  AUTH0_ACTIONS_SHARED_SECRET: string;
   app: AppConfig;
   database: DatabaseConfig;
   hasura: HasuraConfig;
@@ -595,6 +597,7 @@ export default (): Configuration => {
     publicWebAppUrl: (
       process.env.PUBLIC_WEB_APP_URL || 'https://rendasua.com'
     ).replace(/\/$/, ''),
+    AUTH0_ACTIONS_SHARED_SECRET: process.env.AUTH0_ACTIONS_SHARED_SECRET || '',
     airtelMoney: {
       clientId:
         process.env.AIRTEL_MONEY_CLIENT_ID ??

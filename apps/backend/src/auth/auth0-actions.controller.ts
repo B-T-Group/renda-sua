@@ -1,19 +1,24 @@
 import {
   Body,
   Controller,
+  Headers,
   HttpCode,
   HttpStatus,
   Logger,
   Post,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiBody,
+  ApiHeader,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { Public } from './public.decorator';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import type { Configuration } from '../config/configuration';
 
 interface ResolveUserIdRequest {
   email?: string;
@@ -29,10 +34,31 @@ interface ResolveUserIdResponse {
 @Controller('auth0-actions')
 export class Auth0ActionsController {
   private readonly logger = new Logger(Auth0ActionsController.name);
+  private readonly requiredSecret: string;
 
   constructor(
-    private readonly hasuraSystemService: HasuraSystemService
-  ) {}
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly configService: ConfigService<Configuration>
+  ) {
+    this.requiredSecret =
+      this.configService.get('AUTH0_ACTIONS_SHARED_SECRET') || '';
+    if (!this.requiredSecret) {
+      this.logger.warn(
+        'AUTH0_ACTIONS_SHARED_SECRET not configured - auth0-actions endpoints will reject all requests'
+      );
+    }
+  }
+
+  private verifySharedSecret(providedSecret: string | undefined): void {
+    if (!this.requiredSecret) {
+      throw new UnauthorizedException(
+        'Auth0 Actions endpoints are not configured'
+      );
+    }
+    if (!providedSecret || providedSecret !== this.requiredSecret) {
+      throw new UnauthorizedException('Invalid or missing action secret');
+    }
+  }
 
   @Public()
   @Post('resolve-user-id')
@@ -40,9 +66,15 @@ export class Auth0ActionsController {
   @ApiOperation({
     summary: 'Resolve user UUID by email or phone for Auth0 Actions',
     description:
-      'Public endpoint for Auth0 Actions to look up the database user UUID ' +
-      'by email or phone number. Returns null if user not found. ' +
-      'Used during JWT claim customization to set x-hasura-user-id.',
+      'Protected endpoint for Auth0 Actions to look up the database user UUID ' +
+      'by email or phone number. Returns null if user not found (e.g., during signup). ' +
+      'Used during JWT claim customization to set x-hasura-user-id. ' +
+      'Requires X-Auth0-Action-Secret header matching AUTH0_ACTIONS_SHARED_SECRET.',
+  })
+  @ApiHeader({
+    name: 'X-Auth0-Action-Secret',
+    description: 'Shared secret for Auth0 Action authentication',
+    required: true,
   })
   @ApiBody({
     schema: {
@@ -65,9 +97,16 @@ export class Auth0ActionsController {
       },
     },
   })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid or missing action secret',
+  })
   async resolveUserId(
+    @Headers('x-auth0-action-secret') actionSecret: string | undefined,
     @Body() body: ResolveUserIdRequest
   ): Promise<ResolveUserIdResponse> {
+    this.verifySharedSecret(actionSecret);
+
     const email = body.email?.trim().toLowerCase();
     const phoneNumber = body.phone_number?.trim();
 
@@ -86,23 +125,23 @@ export class Auth0ActionsController {
       if (email) {
         const user = await this.getUserByEmail(email);
         if (user) {
-          this.logger.log(
-            `Auth0 Action resolved user ${user.id} by email ${email}`
+          this.logger.debug(
+            `Auth0 Action resolved user ${user.id} by email`
           );
           return { user_id: user.id, found: true };
         }
       } else if (phoneNumber) {
         const user = await this.getUserByPhone(phoneNumber);
         if (user) {
-          this.logger.log(
-            `Auth0 Action resolved user ${user.id} by phone ${phoneNumber}`
+          this.logger.debug(
+            `Auth0 Action resolved user ${user.id} by phone`
           );
           return { user_id: user.id, found: true };
         }
       }
 
       this.logger.debug(
-        `Auth0 Action: user not found for ${email || phoneNumber} (likely new signup)`
+        `Auth0 Action: user not found (likely new signup)`
       );
       return { user_id: null, found: false };
     } catch (error: any) {
