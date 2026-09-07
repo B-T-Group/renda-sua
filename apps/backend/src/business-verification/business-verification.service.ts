@@ -34,8 +34,10 @@ export type VerificationNextAction =
   | 'verify_mobile_payment_phone'
   | 'complete';
 
-const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
-  new Set(['sign_agreement', 'setup_stripe_connect']);
+const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> = new Set([
+  'sign_agreement',
+  'setup_stripe_connect',
+] as const);
 
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
 
