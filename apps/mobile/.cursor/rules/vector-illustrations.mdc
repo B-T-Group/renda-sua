@@ -1,0 +1,26 @@
+---
+description: Prefer custom SVG vector illustrations to explain UX concepts
+alwaysApply: true
+---
+
+# Vector illustrations for understanding
+
+When building or improving user-facing flows (onboarding, dashboards, empty states, benefit/responsibility explainers, success moments), **generate simple visual vector illustrations** when they help the user understand faster than text alone.
+
+## Prefer
+
+- Theme-aware SVG components under `src/components/illustrations/` (or `src/components/feedback/` for celebratory moments)
+- `react-native-svg` shapes (`Circle`, `Rect`, `Path`) using `useTheme()` colors — no hardcoded brand hex unless dynamic contrast requires it
+- One clear metaphor per illustration (e.g. store → coin for commission; two people for accompaniment)
+- Accessible wrappers: `accessibilityRole="image"` and a short `accessibilityLabel`
+- Keep illustrations small and focused (~96–160px); place above the related headline
+
+## Avoid
+
+- Generic stock photos or emoji as the primary teaching visual
+- Dense decorative art that competes with copy
+- Skipping an illustration when the concept is abstract (commissions, referrals, moderation, verification)
+
+## Example placement
+
+Explainers (benefit / responsibility / how-it-works) should pair each section with a short illustration + title + one supporting sentence.

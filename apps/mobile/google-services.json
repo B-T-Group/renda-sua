@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "963019382468",
+    "project_id": "rendasua-b1f6d",
+    "storage_bucket": "rendasua-b1f6d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:963019382468:android:df09d910a665ac2834f391",
+        "android_client_info": {
+          "package_name": "com.rendasua.agent"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAT8J80cEIPmGit1co_iPau4LszGgE78ww"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
