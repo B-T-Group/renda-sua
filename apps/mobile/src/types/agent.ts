@@ -81,6 +81,7 @@ export interface Order {
   grace_deadline_at?: string | null;
   busy_extra_prep_minutes?: number | null;
   estimated_prep_minutes?: number | null;
+  client_ready_nudge_sent_at?: string | null;
   estimated_delivery_time?: string;
   actual_delivery_time?: string;
   special_instructions?: string;

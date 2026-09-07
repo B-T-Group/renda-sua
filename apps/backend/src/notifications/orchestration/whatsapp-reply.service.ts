@@ -28,6 +28,8 @@ export type WhatsAppCommand =
   | 'BUSY'
   | 'DECLINE'
   | 'READY'
+  | 'MARK_AS_READY'
+  | 'NOT_READY'
   | 'ACCEPT'
   | 'ARRIVED'
   | 'PICKED_UP'
@@ -43,6 +45,8 @@ const BUTTON_TO_ACTION: Record<string, MerchantWaAction> = {
   busy: 'BUSY',
   decline: 'DECLINE',
   need_more_time: 'BUSY',
+  mark_as_ready: 'MARK_AS_READY',
+  not_ready: 'NOT_READY',
 };
 
 /**
@@ -99,7 +103,15 @@ export class WhatsAppReplyService implements OnModuleInit {
       BESOIN_DE_TEMPS: 'BUSY',
       OCCUPE: 'BUSY',
       OCCUPÉ: 'BUSY',
-      READY: 'READY',
+      READY: 'MARK_AS_READY',
+      MARK_AS_READY: 'MARK_AS_READY',
+      MARQUER_PRET: 'MARK_AS_READY',
+      MARQUER_PRÊT: 'MARK_AS_READY',
+      PRET: 'MARK_AS_READY',
+      PRÊT: 'MARK_AS_READY',
+      NOT_READY: 'NOT_READY',
+      PAS_PRET: 'NOT_READY',
+      PAS_PRÊT: 'NOT_READY',
       ACCEPT: 'CONFIRM',
       ARRIVED: 'ARRIVED',
       PICKED_UP: 'PICKED_UP',
@@ -420,6 +432,8 @@ export class WhatsAppReplyService implements OnModuleInit {
     if (command === 'CONFIRM' || command === 'YES') return 'CONFIRM';
     if (command === 'BUSY') return 'BUSY';
     if (command === 'DECLINE' || command === 'NO') return 'DECLINE';
+    if (command === 'MARK_AS_READY' || command === 'READY') return 'MARK_AS_READY';
+    if (command === 'NOT_READY') return 'NOT_READY';
     return null;
   }
 

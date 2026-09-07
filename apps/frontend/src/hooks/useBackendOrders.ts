@@ -835,6 +835,41 @@ export const useBackendOrders = () => {
     }, 'orders.switchingToPickup');
   };
 
+  const remindReady = async (
+    orderId: string
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<{
+          success: boolean;
+          message: string;
+        }>(op(`/orders/${orderId}/remind-ready`), {});
+
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to send ready reminder'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to send ready reminder';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.remindingReady');
+  };
+
   const completeDelivery = async (
     request: CompleteDeliveryRequest
   ): Promise<OrderStatusChangeResponse> => {
@@ -1255,6 +1290,7 @@ export const useBackendOrders = () => {
     completeOrder,
     confirmOrderReceipt,
     switchToPickup,
+    remindReady,
 
     // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)
     completeDelivery,

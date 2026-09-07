@@ -282,6 +282,17 @@ const orders = {
     return res;
   },
 
+  remindReady: async (orderId: string): Promise<OrderActionResponse> => {
+    const res = await api.post<OrderActionResponse>(
+      `/orders/${orderId}/remind-ready`,
+      {}
+    );
+    if (res.success === false) {
+      throw new Error(res.message || 'Failed to send ready reminder');
+    }
+    return res;
+  },
+
   getCancellationPreview: (orderId: string): Promise<CancellationPreview> =>
     api.get<CancellationPreview>(`/orders/${orderId}/cancellation-preview`),
 

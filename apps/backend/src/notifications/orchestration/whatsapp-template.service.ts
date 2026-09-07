@@ -12,6 +12,14 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
   order_offer_agent: { en: 'rs_delivery_offer', fr: 'rs_delivery_offer' },
   order_status_client: { en: 'rs_order_status', fr: 'rs_order_status' },
   order_ready: { en: 'rs_order_ready', fr: 'rs_order_ready' },
+  order_mark_ready_business: {
+    en: 'rs_order_mark_ready',
+    fr: 'rs_order_mark_ready',
+  },
+  order_ready_nudge_business: {
+    en: 'rs_order_ready_nudge',
+    fr: 'rs_order_ready_nudge',
+  },
   rental_request_business: { en: 'rs_rental_request', fr: 'rs_rental_request' },
   verification_attention: { en: 'rs_verification', fr: 'rs_verification' },
   delivery_pin: { en: 'rs_delivery_pin', fr: 'rs_delivery_pin' },
@@ -44,6 +52,8 @@ const BODY_VARS: Record<string, string[]> = {
   order_offer_agent: ['pickupArea', 'distance'],
   order_status_client: ['orderNumber', 'statusLabel'],
   order_ready: ['orderNumber'],
+  order_mark_ready_business: ['orderNumber'],
+  order_ready_nudge_business: ['orderNumber'],
   rental_request_business: ['itemName', 'dates'],
   verification_attention: ['reason'],
   delivery_pin: ['pin'],
@@ -82,6 +92,7 @@ const TEMPLATE_CATEGORIES: Record<string, WhatsAppTemplateCategory> = {
 const STATIC_CTA_KEYS = new Set([
   'verification_attention',
   'order_action_business',
+  'order_ready_nudge_business',
 ]);
 
 /** Recipient templates have no URL CTA in Meta (appealed / approved bodies). */

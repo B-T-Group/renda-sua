@@ -1,13 +1,26 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { DELEGATION_PERMISSIONS } from '../delegations/delegation.constants';
 import { phonesEqual } from '../notifications/merchant-order-notify.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import type { PendingAcceptanceOrder } from './order-acceptance.types';
 import { OrdersService } from './orders.service';
 
-export type MerchantWaAction = 'CONFIRM' | 'BUSY' | 'DECLINE';
+export type MerchantWaAction =
+  | 'CONFIRM'
+  | 'BUSY'
+  | 'DECLINE'
+  | 'MARK_AS_READY'
+  | 'NOT_READY';
+
+const MARK_READY_NOTIFICATION_TYPES = new Set([
+  'order.mark_ready.prompt',
+  'order.ready.nudge',
+]);
+
+const READY_ACTIONABLE_STATUSES = new Set(['confirmed']);
 
 type WaActor =
   | { kind: 'owner'; userId: string; businessId: string }
@@ -84,7 +97,9 @@ export class WhatsAppOrderActionService {
   constructor(
     private readonly hasura: HasuraSystemService,
     private readonly orders: OrdersService,
-    private readonly acceptance: OrderAcceptanceService
+    private readonly acceptance: OrderAcceptanceService,
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notifications: NotificationsService
   ) {}
 
   async handleAction(params: {
@@ -95,6 +110,12 @@ export class WhatsAppOrderActionService {
   }): Promise<{ handled: boolean; message: string }> {
     const bound = await this.handleBoundAction(params);
     if (bound) return bound;
+    if (params.action === 'NOT_READY') {
+      return {
+        handled: true,
+        message: this.msgNoneReady(params.preferredLanguage),
+      };
+    }
     const actor = await this.resolveActor(params.fromPhone);
     if (!actor) {
       return { handled: false, message: this.msgUnknown(params.preferredLanguage) };
@@ -102,9 +123,18 @@ export class WhatsAppOrderActionService {
     if (actor.kind === 'ambiguous') {
       return { handled: true, message: this.msgAmbiguous(params.preferredLanguage) };
     }
-    const order = await this.loadOldestPending(actor);
+    const order =
+      params.action === 'MARK_AS_READY'
+        ? await this.loadOldestConfirmed(actor)
+        : await this.loadOldestPending(actor);
     if (!order) {
-      return { handled: true, message: this.msgNone(params.preferredLanguage) };
+      return {
+        handled: true,
+        message:
+          params.action === 'MARK_AS_READY'
+            ? this.msgNoneReady(params.preferredLanguage)
+            : this.msgNone(params.preferredLanguage),
+      };
     }
     return {
       handled: true,
@@ -117,6 +147,22 @@ export class WhatsAppOrderActionService {
     };
   }
 
+  /**
+   * When Yes/No is tapped on a mark-ready / ready-nudge template, remap
+   * CONFIRM/DECLINE so we never cancel an order from a "No, not ready" tap.
+   */
+  resolveActionForBoundTemplate(
+    action: MerchantWaAction,
+    notificationType?: string | null
+  ): MerchantWaAction {
+    if (!notificationType || !MARK_READY_NOTIFICATION_TYPES.has(notificationType)) {
+      return action;
+    }
+    if (action === 'CONFIRM') return 'MARK_AS_READY';
+    if (action === 'DECLINE') return 'NOT_READY';
+    return action;
+  }
+
   private async handleBoundAction(params: {
     fromPhone: string;
     action: MerchantWaAction;
@@ -125,9 +171,17 @@ export class WhatsAppOrderActionService {
   }): Promise<{ handled: boolean; message: string } | null> {
     const wamid = params.contextMessageId?.trim();
     if (!wamid) return null;
-    const orderId = await this.lookupBoundOrderId(wamid);
-    if (!orderId) return null;
-    return this.runBoundOrderAction(params, orderId);
+    const bound = await this.lookupBoundOrder(wamid);
+    if (!bound?.orderId) return null;
+    const action = this.resolveActionForBoundTemplate(
+      params.action,
+      bound.notificationType
+    );
+    return this.runBoundOrderAction(
+      { ...params, action },
+      bound.orderId,
+      bound.notificationType
+    );
   }
 
   private async runBoundOrderAction(
@@ -136,17 +190,27 @@ export class WhatsAppOrderActionService {
       action: MerchantWaAction;
       preferredLanguage?: string | null;
     },
-    orderId: string
+    orderId: string,
+    notificationType?: string | null
   ): Promise<{ handled: boolean; message: string }> {
     const order = await this.loadOrderById(orderId);
     if (!order) {
       return { handled: true, message: this.msgNone(params.preferredLanguage) };
     }
-    if (!this.isAwaitingAcceptance(order)) {
-      return {
-        handled: true,
-        message: this.msgAlready(order.order_number, params.preferredLanguage),
-      };
+    if (
+      params.action === 'CONFIRM' ||
+      params.action === 'BUSY' ||
+      params.action === 'DECLINE'
+    ) {
+      if (!this.isAwaitingAcceptance(order)) {
+        return {
+          handled: true,
+          message: this.msgAlready(order.order_number, params.preferredLanguage),
+        };
+      }
+    }
+    if (params.action === 'MARK_AS_READY' || params.action === 'NOT_READY') {
+      // Status gate handled in doMarkReady / doNotReady.
     }
     const actor = await this.resolveActorForOrder(params.fromPhone, order);
     if (!actor) {
@@ -161,7 +225,8 @@ export class WhatsAppOrderActionService {
         params.action,
         order,
         actor,
-        params.preferredLanguage
+        params.preferredLanguage,
+        notificationType
       ),
     };
   }
@@ -170,15 +235,58 @@ export class WhatsAppOrderActionService {
     action: MerchantWaAction,
     order: PendingWaOrder,
     actor: ResolvedWaActor,
-    lang?: string | null
+    lang?: string | null,
+    notificationType?: string | null
   ): Promise<string> {
     try {
       if (action === 'CONFIRM') return await this.doConfirm(order, actor, lang);
       if (action === 'BUSY') return await this.doBusy(order, actor, lang);
-      return await this.doDecline(order, actor, lang);
+      if (action === 'DECLINE') return await this.doDecline(order, actor, lang);
+      if (action === 'MARK_AS_READY') {
+        return await this.doMarkReady(order, actor, lang);
+      }
+      return await this.doNotReady(order, lang, notificationType);
     } catch (error: any) {
       return this.mapError(error, order, lang);
     }
+  }
+
+  private async doMarkReady(
+    order: PendingWaOrder,
+    actor: ResolvedWaActor,
+    lang?: string | null
+  ): Promise<string> {
+    if (order.current_status === 'ready_for_pickup') {
+      return this.msgAlreadyReady(order.order_number, lang);
+    }
+    if (!READY_ACTIONABLE_STATUSES.has(order.current_status)) {
+      return this.msgNotConfirmed(order.order_number, lang);
+    }
+    await this.orders.completePreparation(
+      { orderId: order.id, notes: 'Marked ready from WhatsApp' },
+      this.toActor(actor, order)
+    );
+    return this.msgMarkedReady(order.order_number, lang);
+  }
+
+  private async doNotReady(
+    order: PendingWaOrder,
+    lang?: string | null,
+    notificationType?: string | null
+  ): Promise<string> {
+    if (notificationType !== 'order.ready.nudge') {
+      return this.msgNotReadyAck(order.order_number, lang);
+    }
+    const clientUserId = await this.loadClientUserId(order.id);
+    if (clientUserId) {
+      await this.notifications.notifyClientOrderNotReady({
+        clientUserId,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        preferredLanguage: lang,
+      });
+    }
+    return this.msgNotReadyAck(order.order_number, lang);
   }
 
   private async doConfirm(
@@ -296,15 +404,24 @@ export class WhatsAppOrderActionService {
     return (CONFIRMABLE_ACCEPTANCE as readonly string[]).includes(state);
   }
 
-  private async lookupBoundOrderId(wamid: string): Promise<string | null> {
-    const fromEvents = await this.lookupOrderIdFromEvents(wamid);
+  private async lookupBoundOrder(
+    wamid: string
+  ): Promise<{ orderId: string; notificationType?: string | null } | null> {
+    const fromEvents = await this.lookupOrderFromEvents(wamid);
     if (fromEvents) return fromEvents;
-    return this.lookupOrderIdFromInbox(wamid);
+    const orderId = await this.lookupOrderIdFromInbox(wamid);
+    if (!orderId) return null;
+    return { orderId };
   }
 
-  private async lookupOrderIdFromEvents(wamid: string): Promise<string | null> {
+  private async lookupOrderFromEvents(
+    wamid: string
+  ): Promise<{ orderId: string; notificationType?: string | null } | null> {
     const res = await this.hasura.executeQuery<{
-      notification_events: Array<{ entity_id?: string | null }>;
+      notification_events: Array<{
+        entity_id?: string | null;
+        notification_type?: string | null;
+      }>;
     }>(
       `query WaOrderByWamid($wamid: String!) {
         notification_events(
@@ -315,11 +432,14 @@ export class WhatsAppOrderActionService {
           }
           order_by: { created_at: desc }
           limit: 1
-        ) { entity_id }
+        ) { entity_id notification_type }
       }`,
       { wamid }
     );
-    return res.notification_events?.[0]?.entity_id?.trim() || null;
+    const row = res.notification_events?.[0];
+    const orderId = row?.entity_id?.trim();
+    if (!orderId) return null;
+    return { orderId, notificationType: row?.notification_type };
   }
 
   private async lookupOrderIdFromInbox(wamid: string): Promise<string | null> {
@@ -593,6 +713,57 @@ export class WhatsAppOrderActionService {
     return res.orders?.[0] ?? null;
   }
 
+  private async loadOldestConfirmed(
+    actor: ResolvedWaActor
+  ): Promise<PendingWaOrder | null> {
+    const locationIds = actor.kind === 'owner' ? null : actor.locationIds;
+    if (locationIds && !locationIds.length) return null;
+    const res = await this.hasura.executeQuery<{ orders: PendingWaOrder[] }>(
+      locationIds
+        ? `query WaConfirmedLocs($bid: uuid!, $lids: [uuid!]!) {
+            orders(
+              where: {
+                business_id: { _eq: $bid }
+                business_location_id: { _in: $lids }
+                current_status: { _eq: confirmed }
+              }
+              order_by: { created_at: asc }
+              limit: 1
+            ) {
+              ${ORDER_ACTION_FIELDS}
+            }
+          }`
+        : `query WaConfirmedBiz($bid: uuid!) {
+            orders(
+              where: {
+                business_id: { _eq: $bid }
+                current_status: { _eq: confirmed }
+              }
+              order_by: { created_at: asc }
+              limit: 1
+            ) {
+              ${ORDER_ACTION_FIELDS}
+            }
+          }`,
+      locationIds
+        ? { bid: actor.businessId, lids: locationIds }
+        : { bid: actor.businessId }
+    );
+    return res.orders?.[0] ?? null;
+  }
+
+  private async loadClientUserId(orderId: string): Promise<string | null> {
+    const res = await this.hasura.executeQuery<{
+      orders_by_pk?: { client?: { user_id?: string | null } | null } | null;
+    }>(
+      `query WaOrderClient($id: uuid!) {
+        orders_by_pk(id: $id) { client { user_id } }
+      }`,
+      { id: orderId }
+    );
+    return res.orders_by_pk?.client?.user_id ?? null;
+  }
+
   private normalizePhone(phone: string): string {
     return phone.replace(/^\+/, '').replace(/\D/g, '');
   }
@@ -627,6 +798,12 @@ export class WhatsAppOrderActionService {
       : 'No order waiting for confirmation.';
   }
 
+  private msgNoneReady(lang?: string | null): string {
+    return lang === 'fr'
+      ? 'Aucune commande confirmée à marquer prête.'
+      : 'No confirmed order to mark ready.';
+  }
+
   private msgConfirmed(n: string, lang?: string | null): string {
     return lang === 'fr'
       ? `Commande ${n} confirmée.`
@@ -655,5 +832,29 @@ export class WhatsAppOrderActionService {
     return lang === 'fr'
       ? `Commande ${n} : ouvrez Rendasua pour confirmer le créneau.`
       : `Order ${n}: open Rendasua to confirm the time slot.`;
+  }
+
+  private msgMarkedReady(n: string, lang?: string | null): string {
+    return lang === 'fr'
+      ? `Commande ${n} marquée prête pour le retrait.`
+      : `Order ${n} marked ready for pickup.`;
+  }
+
+  private msgAlreadyReady(n: string, lang?: string | null): string {
+    return lang === 'fr'
+      ? `La commande ${n} est déjà prête.`
+      : `Order ${n} is already ready.`;
+  }
+
+  private msgNotConfirmed(n: string, lang?: string | null): string {
+    return lang === 'fr'
+      ? `La commande ${n} doit être confirmée avant d’être marquée prête.`
+      : `Order ${n} must be confirmed before it can be marked ready.`;
+  }
+
+  private msgNotReadyAck(n: string, lang?: string | null): string {
+    return lang === 'fr'
+      ? `OK — le client a été informé que la commande ${n} n’est pas encore prête.`
+      : `OK — the customer was told order ${n} is not ready yet.`;
   }
 }

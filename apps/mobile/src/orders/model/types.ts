@@ -177,6 +177,7 @@ export interface OrderLike {
   current_status: string;
   fulfillment_method?: string | null;
   fulfillment_timing?: 'asap' | 'scheduled' | null;
+  client_ready_nudge_sent_at?: string | null;
   promised_ready_at?: string | null;
   promised_fulfill_by?: string | null;
   payment_timing?: string | null;

@@ -28,6 +28,8 @@ import { FailedDeliveriesService } from './failed-deliveries.service';
 import { BusinessAvailabilityController } from './business-availability.controller';
 import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { OrderMarkReadyInternalController } from './order-mark-ready-internal.controller';
+import { OrderMarkReadyService } from './order-mark-ready.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderDispatchInternalController } from './order-dispatch-internal.controller';
 import { OrderEventsService } from './order-events.service';
@@ -98,6 +100,7 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
     FailedDeliveriesController,
     OrderNotificationsInternalController,
     OrderAcceptanceInternalController,
+    OrderMarkReadyInternalController,
     OrderDispatchInternalController,
     OrderCleanupInternalController,
     BusinessAvailabilityController,
@@ -124,6 +127,7 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
     StorePickupReminderCronService,
     OrderSystemJobsService,
     OrderAcceptanceService,
+    OrderMarkReadyService,
     FulfillmentPromiseService,
     OrderEventsService,
     PickupProgressService,

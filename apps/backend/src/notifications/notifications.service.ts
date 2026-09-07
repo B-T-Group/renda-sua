@@ -1155,6 +1155,227 @@ export class NotificationsService {
     }
   }
 
+  /** Delayed post-confirm prompt: mark order ready for pickup. */
+  async sendMarkReadyPromptNotifications(params: {
+    orderId: string;
+    orderNumber: string;
+    businessUserId?: string | null;
+    businessLocationId?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.fanOutMerchantMarkReadyMessage({
+      ...params,
+      notificationType: 'order.mark_ready.prompt',
+      templateKey: 'order_mark_ready_business',
+      event: 'order_mark_ready_prompt',
+      pushTitleEn: 'Mark order ready?',
+      pushTitleFr: 'Marquer la commande prête ?',
+      pushBodyEn: `Is order ${params.orderNumber} ready for pickup?`,
+      pushBodyFr: `La commande ${params.orderNumber} est-elle prête pour le retrait ?`,
+      includeCta: true,
+    });
+  }
+
+  /** Client-initiated "is my order ready?" nudge to the business. */
+  async sendClientReadyNudgeToBusiness(params: {
+    orderId: string;
+    orderNumber: string;
+    businessUserId?: string | null;
+    businessLocationId?: string | null;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    await this.fanOutMerchantMarkReadyMessage({
+      ...params,
+      notificationType: 'order.ready.nudge',
+      templateKey: 'order_ready_nudge_business',
+      event: 'order_ready_nudge',
+      pushTitleEn: 'Customer asking about order',
+      pushTitleFr: 'Un client demande des nouvelles',
+      pushBodyEn: `Is order ${params.orderNumber} ready for pickup?`,
+      pushBodyFr: `La commande ${params.orderNumber} est-elle prête pour le retrait ?`,
+      includeCta: false,
+    });
+  }
+
+  /** After merchant taps No on a client ready nudge. */
+  async notifyClientOrderNotReady(params: {
+    clientUserId: string;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    const locale = normalizeLanguage(params.preferredLanguage);
+    const title =
+      locale === 'fr' ? 'Commande pas encore prête' : 'Order not ready yet';
+    const body =
+      locale === 'fr'
+        ? `Le magasin a indiqué que la commande ${params.orderNumber} n’est pas encore prête.`
+        : `The store said order ${params.orderNumber} is not ready yet.`;
+    await this.sendPushNotificationByUserId(
+      params.clientUserId,
+      title,
+      body,
+      {
+        type: 'order_status',
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'order_not_ready',
+        persona: 'client',
+        url: `/orders/${params.orderId}`,
+      }
+    );
+  }
+
+  private async fanOutMerchantMarkReadyMessage(params: {
+    orderId: string;
+    orderNumber: string;
+    businessUserId?: string | null;
+    businessLocationId?: string | null;
+    preferredLanguage?: string | null;
+    notificationType: 'order.mark_ready.prompt' | 'order.ready.nudge';
+    templateKey: 'order_mark_ready_business' | 'order_ready_nudge_business';
+    event: string;
+    pushTitleEn: string;
+    pushTitleFr: string;
+    pushBodyEn: string;
+    pushBodyFr: string;
+    includeCta: boolean;
+  }): Promise<void> {
+    const locale = normalizeLanguage(params.preferredLanguage);
+    const title = locale === 'fr' ? params.pushTitleFr : params.pushTitleEn;
+    const body = locale === 'fr' ? params.pushBodyFr : params.pushBodyEn;
+    const links = this.deepLinkService.order(params.orderId);
+    const ownerId = params.businessUserId?.trim();
+    if (ownerId) {
+      await this.notifyMerchantMarkReadyUser({
+        ...params,
+        userId: ownerId,
+        locale,
+        title,
+        body,
+        ctaUrl: links.universal,
+        urlPath: `/orders/${params.orderId}`,
+      });
+    }
+    const delegates = await this.listOrderManagerDelegates(
+      params.businessLocationId
+    );
+    for (const delegate of delegates) {
+      if (ownerId && delegate.userId === ownerId) continue;
+      await this.notifyMerchantMarkReadyUser({
+        ...params,
+        userId: delegate.userId,
+        locale,
+        title,
+        body,
+        ctaUrl: links.universal,
+        urlPath: `/delegate/orders/${params.orderId}`,
+      });
+    }
+    await this.sendLocationAlertMarkReadyWhatsApp(params, locale, links.universal);
+  }
+
+  private async notifyMerchantMarkReadyUser(params: {
+    userId: string;
+    orderId: string;
+    orderNumber: string;
+    locale: EmailLocale;
+    notificationType: 'order.mark_ready.prompt' | 'order.ready.nudge';
+    templateKey: 'order_mark_ready_business' | 'order_ready_nudge_business';
+    event: string;
+    title: string;
+    body: string;
+    ctaUrl: string;
+    urlPath: string;
+    includeCta: boolean;
+  }): Promise<void> {
+    const pushEnabled =
+      !!this.configService.get<Configuration['push']>('push')?.enabled;
+    await this.orchestrator.notify({
+      type: params.notificationType,
+      category: 'actionable',
+      recipientUserId: params.userId,
+      locale: params.locale,
+      preferenceCategory: 'order_updates',
+      entityType: 'order',
+      entityId: params.orderId,
+      dedupeKey: `${params.notificationType}:${params.orderId}:${params.userId}`,
+      channels: {
+        ...(pushEnabled
+          ? {
+              push: {
+                title: params.title,
+                body: params.body,
+                interruptible: true,
+                data: {
+                  url: params.urlPath,
+                  orderId: params.orderId,
+                  orderNumber: params.orderNumber,
+                  event: params.event,
+                  persona: 'business',
+                },
+              },
+            }
+          : {}),
+        whatsapp: {
+          templateKey: params.templateKey,
+          ctaUrl: params.includeCta ? params.ctaUrl : undefined,
+          variables: { orderNumber: params.orderNumber },
+        },
+      },
+    });
+  }
+
+  private async sendLocationAlertMarkReadyWhatsApp(
+    params: {
+      orderId: string;
+      orderNumber: string;
+      businessUserId?: string | null;
+      businessLocationId?: string | null;
+      notificationType: 'order.mark_ready.prompt' | 'order.ready.nudge';
+      templateKey: 'order_mark_ready_business' | 'order_ready_nudge_business';
+      includeCta: boolean;
+    },
+    locale: EmailLocale,
+    ctaUrl: string
+  ): Promise<void> {
+    const phone = await this.getLocationOrderAlertPhone(
+      params.businessLocationId
+    );
+    if (!phone || !this.whatsappService?.isConfigured?.()) return;
+    const ownerPhone = params.businessUserId
+      ? await this.getUserPhone(params.businessUserId)
+      : null;
+    if (phonesEqual(phone, ownerPhone)) return;
+    try {
+      const metaName = this.whatsAppTemplateService.resolveMetaName(
+        params.templateKey,
+        locale
+      );
+      if (!metaName) return;
+      const result = await this.whatsappService.sendTemplateMessage({
+        to: phone,
+        templateName: metaName,
+        languageCode: locale === 'fr' ? 'fr' : 'en',
+        category: 'UTILITY',
+        components: this.whatsAppTemplateService.buildComponents({
+          templateKey: params.templateKey,
+          variables: { orderNumber: params.orderNumber },
+          ctaUrl: params.includeCta ? ctaUrl : undefined,
+        }),
+      });
+      await this.bindWhatsAppMessageToOrder(
+        result.messages[0]?.id,
+        params.orderId,
+        params.notificationType
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Location alert mark-ready WA failed: ${error?.message ?? error}`
+      );
+    }
+  }
+
   async sendPickupReminderPush(params: {
     agentUserId?: string | null;
     orderId: string;
@@ -1654,7 +1875,8 @@ export class NotificationsService {
   /** Persist wamid → order so WhatsApp button taps act on that order. */
   private async bindWhatsAppMessageToOrder(
     wamid: string | undefined,
-    orderId?: string | null
+    orderId?: string | null,
+    notificationType = 'order.created'
   ): Promise<void> {
     if (!wamid || !orderId) return;
     try {
@@ -1664,7 +1886,7 @@ export class NotificationsService {
         }`,
         {
           object: {
-            notification_type: 'order.created',
+            notification_type: notificationType,
             category: 'actionable',
             channel: 'whatsapp',
             status: 'sent',

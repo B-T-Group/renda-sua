@@ -917,6 +917,9 @@
     "completeDelivery": "Terminer la livraison",
     "confirmClientPickup": "Confirmer le retrait",
     "readyForPickup": "Marquer comme prête",
+    "askIfReady": "Demander si ma commande est prête",
+    "askIfReadySuccess": "Nous avons demandé au magasin si votre commande est prête",
+    "askIfReadyError": "Impossible d’envoyer le rappel",
     "printLabel": "Imprimer l’étiquette",
     "markAsFailed": "Marquer comme échoué",
     "switchToPickupFailed": "Impossible de passer au retrait en magasin."

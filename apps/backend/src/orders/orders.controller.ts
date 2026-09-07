@@ -37,6 +37,7 @@ import {
   CheckoutPreflightResponseDto,
 } from './dto/checkout-preflight.dto';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { OrderMarkReadyService } from './order-mark-ready.service';
 import { OrderStatusService } from './order-status.service';
 import type {
   BatchOrderStatusChangeRequest,
@@ -66,6 +67,7 @@ export class OrdersController {
     private readonly ordersService: OrdersService,
     private readonly orderStatusService: OrderStatusService,
     private readonly orderAcceptanceService: OrderAcceptanceService,
+    private readonly orderMarkReadyService: OrderMarkReadyService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly configurationsService: ConfigurationsService,
     private readonly loyaltyService: LoyaltyService,
@@ -423,6 +425,20 @@ export class OrdersController {
   })
   async completePreparation(@Body() request: OrderStatusChangeRequest) {
     return this.ordersService.completePreparation(request);
+  }
+
+  @Post(':id/remind-ready')
+  @ApiOperation({
+    summary: 'Client asks business if order is ready (once per order)',
+    description:
+      'Sends the business a push and WhatsApp nudge. Allowed only while the order is confirmed.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Reminder sent' })
+  @ApiResponse({ status: 400, description: 'Order not confirmed' })
+  @ApiResponse({ status: 409, description: 'Already reminded once' })
+  async remindReady(@Param('id') orderId: string) {
+    return this.orderMarkReadyService.remindReady(orderId);
   }
 
   @Post('batch/complete_preparation')

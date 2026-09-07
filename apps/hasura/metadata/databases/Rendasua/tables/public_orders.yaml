@@ -240,6 +240,7 @@ select_permissions:
         - dispatch_ready_at
         - pickup_by
         - pickup_reminder_last_sent_at
+        - client_ready_nudge_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by
@@ -333,6 +334,7 @@ select_permissions:
         - dispatch_ready_at
         - pickup_by
         - pickup_reminder_last_sent_at
+        - client_ready_nudge_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by
@@ -425,6 +427,7 @@ select_permissions:
         - dispatch_ready_at
         - pickup_by
         - pickup_reminder_last_sent_at
+        - client_ready_nudge_sent_at
         - fulfillment_timing
         - promised_ready_at
         - promised_fulfill_by

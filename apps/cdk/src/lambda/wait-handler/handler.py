@@ -235,6 +235,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "Acceptance reminder",
             )
 
+        if event_type == "order.mark_ready_prompt":
+            return _call_backend_internal(
+                "mark-ready-prompt",
+                {"orderId": order_id},
+                "Mark ready prompt",
+            )
+
         if event_type == "order.acceptance_grace_deadline":
             return _call_backend_internal(
                 "acceptance-grace-deadline",

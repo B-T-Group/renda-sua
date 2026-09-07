@@ -942,6 +942,9 @@
     "completeDelivery": "Complete delivery",
     "confirmClientPickup": "Confirm pickup",
     "readyForPickup": "Set as ready",
+    "askIfReady": "Ask if my order is ready",
+    "askIfReadySuccess": "We asked the store if your order is ready",
+    "askIfReadyError": "Could not send the reminder",
     "printLabel": "Print label",
     "markAsFailed": "Mark as failed",
     "switchToPickupFailed": "Could not switch to store pickup."

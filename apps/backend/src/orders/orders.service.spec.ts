@@ -244,6 +244,7 @@ describe('OrdersService', () => {
             estimateFx: jest.fn().mockResolvedValue({ rate: 1.0, fee: 0 }),
           },
         },
+        { provide: require('../recipients/recipients.service').RecipientsService, useValue: {} },
         { provide: DeliveryConfigService, useValue: {} },
         { provide: DeliveryWindowsService, useValue: {} },
         { provide: CommissionsService, useValue: {
@@ -289,6 +290,7 @@ describe('OrdersService', () => {
           useValue: {
             resolveRailForBusiness: jest.fn(),
             resolveRailForUser: jest.fn(),
+            getUserCountryCode: jest.fn().mockResolvedValue('CM'),
           },
         },
         { provide: StripeCheckoutService, useValue: {} },
@@ -301,6 +303,10 @@ describe('OrdersService', () => {
               success: true,
             }),
           },
+        },
+        {
+          provide: require('../stripe-payments/stripe-refund.service').StripeRefundService,
+          useValue: {},
         },
         {
           provide: StripeTaxCheckoutBuilderService,
@@ -327,6 +333,10 @@ describe('OrdersService', () => {
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
         },
         { provide: OrderSystemJobsService, useValue: {} },
+        {
+          provide: require('./order-cleanup.service').OrderCleanupService,
+          useValue: {},
+        },
         {
           provide: OrderPickupMonitorService,
           useValue: {
@@ -367,7 +377,21 @@ describe('OrdersService', () => {
             }),
             getAcceptanceTimeoutSeconds: jest.fn().mockResolvedValue(300),
             recordMerchantCancelOfPending: jest.fn(),
+            getBusinessTiming: jest.fn().mockResolvedValue({
+              defaultEstimatedPrepMinutes: 15,
+            }),
           },
+        },
+        {
+          provide: require('./fulfillment-promise.service').FulfillmentPromiseService,
+          useValue: {
+            persistForOrder: jest.fn(),
+            reanchorAsapAtReady: jest.fn(),
+          },
+        },
+        {
+          provide: require('./order-mark-ready.service').OrderMarkReadyService,
+          useValue: { scheduleAfterConfirm: jest.fn() },
         },
         { provide: RbacService, useValue: {} },
         {
@@ -384,6 +408,10 @@ describe('OrdersService', () => {
         {
           provide: EventEmitter2,
           useValue: { emit: jest.fn() },
+        },
+        {
+          provide: require('../food/food-orders.service').FoodOrdersService,
+          useValue: { applyConfirmationUpdates: jest.fn() },
         },
       ],
     }).compile();

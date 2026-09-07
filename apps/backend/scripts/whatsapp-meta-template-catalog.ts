@@ -12,13 +12,13 @@ export type ContentTemplate = {
   category: 'UTILITY' | 'MARKETING';
   body: Record<TemplateLanguage, string>;
   exampleValues: string[];
-  /** Single URL CTA (legacy templates). */
+  /** Single URL CTA (legacy templates). May combine with quickReplies (URL first). */
   button?: {
     text: Record<TemplateLanguage, string>;
     url: string;
     dynamic: boolean;
   };
-  /** Quick-reply buttons (merchant action templates). */
+  /** Quick-reply buttons (merchant action templates). May combine with button. */
   quickReplies?: Array<{
     id: string;
     text: Record<TemplateLanguage, string>;
@@ -197,6 +197,59 @@ See you soon.`,
 La commande {{1}} peut être récupérée maintenant. Rendez-vous au magasin ou suivez les instructions de retrait dans l’application.
 
 À bientôt.`,
+    },
+  },
+  {
+    kind: 'content',
+    name: 'rs_order_mark_ready',
+    category: 'UTILITY',
+    exampleValues: ['ORD-1001'],
+    button: {
+      text: { en: 'Open order', fr: 'Ouvrir la commande' },
+      url: `${APP}/app/orders/{{1}}`,
+      dynamic: true,
+    },
+    quickReplies: [
+      {
+        id: 'mark_as_ready',
+        text: { en: 'Mark as ready', fr: 'Marquer prêt' },
+      },
+    ],
+    body: {
+      en: `Rendasua: is order {{1}} ready for pickup?
+
+When preparation is done, tap Mark as ready so the customer is notified. You can also open the order in the app.`,
+      fr: `Rendasua : la commande {{1}} est-elle prête pour le retrait ?
+
+Lorsque la préparation est terminée, appuyez sur Marquer prêt pour informer le client. Vous pouvez aussi ouvrir la commande dans l’application.`,
+    },
+  },
+  {
+    kind: 'content',
+    name: 'rs_order_ready_nudge',
+    category: 'UTILITY',
+    exampleValues: ['ORD-1001'],
+    quickReplies: [
+      {
+        id: 'mark_as_ready',
+        text: { en: 'Yes', fr: 'Oui' },
+      },
+      {
+        id: 'not_ready',
+        text: { en: 'No', fr: 'Non' },
+      },
+    ],
+    body: {
+      en: `Rendasua: a customer asked about their order.
+
+Is order {{1}} ready for pickup?
+
+Tap Yes to mark it ready, or No if it still needs more time.`,
+      fr: `Rendasua : un client a demandé des nouvelles de sa commande.
+
+La commande {{1}} est-elle prête pour le retrait ?
+
+Appuyez sur Oui pour la marquer prête, ou Non si elle a encore besoin de temps.`,
     },
   },
   {
@@ -507,20 +560,21 @@ function buttonsComponent(
   template: ContentTemplate,
   language: TemplateLanguage
 ): GraphComponent | null {
+  const buttons: GraphButton[] = [];
+  // URL CTA first so send-time button index 0 stays the dynamic URL param.
+  if (template.button) {
+    buttons.push(urlButton(template, language));
+  }
   if (template.quickReplies?.length) {
-    return {
-      type: 'BUTTONS',
-      buttons: template.quickReplies.map((qr) => ({
+    for (const qr of template.quickReplies) {
+      buttons.push({
         type: 'QUICK_REPLY',
         text: qr.text[language],
-      })),
-    };
+      });
+    }
   }
-  if (!template.button) return null;
-  return {
-    type: 'BUTTONS',
-    buttons: [urlButton(template, language)],
-  };
+  if (!buttons.length) return null;
+  return { type: 'BUTTONS', buttons };
 }
 
 function urlButton(
@@ -573,22 +627,32 @@ function urlButtonNeedsUpdate(
   template: ContentTemplate,
   language: TemplateLanguage
 ): boolean {
-  if (template.quickReplies?.length) {
-    if (buttons.length !== template.quickReplies.length) return true;
-    return template.quickReplies.some((qr, i) => {
-      const b = buttons[i];
-      return (
-        (b?.type ?? '').toUpperCase() !== 'QUICK_REPLY' ||
-        (b?.text ?? '') !== qr.text[language]
-      );
-    });
+  const expected = expectedButtons(template, language);
+  if (buttons.length !== expected.length) return true;
+  return expected.some((want, i) => buttonDiffers(buttons[i], want));
+}
+
+function expectedButtons(
+  template: ContentTemplate,
+  language: TemplateLanguage
+): GraphButton[] {
+  const buttons: GraphButton[] = [];
+  if (template.button) buttons.push(urlButton(template, language));
+  for (const qr of template.quickReplies ?? []) {
+    buttons.push({ type: 'QUICK_REPLY', text: qr.text[language] });
   }
-  if (!template.button) return buttons.length > 0;
-  const first = buttons[0];
-  if (!first) return true;
+  return buttons;
+}
+
+function buttonDiffers(actual: GraphButton | undefined, want: GraphButton): boolean {
+  if (!actual) return true;
+  const type = (actual.type ?? '').toUpperCase();
+  const wantType = (want.type ?? '').toUpperCase();
+  if (type !== wantType) return true;
+  if (wantType === 'QUICK_REPLY') return (actual.text ?? '') !== (want.text ?? '');
   return (
-    (first.text ?? '') !== template.button.text[language] ||
-    (first.url ?? '') !== template.button.url
+    (actual.text ?? '') !== (want.text ?? '') ||
+    (actual.url ?? '') !== (want.url ?? '')
   );
 }
 
