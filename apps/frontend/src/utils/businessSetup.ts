@@ -4,7 +4,7 @@ import type {
 } from '../hooks/useBusinessVerification';
 
 const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
-  new Set(['sign_agreement']);
+  new Set(['sign_agreement', 'setup_stripe_connect']);
 
 /** True when the merchant still has a setup step to complete. */
 export function requiresMerchantAction(

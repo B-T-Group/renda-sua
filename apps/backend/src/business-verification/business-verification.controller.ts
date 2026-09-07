@@ -64,7 +64,7 @@ export class BusinessVerificationController {
             requiresMerchantAction: {
               type: 'boolean',
               description:
-                'True when nextAction is sign_agreement (required setup)',
+                'True when nextAction is sign_agreement or setup_stripe_connect (required setup)',
             },
             isOnboarding: {
               type: 'boolean',

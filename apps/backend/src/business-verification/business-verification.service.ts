@@ -35,7 +35,7 @@ export type VerificationNextAction =
   | 'complete';
 
 const MERCHANT_ACTION_NEXT_ACTIONS: ReadonlySet<VerificationNextAction> =
-  new Set(['sign_agreement']);
+  new Set(['sign_agreement', 'setup_stripe_connect']);
 
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
 
@@ -263,7 +263,7 @@ export class BusinessVerificationService {
     agreement: { complete: boolean }
   ) {
     const stripeConnect = await this.getStripeConnectStep(user.id);
-    const nextAction = this.resolveStripeNextAction(agreement);
+    const nextAction = this.resolveStripeNextAction(agreement, stripeConnect);
     return {
       // Overwritten in getStatus from lifecycle snapshot (DB is_verified).
       is_verified: false,
@@ -290,10 +290,12 @@ export class BusinessVerificationService {
     };
   }
 
-  private resolveStripeNextAction(agreement: {
-    complete: boolean;
-  }): VerificationNextAction {
+  private resolveStripeNextAction(
+    agreement: { complete: boolean },
+    stripeConnect: { complete: boolean }
+  ): VerificationNextAction {
     if (!agreement.complete) return 'sign_agreement';
+    if (!stripeConnect.complete) return 'setup_stripe_connect';
     return 'complete';
   }
 
