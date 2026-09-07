@@ -73,7 +73,8 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       {} as any,
       {} as any,
       categoriesService as any,
-      { autoAssignCollectionsIfFit: jest.fn() } as any
+      { autoAssignCollectionsIfFit: jest.fn() } as any,
+      { incrementGeneration: jest.fn() } as any
     );
 
     return {

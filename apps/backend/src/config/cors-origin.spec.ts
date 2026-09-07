@@ -1,4 +1,8 @@
-import { isCorsOriginAllowed, parseCorsOrigins } from './cors-origin';
+import {
+  CORS_ALLOWED_HEADERS,
+  isCorsOriginAllowed,
+  parseCorsOrigins,
+} from './cors-origin';
 
 describe('parseCorsOrigins', () => {
   it('always includes production origins even when CORS_ORIGIN is unset', () => {
@@ -64,5 +68,19 @@ describe('isCorsOriginAllowed', () => {
     const allowlist = parseCorsOrigins(undefined);
     expect(isCorsOriginAllowed('https://www.rendasua.com', allowlist)).toBe(true);
     expect(isCorsOriginAllowed('https://rendasua.com', allowlist)).toBe(true);
+  });
+});
+
+describe('CORS_ALLOWED_HEADERS', () => {
+  it('allows Hasura role and persona headers on preflight', () => {
+    expect(CORS_ALLOWED_HEADERS).toEqual(
+      expect.arrayContaining([
+        'Authorization',
+        'X-Requested-With',
+        'X-Hasura-Role',
+        'X-Active-Delegation',
+        'X-Active-Persona',
+      ])
+    );
   });
 });

@@ -34,6 +34,10 @@ import { CountryOnboardingService } from './country-onboarding.service';
 import { LocationsService } from './locations.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import {
+  SUPPORTED_COUNTRIES_CACHE_KEY,
+  SUPPORTED_COUNTRIES_TTL_SECONDS,
+} from '../catalog-cache/catalog-cache-keys';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 
 interface RequestWithUser extends Request {
@@ -479,7 +483,7 @@ export class LocationsController {
   }> {
     try {
       return await this.catalogCacheService.getOrCompute(
-        'supported-countries',
+        SUPPORTED_COUNTRIES_CACHE_KEY,
         async () => {
           const query = `
             query GetSupportedCountriesPublic {
@@ -509,7 +513,7 @@ export class LocationsController {
 
           return { success: true, countries };
         },
-        { ttlSeconds: 3600 }
+        { ttlSeconds: SUPPORTED_COUNTRIES_TTL_SECONDS }
       );
     } catch (error: any) {
       this.logger.error('Failed to fetch supported countries (public)', error);

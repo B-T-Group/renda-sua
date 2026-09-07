@@ -24,7 +24,11 @@ import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { join } from 'path';
 import { AppModule } from './app/app.module';
 import { configureRuntimeDns } from './config/configure-runtime-dns';
-import { isCorsOriginAllowed, parseCorsOrigins } from './config/cors-origin';
+import {
+  CORS_ALLOWED_HEADERS,
+  isCorsOriginAllowed,
+  parseCorsOrigins,
+} from './config/cors-origin';
 import { initSentry } from './instrument';
 
 /** Load apps/backend .env files before Secrets Manager so local overrides can win. */
@@ -174,15 +178,7 @@ async function bootstrap() {
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Client-Platform',
-      'X-Requested-With',
-      'X-Hasura-Role',
-      'X-Active-Delegation',
-      'X-Active-Persona',
-    ],
+    allowedHeaders: [...CORS_ALLOWED_HEADERS],
   });
 
   const globalPrefix = 'api';

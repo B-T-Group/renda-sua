@@ -400,9 +400,9 @@ export class SignupService {
       const sessionId = this.sessionStore.generateSessionId();
       await this.sessionStore.createSession(sessionId, {
         userId: result.user.id,
-        auth0RefreshToken: tokens.refresh_token!,
-        auth0AccessToken: tokens.access_token,
-        auth0IdToken: tokens.id_token,
+        auth0RefreshToken: result.tokens.refresh_token!,
+        auth0AccessToken: result.tokens.access_token,
+        auth0IdToken: result.tokens.id_token,
         createdAt: Date.now(),
         lastRefreshedAt: Date.now(),
         userAgent,
@@ -420,10 +420,10 @@ export class SignupService {
           attemptId: body.attemptId,
           user: result.user,
           launchPromo: result.launchPromo,
-          access_token: tokens.access_token,
-          id_token: tokens.id_token,
-          token_type: tokens.token_type,
-          expires_in: tokens.expires_in,
+          access_token: result.tokens.access_token,
+          id_token: result.tokens.id_token,
+          token_type: result.tokens.token_type,
+          expires_in: result.tokens.expires_in,
         },
       };
     }
@@ -435,7 +435,7 @@ export class SignupService {
         attemptId: body.attemptId,
         user: result.user,
         launchPromo: result.launchPromo,
-        ...tokens,
+        ...result.tokens,
       },
     };
   }
@@ -979,19 +979,104 @@ export class SignupService {
           phoneNumber,
           payload
         );
+
+    // Set Auth0 app_metadata with user UUID and refresh tokens for proper JWT claims
+    let finalTokens = authTokens;
+    if (authTokens.id_token && authTokens.refresh_token) {
+      const idClaims = jwt.decode(authTokens.id_token) as Auth0IdTokenClaims | null;
+      if (!idClaims?.sub) {
+        // Missing sub means we can't set metadata, tokens will lack UUID claims
+        this.logger.error(
+          `No Auth0 sub in id_token for user ${provisioned.user.id} - cannot set metadata`
+        );
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Account created but authentication setup failed. Please contact support.',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+      
+      try {
+        // Derive roles from payload.personas (preferred) or user_type_id (fallback)
+        const personas = this.normalizeSignupPersonas(payload);
+        const defaultRole = this.deriveDefaultRole(personas, provisioned.user.user_type_id);
+        const allowedRoles = this.deriveAllowedRoles(personas);
+
+        await this.auth0Service.setRendasuaUserMetadata({
+          auth0Sub: idClaims.sub,
+          userId: provisioned.user.id,
+          defaultRole,
+          allowedRoles,
+        });
+
+        // Refresh tokens to get JWT with proper x-hasura-user-id claims
+        // Auth0 refresh typically omits refresh_token in response - preserve original
+        const refreshed = await this.auth0Service.refreshTokensForNewUser(
+          authTokens.refresh_token
+        );
+        finalTokens = {
+          ...authTokens,
+          ...refreshed,
+          refresh_token: refreshed.refresh_token ?? authTokens.refresh_token,
+        };
+        this.logger.log(
+          `Refreshed tokens for new user ${provisioned.user.id} with Auth0 metadata`
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to set Auth0 metadata or refresh tokens for user ${provisioned.user.id}: ${error?.message}`,
+          error?.stack
+        );
+        // NOTE: Metadata/refresh failure leaves orphaned DB user - acceptable trade-off
+        // User can contact support to fix. Alternative would be complex rollback saga.
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Account created but authentication setup failed. Please contact support.',
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+    }
+
     const snapshot: SignupCompletionSnapshot = {
       user: provisioned.user,
       launchPromo: provisioned.launchPromo,
-      tokens: authTokens,
+      tokens: finalTokens,
       completedAt: new Date().toISOString(),
       sessionId: undefined, // Will be set in verifySignupOtp for web clients
     };
     await this.markAttemptCompleted(attempt.id, provisioned.user.id, snapshot);
     return {
-      tokens: authTokens,
+      tokens: finalTokens,
       user: provisioned.user,
       launchPromo: provisioned.launchPromo,
     };
+  }
+
+  private deriveDefaultRole(personas: PersonaId[], userTypeId: string): string {
+    // Prefer personas array, fall back to user_type_id
+    if (personas.length === 1) {
+      return personas[0];
+    }
+    // Multiple personas: use user_type_id as tie-breaker
+    if (userTypeId === 'client' && personas.includes('client')) return 'client';
+    if (userTypeId === 'agent' && personas.includes('agent')) return 'agent';
+    if (userTypeId === 'business' && personas.includes('business')) return 'business';
+    // Fallback: first persona or 'user'
+    return personas[0] || 'user';
+  }
+
+  private deriveAllowedRoles(personas: PersonaId[]): string[] {
+    const roles: string[] = ['user'];
+    for (const persona of personas) {
+      if (!roles.includes(persona)) {
+        roles.push(persona);
+      }
+    }
+    return roles;
   }
 
   private async createFreshProvisionedUser(
