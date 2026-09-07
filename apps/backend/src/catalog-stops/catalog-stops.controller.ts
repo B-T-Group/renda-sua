@@ -15,6 +15,10 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import {
+  buildEssentialsCacheKey,
+  ESSENTIALS_TTL_SECONDS,
+} from '../catalog-cache/catalog-cache-keys';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import {
   CatalogStopsService,
@@ -299,15 +303,8 @@ export class CatalogStopsController {
   }> {
     try {
       const limit = query.limit ? Number(query.limit) : undefined;
-      const cacheKey = [
-        'essentials',
-        query.country_code || 'global',
-        query.state || 'all',
-        limit || 8,
-      ].join(':');
-
       return await this.catalogCacheService.getOrCompute(
-        cacheKey,
+        buildEssentialsCacheKey(query.country_code, query.state, limit),
         async () => {
           const data = await this.catalogStopsService.getEssentials({
             country_code: query.country_code,
@@ -321,7 +318,7 @@ export class CatalogStopsController {
             message: 'Featured collections retrieved successfully',
           };
         },
-        { ttlSeconds: 180 }
+        { ttlSeconds: ESSENTIALS_TTL_SECONDS }
       );
     } catch (error: any) {
       throw new HttpException(

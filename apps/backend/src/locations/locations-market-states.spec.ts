@@ -12,6 +12,7 @@ describe('LocationsController.getMarketStates', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       {
         getConfigMap: jest.fn().mockResolvedValue(new Map()),
       } as any

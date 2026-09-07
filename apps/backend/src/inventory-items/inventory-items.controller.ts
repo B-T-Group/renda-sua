@@ -10,6 +10,14 @@ import {
 import { ApiOperation, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
+import {
+  buildInventoryItemsCacheKey,
+  buildStoresCacheKey,
+  inventoryItemsCacheTtlSeconds,
+  isCatalogUserAuthenticated,
+  isInventoryItemsCacheable,
+  STORES_TTL_SECONDS,
+} from '../catalog-cache/catalog-cache-keys';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type {
@@ -217,20 +225,15 @@ export class InventoryItemsController {
     const lng =
       origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
     const hasOrigin = Number.isFinite(lat) && Number.isFinite(lng);
-    const activeFilter = is_active === 'true' ? 'true' : is_active === 'false' ? 'false' : 'any';
-    const includeUnavail = include_unavailable === 'true' ? 'true' : 'false';
-
-    const cacheKey = hasOrigin
-      ? null
-      : [
-          'stores',
-          search || 'all',
-          country_code || 'global',
-          state || 'all',
-          activeFilter,
-          includeUnavail,
-          n,
-        ].join(':');
+    const cacheKey = buildStoresCacheKey({
+      hasOrigin,
+      search,
+      countryCode: country_code,
+      state,
+      isActive: is_active,
+      includeUnavailable: include_unavailable,
+      limit: n,
+    });
 
     if (cacheKey) {
       return await this.catalogCacheService.getOrCompute(
@@ -257,7 +260,7 @@ export class InventoryItemsController {
             message: 'Stores retrieved successfully',
           };
         },
-        { ttlSeconds: 180 }
+        { ttlSeconds: STORES_TTL_SECONDS }
       );
     }
 
@@ -599,48 +602,37 @@ export class InventoryItemsController {
       const requestedLimit = processedQuery.limit || 20;
       const clampedLimit = Math.min(Math.max(requestedLimit, 1), 50);
       const hasOrigin = Number.isFinite(oLat) && Number.isFinite(oLng);
-      
-      let isAuthenticated = false;
-      try {
-        const userId = this.hasuraUserService.getUserId();
-        isAuthenticated = Boolean(userId && userId !== 'anonymous');
-      } catch {
-        isAuthenticated = false;
-      }
-      
-      const isCacheable =
-        !processedQuery.owner_preview &&
-        !processedQuery.business_id &&
-        !hasOrigin &&
-        !isAuthenticated;
+      const isCacheable = isInventoryItemsCacheable({
+        ownerPreview: processedQuery.owner_preview,
+        businessId: processedQuery.business_id,
+        hasOrigin,
+        isAuthenticated: this.resolveCatalogAuth(),
+      });
 
       if (isCacheable) {
         const generation = await this.catalogCacheService.getGeneration('global');
-        const cacheKey = [
-          'items',
+        const cacheKey = buildInventoryItemsCacheKey({
           generation,
-          processedQuery.page || 1,
-          clampedLimit,
-          sort || 'relevance',
-          processedQuery.search || '',
-          processedQuery.category || '',
-          processedQuery.subcategory || '',
-          processedQuery.location_name || '',
-          processedQuery.business_name || '',
-          processedQuery.brand || '',
-          processedQuery.min_price || '',
-          processedQuery.max_price || '',
-          processedQuery.currency || '',
-          processedQuery.is_active === false ? 'inactive' : 'active',
-          processedQuery.country_code || 'global',
-          processedQuery.state || '',
-          processedQuery.include_unavailable ? 'incl' : 'avail',
-          processedQuery.business_location_id || '',
-          processedQuery.collection || '',
-          processedQuery.food_only ? 'food' : 'all',
-        ].join(':');
-
-        const ttl = processedQuery.search || sort === 'deals' ? 30 : sort === 'relevance' || !sort ? 120 : 60;
+          page: processedQuery.page,
+          limit: clampedLimit,
+          sort,
+          search: processedQuery.search,
+          category: processedQuery.category,
+          subcategory: processedQuery.subcategory,
+          locationName: processedQuery.location_name,
+          businessName: processedQuery.business_name,
+          brand: processedQuery.brand,
+          minPrice: processedQuery.min_price,
+          maxPrice: processedQuery.max_price,
+          currency: processedQuery.currency,
+          isActive: processedQuery.is_active,
+          countryCode: processedQuery.country_code,
+          state: processedQuery.state,
+          includeUnavailable: processedQuery.include_unavailable,
+          businessLocationId: processedQuery.business_location_id,
+          collection: processedQuery.collection,
+          foodOnly: processedQuery.food_only,
+        });
 
         return await this.catalogCacheService.getOrCompute(
           cacheKey,
@@ -654,7 +646,7 @@ export class InventoryItemsController {
               message: 'Inventory items retrieved successfully',
             };
           },
-          { ttlSeconds: ttl }
+          { ttlSeconds: inventoryItemsCacheTtlSeconds(processedQuery.search, sort) }
         );
       }
 
@@ -994,6 +986,14 @@ export class InventoryItemsController {
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
+    }
+  }
+
+  private resolveCatalogAuth(): boolean {
+    try {
+      return isCatalogUserAuthenticated(this.hasuraUserService.getUserId());
+    } catch {
+      return false;
     }
   }
 }

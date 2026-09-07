@@ -111,7 +111,8 @@ describe('BusinessItemsService CSV upload', () => {
       {} as any,
       {} as any,
       categoriesService as any,
-      { autoAssignCollectionsIfFit: jest.fn() } as any
+      { autoAssignCollectionsIfFit: jest.fn() } as any,
+      { incrementGeneration: jest.fn() } as any
     );
 
     return {
@@ -203,7 +204,8 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
       {} as any,
       {} as any,
       { listCategoryTree: jest.fn().mockResolvedValue([]) } as any,
-      { autoAssignCollectionsIfFit: jest.fn() } as any
+      { autoAssignCollectionsIfFit: jest.fn() } as any,
+      { incrementGeneration: jest.fn() } as any
     );
     (service as any).updateInventoryItem = updateInventoryItem;
     (service as any).createInventoryItem = createInventoryItem;
