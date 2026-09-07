@@ -106,6 +106,7 @@ import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
+import { OrderMarkReadyService } from './order-mark-ready.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { OrderEventsService } from './order-events.service';
 import { OrderPickupMonitorService } from './order-pickup-monitor.service';
@@ -460,6 +461,7 @@ export class OrdersService {
     private readonly orderCleanupService: OrderCleanupService,
     private readonly orderAcceptanceService: OrderAcceptanceService,
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
+    private readonly orderMarkReadyService: OrderMarkReadyService,
     private readonly orderPickupMonitorService: OrderPickupMonitorService,
     private readonly orderReassignmentService: OrderReassignmentService,
     private readonly orderEventsService: OrderEventsService,
@@ -1461,6 +1463,13 @@ export class OrdersService {
       userId,
       request.notes
     );
+    void this.orderMarkReadyService.scheduleAfterConfirm({
+      id: request.orderId,
+      business_id: order.business_id,
+      fulfillment_method: (order as any).fulfillment_method,
+      fulfillment_timing: (order as any).fulfillment_timing,
+      delivery_time_windows: (order as any).delivery_time_windows,
+    });
     return {
       success: true,
       order: updatedOrder,
@@ -5607,6 +5616,7 @@ export class OrdersService {
           accepted_at
           busy_extra_prep_minutes
           estimated_prep_minutes
+          client_ready_nudge_sent_at
           estimated_delivery_time
           actual_delivery_time
           special_instructions
@@ -5832,6 +5842,7 @@ export class OrdersService {
           accepted_at
           busy_extra_prep_minutes
           estimated_prep_minutes
+          client_ready_nudge_sent_at
           estimated_delivery_time
           actual_delivery_time
           special_instructions
@@ -6501,6 +6512,7 @@ export class OrdersService {
           accepted_at
           busy_extra_prep_minutes
           estimated_prep_minutes
+          client_ready_nudge_sent_at
           created_at
           subtotal
           base_delivery_fee

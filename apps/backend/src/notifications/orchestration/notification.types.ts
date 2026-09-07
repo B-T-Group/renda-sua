@@ -25,6 +25,8 @@ export type NotificationType =
   | 'order.acceptance.activate'
   | 'order.acceptance.escalation'
   | 'order.acceptance.reminder'
+  | 'order.mark_ready.prompt'
+  | 'order.ready.nudge'
   | 'order.busy'
   | 'order.missed'
   | 'order.auto_declined'

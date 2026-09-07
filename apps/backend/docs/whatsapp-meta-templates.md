@@ -13,6 +13,8 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `order_offer_agent` | `rs_delivery_offer` | **MARKETING** | pickupArea, distance | URL CTA → `/app/deliveries/{{1}}` |
 | `order_status_client` | `rs_order_status` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
 | `order_ready` | `rs_order_ready` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` |
+| `order_mark_ready_business` | `rs_order_mark_ready` | UTILITY | orderNumber | URL CTA → `/app/orders/{{1}}` + QUICK_REPLY: Mark as ready |
+| `order_ready_nudge_business` | `rs_order_ready_nudge` | UTILITY | orderNumber | QUICK_REPLY: Yes / No (`mark_as_ready` / `not_ready`) |
 | `rental_request_business` | `rs_rental_request` | UTILITY | itemName, dates | URL CTA → `/app/rentals/requests/{{1}}` |
 | `verification_attention` | `rs_verification` | UTILITY | reason | URL CTA → `/app/verification` (static) |
 | `delivery_pin` | `rs_delivery_pin` | **AUTHENTICATION** | pin (code only) | OTP copy-code button (no URL CTA) |
@@ -181,6 +183,52 @@ Rendasua : votre commande est prête pour le retrait.
 La commande {{1}} peut être récupérée maintenant. Rendez-vous au magasin ou suivez les instructions de retrait dans l’application.
 
 À bientôt.
+```
+
+---
+
+## 4b. `rs_order_mark_ready`
+
+**Vars:** `{{1}}` orderNumber  
+**Buttons:** Open order → `https://rendasua.com/app/orders/{{1}}` · QUICK_REPLY Mark as ready (`mark_as_ready`)
+
+**en**
+```
+Rendasua: is order {{1}} ready for pickup?
+
+When preparation is done, tap Mark as ready so the customer is notified. You can also open the order in the app.
+```
+
+**fr**
+```
+Rendasua : la commande {{1}} est-elle prête pour le retrait ?
+
+Lorsque la préparation est terminée, appuyez sur Marquer prêt pour informer le client. Vous pouvez aussi ouvrir la commande dans l’application.
+```
+
+---
+
+## 4c. `rs_order_ready_nudge`
+
+**Vars:** `{{1}}` orderNumber  
+**Buttons:** QUICK_REPLY Yes (`mark_as_ready`) · QUICK_REPLY No (`not_ready`)
+
+**en**
+```
+Rendasua: a customer asked about their order.
+
+Is order {{1}} ready for pickup?
+
+Tap Yes to mark it ready, or No if it still needs more time.
+```
+
+**fr**
+```
+Rendasua : un client a demandé des nouvelles de sa commande.
+
+La commande {{1}} est-elle prête pour le retrait ?
+
+Appuyez sur Oui pour la marquer prête, ou Non si elle a encore besoin de temps.
 ```
 
 ---

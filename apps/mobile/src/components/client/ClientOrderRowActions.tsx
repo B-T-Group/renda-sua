@@ -6,6 +6,7 @@ import { useOrderRatingEligibility } from '../../hooks/useOrderRatingEligibility
 import { agentApi } from '../../services/agentApi';
 import type { Order } from '../../types/agent';
 import {
+  clientCanAskIfReady,
   clientCanCancelOrder,
   clientCanConfirmReceipt,
   clientShowDeliveryPin,
@@ -27,7 +28,9 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
   const isPickup = order.fulfillment_method === 'pickup';
   const showCancel = clientCanCancelOrder(order);
   const showReceipt = clientCanConfirmReceipt(order);
+  const showAskReady = clientCanAskIfReady(order);
   const [receiptBusy, setReceiptBusy] = useState(false);
+  const [askReadyBusy, setAskReadyBusy] = useState(false);
 
   const { eligibility } = useOrderRatingEligibility(
     order.id,
@@ -43,11 +46,21 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
   const [cancelOpen, setCancelOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
 
-  if (!showPin && !showCancel && !showRate && !showReceipt) {
+  if (!showPin && !showCancel && !showRate && !showReceipt && !showAskReady) {
     return null;
   }
 
   const actions = [
+    showAskReady
+      ? {
+          id: 'askIfReady',
+          label: t('orderActions.askIfReady', 'Ask if my order is ready'),
+          icon: 'bell-ring-outline',
+          mode: 'outlined' as const,
+          loading: askReadyBusy,
+          disabled: askReadyBusy,
+        }
+      : null,
     showReceipt
       ? {
           id: 'confirmReceipt',
@@ -101,6 +114,33 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
           layout="column"
           actions={actions}
           onActionPress={(id) => {
+            if (id === 'askIfReady') {
+              void (async () => {
+                if (askReadyBusy) return;
+                setAskReadyBusy(true);
+                try {
+                  await agentApi.orders.remindReady(order.id);
+                  setSnack(
+                    t(
+                      'orderActions.askIfReadySuccess',
+                      'We asked the store if your order is ready'
+                    )
+                  );
+                  onOrderMutated?.();
+                } catch (e: unknown) {
+                  setSnack(
+                    e instanceof Error
+                      ? e.message
+                      : t(
+                          'orderActions.askIfReadyError',
+                          'Could not send the reminder'
+                        )
+                  );
+                } finally {
+                  setAskReadyBusy(false);
+                }
+              })();
+            }
             if (id === 'confirmReceipt') {
               void (async () => {
                 if (receiptBusy) return;

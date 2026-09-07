@@ -28,6 +28,14 @@ export function clientShowDeliveryPin(order: Order): boolean {
   return PIN_STATUSES.includes(status);
 }
 
+/** Client may ask once whether a confirmed order is ready. */
+export function clientCanAskIfReady(order: Order): boolean {
+  if (order.fulfillment_method === 'shipping') return false;
+  if (order.current_status !== 'confirmed') return false;
+  return !(order as { client_ready_nudge_sent_at?: string | null })
+    .client_ready_nudge_sent_at;
+}
+
 /** Client may cancel before an agent is assigned (backend rule). */
 export function clientCanCancelOrder(order: Order): boolean {
   if (order.assigned_agent_id) return false;

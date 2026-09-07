@@ -49,11 +49,6 @@ describe('BusinessItemsService CSV upload', () => {
             ],
           });
         }
-        if (query.includes('query GetBusinessLocations')) {
-          return Promise.resolve({
-            business_locations: [{ id: 'location-1', name: 'Main Store' }],
-          });
-        }
         if (query.includes('query GetBusinessInventory')) {
           return Promise.resolve({ business_inventory: [] });
         }
@@ -66,16 +61,23 @@ describe('BusinessItemsService CSV upload', () => {
     };
     const hasuraSystemService = {
       resolveBusinessCurrency: jest.fn().mockResolvedValue('CAD'),
-      executeQuery: jest.fn().mockResolvedValue({
-        items_by_pk: {
-          id: 'item-1',
-          business_id: businessId,
-          moderation_status: existingItem.moderation_status,
-          name: row.name,
-          description: row.description,
-          status: 'active',
-          price: row.price,
-        },
+      executeQuery: jest.fn((query: string) => {
+        if (query.includes('query GetBusinessLocations')) {
+          return Promise.resolve({
+            business_locations: [{ id: 'location-1', name: 'Main Store' }],
+          });
+        }
+        return Promise.resolve({
+          items_by_pk: {
+            id: 'item-1',
+            business_id: businessId,
+            moderation_status: existingItem.moderation_status,
+            name: row.name,
+            description: row.description,
+            status: 'active',
+            price: row.price,
+          },
+        });
       }),
       executeMutation: jest.fn().mockResolvedValue({
         update_items: {
@@ -337,5 +339,48 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
       response: { error: 'PRICE_REQUIRED' },
     });
     expect(createInventoryItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('BusinessItemsService getBusinessLocations', () => {
+  it('reads locations via system Hasura so order_alert_phone is selectable', async () => {
+    const hasuraUserService = {
+      executeQuery: jest.fn(),
+      executeMutation: jest.fn(),
+    };
+    const hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        business_locations: [
+          { id: 'loc-1', name: 'Store', order_alert_phone: '+15550001111' },
+        ],
+      }),
+      executeMutation: jest.fn(),
+    };
+    const service = new BusinessItemsService(
+      hasuraUserService as any,
+      hasuraSystemService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { recompute: jest.fn() } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { incrementGeneration: jest.fn() } as any
+    );
+
+    const locations = await service.getBusinessLocations('biz-1');
+
+    expect(hasuraUserService.executeQuery).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('order_alert_phone'),
+      { businessId: 'biz-1' }
+    );
+    expect(locations).toEqual([
+      { id: 'loc-1', name: 'Store', order_alert_phone: '+15550001111' },
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, Payments, Storefront, Undo } from '@mui/icons-material';
+import { Cancel, CheckCircle, NotificationsActive, Payments, Storefront, Undo } from '@mui/icons-material';
 import { Box, Button } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +34,14 @@ function clientCanPayAtPickup(order: OrderData): boolean {
   );
 }
 
+function clientCanAskIfReady(order: OrderData): boolean {
+  return (
+    order.current_status === 'confirmed' &&
+    order.fulfillment_method !== 'shipping' &&
+    !order.client_ready_nudge_sent_at
+  );
+}
+
 const ClientActions: React.FC<ClientActionsProps> = ({
   order,
   onActionComplete,
@@ -42,13 +50,14 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   deliveryPinFullWidth = false,
 }) => {
   const { t } = useTranslation();
-  const { completeOrder, confirmOrderReceipt, switchToPickup } =
+  const { completeOrder, confirmOrderReceipt, switchToPickup, remindReady } =
     useBackendOrders();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [payPickupOpen, setPayPickupOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [switchingToPickup, setSwitchingToPickup] = useState(false);
+  const [remindingReady, setRemindingReady] = useState(false);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -129,11 +138,34 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     }
   };
 
+  const handleAskIfReady = async () => {
+    setRemindingReady(true);
+    try {
+      await remindReady(order.id);
+      onShowNotification?.(
+        t(
+          'orderActions.askIfReadySuccess',
+          'We asked the store if your order is ready'
+        ),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t('orderActions.askIfReadyError', 'Could not send the reminder'),
+        'error'
+      );
+    } finally {
+      setRemindingReady(false);
+    }
+  };
+
   const getAvailableActions = () => {
     const actions: Array<{
       label: string;
       action: () => void;
-      color: 'error' | 'warning' | 'success' | 'cta';
+      color: 'error' | 'warning' | 'success' | 'cta' | 'primary';
       icon: React.ReactNode;
       variant?: 'outlined' | 'contained';
       loading?: boolean;
@@ -146,6 +178,17 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         color: 'cta',
         icon: <Payments />,
         variant: 'contained',
+      });
+    }
+
+    if (clientCanAskIfReady(order)) {
+      actions.push({
+        label: t('orderActions.askIfReady', 'Ask if my order is ready'),
+        action: () => void handleAskIfReady(),
+        color: 'primary',
+        icon: <NotificationsActive />,
+        variant: 'outlined',
+        loading: remindingReady,
       });
     }
 

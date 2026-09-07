@@ -60,6 +60,14 @@ function clientActions(
   if (primary) actions.push(primary);
 
   const s = order.current_status;
+  if (s === 'confirmed' && order.fulfillment_method !== 'shipping' && !order.client_ready_nudge_sent_at) {
+    actions.push({
+      id: 'ask_if_ready',
+      labelKey: 'orderActions.askIfReady',
+      labelDefault: 'Ask if my order is ready',
+      variant: 'outlined',
+    });
+  }
   if (['pending', 'pending_payment', 'confirmed', 'preparing'].includes(s)) {
     actions.push({
       id: 'cancel',

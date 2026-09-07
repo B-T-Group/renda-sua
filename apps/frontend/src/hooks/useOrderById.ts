@@ -34,6 +34,7 @@ export interface OrderData {
   tax_amount: number;
   total_amount?: number; // Optional for agents
   currency: string;
+  client_ready_nudge_sent_at?: string | null;
   current_status: string;
   acceptance_state?: string | null;
   acceptance_deadline_at?: string | null;

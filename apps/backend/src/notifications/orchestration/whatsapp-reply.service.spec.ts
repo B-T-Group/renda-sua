@@ -82,6 +82,14 @@ describe('WhatsAppReplyService', () => {
     expect(service.parseButtonReply('confirm')).toBe('CONFIRM');
     expect(service.parseButtonReply('busy')).toBe('BUSY');
     expect(service.parseButtonReply('decline')).toBe('DECLINE');
+    expect(service.parseButtonReply('mark_as_ready')).toBe('MARK_AS_READY');
+    expect(service.parseButtonReply('not_ready')).toBe('NOT_READY');
+  });
+
+  it('parses mark-as-ready aliases', () => {
+    expect(service.parseCommand('READY')).toBe('MARK_AS_READY');
+    expect(service.parseCommand('Mark as ready')).toBe('MARK_AS_READY');
+    expect(service.parseCommand('Marquer prêt')).toBe('MARK_AS_READY');
   });
 
   it('maps French quick-reply titles when Meta sends text as id', () => {
