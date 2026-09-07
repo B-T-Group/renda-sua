@@ -403,11 +403,11 @@ const link = await this.stripeService.createAccountLink(
 | Payments "Coming soon" | MoMo: phone gate; Stripe: exempt | ✅ `isLocationPaymentsEnabled` | ✅ Preflight | ✅ `payments_enabled` field | ✅ All Correct |
 | Stripe Connect for orders | NOT required | ✅ Not checked | ✅ Not checked | ✅ Not checked | ✅ All Correct |
 | Stripe Connect for badge | `charges_enabled ∧ payouts_enabled` | ✅ `deriveVerifiedBadge` | ✅ Badge | ✅ Badge | ✅ All Correct |
-| Stripe Connect dashboard CTA | Show when incomplete | N/A | ✅ Prominent card | ⚠️ Hidden for MoMo | ⚠️ **Mobile Gap** |
+| Stripe Connect dashboard CTA | Show when incomplete | N/A | ✅ Prominent card | ❌ Missing (next-action) | ❌ **Real Bug** |
 
 **✅ Backend and order-placement logic implement intended rules correctly across all platforms.**
 
-**⚠️ Mobile Dashboard UX Gap**: Stripe Connect CTA not surfaced when `paymentRail = 'mobile_money'` AND `can_accept_orders = true`.
+**❌ Mobile Dashboard Bug**: `resolveStripeNextAction` never emits `setup_stripe_connect`, so setup mode exits after agreement without prompting Connect completion.
 
 ---
 
@@ -426,30 +426,44 @@ Mobile PDP correctly enforces both gates:
 - `apps/mobile/src/utils/merchantLifecycle.ts:17-21`
 - `apps/mobile/src/components/browse/InventoryCatalogCard.tsx:162-164`
 
-### ⚠️ **Dashboard CTA Gap** (Mobile-Specific UX Issue)
+### ❌ **Dashboard CTA Gap** (Confirmed Real Bug)
 
-**Issue**: Mobile business dashboard hides Stripe Connect setup card when:
-- `can_accept_orders = true` (agreement signed)
-- `paymentRail = 'mobile_money'`
+**Issue**: `resolveStripeNextAction` never emits `setup_stripe_connect` action, so setup mode exits after agreement signing without prompting Stripe Connect setup.
 
-**Impact**: Stripe-rail merchants with signed agreements but incomplete Connect won't see dashboard prompt to complete setup.
+**Root Cause** (confirmed by Payments team):
+- Setup mode exits when `can_accept_orders = true` (agreement signed)
+- Next-action resolver does not emit `setup_stripe_connect` for Stripe-rail merchants with incomplete Connect
+- Dashboard shows no CTA to complete Stripe onboarding
 
-**Web Behavior**: Always shows `StripeConnectOnboardingCard` when payouts not enabled (regardless of `can_accept_orders`).
+**Impact**: Stripe-rail merchants can accept orders after signing agreement but:
+- ❌ Cannot receive payouts (no Stripe Connect)
+- ❌ No dashboard CTA to complete setup
+- ❌ No verified badge
 
-**Mobile Behavior**: `BusinessVerificationBanner` returns early for MoMo merchants (`apps/mobile/src/components/business/BusinessVerificationBanner.tsx:97-102`):
+**Mobile Code** (`apps/mobile/src/components/business/BusinessVerificationBanner.tsx:90-102`):
 
 ```typescript
+if (loading || !status || status.can_accept_orders) {
+  return null;  // Hides banner when can_accept_orders = true
+}
+
+// Banner only shows for:
+// 1. Suspended stores
+// 2. Stripe-rail merchants without signed agreement
 if (
   status.lifecycle_status !== 'suspended' &&
   status.paymentRail === 'mobile_money'
 ) {
-  return null;  // Hides banner
+  return null;
 }
 ```
 
-**Workaround**: Stripe Connect card exists at `ConfigurePaymentsScreen` but requires manual navigation.
+**Fix Required**: `resolveStripeNextAction` (or equivalent) must emit `setup_stripe_connect` when:
+- Agreement signed (`can_accept_orders = true`)
+- Stripe-rail merchant (`paymentRail = 'stripe'`)
+- Connect incomplete (`!chargesEnabled || !payoutsEnabled`)
 
-**Recommended Fix**: Show Stripe Connect card on dashboard when `paymentRail = 'stripe'` AND Connect incomplete, similar to web.
+**Status**: Separate fix agent is shipping the next-action emit correction.
 
 ---
 
@@ -550,34 +564,46 @@ If the product decision changes to **require Stripe Connect for orders**:
 
 ## Conclusion
 
-**✅ No backend or order-placement gap.** All platforms (web + mobile) correctly implement intended product rules:
-- ✅ Place Order = agreement signed only (`can_accept_orders`)
-- ✅ "Coming soon" = MoMo phone gate (Stripe countries exempt via `payments_enabled`)
-- ✅ Stripe Connect = badge + payouts only (NOT order eligibility)
+### ✅ Order Placement Rules: Working As Intended
 
-**⚠️ One mobile dashboard UX gap**: Stripe Connect setup CTA not surfaced for MoMo-rail merchants when `can_accept_orders = true`.
+All platforms (backend, web, mobile) correctly implement confirmed product rules:
+- ✅ **Place Order** = agreement signed only (`can_accept_orders`)
+- ✅ **"Coming soon"** = MoMo phone gate (Stripe countries exempt via `payments_enabled`)
+- ✅ **Stripe Connect** = badge + payouts only (NOT order eligibility)
 
-### Likely Explanation for Reported Issue
+**No gap in order-placement logic.** Business with signed agreement but incomplete Stripe Connect **should be orderable** in Stripe countries.
 
-If business `03e3ee73-86a3-4323-bc3a-336e67dce9d6`:
-- ✅ Has signed merchant agreement → `can_accept_orders = true`
-- ✅ Is in Stripe-enabled country (US, CA, UK, FR, etc.) → `payments_enabled = true`
-- ❌ Has incomplete Stripe Connect → `charges_enabled = false`, `payouts_enabled = false`
+---
 
-**Then**:
-- ✅ **Orders are placeable** on mobile (and web) — **working as intended per confirmed rules**
-- ✅ Mobile Place Order button shows "Buy" (not "Coming soon")
-- ⚠️ Mobile dashboard **does NOT** prominently show "Complete Stripe payouts" CTA (differs from web)
-- ✅ Backend allows orders (Stripe Connect readiness not required for checkout)
+### ❌ Dashboard CTA: Confirmed Bug
 
-### If This Is a Problem
+**Mobile dashboard does not prompt Stripe Connect setup** after agreement signing.
 
-**Not a product rule violation** — the current behavior matches the confirmed intended design.
+**Root Cause** (confirmed by Payments):
+- `resolveStripeNextAction` never emits `setup_stripe_connect`
+- Setup mode exits when `can_accept_orders = true`
+- No automatic CTA for Stripe-rail merchants to complete Connect
 
-**If product wants Stripe Connect required for orders**, this would be a **separate feature request** requiring:
-1. Update `deriveLifecycleStatus` to check payment capability
-2. Update `can_accept_orders` generated column
-3. Update preflight to block when Connect incomplete for Stripe-rail sellers
-4. Recalculate all business lifecycle states
+**Impact on Reported Business** (`03e3ee73-86a3-4323-bc3a-336e67dce9d6`):
 
-**Do NOT implement** unless explicitly requested by product/payments team.
+| Behavior | Expected | Actual | Status |
+|----------|----------|--------|--------|
+| Place Order shows "Buy" | ✅ Yes (Stripe country) | ✅ Yes | ✅ Correct |
+| Orders placeable | ✅ Yes (agreement signed) | ✅ Yes | ✅ Correct |
+| "Coming soon" block | ❌ No (Stripe exempt) | ❌ No | ✅ Correct |
+| Dashboard CTA for Connect | ✅ Should show | ❌ Not shown | ❌ **Bug** |
+| Verified badge | ❌ No (Connect incomplete) | ❌ No | ✅ Correct |
+| Can receive payouts | ❌ No (Connect incomplete) | ❌ No | ✅ Correct |
+
+**Merchant can accept orders but cannot receive payouts, with no dashboard prompt to fix it.**
+
+---
+
+### Fix Status
+
+**Separate fix agent is shipping the next-action correction** to emit `setup_stripe_connect` when:
+- Agreement signed (`can_accept_orders = true`)
+- Stripe-rail merchant (`paymentRail = 'stripe'`)
+- Connect incomplete (`!chargesEnabled || !payoutsEnabled`)
+
+**This investigation is complete.** No changes needed to order-placement logic.
