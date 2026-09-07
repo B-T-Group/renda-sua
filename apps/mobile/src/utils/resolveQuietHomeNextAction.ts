@@ -14,6 +14,7 @@ import {
 
 export type QuietHomeNextActionId =
   | 'cannot_accept_orders'
+  | 'setup_stripe_connect'
   | 'id_review'
   | 'confirm_mm_phone'
   | 'actions_needed'
@@ -66,15 +67,14 @@ export function resolveQuietHomeNextAction(
 ): QuietHomeNextAction | null {
   const verification = input.verification;
   const canAccept = verification?.can_accept_orders === true;
-  const nextAction = verification?.nextAction;
-
-  // Stripe Connect setup needed (even after go-live / can_accept_orders).
-  if (nextAction === 'setup_stripe_connect') {
-    return { id: 'cannot_accept_orders', kind: 'blocker' };
-  }
 
   if (verification && !canAccept) {
     return { id: 'cannot_accept_orders', kind: 'blocker' };
+  }
+
+  // Post go-live: still surface Connect when backend asks for it.
+  if (verification?.nextAction === 'setup_stripe_connect') {
+    return { id: 'setup_stripe_connect', kind: 'blocker' };
   }
 
   if (input.showIdReview) {

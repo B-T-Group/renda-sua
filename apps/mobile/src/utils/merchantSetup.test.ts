@@ -125,6 +125,20 @@ describe('isSetupMode', () => {
     ).toBe(false);
   });
 
+  it('stays false after go-live even if setup_stripe_connect remains', () => {
+    expect(
+      isSetupMode(
+        baseStatus({
+          nextAction: 'setup_stripe_connect',
+          requiresMerchantAction: true,
+          isOnboarding: false,
+          can_accept_orders: true,
+          lifecycle_status: 'active',
+        })
+      )
+    ).toBe(false);
+  });
+
   it('uses isOnboarding when present', () => {
     expect(
       isSetupMode(

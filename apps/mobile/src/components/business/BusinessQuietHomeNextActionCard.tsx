@@ -37,6 +37,15 @@ const TIP_COPY: Record<
     ctaKey: 'business.quietHome.next.cannotAcceptCta',
     cta: 'Continue setup',
   },
+  setup_stripe_connect: {
+    titleKey: 'business.quietHome.next.setupStripeTitle',
+    title: 'Set up payouts',
+    messageKey: 'business.quietHome.next.setupStripeMessage',
+    message:
+      'Connect Stripe so you can receive payouts from card orders.',
+    ctaKey: 'business.quietHome.next.setupStripeCta',
+    cta: 'Configure payments',
+  },
   id_review: {
     titleKey: 'business.quietHome.next.idReviewTitle',
     title: 'ID under review',

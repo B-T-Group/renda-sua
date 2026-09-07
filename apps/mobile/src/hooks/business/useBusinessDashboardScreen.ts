@@ -1159,6 +1159,10 @@ export function useBusinessDashboardScreen() {
       void ftue.convertNudge(`merchant-tip:${id}`);
       setTipEpoch((n) => n + 1);
     }
+    if (id === 'setup_stripe_connect') {
+      onSetupPayouts();
+      return;
+    }
     if (id === 'cannot_accept_orders') {
       if (verification.status?.nextAction === 'upload_id') {
         onSetupUploadId();

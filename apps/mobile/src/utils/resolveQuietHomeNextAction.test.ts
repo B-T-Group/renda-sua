@@ -77,7 +77,7 @@ describe('resolveQuietHomeNextAction', () => {
     expect(action?.kind).toBe('blocker');
   });
 
-  it('returns cannot_accept_orders for setup_stripe_connect even when can_accept_orders', () => {
+  it('returns setup_stripe_connect even when can_accept_orders is true', () => {
     const action = resolveQuietHomeNextAction(
       baseInput({
         verification: verification({
@@ -85,10 +85,26 @@ describe('resolveQuietHomeNextAction', () => {
           nextAction: 'setup_stripe_connect',
           paymentRail: 'stripe',
         }),
+        showIdReview: true,
+        showMmPhoneConfirm: true,
+        actionsNeededCount: 3,
+      })
+    );
+    expect(action?.id).toBe('setup_stripe_connect');
+    expect(action?.kind).toBe('blocker');
+  });
+
+  it('prefers cannot_accept_orders over setup_stripe_connect when blocked', () => {
+    const action = resolveQuietHomeNextAction(
+      baseInput({
+        verification: verification({
+          can_accept_orders: false,
+          nextAction: 'setup_stripe_connect',
+          paymentRail: 'stripe',
+        }),
       })
     );
     expect(action?.id).toBe('cannot_accept_orders');
-    expect(action?.kind).toBe('blocker');
   });
 
   it('returns id_review before mm phone', () => {
