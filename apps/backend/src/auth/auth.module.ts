@@ -13,6 +13,7 @@ import { MobilePaymentPhoneSeedModule } from '../mobile-payment-phones/mobile-pa
 import { RbacModule } from '../rbac/rbac.module';
 import { AuthGuard } from './auth.guard';
 import { Auth0Service } from './auth0.service';
+import { Auth0ActionsController } from './auth0-actions.controller';
 import { LoginController } from './login.controller';
 import { LoginService } from './login.service';
 import { PermissionService } from './permission.service';
@@ -39,7 +40,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     MobilePaymentPhoneSeedModule,
     MetaConversionsModule,
   ],
-  controllers: [SignupController, LoginController],
+  controllers: [SignupController, LoginController, Auth0ActionsController],
   providers: [
     AuthGuard,
     Auth0Service,

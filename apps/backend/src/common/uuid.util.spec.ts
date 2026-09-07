@@ -44,18 +44,36 @@ describe('requireAuthUserUuid', () => {
     ).toBe('11111111-1111-4111-8111-111111111111');
   });
 
-  it('throws HTTP 401 for Auth0 email and phone subjects', () => {
-    for (const sub of [
-      'email|6a95505255ad3b18af9e159f',
-      'auth0|test-phone|+24174000000',
-    ]) {
+  it('throws HTTP 401 for Auth0 email and phone subjects with helpful hint', () => {
+    const testCases = [
+      { sub: 'email|6a95505255ad3b18af9e159f', expectedPrefix: 'email' },
+      { sub: 'auth0|test-phone|+24174000000', expectedPrefix: 'auth0' },
+      { sub: 'sms|+237670000000', expectedPrefix: 'sms' },
+    ];
+
+    for (const { sub, expectedPrefix } of testCases) {
       try {
         requireAuthUserUuid(sub);
         fail(`expected throw for ${sub}`);
       } catch (error: any) {
         expect(error).toBeInstanceOf(UnauthorizedException);
         expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+        expect(error.message).toContain('user id is not a UUID');
+        expect(error.message).toContain(`Auth0 sub detected: ${expectedPrefix}|`);
+        expect(error.message).toContain('Auth0 Action must look up the database user UUID');
       }
+    }
+  });
+
+  it('throws HTTP 401 for non-UUID without Auth0 hint', () => {
+    try {
+      requireAuthUserUuid('not-a-uuid');
+      fail('expected throw');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+      expect(error.message).toBe('Invalid authentication token: user id is not a UUID');
+      expect(error.message).not.toContain('Auth0 sub detected');
     }
   });
 });
