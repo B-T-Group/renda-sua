@@ -60,6 +60,7 @@ export type QuietHomeGatingInput = {
  * Loading or failed totals must keep day-to-day fulfillment modules visible.
  */
 export function resolveQuietHomeGating(input: QuietHomeGatingInput): {
+  aggregatesReady: boolean;
   quietHomeMode: boolean;
   fulfillmentMode: boolean;
 } {
@@ -70,6 +71,7 @@ export function resolveQuietHomeGating(input: QuietHomeGatingInput): {
     aggregatesReady &&
     (input.aggregates?.ordersTotal ?? 0) === 0;
   return {
+    aggregatesReady,
     quietHomeMode,
     fulfillmentMode: input.showOperationalModules && !quietHomeMode,
   };
