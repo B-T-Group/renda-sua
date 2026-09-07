@@ -147,13 +147,13 @@ const BusinessDashboard: React.FC = () => {
   const isLoading = aggregatesLoading;
   const itemCount = aggregates?.itemCount ?? 0;
   const rentalItemCount = aggregates?.rentalItemCount ?? 0;
-  const aggregatesReady = !aggregatesLoading && !!aggregates && !aggregatesError;
-  const { quietHomeMode, fulfillmentMode } = resolveQuietHomeGating({
-    showOperationalModules,
-    aggregatesLoading,
-    aggregates,
-    aggregatesError,
-  });
+  const { aggregatesReady, quietHomeMode, fulfillmentMode } =
+    resolveQuietHomeGating({
+      showOperationalModules,
+      aggregatesLoading,
+      aggregates,
+      aggregatesError,
+    });
 
   const {
     primaryOrderModules,

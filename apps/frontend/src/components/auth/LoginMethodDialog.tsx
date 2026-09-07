@@ -152,12 +152,12 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
     if (identifierMode === 'phone') {
       return t(
         'auth.loginMethodHintPhoneShort',
-        'We'll text you a 4-digit code to verify your identity.'
+        "We'll text you a 4-digit code to verify your identity."
       );
     }
     return t(
       'auth.loginMethodHintEmailOtpShort',
-      'We'll email you a 4-digit code to verify your identity.'
+      "We'll email you a 4-digit code to verify your identity."
     );
   }, [identifierMode, t]);
 

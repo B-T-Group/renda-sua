@@ -91,7 +91,11 @@ describe('web quiet home utils', () => {
         aggregatesLoading: true,
         aggregates: null,
       })
-    ).toEqual({ quietHomeMode: false, fulfillmentMode: true });
+    ).toEqual({
+      aggregatesReady: false,
+      quietHomeMode: false,
+      fulfillmentMode: true,
+    });
     expect(
       resolveQuietHomeGating({
         showOperationalModules: true,
@@ -99,21 +103,33 @@ describe('web quiet home utils', () => {
         aggregates: null,
         aggregatesError: 'Failed to load dashboard',
       })
-    ).toEqual({ quietHomeMode: false, fulfillmentMode: true });
+    ).toEqual({
+      aggregatesReady: false,
+      quietHomeMode: false,
+      fulfillmentMode: true,
+    });
     expect(
       resolveQuietHomeGating({
         showOperationalModules: true,
         aggregatesLoading: false,
         aggregates: { ordersTotal: 0 },
       })
-    ).toEqual({ quietHomeMode: true, fulfillmentMode: false });
+    ).toEqual({
+      aggregatesReady: true,
+      quietHomeMode: true,
+      fulfillmentMode: false,
+    });
     expect(
       resolveQuietHomeGating({
         showOperationalModules: true,
         aggregatesLoading: false,
         aggregates: { ordersTotal: 2 },
       })
-    ).toEqual({ quietHomeMode: false, fulfillmentMode: true });
+    ).toEqual({
+      aggregatesReady: true,
+      quietHomeMode: false,
+      fulfillmentMode: true,
+    });
   });
 
   it('prioritizes cannot_accept_orders', () => {
