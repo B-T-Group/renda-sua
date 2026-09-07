@@ -24,7 +24,7 @@ Depuis le message utilisateur (sinon demander une seule fois) :
 
 1. **Features à couvrir** — puces, noms ou notes courtes (obligatoire).
 2. **Périmètre optionnel** — fenêtre (`7 derniers jours`, `depuis vendredi`),
-   branche, repos (`rendasua`, `mobile-rendasua`, les deux), ou tag/release.
+   branche, sous-app (`mobile`, `backend`, `frontend`), ou tag/release.
 3. **Ajustements de ton optionnels** — plus formel, mention d’une personne, etc.
 
 Sans fenêtre de temps : **7–14 derniers jours** de commits sur la branche
@@ -35,9 +35,8 @@ courante vs `main` / merges récents.
 1. **Lire** la liste de features. N’invente pas de sujets hors liste, sauf un
    détail étroitement lié clairement livré sous une de leurs puces (une courte
    clause max).
-2. **Collecter le contexte code** (les deux workspaces si pertinent) :
-   - `/Users/besongsamuel/Documents/Github/rs/rendasua`
-   - `/Users/besongsamuel/Workspace/mobile-rendasua`
+2. **Collecter le contexte code** (le monorepo) :
+   - `/Users/besongsamuel/Documents/Github/rs/rendasua` (inclut `apps/mobile/`)
    - `git log`, `git diff`, titres/descriptions de PR si utile.
    - Prioriser l’impact utilisateur / métier, pas les chemins de fichiers.
 3. **Mapper** chaque feature → 1–2 résultats concrets.

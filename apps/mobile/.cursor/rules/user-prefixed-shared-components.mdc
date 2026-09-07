@@ -1,0 +1,31 @@
+---
+description: Naming for components/screens shared across all personas
+globs: **/*.tsx
+alwaysApply: false
+---
+
+# Prefix persona-neutral components with `User`
+
+When a component or screen is applicable to **all** personas (client, agent, and
+business) rather than one specific persona, name it with a `User` prefix and put
+shared screens in `src/screens/shared/`. Do not name a cross-persona component
+after a single persona (e.g. `Client...`, `Agent...`, `Business...`), since that
+is misleading when every persona reuses it.
+
+## Examples
+
+```tsx
+// ❌ BAD — persona-specific name, but reused by client, agent, and business
+// src/screens/client/ClientAccountsScreen.tsx
+export default observer(ClientAccountsScreenBase);
+
+// ✅ GOOD — persona-neutral name, lives in screens/shared
+// src/screens/shared/UserAccountsScreen.tsx
+export default observer(UserAccountsScreenBase);
+```
+
+## Guidance
+
+- Persona-specific component → keep the persona prefix (`AgentStatusBar`, `ClientTopUpDialog`).
+- Used by every persona → `User` prefix (`UserAccountsScreen`, `UserProfileCard`).
+- Place `User`-prefixed screens in `src/screens/shared/`, not under a persona folder.
