@@ -15,12 +15,27 @@ export function requireUuid(value: string | undefined, fieldName: string): strin
   return trimmed;
 }
 
-/** JWT `x-hasura-user-id` must be the DB users.id UUID, not an Auth0 `sub`. */
+/**
+ * JWT `x-hasura-user-id` must be the DB users.id UUID, not an Auth0 `sub`.
+ * 
+ * Common failure: Auth0 Action sets `x-hasura-user-id` to Auth0 `sub` (e.g.
+ * `auth0|1234` or `email|abc`) instead of looking up the database user UUID.
+ * 
+ * Fix: Update Auth0 Action to call POST /api/auth0-actions/resolve-user-id
+ * with { email } or { phone_number } to get the database user UUID, then set
+ * that as `x-hasura-user-id` in the JWT claims.
+ */
 export function requireAuthUserUuid(value?: string | null): string {
   const trimmed = value?.trim();
   if (!isUuid(trimmed)) {
+    const valueStr = trimmed || '';
+    const prefix = valueStr.split('|')[0];
+    let hint = '';
+    if (prefix === 'auth0' || prefix === 'email' || prefix === 'sms') {
+      hint = ` (Auth0 sub detected: ${prefix}|...). Auth0 Action must look up the database user UUID, not use the Auth0 sub.`;
+    }
     throw new UnauthorizedException(
-      'Invalid authentication token: user id is not a UUID'
+      `Invalid authentication token: user id is not a UUID${hint}`
     );
   }
   return trimmed;

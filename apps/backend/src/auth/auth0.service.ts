@@ -259,4 +259,35 @@ export class Auth0Service {
     const client = this.getManagementClient();
     await client.users.delete({ id: sub });
   }
+
+  /**
+   * Set Rendasua user metadata in Auth0 app_metadata for JWT claim generation.
+   * Auth0 Action reads this to set x-hasura-user-id and persona claims.
+   */
+  async setRendasuaUserMetadata(input: {
+    auth0Sub: string;
+    userId: string;
+    defaultRole?: string;
+    allowedRoles?: string[];
+  }): Promise<void> {
+    const client = this.getManagementClient();
+    await client.users.update(
+      { id: input.auth0Sub },
+      {
+        app_metadata: {
+          rendasua_user_id: input.userId,
+          rendasua_default_role: input.defaultRole,
+          rendasua_allowed_roles: input.allowedRoles,
+        },
+      }
+    );
+  }
+
+  /**
+   * Refresh access token using refresh_token.
+   * Returns new tokens with updated JWT claims (after app_metadata was set).
+   */
+  async refreshTokensForNewUser(refreshToken: string): Promise<Auth0TokenResponse> {
+    return this.refreshAccessToken(refreshToken);
+  }
 }
