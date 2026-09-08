@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { observer } from 'mobx-react-lite';
-import { View, StyleSheet } from 'react-native';
+import { InteractionManager, View, StyleSheet } from 'react-native';
 import { useStore } from '../stores/RootStore';
 
 import PersonaSessionGate from '../screens/shared/PersonaSessionGate';
@@ -29,6 +29,16 @@ type GuestLaunch = {
   initialSignupParams?: AuthStackParamList['Signup'];
 };
 
+const FACE_ID_SHEET_HIDE_MS = 400;
+
+function waitForSheetHide(): Promise<void> {
+  return new Promise((resolve) => {
+    InteractionManager.runAfterInteractions(() => {
+      setTimeout(resolve, FACE_ID_SHEET_HIDE_MS);
+    });
+  });
+}
+
 function AppNavigatorContent() {
   const { auth, persona, savedAccounts, ftue } = useStore();
   const [enablingBio, setEnablingBio] = useState(false);
@@ -44,8 +54,13 @@ function AppNavigatorContent() {
 
   const handleEnableBiometric = useCallback(async () => {
     setEnablingBio(true);
-    await SessionService.enableBiometricsForActiveAccount();
-    setEnablingBio(false);
+    SessionService.dismissBiometricPrompt();
+    await waitForSheetHide();
+    try {
+      await SessionService.enableBiometricsForActiveAccount();
+    } finally {
+      setEnablingBio(false);
+    }
   }, []);
 
   const handleDismissBiometric = useCallback(() => {

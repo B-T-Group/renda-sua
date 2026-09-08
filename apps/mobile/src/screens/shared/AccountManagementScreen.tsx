@@ -81,7 +81,9 @@ function AccountManagementScreenBase() {
           setBusyId(null);
           return;
         }
-        await SessionService.enableBiometricsForActiveAccount();
+        await SessionService.enableBiometricsForActiveAccount({
+          skipAuthentication: true,
+        });
       } else {
         await SessionService.disableBiometricsForAccount(accountId);
       }
