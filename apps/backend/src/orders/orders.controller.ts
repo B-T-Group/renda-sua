@@ -277,7 +277,11 @@ export class OrdersController {
       },
     },
   })
-  async createOrder(@Body() orderData: CreateOrderRequest) {
+  async createOrder(
+    @Body() orderData: CreateOrderRequest,
+    @Request() req?: any,
+    @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
+  ) {
     try {
       const isPickup = orderData.fulfillment_method === 'pickup';
       if (!isPickup && !orderData.delivery_address_id) {
@@ -287,7 +291,9 @@ export class OrdersController {
         );
       }
 
-      const order = await this.ordersService.createOrder(orderData);
+      const order = await this.ordersService.createOrder(
+        this.withRequestMetaCapi(orderData, req, platform)
+      );
 
       return {
         success: true,
@@ -2364,5 +2370,19 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: 'Not authorized (client only)' })
   async confirmOrderReceipt(@Param('id') orderId: string) {
     return this.ordersService.confirmOrderReceipt(orderId);
+  }
+
+  private withRequestMetaCapi(
+    orderData: CreateOrderRequest,
+    req?: { ip?: string; headers?: Record<string, unknown> },
+    platform?: string
+  ): CreateOrderRequest {
+    const ua = req?.headers?.['user-agent'];
+    return {
+      ...orderData,
+      clientIpAddress: typeof req?.ip === 'string' ? req.ip : undefined,
+      clientUserAgent: typeof ua === 'string' ? ua : undefined,
+      metaActionSource: resolveMetaActionSource(platform),
+    };
   }
 }

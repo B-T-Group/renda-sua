@@ -50,7 +50,11 @@ def _call_backend_internal(
     base = (os.environ.get("BACKEND_INTERNAL_API_BASE_URL") or "").rstrip("/")
     key = os.environ.get("NOTIFICATIONS_INTERNAL_API_KEY") or ""
     if not base or not key:
-        log_error("BACKEND_INTERNAL_API_BASE_URL or NOTIFICATIONS_INTERNAL_API_KEY missing")
+        log_error(
+            "BACKEND_INTERNAL_API_BASE_URL or NOTIFICATIONS_INTERNAL_API_KEY missing",
+            has_base=bool(base),
+            has_key=bool(key),
+        )
         return {"success": False, "error": "backend internal API not configured"}
     url = f"{base}/api/orders/internal/{path}"
     payload = json.dumps(body).encode("utf-8")

@@ -97,6 +97,19 @@ describe('MetaConversionsService', () => {
             last_name: 'B',
           },
         },
+        delivery_address: {
+          city: 'Toronto',
+          state: 'ON',
+          postal_code: 'M5V 1A1',
+          country: 'CA',
+        },
+        meta_capi_context: {
+          fbc: 'fb.1.123.abc',
+          fbp: 'fb.1.123.xyz',
+          clientIpAddress: '203.0.113.10',
+          clientUserAgent: 'Mozilla/5.0',
+          actionSource: 'website',
+        },
       },
     });
     await service.trackPurchaseForOrderId('ord-1');
@@ -107,6 +120,14 @@ describe('MetaConversionsService', () => {
     expect(payload.data[0].custom_data.content_ids).toEqual(['inv-1']);
     expect(payload.data[0].custom_data.value).toBe(50);
     expect(payload.data[0].user_data.em).toBeDefined();
+    expect(payload.data[0].user_data.fbc).toBe('fb.1.123.abc');
+    expect(payload.data[0].user_data.fbp).toBe('fb.1.123.xyz');
+    expect(payload.data[0].user_data.client_ip_address).toBe('203.0.113.10');
+    expect(payload.data[0].user_data.client_user_agent).toBe('Mozilla/5.0');
+    expect(payload.data[0].user_data.ct).toBeDefined();
+    expect(payload.data[0].user_data.st).toBeDefined();
+    expect(payload.data[0].user_data.zp).toBeDefined();
+    expect(payload.data[0].user_data.country).toBeDefined();
   });
 
   it('trackViewContentSafe sends ViewContent', async () => {

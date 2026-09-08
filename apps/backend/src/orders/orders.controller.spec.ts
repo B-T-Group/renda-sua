@@ -78,7 +78,34 @@ describe('OrdersController', () => {
       const result = await controller.createOrder(orderData);
 
       expect(result).toEqual(expectedResult);
-      expect(ordersService.createOrder).toHaveBeenCalledWith(orderData);
+      expect(ordersService.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining(orderData)
+      );
+    });
+
+    it('forwards Meta match ids from the request', async () => {
+      const orderData = {
+        items: [{ business_inventory_id: 'inv-123', quantity: 1 }],
+        delivery_address_id: 'addr-123',
+        fbc: 'fb.1.1.click',
+        fbp: 'fb.1.1.browser',
+      };
+      ordersService.createOrder.mockResolvedValue({ id: 'order-123' } as any);
+
+      await controller.createOrder(orderData, {
+        ip: '203.0.113.10',
+        headers: { 'user-agent': 'Mozilla/5.0' },
+      });
+
+      expect(ordersService.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fbc: 'fb.1.1.click',
+          fbp: 'fb.1.1.browser',
+          clientIpAddress: '203.0.113.10',
+          clientUserAgent: 'Mozilla/5.0',
+          metaActionSource: 'website',
+        })
+      );
     });
 
     it('should handle service errors appropriately', async () => {

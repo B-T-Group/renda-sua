@@ -579,6 +579,9 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           ENVIRONMENT: environment,
           GRAPHQL_ENDPOINT: graphqlEndpoint,
           ORDER_STATUS_QUEUE_URL: orderStatusQueue.queueUrl,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
         },
       }
     );

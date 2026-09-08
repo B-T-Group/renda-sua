@@ -61,6 +61,10 @@ export class OrderMarkReadyService {
     }
   }
 
+  /**
+   * Delayed WhatsApp `order_mark_ready_business` prompt. Send only after the
+   * business has confirmed and before the order is marked ready.
+   */
   async onMarkReadyPrompt(orderId: string): Promise<{
     success: boolean;
     skipped?: boolean;
@@ -68,16 +72,9 @@ export class OrderMarkReadyService {
   }> {
     const order = await this.loadOrder(orderId);
     if (!order) return { success: false, reason: 'order_not_found' };
-    if (order.current_status !== 'confirmed') {
-      return { success: true, skipped: true, reason: 'not_confirmed' };
-    }
-    await this.notifications.sendMarkReadyPromptNotifications({
-      orderId: order.id,
-      orderNumber: order.order_number,
-      businessUserId: order.business?.user_id,
-      businessLocationId: order.business_location_id,
-      preferredLanguage: order.business?.user?.preferred_language,
-    });
+    const skipReason = this.skipMarkReadyPromptReason(order.current_status);
+    if (skipReason) return { success: true, skipped: true, reason: skipReason };
+    await this.sendMarkReadyPrompt(order);
     return { success: true };
   }
 
@@ -108,6 +105,21 @@ export class OrderMarkReadyService {
       success: true,
       message: 'Reminder sent to the business',
     };
+  }
+
+  private skipMarkReadyPromptReason(status: string): string | null {
+    if (status === 'confirmed' || status === 'preparing') return null;
+    return status === 'pending' ? 'not_confirmed' : 'not_actionable';
+  }
+
+  private async sendMarkReadyPrompt(order: MarkReadyOrderRow): Promise<void> {
+    await this.notifications.sendMarkReadyPromptNotifications({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      businessUserId: order.business?.user_id,
+      businessLocationId: order.business_location_id,
+      preferredLanguage: order.business?.user?.preferred_language,
+    });
   }
 
   private isAsapNonShipping(order: {

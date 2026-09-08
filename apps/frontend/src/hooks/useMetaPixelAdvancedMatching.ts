@@ -1,32 +1,27 @@
 import { useEffect, useRef } from 'react';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { META_PIXEL_ID } from '../utils/metaBrowserIds';
+import { buildMetaPixelAdvancedMatching } from '../utils/metaPixelAdvancedMatching';
 
 type FbqInit = (
   command: 'init',
   pixelId: string,
-  advancedMatching?: {
-    em?: string;
-    ph?: string;
-    fn?: string;
-    ln?: string;
-    external_id?: string;
-  }
+  advancedMatching?: ReturnType<typeof buildMetaPixelAdvancedMatching>
 ) => void;
 
-function matchingFingerprint(profile: {
-  id: string;
-  email?: string | null;
-  phone_number?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-}): string {
+function matchingFingerprint(
+  params: ReturnType<typeof buildMetaPixelAdvancedMatching>
+): string {
   return [
-    profile.id,
-    profile.email?.trim().toLowerCase() ?? '',
-    (profile.phone_number ?? '').replace(/\D/g, ''),
-    profile.first_name?.trim().toLowerCase() ?? '',
-    profile.last_name?.trim().toLowerCase() ?? '',
+    params.external_id ?? '',
+    params.em ?? '',
+    params.ph ?? '',
+    params.fn ?? '',
+    params.ln ?? '',
+    params.ct ?? '',
+    params.st ?? '',
+    params.zp ?? '',
+    params.country ?? '',
   ].join('|');
 }
 
@@ -44,26 +39,15 @@ export function useMetaPixelAdvancedMatching(): void {
     if (!userId) return;
     if (typeof window === 'undefined') return;
 
-    const fingerprint = matchingFingerprint(profile);
+    const matching = buildMetaPixelAdvancedMatching(profile);
+    const fingerprint = matchingFingerprint(matching);
     if (appliedFingerprintRef.current === fingerprint) return;
 
     const fbq = (window as unknown as { fbq?: FbqInit }).fbq;
     if (typeof fbq !== 'function') return;
 
     try {
-      fbq('init', META_PIXEL_ID, {
-        external_id: userId,
-        ...(profile.email?.trim() && { em: profile.email.trim().toLowerCase() }),
-        ...(profile.phone_number?.trim() && {
-          ph: profile.phone_number.replace(/\D/g, ''),
-        }),
-        ...(profile.first_name?.trim() && {
-          fn: profile.first_name.trim().toLowerCase(),
-        }),
-        ...(profile.last_name?.trim() && {
-          ln: profile.last_name.trim().toLowerCase(),
-        }),
-      });
+      fbq('init', META_PIXEL_ID, matching);
       appliedFingerprintRef.current = fingerprint;
     } catch {
       // Pixel failures must never break the app.
