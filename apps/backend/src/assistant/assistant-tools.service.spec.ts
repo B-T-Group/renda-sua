@@ -130,6 +130,7 @@ describe('AssistantToolsService', () => {
       locale: 'en',
     });
     expect(result.handoff).toBe(true);
-    expect(result.content).toMatch(/get back/i);
+    expect(result.content).toMatch(/\[\[NO_REPLY\]\]/);
+    expect(result.content).toMatch(/get back shortly/i);
   });
 });

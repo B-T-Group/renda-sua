@@ -30,6 +30,8 @@ export type AssistantReply = {
   reply: string;
   handoff: boolean;
   locale: AssistantLocale;
+  /** When true, WhatsApp must not send a session message. */
+  silent: boolean;
 };
 
 export type AssistantTurnInput = Omit<AssistantChatInput, 'locale'> & {
