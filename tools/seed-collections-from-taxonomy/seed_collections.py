@@ -25,7 +25,17 @@ TOP_CATEGORIES = 15
 TOP_SUBCATEGORIES = 12
 MIN_LISTINGS_FOR_SEED = 8
 ESSENTIAL_KEYWORD_HINTS: dict[str, list[str]] = {
-    "baby-essentials": ["bébé", "bebe", "baby", "enfant", "kids", "couche", "diaper"],
+    "baby-essentials": [
+        "bébé",
+        "bebe",
+        "baby",
+        "enfant",
+        "kids",
+        "couche",
+        "couches",
+        "diaper",
+        "diapers",
+    ],
     "cleaning-essentials": [
         "ménage",
         "menage",
@@ -47,6 +57,25 @@ ESSENTIAL_KEYWORD_HINTS: dict[str, list[str]] = {
         "fourniture",
     ],
 }
+
+# Categories that must never be pulled into baby essentials via keyword refresh
+# (e.g. French "couchette" sleeper-cab trucks formerly matched ILIKE '%couche%').
+ESSENTIAL_CATEGORY_BLOCKLIST: dict[str, list[str]] = {
+    "baby-essentials": [
+        "heavy truck",
+        "truck",
+        "vehicle",
+        "automobile",
+        "auto",
+        "camion",
+        "véhicule",
+        "vehicule",
+    ],
+}
+
+# Keyword stems that should match longer forms (clean→cleaning). Others use
+# full word boundaries so "couche" does not match truck "couchette".
+KEYWORD_PREFIX_STEMS = {"clean", "school"}
 
 
 @dataclass
@@ -224,10 +253,35 @@ def sample_item_ids_for_subcategory(cur, subcategory_id: int, limit: int) -> lis
     return [r[0] for r in cur.fetchall()]
 
 
-def sample_items_by_keywords(cur, keywords: list[str], limit: int) -> list[str]:
-    patterns = [f"%{k}%" for k in keywords]
-    cur.execute(
+def keyword_to_regex(keyword: str) -> str:
+    """Build a case-insensitive Postgres regex with word boundaries."""
+    escaped = re.escape(keyword)
+    if keyword.casefold() in KEYWORD_PREFIX_STEMS:
+        return rf"\m{escaped}"
+    return rf"\m{escaped}\M"
+
+
+def sample_items_by_keywords(
+    cur,
+    keywords: list[str],
+    limit: int,
+    *,
+    exclude_category_ilike: list[str] | None = None,
+) -> list[str]:
+    regexes = [keyword_to_regex(k) for k in keywords]
+    exclude = exclude_category_ilike or []
+    exclude_sql = ""
+    params: list[Any] = [regexes, regexes, regexes, regexes]
+    if exclude:
+        exclude_patterns = [f"%{p}%" for p in exclude]
+        exclude_sql = """
+          AND c.name NOT ILIKE ALL(%s)
+          AND sc.name NOT ILIKE ALL(%s)
         """
+        params.extend([exclude_patterns, exclude_patterns])
+    params.append(limit)
+    cur.execute(
+        f"""
         SELECT i.id::text
         FROM items i
         JOIN item_sub_categories sc ON sc.id = i.item_sub_category_id
@@ -240,16 +294,17 @@ def sample_items_by_keywords(cur, keywords: list[str], limit: int) -> list[str]:
           AND COALESCE(bi.quantity, 0) > 0
           AND b.is_storefront_visible = true
           AND (
-            i.name ILIKE ANY(%s)
-            OR COALESCE(i.description, '') ILIKE ANY(%s)
-            OR sc.name ILIKE ANY(%s)
-            OR c.name ILIKE ANY(%s)
+            i.name ~* ANY(%s)
+            OR COALESCE(i.description, '') ~* ANY(%s)
+            OR sc.name ~* ANY(%s)
+            OR c.name ~* ANY(%s)
           )
+          {exclude_sql}
         GROUP BY i.id
         ORDER BY COUNT(bi.id) DESC, i.created_at DESC
         LIMIT %s
         """,
-        (patterns, patterns, patterns, patterns, limit),
+        params,
     )
     return [r[0] for r in cur.fetchall()]
 
@@ -350,7 +405,12 @@ def build_plan(cur) -> list[ProposedCollection]:
         if count >= 4:
             continue
         need = max(4 - count, ITEMS_PER_COLLECTION - count)
-        item_ids = sample_items_by_keywords(cur, hints, need + 4)
+        item_ids = sample_items_by_keywords(
+            cur,
+            hints,
+            need + 4,
+            exclude_category_ilike=ESSENTIAL_CATEGORY_BLOCKLIST.get(slug),
+        )
         if not item_ids:
             continue
         proposals.append(
