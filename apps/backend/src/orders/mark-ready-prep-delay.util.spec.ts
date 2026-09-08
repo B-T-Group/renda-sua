@@ -44,4 +44,19 @@ describe('resolveMarkReadyDelayMinutes', () => {
       })
     ).toBe(5);
   });
+
+  it('clamps very long averages to 120 minutes', () => {
+    const samples = Array.from({ length: 5 }, () => ({
+      accepted_at: '2026-01-01T10:00:00.000Z',
+      order_status_history: [
+        { status: 'ready_for_pickup', created_at: '2026-01-01T14:00:00.000Z' },
+      ],
+    }));
+    expect(
+      resolveMarkReadyDelayMinutes({
+        completedOrderCount: 10,
+        prepSamples: samples,
+      })
+    ).toBe(120);
+  });
 });
