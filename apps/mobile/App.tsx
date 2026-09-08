@@ -13,6 +13,7 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { RootStore, RootStoreProvider } from './src/stores/RootStore';
 import { client } from './src/services/apolloClient';
 import { useExpoUpdatesOnStartup } from './src/hooks/useExpoUpdatesOnStartup';
+import { useStoreUpdateGate } from './src/hooks/useStoreUpdateGate';
 import { AgentActiveDeliveryProvider } from './src/contexts/AgentActiveDeliveryContext';
 import { AgentLocationProvider, useAgentLocation } from './src/contexts/AgentLocationContext';
 import { AgentBackgroundLocationDisclosureDialog } from './src/components/agent/AgentBackgroundLocationDisclosureDialog';
@@ -42,6 +43,7 @@ import { OrderOfferOverlay } from './src/components/orderOffer/OrderOfferOverlay
 import { IncomingOrderOverlay } from './src/components/incomingOrder/IncomingOrderOverlay';
 import { StockAvailabilityOverlay } from './src/components/stockAvailability/StockAvailabilityOverlay';
 import { AdminBroadcastOverlay } from './src/components/admin/AdminBroadcastOverlay';
+import { StoreUpdateModal } from './src/components/common/StoreUpdateModal';
 import { ReferralRejectionOverlay } from './src/components/agent/ReferralRejectionOverlay';
 import { PickupReminderOverlay } from './src/components/agent/PickupReminderOverlay';
 import { StorePickupReminderOverlay } from './src/components/client/StorePickupReminderOverlay';
@@ -62,6 +64,7 @@ function AppContentBase() {
   const [hydrated, setHydrated] = useState(false);
   const [navReady, setNavReady] = useState(false);
   const { navigationTheme } = useTheme();
+  const storeUpdate = useStoreUpdateGate();
 
   useExpoUpdatesOnStartup();
   useAuthForegroundRefresh();
@@ -118,6 +121,11 @@ function AppContentBase() {
             <IncomingOrderOverlay />
             <StockAvailabilityOverlay />
             <AdminBroadcastOverlay />
+            <StoreUpdateModal
+              visible={storeUpdate.visible}
+              mode={storeUpdate.mode}
+              onDismiss={() => void storeUpdate.dismiss()}
+            />
             <ReferralRejectionOverlay />
             <PickupReminderOverlay />
             <StorePickupReminderOverlay />

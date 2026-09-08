@@ -70,6 +70,14 @@
     "updating": "We are updating some of our backend services.",
     "tryAgain": "Try again"
   },
+  "appUpdate": {
+    "forceTitle": "Update required",
+    "forceBody": "This version of Rendasua is no longer supported. Please update to continue.",
+    "softTitle": "Update available",
+    "softBody": "A newer version of Rendasua is available with improvements and fixes.",
+    "update": "Update app",
+    "later": "Not now"
+  },
   "common": {
     "orders": "Orders",
     "loading": "Loading...",

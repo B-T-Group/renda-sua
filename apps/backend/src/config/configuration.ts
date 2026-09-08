@@ -503,6 +503,13 @@ export interface WhatsAppConfig {
   notificationsEnabled: boolean;
 }
 
+export interface MobileAppConfig {
+  /** Semver floor — clients below this must update (empty = no force). */
+  minVersion: string;
+  /** Semver soft prompt — clients below this see dismissible update (empty = none). */
+  recommendedVersion: string;
+}
+
 export interface Configuration {
   GOOGLE_MAPS_API_KEY: string;
   GOOGLE_CACHE_ENABLED: boolean;
@@ -511,6 +518,7 @@ export interface Configuration {
   publicWebAppUrl: string;
   /** Shared secret for Auth0 Actions to authenticate API calls. */
   AUTH0_ACTIONS_SHARED_SECRET: string;
+  mobileApp: MobileAppConfig;
   app: AppConfig;
   database: DatabaseConfig;
   hasura: HasuraConfig;
@@ -598,6 +606,12 @@ export default (): Configuration => {
       process.env.PUBLIC_WEB_APP_URL || 'https://rendasua.com'
     ).replace(/\/$/, ''),
     AUTH0_ACTIONS_SHARED_SECRET: process.env.AUTH0_ACTIONS_SHARED_SECRET || '',
+    mobileApp: {
+      minVersion: (process.env.MOBILE_APP_MIN_VERSION || '').trim(),
+      recommendedVersion: (
+        process.env.MOBILE_APP_RECOMMENDED_VERSION || ''
+      ).trim(),
+    },
     airtelMoney: {
       clientId:
         process.env.AIRTEL_MONEY_CLIENT_ID ??

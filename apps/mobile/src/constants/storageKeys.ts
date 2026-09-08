@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
   agentWentAvailable: '@RendasuaAgent:ftue:agentWentAvailable',
   shoppingCart: '@RendasuaAgent:shoppingCart',
   language: '@BTGroupe:language',
+  /** Soft store-update dismiss — stores the recommended version that was dismissed. */
+  storeUpdateDismissedRecommended: '@RendasuaAgent:storeUpdate:dismissedRecommended',
   /** Opaque deferred-signup attempt id — held until OTP verification completes. */
   pendingSignupAttemptId: '@RendasuaAgent:pendingSignupAttemptId',
   /** Post-signup welcome state (promo + persona) — survives restart until welcome dismissed. */
