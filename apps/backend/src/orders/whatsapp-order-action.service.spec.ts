@@ -114,7 +114,7 @@ describe('WhatsAppOrderActionService', () => {
     expect(result.message).toMatch(/ready/i);
   });
 
-  it('remaps Yes on ready-nudge template to mark ready', () => {
+  it('remaps Yes/No on mark-ready templates and leaves other templates alone', () => {
     expect(
       service.resolveActionForBoundTemplate('CONFIRM', 'order.ready.nudge')
     ).toBe('MARK_AS_READY');
@@ -122,8 +122,17 @@ describe('WhatsAppOrderActionService', () => {
       service.resolveActionForBoundTemplate('DECLINE', 'order.ready.nudge')
     ).toBe('NOT_READY');
     expect(
+      service.resolveActionForBoundTemplate('CONFIRM', 'order.mark_ready.prompt')
+    ).toBe('MARK_AS_READY');
+    expect(
+      service.resolveActionForBoundTemplate('DECLINE', 'order.mark_ready.prompt')
+    ).toBe('NOT_READY');
+    expect(
       service.resolveActionForBoundTemplate('CONFIRM', 'order.created')
     ).toBe('CONFIRM');
+    expect(
+      service.resolveActionForBoundTemplate('DECLINE', 'order.created')
+    ).toBe('DECLINE');
   });
 
   it('notifies client when merchant says not ready on nudge', async () => {
@@ -166,6 +175,101 @@ describe('WhatsAppOrderActionService', () => {
       expect.objectContaining({ clientUserId: 'client-1', orderId: 'o1' })
     );
     expect(result.message).toMatch(/not ready/i);
+  });
+
+  it('does not cancel or notify when No is tapped on the delayed mark-ready prompt', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [
+          {
+            entity_id: 'o1',
+            notification_type: 'order.mark_ready.prompt',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'ORD-P',
+          business_id: 'b1',
+          business_location_id: 'loc1',
+          current_status: 'confirmed',
+          business_location: {
+            id: 'loc1',
+            business_id: 'b1',
+            business: { user_id: 'u1' },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'DECLINE',
+      contextMessageId: 'wamid.prompt',
+    });
+    expect(orders.cancelOrder).not.toHaveBeenCalled();
+    expect(notifications.notifyClientOrderNotReady).not.toHaveBeenCalled();
+    expect(result.handled).toBe(true);
+    expect(result.message).toMatch(/not ready/i);
+  });
+
+  it('does not mark ready when the bound order is already ready or unconfirmed', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [
+          { entity_id: 'o1', notification_type: 'order.mark_ready.prompt' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          order_number: 'ORD-READY',
+          business_id: 'b1',
+          current_status: 'ready_for_pickup',
+        },
+      })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      });
+    await expect(
+      service.handleAction({
+        fromPhone: '237600000000',
+        action: 'CONFIRM',
+        contextMessageId: 'wamid.ready',
+      })
+    ).resolves.toMatchObject({ handled: true, message: expect.stringMatching(/already ready/i) });
+    expect(orders.completePreparation).not.toHaveBeenCalled();
+
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [
+          { entity_id: 'o2', notification_type: 'order.mark_ready.prompt' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o2',
+          order_number: 'ORD-PEND',
+          business_id: 'b1',
+          current_status: 'pending',
+        },
+      })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      });
+    await expect(
+      service.handleAction({
+        fromPhone: '237600000000',
+        action: 'CONFIRM',
+        contextMessageId: 'wamid.pending',
+      })
+    ).resolves.toMatchObject({
+      handled: true,
+      message: expect.stringMatching(/must be confirmed/i),
+    });
+    expect(orders.completePreparation).not.toHaveBeenCalled();
   });
 
   it('matches location alert phone ignoring formatting', async () => {
