@@ -15,8 +15,6 @@ jest.mock('framer-motion', () => ({
     div: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   },
   useReducedMotion: () => true,
-  useMotionValue: (value: number) => ({ set: jest.fn(), get: () => value }),
-  useSpring: () => ({ on: () => () => undefined }),
 }));
 
 jest.mock('../../hooks/useMarketplacePublicStats', () => ({
@@ -35,7 +33,7 @@ jest.mock('../../hooks/useMarketplacePublicStats', () => ({
 const theme = createTheme();
 
 describe('CommunityStatsSection', () => {
-  it('renders live community counts', () => {
+  it('renders live community counts in the network illustration', () => {
     render(
       <ThemeProvider theme={theme}>
         <CommunityStatsSection />
@@ -43,10 +41,24 @@ describe('CommunityStatsSection', () => {
     );
 
     expect(screen.getByText('Join thousands already on Rendasua')).toBeTruthy();
-    expect(screen.getAllByText('Clients').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Agents').length).toBeGreaterThan(0);
+    expect(screen.getByText('Clients')).toBeTruthy();
+    expect(screen.getByText('Agents')).toBeTruthy();
     expect(screen.getByText('Businesses')).toBeTruthy();
-    expect(screen.getAllByText('Products').length).toBeGreaterThan(0);
+    expect(screen.getByText('Products')).toBeTruthy();
+    expect(screen.getByText((1280).toLocaleString())).toBeTruthy();
+    expect(screen.getByText('42')).toBeTruthy();
+    expect(screen.getByText('18')).toBeTruthy();
+    expect(screen.getByText('540')).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        'Rendasua marketplace connecting clients, agents, businesses, and products'
+      )
+    ).toBeTruthy();
     expect(screen.getByText('Updates every few minutes')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Four sides of the same marketplace — growing together in your city.'
+      )
+    ).toBeTruthy();
   });
 });
