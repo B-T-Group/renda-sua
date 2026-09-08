@@ -87,6 +87,7 @@ import {
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
+import { buildOrderMetaCapiContext } from '../meta-conversions/order-meta-capi.util';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
 import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
 import {
@@ -9169,7 +9170,8 @@ export class OrdersService {
         $presentmentCurrency: String,
         $presentmentAmount: numeric,
         $presentmentFxRate: numeric,
-        $presentmentFxSource: String
+        $presentmentFxSource: String,
+        $metaCapiContext: jsonb
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -9219,6 +9221,7 @@ export class OrdersService {
           presentment_amount: $presentmentAmount,
           presentment_fx_rate: $presentmentFxRate,
           presentment_fx_source: $presentmentFxSource,
+          meta_capi_context: $metaCapiContext,
           order_items: {
             data: $orderItems
           }
@@ -9373,6 +9376,14 @@ export class OrdersService {
         presentmentAmount: fxEstimate?.amount ?? null,
         presentmentFxRate: fxEstimate?.rate ?? null,
         presentmentFxSource: fxEstimate?.source ?? null,
+        metaCapiContext: buildOrderMetaCapiContext({
+          fbc: orderData.fbc,
+          fbp: orderData.fbp,
+          clientIpAddress: orderData.clientIpAddress,
+          clientUserAgent: orderData.clientUserAgent,
+          actionSource: orderData.metaActionSource,
+          eventSourceUrl: orderData.eventSourceUrl,
+        }),
       }
     );
 

@@ -45,7 +45,10 @@ jest.mock('../utils/metaEventIds', () => ({
 }));
 
 jest.mock('../utils/metaBrowserIds', () => ({
-  getMetaBrowserContext: () => ({}),
+  getMetaBrowserContext: () => ({
+    fbc: 'fb.1.1.click',
+    fbp: 'fb.1.1.browser',
+  }),
 }));
 
 const cartItem: CartItem = {
@@ -109,6 +112,8 @@ describe('useCheckout loading lock', () => {
       '/orders',
       expect.objectContaining({
         items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        fbc: 'fb.1.1.click',
+        fbp: 'fb.1.1.browser',
       })
     );
     expect(mockClearCart).toHaveBeenCalledTimes(1);

@@ -14,6 +14,10 @@ export type MetaUserDataInput = {
   fbc?: string | null;
   /** Meta browser id cookie (`_fbp`); do not hash. */
   fbp?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
 };
 
 export type MetaContentItem = {
@@ -113,4 +117,36 @@ export type MetaInitiateCheckoutInput = {
 
 export type OrderPaidEvent = {
   orderId: string;
+};
+
+export type MetaPurchaseGeoAddress = {
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+};
+
+export type MetaPurchaseOrder = {
+  id: string;
+  order_number: string;
+  total_amount: number;
+  currency: string;
+  payer_country?: string | null;
+  meta_capi_context?: unknown;
+  order_items: Array<{
+    business_inventory_id: string;
+    quantity: number;
+    unit_price?: number | null;
+  }>;
+  delivery_address?: MetaPurchaseGeoAddress | null;
+  business_location?: { address?: MetaPurchaseGeoAddress | null } | null;
+  client?: {
+    user_id?: string;
+    user?: {
+      email?: string;
+      phone_number?: string;
+      first_name?: string;
+      last_name?: string;
+    };
+  };
 };

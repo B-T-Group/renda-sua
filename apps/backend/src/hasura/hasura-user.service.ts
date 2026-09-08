@@ -90,6 +90,16 @@ export interface CreateOrderRequest {
     email?: string;
     notify_whatsapp?: boolean;
   };
+  /** Meta _fbc cookie (Click ID); do not hash. */
+  fbc?: string;
+  /** Meta _fbp cookie (Browser ID); do not hash. */
+  fbp?: string;
+  /** Page URL for Meta event_source_url. */
+  eventSourceUrl?: string;
+  /** Set by OrdersController from the request; clients should not send this. */
+  clientIpAddress?: string;
+  clientUserAgent?: string;
+  metaActionSource?: 'website' | 'app' | 'other';
 }
 
 export interface Item {

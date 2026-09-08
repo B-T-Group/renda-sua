@@ -3,10 +3,14 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { metaPurchaseEventId } from './meta-conversions.constants';
 import { MetaConversionsClientService } from './meta-conversions-client.service';
 import {
+  hashMetaCity,
+  hashMetaCountry,
   hashMetaEmail,
   hashMetaExternalId,
   hashMetaName,
   hashMetaPhone,
+  hashMetaState,
+  hashMetaZip,
 } from './meta-conversions-hash.util';
 import type {
   MetaActionSource,
@@ -14,9 +18,14 @@ import type {
   MetaCustomDataInput,
   MetaInitiateCheckoutInput,
   MetaProductTrackInput,
+  MetaPurchaseOrder,
   MetaSendStandardEventInput,
   MetaUserDataInput,
 } from './meta-conversions.types';
+import {
+  parseOrderMetaCapiContext,
+  pickMetaGeoAddress,
+} from './order-meta-capi.util';
 
 const ORDER_FOR_PURCHASE_QUERY = `
   query OrderForMetaPurchase($id: uuid!) {
@@ -25,10 +34,26 @@ const ORDER_FOR_PURCHASE_QUERY = `
       order_number
       total_amount
       currency
+      payer_country
+      meta_capi_context
       order_items {
         business_inventory_id
         quantity
         unit_price
+      }
+      delivery_address {
+        city
+        state
+        postal_code
+        country
+      }
+      business_location {
+        address {
+          city
+          state
+          postal_code
+          country
+        }
       }
       client {
         user_id
@@ -176,33 +201,14 @@ export class MetaConversionsService {
       this.logger.warn(`Meta CAPI Purchase: order not found ${orderId}`);
       return;
     }
-    const user = order.client?.user;
-    const items = order.order_items ?? [];
+    const capi = parseOrderMetaCapiContext(order.meta_capi_context);
     await this.sendStandardEvent({
       eventName: 'Purchase',
       eventId: metaPurchaseEventId(order.id),
-      actionSource,
-      userData: {
-        email: user?.email,
-        phone: user?.phone_number,
-        firstName: user?.first_name,
-        lastName: user?.last_name,
-        externalId: order.client?.user_id,
-      },
-      customData: {
-        content_type: 'product',
-        content_ids: items.map((i) => i.business_inventory_id).filter(Boolean),
-        contents: items.map((i) => ({
-          id: i.business_inventory_id,
-          quantity: Number(i.quantity) || 1,
-          item_price:
-            i.unit_price != null ? Number(i.unit_price) : undefined,
-        })),
-        value: Number(order.total_amount) || 0,
-        currency: order.currency || 'USD',
-        order_id: order.order_number,
-        num_items: items.reduce((s, i) => s + (Number(i.quantity) || 0), 0),
-      },
+      actionSource: capi.actionSource ?? actionSource,
+      userData: this.userDataFromPurchaseOrder(order, capi),
+      customData: this.customDataFromPurchaseOrder(order),
+      eventSourceUrl: capi.eventSourceUrl,
     });
   }
 
@@ -321,10 +327,65 @@ export class MetaConversionsService {
     }
   }
 
+  private userDataFromPurchaseOrder(
+    order: MetaPurchaseOrder,
+    capi: ReturnType<typeof parseOrderMetaCapiContext>
+  ): MetaUserDataInput {
+    const user = order.client?.user;
+    const geo = pickMetaGeoAddress(
+      order.delivery_address,
+      order.business_location?.address
+    );
+    return {
+      email: user?.email,
+      phone: user?.phone_number,
+      firstName: user?.first_name,
+      lastName: user?.last_name,
+      externalId: order.client?.user_id,
+      clientIpAddress: capi.clientIpAddress,
+      clientUserAgent: capi.clientUserAgent,
+      fbc: capi.fbc,
+      fbp: capi.fbp,
+      city: geo.city,
+      state: geo.state,
+      zip: geo.postal_code,
+      country: geo.country ?? order.payer_country,
+    };
+  }
+
+  private customDataFromPurchaseOrder(
+    order: MetaPurchaseOrder
+  ): MetaCustomDataInput {
+    const items = order.order_items ?? [];
+    return {
+      content_type: 'product',
+      content_ids: items.map((i) => i.business_inventory_id).filter(Boolean),
+      contents: items.map((i) => ({
+        id: i.business_inventory_id,
+        quantity: Number(i.quantity) || 1,
+        item_price: i.unit_price != null ? Number(i.unit_price) : undefined,
+      })),
+      value: Number(order.total_amount) || 0,
+      currency: order.currency || 'USD',
+      order_id: order.order_number,
+      num_items: items.reduce((s, i) => s + (Number(i.quantity) || 0), 0),
+    };
+  }
+
   private buildUserData(
     input: MetaUserDataInput
   ): Record<string, string | string[]> {
     const out: Record<string, string | string[]> = {};
+    this.assignHashedPii(out, input);
+    this.assignMatchIds(out, input);
+    this.assignHashedGeo(out, input);
+    return out;
+  }
+
+  private assignHashedPii(
+    out: Record<string, string | string[]>,
+    input: MetaUserDataInput
+  ): void {
     if (input.email?.trim()) out.em = [hashMetaEmail(input.email)];
     if (input.phone?.trim()) {
       const ph = hashMetaPhone(input.phone);
@@ -335,6 +396,12 @@ export class MetaConversionsService {
     if (input.externalId?.trim()) {
       out.external_id = [hashMetaExternalId(input.externalId)];
     }
+  }
+
+  private assignMatchIds(
+    out: Record<string, string | string[]>,
+    input: MetaUserDataInput
+  ): void {
     if (input.clientIpAddress?.trim()) {
       out.client_ip_address = input.clientIpAddress.trim();
     }
@@ -343,7 +410,28 @@ export class MetaConversionsService {
     }
     if (input.fbc?.trim()) out.fbc = input.fbc.trim();
     if (input.fbp?.trim()) out.fbp = input.fbp.trim();
-    return out;
+  }
+
+  private assignHashedGeo(
+    out: Record<string, string | string[]>,
+    input: MetaUserDataInput
+  ): void {
+    if (input.city?.trim()) {
+      const ct = hashMetaCity(input.city);
+      if (ct) out.ct = [ct];
+    }
+    if (input.state?.trim()) {
+      const st = hashMetaState(input.state);
+      if (st) out.st = [st];
+    }
+    if (input.zip?.trim()) {
+      const zp = hashMetaZip(input.zip);
+      if (zp) out.zp = [zp];
+    }
+    if (input.country?.trim()) {
+      const country = hashMetaCountry(input.country);
+      if (country) out.country = [country];
+    }
   }
 
   private pruneEmpty(
@@ -358,26 +446,7 @@ export class MetaConversionsService {
     return out;
   }
 
-  private async loadOrder(orderId: string): Promise<{
-    id: string;
-    order_number: string;
-    total_amount: number;
-    currency: string;
-    order_items: Array<{
-      business_inventory_id: string;
-      quantity: number;
-      unit_price?: number | null;
-    }>;
-    client?: {
-      user_id?: string;
-      user?: {
-        email?: string;
-        phone_number?: string;
-        first_name?: string;
-        last_name?: string;
-      };
-    };
-  } | null> {
+  private async loadOrder(orderId: string): Promise<MetaPurchaseOrder | null> {
     const res = await this.hasuraSystemService.executeQuery(
       ORDER_FOR_PURCHASE_QUERY,
       { id: orderId }

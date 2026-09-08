@@ -1,8 +1,12 @@
 import {
+  hashMetaCity,
+  hashMetaCountry,
   hashMetaEmail,
   hashMetaExternalId,
   hashMetaName,
   hashMetaPhone,
+  hashMetaState,
+  hashMetaZip,
   normalizeMetaEmail,
   normalizeMetaPhone,
 } from './meta-conversions-hash.util';
@@ -36,5 +40,13 @@ describe('meta-conversions-hash.util', () => {
 
   it('hashes external id', () => {
     expect(hashMetaExternalId('user-1')).toHaveLength(64);
+  });
+
+  it('hashes city, state, zip, and country', () => {
+    expect(hashMetaCity('Toronto')).toBe(hashMetaCity('  TORONTO '));
+    expect(hashMetaState('ON')).toBe(hashMetaState('on'));
+    expect(hashMetaZip('M5V 1A1')).toBe(hashMetaZip('m5v1a1'));
+    expect(hashMetaCountry('CA')).toHaveLength(64);
+    expect(hashMetaCountry('Canada')).toBe('');
   });
 });

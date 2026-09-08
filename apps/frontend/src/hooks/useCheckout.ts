@@ -320,10 +320,11 @@ export const useCheckout = () => {
               fulfillmentMethod === 'pickup' ? false : requiresFastDelivery,
             payment_timing: paymentTiming,
             ...(deliveryWindow ? { delivery_window: deliveryWindow } : {}),
-            ...diasporaPayload,
-          };
+          ...diasporaPayload,
+          ...browser,
+        };
 
-          const response = await apiClient.post('/orders', orderData);
+        const response = await apiClient.post('/orders', orderData);
 
           if (!response.data.success) {
             throw new Error(
@@ -425,6 +426,7 @@ export const useCheckout = () => {
           special_instructions: specialInstructions,
           requires_fast_delivery: requiresFastDelivery,
           delivery_window: deliveryWindow,
+          ...getMetaBrowserContext(),
         };
 
         const response = await apiClient.post('/orders', orderData);

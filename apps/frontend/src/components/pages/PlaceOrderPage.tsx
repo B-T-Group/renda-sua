@@ -79,6 +79,7 @@ import {
   metaPixelGoogleProductCategoryFromItem,
 } from '../../utils/metaPixelContentCategory';
 import { metaPurchaseEventId } from '../../utils/metaEventIds';
+import { getMetaBrowserContext } from '../../utils/metaBrowserIds';
 import type { ImageType } from '../../types/image';
 import {
   effectiveVariantUnitPrice,
@@ -1355,6 +1356,7 @@ const PlaceOrderPage: React.FC = () => {
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
         special_instructions: specialInstructions.trim() || undefined,
         discount_code: appliedDiscountCode || undefined,
+        ...getMetaBrowserContext(),
       };
 
       const response = await apiClient.post('/orders', orderData);
