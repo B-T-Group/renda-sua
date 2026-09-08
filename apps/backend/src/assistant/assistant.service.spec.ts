@@ -306,4 +306,110 @@ describe('AssistantService', () => {
       'fr'
     );
   });
+
+  it('stays silent on WhatsApp when the model returns [[NO_REPLY]]', async () => {
+    bedrock.converseWithTools.mockResolvedValue({
+      stopReason: 'end_turn',
+      text: '[[NO_REPLY]]',
+      toolUses: [],
+      assistantContent: [{ text: '[[NO_REPLY]]' }],
+    });
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [
+        {
+          role: 'user',
+          content: 'Thank you for contacting us. This is an automated message.',
+        },
+      ],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: 'en',
+        country: null,
+        phoneE164: '2376',
+        accountType: null,
+        clientId: null,
+      },
+    });
+    expect(result.silent).toBe(true);
+    expect(result.reply).toBe('');
+  });
+
+  it('stays silent on WhatsApp empty model output', async () => {
+    bedrock.converseWithTools.mockResolvedValue({
+      stopReason: 'end_turn',
+      text: '',
+      toolUses: [],
+      assistantContent: [],
+    });
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [{ role: 'user', content: 'hello there' }],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: 'en',
+        country: null,
+        phoneE164: '2376',
+        accountType: null,
+        clientId: null,
+      },
+    });
+    expect(result.silent).toBe(true);
+    expect(result.reply).toBe('');
+  });
+
+  it('returns GET_BACK_SHORTLY for in-app empty fallback', async () => {
+    bedrock.converseWithTools.mockResolvedValue({
+      stopReason: 'end_turn',
+      text: '',
+      toolUses: [],
+      assistantContent: [],
+    });
+    const result = await service.runTurn({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'something obscure' }],
+      identity: {
+        isVerified: true,
+        userId: 'u1',
+        firstName: 'Ada',
+        preferredLanguage: 'en',
+        country: 'CM',
+        phoneE164: null,
+        accountType: 'client',
+        clientId: 'c1',
+      },
+    });
+    expect(result.silent).toBe(false);
+    expect(result.reply).toMatch(/get back to you shortly/i);
+    expect(result.handoff).toBe(true);
+  });
+
+  it('marks successful WhatsApp answers as not silent', async () => {
+    bedrock.converseWithTools.mockResolvedValue({
+      stopReason: 'end_turn',
+      text: 'Yes, we support pay at delivery in Cameroon.',
+      toolUses: [],
+      assistantContent: [{ text: 'Yes, we support pay at delivery in Cameroon.' }],
+    });
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [{ role: 'user', content: 'do you support payment at delivery?' }],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: null,
+        country: 'CM',
+        phoneE164: '2376',
+        accountType: null,
+        clientId: null,
+      },
+    });
+    expect(result.silent).toBe(false);
+    expect(result.reply.length).toBeGreaterThan(0);
+  });
 });

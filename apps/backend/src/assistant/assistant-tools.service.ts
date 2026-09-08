@@ -169,15 +169,10 @@ export class AssistantToolsService {
   }
 
   private handoff(request: ToolRequest): AssistantToolResult {
-    const locale = request.locale === 'fr' ? 'fr' : 'en';
     const technical = request.input.issue_type === 'technical';
     const guidance = technical
-      ? locale === 'fr'
-        ? 'Nous contactons notre équipe technique et reviendrons vers vous sous peu.'
-        : 'We are contacting our technical team and will get back to you shortly.'
-      : locale === 'fr'
-        ? 'Nous reviendrons vers vous sous peu.'
-        : 'We will get back to you shortly.';
+      ? 'Handoff recorded for the technical team. On WhatsApp reply with exactly [[NO_REPLY]]. In-app, tell the customer the technical team will investigate and get back shortly.'
+      : 'Handoff recorded. On WhatsApp reply with exactly [[NO_REPLY]]. In-app, say we will get back shortly.';
     return { content: guidance, handoff: true };
   }
 
@@ -289,7 +284,8 @@ export class AssistantToolsService {
     return {
       toolSpec: {
         name: 'request_human_support',
-        description: 'Escalate technical issues or questions without an answer.',
+        description:
+          'Escalate a real customer question that tools/knowledge cannot answer, or a technical/app failure. Do not call for automated messages, acknowledgements, or non-inquiries.',
         inputSchema: {
           json: {
             type: 'object',

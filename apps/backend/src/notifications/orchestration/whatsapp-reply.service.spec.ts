@@ -215,6 +215,7 @@ describe('WhatsAppReplyService', () => {
       reply: 'How can I help?',
       handoff: false,
       locale: 'en',
+      silent: false,
     });
     whatsapp.sendSessionText.mockResolvedValue({
       messages: [{ id: 'wamid.reply' }],
@@ -283,6 +284,7 @@ describe('WhatsAppReplyService', () => {
       reply: 'First answer',
       handoff: false,
       locale: 'en',
+      silent: false,
     });
     await flushBackground();
 
@@ -319,6 +321,7 @@ describe('WhatsAppReplyService', () => {
       reply: 'Late answer after opt-out',
       handoff: false,
       locale: 'en',
+      silent: false,
     });
     await flushBackground();
 
@@ -348,10 +351,69 @@ describe('WhatsAppReplyService', () => {
     });
     await flushBackground();
 
-    held.resolve({ reply: 'stale', handoff: false, locale: 'en' });
+    held.resolve({ reply: 'stale', handoff: false, locale: 'en', silent: false });
     await flushBackground();
 
     expect(assistant.chat).toHaveBeenCalledTimes(1);
+    expect(whatsapp.sendSessionText).not.toHaveBeenCalled();
+  });
+
+  it('does not enqueue the assistant for automated inbound text', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    whatsapp.isConfigured.mockReturnValue(true);
+    assistant.isWhatsAppRepliesEnabled.mockReturnValue(true);
+
+    const result = await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'Thank you for contacting us. This is an automated message.',
+    });
+
+    expect(result.handled).toBe(true);
+    await flushBackground();
+    expect(assistant.chat).not.toHaveBeenCalled();
+    expect(whatsapp.sendSessionText).not.toHaveBeenCalled();
+  });
+
+  it('does not send when the assistant returns silent', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    whatsapp.isConfigured.mockReturnValue(true);
+    assistant.isWhatsAppRepliesEnabled.mockReturnValue(true);
+    identity.resolveFromPhone.mockResolvedValue({ preferredLanguage: 'en' });
+    inbox.listRecentMessages.mockResolvedValue([]);
+    assistant.chat.mockResolvedValue({
+      reply: '',
+      handoff: false,
+      locale: 'en',
+      silent: true,
+    });
+
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'Where is my order?',
+    });
+    await flushBackground();
+
+    expect(assistant.chat).toHaveBeenCalled();
+    expect(whatsapp.sendSessionText).not.toHaveBeenCalled();
+    expect(inbox.persistOutbound).not.toHaveBeenCalled();
+  });
+
+  it('does not send technical fallback when Bedrock throws', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue('user-1');
+    whatsapp.isConfigured.mockReturnValue(true);
+    assistant.isWhatsAppRepliesEnabled.mockReturnValue(true);
+    identity.resolveFromPhone.mockResolvedValue({ preferredLanguage: 'en' });
+    inbox.listRecentMessages.mockResolvedValue([]);
+    assistant.chat.mockRejectedValue(new Error('Bedrock down'));
+
+    await service.handleInboundText({
+      fromPhone: '15551234567',
+      text: 'Where is my order?',
+    });
+    await flushBackground();
+
+    expect(assistant.chat).toHaveBeenCalled();
+    expect(assistant.fallbackTechnical).not.toHaveBeenCalled();
     expect(whatsapp.sendSessionText).not.toHaveBeenCalled();
   });
 });

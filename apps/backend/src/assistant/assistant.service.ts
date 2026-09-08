@@ -14,6 +14,8 @@ import type {
   AssistantTurnInput,
 } from './assistant.types';
 
+const NO_REPLY_TOKEN = '[[NO_REPLY]]';
+
 @Injectable()
 export class AssistantService implements OnModuleInit {
   private readonly logger = new Logger(AssistantService.name);
@@ -74,7 +76,9 @@ export class AssistantService implements OnModuleInit {
     localeHint?: AssistantLocale | null
   ): Promise<AssistantReply> {
     const locale = this.resolveLocale(input, localeHint);
-    if (this.isTechnicalIssue(input)) return this.fallback(input.channel, locale, true);
+    if (this.isTechnicalIssue(input)) {
+      return this.fallback(input.channel, locale, true);
+    }
     if (!this.isEnabled()) return this.fallback(input.channel, locale, false);
     try {
       return await this.runLoop(input, locale);
@@ -103,7 +107,14 @@ export class AssistantService implements OnModuleInit {
         temperature: 0.2,
       });
       if (!result.toolUses.length) {
-        if (await this.injectKnowledgeIfNeeded(input, locale, messages, usedKnowledge)) {
+        if (
+          await this.injectKnowledgeIfNeeded(
+            input,
+            locale,
+            messages,
+            usedKnowledge
+          )
+        ) {
           usedKnowledge = true;
           continue;
         }
@@ -115,7 +126,7 @@ export class AssistantService implements OnModuleInit {
       handoff ||= executed.handoff;
       messages.push({ role: 'user', content: executed.content });
     }
-    return this.fallback(input.channel, locale, false);
+    return this.fallback(input.channel, locale, false, handoff);
   }
 
   private async injectKnowledgeIfNeeded(
@@ -157,7 +168,11 @@ export class AssistantService implements OnModuleInit {
   }
 
   private knowledgeTopicFor(text: string): 'markets' | 'payments' {
-    if (/\b(pix|stripe|mobile\s*money|momo|airtel|moov|mtn|orange|card|carte|paiement|payment)\b/i.test(text)) {
+    if (
+      /\b(pix|stripe|mobile\s*money|momo|airtel|moov|mtn|orange|card|carte|paiement|payment)\b/i.test(
+        text
+      )
+    ) {
       return 'payments';
     }
     return 'markets';
@@ -168,7 +183,9 @@ export class AssistantService implements OnModuleInit {
     if (/\b(canada)\b/i.test(text)) return 'CA';
     if (/\b(gabon)\b/i.test(text)) return 'GA';
     if (/\b(cameroon|cameroun)\b/i.test(text)) return 'CM';
-    if (/\b(united\s*states|u\.s\.a\.|usa|états?-unis|etats?-unis)\b/i.test(text)) {
+    if (
+      /\b(united\s*states|u\.s\.a\.|usa|états?-unis|etats?-unis)\b/i.test(text)
+    ) {
       return 'US';
     }
     return null;
@@ -182,7 +199,11 @@ export class AssistantService implements OnModuleInit {
     }>,
     input: Omit<AssistantChatInput, 'locale'>,
     locale: AssistantLocale
-  ): Promise<{ content: ContentBlock[]; handoff: boolean; usedKnowledge: boolean }> {
+  ): Promise<{
+    content: ContentBlock[];
+    handoff: boolean;
+    usedKnowledge: boolean;
+  }> {
     const content: ContentBlock[] = [];
     let handoff = false;
     let usedKnowledge = false;
@@ -220,7 +241,9 @@ export class AssistantService implements OnModuleInit {
       if (previous?.role === role) previous.content?.push({ text });
       else messages.push({ role, content: [{ text }] });
     }
-    if (!messages.length) messages.push({ role: 'user', content: [{ text: 'Hello' }] });
+    if (!messages.length) {
+      messages.push({ role: 'user', content: [{ text: 'Hello' }] });
+    }
     if (messages[0].role !== 'user') {
       messages.unshift({ role: 'user', content: [{ text: 'Hello' }] });
     }
@@ -234,14 +257,23 @@ export class AssistantService implements OnModuleInit {
     const name = input.identity.firstName
       ? `Address the customer naturally as ${input.identity.firstName}.`
       : 'Do not invent a customer name.';
+    const channelRules =
+      input.channel === 'whatsapp'
+        ? `WhatsApp channel rules:
+Answer only from tool results and knowledge topics (company, markets, payments, delivery, pickup, support; plus the customer's orders/profile when those tools are provided). Never invent information.
+If the latest user message is not a Rendasua customer inquiry (automated business replies, away messages, order receipts, thanks/ok, off-topic), or you cannot ground an answer in tools/knowledge, reply with exactly ${NO_REPLY_TOKEN} and nothing else.
+Do not greet, acknowledge automated messages, or promise a callback on WhatsApp.
+Do not call request_human_support for automated or non-inquiry text. Call it only for a real customer question you cannot answer; after that tool, still reply with exactly ${NO_REPLY_TOKEN} on WhatsApp (no customer-facing handoff copy).`
+        : `In-app channel rules:
+If no answer is available, request human support and say we will get back shortly.
+For app errors, bugs, or payment failures, request human support and say the technical team will investigate.`;
     return `You are Rendasua's professional customer assistant. ${name}
 Mirror the customer's language; the current language is ${locale}.
 Use tools for company facts and private account data. Never invent information.
 Before answering about countries, markets, coverage, regions/states, or payment methods/rails (including short follow-ups like "and Brazil?"), you MUST call list_supported_country_states and/or list_supported_payment_systems. Answer only from those tool results. Use get_knowledge for process copy (pay-at-delivery, pickup, support), not as the sole source of live country lists.
 If a country is not returned as configured/active, say we are not available there yet. Never invent local payment methods (for example Pix) or claim Groupe BT presence equals Rendasua availability.
 When the customer asks about their orders, recent purchases, deliveries, or a specific order number, call get_my_recent_orders or get_order_status (only available when those tools are provided).
-If no answer is available, request human support and say we will get back shortly.
-For app errors, bugs, or payment failures, request human support and say the technical team will investigate.
+${channelRules}
 Be concise and never expose internal tools or implementation details.
 Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reasoning>, or similar metadata in the reply — output only the customer-facing message.`;
   }
@@ -250,7 +282,9 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
     input: Omit<AssistantChatInput, 'locale'>,
     hint?: AssistantLocale | null
   ): AssistantLocale {
-    const latest = [...input.messages].reverse().find((item) => item.role === 'user');
+    const latest = [...input.messages]
+      .reverse()
+      .find((item) => item.role === 'user');
     return this.detectLocaleFromText(
       latest?.content || '',
       hint || input.identity.preferredLanguage
@@ -271,20 +305,42 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
     locale: AssistantLocale
   ): AssistantReply {
     const cleaned = sanitizeAssistantReply(text);
-    if (!cleaned) {
-      // Empty model output: ask for follow-up, not the technical-failure copy.
-      return this.fallback(channel, locale, false);
+    if (!cleaned || this.isNoReplyToken(cleaned)) {
+      if (channel === 'whatsapp') {
+        return { reply: '', handoff, locale, silent: true };
+      }
+      return this.fallback(channel, locale, false, handoff);
     }
-    return { reply: this.cap(cleaned, channel), handoff, locale };
+    return {
+      reply: this.cap(cleaned, channel),
+      handoff,
+      locale,
+      silent: false,
+    };
+  }
+
+  private isNoReplyToken(text: string): boolean {
+    return text.trim().toUpperCase() === NO_REPLY_TOKEN;
   }
 
   private fallback(
     channel: AssistantChatInput['channel'],
     locale: AssistantLocale,
-    isTechnical: boolean
+    isTechnical: boolean,
+    handoff = true
   ): AssistantReply {
-    const text = isTechnical ? TECHNICAL_FAILURE[locale] : GET_BACK_SHORTLY[locale];
-    return { reply: this.cap(text, channel), handoff: true, locale };
+    if (channel === 'whatsapp') {
+      return { reply: '', handoff, locale, silent: true };
+    }
+    const text = isTechnical
+      ? TECHNICAL_FAILURE[locale]
+      : GET_BACK_SHORTLY[locale];
+    return {
+      reply: this.cap(text, channel),
+      handoff: true,
+      locale,
+      silent: false,
+    };
   }
 
   private cap(text: string, channel: AssistantChatInput['channel']): string {

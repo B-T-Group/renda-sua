@@ -13,6 +13,7 @@ import type {
   AssistantChatMessage,
   AssistantTurnResult,
 } from '../../assistant/assistant.types';
+import { isWhatsAppAssistantInquiry } from '../../assistant/is-whatsapp-assistant-inquiry';
 import type { Configuration } from '../../config/configuration';
 import { NotificationAnalyticsService } from './notification-analytics.service';
 import { NotificationPreferenceService } from './notification-preference.service';
@@ -202,6 +203,12 @@ export class WhatsAppReplyService implements OnModuleInit {
     if (command === 'UNKNOWN' && params.text) {
       const repliesEnabled = this.assistant.isWhatsAppRepliesEnabled();
       if (repliesEnabled) {
+        if (!isWhatsAppAssistantInquiry(params.text)) {
+          this.logger.log(
+            `WhatsApp UNKNOWN skipped AI: not an inquiry (phone=${params.fromPhone.slice(-4)})`
+          );
+          return { handled: true, command, userId: userId ?? undefined };
+        }
         this.logger.log(
           `WhatsApp UNKNOWN → enqueue assistant reply (phone=${params.fromPhone.slice(-4)})`
         );
@@ -303,13 +310,18 @@ export class WhatsAppReplyService implements OnModuleInit {
       this.logger.log('WhatsApp assistant turn skipped: cancelled (STOP)');
       return false;
     }
-    const fallbackLocale = this.assistant.detectLocaleFromText(params.text);
     this.logger.log(
       `WhatsApp assistant turn start (phone=...${phoneKey.slice(-4)} chars=${params.text.length})`
     );
     try {
       const result = await this.runAssistantTurn(params.fromPhone, params.text);
       if (this.assistantCancelled.has(phoneKey)) return false;
+      if (result.silent || !result.reply.trim()) {
+        this.logger.log(
+          `WhatsApp assistant stayed silent (handoff=${result.handoff})`
+        );
+        return false;
+      }
       await this.sendAssistantReply(params.fromPhone, result.reply);
       await this.trackAssistantReply(params, result);
       this.logger.log(
@@ -318,12 +330,8 @@ export class WhatsAppReplyService implements OnModuleInit {
       return true;
     } catch (error: any) {
       this.logger.warn(`WhatsApp assistant failed: ${error?.message ?? error}`);
-      if (this.assistantCancelled.has(phoneKey)) return false;
-      await this.sendAssistantReply(
-        params.fromPhone,
-        this.assistant.fallbackTechnical(fallbackLocale)
-      );
-      return true;
+      // Do not send technical fallback copy on WhatsApp — stay silent.
+      return false;
     }
   }
 
