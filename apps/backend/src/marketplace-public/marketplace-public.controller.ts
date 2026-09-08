@@ -29,6 +29,8 @@ export class MarketplacePublicController {
         data: {
           type: 'object',
           properties: {
+            clients: { type: 'number' },
+            agents: { type: 'number' },
             merchants: { type: 'number' },
             products: { type: 'number' },
             cities: { type: 'number' },

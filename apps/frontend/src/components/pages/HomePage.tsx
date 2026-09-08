@@ -52,6 +52,7 @@ const PlatformFeaturesSection = lazy(() => import('../home/PlatformFeaturesSecti
 const BrowseProductsPreviewSection = lazy(() => import('../home/BrowseProductsPreviewSection'));
 const BusinessGrowthSection = lazy(() => import('../home/BusinessGrowthSection'));
 const BecomeAgentSection = lazy(() => import('../home/BecomeAgentSection'));
+const CommunityStatsSection = lazy(() => import('../home/CommunityStatsSection'));
 const DownloadAppSection = lazy(() => import('../home/DownloadAppSection'));
 const HomeFaqSection = lazy(() => import('../home/HomeFaqSection'));
 
@@ -88,6 +89,10 @@ const HomePage: React.FC = () => {
       <TrustStripSection />
 
       {/* === BELOW THE FOLD — lazy-mounted === */}
+      <Suspense fallback={<SectionFallback />}>
+        <CommunityStatsSection />
+      </Suspense>
+
       <Suspense fallback={<SectionFallback />}>
         <MarketplaceOverviewSection />
       </Suspense>

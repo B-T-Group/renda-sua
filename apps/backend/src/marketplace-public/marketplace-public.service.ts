@@ -9,6 +9,7 @@ const SETUP_MINUTES_MAX = 5;
 const SECURE_PAYMENTS_PERCENT = 100;
 const LOGO_LIMIT = 12;
 const CITY_SCAN_LIMIT = 2000;
+const STATS_CACHE_TTL_MS = 60_000;
 
 interface AggregateCount {
   aggregate?: { count?: number | null } | null;
@@ -22,6 +23,8 @@ interface LocationRow {
 }
 
 interface StatsQueryResult {
+  clients_aggregate: AggregateCount;
+  agents_aggregate: AggregateCount;
   businesses_aggregate: AggregateCount;
   business_inventory_aggregate: AggregateCount;
   orders_aggregate: AggregateCount;
@@ -32,24 +35,41 @@ interface StatsQueryResult {
 @Injectable()
 export class MarketplacePublicService {
   private readonly logger = new Logger(MarketplacePublicService.name);
+  private cache: { stats: MarketplacePublicStatsDto; expiresAt: number } | null =
+    null;
 
   constructor(private readonly hasura: HasuraSystemService) {}
 
   async getPublicStats(): Promise<MarketplacePublicStatsDto> {
+    if (this.cache && this.cache.expiresAt > Date.now()) {
+      return this.cache.stats;
+    }
     try {
-      const data = await this.fetchStats();
-      return this.mapStats(data);
+      return this.storeCache(this.mapStats(await this.fetchStats()));
     } catch (error: any) {
       this.logger.error(
         `Failed to load marketplace public stats: ${error?.message}`
       );
-      return this.emptyStats();
+      return this.cache?.stats ?? this.emptyStats();
     }
+  }
+
+  private storeCache(stats: MarketplacePublicStatsDto): MarketplacePublicStatsDto {
+    this.cache = { stats, expiresAt: Date.now() + STATS_CACHE_TTL_MS };
+    return stats;
   }
 
   private async fetchStats(): Promise<StatsQueryResult> {
     const query = `
       query MarketplacePublicStats($cityLimit: Int!, $logoLimit: Int!) {
+        clients_aggregate(
+          where: { user: { account_status: { _neq: "deleted" } } }
+        ) {
+          aggregate { count }
+        }
+        agents_aggregate(where: { is_verified: { _eq: true } }) {
+          aggregate { count }
+        }
         businesses_aggregate(where: { is_storefront_visible: { _eq: true } }) {
           aggregate { count }
         }
@@ -105,6 +125,8 @@ export class MarketplacePublicService {
 
   private mapStats(data: StatsQueryResult): MarketplacePublicStatsDto {
     return {
+      clients: this.countOf(data.clients_aggregate),
+      agents: this.countOf(data.agents_aggregate),
       merchants: this.countOf(data.businesses_aggregate),
       products: this.countOf(data.business_inventory_aggregate),
       cities: this.countDistinctCities(data.city_locations ?? []),
@@ -146,6 +168,8 @@ export class MarketplacePublicService {
 
   private emptyStats(): MarketplacePublicStatsDto {
     return {
+      clients: 0,
+      agents: 0,
       merchants: 0,
       products: 0,
       cities: 0,

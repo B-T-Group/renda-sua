@@ -22,6 +22,16 @@
       "availableIos": "Available on iOS",
       "availableAndroid": "Available on Android"
     },
+    "stats": {
+      "eyebrow": "A growing local marketplace",
+      "title": "Join thousands already on Rendasua",
+      "subtitle": "Real people, real shops, and real products in your city — updated live.",
+      "liveLabel": "Updates every few minutes",
+      "clients": "Clients",
+      "agents": "Agents",
+      "businesses": "Businesses",
+      "products": "Products"
+    },
     "overview": {
       "eyebrow": "One platform. Three roles. One great experience.",
       "title": "A marketplace built for everyone",
