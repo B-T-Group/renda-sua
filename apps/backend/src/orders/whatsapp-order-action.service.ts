@@ -7,6 +7,7 @@ import type { AuthorizedBusinessActor } from './authorized-business-actor';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import type { PendingAcceptanceOrder } from './order-acceptance.types';
 import { OrdersService } from './orders.service';
+import { whatsappOrderConfirmedMessage } from './whatsapp-order-confirmed.message';
 
 export type MerchantWaAction =
   | 'CONFIRM'
@@ -28,22 +29,29 @@ const ACTIONABLE_PROMPT_TYPES = [
   'order.ready.nudge',
 ] as const;
 
-const READY_ACTIONABLE_STATUSES = new Set(['confirmed']);
+const READY_ACTIONABLE_STATUSES = new Set(['confirmed', 'preparing']);
 const PROMPT_LOOKBACK_MS = 48 * 60 * 60 * 1000;
 
 type WaActor =
-  | { kind: 'owner'; userId: string; businessId: string }
+  | {
+      kind: 'owner';
+      userId: string;
+      businessId: string;
+      preferredLanguage?: string | null;
+    }
   | {
       kind: 'delegate';
       userId: string;
       businessId: string;
       locationIds: string[];
+      preferredLanguage?: string | null;
     }
   | {
       kind: 'location_alert';
       businessId: string;
       locationIds: string[];
       ownerUserId: string;
+      preferredLanguage?: string | null;
     }
   | { kind: 'ambiguous' };
 
@@ -58,12 +66,16 @@ type PendingWaOrder = PendingAcceptanceOrder & {
     id: string;
     business_id: string;
     order_alert_phone?: string | null;
-    business?: { user_id?: string | null } | null;
+    business?: {
+      user_id?: string | null;
+      user?: { preferred_language?: string | null } | null;
+    } | null;
   } | null;
 };
 
 type WaUserRow = {
   id: string;
+  preferred_language?: string | null;
   business?: { id: string } | null;
   location_delegations?: Array<{
     business_location_id: string;
@@ -123,7 +135,7 @@ const CONFIRMED_ORDERS_BIZ = `query WaConfirmedBiz($bid: uuid!) {
   orders(
     where: {
       business_id: { _eq: $bid }
-      current_status: { _eq: confirmed }
+      current_status: { _in: [confirmed, preparing] }
     }
     order_by: { created_at: asc }
     limit: 2
@@ -137,7 +149,7 @@ const CONFIRMED_ORDERS_LOCS = `query WaConfirmedLocs($bid: uuid!, $lids: [uuid!]
     where: {
       business_id: { _eq: $bid }
       business_location_id: { _in: $lids }
-      current_status: { _eq: confirmed }
+      current_status: { _in: [confirmed, preparing] }
     }
     order_by: { created_at: asc }
     limit: 2
@@ -205,7 +217,7 @@ export class WhatsAppOrderActionService {
     if (!order) {
       return {
         handled: true,
-        message: this.msgNone(params.preferredLanguage),
+        message: this.msgNone(this.actionLang(params.preferredLanguage, actor)),
       };
     }
     return {
@@ -214,7 +226,7 @@ export class WhatsAppOrderActionService {
         params.action,
         order,
         actor,
-        params.preferredLanguage
+        this.actionLang(params.preferredLanguage, actor)
       ),
     };
   }
@@ -281,7 +293,7 @@ export class WhatsAppOrderActionService {
         action,
         order,
         actor,
-        params.preferredLanguage,
+        this.actionLang(params.preferredLanguage, actor),
         latest.notificationType
       ),
     };
@@ -301,7 +313,7 @@ export class WhatsAppOrderActionService {
     },
     actor: ResolvedWaActor
   ): Promise<{ handled: boolean; message: string }> {
-    const lang = params.preferredLanguage;
+    const lang = this.actionLang(params.preferredLanguage, actor);
     if (params.contextMessageId?.trim()) {
       return { handled: true, message: this.msgNeedAppReady(lang) };
     }
@@ -388,7 +400,7 @@ export class WhatsAppOrderActionService {
         params.action,
         order,
         actor,
-        params.preferredLanguage,
+        this.actionLang(params.preferredLanguage, actor),
         notificationType
       ),
     };
@@ -464,7 +476,11 @@ export class WhatsAppOrderActionService {
       { orderId: order.id, notes: 'Confirmed from WhatsApp' },
       this.toActor(actor, order)
     );
-    return this.msgConfirmed(order.order_number, lang);
+    return this.msgConfirmed(
+      order.order_number,
+      lang,
+      order.fulfillment_method
+    );
   }
 
   private async doBusy(
@@ -655,7 +671,7 @@ export class WhatsAppOrderActionService {
           ${ORDER_ACTION_FIELDS}
           business_location {
             id business_id order_alert_phone
-            business { user_id }
+            business { user_id user { preferred_language } }
           }
         }
       }`,
@@ -680,7 +696,12 @@ export class WhatsAppOrderActionService {
     order: PendingWaOrder
   ): WaActor | null {
     if (user.business?.id && user.business.id === order.business_id) {
-      return { kind: 'owner', userId: user.id, businessId: user.business.id };
+      return {
+        kind: 'owner',
+        userId: user.id,
+        businessId: user.business.id,
+        preferredLanguage: user.preferred_language,
+      };
     }
     const match = this.manageDelegations(user).find(
       (row) => row.business_location_id === order.business_location_id
@@ -691,6 +712,7 @@ export class WhatsAppOrderActionService {
       userId: user.id,
       businessId: match.business_id,
       locationIds: [match.business_location_id],
+      preferredLanguage: user.preferred_language,
     };
   }
 
@@ -708,6 +730,7 @@ export class WhatsAppOrderActionService {
       businessId: loc.business_id,
       locationIds: [loc.id],
       ownerUserId,
+      preferredLanguage: loc.business?.user?.preferred_language,
     };
   }
 
@@ -737,7 +760,12 @@ export class WhatsAppOrderActionService {
     const user = await this.loadUserByPhone(normalized);
     if (!user) return null;
     if (user.business?.id) {
-      return { kind: 'owner', userId: user.id, businessId: user.business.id };
+      return {
+        kind: 'owner',
+        userId: user.id,
+        businessId: user.business.id,
+        preferredLanguage: user.preferred_language,
+      };
     }
     return this.delegateActorFromDelegations(user);
   }
@@ -751,6 +779,7 @@ export class WhatsAppOrderActionService {
           { phone_number: { _eq: $b } }
         ]}, limit: 1) {
           id
+          preferred_language
           business { id }
           location_delegations(where: { status: { _eq: "active" } }) {
             business_location_id
@@ -795,6 +824,7 @@ export class WhatsAppOrderActionService {
       userId: user.id,
       businessId: businessIds[0],
       locationIds: [...new Set(manage.map((d) => d.business_location_id))],
+      preferredLanguage: user.preferred_language,
     };
   }
 
@@ -806,7 +836,10 @@ export class WhatsAppOrderActionService {
         id: string;
         business_id: string;
         order_alert_phone?: string | null;
-        business?: { user_id: string } | null;
+        business?: {
+          user_id: string;
+          user?: { preferred_language?: string | null } | null;
+        } | null;
       }>;
     }>(
       `query LocAlertPhones {
@@ -817,7 +850,7 @@ export class WhatsAppOrderActionService {
           }
         ) {
           id business_id order_alert_phone
-          business { user_id }
+          business { user_id user { preferred_language } }
         }
       }`
     );
@@ -832,6 +865,7 @@ export class WhatsAppOrderActionService {
       businessId: businessIds[0],
       locationIds: [...new Set(matches.map((row) => row.id))],
       ownerUserId: matches[0].business!.user_id,
+      preferredLanguage: matches[0].business?.user?.preferred_language,
     };
   }
 
@@ -957,6 +991,15 @@ export class WhatsAppOrderActionService {
       : `Could not update order ${order.order_number}. Open Rendasua.`;
   }
 
+  private actionLang(
+    preferred?: string | null,
+    actor?: WaActor | null
+  ): string | null {
+    if (preferred?.trim()) return preferred;
+    if (!actor || actor.kind === 'ambiguous') return null;
+    return actor.preferredLanguage ?? null;
+  }
+
   private msgUnknown(lang?: string | null): string {
     return lang === 'fr'
       ? 'Numéro non reconnu pour les commandes Rendasua.'
@@ -987,10 +1030,16 @@ export class WhatsAppOrderActionService {
       : 'Open Rendasua to mark the right order ready.';
   }
 
-  private msgConfirmed(n: string, lang?: string | null): string {
-    return lang === 'fr'
-      ? `Commande ${n} confirmée.`
-      : `Order ${n} confirmed.`;
+  private msgConfirmed(
+    n: string,
+    lang?: string | null,
+    fulfillmentMethod?: string | null
+  ): string {
+    return whatsappOrderConfirmedMessage({
+      orderNumber: n,
+      language: lang,
+      fulfillmentMethod,
+    });
   }
 
   private msgBusy(n: string, lang?: string | null): string {

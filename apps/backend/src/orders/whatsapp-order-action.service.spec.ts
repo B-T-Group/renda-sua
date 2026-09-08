@@ -59,7 +59,59 @@ describe('WhatsAppOrderActionService', () => {
     });
     expect(orders.confirmOrder).toHaveBeenCalled();
     expect(result.handled).toBe(true);
-    expect(result.message).toMatch(/confirmed/i);
+    expect(result.message).toBe(
+      'Order ORD-1 confirmed. When it is ready, open the Rendasua app and mark it as ready so the customer is notified.'
+    );
+  });
+
+  it('prompts delivery merchants to mark ready for pickup after confirm', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'o1' }] })
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({
+        orders: [
+          ownerOrder({
+            fulfillment_method: 'delivery',
+            fulfillment_timing: 'asap',
+          }),
+        ],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+    });
+    expect(result.message).toMatch(/ready for pickup/i);
+    expect(result.message).toMatch(/courier/i);
+  });
+
+  it('localizes the confirm ack from the merchant preferred language', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [
+          {
+            id: 'u1',
+            preferred_language: 'fr',
+            business: { id: 'b1' },
+            location_delegations: [],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'o1' }] })
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({
+        orders: [ownerOrder({ fulfillment_method: 'pickup' })],
+      });
+    orders.confirmOrder.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'CONFIRM',
+    });
+    expect(result.message).toMatch(/Commande ORD-1 confirmée/i);
+    expect(result.message).toMatch(/informer le client/i);
   });
 
   it('asks to open app for slotted orders', async () => {
@@ -675,6 +727,7 @@ describe('WhatsAppOrderActionService', () => {
       expect.objectContaining({ businessId: 'b1', locationId: 'loc1' })
     );
     expect(result.message).toMatch(/ORD-NEW/);
+    expect(result.message).toMatch(/mark it as ready/i);
   });
 
   it('does not fall back to an older order when the bound order is no longer pending', async () => {

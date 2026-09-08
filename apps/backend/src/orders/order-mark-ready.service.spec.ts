@@ -142,9 +142,9 @@ describe('OrderMarkReadyService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('skips when the order is no longer confirmed', async () => {
+    it('skips when the order has not been confirmed yet', async () => {
       hasura.executeQuery.mockResolvedValueOnce({
-        orders_by_pk: { ...confirmedOrder, current_status: 'ready_for_pickup' },
+        orders_by_pk: { ...confirmedOrder, current_status: 'pending' },
       });
 
       await expect(service.onMarkReadyPrompt('o1')).resolves.toEqual({
@@ -155,6 +155,34 @@ describe('OrderMarkReadyService', () => {
       expect(
         notifications.sendMarkReadyPromptNotifications
       ).not.toHaveBeenCalled();
+    });
+
+    it('skips when the order is already marked ready', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: { ...confirmedOrder, current_status: 'ready_for_pickup' },
+      });
+
+      await expect(service.onMarkReadyPrompt('o1')).resolves.toEqual({
+        success: true,
+        skipped: true,
+        reason: 'not_actionable',
+      });
+      expect(
+        notifications.sendMarkReadyPromptNotifications
+      ).not.toHaveBeenCalled();
+    });
+
+    it('still prompts while the order is being prepared', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: { ...confirmedOrder, current_status: 'preparing' },
+      });
+
+      await expect(service.onMarkReadyPrompt('o1')).resolves.toEqual({
+        success: true,
+      });
+      expect(
+        notifications.sendMarkReadyPromptNotifications
+      ).toHaveBeenCalled();
     });
 
     it('notifies the merchant for a confirmed order', async () => {
