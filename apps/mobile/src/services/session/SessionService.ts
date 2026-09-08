@@ -109,29 +109,58 @@ export class SessionService {
     }
   }
 
-  async enableBiometricsForActiveAccount(): Promise<boolean> {
-    const { auth, savedAccounts } = this.store;
-    const accountId = auth.activeSavedAccountId;
-    if (!accountId) return false;
+  async enableBiometricsForActiveAccount(
+    options?: { skipAuthentication?: boolean }
+  ): Promise<boolean> {
+    try {
+      return await this.tryEnableBiometricsForActiveAccount(options);
+    } finally {
+      this.store.auth.setBiometricPromptPending(false);
+    }
+  }
 
-    const account = await SavedAccountService.findById(accountId);
+  private async tryEnableBiometricsForActiveAccount(
+    options?: { skipAuthentication?: boolean }
+  ): Promise<boolean> {
+    const account = await this.activeAccountForBiometrics();
     if (!account) return false;
+    if (!options?.skipAuthentication) {
+      const bio = await BiometricService.authenticate(
+        `Enable sign in for ${account.displayName}`
+      );
+      if (!bio.ok) return false;
+    }
+    return this.persistBiometricEnabled(account);
+  }
 
-    const bio = await BiometricService.authenticate(
-      `Enable sign in for ${account.displayName}`
-    );
-    if (!bio.ok) return false;
+  private async activeAccountForBiometrics(): Promise<SavedAccount | null> {
+    const accountId = this.store.auth.activeSavedAccountId;
+    if (!accountId) return null;
+    return SavedAccountService.findById(accountId);
+  }
 
-    const refreshToken = await SecureStorageService.getRefreshToken(account.secureStoreKey);
-    if (!refreshToken) return false;
-
-    const ok = await SecureStorageService.setRefreshToken(account.secureStoreKey, refreshToken);
-    if (!ok) return false;
-
-    await SavedAccountService.setBiometricEnabled(accountId, true);
-    await savedAccounts.hydrate();
-    auth.setBiometricPromptPending(false);
+  private async persistBiometricEnabled(account: SavedAccount): Promise<boolean> {
+    const token = await this.refreshTokenForAccount(account);
+    if (!token) return false;
+    await SavedAccountService.setBiometricEnabled(account.id, true);
+    await this.store.savedAccounts.hydrate();
     return true;
+  }
+
+  private async refreshTokenForAccount(account: SavedAccount): Promise<string | null> {
+    const stored = await this.readRefreshTokenWithRetry(account.secureStoreKey);
+    if (stored) return stored;
+    const memory = this.store.auth.tokens?.refreshToken;
+    if (!memory) return null;
+    const ok = await SecureStorageService.setRefreshToken(account.secureStoreKey, memory);
+    return ok ? memory : null;
+  }
+
+  private async readRefreshTokenWithRetry(key: string): Promise<string | null> {
+    const first = await SecureStorageService.getRefreshToken(key);
+    if (first) return first;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return SecureStorageService.getRefreshToken(key);
   }
 
   async disableBiometricsForAccount(accountId: string): Promise<void> {
