@@ -119,6 +119,33 @@ const RECENT_ORDERS_LOCS = `query WaRecentOrdersLocs($bid: uuid!, $lids: [uuid!]
   ) { id }
 }`;
 
+const CONFIRMED_ORDERS_BIZ = `query WaConfirmedBiz($bid: uuid!) {
+  orders(
+    where: {
+      business_id: { _eq: $bid }
+      current_status: { _eq: confirmed }
+    }
+    order_by: { created_at: asc }
+    limit: 2
+  ) {
+    ${ORDER_ACTION_FIELDS}
+  }
+}`;
+
+const CONFIRMED_ORDERS_LOCS = `query WaConfirmedLocs($bid: uuid!, $lids: [uuid!]!) {
+  orders(
+    where: {
+      business_id: { _eq: $bid }
+      business_location_id: { _in: $lids }
+      current_status: { _eq: confirmed }
+    }
+    order_by: { created_at: asc }
+    limit: 2
+  ) {
+    ${ORDER_ACTION_FIELDS}
+  }
+}`;
+
 const LATEST_PROMPT_QUERY = `query WaLatestPrompt($ids: [uuid!]!, $types: [String!]!, $since: timestamptz!) {
   notification_events(
     where: {
@@ -169,19 +196,16 @@ export class WhatsAppOrderActionService {
     if (actor.kind === 'ambiguous') {
       return { handled: true, message: this.msgAmbiguous(params.preferredLanguage) };
     }
-    const remapped = await this.remapUnboundYesNo(params, actor);
+    const remapped = await this.remapUnboundReadyReply(params, actor);
     if (remapped) return remapped;
-    const order =
-      params.action === 'MARK_AS_READY'
-        ? await this.loadOldestConfirmed(actor)
-        : await this.loadOldestPending(actor);
+    if (params.action === 'MARK_AS_READY') {
+      return this.handleUnboundMarkReady(params, actor);
+    }
+    const order = await this.loadOldestPending(actor);
     if (!order) {
       return {
         handled: true,
-        message:
-          params.action === 'MARK_AS_READY'
-            ? this.msgNoneReady(params.preferredLanguage)
-            : this.msgNone(params.preferredLanguage),
+        message: this.msgNone(params.preferredLanguage),
       };
     }
     return {
@@ -216,18 +240,26 @@ export class WhatsAppOrderActionService {
    * is a mark-ready / ready-nudge, remap so "No" cannot cancel a different
    * pending order.
    */
-  private async remapUnboundYesNo(
+  private async remapUnboundReadyReply(
     params: {
       action: MerchantWaAction;
       preferredLanguage?: string | null;
     },
     actor: ResolvedWaActor
   ): Promise<{ handled: boolean; message: string } | null> {
-    if (params.action !== 'CONFIRM' && params.action !== 'DECLINE') return null;
+    if (!this.isUnboundReadyAlias(params.action)) return null;
     const latest = await this.loadLatestActionablePrompt(actor);
     if (!latest) return null;
     if (!MARK_READY_NOTIFICATION_TYPES.has(latest.notificationType)) return null;
     return this.runLatestReadyPromptAction(params, actor, latest);
+  }
+
+  private isUnboundReadyAlias(action: MerchantWaAction): boolean {
+    return (
+      action === 'CONFIRM' ||
+      action === 'DECLINE' ||
+      action === 'MARK_AS_READY'
+    );
   }
 
   private async runLatestReadyPromptAction(
@@ -242,7 +274,7 @@ export class WhatsAppOrderActionService {
     if (!order || !this.actorOwnsOrder(actor, order)) return null;
     if (!READY_ACTIONABLE_STATUSES.has(order.current_status)) return null;
     const action =
-      params.action === 'CONFIRM' ? 'MARK_AS_READY' : 'NOT_READY';
+      params.action === 'DECLINE' ? 'NOT_READY' : 'MARK_AS_READY';
     return {
       handled: true,
       message: await this.runAction(
@@ -260,6 +292,30 @@ export class WhatsAppOrderActionService {
     if (actor.kind === 'owner') return true;
     const locationId = order.business_location_id;
     return !!locationId && actor.locationIds.includes(locationId);
+  }
+
+  private async handleUnboundMarkReady(
+    params: {
+      contextMessageId?: string | null;
+      preferredLanguage?: string | null;
+    },
+    actor: ResolvedWaActor
+  ): Promise<{ handled: boolean; message: string }> {
+    const lang = params.preferredLanguage;
+    if (params.contextMessageId?.trim()) {
+      return { handled: true, message: this.msgNeedAppReady(lang) };
+    }
+    const confirmed = await this.loadConfirmedOrders(actor);
+    if (!confirmed.length) {
+      return { handled: true, message: this.msgNoneReady(lang) };
+    }
+    if (confirmed.length > 1) {
+      return { handled: true, message: this.msgNeedAppReady(lang) };
+    }
+    return {
+      handled: true,
+      message: await this.runAction('MARK_AS_READY', confirmed[0], actor, lang),
+    };
   }
 
   private async loadLatestActionablePrompt(
@@ -859,43 +915,18 @@ export class WhatsAppOrderActionService {
     return res.orders?.[0] ?? null;
   }
 
-  private async loadOldestConfirmed(
+  private async loadConfirmedOrders(
     actor: ResolvedWaActor
-  ): Promise<PendingWaOrder | null> {
+  ): Promise<PendingWaOrder[]> {
     const locationIds = actor.kind === 'owner' ? null : actor.locationIds;
-    if (locationIds && !locationIds.length) return null;
+    if (locationIds && !locationIds.length) return [];
     const res = await this.hasura.executeQuery<{ orders: PendingWaOrder[] }>(
-      locationIds
-        ? `query WaConfirmedLocs($bid: uuid!, $lids: [uuid!]!) {
-            orders(
-              where: {
-                business_id: { _eq: $bid }
-                business_location_id: { _in: $lids }
-                current_status: { _eq: confirmed }
-              }
-              order_by: { created_at: asc }
-              limit: 1
-            ) {
-              ${ORDER_ACTION_FIELDS}
-            }
-          }`
-        : `query WaConfirmedBiz($bid: uuid!) {
-            orders(
-              where: {
-                business_id: { _eq: $bid }
-                current_status: { _eq: confirmed }
-              }
-              order_by: { created_at: asc }
-              limit: 1
-            ) {
-              ${ORDER_ACTION_FIELDS}
-            }
-          }`,
+      locationIds ? CONFIRMED_ORDERS_LOCS : CONFIRMED_ORDERS_BIZ,
       locationIds
         ? { bid: actor.businessId, lids: locationIds }
         : { bid: actor.businessId }
     );
-    return res.orders?.[0] ?? null;
+    return res.orders ?? [];
   }
 
   private async loadClientUserId(orderId: string): Promise<string | null> {
@@ -948,6 +979,12 @@ export class WhatsAppOrderActionService {
     return lang === 'fr'
       ? 'Aucune commande confirmée à marquer prête.'
       : 'No confirmed order to mark ready.';
+  }
+
+  private msgNeedAppReady(lang?: string | null): string {
+    return lang === 'fr'
+      ? 'Ouvrez Rendasua pour marquer la bonne commande prête.'
+      : 'Open Rendasua to mark the right order ready.';
   }
 
   private msgConfirmed(n: string, lang?: string | null): string {

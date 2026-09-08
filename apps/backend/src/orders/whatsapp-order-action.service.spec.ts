@@ -96,6 +96,8 @@ describe('WhatsAppOrderActionService', () => {
       .mockResolvedValueOnce({
         users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
       })
+      .mockResolvedValueOnce({ orders: [{ id: 'o1' }] })
+      .mockResolvedValueOnce({ notification_events: [] })
       .mockResolvedValueOnce({
         orders: [
           {
@@ -930,6 +932,53 @@ describe('WhatsAppOrderActionService', () => {
       expect.objectContaining({ businessId: 'b1', locationId: 'loc1' })
     );
     expect(result.message).toMatch(/ORD-READY/);
+  });
+
+  it('refuses unbound READY when two confirmed orders exist and nothing is bound', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'o-old' }, { id: 'o-new' }] })
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({
+        orders: [
+          ownerOrder({
+            id: 'o-old',
+            order_number: 'ORD-OLD',
+            current_status: 'confirmed',
+          }),
+          ownerOrder({
+            id: 'o-new',
+            order_number: 'ORD-NEW',
+            current_status: 'confirmed',
+          }),
+        ],
+      });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'MARK_AS_READY',
+    });
+    expect(orders.completePreparation).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/open rendasua/i);
+  });
+
+  it('does not mark the oldest confirmed order when a mark-ready wamid is unknown', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({ whatsapp_messages: [] })
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'o-old' }, { id: 'o-new' }] })
+      .mockResolvedValueOnce({ notification_events: [] });
+    const result = await service.handleAction({
+      fromPhone: '+237600000000',
+      action: 'MARK_AS_READY',
+      contextMessageId: 'wamid.unknown',
+    });
+    expect(orders.completePreparation).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/open rendasua/i);
   });
 
   it('still declines the pending order when the latest prompt is a new order', async () => {
