@@ -72,6 +72,14 @@
     "updating": "Nous mettons à jour certains de nos services backend.",
     "tryAgain": "Réessayer"
   },
+  "appUpdate": {
+    "forceTitle": "Mise à jour requise",
+    "forceBody": "Cette version de Rendasua n'est plus prise en charge. Veuillez mettre à jour pour continuer.",
+    "softTitle": "Mise à jour disponible",
+    "softBody": "Une nouvelle version de Rendasua est disponible avec des améliorations et des corrections.",
+    "update": "Mettre à jour",
+    "later": "Pas maintenant"
+  },
   "common": {
     "orders": "Commandes",
     "loading": "Chargement...",

@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { LockoutService } from '../auth/lockout.service';
@@ -10,12 +11,20 @@ describe('AppController', () => {
   let app: TestingModule;
   const lockout = { isStoreReady: jest.fn(() => true) };
   const sessionStore = { isStoreReady: jest.fn(() => true) };
+  const configGet = jest.fn(() => ({
+    minVersion: '',
+    recommendedVersion: '',
+  }));
 
   beforeAll(async () => {
     app = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
         AppService,
+        {
+          provide: ConfigService,
+          useValue: { get: configGet },
+        },
         {
           provide: HasuraSystemService,
           useValue: { executeQuery: jest.fn().mockResolvedValue({}) },
@@ -62,6 +71,29 @@ describe('AppController', () => {
         })
       );
       expect(res.status).toHaveBeenCalledWith(503);
+    });
+  });
+
+  describe('getMobileVersionPolicy', () => {
+    it('returns nulls when versions are unset', () => {
+      configGet.mockReturnValue({ minVersion: '', recommendedVersion: '  ' });
+      const appController = app.get<AppController>(AppController);
+      expect(appController.getMobileVersionPolicy()).toEqual({
+        minVersion: null,
+        recommendedVersion: null,
+      });
+    });
+
+    it('returns configured min and recommended versions', () => {
+      configGet.mockReturnValue({
+        minVersion: '1.0.10',
+        recommendedVersion: '1.0.12',
+      });
+      const appController = app.get<AppController>(AppController);
+      expect(appController.getMobileVersionPolicy()).toEqual({
+        minVersion: '1.0.10',
+        recommendedVersion: '1.0.12',
+      });
     });
   });
 });

@@ -8,6 +8,7 @@ import {
   Post,
   Res,
 } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
@@ -17,11 +18,12 @@ import { SessionStoreService } from '../auth/session-store.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
-import { AppService } from './app.service';
+import { AppService, type MobileVersionPolicyDto } from './app.service';
 
 type HealthHasura = { status: string; latencyMs?: number };
 type HealthRedis = { status: string };
 
+@ApiTags('app')
 @Controller()
 export class AppController {
   constructor(
@@ -48,6 +50,31 @@ export class AppController {
       return { status: 'unhealthy', timestamp: base.timestamp, hasura, redis };
     }
     return { ...base, hasura, redis };
+  }
+
+  @Public()
+  @Get('app/version-policy')
+  @ApiOperation({
+    summary:
+      'Mobile store update policy (min / recommended semver for soft or force prompts)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Version floors; null fields mean no prompt for that tier',
+    schema: {
+      type: 'object',
+      properties: {
+        minVersion: { type: 'string', nullable: true, example: '1.0.10' },
+        recommendedVersion: {
+          type: 'string',
+          nullable: true,
+          example: '1.0.12',
+        },
+      },
+    },
+  })
+  getMobileVersionPolicy(): MobileVersionPolicyDto {
+    return this.appService.getMobileVersionPolicy();
   }
 
   private async checkHasuraHealth(): Promise<HealthHasura> {
