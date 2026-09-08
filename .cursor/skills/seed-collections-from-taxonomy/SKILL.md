@@ -9,7 +9,7 @@ description: >-
 
 # Seed collections from taxonomy (prod | dev)
 
-Creates `collections` + `item_collections` from categories/subcategories with the most active storefront listings. Also tops up thin essentials (`baby-essentials`, `cleaning-essentials`, `back-to-school-essentials`) via keyword matching.
+Creates `collections` + `item_collections` from categories/subcategories with the most active storefront listings. Also tops up thin essentials (`baby-essentials`, `cleaning-essentials`, `back-to-school-essentials`) via **word-boundary** keyword matching (so French truck `couchette` does not match baby `couche`).
 
 ## Resolve environment
 

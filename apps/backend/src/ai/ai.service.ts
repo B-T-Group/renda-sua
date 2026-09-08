@@ -1671,9 +1671,11 @@ No markdown, no explanation outside JSON.`;
 Strict mode:
 - Only suggest a collection when the product CLEARLY belongs there.
 - Prefer returning an empty suggestions array over a weak or speculative match.
-- At most ${maxSuggestions} suggestions.`
+- At most ${maxSuggestions} suggestions.
+- Never assign vehicles, trucks, highway/sleeper cabs, or automotive parts to baby/kids collections. French "couchette" means a truck sleeper berth, not a baby diaper ("couche") or baby sleeper garment.`
       : `
-- Suggest up to ${maxSuggestions} collections that are a reasonable fit.`;
+- Suggest up to ${maxSuggestions} collections that are a reasonable fit.
+- Never assign vehicles, trucks, highway/sleeper cabs, or automotive parts to baby/kids collections. French "couchette" means a truck sleeper berth, not a baby diaper ("couche") or baby sleeper garment.`;
     const userText = `
 Product:
 - name: ${input.itemName}
@@ -1697,8 +1699,8 @@ Use collectionId values exactly from the list.`;
         {
           role: 'system',
           content: input.strictFitOnly
-            ? 'You assign e-commerce products to curated shopping collections only when the fit is clear. Prefer no suggestions over weak matches. Only use collection IDs from the provided list.'
-            : 'You assign e-commerce products to curated shopping collections. Only use collection IDs from the provided list.',
+            ? 'You assign e-commerce products to curated shopping collections only when the fit is clear. Prefer no suggestions over weak matches. Only use collection IDs from the provided list. Do not confuse truck sleeper cabs (Highway/Sleeper, couchette) with baby products.'
+            : 'You assign e-commerce products to curated shopping collections. Only use collection IDs from the provided list. Do not confuse truck sleeper cabs (Highway/Sleeper, couchette) with baby products.',
         },
         { role: 'user', content: `${userText}${imageUrlsText}` },
       ],
