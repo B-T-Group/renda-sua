@@ -6744,6 +6744,16 @@
       "availableIos": "Disponible sur iOS",
       "availableAndroid": "Disponible sur Android"
     },
+    "stats": {
+      "eyebrow": "Un marché local en croissance",
+      "title": "Rejoignez des milliers de personnes déjà sur Rendasua",
+      "subtitle": "De vrais clients, commerces et produits dans votre ville — mis à jour en direct.",
+      "liveLabel": "Mise à jour toutes les quelques minutes",
+      "clients": "Clients",
+      "agents": "Agents",
+      "businesses": "Entreprises",
+      "products": "Produits"
+    },
     "overview": {
       "eyebrow": "Une plateforme. Trois rôles. Une grande expérience.",
       "title": "Un marché conçu pour tous",

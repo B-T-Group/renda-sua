@@ -5,6 +5,8 @@ export interface MarketplaceLogoDto {
 }
 
 export interface MarketplacePublicStatsDto {
+  clients: number;
+  agents: number;
   merchants: number;
   products: number;
   cities: number;
