@@ -8,7 +8,7 @@
  * Screens (PlaceOrderScreen, CartCheckoutScreen) should call this hook instead
  * of embedding createOrder / PaymentSheet / MM handling themselves.
  *
- * MoMo Deposit Flow (Backend #275 @ c00abe02, merged):
+ * MoMo Deposit Flow (Backend #275, merged main @ 3ed60fab):
  * - Place-order with pay_at_delivery/pickup MoMo creates order in pending_payment
  * - Backend calculates deposit: max(151, round(total * (total<5000?0.10:0.05)))
  * - Backend initiates MoMo deposit collect automatically (same create-order endpoint)
@@ -175,7 +175,7 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
         };
       }
       
-      // MoMo Deposit Collect (Backend #275 @ c00abe02, merged):
+      // MoMo Deposit Collect (Backend #275, merged main @ 3ed60fab):
       // For pay_at_delivery/pickup MoMo orders with deposit:
       // - Order created in current_status=pending_payment, deposit_status=pending
       // - Backend initiates MoMo collect during order creation (same create-order endpoint)

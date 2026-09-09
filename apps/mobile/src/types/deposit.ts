@@ -5,7 +5,7 @@
  * remainder when order is delivered/picked up. Server returns deposit_amount;
  * client fallback: max(151 XAF, percentage based on grand total).
  *
- * Backend contract (renda-sua #275 @ c00abe02, merged):
+ * Backend contract (renda-sua #275, merged main @ 3ed60fab):
  * - deposit_status enum: none | pending | paid | failed | forfeited | refunded
  * - Note: pending_payment is current_status, NOT deposit_status
  */
