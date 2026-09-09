@@ -10142,6 +10142,7 @@ export class OrdersService {
             current_status: 'pending_payment',
             total_amount: total_amount,
             deposit_amount: depositCalc.depositAmount,
+            deposit_status: 'pending',
             amount_due: depositCalc.amountDue,
             delivery_window: deliveryWindow,
             payment_source: 'mobile_money' as const,
