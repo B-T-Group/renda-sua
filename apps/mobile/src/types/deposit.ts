@@ -29,7 +29,7 @@ export interface DepositConfig {
  * Calculate fallback deposit amount when server deposit_amount is missing.
  * Rule: max(150, round(grand_total * (total<5000?0.10:0.05)))
  * 
- * Backend contract (renda-sua #282 merged @ ac4ee135):
+ * Backend contract (renda-sua #282 merged @ eb9cca31):
  * - max(150, round(grand_total * (total<5000?0.10:0.05)))
  * - Market flag: application_configurations.config_key=momo_pay_now_delivery_enabled
  *   (country_code scoped, default false)
