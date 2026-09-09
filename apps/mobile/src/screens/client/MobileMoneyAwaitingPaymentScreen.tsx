@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
 import { PaymentRetryView } from '../../components/checkout/PaymentRetryView';
+import { AddPaymentPhoneDialog } from '../../components/dialogs/AddPaymentPhoneDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMobileMoneyPaymentPoll } from '../../hooks/useMobileMoneyPaymentPoll';
 import type {
@@ -34,7 +35,10 @@ export default function MobileMoneyAwaitingPaymentScreen() {
   const { state, error, stop, restart } = useMobileMoneyPaymentPoll(orderIds);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
-  const masked = useMemo(() => maskPhoneE164(phoneE164), [phoneE164]);
+  const [currentPhone, setCurrentPhone] = useState(phoneE164);
+  const [editPhoneDialogVisible, setEditPhoneDialogVisible] = useState(false);
+  const [savingPhone, setSavingPhone] = useState(false);
+  const masked = useMemo(() => maskPhoneE164(currentPhone), [currentPhone]);
 
   const leaveToOrder = useCallback(() => {
     stop();
@@ -58,7 +62,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     setRetrying(true);
     setRetryError(null);
     try {
-      const phone = phoneE164.trim() || undefined;
+      const phone = currentPhone.trim() || undefined;
       await Promise.all(
         orderIds.map((id) =>
           source === 'pickup'
@@ -77,6 +81,32 @@ export default function MobileMoneyAwaitingPaymentScreen() {
       setRetrying(false);
     }
   };
+
+  const onEditPhone = useCallback(() => {
+    setEditPhoneDialogVisible(true);
+  }, []);
+
+  const onSavePhone = useCallback(
+    async (newPhoneE164: string) => {
+      setSavingPhone(true);
+      try {
+        setCurrentPhone(newPhoneE164);
+        setEditPhoneDialogVisible(false);
+      } catch (e: unknown) {
+        // If there's an error, keep the dialog open
+        throw e;
+      } finally {
+        setSavingPhone(false);
+      }
+    },
+    []
+  );
+
+  const onDismissEditPhoneDialog = useCallback(() => {
+    if (!savingPhone) {
+      setEditPhoneDialogVisible(false);
+    }
+  }, [savingPhone]);
 
   const onContinueAfterPaid = () => {
     stop();
@@ -118,7 +148,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
         onRetry={() => void onRetry()}
         retrying={retrying}
         showOrderReservedBanner={true}
-        onEditPhone={undefined} // Can be added later if needed
+        onEditPhone={onEditPhone}
         retryLabel={source === 'pickup' ? t('business.pickup.momoSendAgain', 'Send again') : undefined}
         // onChangeMethod NOT passed - payment rail is locked by preflight
       />
@@ -286,6 +316,13 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      <AddPaymentPhoneDialog
+        visible={editPhoneDialogVisible}
+        saving={savingPhone}
+        onDismiss={onDismissEditPhoneDialog}
+        onSave={onSavePhone}
+      />
     </View>
   );
 }

@@ -951,14 +951,16 @@ export default function PlaceOrderScreen() {
     }
 
     const orderNumber = outcome.orderNumbers[0] ?? '';
-    const momoPending =
+    // Navigate to MoMo waiting screen for:
+    // 1. Pay-now MoMo orders (full payment or deposit)
+    // 2. Pay-at-delivery/pickup MoMo deposit orders (deposit collect initiated)
+    const momoWaitingRequired =
       !resolvedIsStripeRail &&
-      payTiming === 'pay_now' &&
       (outcome.type === 'pending' ||
         (outcome.type === 'success' &&
           outcome.paymentRail === 'mobile_money' &&
           !outcome.cardAuthorized));
-    if (momoPending && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
+    if (momoWaitingRequired && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
         overrideNationalDigits

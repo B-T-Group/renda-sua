@@ -38,12 +38,23 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
     const orders = await Promise.all(
       ids.map(async (id) => {
         const order = await agentApi.orders.getById(id);
+<<<<<<< HEAD
         return {
           payment_status: order.payment_status,
           deposit_status: order.deposit_status,
           deposit_amount: order.deposit_amount,
           deposit_mobile_payment_transaction_id: order.deposit_mobile_payment_transaction_id,
         };
+=======
+        // For deposit orders, check deposit_status instead of payment_status.
+        // Deposit orders are identified by presence of deposit_mobile_payment_transaction_id
+        // or deposit_amount > 0. On MoMo SUCCESS: deposit_status→paid.
+        const isDepositOrder = Boolean(
+          order.deposit_mobile_payment_transaction_id ||
+          (order.deposit_amount && order.deposit_amount > 0)
+        );
+        return isDepositOrder ? order.deposit_status : order.payment_status;
+>>>>>>> 5a02c8de (feat(mobile): implement MoMo reservation-deposit place-order navigation)
       })
     );
     return resolveMomoPaymentStatuses(orders);
