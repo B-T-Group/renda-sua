@@ -706,7 +706,7 @@ export default function PlaceOrderScreen() {
 
   const depositIsFloor = useMemo(() => {
     if (!depositAmount) return false;
-    const DEPOSIT_FLOOR = 151;
+    const DEPOSIT_FLOOR = 150;
     return depositAmount === DEPOSIT_FLOOR;
   }, [depositAmount]);
 

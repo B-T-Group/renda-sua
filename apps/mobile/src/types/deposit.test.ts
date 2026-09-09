@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { calculateDepositFallback, resolveDepositAmount } from './deposit';
 
 describe('calculateDepositFallback', () => {
-  it('returns floor 151 XAF for very small orders', () => {
-    expect(calculateDepositFallback(100)).toBe(151);
-    expect(calculateDepositFallback(500)).toBe(151);
-    expect(calculateDepositFallback(1000)).toBe(151);
+  it('returns floor 150 XAF for very small orders', () => {
+    expect(calculateDepositFallback(100)).toBe(150);
+    expect(calculateDepositFallback(500)).toBe(150);
+    expect(calculateDepositFallback(1000)).toBe(150);
   });
 
   it('returns 10% for orders < 5000 XAF when above floor', () => {
