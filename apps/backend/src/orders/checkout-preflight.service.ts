@@ -518,7 +518,14 @@ export class CheckoutPreflightService {
       }
 
       // Validate requested payment timing
-      const requestedTiming = dto.payment_timing ?? 'pay_now';
+      // When omitted, prefer PAD/pickup over pay_now if those are available
+      const requestedTiming =
+        dto.payment_timing ??
+        (allowedPaymentTimings.includes('pay_at_delivery')
+          ? 'pay_at_delivery'
+          : allowedPaymentTimings.includes('pay_at_pickup')
+            ? 'pay_at_pickup'
+            : 'pay_now');
       if (requestedTiming === 'pay_at_delivery' && !allPayOnDelivery) {
         blockers.push({
           code: 'PAY_AT_DELIVERY_UNAVAILABLE',

@@ -9589,18 +9589,26 @@ export class OrdersService {
         ? 'estimated'
         : 'none';
     
+    // Helper: Determine deposit rail for PAD/PAP orders using same logic everywhere
+    // Must be called AFTER payment_source and payer_payment_rail are set
+    const getDepositRailForPayAtTiming = (): 'mobile_money' | 'stripe' | 'wallet' => {
+      if (paymentRail === 'stripe') return 'stripe';
+      // For PAD/PAP, payer_payment_rail is derived from payment_source
+      // payment_source = wallet for zero/negative orders, else mobile_payment
+      // This ensures status decision and deposit collect use identical logic
+      const payment_source: 'wallet' | 'mobile_payment' | 'credit_card' =
+        canPayWithWallet || isZeroOrNegativeOrder
+          ? 'wallet'
+          : 'mobile_payment';
+      return payment_source === 'wallet' ? 'wallet' : 'mobile_money';
+    };
+    
     // Determine initial status for pay_at_delivery/pickup orders
     // When deposit is required, start in pending_payment (not pending)
     // to avoid triggering acceptance SLA before deposit is paid
     let current_status: string;
     if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
-      // Check if deposit will be required using same logic as deposit collection below
-      // Rail determination must match deposit collect path to avoid status/collect disagreement
-      // For PAD/PAP: payment_source is always 'mobile_payment', so rail logic simplifies
-      const railForDepositCheck: 'mobile_money' | 'stripe' | 'wallet' =
-        paymentRail === 'stripe'
-          ? 'stripe'
-          : 'mobile_money';  // PAD/PAP never uses wallet (payment_source = mobile_payment)
+      const railForDepositCheck = getDepositRailForPayAtTiming();
       const requiresDeposit = this.depositCalculationService.isDepositRequired(
         paymentTiming,
         railForDepositCheck
@@ -10017,12 +10025,8 @@ export class OrdersService {
       paymentTiming === 'pay_at_pickup'
     ) {
       // MoMo reservation deposit collection for pay_at_delivery/pickup
-      const railForDeposit: 'mobile_money' | 'stripe' | 'wallet' =
-        paymentRail === 'stripe'
-          ? 'stripe'
-          : payer_payment_rail === 'wallet'
-            ? 'wallet'
-            : 'mobile_money';
+      // Use same rail logic as status decision above
+      const railForDeposit = getDepositRailForPayAtTiming();
       const requiresDeposit = this.depositCalculationService.isDepositRequired(
         paymentTiming,
         railForDeposit
