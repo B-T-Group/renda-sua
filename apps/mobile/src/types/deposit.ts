@@ -4,9 +4,13 @@
  * Deposit path: customer pays a small reservation deposit now (via MoMo),
  * remainder when order is delivered/picked up. Server returns deposit_amount;
  * client fallback: max(151 XAF, percentage based on grand total).
+ *
+ * Backend contract (renda-sua #275 @ c00abe02, merged):
+ * - deposit_status enum: none | pending | paid | failed | forfeited | refunded
+ * - Note: pending_payment is current_status, NOT deposit_status
  */
 
-export type DepositStatus = 'pending_payment' | 'paid' | 'forfeited' | 'refunded';
+export type DepositStatus = 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded';
 
 export interface DepositConfig {
   /** Server-authoritative deposit amount (XAF). UI always prefers this when present. */

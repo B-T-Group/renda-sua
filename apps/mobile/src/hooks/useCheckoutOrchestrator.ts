@@ -8,16 +8,17 @@
  * Screens (PlaceOrderScreen, CartCheckoutScreen) should call this hook instead
  * of embedding createOrder / PaymentSheet / MM handling themselves.
  *
- * MoMo Deposit Flow (Backend Contract #275 — DRAFT-WIRED, pending Payments/CR approval):
- * - Place-order with pay_at_delivery/pickup creates order in pending_payment
- * - Backend initiates MoMo deposit collect automatically (same create-order path)
- * - Response includes: deposit_amount?, amount_due?, deposit_status?, 
- *   payment_transaction, database_transaction? (all optional/defensive)
+ * MoMo Deposit Flow (Backend #275 @ c00abe02, merged):
+ * - Place-order with pay_at_delivery/pickup MoMo creates order in pending_payment
+ * - Backend calculates deposit: max(151, round(total * (total<5000?0.10:0.05)))
+ * - Backend initiates MoMo deposit collect automatically (same create-order endpoint)
+ * - Response includes: deposit_amount, amount_due, deposit_status (pending), 
+ *   current_status (pending_payment), payment_transaction, deposit_mobile_payment_transaction_id
  * - Client navigates to MobileMoneyAwaitingPayment for polling (existing flow)
- * - After SUCCESS callback: deposit_status=paid, current_status → pending; remainder unpaid
+ * - After MoMo SUCCESS callback: deposit_status→paid, current_status→pending; remainder unpaid
+ * - On FAILED: deposit_status→failed
  * - Market flag: momo_pay_now_delivery_enabled (default false) gates full pay-now UI
- * - Calc: max(151, round(grand_total * (total<5000?0.10:0.05)))
- * - Contract subject to Payments review; expect possible field changes
+ * - Deposit fields remain optional/defensive for backward compatibility
  */
 import { useCallback, useRef, useState } from 'react';
 import type { ResolvedCheckoutConfig } from '../types/checkout';
@@ -174,21 +175,20 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
         };
       }
       
-      // MoMo Deposit Collect (Backend #275 — DRAFT-WIRED, pending Payments approval):
-      // For deposit orders (pay_at_delivery/pickup with deposit_amount):
-      // - Order created in pending_payment status
-      // - Backend initiates MoMo collect during order creation (same create-order path, no extra endpoints)
-      // - Response includes optional deposit_amount, amount_due, deposit_status, database_transaction
-      // - Client navigates to MobileMoneyAwaitingPayment which polls payment_status
-      // - On MoMo SUCCESS callback: deposit_status → paid, current_status → pending
-      // - On FAILED: user retries via MobileMoneyAwaitingPayment retry flow
+      // MoMo Deposit Collect (Backend #275 @ c00abe02, merged):
+      // For pay_at_delivery/pickup MoMo orders with deposit:
+      // - Order created in current_status=pending_payment, deposit_status=pending
+      // - Backend initiates MoMo collect during order creation (same create-order endpoint)
+      // - Response includes deposit_amount, amount_due, deposit_status, deposit_mobile_payment_transaction_id
+      // - Client navigates to MobileMoneyAwaitingPayment which polls order.payment_status
+      // - On MoMo SUCCESS callback: deposit_status→paid, current_status→pending
+      // - On FAILED: deposit_status→failed; user retries via waiting screen
       // 
-      // Deposit orders handled transparently by existing MoMo pending flow.
-      // All deposit fields typed as optional (defensive) pending contract finalization.
-      // No invented endpoints; collect initiated server-side during create-order.
+      // Deposit orders and full pay-now MoMo both use the same pending flow.
+      // All deposit fields remain optional/defensive for backward compatibility.
       
       // Mobile Money is push-based; order is created and payment is initiated server-side.
-      // Success = payment pending confirmation from provider.
+      // Success = payment pending confirmation from provider (or deposit collect pending).
       return { type: 'pending', orderIds: [order.id], orderNumbers: [order.order_number ?? order.id], paymentRail: 'mobile_money' };
     },
     []
