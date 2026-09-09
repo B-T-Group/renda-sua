@@ -5,6 +5,7 @@ import {
   MOMO_POLL_TIMEOUT_MS,
   resolveMomoPaymentStatuses,
   type MomoPaymentPollPhase,
+  type ResolveMomoPaymentOptions,
 } from '../utils/momoPaymentPoll';
 
 export type MobileMoneyPollState =
@@ -13,7 +14,10 @@ export type MobileMoneyPollState =
   | { phase: 'failed' }
   | { phase: 'timeout' };
 
-export function useMobileMoneyPaymentPoll(orderIds: string[]) {
+export function useMobileMoneyPaymentPoll(
+  orderIds: string[],
+  options?: ResolveMomoPaymentOptions
+) {
   const [state, setState] = useState<MobileMoneyPollState>({ phase: 'waiting' });
   const [error, setError] = useState<string | null>(null);
   const [restartToken, setRestartToken] = useState(0);
@@ -21,6 +25,9 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
   const idsKey = orderIds.join(',');
   const orderIdsRef = useRef(orderIds);
   orderIdsRef.current = orderIds;
+  const expectDeposit = options?.expectDeposit;
+  const expectDepositRef = useRef(expectDeposit);
+  expectDepositRef.current = expectDeposit;
 
   const stop = useCallback(() => {
     stoppedRef.current = true;
@@ -46,7 +53,9 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
         };
       })
     );
-    return resolveMomoPaymentStatuses(orders);
+    return resolveMomoPaymentStatuses(orders, {
+      expectDeposit: expectDepositRef.current,
+    });
   }, []);
 
   useEffect(() => {
@@ -85,7 +94,7 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
       stoppedRef.current = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [idsKey, restartToken, checkOnce, orderIds.length]);
+  }, [idsKey, restartToken, checkOnce, orderIds.length, expectDeposit]);
 
   return { state, error, stop, restart };
 }

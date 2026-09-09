@@ -106,6 +106,23 @@ export class DepositCalculationService {
   }
 
   /**
+   * Amount to collect on remainder MoMo (pickup/delivery/cash recon).
+   * When deposit is already paid, charge only total − deposit.
+   */
+  remainderPaymentAmount(order: {
+    total_amount?: number | null;
+    deposit_amount?: number | null;
+    deposit_status?: string | null;
+  }): number {
+    const total = Number(order.total_amount) || 0;
+    const deposit = Number(order.deposit_amount) || 0;
+    if (order.deposit_status === 'paid' && deposit > 0) {
+      return Math.max(0, total - deposit);
+    }
+    return total;
+  }
+
+  /**
    * Get deposit lock point for refund eligibility based on fulfillment method.
    * 
    * Refund via MoMo withdraw until lock:

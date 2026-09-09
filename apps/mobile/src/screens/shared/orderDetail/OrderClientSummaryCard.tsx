@@ -425,6 +425,50 @@ export function OrderClientSummaryCard({
         </Text>
       </View>
 
+      {(order.deposit_amount ?? 0) > 0 &&
+      (order.deposit_status === 'pending' || order.deposit_status === 'paid') ? (
+        <View style={{ marginBottom: spacing.sm }}>
+          <SummaryRow
+            label={
+              order.deposit_status === 'paid'
+                ? t('deposit.summaryPaid', 'Deposit paid')
+                : t('deposit.summaryDue', 'Deposit due')
+            }
+            value={formatCurrency(order.deposit_amount ?? 0, cur, locale)}
+            colors={colors}
+          />
+          {order.payment_status !== 'paid' ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: 4,
+                gap: 12,
+              }}
+            >
+              <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '700', flex: 1 }}>
+                {t('deposit.amountDue', 'Amount due')}
+              </Text>
+              <Text
+                variant="titleMedium"
+                style={{
+                  color:
+                    order.deposit_status === 'paid'
+                      ? colors.primary.main
+                      : colors.text.primary,
+                  fontWeight: '800',
+                  maxWidth: '52%',
+                  textAlign: 'right',
+                }}
+              >
+                {formatCurrency(remainingAfterDeposit(order), cur, locale)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       {history.length > 0 ? (
         <List.Accordion
           title={t('orders.clientManage.historyTitle', 'Status history')}

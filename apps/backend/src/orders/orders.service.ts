@@ -819,6 +819,13 @@ export class OrdersService {
         ...restOrder
       } = order;
 
+      // Agents must not see GMV (total_amount), but need remainder when deposit is paid
+      const depositPaid =
+        order.deposit_status === 'paid' && Number(order.deposit_amount) > 0;
+      const amountDue = depositPaid
+        ? this.depositCalculationService.remainderPaymentAmount(order)
+        : undefined;
+
       // Restrict order_items to agent-allowed fields only (no name, image, brand)
       const orderItems = restOrder.order_items?.map((item: any) => {
         const {
@@ -852,6 +859,7 @@ export class OrdersService {
 
       return withDeliveryContactForFulfiller({
         ...restOrder,
+        ...(amountDue != null ? { amount_due: amountDue } : {}),
         delivery_commission: earnings.totalEarnings,
         agent_hold_amount: agentHoldAmount,
         order_items: orderItems,
@@ -3502,9 +3510,12 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
+      order as any
+    );
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `order ${order.order_number} (pay at delivery)`,
       provider,
@@ -3520,7 +3531,7 @@ export class OrdersService {
     });
 
     const paymentRequest = {
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `Order ${order.order_number}`,
       customerPhone: phoneNumber,
@@ -3699,9 +3710,12 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
+      order as any
+    );
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `order ${order.order_number} (pay at pickup)`,
       provider,
@@ -3717,7 +3731,7 @@ export class OrdersService {
     });
 
     const paymentRequest = {
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `Order ${order.order_number}`,
       customerPhone: phoneNumber,
@@ -4689,9 +4703,12 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
+      order as any
+    );
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `order ${order.order_number} (cash exception reconciliation)`,
       provider,
@@ -4706,7 +4723,7 @@ export class OrdersService {
     });
 
     const paymentRequest = {
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `Order ${order.order_number} reconciliation`,
       customerPhone: phone,

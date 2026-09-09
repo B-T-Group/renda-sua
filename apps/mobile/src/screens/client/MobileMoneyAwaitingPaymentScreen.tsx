@@ -43,7 +43,15 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     amountDue: amountDueParam,
     currency: currencyParam,
   } = route.params;
-  const { state, error, stop, restart } = useMobileMoneyPaymentPoll(orderIds);
+  const { state, error, stop, restart } = useMobileMoneyPaymentPoll(orderIds, {
+    // Pickup remainder / full-pay must poll payment_status, not deposit_status.
+    expectDeposit:
+      isDepositOrderParam === true
+        ? true
+        : isDepositOrderParam === false || source === 'pickup'
+          ? false
+          : undefined,
+  });
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [currentPhone, setCurrentPhone] = useState(phoneE164);
@@ -83,8 +91,13 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     };
   }, [orderIds, isDepositOrderParam, depositAmountParam]);
 
-  // Route param is authoritative (prevents race). Fallback to fetched data only if route param not provided.
-  const isDepositOrder = isDepositOrderParam ?? Boolean(orderData?.deposit_amount && orderData.deposit_amount > 0);
+  // Route param / pickup source are authoritative. Never infer deposit from
+  // deposit_amount alone after deposit is already paid (remainder flow).
+  const isDepositOrder =
+    isDepositOrderParam === true ||
+    (isDepositOrderParam == null &&
+      source !== 'pickup' &&
+      Boolean(orderData?.deposit_amount && orderData.deposit_amount > 0));
 
   const leaveToOrder = useCallback(() => {
     stop();

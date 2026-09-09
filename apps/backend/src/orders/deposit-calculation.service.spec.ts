@@ -93,6 +93,49 @@ describe('DepositCalculationService', () => {
     });
   });
 
+  describe('remainderPaymentAmount', () => {
+    it('returns total minus deposit when deposit is paid', () => {
+      expect(
+        service.remainderPaymentAmount({
+          total_amount: 200,
+          deposit_amount: 150,
+          deposit_status: 'paid',
+        })
+      ).toBe(50);
+    });
+
+    it('returns full total when deposit is pending', () => {
+      expect(
+        service.remainderPaymentAmount({
+          total_amount: 200,
+          deposit_amount: 150,
+          deposit_status: 'pending',
+        })
+      ).toBe(200);
+    });
+
+    it('returns full total when deposit_status is none or missing', () => {
+      expect(
+        service.remainderPaymentAmount({
+          total_amount: 200,
+          deposit_amount: 0,
+          deposit_status: 'none',
+        })
+      ).toBe(200);
+      expect(service.remainderPaymentAmount({ total_amount: 200 })).toBe(200);
+    });
+
+    it('clamps remainder at zero when deposit exceeds total', () => {
+      expect(
+        service.remainderPaymentAmount({
+          total_amount: 100,
+          deposit_amount: 150,
+          deposit_status: 'paid',
+        })
+      ).toBe(0);
+    });
+  });
+
   describe('isDepositRequired', () => {
     it('should require deposit for pay_at_delivery on mobile_money', () => {
       expect(
