@@ -7058,21 +7058,23 @@ export class OrdersService {
         `Deposit captured for order ${orderNumber}, transitioning to pending`
       );
 
-      // Credit platform ledger with deposit (will be settled with rest of order later)
+      // Credit platform account ledger with deposit (will be settled with rest of order later)
+      // Note: Deposit is tracked separately and will be counted in final settlement to avoid double-counting
       try {
         const depositAmount = (order as any).deposit_amount;
         if (depositAmount && depositAmount > 0) {
-          await this.accountsService.creditAccount(
-            order.business_id,
-            depositAmount,
-            (order as any).currency || 'XAF',
-            'platform_deposit',
-            `Deposit captured for order ${order.order_number}`
-          );
+          const platformAccountId = order.business_id; // TODO: Use actual platform account ID
+          await this.accountsService.registerDepositIfNotExists({
+            accountId: platformAccountId,
+            amount: depositAmount,
+            referenceId: `deposit-${order.order_number}`,
+            transactionType: 'deposit',
+            memo: `Deposit for order ${order.order_number}`,
+          });
         }
       } catch (ledgerError: any) {
         this.logger.error(
-          `Failed to credit platform ledger with deposit for ${orderNumber}:`,
+          `Failed to register platform ledger deposit for ${orderNumber}:`,
           ledgerError
         );
       }
@@ -9668,9 +9670,13 @@ export class OrdersService {
       paymentTiming === 'pay_at_pickup'
     ) {
       // MoMo reservation deposit collection for pay_at_delivery/pickup
+      const railForDeposit: 'mobile_money' | 'stripe' | 'wallet' =
+        paymentRail === 'stripe' ? 'stripe' : 
+        paymentRail === 'wallet' ? 'wallet' : 
+        'mobile_money';
       const requiresDeposit = this.depositCalculationService.isDepositRequired(
         paymentTiming,
-        paymentRail === 'stripe' ? 'stripe' : paymentRail === 'wallet' ? 'wallet' : 'mobile_money'
+        railForDeposit
       );
 
       if (requiresDeposit && currency === 'XAF') {
@@ -9719,22 +9725,19 @@ export class OrdersService {
 
           // Create mobile_payment_transaction for deposit
           const depositTransaction =
-            await this.mobilePaymentsDatabaseService.createMobilePaymentTransaction(
-              {
-                user_id: user.id,
-                account_id: account.id,
-                amount: depositCalc.depositAmount,
-                currency,
-                payment_method: 'mobile_money',
-                transaction_id: depositResult.transactionId ?? depositReference,
-                reference: depositReference,
-                payment_entity: 'order_deposit',
-                entity_id: order.order_number,
-                status: 'pending',
-                provider,
-                customer_phone: phoneNumber,
-              }
-            );
+            await this.mobilePaymentsDatabaseService.createTransaction({
+              reference: depositReference,
+              amount: depositCalc.depositAmount,
+              currency,
+              description: `Deposit for order ${order.order_number}`,
+              provider,
+              payment_method: 'mobile_money',
+              customer_phone: phoneNumber,
+              account_id: account.id,
+              transaction_type: 'PAYMENT',
+              payment_entity: 'order_deposit',
+              entity_id: order.order_number,
+            });
 
           // Update order with deposit info (keep status pending_payment until callback)
           const updateDepositMutation = `

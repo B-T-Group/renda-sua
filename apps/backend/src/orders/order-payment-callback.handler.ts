@@ -30,9 +30,15 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
 
   async onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void> {
     if (transaction.payment_entity === 'order_deposit') {
+      const orderNumber = transaction.entity_id;
+      const transactionId = transaction.transaction_id ?? transaction.reference;
+      if (!orderNumber) {
+        this.logger.error('Deposit callback missing order number (entity_id)');
+        return;
+      }
       await this.ordersService.finalizeDepositAfterCallback(
-        transaction.entity_id,
-        transaction.transaction_id ?? transaction.reference
+        orderNumber,
+        transactionId
       );
       return;
     }
