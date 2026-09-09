@@ -3,7 +3,7 @@ import { AccountsService } from './accounts.service';
 describe('AccountsService', () => {
   const accountId = 'account-1';
   const userId = 'user-1';
-  const referenceId = 'ref-1';
+  const referenceId = '11111111-1111-4111-8111-111111111111';
 
   const activeAccount = {
     id: accountId,
@@ -130,6 +130,23 @@ describe('AccountsService', () => {
         })
       ).resolves.toEqual({ success: true, alreadyExists: true });
 
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-uuid referenceId without calling Hasura', async () => {
+      await expect(
+        service.registerDepositIfNotExists({
+          accountId,
+          amount: 125,
+          memo: 'Deposit captured for order ORD-1',
+          referenceId: 'deposit-ORD-1',
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'referenceId must be a uuid',
+      });
+
+      expect(executeQuery).not.toHaveBeenCalled();
       expect(executeMutation).not.toHaveBeenCalled();
     });
 

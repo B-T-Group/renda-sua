@@ -7520,11 +7520,11 @@ export class OrdersService {
           );
         }
         
-        // Credit wallet - fail the entire callback if this fails
+        // reference_id is uuid — order.id is idempotent across deposit payment retries.
         const credit = await this.accountsService.registerDepositIfNotExists({
           accountId: clientAccount.id,
           amount: depositAmount,
-          referenceId: `deposit-${order.order_number}`,
+          referenceId: order.id,
           memo: `Deposit captured for order ${order.order_number}`,
         });
         

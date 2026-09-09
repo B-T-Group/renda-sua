@@ -191,6 +191,7 @@ describe('OrdersService', () => {
 
     const mockAccountsService = {
       registerTransaction: jest.fn(),
+      registerDepositIfNotExists: jest.fn(),
     };
 
     const mockOrderStatusService = {
@@ -2040,6 +2041,91 @@ describe('OrdersService', () => {
         orderNumber: 'ORD-1',
         orderId: 'order-123',
       });
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeDepositAfterCallback credits wallet with order.id not deposit-orderNumber', async () => {
+      const depositOrder = {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        order_number: 'ORD-20240909-000001',
+        current_status: 'pending_payment',
+        deposit_status: 'pending',
+        deposit_amount: 5000,
+        total_amount: 20000,
+        currency: 'XAF',
+        client: { user_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+        deposit_mobile_payment_transaction_id:
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      };
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue(depositOrder);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      });
+      accountsService.registerDepositIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+      configService.get.mockReturnValue({ orderStatusChangeEnabled: false });
+
+      await service.finalizeDepositAfterCallback(
+        depositOrder.order_number,
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      );
+
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
+        accountId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        amount: 5000,
+        referenceId: depositOrder.id,
+        memo: `Deposit captured for order ${depositOrder.order_number}`,
+      });
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          referenceId: `deposit-${depositOrder.order_number}`,
+        })
+      );
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation FinalizeDeposit'),
+        expect.objectContaining({ orderId: depositOrder.id })
+      );
+
+      requireSpy.mockRestore();
+    });
+
+    it('finalizeDepositAfterCallback fails closed when wallet credit fails', async () => {
+      const depositOrder = {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        order_number: 'ORD-20240909-000001',
+        current_status: 'pending_payment',
+        deposit_status: 'pending',
+        deposit_amount: 5000,
+        total_amount: 20000,
+        currency: 'XAF',
+        client: { user_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+        deposit_mobile_payment_transaction_id:
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      };
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue(depositOrder);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      });
+      accountsService.registerDepositIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'referenceId must be a uuid',
+      });
+
+      await expect(
+        service.finalizeDepositAfterCallback(
+          depositOrder.order_number,
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+        )
+      ).rejects.toThrow(/Deposit wallet credit failed/);
+
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
 
       requireSpy.mockRestore();
     });

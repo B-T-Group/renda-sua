@@ -689,8 +689,7 @@ export class MobilePaymentsController {
       throw new HttpException(
         {
           success: false,
-          message: 'Failed to process callback',
-          error: error.message,
+          message: error.message || 'Failed to process callback',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -737,8 +736,7 @@ export class MobilePaymentsController {
       throw new HttpException(
         {
           success: false,
-          message: 'Failed to process callback',
-          error: error.message,
+          message: error.message || 'Failed to process callback',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

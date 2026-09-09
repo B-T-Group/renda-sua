@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isUuid } from '../common/uuid.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface TransactionRequest {
@@ -250,6 +251,9 @@ export class AccountsService {
   ): Promise<IdempotentTransactionResult> {
     if (!request.referenceId) {
       return { success: false, error: 'referenceId is required' };
+    }
+    if (!isUuid(request.referenceId)) {
+      return { success: false, error: 'referenceId must be a uuid' };
     }
     const alreadyExists = await this.hasTransactionForReference({
       accountId: request.accountId,
