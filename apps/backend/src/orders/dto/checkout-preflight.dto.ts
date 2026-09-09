@@ -321,12 +321,6 @@ export class CheckoutGroupDto {
 
   @ApiPropertyOptional({
     description:
-      'Deposit rate used for calculation (0.10 for orders < 5000 XAF, 0.05 for >= 5000 XAF).',
-  })
-  deposit_rate?: number;
-
-  @ApiPropertyOptional({
-    description:
       'True when MoMo pay_now is enabled for delivery in this market. False means pay_now is hidden for MoMo + delivery.',
   })
   momo_pay_now_delivery_enabled?: boolean;

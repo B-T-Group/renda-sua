@@ -676,7 +676,6 @@ export class CheckoutPreflightService {
       let depositRequired = false;
       let depositAmount: number | undefined;
       let amountDue: number | undefined;
-      let depositRate: number | undefined;
 
       const requestedOrAvailableTiming = dto.payment_timing ?? 
         (allowedPaymentTimings.includes('pay_at_delivery') ? 'pay_at_delivery' :
@@ -695,7 +694,6 @@ export class CheckoutPreflightService {
           depositRequired = true;
           depositAmount = depositCalc.depositAmount;
           amountDue = depositCalc.amountDue;
-          depositRate = depositCalc.rate;
         } catch (error: any) {
           this.logger.warn(
             `Deposit calculation failed for group ${businessId}`,
@@ -741,7 +739,6 @@ export class CheckoutPreflightService {
         deposit_required: depositRequired || undefined,
         deposit_amount: depositAmount,
         amount_due: amountDue,
-        deposit_rate: depositRate,
         momo_pay_now_delivery_enabled: rail === 'mobile_money' && fulfillment === 'delivery' 
           ? momoPayNowDeliveryEnabled 
           : undefined,

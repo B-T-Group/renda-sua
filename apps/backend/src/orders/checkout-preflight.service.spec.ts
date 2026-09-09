@@ -1087,7 +1087,6 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.deposit_required).toBe(true);
       expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF (>= 5000)
       expect(result.groups[0]?.amount_due).toBe(9500);
-      expect(result.groups[0]?.deposit_rate).toBe(0.05);
     });
 
     it('calculates deposit for MoMo + XAF + pay_at_pickup', async () => {
@@ -1104,7 +1103,6 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.deposit_required).toBe(true);
       expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF
       expect(result.groups[0]?.amount_due).toBe(9500);
-      expect(result.groups[0]?.deposit_rate).toBe(0.05);
     });
 
     it('does NOT calculate deposit for pay_now timing', async () => {
@@ -1161,7 +1159,6 @@ describe('CheckoutPreflightService', () => {
 
       expect(result.groups[0]?.deposit_required).toBe(true);
       expect(result.groups[0]?.deposit_amount).toBe(300); // 5% of 6000 XAF
-      expect(result.groups[0]?.deposit_rate).toBe(0.05);
     });
 
     it('enforces 151 XAF floor on small orders', async () => {
