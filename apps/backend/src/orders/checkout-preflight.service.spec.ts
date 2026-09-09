@@ -271,7 +271,7 @@ describe('CheckoutPreflightService', () => {
               }
               const rate = total < 5000 ? 0.1 : 0.05;
               const calculated = Math.round(total * rate);
-              const depositAmount = Math.max(151, calculated);
+              const depositAmount = Math.max(150, calculated);
               return {
                 depositAmount,
                 rate,
@@ -1168,7 +1168,7 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.deposit_amount).toBe(300); // 5% of 6000 XAF
     });
 
-    it('enforces 151 XAF floor on small orders', async () => {
+    it('enforces 150 XAF floor on small orders', async () => {
       (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
         (query: string) => {
           if (query.includes('GetInventoryForPreflight')) {
@@ -1207,7 +1207,7 @@ describe('CheckoutPreflightService', () => {
       const result = await service.resolve(dto, false);
 
       expect(result.groups[0]?.deposit_required).toBe(true);
-      expect(result.groups[0]?.deposit_amount).toBe(151); // Floor, not 100 (10% of 1000)
+      expect(result.groups[0]?.deposit_amount).toBe(150); // Floor, not 100 (10% of 1000)
     });
   });
 

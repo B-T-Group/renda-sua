@@ -16,7 +16,7 @@ describe('DepositCalculationService', () => {
     it('should calculate 10% deposit for orders under 5000 XAF', () => {
       const result = service.calculateDeposit(1000, 'XAF');
       
-      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF); // floor wins (100 < 151)
+      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF); // floor wins (100 < 150)
       expect(result.rate).toBe(0.10);
       expect(result.amountDue).toBe(1000 - MOMO_DEPOSIT_MIN_XAF);
       expect(result.totalAmount).toBe(1000);
@@ -52,7 +52,7 @@ describe('DepositCalculationService', () => {
     it('should enforce floor for tiny orders', () => {
       const result = service.calculateDeposit(100, 'XAF');
       
-      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF); // floor wins (10 < 151)
+      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF); // floor wins (10 < 150)
       expect(result.rate).toBe(0.10);
       expect(result.amountDue).toBe(0); // can't be negative
       expect(result.totalAmount).toBe(100);
