@@ -249,30 +249,7 @@
     "incompleteAddress": {
       "banner": "Votre adresse de livraison est incomplète. Ajoutez la ville, la région et le code postal pour continuer avec le paiement par carte.",
       "cta": "Compléter l'adresse"
-    }
-  },
-  "deposit": {
-    "reservationTitle": "Acompte de réservation",
-    "minimumLabel": "Acompte minimum pour cette commande",
-    "refundableUntilSent": "Remboursable jusqu'à l'envoi en livraison ou jusqu'à ce que la commande soit prête pour le retrait",
-    "appliedToTotal": "Appliqué à votre commande — pas de frais supplémentaires",
-    "frenchNote": "FR: Remboursable avant envoi en livraison ou avant pret au retrait · déduit du total",
-    "dueNow": "À payer maintenant (acompte)",
-    "dueLater": "À payer plus tard",
-    "payDepositCta": "Payer l'acompte · {{amount}} {{currency}}",
-    "forfeit": {
-      "outForDeliveryTitle": "Annuler pendant la livraison?",
-      "outForDeliveryMessage": "Votre commande est déjà en route. L'annuler ou la refuser maintenant signifie que vous perdez l'acompte de réservation.",
-      "outForDeliveryForfeitAmount": "Acompte perdu",
-      "readyForPickupTitle": "Annuler après préparation?",
-      "readyForPickupMessage": "Votre commande est prête au magasin. L'annuler ou ne pas venir maintenant signifie que vous perdez l'acompte de réservation.",
-      "readyForPickupForfeitAmount": "Acompte perdu",
-      "keepOrderCta": "Garder ma commande",
-      "pickUpCta": "Je vais la récupérer",
-      "cancelAndForfeitCta": "Annuler et perdre {{amount}} {{currency}}",
-      "forfeitNote": "FR: Annuler maintenant = acompte non remboursé ({{amount}} {{currency}})",
-      "youKeepDepositIf": "Vous ne conserverez l'acompte que si nous annulons, le magasin annule ou la livraison échoue."
-    }
+    },
     "tipsToResolve": "Conseils pour résoudre",
     "tryAgain": "Réessayer",
     "changePaymentMethod": "Changer de méthode de paiement",
@@ -306,6 +283,29 @@
       "confirmPhoneDesc": "Assurez-vous que {{phone}} correspond au numéro lié à votre portefeuille MoMo.",
       "encrypted": "Crypté",
       "secure": "Paiement sécurisé"
+    }
+  },
+  "deposit": {
+    "reservationTitle": "Acompte de réservation",
+    "minimumLabel": "Acompte minimum pour cette commande",
+    "refundableUntilSent": "Remboursable jusqu'à l'envoi en livraison ou jusqu'à ce que la commande soit prête pour le retrait",
+    "appliedToTotal": "Appliqué à votre commande — pas de frais supplémentaires",
+    "frenchNote": "FR: Remboursable avant envoi en livraison ou avant pret au retrait · déduit du total",
+    "dueNow": "À payer maintenant (acompte)",
+    "dueLater": "À payer plus tard",
+    "payDepositCta": "Payer l'acompte · {{amount}} {{currency}}",
+    "forfeit": {
+      "outForDeliveryTitle": "Annuler pendant la livraison?",
+      "outForDeliveryMessage": "Votre commande est déjà en route. L'annuler ou la refuser maintenant signifie que vous perdez l'acompte de réservation.",
+      "outForDeliveryForfeitAmount": "Acompte perdu",
+      "readyForPickupTitle": "Annuler après préparation?",
+      "readyForPickupMessage": "Votre commande est prête au magasin. L'annuler ou ne pas venir maintenant signifie que vous perdez l'acompte de réservation.",
+      "readyForPickupForfeitAmount": "Acompte perdu",
+      "keepOrderCta": "Garder ma commande",
+      "pickUpCta": "Je vais la récupérer",
+      "cancelAndForfeitCta": "Annuler et perdre {{amount}} {{currency}}",
+      "forfeitNote": "FR: Annuler maintenant = acompte non remboursé ({{amount}} {{currency}})",
+      "youKeepDepositIf": "Vous ne conserverez l'acompte que si nous annulons, le magasin annule ou la livraison échoue."
     }
   },
   "addresses": {

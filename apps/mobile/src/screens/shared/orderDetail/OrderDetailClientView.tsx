@@ -12,6 +12,7 @@ import {
 } from 'react-native-paper';
 import { AgentLocationMapModal } from '../../../components/client/AgentLocationMapModal';
 import { CancellationConfirmSheet } from '../../../components/client/CancellationConfirmSheet';
+import { ForfeitDepositCancelDialog } from '../../../components/dialogs/ForfeitDepositCancelDialog';
 import { ClientPickupPaymentSheet } from '../../../components/client/ClientPickupPaymentSheet';
 import { NoAgentOptionsSheet } from '../../../components/client/NoAgentOptionsSheet';
 import { SendDeliveryPinButton } from '../../../components/client/SendDeliveryPinButton';
@@ -224,6 +225,8 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
 
   const [mapOpen, setMapOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [forfeitCancelOpen, setForfeitCancelOpen] = useState(false);
+  const [cancellingForfeit, setCancellingForfeit] = useState(false);
   const [noAgentOpen, setNoAgentOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [rateMode, setRateMode] = useState<RateOrderMode | null>(null);
@@ -338,6 +341,14 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       : ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
   const showCancel = clientCanCancelOrder(order);
   const showNoAgentOptions = clientShowNoAgentOptions(order);
+  
+  // Determine if cancel should show forfeit warning (Out for delivery or Ready for pickup)
+  const isForfeitRiskState = 
+    order.current_status === 'out_for_delivery' || 
+    order.current_status === 'ready_for_pickup';
+  const depositAmount = (order as any).deposit_amount ?? null;
+  const showForfeitDialog = showCancel && isForfeitRiskState && depositAmount != null && depositAmount > 0;
+  
   const scrollPad = {
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
@@ -768,7 +779,11 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             textColor={colors.error.main}
             icon="close-circle-outline"
             onPress={() => {
-              setCancelOpen(true);
+              if (showForfeitDialog) {
+                setForfeitCancelOpen(true);
+              } else {
+                setCancelOpen(true);
+              }
               trackCancellationEvent('cancellation_dialog_opened', {
                 orderId: order.id,
                 orderStatus: status,
@@ -800,6 +815,48 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           void refetch();
         }}
       />
+      
+      <ForfeitDepositCancelDialog
+        visible={forfeitCancelOpen}
+        mode={order.current_status === 'ready_for_pickup' ? 'ready_for_pickup' : 'out_for_delivery'}
+        depositAmount={depositAmount ?? 0}
+        currency={order.currency ?? 'XAF'}
+        onKeep={() => {
+          setForfeitCancelOpen(false);
+          trackCancellationEvent('forfeit_cancel_abandoned', {
+            orderId: order.id,
+            orderStatus: order.current_status,
+          });
+        }}
+        onCancelAndForfeit={async () => {
+          setCancellingForfeit(true);
+          trackCancellationEvent('forfeit_cancel_confirmed', {
+            orderId: order.id,
+            orderStatus: order.current_status,
+          });
+          try {
+            const res = await agentApi.orders.cancel({
+              orderId: order.id,
+              cancellationReasonId: undefined,
+              notes: 'Cancelled with deposit forfeit',
+            });
+            if (res.success) {
+              setForfeitCancelOpen(false);
+              setSnack(t('orderActions.cancelSuccess', 'Order cancelled successfully.'));
+              void refetch();
+            } else {
+              setSnack(res.message ?? t('orderActions.cancelFailed', 'Could not cancel order.'));
+            }
+          } catch (e: any) {
+            setSnack(e?.message ?? t('orderActions.cancelFailed', 'Could not cancel order.'));
+          } finally {
+            setCancellingForfeit(false);
+          }
+        }}
+        onDismiss={() => setForfeitCancelOpen(false)}
+        loading={cancellingForfeit}
+      />
+      
       <NoAgentOptionsSheet
         visible={noAgentOpen}
         order={order}
