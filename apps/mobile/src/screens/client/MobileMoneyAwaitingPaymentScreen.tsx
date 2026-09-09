@@ -31,19 +31,37 @@ export default function MobileMoneyAwaitingPaymentScreen() {
         'MobileMoneyAwaitingPayment'
       >
     >();
-  const { orderIds, phoneE164, source, orderNumbers, fulfillment } = route.params;
+  const { 
+    orderIds, 
+    phoneE164, 
+    source, 
+    orderNumbers, 
+    fulfillment,
+    isDepositOrder: isDepositOrderParam,
+    depositAmount: depositAmountParam,
+    amountDue: amountDueParam,
+    currency: currencyParam,
+  } = route.params;
   const { state, error, stop, restart } = useMobileMoneyPaymentPoll(orderIds);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [currentPhone, setCurrentPhone] = useState(phoneE164);
   const [editPhoneDialogVisible, setEditPhoneDialogVisible] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
-  const [orderData, setOrderData] = useState<{ deposit_amount?: number; amount_due?: number; currency?: string } | null>(null);
+  const [orderData, setOrderData] = useState<{ deposit_amount?: number; amount_due?: number; currency?: string } | null>(
+    isDepositOrderParam 
+      ? { deposit_amount: depositAmountParam, amount_due: amountDueParam, currency: currencyParam || 'XAF' }
+      : null
+  );
   const masked = useMemo(() => maskPhoneE164(currentPhone), [currentPhone]);
 
-  // Fetch order to determine if this is a deposit order
+  // Fetch order to enrich copy (but route params are authoritative for isDepositOrder)
   useEffect(() => {
     if (!orderIds.length) return;
+    // If route params already provided deposit info, only fetch if missing
+    if (isDepositOrderParam && depositAmountParam) {
+      return; // Already have authoritative deposit info from route params
+    }
     let cancelled = false;
     void (async () => {
       try {
@@ -62,9 +80,10 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     return () => {
       cancelled = true;
     };
-  }, [orderIds]);
+  }, [orderIds, isDepositOrderParam, depositAmountParam]);
 
-  const isDepositOrder = Boolean(orderData?.deposit_amount && orderData.deposit_amount > 0);
+  // Route param is authoritative (prevents race). Fallback to fetched data only if route param not provided.
+  const isDepositOrder = isDepositOrderParam ?? Boolean(orderData?.deposit_amount && orderData.deposit_amount > 0);
 
   const leaveToOrder = useCallback(() => {
     stop();
@@ -86,16 +105,18 @@ export default function MobileMoneyAwaitingPaymentScreen() {
   }, [navigation, t, isDepositOrder]);
 
   // Deposit fail/timeout: navigate back to checkout (order cancelled server-side).
-  // No retry endpoint exists for deposits.
+  // No retry endpoint exists for deposits. Must land on Place Order or Cart for retry.
   const onBackToCheckout = useCallback(() => {
     stop();
-    // Navigate back to previous screen (PlaceOrder or Cart)
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      // Fallback: navigate to main tabs
-      navigation.navigate('ClientMainTabs', { screen: 'ClientHome' });
-    }
+    // Explicitly navigate to Cart (source is always 'checkout' for deposits from cart/place-order)
+    // User must be able to edit phone and create a NEW order
+    navigation.reset({
+      index: 1,
+      routes: [
+        { name: 'ClientMainTabs' },
+        { name: 'Cart' },
+      ],
+    });
   }, [navigation, stop]);
 
   // Non-deposit retry (pay_now full-pay or pickup)

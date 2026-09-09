@@ -89,6 +89,14 @@ export type MobileMoneyAwaitingPaymentParams = {
   orderNumbers?: string[];
   /** Passed through to OrderPlacedSuccess after checkout MoMo completes. */
   fulfillment?: 'delivery' | 'pickup' | 'shipping';
+  /** Authoritative deposit flag (prevents race before order fetch). */
+  isDepositOrder?: boolean;
+  /** Deposit amount for UI copy (XAF). */
+  depositAmount?: number;
+  /** Amount due after deposit (XAF). */
+  amountDue?: number;
+  /** Currency (defaults to XAF if omitted). */
+  currency?: string;
 };
 
 /** Guest shell: root stack (tabs + item detail). */
