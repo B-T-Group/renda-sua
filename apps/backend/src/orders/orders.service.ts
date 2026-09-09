@@ -8488,6 +8488,14 @@ export class OrdersService {
           payment_source
           payment_timing
           payment_status
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           business {
             user_id
           }
