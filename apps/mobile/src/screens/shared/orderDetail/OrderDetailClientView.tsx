@@ -455,6 +455,9 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
         phoneE164,
         source: 'pickup',
         orderNumbers: order?.order_number ? [order.order_number] : undefined,
+        isDepositOrder: false,
+        amountDue: remainingAfterDeposit(order),
+        currency: order?.currency || 'XAF',
       });
     } catch (e: unknown) {
       setSnack(

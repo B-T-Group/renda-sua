@@ -152,4 +152,51 @@ describe('resolveMomoPaymentStatuses', () => {
       ).toBe('paid');
     });
   });
+
+  describe('remainder after deposit (expectDeposit=false)', () => {
+    it('waits on payment_status when deposit is already paid', () => {
+      expect(
+        resolveMomoPaymentStatuses(
+          [
+            {
+              deposit_amount: 150,
+              deposit_status: 'paid',
+              payment_status: 'pending',
+            },
+          ],
+          { expectDeposit: false }
+        )
+      ).toBe('waiting');
+    });
+
+    it('returns paid only when payment_status is paid', () => {
+      expect(
+        resolveMomoPaymentStatuses(
+          [
+            {
+              deposit_amount: 150,
+              deposit_status: 'paid',
+              payment_status: 'paid',
+            },
+          ],
+          { expectDeposit: false }
+        )
+      ).toBe('paid');
+    });
+
+    it('returns failed on payment_status failed even if deposit paid', () => {
+      expect(
+        resolveMomoPaymentStatuses(
+          [
+            {
+              deposit_amount: 150,
+              deposit_status: 'paid',
+              payment_status: 'failed',
+            },
+          ],
+          { expectDeposit: false }
+        )
+      ).toBe('failed');
+    });
+  });
 });

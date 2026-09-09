@@ -31,7 +31,9 @@ export default function BusinessPickupPaymentAwaitingScreen() {
       >
     >();
   const { orderId, phoneE164, orderNumber, amount } = route.params;
-  const { state, error, stop, restart } = useMobileMoneyPaymentPoll([orderId]);
+  const { state, error, stop, restart } = useMobileMoneyPaymentPoll([orderId], {
+    expectDeposit: false,
+  });
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const masked = useMemo(() => maskPhoneE164(phoneE164), [phoneE164]);
