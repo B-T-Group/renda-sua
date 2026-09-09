@@ -8,16 +8,16 @@
  * Screens (PlaceOrderScreen, CartCheckoutScreen) should call this hook instead
  * of embedding createOrder / PaymentSheet / MM handling themselves.
  *
- * MoMo Deposit Flow (Backend Contract #275 — HOLD, do NOT wire collect yet):
+ * MoMo Deposit Flow (Backend Contract #275 — DRAFT-WIRED, pending Payments/CR approval):
  * - Place-order with pay_at_delivery/pickup creates order in pending_payment
- * - Response includes: deposit_amount, amount_due (= total − deposit),
- *   current_status: pending_payment, payment_transaction (MoMo pending),
- *   database_transaction.id
- * - TODO: Wire MoMo collect flow when Backend clears HOLD
- * - After SUCCESS callback: deposit_status=paid, status → pending; remainder unpaid
- * - Market flag: application_configurations.config_key=momo_pay_now_delivery_enabled
- *   (country_code scoped, default false)
+ * - Backend initiates MoMo deposit collect automatically (same create-order path)
+ * - Response includes: deposit_amount?, amount_due?, deposit_status?, 
+ *   payment_transaction, database_transaction? (all optional/defensive)
+ * - Client navigates to MobileMoneyAwaitingPayment for polling (existing flow)
+ * - After SUCCESS callback: deposit_status=paid, current_status → pending; remainder unpaid
+ * - Market flag: momo_pay_now_delivery_enabled (default false) gates full pay-now UI
  * - Calc: max(151, round(grand_total * (total<5000?0.10:0.05)))
+ * - Contract subject to Payments review; expect possible field changes
  */
 import { useCallback, useRef, useState } from 'react';
 import type { ResolvedCheckoutConfig } from '../types/checkout';
@@ -174,12 +174,18 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
         };
       }
       
-      // TODO (MoMo Deposit — Backend #275 HOLD):
-      // When Backend clears HOLD, wire MoMo deposit collect here:
-      // 1. Check if order.deposit_amount && order.database_transaction?.id
-      // 2. Initiate MoMo collect with database_transaction.id
-      // 3. Poll/listen for deposit_status transition: pending_payment → paid
-      // 4. Navigate based on deposit collect outcome (SUCCESS → order pending; FAILED → retry)
+      // MoMo Deposit Collect (Backend #275 — DRAFT-WIRED, pending Payments approval):
+      // For deposit orders (pay_at_delivery/pickup with deposit_amount):
+      // - Order created in pending_payment status
+      // - Backend initiates MoMo collect during order creation (same create-order path, no extra endpoints)
+      // - Response includes optional deposit_amount, amount_due, deposit_status, database_transaction
+      // - Client navigates to MobileMoneyAwaitingPayment which polls payment_status
+      // - On MoMo SUCCESS callback: deposit_status → paid, current_status → pending
+      // - On FAILED: user retries via MobileMoneyAwaitingPayment retry flow
+      // 
+      // Deposit orders handled transparently by existing MoMo pending flow.
+      // All deposit fields typed as optional (defensive) pending contract finalization.
+      // No invented endpoints; collect initiated server-side during create-order.
       
       // Mobile Money is push-based; order is created and payment is initiated server-side.
       // Success = payment pending confirmation from provider.
