@@ -46,6 +46,15 @@ export function hasLivePendingDepositTx(order: Order): boolean {
 
 /** Remainder after deposit: prefer server `amount_due`, else total minus deposit. */
 export function remainingAfterDeposit(order: Order): number {
-  if (order.amount_due != null) return order.amount_due;
-  return (order.total_amount ?? 0) - (order.deposit_amount ?? 0);
+  return resolveAmountDueAfterDeposit(order) ?? 0;
+}
+
+/**
+ * Same as remainingAfterDeposit, but null when neither amount_due nor total_amount
+ * is available (agent payloads strip total_amount until amount_due is enriched).
+ */
+export function resolveAmountDueAfterDeposit(order: Order): number | null {
+  if (order.amount_due != null) return Math.max(0, Number(order.amount_due));
+  if (order.total_amount == null) return null;
+  return Math.max(0, Number(order.total_amount) - (order.deposit_amount ?? 0));
 }

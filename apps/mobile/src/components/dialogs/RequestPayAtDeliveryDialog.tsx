@@ -9,6 +9,7 @@ import type { Order } from '../../types/agent';
 import { getDeviceDefaultCountryCode } from '../../utils/deviceDefaultCountry';
 import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 import { e164ToCountryAndNational, nationalDigitsToE164 } from '../../utils/phoneLoginUsername';
+import { resolveAmountDueAfterDeposit } from '../../utils/depositResume';
 
 export interface RequestPayAtDeliveryDialogProps {
   visible: boolean;
@@ -60,6 +61,12 @@ export function RequestPayAtDeliveryDialog({
 
   const eligible = order ? orderNeedsPayAtDeliveryAgentActions(order) : false;
   const clientPhone = order?.client?.user?.phone_number?.trim() ?? '';
+  const depositPaid =
+    !!order && (order.deposit_amount ?? 0) > 0 && order.deposit_status === 'paid';
+  const remainder = order ? resolveAmountDueAfterDeposit(order) : null;
+  const showRemainder = depositPaid && remainder != null;
+  const currency = order?.currency || 'XAF';
+  const depositAmount = order?.deposit_amount ?? 0;
 
   const overrideE164 = nationalDigitsToE164(countryIso, nationalDigits);
 
@@ -91,12 +98,34 @@ export function RequestPayAtDeliveryDialog({
               })}
             </Text>
           ) : (
-            <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: 12 }}>
-              {t('agent.orders.payAtDelivery.requestHelp', {
-                defaultValue:
-                  'Send a mobile payment request to the client. Once they approve it, the order will complete automatically.',
-              })}
-            </Text>
+            <>
+              <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: 12 }}>
+                {showRemainder
+                  ? t('agent.orders.payAtDelivery.requestHelpRemainder', {
+                      defaultValue:
+                        'The client already paid a deposit of {{deposit}} {{currency}}. Request the remaining {{amount}} {{currency}}.',
+                      deposit: depositAmount,
+                      amount: remainder,
+                      currency,
+                    })
+                  : t('agent.orders.payAtDelivery.requestHelp', {
+                      defaultValue:
+                        'Send a mobile payment request to the client. Once they approve it, the order will complete automatically.',
+                    })}
+              </Text>
+              {showRemainder ? (
+                <Text
+                  variant="titleSmall"
+                  style={{ color: colors.text.primary, marginBottom: 12, fontWeight: '700' }}
+                >
+                  {t('agent.orders.payAtDelivery.amountToCollect', {
+                    defaultValue: 'Amount to collect: {{amount}} {{currency}}',
+                    amount: remainder,
+                    currency,
+                  })}
+                </Text>
+              ) : null}
+            </>
           )}
           {order ? (
             <Text variant="titleSmall" style={{ color: colors.text.primary, marginBottom: 12 }}>

@@ -362,9 +362,14 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       primaryLabelKey = 'deposit.payDepositCta';
       primaryLabelDefault = 'Pay deposit · {{amount}} {{currency}}';
     } else if (order.payment_timing === 'pay_at_pickup') {
-      // Pay at pickup flow
-      primaryLabelKey = 'orders.payAtPickup.cta';
-      primaryLabelDefault = 'Pay now';
+      // Pay at pickup: show remainder when deposit already paid
+      if ((order.deposit_amount ?? 0) > 0 && order.deposit_status === 'paid') {
+        primaryLabelKey = 'orders.payAtPickup.ctaAmount';
+        primaryLabelDefault = 'Pay now · {{amount}} {{currency}}';
+      } else {
+        primaryLabelKey = 'orders.payAtPickup.cta';
+        primaryLabelDefault = 'Pay now';
+      }
     } else {
       // Default pay label
       [primaryLabelKey, primaryLabelDefault] = ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
@@ -912,7 +917,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
                     amount: order.deposit_amount ?? 0,
                     currency: order.currency || 'XAF',
                   })
-                : t(primaryLabelKey, primaryLabelDefault)}
+                : stickyPrimaryId === 'pay' &&
+                    order.payment_timing === 'pay_at_pickup' &&
+                    (order.deposit_amount ?? 0) > 0 &&
+                    order.deposit_status === 'paid'
+                  ? t(primaryLabelKey, primaryLabelDefault, {
+                      amount: remainingAfterDeposit(order),
+                      currency: order.currency || 'XAF',
+                    })
+                  : t(primaryLabelKey, primaryLabelDefault)}
             </Button>
           ) : null}
           {showCancel ? (

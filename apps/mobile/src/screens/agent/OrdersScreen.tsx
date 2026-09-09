@@ -539,15 +539,15 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
       <RequestPayAtDeliveryDialog
         visible={!!requestPayOrder}
         order={requestPayOrder}
-        loading={payDialogLoading}
+        submitting={payDialogLoading}
         onDismiss={() => setRequestPayOrder(null)}
-        onConfirm={handlePayAtDeliveryRequest}
+        onSendRequest={handlePayAtDeliveryRequest}
       />
 
       <MarkPaidCashExceptionDialog
         visible={!!cashOrder}
         order={cashOrder}
-        loading={payDialogLoading}
+        submitting={payDialogLoading}
         onDismiss={() => setCashOrder(null)}
         onConfirm={handleCashException}
       />

@@ -43,6 +43,7 @@ import { useStore } from '../../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../../utils/defaultClaimTopupPhone';
 import { mergeOrderForDeliverySuccess } from '../../../utils/mergeOrderForDeliverySuccess';
 import { orderNeedsPayAtDeliveryAgentActions } from '../../../utils/orderPaymentAgentActions';
+import { resolveAmountDueAfterDeposit } from '../../../utils/depositResume';
 import type { OrderDetailScreenProps } from './types';
 import { APP_FEATURES } from '../../../constants/appFeatures';
 import { DeliveryWorkflowIndicator } from '../../../components/agent/DeliveryWorkflowIndicator';
@@ -670,6 +671,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
   const status = order.current_status;
   const showClientPii = showClientPiiToAgent(order);
   const needsPayAtDeliveryActions = orderNeedsPayAtDeliveryAgentActions(order);
+  const agentAmountDue = resolveAmountDueAfterDeposit(order);
   const statusLabel = t(`common.orderStatus.${status}`, status);
   const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), 'agent');
   const showStickyPrimary =
@@ -845,6 +847,28 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
               </Text>
             </View>
           )}
+          {(order.deposit_amount ?? 0) > 0 && order.deposit_status === 'paid' ? (
+            <>
+              <View style={styles.financialRow}>
+                <Text style={[styles.financialLabel, { color: colors.text.secondary }, typography.body2]}>
+                  {t('agent.orders.detail.depositPaid', 'Deposit paid')}
+                </Text>
+                <Text style={[styles.financialValue, { color: colors.text.primary }, typography.body2]}>
+                  {order.deposit_amount} {order.currency}
+                </Text>
+              </View>
+              {agentAmountDue != null ? (
+                <View style={[styles.financialRow, styles.financialRowTotal]}>
+                  <Text style={[styles.financialLabel, { color: colors.text.primary }, typography.subtitle2]}>
+                    {t('agent.orders.detail.amountDue', 'Amount due')}
+                  </Text>
+                  <Text style={[styles.financialValue, { color: colors.primary.main }, typography.subtitle2]}>
+                    {agentAmountDue} {order.currency}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          ) : null}
         </ExpandableSection>
 
         {/* Secondary actions; primary lifecycle CTA stays in sticky footer above the tab bar */}
@@ -1134,6 +1158,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
 
       <MarkPaidCashExceptionDialog
         visible={showCashExceptionDialog}
+        order={order ?? null}
         onDismiss={() => setShowCashExceptionDialog(false)}
         onConfirm={handleCashExceptionConfirm}
         submitting={payAtDeliveryDialogLoading}

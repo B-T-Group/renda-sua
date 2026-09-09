@@ -19,6 +19,7 @@ import {
   nationalDigitsToE164,
 } from '../../utils/phoneLoginUsername';
 import { pickMobileMoneyDefaultCountry } from '../../utils/placeOrderPhoneValidation';
+import { remainingAfterDeposit } from '../../utils/depositResume';
 
 function isPickupMomoPhone(phone: string): boolean {
   const parsed = e164ToCountryAndNational(phone);
@@ -78,6 +79,10 @@ export function ClientPickupPaymentSheet({
 
   const overrideE164 = nationalDigitsToE164(countryIso, nationalDigits);
   const canSubmit = useDifferent ? overrideE164 !== null : profilePhoneOk;
+  const depositPaid =
+    (order.deposit_amount ?? 0) > 0 && order.deposit_status === 'paid';
+  const remainder = remainingAfterDeposit(order);
+  const currency = order.currency || 'XAF';
 
   const handleSubmit = async () => {
     if (useDifferent) {
@@ -117,10 +122,16 @@ export function ClientPickupPaymentSheet({
             variant="bodyMedium"
             style={{ color: colors.text.secondary, marginTop: spacing.sm }}
           >
-            {t(
-              'orders.payAtPickup.hint',
-              'We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.'
-            )}
+            {depositPaid
+              ? t(
+                  'orders.payAtPickup.hintRemainder',
+                  'You already paid a deposit. We will request the remaining {{amount}} {{currency}} on this number.',
+                  { amount: remainder, currency }
+                )
+              : t(
+                  'orders.payAtPickup.hint',
+                  'We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.'
+                )}
           </Text>
           {clientPhone && !useDifferent ? (
             <Text variant="bodySmall" style={{ marginTop: spacing.sm }}>
@@ -158,7 +169,13 @@ export function ClientPickupPaymentSheet({
               disabled={!canSubmit || loading}
               onPress={() => void handleSubmit()}
             >
-              {t('orders.payAtPickup.cta', 'Pay now')}
+              {depositPaid
+                ? t(
+                    'orders.payAtPickup.ctaAmount',
+                    'Pay now · {{amount}} {{currency}}',
+                    { amount: remainder, currency }
+                  )
+                : t('orders.payAtPickup.cta', 'Pay now')}
             </Button>
           </View>
         </Pressable>
