@@ -191,6 +191,7 @@ describe('OrdersService', () => {
 
     const mockAccountsService = {
       registerTransaction: jest.fn(),
+      registerDepositIfNotExists: jest.fn(),
     };
 
     const mockOrderStatusService = {
@@ -2468,6 +2469,61 @@ describe('OrdersService', () => {
         { status: HttpStatus.BAD_REQUEST }
       );
       expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('finalizeDepositAfterCallback', () => {
+    const depositTxnId = '99a3bd0d-262c-4d4c-80da-5071b4bfbfa2';
+    const depositOrder = {
+      id: 'order-uuid-123',
+      order_number: '49520979',
+      current_status: 'pending_payment',
+      deposit_status: 'pending',
+      deposit_amount: 2000,
+      total_amount: 10000,
+      currency: 'XAF',
+      client: { user_id: 'client-user-1' },
+      deposit_mobile_payment_transaction_id: depositTxnId,
+    };
+
+    beforeEach(() => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue(depositOrder);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'acct-client',
+      } as any);
+      accountsService.registerDepositIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+    });
+
+    it('credits the client wallet using the MoMo transaction uuid', async () => {
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
+        accountId: 'acct-client',
+        amount: 2000,
+        referenceId: depositTxnId,
+        memo: 'Deposit captured for order 49520979',
+      });
+    });
+
+    it('does not use a non-uuid deposit-orderNumber ledger reference', async () => {
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          referenceId: 'deposit-49520979',
+        })
+      );
     });
   });
 });

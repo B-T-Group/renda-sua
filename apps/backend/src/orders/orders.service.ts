@@ -4172,18 +4172,9 @@ export class OrdersService {
           );
         }
         if (existingTxn.status === 'success' || (existingTxn.status as any) === 'authorized') {
-          this.logger.warn(
-            `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} succeeded/authorized but order deposit_status still pending (callback lag or finalize failure)`
-          );
-          throw new HttpException(
-            {
-              success: false,
-              message: 'Prior deposit payment succeeded but is still processing. Please wait or poll the order status.',
-              code: 'DEPOSIT_PAYMENT_PROCESSING',
-              existing_transaction_id: existingTxnId,
-              deposit_status: depositStatus,
-            },
-            HttpStatus.CONFLICT
+          return this.completePaidDepositFromSucceededTxn(
+            order.order_number,
+            existingTxnId
           );
         }
       }
@@ -7524,7 +7515,10 @@ export class OrdersService {
         const credit = await this.accountsService.registerDepositIfNotExists({
           accountId: clientAccount.id,
           amount: depositAmount,
-          referenceId: `deposit-${order.order_number}`,
+          referenceId: this.depositLedgerReferenceId(
+            transactionDbId,
+            depositTxnId
+          ),
           memo: `Deposit captured for order ${order.order_number}`,
         });
         
@@ -7698,6 +7692,38 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  private async completePaidDepositFromSucceededTxn(
+    orderNumber: string,
+    transactionDbId: string
+  ): Promise<{
+    success: true;
+    message: string;
+    current_status: string;
+    deposit_status: 'paid';
+  }> {
+    this.logger.warn(
+      `Replaying deposit finalize for order ${orderNumber} — prior txn ${transactionDbId} succeeded but deposit still pending`
+    );
+    await this.finalizeDepositAfterCallback(orderNumber, transactionDbId);
+    return {
+      success: true,
+      message: 'Deposit payment completed',
+      current_status: 'pending',
+      deposit_status: 'paid',
+    };
+  }
+
+  private depositLedgerReferenceId(
+    transactionDbId: string,
+    orderDepositTxnId?: string
+  ): string {
+    const referenceId = transactionDbId || orderDepositTxnId;
+    if (!referenceId) {
+      throw new Error('Missing deposit mobile payment transaction id');
+    }
+    return referenceId;
   }
 
   private isTerminalOrderForPaymentFinalize(order: {

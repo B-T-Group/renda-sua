@@ -1381,7 +1381,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry deposit payment (client only)',
     description:
-      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. Returns 409 if a prior deposit payment request is still pending/processing at the provider (client should poll that transaction instead).',
+      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. If the prior MoMo transaction already succeeded, replays deposit finalize. Returns 409 if a prior deposit payment request is still pending at the provider (client should poll that transaction instead).',
   })
   @ApiParam({ name: 'id', description: 'Order ID', type: String })
   @ApiBody({
@@ -1390,7 +1390,7 @@ export class OrdersController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Deposit payment retry initiated or already paid',
+    description: 'Deposit payment retry initiated, already paid, or finalize replayed',
     schema: {
       type: 'object',
       properties: {
@@ -1415,7 +1415,7 @@ export class OrdersController {
   @ApiResponse({
     status: 409,
     description:
-      'Prior deposit payment still pending/processing at provider (client should poll existing transaction). Code: DEPOSIT_PAYMENT_PENDING (txn pending) or DEPOSIT_PAYMENT_PROCESSING (txn succeeded but callback/finalize lag)',
+      'Prior deposit payment still pending at provider (client should poll existing transaction). Code: DEPOSIT_PAYMENT_PENDING',
     schema: {
       type: 'object',
       properties: {
@@ -1426,7 +1426,7 @@ export class OrdersController {
         },
         code: {
           type: 'string',
-          enum: ['DEPOSIT_PAYMENT_PENDING', 'DEPOSIT_PAYMENT_PROCESSING'],
+          enum: ['DEPOSIT_PAYMENT_PENDING'],
         },
         existing_transaction_id: { type: 'string', format: 'uuid' },
         deposit_status: { type: 'string', example: 'pending' },
