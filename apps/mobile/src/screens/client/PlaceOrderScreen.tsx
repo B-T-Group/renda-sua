@@ -455,6 +455,19 @@ export default function PlaceOrderScreen() {
     }
   }, [fulfillment, payTiming]);
 
+  // Force payTiming when momo_pay_now_delivery_enabled is false
+  useEffect(() => {
+    if (isDiaspora || resolvedIsStripeRail) return;
+    const momoPayNowEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+    if (!momoPayNowEnabled) {
+      if (fulfillment === 'delivery' && payTiming !== 'pay_at_delivery') {
+        setPayTiming('pay_at_delivery');
+      } else if (fulfillment === 'pickup' && payTiming !== 'pay_at_pickup') {
+        setPayTiming('pay_at_pickup');
+      }
+    }
+  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.momo_pay_now_delivery_enabled, fulfillment, payTiming]);
+
   const selectedAddress = useMemo(
     () => addressesForDelivery.find((a) => a.id === deliveryAddressId),
     [addressesForDelivery, deliveryAddressId]
