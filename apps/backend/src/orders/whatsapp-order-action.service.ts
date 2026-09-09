@@ -110,7 +110,6 @@ const RECENT_ORDERS_BIZ = `query WaRecentOrdersBiz($bid: uuid!, $since: timestam
   orders(
     where: {
       business_id: { _eq: $bid }
-      current_status: { _in: [pending, confirmed, preparing] }
       created_at: { _gte: $since }
     }
     order_by: { created_at: desc }
@@ -123,7 +122,6 @@ const RECENT_ORDERS_LOCS = `query WaRecentOrdersLocs($bid: uuid!, $lids: [uuid!]
     where: {
       business_id: { _eq: $bid }
       business_location_id: { _in: $lids }
-      current_status: { _in: [pending, confirmed, preparing] }
       created_at: { _gte: $since }
     }
     order_by: { created_at: desc }
@@ -281,9 +279,15 @@ export class WhatsAppOrderActionService {
     },
     actor: ResolvedWaActor,
     latest: { orderId: string; notificationType: string }
-  ): Promise<{ handled: boolean; message: string } | null> {
+  ): Promise<{ handled: boolean; message: string }> {
     const order = await this.loadOrderById(latest.orderId);
-    if (!order || !this.actorOwnsOrder(actor, order)) return null;
+    const lang = this.actionLang(params.preferredLanguage, actor);
+    if (!order || !this.actorOwnsOrder(actor, order)) {
+      return { handled: true, message: this.msgNeedAppReady(lang) };
+    }
+    if (!READY_ACTIONABLE_STATUSES.has(order.current_status)) {
+      return this.ackStaleReadyReply(order, lang);
+    }
     const action =
       params.action === 'DECLINE' ? 'NOT_READY' : 'MARK_AS_READY';
     return {
@@ -292,9 +296,22 @@ export class WhatsAppOrderActionService {
         action,
         order,
         actor,
-        this.actionLang(params.preferredLanguage, actor),
+        lang,
         latest.notificationType
       ),
+    };
+  }
+
+  private ackStaleReadyReply(
+    order: PendingWaOrder,
+    lang?: string | null
+  ): { handled: boolean; message: string } {
+    if (order.current_status === 'ready_for_pickup') {
+      return { handled: true, message: this.msgAlreadyReady(order.order_number, lang) };
+    }
+    return {
+      handled: true,
+      message: this.msgReadyPromptStale(order.order_number, lang),
     };
   }
 
@@ -1087,5 +1104,11 @@ export class WhatsAppOrderActionService {
     return lang === 'fr'
       ? `OK — le client a été informé que la commande ${n} n’est pas encore prête.`
       : `OK — the customer was told order ${n} is not ready yet.`;
+  }
+
+  private msgReadyPromptStale(n: string, lang?: string | null): string {
+    return lang === 'fr'
+      ? `La commande ${n} n’attend plus de réponse « prête ».`
+      : `Order ${n} no longer needs a ready reply.`;
   }
 }
