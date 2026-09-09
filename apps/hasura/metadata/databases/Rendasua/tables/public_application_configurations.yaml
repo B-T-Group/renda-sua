@@ -1,3 +1,67 @@
 table:
   name: application_configurations
   schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - config_key
+        - config_name
+        - description
+        - data_type
+        - string_value
+        - number_value
+        - boolean_value
+        - json_value
+        - array_value
+        - date_value
+        - country_code
+        - status
+        - version
+        - tags
+      filter:
+        status:
+          _eq: active
+  - role: business
+    permission:
+      columns:
+        - id
+        - config_key
+        - config_name
+        - description
+        - data_type
+        - string_value
+        - number_value
+        - boolean_value
+        - json_value
+        - array_value
+        - date_value
+        - country_code
+        - status
+        - version
+        - tags
+      filter:
+        status:
+          _eq: active
+  - role: agent
+    permission:
+      columns:
+        - id
+        - config_key
+        - config_name
+        - description
+        - data_type
+        - string_value
+        - number_value
+        - boolean_value
+        - json_value
+        - array_value
+        - date_value
+        - country_code
+        - status
+        - version
+        - tags
+      filter:
+        status:
+          _eq: active

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 
 /**
  * Deposit forfeit reason codes (immutable audit trail)
@@ -84,9 +85,13 @@ export class DepositRefundService {
         transactionType: 'GIVE_CHANGE' as const,
       };
 
+      // Generate references: long for DB, short for MyPVIT (≤15 chars)
+      const refundLongReference = `${order.order_number}-REFUND-${Date.now()}`;
+      const refundShortReference = buildShortReferenceForMyPVit(refundLongReference);
+
       const withdrawalResult = await this.mobilePaymentsService.initiatePayment(
         withdrawalRequest,
-        `DEPREF-${order.order_number}-${Date.now()}`
+        refundShortReference
       );
 
       if (!withdrawalResult.success) {

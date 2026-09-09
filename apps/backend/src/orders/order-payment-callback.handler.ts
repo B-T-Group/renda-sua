@@ -31,14 +31,15 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
   async onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void> {
     if (transaction.payment_entity === 'order_deposit') {
       const orderNumber = transaction.entity_id;
-      const transactionId = transaction.transaction_id ?? transaction.reference;
       if (!orderNumber) {
         this.logger.error('Deposit callback missing order number (entity_id)');
         return;
       }
+      // Pass DB uuid (transaction.id) for FK to mobile_payment_transactions.id
+      // Place-order already set deposit_mobile_payment_transaction_id correctly
       await this.ordersService.finalizeDepositAfterCallback(
         orderNumber,
-        transactionId
+        transaction.id
       );
       return;
     }
@@ -67,12 +68,12 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
       this.logger.log(
         `Deposit payment failed for order ${transaction.entity_id}: ${message}`
       );
-      // Deposit failure = order cannot proceed - cancel it
+      // Deposit failure = order cannot proceed - mark deposit failed and cancel order
       const orderNumber = transaction.entity_id || transaction.reference;
       const order = await this.ordersService.getOrderForProcessingByNumber(
         orderNumber
       );
-      await this.ordersService.onOrderPaymentFailed(order.id, message);
+      await this.ordersService.onDepositPaymentFailed(order.id, message);
       return;
     }
     if (transaction.payment_entity === 'order_cash_reconciliation') {

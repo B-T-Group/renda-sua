@@ -121,6 +121,7 @@ import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { DepositRefundService } from './deposit-refund.service';
 import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 
 export interface OrderStatusChangeRequest {
@@ -473,6 +474,7 @@ export class OrdersService {
     private readonly eventEmitter: EventEmitter2,
     private readonly foodOrdersService: FoodOrdersService,
     private readonly depositCalculationService: DepositCalculationService,
+    private readonly depositRefundService: DepositRefundService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -7008,7 +7010,7 @@ export class OrdersService {
    * 
    * On deposit SUCCESS:
    * - Mark deposit_status = 'paid' (enum value)
-   * - Link deposit_mobile_payment_transaction_id (uuid FK)
+   * - deposit_mobile_payment_transaction_id FK already set at place-order
    * - Transition pending_payment → pending (await merchant acceptance)
    * - Credit client wallet (consistent with existing MoMo order path)
    * - Start acceptance SLA
@@ -7020,7 +7022,7 @@ export class OrdersService {
    */
   async finalizeDepositAfterCallback(
     orderNumber: string,
-    transactionId: string
+    transactionDbId: string
   ): Promise<void> {
     try {
       const order = await this.requireOrderDetailsByNumber(orderNumber);
@@ -7044,17 +7046,16 @@ export class OrdersService {
       const amountDue = Math.max(0, totalAmount - depositAmount);
 
       // Mark deposit as paid and transition to pending (NOT fully paid - remainder still due)
+      // Note: deposit_mobile_payment_transaction_id FK already set at place-order
       const finalizeMutation = `
         mutation FinalizeDeposit(
           $orderId: uuid!,
-          $transactionId: uuid!,
           $now: timestamptz!
         ) {
           update_orders_by_pk(
             pk_columns: { id: $orderId }
             _set: {
               deposit_status: "paid"
-              deposit_mobile_payment_transaction_id: $transactionId
               current_status: pending
               payment_status: "pending"
               updated_at: $now
@@ -7071,7 +7072,6 @@ export class OrdersService {
 
       await this.hasuraSystemService.executeMutation(finalizeMutation, {
         orderId: order.id,
-        transactionId,
         now: new Date().toISOString(),
       });
 
@@ -7913,6 +7913,15 @@ export class OrdersService {
       }
     }
 
+    // MUST-FIX 3: Handle deposit refund/forfeit on cancellation
+    await this.handleDepositOnCancellation(
+      order,
+      orderId,
+      previousStatus,
+      cancelledBy,
+      notes
+    );
+
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
@@ -7924,6 +7933,108 @@ export class OrdersService {
       this.logger.error(
         `Failed to send order.cancelled message to SQS: ${error?.message}`
       );
+    }
+  }
+
+  /**
+   * Handle deposit refund/forfeit when order is cancelled.
+   * 
+   * Product rules:
+   * - Business cancel / platform / delivery failure → refund (even after lock)
+   * - Customer cancel / refuse / no-show:
+   *   - Before lock point → refund
+   *   - After lock point → forfeit with reason code
+   * - Lock point: delivery = out_for_delivery, pickup = ready_for_pickup
+   */
+  private async handleDepositOnCancellation(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    cancelledBy: 'client' | 'business' | 'system',
+    notes?: string
+  ): Promise<void> {
+    const depositStatus = (order as any).deposit_status;
+    const depositAmount = (order as any).deposit_amount;
+    
+    // Only process if deposit was captured
+    if (depositStatus !== 'paid' || !depositAmount || depositAmount <= 0) {
+      return;
+    }
+
+    const fulfillmentMethod = (order as any).fulfillment_method as
+      | 'delivery'
+      | 'pickup'
+      | 'shipping';
+
+    // Determine if after lock point
+    const afterLock = this.depositCalculationService.isAfterRefundLockPoint(
+      fulfillmentMethod,
+      previousStatus
+    );
+
+    // Business/system cancel → always refund (product rule: business cancel refunds even after lock)
+    if (cancelledBy === 'business' || cancelledBy === 'system') {
+      try {
+        const refundResult = await this.depositRefundService.refundDeposit(orderId);
+        if (!refundResult.success) {
+          this.logger.error(
+            `Deposit refund failed for ${cancelledBy} cancel of order ${orderId}: ${refundResult.message}`
+          );
+        } else {
+          this.logger.log(
+            `Deposit refund initiated for ${cancelledBy} cancel of order ${orderId}`
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to process deposit refund for ${cancelledBy} cancel: ${error.message}`
+        );
+      }
+      return;
+    }
+
+    // Customer cancel
+    if (cancelledBy === 'client') {
+      if (!afterLock) {
+        // Before lock → refund
+        try {
+          const refundResult = await this.depositRefundService.refundDeposit(orderId);
+          if (!refundResult.success) {
+            this.logger.error(
+              `Deposit refund failed for client cancel (before lock) of order ${orderId}: ${refundResult.message}`
+            );
+          } else {
+            this.logger.log(
+              `Deposit refund initiated for client cancel (before lock) of order ${orderId}`
+            );
+          }
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to process deposit refund for client cancel (before lock): ${error.message}`
+          );
+        }
+      } else {
+        // After lock → forfeit
+        try {
+          const forfeitResult = await this.depositRefundService.forfeitDeposit(
+            orderId,
+            'customer_cancel_after_lock'
+          );
+          if (!forfeitResult.success) {
+            this.logger.error(
+              `Deposit forfeit failed for client cancel (after lock) of order ${orderId}: ${forfeitResult.message}`
+            );
+          } else {
+            this.logger.log(
+              `Deposit forfeited for client cancel (after lock) of order ${orderId}`
+            );
+          }
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to process deposit forfeit for client cancel (after lock): ${error.message}`
+          );
+        }
+      }
     }
   }
 
@@ -8083,6 +8194,45 @@ export class OrdersService {
     );
   }
 
+  /**
+   * Handle deposit payment failure - mark deposit_status = 'failed' and cancel order
+   */
+  async onDepositPaymentFailed(
+    orderId: string,
+    failureMessage?: string | null
+  ): Promise<void> {
+    try {
+      const mutation = `
+        mutation MarkDepositFailed($orderId: uuid!, $now: timestamptz!) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: {
+              deposit_status: "failed"
+              updated_at: $now
+            }
+          ) {
+            id
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(mutation, {
+        orderId,
+        now: new Date().toISOString(),
+      });
+      this.logger.log(`Marked deposit_status=failed for order ${orderId}`);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to mark deposit_status=failed for order ${orderId}:`,
+        error
+      );
+    }
+    // Cancel the order (deposit failure = order cannot proceed)
+    await this.orderSystemJobsService.onOrderPaymentFailed(
+      orderId,
+      failureMessage
+    );
+  }
+
   private async getAgentStatus(agentId: string): Promise<string> {
     const query = `
       query GetAgentStatus($agentId: uuid!) {
@@ -8095,6 +8245,52 @@ export class OrdersService {
       agentId,
     });
     return (result as any).agents_by_pk?.status ?? 'active';
+  }
+
+  /**
+   * Check if a market-level application_configurations flag is enabled
+   * @param configKey - The config key to check
+   * @param countryCode - Optional country code for country-specific config
+   * @returns true if enabled, false otherwise (default false)
+   */
+  private async isMarketFlagEnabled(
+    configKey: string,
+    countryCode?: string | null
+  ): Promise<boolean> {
+    try {
+      const query = `
+        query GetMarketFlag($configKey: String!, $countryCode: String) {
+          application_configurations(
+            where: {
+              config_key: { _eq: $configKey }
+              _or: [
+                { country_code: { _eq: $countryCode } }
+                { country_code: { _is_null: true } }
+              ]
+            }
+            order_by: { country_code: desc_nulls_last }
+            limit: 1
+          ) {
+            boolean_value
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        configKey,
+        countryCode: countryCode || null,
+      });
+      const configs = (result as any).application_configurations || [];
+      if (configs.length === 0) {
+        return false; // Default to false if config not found
+      }
+      return configs[0].boolean_value === true;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to read market flag ${configKey} for ${countryCode}:`,
+        error
+      );
+      return false; // Default to false on error
+    }
   }
 
   /**
@@ -9229,6 +9425,31 @@ export class OrdersService {
       isDiaspora: railResolution.isDiaspora,
       paymentTiming,
     });
+
+    // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
+    // Block MoMo pay_now + delivery when flag is false (default)
+    if (
+      paymentTiming === 'pay_now' &&
+      fulfillmentMethod === 'delivery' &&
+      railResolution.rail === 'mobile_money'
+    ) {
+      const momoPayNowDeliveryEnabled =
+        await this.isMarketFlagEnabled(
+          'momo_pay_now_delivery_enabled',
+          fulfillmentCountry
+        );
+      if (!momoPayNowDeliveryEnabled) {
+        throw new HttpException(
+          {
+            success: false,
+            message:
+              'Pay now with mobile money is not available for delivery in this market. Please choose pay at delivery or store pickup.',
+            error: 'MOMO_PAY_NOW_DELIVERY_NOT_ENABLED',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
 
     if (
       (paymentTiming === 'pay_at_delivery' ||

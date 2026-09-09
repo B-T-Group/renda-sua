@@ -88,6 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_deposit_status
 -- Global default: false (MoMo pay-now+delivery hidden by default)
 INSERT INTO public.application_configurations (
   config_key,
+  config_name,
   data_type,
   boolean_value,
   country_code,
@@ -96,6 +97,7 @@ INSERT INTO public.application_configurations (
   updated_at
 ) VALUES (
   'momo_pay_now_delivery_enabled',
+  'MoMo Pay Now + Delivery Enabled',
   'boolean',
   false,
   NULL,  -- Global default
@@ -103,8 +105,9 @@ INSERT INTO public.application_configurations (
   NOW(),
   NOW()
 )
-ON CONFLICT (config_key, COALESCE(country_code, '')) DO NOTHING;
+ON CONFLICT (config_key, country_code) DO NOTHING;
 
 -- Per-country overrides can be added later as needed:
--- INSERT INTO application_configurations (config_key, data_type, boolean_value, country_code, ...)
--- VALUES ('momo_pay_now_delivery_enabled', 'boolean', true, 'GA', ...) ON CONFLICT DO NOTHING;
+-- INSERT INTO application_configurations (config_key, config_name, data_type, boolean_value, country_code, description, created_at, updated_at)
+-- VALUES ('momo_pay_now_delivery_enabled', 'MoMo Pay Now + Delivery Enabled', 'boolean', true, 'GA', 'Country-specific override for GA', NOW(), NOW())
+-- ON CONFLICT (config_key, country_code) DO NOTHING;
