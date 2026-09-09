@@ -7166,6 +7166,17 @@ export class OrdersService {
         );
       }
 
+      // Send order.created message to SQS queue after deposit success
+      try {
+        await this.orderQueueService.sendOrderCreatedMessage(order.id);
+      } catch (error) {
+        this.logger.error(
+          `Failed to send order.created message to SQS after deposit: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+
       // Send order created notifications
       try {
         const notificationsEnabled =
@@ -9577,10 +9588,31 @@ export class OrdersService {
       )
         ? 'estimated'
         : 'none';
-    const current_status =
-      paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
-        ? 'pending'
-        : 'pending_payment';
+    
+    // Determine initial status for pay_at_delivery/pickup orders
+    // When deposit is required, start in pending_payment (not pending)
+    // to avoid triggering acceptance SLA before deposit is paid
+    let current_status: string;
+    if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
+      // Check if deposit will be required using same logic as deposit collection below
+      // Rail determination: Stripe seller → stripe, wallet payer → wallet, else mobile_money
+      const railForDepositCheck: 'mobile_money' | 'stripe' | 'wallet' =
+        paymentRail === 'stripe'
+          ? 'stripe'
+          : (canPayWithWallet || isZeroOrNegativeOrder)
+            ? 'wallet'
+            : 'mobile_money';
+      const requiresDeposit = this.depositCalculationService.isDepositRequired(
+        paymentTiming,
+        railForDepositCheck
+      );
+      // If deposit required + XAF currency, start in pending_payment
+      // Otherwise start in pending (existing behavior for non-deposit PAD/pickup)
+      current_status = requiresDeposit && currency === 'XAF' ? 'pending_payment' : 'pending';
+    } else {
+      current_status = 'pending_payment';
+    }
+    
     const business_id = businessInventories[0].business_location.business_id;
     const payment_method =
       paymentTiming === 'pay_at_delivery'
@@ -9958,18 +9990,19 @@ export class OrdersService {
           `Failed to start acceptance SLA for ${order.id}: ${error?.message}`
         );
       }
-    }
-
-    // Send order.created message to SQS queue
-    try {
-      await this.orderQueueService.sendOrderCreatedMessage(order.id);
-    } catch (error) {
-      // Log but don't throw - order creation should succeed
-      this.logger.error(
-        `Failed to send order.created message to SQS: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      
+      // Send order.created message to SQS queue for non-deposit orders
+      // For deposit-required orders, this is sent after deposit success in finalizeDepositAfterCallback
+      try {
+        await this.orderQueueService.sendOrderCreatedMessage(order.id);
+      } catch (error) {
+        // Log but don't throw - order creation should succeed
+        this.logger.error(
+          `Failed to send order.created message to SQS: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     }
 
     if (
