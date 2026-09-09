@@ -62,7 +62,11 @@ import {
   type OrderViewModelContext,
 } from '../../../orders/model';
 import type { OrderDetailScreenProps } from './types';
-import { isDepositPending, hasLivePendingDepositTx } from '../../../utils/depositResume';
+import {
+  isDepositPending,
+  hasLivePendingDepositTx,
+  remainingAfterDeposit,
+} from '../../../utils/depositResume';
 
 type Props = OrderDetailScreenProps;
 
@@ -356,7 +360,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     if (depositIsPending) {
       // Deposit pending: show "Pay deposit" CTA
       primaryLabelKey = 'deposit.payDepositCta';
-      primaryLabelDefault = `Pay deposit · ${formatCurrency(order.deposit_amount ?? 0, order.currency || 'XAF', locale)}`;
+      primaryLabelDefault = 'Pay deposit · {{amount}} {{currency}}';
     } else if (order.payment_timing === 'pay_at_pickup') {
       // Pay at pickup flow
       primaryLabelKey = 'orders.payAtPickup.cta';
@@ -467,7 +471,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       order.client?.user?.phone_number?.trim() ||
       '';
     const depositAmount = order.deposit_amount ?? 0;
-    const amountDue = (order.grand_total ?? 0) - depositAmount;
+    const amountDue = remainingAfterDeposit(order);
     
     // Poll-only path: if live pending deposit tx exists, navigate directly to await (no POST)
     // Per PE: prefer poll when deposit_mobile_payment_transaction_id is set AND deposit pending
@@ -903,7 +907,12 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
               loading={actionLoading || payDepositLoading}
               onPress={onStickyPrimaryPress}
             >
-              {t(primaryLabelKey, primaryLabelDefault)}
+              {depositIsPending
+                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+                    amount: order.deposit_amount ?? 0,
+                    currency: order.currency || 'XAF',
+                  })
+                : t(primaryLabelKey, primaryLabelDefault)}
             </Button>
           ) : null}
           {showCancel ? (

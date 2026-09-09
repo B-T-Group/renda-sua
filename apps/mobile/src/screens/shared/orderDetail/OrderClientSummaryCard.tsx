@@ -12,7 +12,11 @@ import { useOrderStripePayment } from '../../../hooks/useOrderStripePayment';
 import { formatCurrency } from '../../../utils/formatters';
 import { resolveOrderPricing } from '../../../utils/orderAmounts';
 import { OrderStatusHistoryTimeline } from './OrderStatusHistoryTimeline';
-import { isDepositPending, hasLivePendingDepositTx } from '../../../utils/depositResume';
+import {
+  isDepositPending,
+  hasLivePendingDepositTx,
+  remainingAfterDeposit,
+} from '../../../utils/depositResume';
 
 function formatWhen(locale: string, iso: string): string {
   return new Date(iso).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
@@ -215,7 +219,7 @@ export function OrderClientSummaryCard({
     
     const phoneE164 = order.client?.user?.phone_number?.trim() || '';
     const depositAmount = order.deposit_amount ?? 0;
-    const amountDue = (order.grand_total ?? 0) - depositAmount;
+    const amountDue = remainingAfterDeposit(order);
     
     // Poll-only path: if live pending deposit tx exists, navigate directly to await (no POST)
     // Per PE: prefer poll when deposit_mobile_payment_transaction_id is set AND deposit pending
@@ -379,7 +383,7 @@ export function OrderClientSummaryCard({
             disabled={payingDeposit}
           >
             {t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
-              amount: formatCurrency(order.deposit_amount ?? 0, cur, locale, { includeSymbol: false }),
+              amount: order.deposit_amount ?? 0,
               currency: cur,
             })}
           </Button>

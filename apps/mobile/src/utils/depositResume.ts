@@ -43,3 +43,9 @@ export function hasLivePendingDepositTx(order: Order): boolean {
     order.deposit_mobile_payment_transaction_id
   );
 }
+
+/** Remainder after deposit: prefer server `amount_due`, else total minus deposit. */
+export function remainingAfterDeposit(order: Order): number {
+  if (order.amount_due != null) return order.amount_due;
+  return (order.total_amount ?? 0) - (order.deposit_amount ?? 0);
+}

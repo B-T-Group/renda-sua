@@ -323,6 +323,7 @@
     "paidTitle": "Deposit confirmed",
     "paidBody": "Your deposit payment is confirmed. The store will prepare your order. You will pay the remaining {{amount}} when you receive your order.",
     "paymentFailedTitle": "Deposit payment failed",
+    "paymentFailedBody": "The deposit payment request did not succeed. You can try again or return to your order.",
     "sendAgain": "Send again",
     "forfeit": {
       "outForDeliveryTitle": "Cancel while out for delivery?",

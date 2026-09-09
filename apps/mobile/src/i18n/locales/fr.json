@@ -304,6 +304,7 @@
     "paidTitle": "Acompte confirmé",
     "paidBody": "Votre paiement d'acompte est confirmé. Le magasin préparera votre commande. Vous paierez les {{amount}} restants à la réception de votre commande.",
     "paymentFailedTitle": "Échec du paiement de l'acompte",
+    "paymentFailedBody": "La demande de paiement de l'acompte n'a pas abouti. Vous pouvez réessayer ou revenir à votre commande.",
     "sendAgain": "Renvoyer",
     "forfeit": {
       "outForDeliveryTitle": "Annuler pendant la livraison?",
