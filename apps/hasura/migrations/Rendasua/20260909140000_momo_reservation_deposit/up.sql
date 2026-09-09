@@ -87,27 +87,25 @@ CREATE INDEX IF NOT EXISTS idx_orders_deposit_status
 -- 8) Per-market flag via application_configurations (not items table, not country_delivery_configs)
 -- Global default: false (MoMo pay-now+delivery hidden by default)
 INSERT INTO public.application_configurations (
-  config_key,
-  config_name,
-  data_type,
-  boolean_value,
-  country_code,
-  description,
-  created_at,
-  updated_at
-) VALUES (
+  config_key, config_name, description, data_type, boolean_value,
+  country_code, status, tags
+)
+SELECT
   'momo_pay_now_delivery_enabled',
-  'MoMo Pay Now + Delivery Enabled',
+  'MoMo Pay-Now Delivery Enabled',
+  'When false, hide/block full pay-now+delivery on MoMo; only pay-at-delivery with deposit or store pickup. When true, allow full pay-now+delivery.',
   'boolean',
   false,
-  NULL,  -- Global default
-  'When false, hide/block full pay-now+delivery on MoMo; only pay-at-delivery with deposit or store pickup. When true, allow full pay-now+delivery.',
-  NOW(),
-  NOW()
-)
-ON CONFLICT (config_key, country_code) DO NOTHING;
+  NULL,
+  'active',
+  ARRAY['payments', 'momo', 'checkout']
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.application_configurations
+  WHERE config_key = 'momo_pay_now_delivery_enabled'
+    AND country_code IS NULL
+);
 
 -- Per-country overrides can be added later as needed:
--- INSERT INTO application_configurations (config_key, config_name, data_type, boolean_value, country_code, description, created_at, updated_at)
--- VALUES ('momo_pay_now_delivery_enabled', 'MoMo Pay Now + Delivery Enabled', 'boolean', true, 'GA', 'Country-specific override for GA', NOW(), NOW())
--- ON CONFLICT (config_key, country_code) DO NOTHING;
+-- INSERT INTO application_configurations (config_key, config_name, description, data_type, boolean_value, country_code, status, tags)
+-- SELECT 'momo_pay_now_delivery_enabled', 'MoMo Pay-Now Delivery Enabled', 'Country-specific override for GA', 'boolean', true, 'GA', 'active', ARRAY['payments', 'momo', 'checkout']
+-- WHERE NOT EXISTS (SELECT 1 FROM application_configurations WHERE config_key = 'momo_pay_now_delivery_enabled' AND country_code = 'GA');
