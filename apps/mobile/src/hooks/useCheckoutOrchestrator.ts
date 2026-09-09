@@ -8,15 +8,15 @@
  * Screens (PlaceOrderScreen, CartCheckoutScreen) should call this hook instead
  * of embedding createOrder / PaymentSheet / MM handling themselves.
  *
- * MoMo Deposit Flow (Backend #275, merged main @ 3ed60fab):
+ * MoMo Deposit Flow (Backend #282 merged @ eb9cca31):
  * - Place-order with pay_at_delivery/pickup MoMo creates order in pending_payment
- * - Backend calculates deposit: max(151, round(total * (total<5000?0.10:0.05)))
+ * - Backend calculates deposit: max(150, round(total * (total<5000?0.10:0.05)))
  * - Backend initiates MoMo deposit collect automatically (same create-order endpoint)
- * - Response includes: deposit_amount, amount_due, deposit_status (pending), 
- *   current_status (pending_payment), payment_transaction, deposit_mobile_payment_transaction_id
- * - Client navigates to MobileMoneyAwaitingPayment for polling (existing flow)
- * - After MoMo SUCCESS callback: deposit_status→paid, current_status→pending; remainder unpaid
- * - On FAILED: deposit_status→failed
+ * - Response includes: current_status=pending_payment, payment_transaction (deposit collect started)
+ * - deposit_status may be omitted initially; GET /orders/:id later shows pending
+ * - Client navigates to MoMo await when: current_status=pending_payment AND/OR payment_transaction present
+ * - After MoMo SUCCESS callback: deposit_status→paid (via GET), current_status→pending
+ * - On FAILED: deposit_status→failed; user retries via waiting screen
  * - Market flag: momo_pay_now_delivery_enabled (default false) gates full pay-now UI
  * - Deposit fields remain optional/defensive for backward compatibility
  */
@@ -40,7 +40,14 @@ export type CheckoutOutcome =
       /** Manual capture: card authorized at checkout, charge happens later. */
       cardAuthorized?: boolean;
     }
-  | { type: 'pending'; orderIds: string[]; orderNumbers: string[]; paymentRail: 'stripe' | 'mobile_money' | null }
+  | { 
+      type: 'pending'; 
+      orderIds: string[]; 
+      orderNumbers: string[]; 
+      paymentRail: 'stripe' | 'mobile_money' | null;
+      /** True when deposit collect started (navigate to MoMo await). */
+      isDepositOrder?: boolean;
+    }
   | { type: 'cancelled' }
   | { type: 'busy' }
   | { type: 'error'; message: string; code?: string }; // code e.g. MERCHANT_CLOSED
@@ -175,21 +182,34 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
         };
       }
       
-      // MoMo Deposit Collect (Backend #275, merged main @ 3ed60fab):
+      // MoMo Deposit Collect (Backend #282 merged @ eb9cca31):
       // For pay_at_delivery/pickup MoMo orders with deposit:
-      // - Order created in current_status=pending_payment, deposit_status=pending
+      // - Order created in current_status=pending_payment
       // - Backend initiates MoMo collect during order creation (same create-order endpoint)
-      // - Response includes deposit_amount, amount_due, deposit_status, deposit_mobile_payment_transaction_id
-      // - Client navigates to MobileMoneyAwaitingPayment which polls order.payment_status
-      // - On MoMo SUCCESS callback: deposit_status→paid, current_status→pending
-      // - On FAILED: deposit_status→failed; user retries via waiting screen
+      // - Response includes payment_transaction (deposit collect started)
+      // - deposit_status may be omitted on create; GET /orders/:id later shows pending
+      // - Deposit orders identified by: deposit_amount > 0 OR deposit_mobile_payment_transaction_id present
+      // - Navigate to MoMo await ONLY for deposit orders (non-deposit PAD/PAP must not await)
+      // - Poll GET /orders/:id checks deposit_status: paid→success, failed→order cancelled
       // 
       // Deposit orders and full pay-now MoMo both use the same pending flow.
       // All deposit fields remain optional/defensive for backward compatibility.
       
-      // Mobile Money is push-based; order is created and payment is initiated server-side.
-      // Success = payment pending confirmation from provider (or deposit collect pending).
-      return { type: 'pending', orderIds: [order.id], orderNumbers: [order.order_number ?? order.id], paymentRail: 'mobile_money' };
+      // Detect deposit order: has deposit_amount, deposit transaction ID, or deposit_status=pending
+      // Nest #286 @ ed18c83f: create now includes deposit_status when deposit-required
+      const isDepositOrder = Boolean(
+        (order.deposit_amount != null && order.deposit_amount > 0) ||
+        order.deposit_mobile_payment_transaction_id ||
+        order.deposit_status === 'pending'
+      );
+      
+      return { 
+        type: 'pending', 
+        orderIds: [order.id], 
+        orderNumbers: [order.order_number ?? order.id], 
+        paymentRail: 'mobile_money',
+        isDepositOrder,
+      };
     },
     []
   );

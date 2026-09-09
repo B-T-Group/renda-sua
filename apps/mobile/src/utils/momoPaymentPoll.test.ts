@@ -45,12 +45,12 @@ describe('resolveMomoPaymentStatuses', () => {
     it('returns paid when all deposit orders have deposit_status=paid', () => {
       expect(
         resolveMomoPaymentStatuses([
-          { deposit_amount: 151, deposit_status: 'paid', payment_status: 'pending' },
+          { deposit_amount: 150, deposit_status: 'paid', payment_status: 'pending' },
         ])
       ).toBe('paid');
       expect(
         resolveMomoPaymentStatuses([
-          { deposit_amount: 151, deposit_status: 'paid', payment_status: 'pending' },
+          { deposit_amount: 150, deposit_status: 'paid', payment_status: 'pending' },
           { deposit_amount: 200, deposit_status: 'paid', payment_status: 'pending' },
         ])
       ).toBe('paid');
@@ -59,7 +59,7 @@ describe('resolveMomoPaymentStatuses', () => {
     it('returns failed when deposit order has deposit_status=failed', () => {
       expect(
         resolveMomoPaymentStatuses([
-          { deposit_amount: 151, deposit_status: 'failed', payment_status: 'pending' },
+          { deposit_amount: 150, deposit_status: 'failed', payment_status: 'pending' },
         ])
       ).toBe('failed');
     });
@@ -67,7 +67,7 @@ describe('resolveMomoPaymentStatuses', () => {
     it('returns waiting when deposit order has deposit_status=pending', () => {
       expect(
         resolveMomoPaymentStatuses([
-          { deposit_amount: 151, deposit_status: 'pending', payment_status: 'pending' },
+          { deposit_amount: 150, deposit_status: 'pending', payment_status: 'pending' },
         ])
       ).toBe('waiting');
     });
@@ -117,7 +117,7 @@ describe('resolveMomoPaymentStatuses', () => {
       // Deposit: pending + failed → failed
       expect(
         resolveMomoPaymentStatuses([
-          { deposit_amount: 151, deposit_status: 'pending', payment_status: 'pending' },
+          { deposit_amount: 150, deposit_status: 'pending', payment_status: 'pending' },
           { deposit_amount: 200, deposit_status: 'failed', payment_status: 'pending' },
         ])
       ).toBe('failed');
@@ -147,7 +147,7 @@ describe('resolveMomoPaymentStatuses', () => {
       expect(
         resolveMomoPaymentStatuses([
           { payment_status: 'paid' },
-          { deposit_amount: 151, deposit_status: 'paid', payment_status: 'pending' },
+          { deposit_amount: 150, deposit_status: 'paid', payment_status: 'pending' },
         ])
       ).toBe('paid');
     });

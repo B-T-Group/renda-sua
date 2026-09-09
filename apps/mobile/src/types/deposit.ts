@@ -3,7 +3,7 @@
  *
  * Deposit path: customer pays a small reservation deposit now (via MoMo),
  * remainder when order is delivered/picked up. Server returns deposit_amount;
- * client fallback: max(151 XAF, percentage based on grand total).
+ * client fallback: max(150 XAF, percentage based on grand total).
  *
  * Backend contract (renda-sua #275, merged main @ 3ed60fab):
  * - deposit_status enum: none | pending | paid | failed | forfeited | refunded
@@ -27,15 +27,15 @@ export interface DepositConfig {
 
 /**
  * Calculate fallback deposit amount when server deposit_amount is missing.
- * Rule: max(151, round(grand_total * (total<5000?0.10:0.05)))
+ * Rule: max(150, round(grand_total * (total<5000?0.10:0.05)))
  * 
- * Backend contract (renda-sua #275):
- * - max(151, round(grand_total * (total<5000?0.10:0.05)))
+ * Backend contract (renda-sua #282 merged @ eb9cca31):
+ * - max(150, round(grand_total * (total<5000?0.10:0.05)))
  * - Market flag: application_configurations.config_key=momo_pay_now_delivery_enabled
  *   (country_code scoped, default false)
  */
 export function calculateDepositFallback(grandTotalXAF: number): number {
-  const FLOOR = 151;
+  const FLOOR = 150;
   const percentage = grandTotalXAF < 5000 ? 0.1 : 0.05;
   const computed = Math.round(grandTotalXAF * percentage);
   return Math.max(FLOOR, computed);

@@ -245,6 +245,10 @@ export default observer(function CartCheckoutScreen() {
   const fulfillmentConfirmed =
     !(pickupEligible || shippingEligible) || hasChosenFulfillment;
 
+  // Diaspora orders require Stripe pay-now only
+  const diasporaContext = preflightConfig?.diaspora;
+  const isDiaspora = requiresStripePayNow(diasporaContext);
+
   // Sticky latch: preflight only returns delivery_availability for delivery
   // fulfillment. Keep Delivery grayed out after auto-switching to pickup.
   const [deliveryUnavailable, setDeliveryUnavailable] = useState(false);
@@ -510,7 +514,7 @@ export default observer(function CartCheckoutScreen() {
 
   const depositIsFloor = useMemo(() => {
     if (!depositAmount) return false;
-    const DEPOSIT_FLOOR = 151;
+    const DEPOSIT_FLOOR = 150;
     return depositAmount === DEPOSIT_FLOOR;
   }, [depositAmount]);
 
@@ -598,10 +602,6 @@ export default observer(function CartCheckoutScreen() {
   }, [savingProfilePhone]);
 
   const onAddPhonePress = useCallback(() => setAddPhoneDialogVisible(true), []);
-
-  // Diaspora orders require Stripe pay-now only
-  const diasporaContext = preflightConfig?.diaspora;
-  const isDiaspora = requiresStripePayNow(diasporaContext);
 
   /**
    * Payment rail resolution (server-authoritative):
@@ -721,14 +721,16 @@ export default observer(function CartCheckoutScreen() {
     }
 
     cart.clear();
-    const momoPending =
+    // Navigate to MoMo waiting screen for:
+    // 1. Deposit orders (deposit collect initiated), OR
+    // 2. Pay_now full-pay MoMo orders
+    // Non-deposit PAD/PAP MoMo must NOT enter await (would poll-timeout).
+    const momoWaitingRequired =
       !resolvedIsStripeRail &&
-      payTiming === 'pay_now' &&
-      (outcome.type === 'pending' ||
-        (outcome.type === 'success' &&
-          outcome.paymentRail === 'mobile_money' &&
-          !outcome.cardAuthorized));
-    if (momoPending && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
+      outcome.type === 'pending' &&
+      outcome.paymentRail === 'mobile_money' &&
+      (outcome.isDepositOrder === true || payTiming === 'pay_now');
+    if (momoWaitingRequired) {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
         overrideNationalDigits
@@ -749,6 +751,12 @@ export default observer(function CartCheckoutScreen() {
               source: 'checkout',
               orderNumbers: outcome.orderNumbers,
               fulfillment,
+              // Only pass isDepositOrder=true for deposits (enables Back-to-checkout fail UX)
+              // Pay_now full-pay gets Nest retry + onEditPhone
+              isDepositOrder: outcome.isDepositOrder === true ? true : undefined,
+              depositAmount: depositAmount || undefined,
+              amountDue: preflightConfig?.amount_due || undefined,
+              currency,
             },
           },
         ],

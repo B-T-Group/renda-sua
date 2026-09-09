@@ -706,7 +706,7 @@ export default function PlaceOrderScreen() {
 
   const depositIsFloor = useMemo(() => {
     if (!depositAmount) return false;
-    const DEPOSIT_FLOOR = 151;
+    const DEPOSIT_FLOOR = 150;
     return depositAmount === DEPOSIT_FLOOR;
   }, [depositAmount]);
 
@@ -951,14 +951,16 @@ export default function PlaceOrderScreen() {
     }
 
     const orderNumber = outcome.orderNumbers[0] ?? '';
-    const momoPending =
+    // Navigate to MoMo waiting screen for:
+    // 1. Deposit orders (deposit collect initiated), OR
+    // 2. Pay_now full-pay MoMo orders
+    // Non-deposit PAD/PAP MoMo must NOT enter await (would poll-timeout).
+    const momoWaitingRequired =
       !resolvedIsStripeRail &&
-      payTiming === 'pay_now' &&
-      (outcome.type === 'pending' ||
-        (outcome.type === 'success' &&
-          outcome.paymentRail === 'mobile_money' &&
-          !outcome.cardAuthorized));
-    if (momoPending && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
+      outcome.type === 'pending' &&
+      outcome.paymentRail === 'mobile_money' &&
+      (outcome.isDepositOrder === true || payTiming === 'pay_now');
+    if (momoWaitingRequired) {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
         overrideNationalDigits
@@ -979,6 +981,12 @@ export default function PlaceOrderScreen() {
               source: 'checkout',
               orderNumbers: outcome.orderNumbers,
               fulfillment,
+              // Only pass isDepositOrder=true for deposits (enables Back-to-checkout fail UX)
+              // Pay_now full-pay gets Nest retry + onEditPhone
+              isDepositOrder: outcome.isDepositOrder === true ? true : undefined,
+              depositAmount: depositAmount || undefined,
+              amountDue: preflightConfig?.amount_due || undefined,
+              currency,
             },
           },
         ],

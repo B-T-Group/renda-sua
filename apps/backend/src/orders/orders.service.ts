@@ -175,6 +175,7 @@ export interface GetOrderRequest {
 
 export interface RetryOrderPaymentOptions {
   stripePaymentMethod?: 'payment_sheet';
+  phoneNumber?: string;
 }
 
 export interface ClaimAvailabilityResponse {
@@ -3822,7 +3823,7 @@ export class OrdersService {
       return this.retryStripeOrderPayment(order, options);
     }
 
-    return this.retryMobileMoneyOrderPayment(order, orderId);
+    return this.retryMobileMoneyOrderPayment(order, orderId, options?.phoneNumber);
   }
 
   private async retryStripeOrderPayment(
@@ -3916,7 +3917,11 @@ export class OrdersService {
     };
   }
 
-  private async retryMobileMoneyOrderPayment(order: Orders, orderId: string) {
+  private async retryMobileMoneyOrderPayment(
+    order: Orders,
+    orderId: string,
+    phoneNumberOverride?: string
+  ) {
     const existing =
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
@@ -3934,7 +3939,7 @@ export class OrdersService {
       };
     }
 
-    const phoneNumber = order.client?.user?.phone_number || '';
+    const phoneNumber = phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Phone number is required to retry payment',

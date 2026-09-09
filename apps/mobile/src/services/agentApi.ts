@@ -313,7 +313,7 @@ const orders = {
   /** Client: re-initiate pay-now payment (mobile money or Stripe PaymentSheet). */
   retryPayment: (
     orderId: string,
-    body?: { stripe_payment_method?: 'payment_sheet' }
+    body?: { stripe_payment_method?: 'payment_sheet'; phone_number?: string }
   ): Promise<{
     success: boolean;
     checkout_url?: string;

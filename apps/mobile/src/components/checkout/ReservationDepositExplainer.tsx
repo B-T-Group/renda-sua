@@ -10,7 +10,7 @@ export interface ReservationDepositExplainerProps {
   depositAmount: number;
   currency: string;
   style?: object;
-  /** True when deposit equals floor amount (151 XAF). */
+  /** True when deposit equals floor amount (150 XAF). */
   isFloorAmount?: boolean;
   /** Grand total for calculating percentage (optional). */
   grandTotal?: number;
