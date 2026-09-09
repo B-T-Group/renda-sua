@@ -307,6 +307,7 @@
   "deposit": {
     "reservationTitle": "Reservation deposit",
     "minimumLabel": "Minimum deposit for this order",
+    "percentageLabel": "{{percentage}}% of your order",
     "refundableUntilSent": "Refundable until we send it for delivery, or until it is ready for pickup",
     "appliedToTotal": "Applied to your order — not an extra fee",
     "dueNow": "Due now (deposit)",
@@ -322,8 +323,8 @@
       "keepOrderCta": "Keep my order",
       "pickUpCta": "I will pick it up",
       "cancelAndForfeitCta": "Cancel and forfeit {{amount}} {{currency}}",
-      "forfeitNote": "FR: Annuler maintenant = acompte non remboursé ({{amount}} {{currency}})",
-      "youKeepDepositIf": "You will keep the deposit only if we cancel, the store cancels, or delivery fails."
+      "youKeepDepositIfPickup": "You will keep the deposit only if we cancel or the store cancels.",
+      "youKeepDepositIfDelivery": "You will keep the deposit only if we cancel, the store cancels, or delivery fails."
     }
   },
   "addresses": {

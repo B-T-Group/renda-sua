@@ -153,10 +153,15 @@ export function ForfeitDepositCancelDialog({
                 },
               ]}
             >
-              {t(
-                'deposit.forfeit.youKeepDepositIf',
-                'You will keep the deposit only if we cancel, the store cancels, or delivery fails.'
-              )}
+              {mode === 'ready_for_pickup'
+                ? t(
+                    'deposit.forfeit.youKeepDepositIfPickup',
+                    'You will keep the deposit only if we cancel or the store cancels.'
+                  )
+                : t(
+                    'deposit.forfeit.youKeepDepositIfDelivery',
+                    'You will keep the deposit only if we cancel, the store cancels, or delivery fails.'
+                  )}
             </Text>
           </View>
 
@@ -182,26 +187,6 @@ export function ForfeitDepositCancelDialog({
               {dangerCta}
             </Button>
           </View>
-
-          <Text
-            variant="bodySmall"
-            style={[
-              typography.caption,
-              {
-                color: colors.text.secondary,
-                textAlign: 'center',
-                marginTop: spacing.sm,
-                paddingHorizontal: spacing.lg,
-                fontStyle: 'italic',
-              },
-            ]}
-          >
-            {t(
-              'deposit.forfeit.forfeitNote',
-              'FR: Annuler maintenant = acompte non remboursé ({{amount}} {{currency}})',
-              { amount: depositAmount, currency }
-            )}
-          </Text>
         </Pressable>
       </Pressable>
     </Modal>

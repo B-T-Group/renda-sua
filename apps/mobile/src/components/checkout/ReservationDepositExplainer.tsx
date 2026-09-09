@@ -12,6 +12,8 @@ export interface ReservationDepositExplainerProps {
   style?: object;
   /** True when deposit equals floor amount (151 XAF). */
   isFloorAmount?: boolean;
+  /** Grand total for calculating percentage (optional). */
+  grandTotal?: number;
 }
 
 /**
@@ -23,9 +25,15 @@ export function ReservationDepositExplainer({
   currency,
   style,
   isFloorAmount,
+  grandTotal,
 }: ReservationDepositExplainerProps) {
   const { t } = useTranslation();
   const { colors, typography, spacing, borderRadius } = useTheme();
+
+  // Calculate percentage used for non-floor amounts
+  const percentageUsed = grandTotal && !isFloorAmount && grandTotal > 0
+    ? (grandTotal < 5000 ? 10 : 5)
+    : null;
 
   return (
     <View
@@ -66,7 +74,7 @@ export function ReservationDepositExplainer({
         {formatCatalogMoney(depositAmount, currency)}
       </Text>
 
-      {isFloorAmount && (
+      {isFloorAmount ? (
         <Text
           variant="bodySmall"
           style={[
@@ -79,7 +87,20 @@ export function ReservationDepositExplainer({
         >
           {t('deposit.minimumLabel', 'Minimum deposit for this order')}
         </Text>
-      )}
+      ) : percentageUsed ? (
+        <Text
+          variant="bodySmall"
+          style={[
+            typography.caption,
+            {
+              color: colors.text.secondary,
+              marginTop: spacing.xs,
+            },
+          ]}
+        >
+          {t('deposit.percentageLabel', '{{percentage}}% of your order', { percentage: percentageUsed })}
+        </Text>
+      ) : null}
 
       <View style={[styles.bulletList, { marginTop: spacing.sm }]}>
         <View style={styles.bulletRow}>

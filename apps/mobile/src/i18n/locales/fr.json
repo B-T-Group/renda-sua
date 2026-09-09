@@ -288,6 +288,7 @@
   "deposit": {
     "reservationTitle": "Acompte de réservation",
     "minimumLabel": "Acompte minimum pour cette commande",
+    "percentageLabel": "{{percentage}}% de votre commande",
     "refundableUntilSent": "Remboursable jusqu'à l'envoi en livraison ou jusqu'à ce que la commande soit prête pour le retrait",
     "appliedToTotal": "Appliqué à votre commande — pas de frais supplémentaires",
     "dueNow": "À payer maintenant (acompte)",
@@ -303,8 +304,8 @@
       "keepOrderCta": "Garder ma commande",
       "pickUpCta": "Je vais la récupérer",
       "cancelAndForfeitCta": "Annuler et perdre {{amount}} {{currency}}",
-      "forfeitNote": "FR: Annuler maintenant = acompte non remboursé ({{amount}} {{currency}})",
-      "youKeepDepositIf": "Vous ne conserverez l'acompte que si nous annulons, le magasin annule ou la livraison échoue."
+      "youKeepDepositIfPickup": "Vous ne conserverez l'acompte que si nous annulons ou le magasin annule.",
+      "youKeepDepositIfDelivery": "Vous ne conserverez l'acompte que si nous annulons, le magasin annule ou la livraison échoue."
     }
   },
   "addresses": {

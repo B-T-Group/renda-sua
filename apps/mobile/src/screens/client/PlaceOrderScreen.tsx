@@ -1182,6 +1182,7 @@ export default function PlaceOrderScreen() {
             depositAmount={depositAmount}
             currency={currency}
             isFloorAmount={depositIsFloor}
+            grandTotal={grandTotal}
             style={{ marginBottom: spacing.sm }}
           />
         ) : null}

@@ -1197,6 +1197,7 @@ export default observer(function CartCheckoutScreen() {
             depositAmount={depositAmount}
             currency={currency}
             isFloorAmount={depositIsFloor}
+            grandTotal={grandTotal}
             style={{ marginBottom: spacing.sm }}
           />
         ) : null}
