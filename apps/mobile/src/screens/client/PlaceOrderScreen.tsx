@@ -154,7 +154,8 @@ export default function PlaceOrderScreen() {
   const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery');
   // Delivery is the default when both options exist; confirmed immediately.
   const [hasChosenFulfillment, setHasChosenFulfillment] = useState(true);
-  const [payTiming, setPayTiming] = useState<PayTiming>('pay_now');
+  // Default to pay_at_delivery (safe default when momo_pay_now_delivery_enabled may be false)
+  const [payTiming, setPayTiming] = useState<PayTiming>('pay_at_delivery');
   const [instructions, setInstructions] = useState('');
   const [snack, setSnack] = useState<string | null>(null);
   const [deliveryScheduleOk, setDeliveryScheduleOk] = useState(true);
@@ -443,30 +444,27 @@ export default function PlaceOrderScreen() {
       return;
     }
 
+    const momoPayNowEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+
     if (fulfillment === 'pickup') {
       setPayTiming(resolvedIsStripeRail ? 'pay_now' : 'pay_at_pickup');
-    }
-    if (fulfillment === 'shipping') setPayTiming('pay_now');
-  }, [fulfillment, resolvedIsStripeRail, isDiaspora]);
-
-  useEffect(() => {
-    if (fulfillmentNeedsAddress(fulfillment) && payTiming === 'pay_at_pickup') {
+    } else if (fulfillment === 'shipping') {
       setPayTiming('pay_now');
-    }
-  }, [fulfillment, payTiming]);
-
-  // Force payTiming when momo_pay_now_delivery_enabled is false
-  useEffect(() => {
-    if (isDiaspora || resolvedIsStripeRail) return;
-    const momoPayNowEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
-    if (!momoPayNowEnabled) {
-      if (fulfillment === 'delivery' && payTiming !== 'pay_at_delivery') {
+    } else if (fulfillment === 'delivery') {
+      // For delivery: respect momo_pay_now_delivery_enabled flag
+      if (resolvedIsStripeRail) {
+        setPayTiming('pay_now');
+      } else if (momoPayNowEnabled) {
+        // Flag enabled: keep current timing or default to pay_now if invalid
+        if (payTiming === 'pay_at_pickup') {
+          setPayTiming('pay_now');
+        }
+      } else {
+        // Flag disabled: force pay_at_delivery
         setPayTiming('pay_at_delivery');
-      } else if (fulfillment === 'pickup' && payTiming !== 'pay_at_pickup') {
-        setPayTiming('pay_at_pickup');
       }
     }
-  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.momo_pay_now_delivery_enabled, fulfillment, payTiming]);
+  }, [fulfillment, resolvedIsStripeRail, isDiaspora, preflightConfig?.momo_pay_now_delivery_enabled, payTiming]);
 
   const selectedAddress = useMemo(
     () => addressesForDelivery.find((a) => a.id === deliveryAddressId),
