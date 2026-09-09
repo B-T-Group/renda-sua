@@ -466,21 +466,14 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
         phoneNumber?.trim() ? { phone_number: phoneNumber.trim() } : {}
       );
       
-      // Handle 409 CONCURRENT_RETRY_DETECTED: soft error, toast and refresh, do NOT open await
-      if (response.code === 'CONCURRENT_RETRY_DETECTED') {
-        setSnack(
-          response.message ||
-          t('deposit.concurrentRetry', 'Another payment attempt is in progress. Please refresh and try again in a moment.')
-        );
-        void refetch();
-        return;
-      }
-      
-      // Handle 409 DEPOSIT_PAYMENT_PENDING / DEPOSIT_PAYMENT_PROCESSING: poll-only, do NOT retry
-      // Both codes mean: existing attempt in flight, open/continue await without re-calling
+      // Handle ALL 409 codes as soft poll/retry-once: open await/poll without hard error
+      // DEPOSIT_PAYMENT_PENDING → existing pending tx
+      // DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid
+      // CONCURRENT_RETRY_DETECTED → soft race, brief refresh+retry once or poll
       if (
         response.code === 'DEPOSIT_PAYMENT_PENDING' ||
-        response.code === 'DEPOSIT_PAYMENT_PROCESSING'
+        response.code === 'DEPOSIT_PAYMENT_PROCESSING' ||
+        response.code === 'CONCURRENT_RETRY_DETECTED'
       ) {
         const phoneE164 =
           phoneNumber?.trim() ||
