@@ -195,10 +195,12 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
       // Deposit orders and full pay-now MoMo both use the same pending flow.
       // All deposit fields remain optional/defensive for backward compatibility.
       
-      // Detect deposit order: has deposit_amount or deposit transaction ID
+      // Detect deposit order: has deposit_amount, deposit transaction ID, or deposit_status=pending
+      // Nest #286 @ ed18c83f: create now includes deposit_status when deposit-required
       const isDepositOrder = Boolean(
         (order.deposit_amount != null && order.deposit_amount > 0) ||
-        order.deposit_mobile_payment_transaction_id
+        order.deposit_mobile_payment_transaction_id ||
+        order.deposit_status === 'pending'
       );
       
       return { 
