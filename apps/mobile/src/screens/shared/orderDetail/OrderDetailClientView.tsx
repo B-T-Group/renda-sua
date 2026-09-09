@@ -520,7 +520,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       });
     } catch (e: unknown) {
       // Handle ALL 409 codes as soft poll/retry-once: open await/poll without hard error
-      // Nest contract (PR #288 @ 5aa09b07):
+      // Nest contract (PR #288 @ 1c260326):
       // - DEPOSIT_PAYMENT_PENDING → existing pending tx
       // - DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid
       // - CONCURRENT_RETRY_DETECTED → soft race, poll/retry-once
