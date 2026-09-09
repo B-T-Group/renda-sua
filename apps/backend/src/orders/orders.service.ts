@@ -4145,9 +4145,9 @@ export class OrdersService {
       );
     }
 
-    if ((order as any).payment_source !== 'mobile_money') {
+    if ((order as any).payment_source !== 'mobile_payment') {
       throw new HttpException(
-        'Deposit payment retry is only available for mobile money orders',
+        'Deposit payment retry is only available for mobile payment orders',
         HttpStatus.BAD_REQUEST
       );
     }

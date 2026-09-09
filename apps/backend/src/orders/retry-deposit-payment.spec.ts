@@ -27,7 +27,7 @@ describe('OrdersService - retryDepositPayment', () => {
     total_amount: 10000,
     currency: 'XAF',
     payment_timing: 'pay_at_delivery',
-    payment_source: 'mobile_money',
+    payment_source: 'mobile_payment',
     deposit_amount: 2000,
     deposit_status: 'pending',
     deposit_mobile_payment_transaction_id: null,
@@ -158,7 +158,7 @@ describe('OrdersService - retryDepositPayment', () => {
       );
     });
 
-    it('should reject if payment_source is not mobile_money', async () => {
+    it('should reject if payment_source is not mobile_payment', async () => {
       const order = { ...mockOrder, payment_source: 'credit_card' };
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
 
@@ -166,7 +166,7 @@ describe('OrdersService - retryDepositPayment', () => {
         service.retryDepositPayment('order-123')
       ).rejects.toThrow(
         new HttpException(
-          'Deposit payment retry is only available for mobile money orders',
+          'Deposit payment retry is only available for mobile payment orders',
           HttpStatus.BAD_REQUEST
         )
       );
