@@ -7092,12 +7092,18 @@ export class OrdersService {
         }
         
         // Credit wallet - fail the entire callback if this fails
-        await this.accountsService.registerDepositIfNotExists({
+        const credit = await this.accountsService.registerDepositIfNotExists({
           accountId: clientAccount.id,
           amount: depositAmount,
           referenceId: `deposit-${order.order_number}`,
           memo: `Deposit captured for order ${order.order_number}`,
         });
+        
+        if (!credit?.success) {
+          throw new Error(
+            `Deposit wallet credit failed for ${orderNumber}: ${credit?.error ?? 'unknown'}`
+          );
+        }
         
         this.logger.log(
           `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
