@@ -7166,6 +7166,17 @@ export class OrdersService {
         );
       }
 
+      // Send order.created message to SQS queue after deposit success
+      try {
+        await this.orderQueueService.sendOrderCreatedMessage(order.id);
+      } catch (error) {
+        this.logger.error(
+          `Failed to send order.created message to SQS after deposit: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+
       // Send order created notifications
       try {
         const notificationsEnabled =
@@ -9577,10 +9588,38 @@ export class OrdersService {
       )
         ? 'estimated'
         : 'none';
-    const current_status =
-      paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
-        ? 'pending'
-        : 'pending_payment';
+    
+    // Helper: Determine deposit rail for PAD/PAP orders using same logic everywhere
+    // Must be called AFTER payment_source and payer_payment_rail are set
+    const getDepositRailForPayAtTiming = (): 'mobile_money' | 'stripe' | 'wallet' => {
+      if (paymentRail === 'stripe') return 'stripe';
+      // For PAD/PAP, payer_payment_rail is derived from payment_source
+      // payment_source = wallet for zero/negative orders, else mobile_payment
+      // This ensures status decision and deposit collect use identical logic
+      const payment_source: 'wallet' | 'mobile_payment' | 'credit_card' =
+        canPayWithWallet || isZeroOrNegativeOrder
+          ? 'wallet'
+          : 'mobile_payment';
+      return payment_source === 'wallet' ? 'wallet' : 'mobile_money';
+    };
+    
+    // Determine initial status for pay_at_delivery/pickup orders
+    // When deposit is required, start in pending_payment (not pending)
+    // to avoid triggering acceptance SLA before deposit is paid
+    let current_status: string;
+    if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
+      const railForDepositCheck = getDepositRailForPayAtTiming();
+      const requiresDeposit = this.depositCalculationService.isDepositRequired(
+        paymentTiming,
+        railForDepositCheck
+      );
+      // If deposit required + XAF currency, start in pending_payment
+      // Otherwise start in pending (existing behavior for non-deposit PAD/pickup)
+      current_status = requiresDeposit && currency === 'XAF' ? 'pending_payment' : 'pending';
+    } else {
+      current_status = 'pending_payment';
+    }
+    
     const business_id = businessInventories[0].business_location.business_id;
     const payment_method =
       paymentTiming === 'pay_at_delivery'
@@ -9960,16 +9999,25 @@ export class OrdersService {
       }
     }
 
-    // Send order.created message to SQS queue
-    try {
-      await this.orderQueueService.sendOrderCreatedMessage(order.id);
-    } catch (error) {
-      // Log but don't throw - order creation should succeed
-      this.logger.error(
-        `Failed to send order.created message to SQS: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+    // Send order.created message to SQS queue for all creates EXCEPT MoMo deposit-required
+    // MoMo deposit-required orders get this message after deposit SUCCESS in finalizeDepositAfterCallback
+    // (Stripe, pay_now, wallet, non-XAF PAD/pickup all send immediately)
+    const isMomoDepositRequiredCreate =
+      (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') &&
+      current_status === 'pending_payment' &&
+      currency === 'XAF';
+    
+    if (!isMomoDepositRequiredCreate) {
+      try {
+        await this.orderQueueService.sendOrderCreatedMessage(order.id);
+      } catch (error) {
+        // Log but don't throw - order creation should succeed
+        this.logger.error(
+          `Failed to send order.created message to SQS: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     }
 
     if (
@@ -9977,12 +10025,8 @@ export class OrdersService {
       paymentTiming === 'pay_at_pickup'
     ) {
       // MoMo reservation deposit collection for pay_at_delivery/pickup
-      const railForDeposit: 'mobile_money' | 'stripe' | 'wallet' =
-        paymentRail === 'stripe'
-          ? 'stripe'
-          : payer_payment_rail === 'wallet'
-            ? 'wallet'
-            : 'mobile_money';
+      // Use same rail logic as status decision above
+      const railForDeposit = getDepositRailForPayAtTiming();
       const requiresDeposit = this.depositCalculationService.isDepositRequired(
         paymentTiming,
         railForDeposit

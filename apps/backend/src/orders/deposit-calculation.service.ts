@@ -3,10 +3,10 @@ import { Injectable, Logger } from '@nestjs/common';
 /**
  * MoMo reservation deposit minimum amount in XAF.
  * MyPVIT docs: amount > 150 XAF (strict greater-than, not >=).
- * Using 151 XAF until sandbox probe confirms 150 works.
+ * Samuel locked: 150 XAF floor. If MyPVIT rejects, revert to 151.
  * Freemopay: same floor for UX parity unless code shows different min.
  */
-export const MOMO_DEPOSIT_MIN_XAF = 151;
+export const MOMO_DEPOSIT_MIN_XAF = 150;
 
 /**
  * Deposit rate for orders under 5000 XAF
@@ -67,7 +67,7 @@ export class DepositCalculationService {
     const rate =
       grandTotal < RATE_THRESHOLD_XAF ? DEPOSIT_RATE_SMALL : DEPOSIT_RATE_LARGE;
 
-    // Calculate deposit: max(151, round(total * rate))
+    // Calculate deposit: max(150, round(total * rate))
     const calculated = Math.round(grandTotal * rate);
     const depositAmount = Math.max(MOMO_DEPOSIT_MIN_XAF, calculated);
 
