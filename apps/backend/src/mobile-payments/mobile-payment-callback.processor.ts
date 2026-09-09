@@ -466,6 +466,7 @@ export class MobilePaymentCallbackProcessor {
     if (
       !transaction.account_id ||
       transaction.payment_entity === 'token' ||
+      transaction.payment_entity === 'order_deposit' ||
       transaction.transaction_type !== 'PAYMENT'
     ) {
       return true;
@@ -518,6 +519,9 @@ export class MobilePaymentCallbackProcessor {
           error?.message || error
         )}`
       );
+      if (transaction.payment_entity === 'order_deposit') {
+        throw error;
+      }
     }
   }
 
