@@ -1138,6 +1138,142 @@ describe('WhatsAppOrderActionService', () => {
     expect(result.message).toMatch(/open rendasua/i);
   });
 
+  it('marks a preparing order ready when unbound Yes follows a mark-ready prompt', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'pending-1' }, { id: 'prep-1' }] })
+      .mockResolvedValueOnce({
+        notification_events: [
+          {
+            entity_id: 'prep-1',
+            notification_type: 'order.mark_ready.prompt',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'prep-1',
+          order_number: 'ORD-PREP',
+          business_id: 'b1',
+          business_location_id: 'loc1',
+          current_status: 'preparing',
+          business_location: {
+            id: 'loc1',
+            business_id: 'b1',
+            business: { user_id: 'u1' },
+          },
+        },
+      });
+    orders.completePreparation.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'CONFIRM',
+    });
+    expect(orders.confirmOrder).not.toHaveBeenCalled();
+    expect(orders.cancelOrder).not.toHaveBeenCalled();
+    expect(orders.completePreparation).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'prep-1' }),
+      expect.objectContaining({ businessId: 'b1', locationId: 'loc1' })
+    );
+    expect(result.message).toMatch(/ORD-PREP/);
+  });
+
+  it('does not cancel a pending order when unbound No follows a stale mark-ready prompt', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'pending-1' }, { id: 'ready-1' }] })
+      .mockResolvedValueOnce({
+        notification_events: [
+          {
+            entity_id: 'ready-1',
+            notification_type: 'order.mark_ready.prompt',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'ready-1',
+          order_number: 'ORD-READY',
+          business_id: 'b1',
+          business_location_id: 'loc1',
+          current_status: 'ready_for_pickup',
+          business_location: {
+            id: 'loc1',
+            business_id: 'b1',
+            business: { user_id: 'u1' },
+          },
+        },
+      });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'DECLINE',
+    });
+    expect(orders.cancelOrder).not.toHaveBeenCalled();
+    expect(notifications.notifyClientOrderNotReady).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/ORD-READY/);
+  });
+
+  it('marks the only preparing order ready when unbound READY has no prompt', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'prep-1' }] })
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({
+        orders: [
+          ownerOrder({
+            id: 'prep-1',
+            order_number: 'ORD-PREP',
+            current_status: 'preparing',
+          }),
+        ],
+      });
+    orders.completePreparation.mockResolvedValue({ success: true });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'MARK_AS_READY',
+    });
+    expect(orders.completePreparation).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'prep-1' }),
+      expect.objectContaining({ businessId: 'b1' })
+    );
+    expect(result.message).toMatch(/ORD-PREP/);
+  });
+
+  it('refuses unbound READY when one confirmed and one preparing order exist', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [{ id: 'u1', business: { id: 'b1' }, location_delegations: [] }],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'o-conf' }, { id: 'o-prep' }] })
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({
+        orders: [
+          ownerOrder({
+            id: 'o-conf',
+            order_number: 'ORD-CONF',
+            current_status: 'confirmed',
+          }),
+          ownerOrder({
+            id: 'o-prep',
+            order_number: 'ORD-PREP',
+            current_status: 'preparing',
+          }),
+        ],
+      });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'MARK_AS_READY',
+    });
+    expect(orders.completePreparation).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/open rendasua/i);
+  });
+
   it('still declines the pending order when the latest prompt is a new order', async () => {
     hasura.executeQuery
       .mockResolvedValueOnce({

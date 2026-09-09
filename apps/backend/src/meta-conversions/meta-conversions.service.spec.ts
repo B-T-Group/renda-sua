@@ -130,6 +130,32 @@ describe('MetaConversionsService', () => {
     expect(payload.data[0].user_data.country).toBeDefined();
   });
 
+  it('uses store geo and payer country when the order has no delivery address', async () => {
+    executeQuery.mockResolvedValue({
+      orders_by_pk: {
+        id: 'ord-2',
+        order_number: 'RS-2',
+        total_amount: 10,
+        currency: 'XAF',
+        payer_country: 'CM',
+        order_items: [
+          { business_inventory_id: 'inv-2', quantity: 1, unit_price: 10 },
+        ],
+        client: { user_id: 'user-2', user: { email: 'c@d.com' } },
+        delivery_address: null,
+        business_location: {
+          address: { city: 'Douala', country: 'CM' },
+        },
+        meta_capi_context: { actionSource: 'app' },
+      },
+    });
+    await service.trackPurchaseForOrderId('ord-2');
+    const event = sendEvents.mock.calls[0][0].data[0];
+    expect(event.action_source).toBe('app');
+    expect(event.user_data.ct).toBeDefined();
+    expect(event.user_data.country).toBeDefined();
+  });
+
   it('trackViewContentSafe sends ViewContent', async () => {
     await service.trackViewContentSafe({
       eventId: 'ev-1',
