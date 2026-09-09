@@ -245,6 +245,10 @@ export default observer(function CartCheckoutScreen() {
   const fulfillmentConfirmed =
     !(pickupEligible || shippingEligible) || hasChosenFulfillment;
 
+  // Diaspora orders require Stripe pay-now only
+  const diasporaContext = preflightConfig?.diaspora;
+  const isDiaspora = requiresStripePayNow(diasporaContext);
+
   // Sticky latch: preflight only returns delivery_availability for delivery
   // fulfillment. Keep Delivery grayed out after auto-switching to pickup.
   const [deliveryUnavailable, setDeliveryUnavailable] = useState(false);
@@ -599,10 +603,6 @@ export default observer(function CartCheckoutScreen() {
 
   const onAddPhonePress = useCallback(() => setAddPhoneDialogVisible(true), []);
 
-  // Diaspora orders require Stripe pay-now only
-  const diasporaContext = preflightConfig?.diaspora;
-  const isDiaspora = requiresStripePayNow(diasporaContext);
-
   /**
    * Payment rail resolution (server-authoritative):
    * - resolvedIsStripeRail comes from preflightConfig.checkout_method === 'STRIPE'
@@ -730,7 +730,7 @@ export default observer(function CartCheckoutScreen() {
         (outcome.type === 'success' &&
           outcome.paymentRail === 'mobile_money' &&
           !outcome.cardAuthorized));
-    if (momoWaitingRequired && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
+    if (momoWaitingRequired) {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
         overrideNationalDigits

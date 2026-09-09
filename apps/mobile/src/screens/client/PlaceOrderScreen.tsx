@@ -960,7 +960,7 @@ export default function PlaceOrderScreen() {
         (outcome.type === 'success' &&
           outcome.paymentRail === 'mobile_money' &&
           !outcome.cardAuthorized));
-    if (momoWaitingRequired && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
+    if (momoWaitingRequired) {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
         overrideNationalDigits
