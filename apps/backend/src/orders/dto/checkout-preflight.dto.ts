@@ -303,6 +303,36 @@ export class CheckoutGroupDto {
 
   @ApiPropertyOptional({
     description:
+      'True when a MoMo reservation deposit is required for this group (MoMo rail + XAF + pay_at_delivery/pickup).',
+  })
+  deposit_required?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Deposit amount in XAF when deposit_required is true.',
+  })
+  deposit_amount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Remaining amount due after deposit (total - deposit_amount).',
+  })
+  amount_due?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Deposit rate used for calculation (0.10 for orders < 5000 XAF, 0.05 for >= 5000 XAF).',
+  })
+  deposit_rate?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'True when MoMo pay_now is enabled for delivery in this market. False means pay_now is hidden for MoMo + delivery.',
+  })
+  momo_pay_now_delivery_enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description:
       'Mobile Money provider selected for the supplied phone number. Null when rail is Stripe or phone not supplied.',
     example: 'freemopay',
   })

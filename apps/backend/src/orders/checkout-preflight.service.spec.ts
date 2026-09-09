@@ -262,6 +262,26 @@ describe('CheckoutPreflightService', () => {
             payerCurrencyForCountry: jest.fn().mockReturnValue(null),
           },
         },
+        {
+          provide: require('./deposit-calculation.service').DepositCalculationService,
+          useValue: {
+            calculateDeposit: jest.fn((total: number, currency: string) => {
+              if (currency !== 'XAF') {
+                throw new Error('Only XAF supported');
+              }
+              const rate = total < 5000 ? 0.1 : 0.05;
+              const calculated = Math.round(total * rate);
+              const depositAmount = Math.max(151, calculated);
+              return {
+                depositAmount,
+                rate,
+                amountDue: total - depositAmount,
+                totalAmount: total,
+              };
+            }),
+            isDepositRequired: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -1014,6 +1034,367 @@ describe('CheckoutPreflightService', () => {
           (e) => e.code === 'DIASPORA_REQUIRES_PAY_NOW'
         )
       ).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // MoMo deposit quote on preflight
+  // -------------------------------------------------------------------------
+  describe('MoMo deposit quote', () => {
+    beforeEach(() => {
+      // Mock the market flag query for deposit tests
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  id: 'inv-1',
+                  sellerCountry: 'CM',
+                  currency: 'XAF',
+                  price: 10000,
+                  payOnDelivery: true,
+                  payAtPickup: true,
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: true }],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+    });
+
+    it('calculates deposit for MoMo + XAF + pay_at_delivery', async () => {
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        payment_timing: 'pay_at_delivery',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.groups[0]?.deposit_required).toBe(true);
+      expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF (>= 5000)
+      expect(result.groups[0]?.amount_due).toBe(9500);
+      expect(result.groups[0]?.deposit_rate).toBe(0.05);
+    });
+
+    it('calculates deposit for MoMo + XAF + pay_at_pickup', async () => {
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.groups[0]?.deposit_required).toBe(true);
+      expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF
+      expect(result.groups[0]?.amount_due).toBe(9500);
+      expect(result.groups[0]?.deposit_rate).toBe(0.05);
+    });
+
+    it('does NOT calculate deposit for pay_now timing', async () => {
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        payment_timing: 'pay_now',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.groups[0]?.deposit_required).toBeUndefined();
+      expect(result.groups[0]?.deposit_amount).toBeUndefined();
+    });
+
+    it('uses 5% rate for orders >= 5000 XAF', async () => {
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  id: 'inv-1',
+                  sellerCountry: 'CM',
+                  currency: 'XAF',
+                  price: 6000,
+                  payOnDelivery: true,
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: true }],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        payment_timing: 'pay_at_delivery',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.groups[0]?.deposit_required).toBe(true);
+      expect(result.groups[0]?.deposit_amount).toBe(300); // 5% of 6000 XAF
+      expect(result.groups[0]?.deposit_rate).toBe(0.05);
+    });
+
+    it('enforces 151 XAF floor on small orders', async () => {
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  id: 'inv-1',
+                  sellerCountry: 'CM',
+                  currency: 'XAF',
+                  price: 1000,
+                  payOnDelivery: true,
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: true }],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        payment_timing: 'pay_at_delivery',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.groups[0]?.deposit_required).toBe(true);
+      expect(result.groups[0]?.deposit_amount).toBe(151); // Floor, not 100 (10% of 1000)
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // MoMo pay_now filtering based on momo_pay_now_delivery_enabled
+  // -------------------------------------------------------------------------
+  describe('momo_pay_now_delivery_enabled flag', () => {
+    it('includes pay_now for MoMo + delivery when flag is enabled', async () => {
+      mockInventory([
+        makeInventoryRow({
+          sellerCountry: 'CM',
+          payOnDelivery: true,
+        }),
+      ]);
+
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  sellerCountry: 'CM',
+                  payOnDelivery: true,
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: true }],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        fulfillment_method: 'delivery',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.groups[0]?.allowed_payment_timings).toContain('pay_now');
+      expect(result.groups[0]?.allowed_payment_timings).toContain('pay_at_delivery');
+      expect(result.groups[0]?.momo_pay_now_delivery_enabled).toBe(true);
+    });
+
+    it('excludes pay_now for MoMo + delivery when flag is disabled', async () => {
+      mockInventory([
+        makeInventoryRow({
+          sellerCountry: 'CM',
+          payOnDelivery: true,
+        }),
+      ]);
+
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  sellerCountry: 'CM',
+                  payOnDelivery: true,
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: false }],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        fulfillment_method: 'delivery',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.groups[0]?.allowed_payment_timings).not.toContain('pay_now');
+      expect(result.groups[0]?.allowed_payment_timings).toContain('pay_at_delivery');
+      expect(result.groups[0]?.momo_pay_now_delivery_enabled).toBe(false);
+    });
+
+    it('always includes pay_now for MoMo + pickup regardless of flag', async () => {
+      mockInventory([
+        makeInventoryRow({
+          sellerCountry: 'CM',
+          payAtPickup: true,
+        }),
+      ]);
+
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  sellerCountry: 'CM',
+                  payAtPickup: true,
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: false }],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        fulfillment_method: 'pickup',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.groups[0]?.allowed_payment_timings).toContain('pay_now');
+      expect(result.groups[0]?.allowed_payment_timings).toContain('pay_at_pickup');
+      expect(result.groups[0]?.momo_pay_now_delivery_enabled).toBeUndefined();
+    });
+
+    it('always includes pay_now for Stripe regardless of MoMo flag', async () => {
+      mockInventory([
+        makeInventoryRow({
+          sellerCountry: 'CA',
+        }),
+      ]);
+      (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
+
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  sellerCountry: 'CA',
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: false }],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const dto: CheckoutPreflightDto = {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CA',
+        fulfillment_method: 'delivery',
+      };
+
+      const result = await service.resolve(dto, false);
+
+      expect(result.groups[0]?.allowed_payment_timings).toContain('pay_now');
+      expect(result.groups[0]?.payment_rail).toBe('stripe');
     });
   });
 });
