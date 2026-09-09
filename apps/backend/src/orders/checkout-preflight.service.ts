@@ -509,6 +509,14 @@ export class CheckoutPreflightService {
       if (allPayOnDelivery && rail !== 'stripe') allowedPaymentTimings.push('pay_at_delivery');
       if (allPayAtPickup && rail !== 'stripe') allowedPaymentTimings.push('pay_at_pickup');
 
+      // Safety: If no payment timings available (shouldn't happen in valid config), block checkout
+      if (allowedPaymentTimings.length === 0) {
+        blockers.push({
+          code: 'NO_PAYMENT_TIMING_AVAILABLE',
+          message: `No payment options are available for items from ${group.businessName || businessId}. Please contact support.`,
+        });
+      }
+
       // Validate requested payment timing
       const requestedTiming = dto.payment_timing ?? 'pay_now';
       if (requestedTiming === 'pay_at_delivery' && !allPayOnDelivery) {

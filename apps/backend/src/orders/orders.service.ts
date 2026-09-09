@@ -9595,13 +9595,12 @@ export class OrdersService {
     let current_status: string;
     if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
       // Check if deposit will be required using same logic as deposit collection below
-      // Rail determination: Stripe seller → stripe, wallet payer → wallet, else mobile_money
+      // Rail determination must match deposit collect path to avoid status/collect disagreement
+      // For PAD/PAP: payment_source is always 'mobile_payment', so rail logic simplifies
       const railForDepositCheck: 'mobile_money' | 'stripe' | 'wallet' =
         paymentRail === 'stripe'
           ? 'stripe'
-          : (canPayWithWallet || isZeroOrNegativeOrder)
-            ? 'wallet'
-            : 'mobile_money';
+          : 'mobile_money';  // PAD/PAP never uses wallet (payment_source = mobile_payment)
       const requiresDeposit = this.depositCalculationService.isDepositRequired(
         paymentTiming,
         railForDepositCheck
@@ -9990,9 +9989,17 @@ export class OrdersService {
           `Failed to start acceptance SLA for ${order.id}: ${error?.message}`
         );
       }
-      
-      // Send order.created message to SQS queue for non-deposit orders
-      // For deposit-required orders, this is sent after deposit success in finalizeDepositAfterCallback
+    }
+
+    // Send order.created message to SQS queue for all creates EXCEPT MoMo deposit-required
+    // MoMo deposit-required orders get this message after deposit SUCCESS in finalizeDepositAfterCallback
+    // (Stripe, pay_now, wallet, non-XAF PAD/pickup all send immediately)
+    const isMomoDepositRequiredCreate =
+      (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') &&
+      current_status === 'pending_payment' &&
+      currency === 'XAF';
+    
+    if (!isMomoDepositRequiredCreate) {
       try {
         await this.orderQueueService.sendOrderCreatedMessage(order.id);
       } catch (error) {

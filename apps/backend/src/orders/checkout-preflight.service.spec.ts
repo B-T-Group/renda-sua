@@ -318,6 +318,13 @@ describe('CheckoutPreflightService', () => {
             ),
           });
         }
+        if (query.includes('GetMarketFlag')) {
+          // Default: momo_pay_now_delivery_enabled = true for all tests
+          // Individual tests can override this by setting up their own mock
+          return Promise.resolve({
+            application_configurations: [{ boolean_value: true }],
+          });
+        }
         return Promise.resolve({});
       }
     );
