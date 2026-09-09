@@ -533,6 +533,14 @@ describe('OrdersService', () => {
         jwtDefaultRole: 'client',
         jwtAllowedRoles: ['client'],
       });
+      hasuraUserService.getUserAddressById.mockResolvedValue({
+        id: 'address-123',
+        address_line_1: '123 Main St',
+        city: 'Douala',
+        state: 'Littoral',
+        postal_code: '00237',
+        country: 'CM',
+      } as any);
 
       const padInventoryFixture = {
         id: 'inventory-pad-123',
@@ -592,12 +600,15 @@ describe('OrdersService', () => {
         available_balance: 0,
       } as any);
 
-      jest.spyOn(service as any, 'paymentRoutingService', 'get').mockReturnValue({
+      (service as any).paymentRoutingService = {
         resolveOrderRail: jest.fn().mockResolvedValue({
           rail: 'mobile_money',
           isDiaspora: false,
         }),
-      });
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
 
       jest.spyOn(service as any, 'updateReservedQuantities').mockResolvedValue(undefined);
       jest.spyOn(service as any, 'isMarketFlagEnabled').mockResolvedValue(true);
@@ -624,30 +635,33 @@ describe('OrdersService', () => {
         totalAmount: 5500,
       });
 
-      jest.spyOn(service as any, 'mobilePaymentsService', 'get').mockReturnValue({
+      (service as any).mobilePaymentsService = {
         initiatePayment: jest.fn().mockResolvedValue({
           success: true,
           transactionId: 'momo-tx-123',
           message: 'Payment initiated',
         }),
         getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
-      });
+      };
 
-      jest.spyOn(service as any, 'mobilePaymentsDatabaseService', 'get').mockReturnValue({
+      (service as any).mobilePaymentsDatabaseService = {
         createTransaction: jest.fn().mockResolvedValue({
           id: 'db-tx-123',
           reference: 'REF-DEP-123',
           status: 'pending',
         }),
-      });
+      };
 
-      jest.spyOn(service as any, 'waitAndExecuteScheduleService', 'get').mockReturnValue({
+      (service as any).waitAndExecuteScheduleService = {
         schedulePaymentTimeout: jest.fn().mockResolvedValue(undefined),
-      });
+      };
 
       hasuraSystemService.executeQuery
         .mockResolvedValueOnce({
           business_inventory: [padInventoryFixture],
+        })
+        .mockResolvedValueOnce({
+          supported_payment_systems: [],
         })
         .mockResolvedValueOnce({ item_deals: [] });
 
