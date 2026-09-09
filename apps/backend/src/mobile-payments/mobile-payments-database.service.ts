@@ -42,6 +42,8 @@ export interface CreateTransactionData {
   customer_phone?: string;
   customer_email?: string;
   account_id?: string;
+  /** Provider reference (e.g. Freemopay `reference`) so callbacks can look up the row. */
+  transaction_id?: string;
   transaction_type?: 'PAYMENT' | 'GIVE_CHANGE';
   payment_entity?:
     | 'order'
@@ -213,6 +215,7 @@ export class MobilePaymentsDatabaseService {
             error_code
             created_at
             updated_at
+            entity_id
           }
         }
       `;

@@ -551,3 +551,107 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     );
   });
 });
+
+describe('MobilePaymentCallbackProcessor Freemopay lookup', () => {
+  const depositTx: MobilePaymentTransaction = {
+    id: '11111111-1111-4111-8111-111111111111',
+    reference: 'ORD-DEP-123',
+    amount: 150,
+    currency: 'XAF',
+    description: 'Deposit',
+    provider: 'freemopay',
+    payment_method: 'mobile_money',
+    status: 'pending',
+    transaction_id: '942b4b0d-3cf1-484e-8509-eca52cb15678',
+    account_id: 'acct-1',
+    transaction_type: 'PAYMENT',
+    payment_entity: 'order_deposit',
+    entity_id: 'ORD-1',
+    created_at: '2026-09-09T00:00:00.000Z',
+    updated_at: '2026-09-09T00:00:00.000Z',
+  };
+
+  const databaseService = {
+    getTransactionByTransactionId: jest.fn(),
+    getTransactionByReference: jest.fn(),
+    getTransactionById: jest.fn(),
+    logCallback: jest.fn(),
+    updateTransaction: jest.fn(),
+  };
+  const accountsService = {
+    hasTransactionForReference: jest.fn(),
+    registerTransaction: jest.fn(),
+  };
+  const onPaymentSuccess = jest.fn();
+  const paymentCallbackRegistry = {
+    getHandlers: jest.fn().mockReturnValue([
+      {
+        supportsPaymentEntity: (e: string) => e === 'order_deposit',
+        onPaymentSuccess,
+        onPaymentFailure: jest.fn(),
+        finalizeCashReconciliationAfterPayment: jest.fn(),
+      },
+    ]),
+  };
+  const mobilePaymentsService = {
+    assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+  };
+
+  let processor: MobilePaymentCallbackProcessor;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    processor = new MobilePaymentCallbackProcessor(
+      databaseService as never,
+      accountsService as never,
+      paymentCallbackRegistry as never,
+      mobilePaymentsService as never
+    );
+    databaseService.logCallback.mockResolvedValue(undefined);
+    databaseService.updateTransaction.mockResolvedValue(undefined);
+    accountsService.hasTransactionForReference.mockResolvedValue(false);
+    accountsService.registerTransaction.mockResolvedValue({ success: true });
+  });
+
+  it('finds the row by Freemopay provider reference', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(depositTx);
+
+    const result = await processor.processFreemopayCallback({
+      reference: depositTx.transaction_id as string,
+      status: 'SUCCESS',
+    });
+
+    expect(result.received).toBe(true);
+    expect(onPaymentSuccess).toHaveBeenCalled();
+    expect(databaseService.getTransactionById).not.toHaveBeenCalled();
+  });
+
+  it('falls back to merchantRef when provider id is missing', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(null);
+    databaseService.getTransactionByReference.mockImplementation(
+      async (ref: string) => (ref === depositTx.reference ? depositTx : null)
+    );
+
+    await processor.processFreemopayCallback({
+      reference: '942b4b0d-3cf1-484e-8509-eca52cb15678',
+      merchantRef: depositTx.reference,
+      status: 'SUCCESS',
+    });
+
+    expect(onPaymentSuccess).toHaveBeenCalled();
+  });
+
+  it('falls back to our row uuid', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(null);
+    databaseService.getTransactionByReference.mockResolvedValue(null);
+    databaseService.getTransactionById.mockResolvedValue(depositTx);
+
+    await processor.processFreemopayCallback({
+      reference: depositTx.id,
+      status: 'SUCCESS',
+    });
+
+    expect(databaseService.getTransactionById).toHaveBeenCalledWith(depositTx.id);
+    expect(onPaymentSuccess).toHaveBeenCalled();
+  });
+});

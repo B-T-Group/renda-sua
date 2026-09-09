@@ -10510,6 +10510,7 @@ export class OrdersService {
               transaction_type: 'PAYMENT',
               payment_entity: 'order_deposit',
               entity_id: order.order_number,
+              transaction_id: depositResult.transactionId,
             });
 
           // Update order with deposit info (keep status pending_payment until callback)
