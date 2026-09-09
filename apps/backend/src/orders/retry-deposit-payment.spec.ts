@@ -81,6 +81,9 @@ describe('OrdersService - retryDepositPayment', () => {
         warn: jest.fn(),
         error: jest.fn(),
       },
+      finalizeDepositAfterCallback: jest.fn(),
+      completePaidDepositFromSucceededTxn:
+        OrdersService.prototype.completePaidDepositFromSucceededTxn,
       retryDepositPayment: OrdersService.prototype.retryDepositPayment,
     } as any;
   });
@@ -213,12 +216,13 @@ describe('OrdersService - retryDepositPayment', () => {
       );
     });
 
-    it('should return 409 DEPOSIT_PAYMENT_PROCESSING if prior deposit transaction succeeded but deposit_status still pending', async () => {
+    it('should replay deposit finalize if prior deposit transaction succeeded but deposit_status still pending', async () => {
       const order = {
         ...mockOrder,
         deposit_mobile_payment_transaction_id: 'txn-old-123',
       };
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
+      (service as any).finalizeDepositAfterCallback.mockResolvedValue(undefined);
 
       mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
         id: 'txn-old-123',
@@ -228,27 +232,27 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
-      await expect(
-        service.retryDepositPayment('order-123')
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            success: false,
-            code: 'DEPOSIT_PAYMENT_PROCESSING',
-            existing_transaction_id: 'txn-old-123',
-            deposit_status: 'pending',
-          }),
-          status: HttpStatus.CONFLICT,
-        })
+      const result = await service.retryDepositPayment('order-123');
+
+      expect((service as any).finalizeDepositAfterCallback).toHaveBeenCalledWith(
+        'ORD-123',
+        'txn-old-123'
       );
+      expect(result).toEqual({
+        success: true,
+        message: 'Deposit payment completed',
+        current_status: 'pending',
+        deposit_status: 'paid',
+      });
     });
 
-    it('should return 409 DEPOSIT_PAYMENT_PROCESSING if prior deposit transaction authorized but deposit_status still pending', async () => {
+    it('should replay deposit finalize if prior deposit transaction authorized but deposit_status still pending', async () => {
       const order = {
         ...mockOrder,
         deposit_mobile_payment_transaction_id: 'txn-old-123',
       };
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
+      (service as any).finalizeDepositAfterCallback.mockResolvedValue(undefined);
 
       mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
         id: 'txn-old-123',
@@ -258,19 +262,13 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
-      await expect(
-        service.retryDepositPayment('order-123')
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            success: false,
-            code: 'DEPOSIT_PAYMENT_PROCESSING',
-            existing_transaction_id: 'txn-old-123',
-            deposit_status: 'pending',
-          }),
-          status: HttpStatus.CONFLICT,
-        })
+      const result = await service.retryDepositPayment('order-123');
+
+      expect((service as any).finalizeDepositAfterCallback).toHaveBeenCalledWith(
+        'ORD-123',
+        'txn-old-123'
       );
+      expect(result.deposit_status).toBe('paid');
     });
 
 
