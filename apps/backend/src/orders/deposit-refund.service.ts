@@ -149,14 +149,14 @@ export class DepositRefundService {
         };
       }
 
-      if (!order.deposit_paid) {
+      if (order.deposit_status !== 'paid') {
         return {
           success: false,
           message: 'No deposit to forfeit',
         };
       }
 
-      if (order.deposit_forfeit_at) {
+      if (order.deposit_forfeited_at) {
         return {
           success: false,
           message: 'Deposit already forfeited',
@@ -171,7 +171,7 @@ export class DepositRefundService {
             _set: {
               deposit_status: "forfeited"
               deposit_forfeit_reason: $reason
-              deposit_forfeit_at: $now
+              deposit_forfeited_at: $now
             }
           ) {
             id
@@ -210,13 +210,12 @@ export class DepositRefundService {
     transactionId: string
   ): Promise<void> {
     const mutation = `
-      mutation CompleteDepositRefund($orderId: uuid!, $transactionId: String!, $now: timestamptz!) {
+      mutation CompleteDepositRefund($orderId: uuid!, $now: timestamptz!) {
         update_orders_by_pk(
           pk_columns: { id: $orderId }
           _set: {
-            deposit_refund_status: "succeeded"
-            deposit_refund_transaction_id: $transactionId
-            deposit_refund_completed_at: $now
+            deposit_refund_status: "refunded"
+            deposit_refunded_at: $now
             deposit_status: "refunded"
           }
         ) {
@@ -227,7 +226,6 @@ export class DepositRefundService {
 
     await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
-      transactionId,
       now: new Date().toISOString(),
     });
 
@@ -250,7 +248,7 @@ export class DepositRefundService {
       };
     }
 
-    if (!order.deposit_paid) {
+    if (order.deposit_status !== 'paid') {
       return {
         eligible: false,
         reason: 'Deposit not yet captured',
@@ -276,7 +274,7 @@ export class DepositRefundService {
 
     if (
       order.deposit_refund_status === 'pending' ||
-      order.deposit_refund_status === 'succeeded'
+      order.deposit_refund_status === 'refunded'
     ) {
       return {
         eligible: false,
@@ -300,16 +298,12 @@ export class DepositRefundService {
     const mutation = `
       mutation MarkDepositRefundAttempted(
         $orderId: uuid!,
-        $transactionId: String,
-        $status: String!,
-        $now: timestamptz!
+        $status: String!
       ) {
         update_orders_by_pk(
           pk_columns: { id: $orderId }
           _set: {
             deposit_refund_status: $status
-            deposit_refund_transaction_id: $transactionId
-            deposit_refund_attempted_at: $now
           }
         ) {
           id
@@ -319,9 +313,7 @@ export class DepositRefundService {
 
     await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
-      transactionId,
       status,
-      now: new Date().toISOString(),
     });
 
     if (notes) {
@@ -344,16 +336,12 @@ export class DepositRefundService {
           fulfillment_method
           currency
           deposit_amount
-          deposit_paid
-          deposit_transaction_id
+          deposit_mobile_payment_transaction_id
           deposit_status
-          deposit_captured_at
           deposit_refund_status
-          deposit_refund_transaction_id
-          deposit_refund_attempted_at
-          deposit_refund_completed_at
           deposit_forfeit_reason
-          deposit_forfeit_at
+          deposit_forfeited_at
+          deposit_refunded_at
           recipient_phone
           payer_phone
           business_location {

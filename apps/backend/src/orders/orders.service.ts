@@ -7007,8 +7007,8 @@ export class OrdersService {
    * CRITICAL: This is NOT a full order payment. Do not call finalizePayAtDeliveryPaymentAndComplete.
    * 
    * On deposit SUCCESS:
-   * - Mark deposit_paid = true, deposit_status = 'captured'
-   * - Set amount_due = total - deposit
+   * - Mark deposit_status = 'paid' (enum value)
+   * - Link deposit_mobile_payment_transaction_id (uuid FK)
    * - Transition pending_payment → pending (await merchant acceptance)
    * - Credit client wallet (consistent with existing MoMo order path)
    * - Start acceptance SLA
@@ -7032,7 +7032,7 @@ export class OrdersService {
         return;
       }
 
-      if ((order as any).deposit_paid === true) {
+      if ((order as any).deposit_status === 'paid') {
         this.logger.warn(
           `Deposit already captured for order ${orderNumber}`
         );
@@ -7043,21 +7043,18 @@ export class OrdersService {
       const totalAmount = order.total_amount || 0;
       const amountDue = Math.max(0, totalAmount - depositAmount);
 
-      // Mark deposit as captured and transition to pending (NOT paid - remainder still due)
+      // Mark deposit as paid and transition to pending (NOT fully paid - remainder still due)
       const finalizeMutation = `
         mutation FinalizeDeposit(
           $orderId: uuid!,
-          $transactionId: String!,
-          $amountDue: numeric!,
+          $transactionId: uuid!,
           $now: timestamptz!
         ) {
           update_orders_by_pk(
             pk_columns: { id: $orderId }
             _set: {
-              deposit_paid: true
-              deposit_status: "captured"
-              deposit_captured_at: $now
-              deposit_transaction_id: $transactionId
+              deposit_status: "paid"
+              deposit_mobile_payment_transaction_id: $transactionId
               current_status: pending
               payment_status: "pending"
               updated_at: $now
@@ -7075,7 +7072,6 @@ export class OrdersService {
       await this.hasuraSystemService.executeMutation(finalizeMutation, {
         orderId: order.id,
         transactionId,
-        amountDue,
         now: new Date().toISOString(),
       });
 
@@ -9777,14 +9773,14 @@ export class OrdersService {
             mutation UpdateOrderDeposit(
               $orderId: uuid!,
               $depositAmount: numeric!,
-              $depositTransactionId: String!,
+              $depositMobilePaymentTransactionId: uuid!,
               $currentStatus: order_status!
             ) {
               update_orders_by_pk(
                 pk_columns: { id: $orderId }
                 _set: {
                   deposit_amount: $depositAmount
-                  deposit_transaction_id: $depositTransactionId
+                  deposit_mobile_payment_transaction_id: $depositMobilePaymentTransactionId
                   deposit_status: "pending"
                   current_status: $currentStatus
                 }
@@ -9797,7 +9793,7 @@ export class OrdersService {
           await this.hasuraSystemService.executeMutation(updateDepositMutation, {
             orderId: order.id,
             depositAmount: depositCalc.depositAmount,
-            depositTransactionId: depositResult.transactionId ?? depositShortReference,
+            depositMobilePaymentTransactionId: depositTransaction.id,
             currentStatus: 'pending_payment',
           });
 
