@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
-import { formatCatalogMoney } from '../../utils/formatters';
+import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
 
 export interface ReservationDepositExplainerProps {
   depositAmount: number;
