@@ -7077,7 +7077,34 @@ export class OrdersService {
       const totalAmount = order.total_amount || 0;
       const amountDue = Math.max(0, totalAmount - depositAmount);
 
-      // Mark deposit as paid and transition to pending (NOT fully paid - remainder still due)
+      // CRITICAL ORDER: Credit wallet FIRST, then mark deposit as paid
+      // Fail closed: if wallet credit fails, do not mark deposit as paid
+      if (depositAmount && depositAmount > 0) {
+        // Resolve client account the same way as other MoMo credit paths
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new Error(
+            `No account found for client user ${order.client.user_id} currency ${order.currency}`
+          );
+        }
+        
+        // Credit wallet - fail the entire callback if this fails
+        await this.accountsService.registerDepositIfNotExists({
+          accountId: clientAccount.id,
+          amount: depositAmount,
+          referenceId: `deposit-${order.order_number}`,
+          memo: `Deposit captured for order ${order.order_number}`,
+        });
+        
+        this.logger.log(
+          `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
+        );
+      }
+
+      // Only mark deposit as paid AFTER wallet credit succeeds
       // Note: deposit_mobile_payment_transaction_id FK already set at place-order
       const finalizeMutation = `
         mutation FinalizeDeposit(
@@ -7112,38 +7139,8 @@ export class OrdersService {
         `Amount due: ${amountDue}. Transitioning to pending (awaiting merchant).`
       );
 
-      // Credit client wallet with deposit (consistent with existing MoMo order credit path)
       // Settlement math: At Delivered, full order total will be debited from client wallet
       // and settled to merchant, so deposit is counted once in GMV, not double-paid to merchant.
-      try {
-        if (depositAmount && depositAmount > 0) {
-          // Resolve client account the same way as other MoMo credit paths
-          const clientAccount = await this.hasuraSystemService.getAccount(
-            order.client.user_id,
-            order.currency
-          );
-          if (!clientAccount) {
-            throw new Error(
-              `No account found for client user ${order.client.user_id} currency ${order.currency}`
-            );
-          }
-          await this.accountsService.registerDepositIfNotExists({
-            accountId: clientAccount.id,
-            amount: depositAmount,
-            referenceId: `deposit-${order.order_number}`,
-            memo: `Deposit captured for order ${order.order_number}`,
-          });
-          this.logger.log(
-            `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
-          );
-        }
-      } catch (ledgerError: any) {
-        this.logger.error(
-          `Failed to credit client wallet with deposit for ${orderNumber}:`,
-          ledgerError
-        );
-        // Non-blocking: deposit is still marked captured on order
-      }
 
       // Start acceptance SLA now that deposit is captured
       try {
