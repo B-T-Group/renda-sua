@@ -317,7 +317,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
         onSecondary={isOrderDetailSource ? leaveToOrder : undefined}
         secondaryLabel={
           isOrderDetailSource
-            ? t('orders.momoAwaiting.backToOrder', 'Back to order')
+            ? t('orders.momoAwaiting.back', 'Back to order')
             : undefined
         }
       />

@@ -358,7 +358,7 @@ export function OrderClientSummaryCard({
           </Button>
           <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xs }}>
             {t(
-              'deposit.paymentHelper',
+              'deposit.resumeHelper',
               'Pay the reservation deposit to confirm your order. You will pay the remaining amount when you receive your order.'
             )}
           </Text>
