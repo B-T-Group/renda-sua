@@ -40,7 +40,14 @@ export type CheckoutOutcome =
       /** Manual capture: card authorized at checkout, charge happens later. */
       cardAuthorized?: boolean;
     }
-  | { type: 'pending'; orderIds: string[]; orderNumbers: string[]; paymentRail: 'stripe' | 'mobile_money' | null }
+  | { 
+      type: 'pending'; 
+      orderIds: string[]; 
+      orderNumbers: string[]; 
+      paymentRail: 'stripe' | 'mobile_money' | null;
+      /** True when deposit collect started (navigate to MoMo await). */
+      isDepositOrder?: boolean;
+    }
   | { type: 'cancelled' }
   | { type: 'busy' }
   | { type: 'error'; message: string; code?: string }; // code e.g. MERCHANT_CLOSED
@@ -181,15 +188,26 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
       // - Backend initiates MoMo collect during order creation (same create-order endpoint)
       // - Response includes payment_transaction (deposit collect started)
       // - deposit_status may be omitted on create; GET /orders/:id later shows pending
-      // - Navigation to MoMo await triggered by: current_status=pending_payment AND/OR payment_transaction present
-      // - Poll GET /orders/:id checks deposit_status: paid→success, failed→retry (#280 logic)
+      // - Deposit orders identified by: deposit_amount > 0 OR deposit_mobile_payment_transaction_id present
+      // - Navigate to MoMo await ONLY for deposit orders (non-deposit PAD/PAP must not await)
+      // - Poll GET /orders/:id checks deposit_status: paid→success, failed→order cancelled
       // 
       // Deposit orders and full pay-now MoMo both use the same pending flow.
       // All deposit fields remain optional/defensive for backward compatibility.
       
-      // Mobile Money is push-based; order is created and payment is initiated server-side.
-      // Navigate to wait screen when payment_transaction present (regardless of deposit_status).
-      return { type: 'pending', orderIds: [order.id], orderNumbers: [order.order_number ?? order.id], paymentRail: 'mobile_money' };
+      // Detect deposit order: has deposit_amount or deposit transaction ID
+      const isDepositOrder = Boolean(
+        (order.deposit_amount != null && order.deposit_amount > 0) ||
+        order.deposit_mobile_payment_transaction_id
+      );
+      
+      return { 
+        type: 'pending', 
+        orderIds: [order.id], 
+        orderNumbers: [order.order_number ?? order.id], 
+        paymentRail: 'mobile_money',
+        isDepositOrder,
+      };
     },
     []
   );

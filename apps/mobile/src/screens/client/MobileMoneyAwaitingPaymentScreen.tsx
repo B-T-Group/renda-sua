@@ -38,7 +38,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
   const [currentPhone, setCurrentPhone] = useState(phoneE164);
   const [editPhoneDialogVisible, setEditPhoneDialogVisible] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
-  const [orderData, setOrderData] = useState<{ deposit_amount?: number; currency?: string } | null>(null);
+  const [orderData, setOrderData] = useState<{ deposit_amount?: number; amount_due?: number; currency?: string } | null>(null);
   const masked = useMemo(() => maskPhoneE164(currentPhone), [currentPhone]);
 
   // Fetch order to determine if this is a deposit order
@@ -51,6 +51,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
         if (!cancelled) {
           setOrderData({
             deposit_amount: order.deposit_amount,
+            amount_due: order.amount_due,
             currency: order.currency || 'XAF',
           });
         }
@@ -84,8 +85,27 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     });
   }, [navigation, t, isDepositOrder]);
 
+  // Deposit fail/timeout: navigate back to checkout (order cancelled server-side).
+  // No retry endpoint exists for deposits.
+  const onBackToCheckout = useCallback(() => {
+    stop();
+    // Navigate back to previous screen (PlaceOrder or Cart)
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      // Fallback: navigate to main tabs
+      navigation.navigate('ClientMainTabs', { screen: 'ClientHome' });
+    }
+  }, [navigation, stop]);
+
+  // Non-deposit retry (pay_now full-pay or pickup)
   const onRetry = async () => {
     if (!orderIds.length) return;
+    // NEVER retry for deposit orders - they're cancelled server-side
+    if (isDepositOrder) {
+      onBackToCheckout();
+      return;
+    }
     setRetrying(true);
     setRetryError(null);
     try {
@@ -152,21 +172,46 @@ export default function MobileMoneyAwaitingPaymentScreen() {
   const phase = state.phase;
   const waiting = phase === 'waiting';
 
-  // When phase is 'failed', use PaymentRetryView instead of inline UI
+  // When phase is 'failed', use PaymentRetryView or deposit-specific fail UI
   if (phase === 'failed') {
-    const errorTitle = isDepositOrder
-      ? t('orders.deposit.failedTitle', 'Deposit not received')
-      : t('orders.momoAwaiting.failedTitle', 'Payment failed');
+    if (isDepositOrder) {
+      // Deposit fail: order cancelled server-side, navigate back to checkout
+      return (
+        <View style={{ flex: 1 }}>
+          <PaymentRetryView
+            errorTitle={t('orders.deposit.failedTitle', 'Deposit not received')}
+            errorReason={t(
+              'orders.deposit.failedBody',
+              "No MoMo approval received. Your order wasn't placed. Return to checkout to try again with the same or different number."
+            )}
+            tips={[
+              {
+                icon: 'wallet-outline',
+                title: t('checkout.payment.checkBalance', 'Check your MoMo balance'),
+                description: t('checkout.payment.checkBalanceDesc', 'Top up your MoMo wallet before trying again.'),
+              },
+              {
+                icon: 'phone-check-outline',
+                title: t('checkout.payment.confirmPhone', 'Confirm your phone number'),
+                description: t('checkout.payment.confirmPhoneDesc', 'Make sure {{phone}} matches the number linked to your MoMo wallet.', { phone: masked }),
+              },
+            ]}
+            onRetry={onBackToCheckout}
+            retrying={false}
+            showOrderReservedBanner={false}
+            retryLabel={t('orders.deposit.backToCheckout', 'Back to checkout')}
+            // No onEditPhone or onChangeMethod for deposits - must re-place order
+          />
+        </View>
+      );
+    }
     
-    const errorReason = isDepositOrder
-      ? t('orders.deposit.failedBody', "No MoMo approval yet. Your order isn't placed — try again or change the number.")
-      : (error || retryError || t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again or go back to your order.'));
-    
+    // Non-deposit fail: allow retry
     return (
       <View style={{ flex: 1 }}>
         <PaymentRetryView
-          errorTitle={errorTitle}
-          errorReason={errorReason}
+          errorTitle={t('orders.momoAwaiting.failedTitle', 'Payment failed')}
+          errorReason={error || retryError || t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again or go back to your order.')}
           tips={[
             {
               icon: 'wallet-outline',
@@ -181,9 +226,9 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           ]}
           onRetry={() => void onRetry()}
           retrying={retrying}
-          showOrderReservedBanner={!isDepositOrder}
+          showOrderReservedBanner={true}
           onEditPhone={onEditPhone}
-          retryLabel={t('orders.deposit.sendAgain', 'Send again')}
+          retryLabel={t('orders.momoAwaiting.sendAgain', 'Send again')}
           // onChangeMethod NOT passed - payment rail is locked by preflight
         />
         
@@ -255,20 +300,37 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           }}
         >
           {phase === 'paid'
-            ? source === 'pickup'
+            ? isDepositOrder && orderData
               ? t(
-                  'orders.momoAwaiting.paidBodyPickup',
-                  'Your payment went through. You can collect your order at the store.'
+                  'orders.deposit.paidBody',
+                  'Deposit paid! The remaining {{remainder}} {{currency}} is due at {{timing}}.',
+                  { 
+                    remainder: orderData.amount_due || 0,
+                    currency: orderData.currency,
+                    timing: fulfillment === 'pickup' 
+                      ? t('orders.deposit.atPickup', 'pickup')
+                      : t('orders.deposit.atDelivery', 'delivery')
+                  }
                 )
-              : t(
-                  'orders.momoAwaiting.paidBodyWaitingForStore',
-                  "Waiting for the store to accept your order. We'll notify you as soon as they confirm."
-                )
+              : source === 'pickup'
+                ? t(
+                    'orders.momoAwaiting.paidBodyPickup',
+                    'Your payment went through. You can collect your order at the store.'
+                  )
+                : t(
+                    'orders.momoAwaiting.paidBodyWaitingForStore',
+                    "Waiting for the store to accept your order. We'll notify you as soon as they confirm."
+                  )
             : phase === 'timeout'
-              ? t(
-                  'orders.momoAwaiting.timeoutBody',
-                  'We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.'
-                )
+              ? isDepositOrder
+                ? t(
+                    'orders.deposit.timeoutBody',
+                    "No MoMo approval yet. Your order wasn't placed. Return to checkout to try again with the same or different number."
+                  )
+                : t(
+                    'orders.momoAwaiting.timeoutBody',
+                    'We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.'
+                  )
               : isDepositOrder && orderData
                 ? t(
                     'orders.deposit.waitingBody',
@@ -345,21 +407,30 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           {phase === 'paid' ? (
             <>
               <Button mode="contained" onPress={onContinueAfterPaid}>
-                {source === 'pickup'
-                  ? t('orders.momoAwaiting.viewOrder', 'View order')
-                  : t('orders.momoAwaiting.viewOrder', 'View order')}
+                {isDepositOrder
+                  ? t('orders.deposit.continue', 'Continue')
+                  : source === 'pickup'
+                    ? t('orders.momoAwaiting.viewOrder', 'View order')
+                    : t('orders.momoAwaiting.viewOrder', 'View order')}
               </Button>
               {/* Only show Track on map for delivery orders, not pickup */}
-              {source === 'checkout' && fulfillment === 'delivery' ? (
+              {source === 'checkout' && fulfillment === 'delivery' && !isDepositOrder ? (
                 <Button mode="outlined" icon="map-marker-outline" onPress={leaveToOrder}>
                   {t('orders.momoAwaiting.trackOnMap', 'Track on map')}
                 </Button>
               ) : null}
             </>
           ) : null}
-          {phase !== 'paid' ? (
-            <Button mode="text" onPress={leaveToOrder}>
-              {t('orders.momoAwaiting.back', 'Back to order')}
+          {phase === 'timeout' && isDepositOrder ? (
+            <Button mode="contained" onPress={onBackToCheckout}>
+              {t('orders.deposit.backToCheckout', 'Back to checkout')}
+            </Button>
+          ) : null}
+          {phase !== 'paid' && !(phase === 'timeout' && isDepositOrder) ? (
+            <Button mode="text" onPress={isDepositOrder && phase === 'timeout' ? onBackToCheckout : leaveToOrder}>
+              {phase === 'timeout' && isDepositOrder
+                ? t('orders.deposit.backToCheckout', 'Back to checkout')
+                : t('orders.momoAwaiting.back', 'Back to order')}
             </Button>
           ) : null}
         </View>

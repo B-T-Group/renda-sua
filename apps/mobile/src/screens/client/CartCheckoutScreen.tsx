@@ -721,15 +721,14 @@ export default observer(function CartCheckoutScreen() {
     }
 
     cart.clear();
-    // Navigate to MoMo waiting screen for:
-    // 1. Pay-now MoMo orders (full payment or deposit)
-    // 2. Pay-at-delivery/pickup MoMo deposit orders (deposit collect initiated)
+    // Navigate to MoMo waiting screen ONLY for deposit orders (deposit collect initiated).
+    // Non-deposit PAD/PAP MoMo must NOT enter await (would poll-timeout).
+    // Deposit detected by: deposit_amount > 0 OR deposit_mobile_payment_transaction_id present.
     const momoWaitingRequired =
       !resolvedIsStripeRail &&
-      (outcome.type === 'pending' ||
-        (outcome.type === 'success' &&
-          outcome.paymentRail === 'mobile_money' &&
-          !outcome.cardAuthorized));
+      outcome.type === 'pending' &&
+      outcome.paymentRail === 'mobile_money' &&
+      outcome.isDepositOrder === true;
     if (momoWaitingRequired) {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
