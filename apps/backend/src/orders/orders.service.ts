@@ -4166,9 +4166,9 @@ export class OrdersService {
             HttpStatus.CONFLICT
           );
         }
-        if (existingTxn.status === 'success') {
+        if (existingTxn.status === 'success' || (existingTxn.status as any) === 'authorized') {
           this.logger.warn(
-            `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} succeeded but order deposit_status still pending (callback lag or finalize failure)`
+            `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} succeeded/authorized but order deposit_status still pending (callback lag or finalize failure)`
           );
           throw new HttpException(
             {
@@ -4220,41 +4220,75 @@ export class OrdersService {
 
     // TOCTOU guard: Claim the order row with conditional FK update before initiating payment.
     // This prevents concurrent retries from both passing the guard and both initiating payment.
-    const claimDepositMutation = `
-      mutation ClaimDepositRetry(
-        $orderId: uuid!,
-        $expectedPriorTxnId: uuid,
-        $claimValue: uuid!,
-        $now: timestamptz!
-      ) {
-        update_orders(
-          where: {
-            id: { _eq: $orderId }
-            deposit_mobile_payment_transaction_id: { _eq: $expectedPriorTxnId }
+    // Hasura _eq: null does NOT match NULL columns; use _is_null: true for null prior FK.
+    const claimDepositMutation = existingTxnId
+      ? `
+          mutation ClaimDepositRetry(
+            $orderId: uuid!,
+            $expectedPriorTxnId: uuid!,
+            $claimValue: uuid!,
+            $now: timestamptz!
+          ) {
+            update_orders(
+              where: {
+                id: { _eq: $orderId }
+                deposit_mobile_payment_transaction_id: { _eq: $expectedPriorTxnId }
+              }
+              _set: {
+                deposit_mobile_payment_transaction_id: $claimValue
+                updated_at: $now
+              }
+            ) {
+              affected_rows
+              returning {
+                id
+                deposit_mobile_payment_transaction_id
+              }
+            }
           }
-          _set: {
-            deposit_mobile_payment_transaction_id: $claimValue
-            updated_at: $now
+        `
+      : `
+          mutation ClaimDepositRetryNull(
+            $orderId: uuid!,
+            $claimValue: uuid!,
+            $now: timestamptz!
+          ) {
+            update_orders(
+              where: {
+                id: { _eq: $orderId }
+                deposit_mobile_payment_transaction_id: { _is_null: true }
+              }
+              _set: {
+                deposit_mobile_payment_transaction_id: $claimValue
+                updated_at: $now
+              }
+            ) {
+              affected_rows
+              returning {
+                id
+                deposit_mobile_payment_transaction_id
+              }
+            }
           }
-        ) {
-          affected_rows
-          returning {
-            id
-            deposit_mobile_payment_transaction_id
-          }
-        }
-      }
-    `;
+        `;
 
     const claimTxnId = crypto.randomUUID();
+    const claimVariables = existingTxnId
+      ? {
+          orderId: order.id,
+          expectedPriorTxnId: existingTxnId,
+          claimValue: claimTxnId,
+          now: new Date().toISOString(),
+        }
+      : {
+          orderId: order.id,
+          claimValue: claimTxnId,
+          now: new Date().toISOString(),
+        };
+
     const claimResult = await this.hasuraSystemService.executeMutation(
       claimDepositMutation,
-      {
-        orderId: order.id,
-        expectedPriorTxnId: existingTxnId || null,
-        claimValue: claimTxnId,
-        now: new Date().toISOString(),
-      }
+      claimVariables
     );
 
     if (claimResult.update_orders.affected_rows === 0) {
