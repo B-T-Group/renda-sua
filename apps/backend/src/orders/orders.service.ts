@@ -10917,6 +10917,23 @@ export class OrdersService {
         throw new Error('Order not found');
       }
 
+      // Calculate client hold amount
+      // CRITICAL: When deposit is paid, client only owes the remainder (total - deposit)
+      // The deposit is already on the platform ledger (client wallet was credited on deposit SUCCESS)
+      // Merchant settlement will still use the FULL order total (deposit + remainder)
+      const depositAmount = (order as any).deposit_amount || 0;
+      const depositStatus = (order as any).deposit_status;
+      const depositPaid = depositStatus === 'paid';
+      
+      const clientHoldAmount = depositPaid
+        ? Math.max(0, order.total_amount - depositAmount)
+        : order.total_amount;
+
+      this.logger.log(
+        `Creating order hold for ${orderId}: total=${order.total_amount}, ` +
+        `deposit=${depositAmount} (${depositStatus}), client_hold=${clientHoldAmount}`
+      );
+
       // Create a new order hold
       const createOrderHoldMutation = `
         mutation CreateOrderHold(
@@ -10959,7 +10976,7 @@ export class OrdersService {
           orderId: order.id,
           clientId: order.client_id,
           currency: order.currency,
-          clientHoldAmount: order.total_amount,
+          clientHoldAmount,
           deliveryFees: deliveryFees ?? 0,
         }
       );
