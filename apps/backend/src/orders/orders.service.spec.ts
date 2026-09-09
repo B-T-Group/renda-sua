@@ -45,9 +45,11 @@ import { OrderPickupMonitorService } from './order-pickup-monitor.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { DepositCalculationService } from './deposit-calculation.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
+  let module: TestingModule;
   let hasuraUserService: jest.Mocked<HasuraUserService>;
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let configService: jest.Mocked<ConfigService<Configuration>>;
@@ -196,7 +198,7 @@ describe('OrdersService', () => {
       creditReferralAfterCompletedDelivery: jest.fn().mockResolvedValue(undefined),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         OrdersService,
         {
@@ -430,6 +432,18 @@ describe('OrdersService', () => {
             refundDeposit: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: require('../commerce-integrations/commerce-order-inventory.hook').CommerceOrderInventoryHook,
+          useValue: {},
+        },
+        {
+          provide: require('../representative-compensation/representative-compensation.service').RepresentativeCompensationService,
+          useValue: {},
+        },
+        {
+          provide: require('../credits/credits.service').CreditsService,
+          useValue: {},
+        },
       ],
     }).compile();
 
@@ -511,6 +525,187 @@ describe('OrdersService', () => {
           firstOrderBaseDeliveryDiscountAmount: 0,
         })
       );
+    });
+
+    it('returns deposit_status, deposit_amount, and amount_due for MoMo deposit-required PAD orders', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraUserService.getUserAddressById.mockResolvedValue({
+        id: 'address-123',
+        address_line_1: '123 Main St',
+        city: 'Douala',
+        state: 'Littoral',
+        postal_code: '00237',
+        country: 'CM',
+      } as any);
+
+      const padInventoryFixture = {
+        id: 'inventory-pad-123',
+        computed_available_quantity: 10,
+        selling_price: 5000,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: '123 Main St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Business',
+            can_accept_orders: true,
+            is_verified: true,
+            user: { 
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-pad-123',
+          name: 'PAD item',
+          description: 'Pay at delivery item',
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Test Category' },
+          },
+        },
+      };
+
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-pad-123',
+        available_balance: 0,
+      } as any);
+
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+
+      jest.spyOn(service as any, 'updateReservedQuantities').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'isMarketFlagEnabled').mockResolvedValue(true);
+      jest.spyOn(service as any, 'assertDeliveryAvailable').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'calculateItemDeliveryFee').mockResolvedValue({
+        baseDeliveryFee: 500,
+        perKmDeliveryFee: 0,
+        deliveryFee: 500,
+        method: 'flat_fee',
+        currency: 'XAF',
+        country: 'CM',
+        isFirstOrderClient: false,
+        firstOrderDeliveryFeePromo: false,
+        firstOrderBaseDeliveryDiscountAmount: 0,
+        baseDeliveryFeeBeforeDiscount: 500,
+      });
+
+      const depositCalcService = module.get(DepositCalculationService) as jest.Mocked<DepositCalculationService>;
+      depositCalcService.isDepositRequired.mockReturnValue(true);
+      depositCalcService.calculateDeposit.mockReturnValue({
+        depositAmount: 550,
+        rate: 0.10,
+        amountDue: 4950,
+        totalAmount: 5500,
+      });
+
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn().mockResolvedValue({
+          success: true,
+          transactionId: 'momo-tx-123',
+          message: 'Payment initiated',
+        }),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      (service as any).mobilePaymentsDatabaseService = {
+        createTransaction: jest.fn().mockResolvedValue({
+          id: 'db-tx-123',
+          reference: 'REF-DEP-123',
+          status: 'pending',
+        }),
+      };
+
+      (service as any).waitAndExecuteScheduleService = {
+        schedulePaymentTimeout: jest.fn().mockResolvedValue(undefined),
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [padInventoryFixture],
+        })
+        .mockResolvedValueOnce({
+          supported_payment_systems: [],
+        })
+        .mockResolvedValueOnce({ item_deals: [] });
+
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-pad-123',
+            order_number: 'ORD-PAD-123',
+            payment_source: 'mobile_payment',
+            currency: 'XAF',
+            total_amount: 5500,
+            current_status: 'pending',
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 })
+        .mockResolvedValueOnce({
+          update_orders_by_pk: { id: 'order-pad-123' },
+        });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'delivery',
+        payment_timing: 'pay_at_delivery',
+        phone_number: '+237670000000',
+        items: [{ business_inventory_id: 'inventory-pad-123', quantity: 1 }],
+        delivery_address_id: 'address-123',
+      });
+
+      expect(result).toMatchObject({
+        current_status: 'pending_payment',
+        deposit_amount: 550,
+        deposit_status: 'pending',
+        amount_due: 4950,
+        payment_transaction: expect.objectContaining({
+          success: true,
+          transaction_id: 'momo-tx-123',
+          mode: 'mobile_money',
+        }),
+      });
+
+      expect(depositCalcService.isDepositRequired).toHaveBeenCalledWith(
+        'pay_at_delivery',
+        'mobile_money'
+      );
+      expect(depositCalcService.calculateDeposit).toHaveBeenCalledWith(5500, 'XAF');
     });
   });
 
