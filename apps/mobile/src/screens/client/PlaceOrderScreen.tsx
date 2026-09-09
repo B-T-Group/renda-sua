@@ -44,7 +44,9 @@ import { RecipientPicker } from '../../components/checkout/RecipientPicker';
 import { PayerChargeSummary } from '../../components/checkout/PayerChargeSummary';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
+import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { useClientAddresses } from '../../hooks/useClientAddresses';
+import { calculateDepositFallback, resolveDepositAmount } from '../../types/deposit';
 import { useClientProfileForPlaceOrder } from '../../hooks/useClientProfileForPlaceOrder';
 import { useCheckoutOrchestrator } from '../../hooks/useCheckoutOrchestrator';
 import { useCompleteAddressPrompt } from '../../hooks/useCompleteAddressPrompt';
@@ -671,6 +673,32 @@ export default function PlaceOrderScreen() {
 
   const grandTotal = Math.max(0, lineSubtotal + deliveryAmount - discountAmount);
 
+  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+  
+  // BLOCKER 1 FIX: Gate deposit UI on real deposit path
+  // Deposit path is active when:
+  // 1. Server explicitly provides deposit_amount > 0, OR
+  // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
+  const isDepositPath = useMemo(() => {
+    if (isDiaspora || resolvedIsStripeRail) return false;
+    const serverDepositProvided = preflightConfig?.deposit_amount != null && preflightConfig.deposit_amount > 0;
+    const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
+    return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
+  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
+
+  // Deposit calculation: prefer server deposit_amount, fallback to calculation.
+  const depositAmount = useMemo(() => {
+    if (!isDepositPath) return null;
+    const serverDeposit = preflightConfig?.deposit_amount;
+    return resolveDepositAmount(grandTotal, serverDeposit);
+  }, [isDepositPath, grandTotal, preflightConfig?.deposit_amount]);
+
+  const depositIsFloor = useMemo(() => {
+    if (!depositAmount) return false;
+    const DEPOSIT_FLOOR = 151;
+    return depositAmount === DEPOSIT_FLOOR;
+  }, [depositAmount]);
+
   const showFirstDeliveryDiscount = useMemo(
     () =>
       fulfillmentConfirmed &&
@@ -1149,6 +1177,16 @@ export default function PlaceOrderScreen() {
           </>
         ) : null}
 
+        {depositAmount != null && depositAmount > 0 && !isDiaspora && !resolvedIsStripeRail ? (
+          <ReservationDepositExplainer
+            depositAmount={depositAmount}
+            currency={currency}
+            isFloorAmount={depositIsFloor}
+            grandTotal={grandTotal}
+            style={{ marginBottom: spacing.sm }}
+          />
+        ) : null}
+
         <PlaceOrderSummaryCard
           thumb={thumb}
           itemName={item.item.name}
@@ -1180,6 +1218,8 @@ export default function PlaceOrderScreen() {
           discountPercentage={discountCode.percentage}
           discountAmount={discountAmount}
           grandTotal={grandTotal}
+          depositAmount={depositAmount}
+          showDepositBreakdown={depositAmount != null && depositAmount > 0}
           showTaxAtCheckoutNotice={
             preflightConfig?.tax_notice === 'calculated_at_checkout'
           }
@@ -1385,7 +1425,7 @@ export default function PlaceOrderScreen() {
         ) : null}
 
         {/* Payment timing (Pay now / Pay at delivery) */}
-        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryEnabled && !isDiaspora ? (
+        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryEnabled && !isDiaspora && momoPayNowDeliveryEnabled ? (
           <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
             <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
               {t('client.placeOrder.paymentTiming', 'Payment')}
@@ -1489,15 +1529,25 @@ export default function PlaceOrderScreen() {
           label={
             resolvedIsStripeRail
               ? t('checkout.payNow', 'Pay now')
-              : payTiming === 'pay_now'
-                ? t('checkout.payWithMoMo', 'Pay with MoMo')
-                : t('client.placeOrder.submit', 'Place order')
+              : depositAmount != null && depositAmount > 0
+                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+                    amount: depositAmount,
+                    currency,
+                  })
+                : payTiming === 'pay_now'
+                  ? t('checkout.payWithMoMo', 'Pay with MoMo')
+                  : t('client.placeOrder.submit', 'Place order')
           }
-          total={formatCatalogMoney(grandTotal, currency)}
+          total={formatCatalogMoney(
+            depositAmount != null && depositAmount > 0 ? depositAmount : grandTotal,
+            currency
+          )}
           totalLabel={
-            preflightConfig?.tax_notice === 'calculated_at_checkout'
-              ? t('checkout.totalBeforeTax', 'Total (before tax)')
-              : t('client.placeOrder.summary.total', 'Total')
+            depositAmount != null && depositAmount > 0
+              ? t('deposit.dueNow', 'Due now')
+              : preflightConfig?.tax_notice === 'calculated_at_checkout'
+                ? t('checkout.totalBeforeTax', 'Total (before tax)')
+                : t('client.placeOrder.summary.total', 'Total')
           }
           onPress={() => { if (!submitting) void onSubmit(); }}
           loading={submitting}

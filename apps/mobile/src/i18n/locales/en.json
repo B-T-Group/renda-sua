@@ -255,6 +255,17 @@
     "payWithMoMo": "Pay with MoMo",
     "payNow": "Pay now",
     "heldUntilAccept": "Held until store accepts",
+    "groupDeliveryUnavailable": "This seller cannot deliver right now.",
+    "summary": "Order summary",
+    "taxCalculatedAtCheckout": "Calculated at checkout",
+    "totalBeforeTax": "Total (before tax)",
+    "deliveryFee": "Delivery",
+    "discount": "Discount",
+    "pickupNoFee": "Waived (store pickup)",
+    "incompleteAddress": {
+      "banner": "Your delivery address is incomplete. Add city, region, and postal code to continue with card payment.",
+      "cta": "Complete address"
+    },
     "tipsToResolve": "Tips to resolve this",
     "tryAgain": "Try again",
     "changePaymentMethod": "Change payment method",
@@ -291,6 +302,29 @@
     "payment": {
       "encrypted": "Encrypted",
       "secure": "Secure checkout"
+    }
+  },
+  "deposit": {
+    "reservationTitle": "Reservation deposit",
+    "minimumLabel": "Minimum deposit for this order",
+    "percentageLabel": "{{percentage}}% of your order",
+    "refundableUntilSent": "Refundable until we send it for delivery, or until it is ready for pickup",
+    "appliedToTotal": "Applied to your order — not an extra fee",
+    "dueNow": "Due now (deposit)",
+    "dueLater": "Due later",
+    "payDepositCta": "Pay deposit · {{amount}} {{currency}}",
+    "forfeit": {
+      "outForDeliveryTitle": "Cancel while out for delivery?",
+      "outForDeliveryMessage": "Your order is already on the way. Cancelling or refusing now means you lose the reservation deposit.",
+      "outForDeliveryForfeitAmount": "Deposit forfeited",
+      "readyForPickupTitle": "Cancel after ready for pickup?",
+      "readyForPickupMessage": "Your order is ready at the store. Cancelling or not showing up now means you lose the reservation deposit.",
+      "readyForPickupForfeitAmount": "Deposit forfeited",
+      "keepOrderCta": "Keep my order",
+      "pickUpCta": "I will pick it up",
+      "cancelAndForfeitCta": "Cancel and forfeit {{amount}} {{currency}}",
+      "youKeepDepositIfPickup": "You will keep the deposit only if we cancel or the store cancels.",
+      "youKeepDepositIfDelivery": "You will keep the deposit only if we cancel, the store cancels, or delivery fails."
     }
   },
   "addresses": {

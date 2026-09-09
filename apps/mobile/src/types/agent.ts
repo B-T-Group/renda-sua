@@ -75,6 +75,10 @@ export interface Order {
   total_amount?: number;
   currency: string;
   current_status: string;
+  deposit_amount?: number | null;
+  deposit_paid?: number | null;
+  amount_due?: number | null;
+  deposit_status?: 'pending_payment' | 'paid' | 'forfeited' | 'refunded' | null;
   acceptance_state?: string | null;
   acceptance_deadline_at?: string | null;
   acceptance_activates_at?: string | null;

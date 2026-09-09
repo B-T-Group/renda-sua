@@ -36,6 +36,10 @@ export interface PlaceOrderSummaryCardProps {
   discountAmount: number;
   grandTotal: number;
   showTaxAtCheckoutNotice?: boolean;
+  /** Deposit amount (when deposit path is active). */
+  depositAmount?: number | null;
+  /** True when showing deposit breakdown (Due now / Due later). */
+  showDepositBreakdown?: boolean;
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -78,12 +82,17 @@ export function PlaceOrderSummaryCard({
   discountAmount,
   grandTotal,
   showTaxAtCheckoutNotice = false,
+  depositAmount,
+  showDepositBreakdown,
 }: PlaceOrderSummaryCardProps) {
   const { t } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
   const showStrikethrough = deliveryFullBefore > deliveryAmount + 0.0001;
   const [couponExpanded, setCouponExpanded] = useState(false);
   const couponVisible = couponExpanded || !!appliedDiscountCode;
+
+  const dueNow = depositAmount ?? 0;
+  const dueLater = grandTotal - dueNow;
 
   return (
     <Card style={{ borderRadius: borderRadius.md, marginBottom: spacing.md }}>
@@ -258,13 +267,31 @@ export function PlaceOrderSummaryCard({
           label={
             showTaxAtCheckoutNotice
               ? t('client.placeOrder.summary.totalBeforeTax', 'Total (before tax)')
-              : t('client.placeOrder.summary.total', 'Total')
+              : t('client.placeOrder.summary.total', 'Order total')
           }
         >
-          <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.primary.main }}>
+          <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.text.primary }}>
             {formatCatalogMoney(grandTotal, currency)}
           </Text>
         </Row>
+
+        {showDepositBreakdown && depositAmount != null && depositAmount > 0 ? (
+          <>
+            <Divider style={{ marginVertical: spacing.sm }} />
+
+            <Row label={t('deposit.dueNow', 'Due now (deposit)')}>
+              <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.primary.main }}>
+                {formatCatalogMoney(dueNow, currency)}
+              </Text>
+            </Row>
+
+            <Row label={t('deposit.dueLater', 'Due later')}>
+              <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.text.secondary }}>
+                {formatCatalogMoney(dueLater, currency)}
+              </Text>
+            </Row>
+          </>
+        ) : null}
 
         <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.md, textAlign: 'center' }}>
           {t('client.placeOrder.summary.securePayment', 'Secure payment')}
