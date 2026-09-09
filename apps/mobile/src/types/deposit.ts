@@ -23,7 +23,12 @@ export interface DepositConfig {
 
 /**
  * Calculate fallback deposit amount when server deposit_amount is missing.
- * Rule: max(151 XAF, 10% if grand_total < 5000 else 5%).
+ * Rule: max(151, round(grand_total * (total<5000?0.10:0.05)))
+ * 
+ * Backend contract (renda-sua #275):
+ * - max(151, round(grand_total * (total<5000?0.10:0.05)))
+ * - Market flag: application_configurations.config_key=momo_pay_now_delivery_enabled
+ *   (country_code scoped, default false)
  */
 export function calculateDepositFallback(grandTotalXAF: number): number {
   const FLOOR = 151;

@@ -51,8 +51,18 @@ export interface CreatedOrder {
     message?: string;
     mode?: string;
   };
+  /** Database transaction ID (for MoMo deposit collect). */
+  database_transaction?: {
+    id?: string;
+  };
   payment_status?: string;
   current_status?: string;
+  /** Deposit amount charged (XAF). Present on MoMo deposit orders. */
+  deposit_amount?: number | null;
+  /** Remaining amount due after deposit (= total − deposit). */
+  amount_due?: number | null;
+  /** Deposit payment status (pending_payment, paid, forfeited, refunded). */
+  deposit_status?: 'pending_payment' | 'paid' | 'forfeited' | 'refunded' | null;
 }
 
 export interface CreateOrderResponse {
