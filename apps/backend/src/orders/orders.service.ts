@@ -5618,6 +5618,14 @@ export class OrdersService {
           acceptance_state
           acceptance_deadline_at
           acceptance_activates_at
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           grace_deadline_at
           accepted_at
           busy_extra_prep_minutes
@@ -5860,6 +5868,14 @@ export class OrdersService {
           payment_timing
           reconciliation_status
           verified_agent_delivery
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           created_at
           updated_at
           completed_at
@@ -7101,18 +7117,25 @@ export class OrdersService {
       // and settled to merchant, so deposit is counted once in GMV, not double-paid to merchant.
       try {
         if (depositAmount && depositAmount > 0) {
-          const clientAccountId = (order as any).client?.user?.id || order.client_id;
-          if (clientAccountId) {
-            await this.accountsService.registerDepositIfNotExists({
-              accountId: clientAccountId,
-              amount: depositAmount,
-              referenceId: `deposit-${order.order_number}`,
-              memo: `Deposit captured for order ${order.order_number}`,
-            });
-            this.logger.log(
-              `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
+          // Resolve client account the same way as other MoMo credit paths
+          const clientAccount = await this.hasuraSystemService.getAccount(
+            order.client.user_id,
+            order.currency
+          );
+          if (!clientAccount) {
+            throw new Error(
+              `No account found for client user ${order.client.user_id} currency ${order.currency}`
             );
           }
+          await this.accountsService.registerDepositIfNotExists({
+            accountId: clientAccount.id,
+            amount: depositAmount,
+            referenceId: `deposit-${order.order_number}`,
+            memo: `Deposit captured for order ${order.order_number}`,
+          });
+          this.logger.log(
+            `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
+          );
         }
       } catch (ledgerError: any) {
         this.logger.error(
