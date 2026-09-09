@@ -4209,16 +4209,23 @@ export class OrdersService {
     const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
     const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
 
-    const depositPaymentRequest = {
-      amount: depositAmount,
-      currency: order.currency,
-      description: `Deposit retry for order ${order.order_number}`,
-      customerPhone: phoneNumber,
-      itemCountry: momo.itemCountry ?? undefined,
-      transactionType: 'PAYMENT' as const,
-    };
+    // Step 1: Create pending mobile_payment_transactions row FIRST (real FK target)
+    const depositTransaction =
+      await this.mobilePaymentsDatabaseService.createTransaction({
+        reference: depositLongReference,
+        amount: depositAmount,
+        currency: order.currency,
+        description: `Deposit retry for order ${order.order_number}`,
+        provider,
+        payment_method: 'mobile_money',
+        customer_phone: phoneNumber,
+        account_id: account.id,
+        transaction_type: 'PAYMENT',
+        payment_entity: 'order_deposit',
+        entity_id: order.order_number,
+      });
 
-    // TOCTOU guard: Claim the order row with conditional FK update before initiating payment.
+    // Step 2: TOCTOU guard - CAS FK to the real transaction id before initiating payment.
     // This prevents concurrent retries from both passing the guard and both initiating payment.
     // Hasura _eq: null does NOT match NULL columns; use _is_null: true for null prior FK.
     const claimDepositMutation = existingTxnId
@@ -4272,17 +4279,16 @@ export class OrdersService {
           }
         `;
 
-    const claimTxnId = crypto.randomUUID();
     const claimVariables = existingTxnId
       ? {
           orderId: order.id,
           expectedPriorTxnId: existingTxnId,
-          claimValue: claimTxnId,
+          claimValue: depositTransaction.id,
           now: new Date().toISOString(),
         }
       : {
           orderId: order.id,
-          claimValue: claimTxnId,
+          claimValue: depositTransaction.id,
           now: new Date().toISOString(),
         };
 
@@ -4295,6 +4301,14 @@ export class OrdersService {
       this.logger.warn(
         `Concurrent retry-deposit-payment detected for order ${order.order_number} — FK changed since read`
       );
+      await this.mobilePaymentsDatabaseService.updateTransaction(
+        depositTransaction.id,
+        {
+          status: 'failed',
+          error_message: 'Concurrent retry detected',
+          error_code: 'CONCURRENT_RETRY',
+        }
+      );
       throw new HttpException(
         {
           success: false,
@@ -4305,6 +4319,16 @@ export class OrdersService {
       );
     }
 
+    // Step 3: Initiate provider payment
+    const depositPaymentRequest = {
+      amount: depositAmount,
+      currency: order.currency,
+      description: `Deposit retry for order ${order.order_number}`,
+      customerPhone: phoneNumber,
+      itemCountry: momo.itemCountry ?? undefined,
+      transactionType: 'PAYMENT' as const,
+    };
+
     const depositResult = await this.mobilePaymentsService.initiatePayment(
       depositPaymentRequest,
       depositShortReference,
@@ -4312,22 +4336,12 @@ export class OrdersService {
     );
 
     if (!depositResult.success) {
-      await this.hasuraSystemService.executeMutation(
-        `
-          mutation RestoreDepositFKAfterFailedInitiate($orderId: uuid!, $priorValue: uuid, $now: timestamptz!) {
-            update_orders_by_pk(
-              pk_columns: { id: $orderId }
-              _set: {
-                deposit_mobile_payment_transaction_id: $priorValue
-                updated_at: $now
-              }
-            ) { id }
-          }
-        `,
+      await this.mobilePaymentsDatabaseService.updateTransaction(
+        depositTransaction.id,
         {
-          orderId: order.id,
-          priorValue: existingTxnId || null,
-          now: new Date().toISOString(),
+          status: 'failed',
+          error_message: depositResult.message || 'Payment initiation failed',
+          error_code: depositResult.errorCode || 'INITIATION_FAILED',
         }
       );
       throw new HttpException(
@@ -4340,21 +4354,6 @@ export class OrdersService {
       );
     }
 
-    const depositTransaction =
-      await this.mobilePaymentsDatabaseService.createTransaction({
-        reference: depositLongReference,
-        amount: depositAmount,
-        currency: order.currency,
-        description: `Deposit retry for order ${order.order_number}`,
-        provider,
-        payment_method: 'mobile_money',
-        customer_phone: phoneNumber,
-        account_id: account.id,
-        transaction_type: 'PAYMENT',
-        payment_entity: 'order_deposit',
-        entity_id: order.order_number,
-      });
-
     if (depositResult.transactionId) {
       await this.mobilePaymentsDatabaseService.updateTransaction(
         depositTransaction.id,
@@ -4363,31 +4362,6 @@ export class OrdersService {
         }
       );
     }
-
-    const updateDepositMutation = `
-      mutation UpdateOrderDepositTransaction(
-        $orderId: uuid!,
-        $depositMobilePaymentTransactionId: uuid!,
-        $now: timestamptz!
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            deposit_mobile_payment_transaction_id: $depositMobilePaymentTransactionId
-            updated_at: $now
-          }
-        ) {
-          id
-          deposit_mobile_payment_transaction_id
-        }
-      }
-    `;
-
-    await this.hasuraSystemService.executeMutation(updateDepositMutation, {
-      orderId: order.id,
-      depositMobilePaymentTransactionId: depositTransaction.id,
-      now: new Date().toISOString(),
-    });
 
     try {
       await this.waitAndExecuteScheduleService.schedulePaymentTimeout(

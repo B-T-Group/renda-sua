@@ -274,7 +274,7 @@ describe('OrdersService - retryDepositPayment', () => {
     });
 
 
-    it('should allow retry if prior deposit transaction is failed', async () => {
+    it('should allow retry if prior deposit transaction is failed (CAS with expectedPriorTxnId)', async () => {
       const order = {
         ...mockOrder,
         deposit_mobile_payment_transaction_id: 'txn-old-123',
@@ -294,11 +294,15 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
-        })
-        .mockResolvedValueOnce({});
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-456',
+        reference: 'ORD-123-DEP-67890-retry',
+        status: 'pending',
+      } as any);
+
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+      });
 
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
@@ -306,17 +310,21 @@ describe('OrdersService - retryDepositPayment', () => {
         message: 'Payment initiated',
       });
 
-      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
-        id: 'txn-new-456',
-        reference: 'ORD-123-DEP-67890-retry',
-        status: 'pending',
-      } as any);
+      mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
 
       const result = await service.retryDepositPayment('order-123');
 
       expect(result.success).toBe(true);
       expect(result.deposit_amount).toBe(2000);
       expect(mobilePaymentsService.initiatePayment).toHaveBeenCalled();
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('ClaimDepositRetry'),
+        expect.objectContaining({
+          expectedPriorTxnId: 'txn-old-123',
+          claimValue: 'txn-new-456',
+        })
+      );
     });
 
     it('should allow retry if prior deposit transaction is cancelled', async () => {
@@ -339,11 +347,15 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
-        })
-        .mockResolvedValueOnce({});
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-456',
+        reference: 'ORD-123-DEP-67890-retry',
+        status: 'pending',
+      } as any);
+
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+      });
 
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
@@ -351,11 +363,7 @@ describe('OrdersService - retryDepositPayment', () => {
         message: 'Payment initiated',
       });
 
-      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
-        id: 'txn-new-456',
-        reference: 'ORD-123-DEP-67890-retry',
-        status: 'pending',
-      } as any);
+      mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
 
       const result = await service.retryDepositPayment('order-123');
 
@@ -365,25 +373,13 @@ describe('OrdersService - retryDepositPayment', () => {
   });
 
   describe('Successful retry', () => {
-    it('should create new deposit transaction with TOCTOU guard when no prior txn (uses _is_null)', async () => {
+    it('should create DB txn first then CAS FK with TOCTOU guard when no prior txn (uses _is_null)', async () => {
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(mockOrder as any);
 
       hasuraSystemService.getAccount.mockResolvedValue({
         id: 'account-123',
         currency: 'XAF',
       } as any);
-
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
-        })
-        .mockResolvedValueOnce(undefined);
-
-      mobilePaymentsService.initiatePayment.mockResolvedValue({
-        success: true,
-        transactionId: 'provider-tx-new',
-        message: 'Payment initiated',
-      });
 
       mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
         id: 'txn-new-456',
@@ -392,6 +388,16 @@ describe('OrdersService - retryDepositPayment', () => {
         amount: 2000,
         currency: 'XAF',
       } as any);
+
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+      });
+
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: true,
+        transactionId: 'provider-tx-new',
+        message: 'Payment initiated',
+      });
 
       mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
 
@@ -402,18 +408,56 @@ describe('OrdersService - retryDepositPayment', () => {
       expect(result.amount_due).toBe(8000);
       expect(result.payment_transaction.transaction_id).toBe('provider-tx-new');
 
-      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('ClaimDepositRetryNull'),
-        expect.objectContaining({
-          orderId: 'order-123',
-          claimValue: expect.any(String),
-        })
+      expect(mobilePaymentsDatabaseService.createTransaction).toHaveBeenCalledBefore(
+        hasuraSystemService.executeMutation as any
       );
 
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('ClaimDepositRetryNull'),
-        expect.not.objectContaining({
-          expectedPriorTxnId: expect.anything(),
+        expect.objectContaining({
+          orderId: 'order-123',
+          claimValue: 'txn-new-456',
+        })
+      );
+    });
+
+    it('should return 409 CONCURRENT_RETRY_DETECTED when CAS FK update affected_rows=0', async () => {
+      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(mockOrder as any);
+
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        currency: 'XAF',
+      } as any);
+
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-456',
+        reference: 'ORD-123-DEP-67890-retry',
+        status: 'pending',
+      } as any);
+
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0, returning: [] },
+      });
+
+      mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
+
+      await expect(
+        service.retryDepositPayment('order-123')
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            success: false,
+            code: 'CONCURRENT_RETRY_DETECTED',
+          }),
+          status: HttpStatus.CONFLICT,
+        })
+      );
+
+      expect(mobilePaymentsDatabaseService.updateTransaction).toHaveBeenCalledWith(
+        'txn-new-456',
+        expect.objectContaining({
+          status: 'failed',
+          error_message: 'Concurrent retry detected',
         })
       );
     });
@@ -426,11 +470,15 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
-        })
-        .mockResolvedValueOnce({});
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-456',
+        reference: 'ORD-123-DEP-67890-retry',
+        status: 'pending',
+      } as any);
+
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+      });
 
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
@@ -438,11 +486,7 @@ describe('OrdersService - retryDepositPayment', () => {
         message: 'Payment initiated',
       });
 
-      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
-        id: 'txn-new-456',
-        reference: 'ORD-123-DEP-67890-retry',
-        status: 'pending',
-      } as any);
+      mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
 
       await service.retryDepositPayment('order-123', '+241077777777');
 
@@ -463,11 +507,15 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
-      hasuraSystemService.executeMutation
-        .mockResolvedValueOnce({
-          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
-        })
-        .mockResolvedValueOnce({});
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-456',
+        reference: 'ORD-123-DEP-67890-retry',
+        status: 'pending',
+      } as any);
+
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+      });
 
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
@@ -475,11 +523,7 @@ describe('OrdersService - retryDepositPayment', () => {
         message: 'Payment initiated',
       });
 
-      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
-        id: 'txn-new-456',
-        reference: 'ORD-123-DEP-67890-retry',
-        status: 'pending',
-      } as any);
+      mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
 
       await service.retryDepositPayment('order-123');
 
