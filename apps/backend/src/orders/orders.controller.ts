@@ -36,6 +36,7 @@ import {
   CheckoutPreflightDto,
   CheckoutPreflightResponseDto,
 } from './dto/checkout-preflight.dto';
+import { RetryDepositPaymentDto } from './dto/retry-deposit-payment.dto';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderMarkReadyService } from './order-mark-ready.service';
 import { OrderStatusService } from './order-status.service';
@@ -1374,22 +1375,12 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry deposit payment (client only)',
     description:
-      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. Returns 409 if a prior deposit payment request is still pending at the provider (client should poll that transaction instead).',
+      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. Returns 409 if a prior deposit payment request is still pending/processing at the provider (client should poll that transaction instead).',
   })
   @ApiParam({ name: 'id', description: 'Order ID', type: String })
   @ApiBody({
     required: false,
-    type: Object,
-    schema: {
-      type: 'object',
-      properties: {
-        phone_number: {
-          type: 'string',
-          description:
-            'Optional override phone number to receive the payment request (E.164).',
-        },
-      },
-    },
+    type: RetryDepositPaymentDto,
   })
   @ApiResponse({
     status: 200,
@@ -1418,7 +1409,7 @@ export class OrdersController {
   @ApiResponse({
     status: 409,
     description:
-      'Prior deposit payment still pending at provider (client should poll existing transaction)',
+      'Prior deposit payment still pending/processing at provider (client should poll existing transaction). Code: DEPOSIT_PAYMENT_PENDING (txn pending) or DEPOSIT_PAYMENT_PROCESSING (txn succeeded but callback/finalize lag)',
     schema: {
       type: 'object',
       properties: {
@@ -1427,7 +1418,10 @@ export class OrdersController {
           type: 'string',
           example: 'Prior deposit payment still pending; please wait',
         },
-        code: { type: 'string', example: 'DEPOSIT_PAYMENT_PENDING' },
+        code: {
+          type: 'string',
+          enum: ['DEPOSIT_PAYMENT_PENDING', 'DEPOSIT_PAYMENT_PROCESSING'],
+        },
         existing_transaction_id: { type: 'string', format: 'uuid' },
         deposit_status: { type: 'string', example: 'pending' },
       },
@@ -1440,7 +1434,7 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: 'Not authorized for this order' })
   async retryDepositPayment(
     @Param('id') orderId: string,
-    @Body() body?: { phone_number?: string }
+    @Body() body?: RetryDepositPaymentDto
   ) {
     return this.ordersService.retryDepositPayment(
       orderId,

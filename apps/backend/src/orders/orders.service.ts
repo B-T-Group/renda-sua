@@ -4124,13 +4124,6 @@ export class OrdersService {
       );
     }
 
-    if (order.current_status === 'cancelled') {
-      throw new HttpException(
-        'Cannot retry deposit payment for cancelled order',
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
     if (!depositAmount || depositAmount <= 0) {
       throw new HttpException(
         'Order does not have a deposit amount',
@@ -4157,20 +4150,37 @@ export class OrdersService {
       const existingTxn = await this.mobilePaymentsDatabaseService.getTransactionById(
         existingTxnId
       );
-      if (existingTxn && existingTxn.status === 'pending') {
-        this.logger.warn(
-          `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} is still pending`
-        );
-        throw new HttpException(
-          {
-            success: false,
-            message: 'Prior deposit payment is still pending. Please wait or poll the existing transaction.',
-            code: 'DEPOSIT_PAYMENT_PENDING',
-            existing_transaction_id: existingTxnId,
-            deposit_status: depositStatus,
-          },
-          HttpStatus.CONFLICT
-        );
+      if (existingTxn) {
+        if (existingTxn.status === 'pending') {
+          this.logger.warn(
+            `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} is still pending`
+          );
+          throw new HttpException(
+            {
+              success: false,
+              message: 'Prior deposit payment is still pending. Please wait or poll the existing transaction.',
+              code: 'DEPOSIT_PAYMENT_PENDING',
+              existing_transaction_id: existingTxnId,
+              deposit_status: depositStatus,
+            },
+            HttpStatus.CONFLICT
+          );
+        }
+        if (existingTxn.status === 'success') {
+          this.logger.warn(
+            `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} succeeded but order deposit_status still pending (callback lag or finalize failure)`
+          );
+          throw new HttpException(
+            {
+              success: false,
+              message: 'Prior deposit payment succeeded but is still processing. Please wait or poll the order status.',
+              code: 'DEPOSIT_PAYMENT_PROCESSING',
+              existing_transaction_id: existingTxnId,
+              deposit_status: depositStatus,
+            },
+            HttpStatus.CONFLICT
+          );
+        }
       }
     }
 
@@ -4208,6 +4218,59 @@ export class OrdersService {
       transactionType: 'PAYMENT' as const,
     };
 
+    // TOCTOU guard: Claim the order row with conditional FK update before initiating payment.
+    // This prevents concurrent retries from both passing the guard and both initiating payment.
+    const claimDepositMutation = `
+      mutation ClaimDepositRetry(
+        $orderId: uuid!,
+        $expectedPriorTxnId: uuid,
+        $claimValue: uuid!,
+        $now: timestamptz!
+      ) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            deposit_mobile_payment_transaction_id: { _eq: $expectedPriorTxnId }
+          }
+          _set: {
+            deposit_mobile_payment_transaction_id: $claimValue
+            updated_at: $now
+          }
+        ) {
+          affected_rows
+          returning {
+            id
+            deposit_mobile_payment_transaction_id
+          }
+        }
+      }
+    `;
+
+    const claimTxnId = crypto.randomUUID();
+    const claimResult = await this.hasuraSystemService.executeMutation(
+      claimDepositMutation,
+      {
+        orderId: order.id,
+        expectedPriorTxnId: existingTxnId || null,
+        claimValue: claimTxnId,
+        now: new Date().toISOString(),
+      }
+    );
+
+    if (claimResult.update_orders.affected_rows === 0) {
+      this.logger.warn(
+        `Concurrent retry-deposit-payment detected for order ${order.order_number} — FK changed since read`
+      );
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Another deposit payment retry is already in progress. Please refresh and try again.',
+          code: 'CONCURRENT_RETRY_DETECTED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+
     const depositResult = await this.mobilePaymentsService.initiatePayment(
       depositPaymentRequest,
       depositShortReference,
@@ -4215,6 +4278,24 @@ export class OrdersService {
     );
 
     if (!depositResult.success) {
+      await this.hasuraSystemService.executeMutation(
+        `
+          mutation RestoreDepositFKAfterFailedInitiate($orderId: uuid!, $priorValue: uuid, $now: timestamptz!) {
+            update_orders_by_pk(
+              pk_columns: { id: $orderId }
+              _set: {
+                deposit_mobile_payment_transaction_id: $priorValue
+                updated_at: $now
+              }
+            ) { id }
+          }
+        `,
+        {
+          orderId: order.id,
+          priorValue: existingTxnId || null,
+          now: new Date().toISOString(),
+        }
+      );
       throw new HttpException(
         {
           success: false,
@@ -4239,6 +4320,15 @@ export class OrdersService {
         payment_entity: 'order_deposit',
         entity_id: order.order_number,
       });
+
+    if (depositResult.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(
+        depositTransaction.id,
+        {
+          transaction_id: depositResult.transactionId,
+        }
+      );
+    }
 
     const updateDepositMutation = `
       mutation UpdateOrderDepositTransaction(

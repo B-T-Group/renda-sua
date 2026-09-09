@@ -33,9 +33,13 @@ describe('OrdersService - retryDepositPayment', () => {
     deposit_mobile_payment_transaction_id: null,
     client: {
       user_id: 'user-123',
-      phone_number: '+241062345678',
+      user: {
+        phone_number: '+241062345678',
+      },
     },
-    payer_phone: '+241062345678',
+    business_location: {
+      address: { country: 'GA' },
+    },
   };
 
   beforeEach(() => {
@@ -65,6 +69,11 @@ describe('OrdersService - retryDepositPayment', () => {
       hasuraSystemService,
       requireActivePersona: jest.fn(),
       getOrderDetails: jest.fn(),
+      orderMomoContext: jest.fn().mockReturnValue({
+        provider: 'mypvit',
+        itemCountry: 'GA',
+        payerUserId: 'user-123',
+      }),
       waitAndExecuteScheduleService: {
         schedulePaymentTimeout: jest.fn(),
       },
@@ -173,8 +182,8 @@ describe('OrdersService - retryDepositPayment', () => {
     });
   });
 
-  describe('CRITICAL: Prior pending transaction guard', () => {
-    it('should return 409 if prior deposit transaction is still pending', async () => {
+  describe('CRITICAL: Prior pending/processing transaction guards', () => {
+    it('should return 409 DEPOSIT_PAYMENT_PENDING if prior deposit transaction is still pending', async () => {
       const order = {
         ...mockOrder,
         deposit_mobile_payment_transaction_id: 'txn-old-123',
@@ -204,6 +213,37 @@ describe('OrdersService - retryDepositPayment', () => {
       );
     });
 
+    it('should return 409 DEPOSIT_PAYMENT_PROCESSING if prior deposit transaction succeeded but deposit_status still pending', async () => {
+      const order = {
+        ...mockOrder,
+        deposit_mobile_payment_transaction_id: 'txn-old-123',
+      };
+      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
+
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
+        id: 'txn-old-123',
+        status: 'success',
+        reference: 'ORD-123-DEP-12345',
+        amount: 2000,
+        currency: 'XAF',
+      } as any);
+
+      await expect(
+        service.retryDepositPayment('order-123')
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            success: false,
+            code: 'DEPOSIT_PAYMENT_PROCESSING',
+            existing_transaction_id: 'txn-old-123',
+            deposit_status: 'pending',
+          }),
+          status: HttpStatus.CONFLICT,
+        })
+      );
+    });
+
+
     it('should allow retry if prior deposit transaction is failed', async () => {
       const order = {
         ...mockOrder,
@@ -224,6 +264,12 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+        })
+        .mockResolvedValueOnce({});
+
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
         transactionId: 'provider-tx-new',
@@ -235,8 +281,6 @@ describe('OrdersService - retryDepositPayment', () => {
         reference: 'ORD-123-DEP-67890-retry',
         status: 'pending',
       } as any);
-
-      hasuraSystemService.executeMutation.mockResolvedValue({});
 
       const result = await service.retryDepositPayment('order-123');
 
@@ -265,6 +309,12 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+        })
+        .mockResolvedValueOnce({});
+
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
         transactionId: 'provider-tx-new',
@@ -277,8 +327,6 @@ describe('OrdersService - retryDepositPayment', () => {
         status: 'pending',
       } as any);
 
-      hasuraSystemService.executeMutation.mockResolvedValue({});
-
       const result = await service.retryDepositPayment('order-123');
 
       expect(result.success).toBe(true);
@@ -287,13 +335,19 @@ describe('OrdersService - retryDepositPayment', () => {
   });
 
   describe('Successful retry', () => {
-    it('should create new deposit transaction and update order FK', async () => {
+    it('should create new deposit transaction and update order FK with TOCTOU guard', async () => {
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(mockOrder as any);
 
       hasuraSystemService.getAccount.mockResolvedValue({
         id: 'account-123',
         currency: 'XAF',
       } as any);
+
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+        })
+        .mockResolvedValueOnce({});
 
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
@@ -309,8 +363,6 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
-      hasuraSystemService.executeMutation.mockResolvedValue({});
-
       const result = await service.retryDepositPayment('order-123');
 
       expect(result.success).toBe(true);
@@ -324,14 +376,15 @@ describe('OrdersService - retryDepositPayment', () => {
           currency: 'XAF',
           payment_entity: 'order_deposit',
           entity_id: 'ORD-123',
+          transaction_id: 'provider-tx-new',
         })
       );
 
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-        expect.stringContaining('UpdateOrderDepositTransaction'),
+        expect.stringContaining('ClaimDepositRetry'),
         expect.objectContaining({
           orderId: 'order-123',
-          depositMobilePaymentTransactionId: 'txn-new-456',
+          expectedPriorTxnId: null,
         })
       );
     });
@@ -344,6 +397,12 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+        })
+        .mockResolvedValueOnce({});
+
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
         transactionId: 'provider-tx-new',
@@ -355,8 +414,6 @@ describe('OrdersService - retryDepositPayment', () => {
         reference: 'ORD-123-DEP-67890-retry',
         status: 'pending',
       } as any);
-
-      hasuraSystemService.executeMutation.mockResolvedValue({});
 
       await service.retryDepositPayment('order-123', '+241077777777');
 
@@ -377,6 +434,12 @@ describe('OrdersService - retryDepositPayment', () => {
         currency: 'XAF',
       } as any);
 
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+        })
+        .mockResolvedValueOnce({});
+
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: true,
         transactionId: 'provider-tx-new',
@@ -388,8 +451,6 @@ describe('OrdersService - retryDepositPayment', () => {
         reference: 'ORD-123-DEP-67890-retry',
         status: 'pending',
       } as any);
-
-      hasuraSystemService.executeMutation.mockResolvedValue({});
 
       await service.retryDepositPayment('order-123');
 
