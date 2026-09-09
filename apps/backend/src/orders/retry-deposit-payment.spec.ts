@@ -462,6 +462,73 @@ describe('OrdersService - retryDepositPayment', () => {
       );
     });
 
+    it('should restore prior FK when initiatePayment fails', async () => {
+      const order = {
+        ...mockOrder,
+        deposit_mobile_payment_transaction_id: 'txn-old-123',
+      };
+      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
+
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
+        id: 'txn-old-123',
+        status: 'failed',
+      } as any);
+
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        currency: 'XAF',
+      } as any);
+
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-456',
+        reference: 'ORD-123-DEP-67890-retry',
+        status: 'pending',
+      } as any);
+
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+        })
+        .mockResolvedValueOnce({ update_orders: { affected_rows: 1 } });
+
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: false,
+        message: 'Provider error',
+        errorCode: 'PROVIDER_ERROR',
+      });
+
+      mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
+
+      await expect(
+        service.retryDepositPayment('order-123')
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            success: false,
+            error: 'DEPOSIT_INITIATION_FAILED',
+          }),
+          status: HttpStatus.BAD_REQUEST,
+        })
+      );
+
+      expect(mobilePaymentsDatabaseService.updateTransaction).toHaveBeenCalledWith(
+        'txn-new-456',
+        expect.objectContaining({
+          status: 'failed',
+          error_message: 'Provider error',
+        })
+      );
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('RestoreDepositFKAfterInitiateFail'),
+        expect.objectContaining({
+          orderId: 'order-123',
+          failedTxnId: 'txn-new-456',
+          priorTxnId: 'txn-old-123',
+        })
+      );
+    });
+
     it('should use phone_number override if provided', async () => {
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(mockOrder as any);
 

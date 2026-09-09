@@ -4344,6 +4344,68 @@ export class OrdersService {
           error_code: depositResult.errorCode || 'INITIATION_FAILED',
         }
       );
+
+      const restoreMutation = existingTxnId
+        ? `
+            mutation RestoreDepositFKAfterInitiateFail(
+              $orderId: uuid!,
+              $failedTxnId: uuid!,
+              $priorTxnId: uuid!,
+              $now: timestamptz!
+            ) {
+              update_orders(
+                where: {
+                  id: { _eq: $orderId }
+                  deposit_mobile_payment_transaction_id: { _eq: $failedTxnId }
+                }
+                _set: {
+                  deposit_mobile_payment_transaction_id: $priorTxnId
+                  updated_at: $now
+                }
+              ) {
+                affected_rows
+              }
+            }
+          `
+        : `
+            mutation RestoreDepositFKToNullAfterInitiateFail(
+              $orderId: uuid!,
+              $failedTxnId: uuid!,
+              $now: timestamptz!
+            ) {
+              update_orders(
+                where: {
+                  id: { _eq: $orderId }
+                  deposit_mobile_payment_transaction_id: { _eq: $failedTxnId }
+                }
+                _set: {
+                  deposit_mobile_payment_transaction_id: null
+                  updated_at: $now
+                }
+              ) {
+                affected_rows
+              }
+            }
+          `;
+
+      const restoreVariables = existingTxnId
+        ? {
+            orderId: order.id,
+            failedTxnId: depositTransaction.id,
+            priorTxnId: existingTxnId,
+            now: new Date().toISOString(),
+          }
+        : {
+            orderId: order.id,
+            failedTxnId: depositTransaction.id,
+            now: new Date().toISOString(),
+          };
+
+      await this.hasuraSystemService.executeMutation(
+        restoreMutation,
+        restoreVariables
+      );
+
       throw new HttpException(
         {
           success: false,
