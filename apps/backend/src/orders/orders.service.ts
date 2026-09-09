@@ -7073,6 +7073,15 @@ export class OrdersService {
         return;
       }
 
+      // Verify transactionDbId matches the FK set at place-order
+      const depositTxnId = (order as any).deposit_mobile_payment_transaction_id;
+      if (transactionDbId && depositTxnId && transactionDbId !== depositTxnId) {
+        throw new Error(
+          `Transaction ID mismatch for deposit callback on ${orderNumber}: ` +
+          `callback=${transactionDbId}, order FK=${depositTxnId}`
+        );
+      }
+
       const depositAmount = (order as any).deposit_amount || 0;
       const totalAmount = order.total_amount || 0;
       const amountDue = Math.max(0, totalAmount - depositAmount);
