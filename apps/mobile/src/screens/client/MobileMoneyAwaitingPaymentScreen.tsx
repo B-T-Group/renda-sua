@@ -98,13 +98,8 @@ export default function MobileMoneyAwaitingPaymentScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-<<<<<<< HEAD
       title: isDepositOrder 
-        ? t('orders.deposit.navTitle', 'Deposit')
-=======
-      title: isDepositOrder
         ? t('deposit.awaitingTitle', 'Approve deposit payment')
->>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
         : t('orders.momoAwaiting.navTitle', 'Approve payment'),
       headerBackTitle: t('common.back', 'Back'),
     });
@@ -125,26 +120,14 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     });
   }, [navigation, stop]);
 
-  // Non-deposit retry (pay_now full-pay or pickup)
+  // Retry payment: deposit orders call retryDepositPayment
   const onRetry = async () => {
     if (!orderIds.length) return;
-    // NEVER retry for deposit orders - they're cancelled server-side
-    if (isDepositOrder) {
-      onBackToCheckout();
-      return;
-    }
     setRetrying(true);
     setRetryError(null);
     try {
       const phone = currentPhone.trim() || undefined;
       await Promise.all(
-<<<<<<< HEAD
-        orderIds.map((id) =>
-          source === 'pickup'
-            ? agentApi.orders.initiatePayAtPickupPayment(id, phone)
-            : agentApi.orders.retryPayment(id, phone ? { phone_number: phone } : undefined)
-        )
-=======
         orderIds.map((id) => {
           if (isDepositOrder) {
             return agentApi.orders.retryDepositPayment(id, phone ? { phone_number: phone } : {});
@@ -154,7 +137,6 @@ export default function MobileMoneyAwaitingPaymentScreen() {
             return agentApi.orders.retryPayment(id);
           }
         })
->>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
       );
       restart();
     } catch (e: unknown) {
@@ -245,13 +227,23 @@ export default function MobileMoneyAwaitingPaymentScreen() {
       );
     }
     
-<<<<<<< HEAD
-    // Non-deposit fail: allow retry
+    // For order-detail source (deposit resume), primary action is "Back to order"
+    const isOrderDetailSource = source === 'order-detail';
+    const errorReason = error || retryError || (
+      isDepositOrder
+        ? t('deposit.paymentFailedBody', 'The deposit payment request did not succeed. You can try again or return to your order.')
+        : t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again or go back to your order.')
+    );
+    
     return (
       <View style={{ flex: 1 }}>
         <PaymentRetryView
-          errorTitle={t('orders.momoAwaiting.failedTitle', 'Payment failed')}
-          errorReason={error || retryError || t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again or go back to your order.')}
+          errorTitle={
+            isDepositOrder
+              ? t('deposit.paymentFailedTitle', 'Deposit payment failed')
+              : t('orders.momoAwaiting.failedTitle', 'Payment failed')
+          }
+          errorReason={errorReason}
           tips={[
             {
               icon: 'wallet-outline',
@@ -266,10 +258,21 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           ]}
           onRetry={() => void onRetry()}
           retrying={retrying}
-          showOrderReservedBanner={true}
-          onEditPhone={onEditPhone}
-          retryLabel={t('orders.momoAwaiting.sendAgain', 'Send again')}
-          // onChangeMethod NOT passed - payment rail is locked by preflight
+          showOrderReservedBanner={!isOrderDetailSource}
+          onEditPhone={isOrderDetailSource ? undefined : onEditPhone}
+          retryLabel={
+            isDepositOrder
+              ? t('deposit.sendAgain', 'Send again')
+              : source === 'pickup'
+                ? t('business.pickup.momoSendAgain', 'Send again')
+                : undefined
+          }
+          onSecondary={isOrderDetailSource ? leaveToOrder : undefined}
+          secondaryLabel={
+            isOrderDetailSource
+              ? t('orders.momoAwaiting.back', 'Back to order')
+              : undefined
+          }
         />
         
         <AddPaymentPhoneDialog
@@ -279,49 +282,6 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           onSave={onSavePhone}
         />
       </View>
-=======
-    // For order-detail source (deposit resume), primary action is "Back to order"
-    const isOrderDetailSource = source === 'order-detail';
-    
-    return (
-      <PaymentRetryView
-        errorTitle={
-          isDepositOrder
-            ? t('deposit.paymentFailedTitle', 'Deposit payment failed')
-            : t('orders.momoAwaiting.failedTitle', 'Payment failed')
-        }
-        errorReason={errorReason}
-        tips={[
-          {
-            icon: 'wallet-outline',
-            title: t('checkout.payment.checkBalance', 'Check your MoMo balance'),
-            description: t('checkout.payment.checkBalanceDesc', 'Top up your MoMo wallet and try again.'),
-          },
-          {
-            icon: 'phone-check-outline',
-            title: t('checkout.payment.confirmPhone', 'Confirm your phone number'),
-            description: t('checkout.payment.confirmPhoneDesc', 'Make sure {{phone}} matches the number linked to your MoMo wallet.', { phone: masked }),
-          },
-        ]}
-        onRetry={() => void onRetry()}
-        retrying={retrying}
-        showOrderReservedBanner={!isOrderDetailSource}
-        onEditPhone={undefined}
-        retryLabel={
-          isDepositOrder
-            ? t('deposit.sendAgain', 'Send again')
-            : source === 'pickup'
-              ? t('business.pickup.momoSendAgain', 'Send again')
-              : undefined
-        }
-        onSecondary={isOrderDetailSource ? leaveToOrder : undefined}
-        secondaryLabel={
-          isOrderDetailSource
-            ? t('orders.momoAwaiting.back', 'Back to order')
-            : undefined
-        }
-      />
->>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
     );
   }
 
@@ -387,29 +347,16 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           }}
         >
           {phase === 'paid'
-<<<<<<< HEAD
-            ? isDepositOrder && orderData
-              ? t(
-                  'orders.deposit.paidBody',
-                  'Deposit paid! The remaining {{remainder}} {{currency}} is due at {{timing}}.',
-                  { 
-                    remainder: orderData.amount_due || 0,
-                    currency: orderData.currency,
-                    timing: fulfillment === 'pickup' 
-                      ? t('orders.deposit.atPickup', 'pickup')
-                      : t('orders.deposit.atDelivery', 'delivery')
-=======
             ? isDepositOrder
               ? t(
                   'deposit.paidBody',
                   'Your deposit payment is confirmed. The store will prepare your order. You will pay the remaining {{amount}} when you receive your order.',
                   {
                     amount: formatCurrency(
-                      amountDue ?? 0,
-                      currency || 'XAF',
+                      amountDueParam ?? orderData?.amount_due ?? 0,
+                      currencyParam || orderData?.currency || 'XAF',
                       'en-US'
                     ),
->>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
                   }
                 )
               : source === 'pickup'
@@ -422,22 +369,6 @@ export default function MobileMoneyAwaitingPaymentScreen() {
                     "Waiting for the store to accept your order. We'll notify you as soon as they confirm."
                   )
             : phase === 'timeout'
-<<<<<<< HEAD
-              ? isDepositOrder
-                ? t(
-                    'orders.deposit.timeoutBody',
-                    "No MoMo approval yet. Your order wasn't placed. Return to checkout to try again with the same or different number."
-                  )
-                : t(
-                    'orders.momoAwaiting.timeoutBody',
-                    'We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.'
-                  )
-              : isDepositOrder && orderData
-                ? t(
-                    'orders.deposit.waitingBody',
-                    "We're collecting your {{amount}} {{currency}} deposit via MoMo. Approve the prompt, then we'll place the order.",
-                    { amount: orderData.deposit_amount, currency: orderData.currency }
-=======
               ? t(
                   'orders.momoAwaiting.timeoutBody',
                   'We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.'
@@ -449,22 +380,17 @@ export default function MobileMoneyAwaitingPaymentScreen() {
                     {
                       phone: masked,
                       amount: formatCurrency(
-                        depositAmount ?? 0,
-                        currency || 'XAF',
+                        depositAmountParam ?? orderData?.deposit_amount ?? 0,
+                        currencyParam || orderData?.currency || 'XAF',
                         'en-US'
                       ),
                     }
->>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
                   )
                 : t(
                     'orders.momoAwaiting.waitingBody',
                     'A payment request was sent to {{phone}}. Open the prompt on that phone and approve it with your PIN.',
                     { phone: masked }
                   )}
-<<<<<<< HEAD
-=======
-        </Text>
->>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
         </Text>
 
         {waiting ? (

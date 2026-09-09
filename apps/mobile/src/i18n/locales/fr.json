@@ -294,7 +294,7 @@
     "dueNow": "À payer maintenant (acompte)",
     "dueLater": "À payer plus tard",
     "payDepositCta": "Payer l'acompte · {{amount}} {{currency}}",
-    "unpaidStatus": "Acompte impayé",
+    "unpaidStatus": "Acompte non payé",
     "resumeHelper": "Payez l'acompte de réservation pour confirmer votre commande. Vous paierez le montant restant à la réception de votre commande.",
     "alreadyPaid": "L'acompte est déjà payé",
     "paymentError": "Échec du paiement de l'acompte",

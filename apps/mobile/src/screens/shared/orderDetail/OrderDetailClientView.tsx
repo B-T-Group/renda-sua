@@ -62,7 +62,7 @@ import {
   type OrderViewModelContext,
 } from '../../../orders/model';
 import type { OrderDetailScreenProps } from './types';
-import { isDepositPending } from '../../../utils/depositResume';
+import { isDepositPending, hasLivePendingDepositTx } from '../../../utils/depositResume';
 
 type Props = OrderDetailScreenProps;
 
@@ -459,40 +459,39 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   };
 
   const runPayDeposit = async (phoneNumber?: string) => {
+    if (!order) return;
     setPayDepositLoading(true);
+    
+    const phoneE164 =
+      phoneNumber?.trim() ||
+      order.client?.user?.phone_number?.trim() ||
+      '';
+    const depositAmount = order.deposit_amount ?? 0;
+    const amountDue = (order.grand_total ?? 0) - depositAmount;
+    
+    // Poll-only path: if live pending deposit tx exists, navigate directly to await (no POST)
+    // Per PE: prefer poll when deposit_mobile_payment_transaction_id is set AND deposit pending
+    if (hasLivePendingDepositTx(order)) {
+      navigation.navigate('MobileMoneyAwaitingPayment', {
+        orderIds: [orderId],
+        phoneE164,
+        source: 'order-detail',
+        orderNumbers: order.order_number ? [order.order_number] : undefined,
+        isDepositOrder: true,
+        depositAmount,
+        amountDue,
+        currency: order.currency,
+      });
+      setPayDepositLoading(false);
+      return;
+    }
+    
+    // Retry path: no live pending attempt → POST retry-deposit-payment
     try {
       const response = await agentApi.orders.retryDepositPayment(
         orderId,
         phoneNumber?.trim() ? { phone_number: phoneNumber.trim() } : {}
       );
-      
-      // Handle ALL 409 codes as soft poll/retry-once: open await/poll without hard error
-      // DEPOSIT_PAYMENT_PENDING → existing pending tx
-      // DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid
-      // CONCURRENT_RETRY_DETECTED → soft race, brief refresh+retry once or poll
-      if (
-        response.code === 'DEPOSIT_PAYMENT_PENDING' ||
-        response.code === 'DEPOSIT_PAYMENT_PROCESSING' ||
-        response.code === 'CONCURRENT_RETRY_DETECTED'
-      ) {
-        const phoneE164 =
-          phoneNumber?.trim() ||
-          order?.client?.user?.phone_number?.trim() ||
-          '';
-        const depositAmount = order.deposit_amount ?? 0;
-        const amountDue = (order.grand_total ?? 0) - depositAmount;
-        navigation.navigate('MobileMoneyAwaitingPayment', {
-          orderIds: [orderId],
-          phoneE164,
-          source: 'order-detail',
-          orderNumbers: order?.order_number ? [order.order_number] : undefined,
-          isDepositOrder: true,
-          depositAmount,
-          amountDue,
-          currency: order.currency,
-        });
-        return;
-      }
       
       // Handle 200 with deposit_status "paid": already paid, refresh order
       if (response.deposit_status === 'paid') {
@@ -509,23 +508,42 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
         throw new Error(response.message || 'Failed to initiate deposit payment');
       }
       
-      const phoneE164 =
-        phoneNumber?.trim() ||
-        order?.client?.user?.phone_number?.trim() ||
-        '';
-      const depositAmount = response.deposit_amount ?? order.deposit_amount ?? 0;
-      const amountDue = response.amount_due ?? ((order.grand_total ?? 0) - depositAmount);
       navigation.navigate('MobileMoneyAwaitingPayment', {
         orderIds: [orderId],
         phoneE164,
         source: 'order-detail',
-        orderNumbers: order?.order_number ? [order.order_number] : undefined,
+        orderNumbers: order.order_number ? [order.order_number] : undefined,
         isDepositOrder: true,
-        depositAmount,
-        amountDue,
+        depositAmount: response.deposit_amount ?? depositAmount,
+        amountDue: response.amount_due ?? amountDue,
         currency: order.currency,
       });
     } catch (e: unknown) {
+      // Handle ALL 409 codes as soft poll/retry-once: open await/poll without hard error
+      // Nest contract (PR #288 @ 5aa09b07):
+      // - DEPOSIT_PAYMENT_PENDING → existing pending tx
+      // - DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid
+      // - CONCURRENT_RETRY_DETECTED → soft race, poll/retry-once
+      const errorCode = (e as any)?.code;
+      if (
+        errorCode === 'DEPOSIT_PAYMENT_PENDING' ||
+        errorCode === 'DEPOSIT_PAYMENT_PROCESSING' ||
+        errorCode === 'CONCURRENT_RETRY_DETECTED'
+      ) {
+        navigation.navigate('MobileMoneyAwaitingPayment', {
+          orderIds: [orderId],
+          phoneE164,
+          source: 'order-detail',
+          orderNumbers: order.order_number ? [order.order_number] : undefined,
+          isDepositOrder: true,
+          depositAmount,
+          amountDue,
+          currency: order.currency,
+        });
+        return;
+      }
+      
+      // Hard error: show message
       setSnack(
         e instanceof Error
           ? e.message

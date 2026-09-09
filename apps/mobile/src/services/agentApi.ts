@@ -325,7 +325,7 @@ const orders = {
   /** 
    * Client: re-initiate deposit payment (mobile money) when deposit is pending.
    * 
-   * Nest contract (PR #288):
+   * Nest contract (PR #288 @ 5aa09b07):
    * - 409 DEPOSIT_PAYMENT_PENDING → existing pending tx, soft poll
    * - 409 DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid, soft poll
    * - 409 CONCURRENT_RETRY_DETECTED → soft race, poll/retry-once, do NOT hard-error
