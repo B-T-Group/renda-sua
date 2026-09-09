@@ -94,7 +94,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
         orderIds.map((id) =>
           source === 'pickup'
             ? agentApi.orders.initiatePayAtPickupPayment(id, phone)
-            : agentApi.orders.retryPayment(id)
+            : agentApi.orders.retryPayment(id, phone ? { phone_number: phone } : undefined)
         )
       );
       restart();
@@ -163,28 +163,37 @@ export default function MobileMoneyAwaitingPaymentScreen() {
       : (error || retryError || t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again or go back to your order.'));
     
     return (
-      <PaymentRetryView
-        errorTitle={errorTitle}
-        errorReason={errorReason}
-        tips={[
-          {
-            icon: 'wallet-outline',
-            title: t('checkout.payment.checkBalance', 'Check your MoMo balance'),
-            description: t('checkout.payment.checkBalanceDesc', 'Top up your MoMo wallet and try again.'),
-          },
-          {
-            icon: 'phone-check-outline',
-            title: t('checkout.payment.confirmPhone', 'Confirm your phone number'),
-            description: t('checkout.payment.confirmPhoneDesc', 'Make sure {{phone}} matches the number linked to your MoMo wallet.', { phone: masked }),
-          },
-        ]}
-        onRetry={() => void onRetry()}
-        retrying={retrying}
-        showOrderReservedBanner={!isDepositOrder}
-        onEditPhone={onEditPhone}
-        retryLabel={t('orders.deposit.sendAgain', 'Send again')}
-        // onChangeMethod NOT passed - payment rail is locked by preflight
-      />
+      <View style={{ flex: 1 }}>
+        <PaymentRetryView
+          errorTitle={errorTitle}
+          errorReason={errorReason}
+          tips={[
+            {
+              icon: 'wallet-outline',
+              title: t('checkout.payment.checkBalance', 'Check your MoMo balance'),
+              description: t('checkout.payment.checkBalanceDesc', 'Top up your MoMo wallet and try again.'),
+            },
+            {
+              icon: 'phone-check-outline',
+              title: t('checkout.payment.confirmPhone', 'Confirm your phone number'),
+              description: t('checkout.payment.confirmPhoneDesc', 'Make sure {{phone}} matches the number linked to your MoMo wallet.', { phone: masked }),
+            },
+          ]}
+          onRetry={() => void onRetry()}
+          retrying={retrying}
+          showOrderReservedBanner={!isDepositOrder}
+          onEditPhone={onEditPhone}
+          retryLabel={t('orders.deposit.sendAgain', 'Send again')}
+          // onChangeMethod NOT passed - payment rail is locked by preflight
+        />
+        
+        <AddPaymentPhoneDialog
+          visible={editPhoneDialogVisible}
+          saving={savingPhone}
+          onDismiss={onDismissEditPhoneDialog}
+          onSave={onSavePhone}
+        />
+      </View>
     );
   }
 

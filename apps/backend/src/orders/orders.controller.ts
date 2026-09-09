@@ -1355,6 +1355,11 @@ export class OrdersController {
           description:
             'For Stripe-rail orders, return a PaymentIntent client secret for native PaymentSheet instead of a hosted Checkout URL.',
         },
+        phone_number: {
+          type: 'string',
+          description:
+            'For mobile money orders, optionally override the phone number for this payment attempt. Must be in E.164 format.',
+        },
       },
     },
   })
@@ -1363,10 +1368,11 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: 'Not authorized for this order' })
   async retryOrderPayment(
     @Param('id') orderId: string,
-    @Body() body?: { stripe_payment_method?: 'payment_sheet' }
+    @Body() body?: { stripe_payment_method?: 'payment_sheet'; phone_number?: string }
   ) {
     return this.ordersService.retryOrderPayment(orderId, {
       stripePaymentMethod: body?.stripe_payment_method,
+      phoneNumber: body?.phone_number,
     });
   }
 
