@@ -17,6 +17,7 @@ import type {
 } from '../../navigation/types';
 import { agentApi } from '../../services/agentApi';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
+import { formatCurrency } from '../../utils/formatters';
 
 export default function MobileMoneyAwaitingPaymentScreen() {
   const { t } = useTranslation();
@@ -98,7 +99,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: isDepositOrder 
-        ? t('orders.deposit.navTitle', 'Deposit')
+        ? t('deposit.awaitingTitle', 'Approve deposit payment')
         : t('orders.momoAwaiting.navTitle', 'Approve payment'),
       headerBackTitle: t('common.back', 'Back'),
     });
@@ -119,24 +120,26 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     });
   }, [navigation, stop]);
 
-  // Non-deposit retry (pay_now full-pay or pickup)
+  // Retry payment: deposit orders call retryDepositPayment
   const onRetry = async () => {
     if (!orderIds.length) return;
-    // NEVER retry for deposit orders - they're cancelled server-side
-    if (isDepositOrder) {
-      onBackToCheckout();
-      return;
-    }
     setRetrying(true);
     setRetryError(null);
     try {
       const phone = currentPhone.trim() || undefined;
       await Promise.all(
-        orderIds.map((id) =>
-          source === 'pickup'
-            ? agentApi.orders.initiatePayAtPickupPayment(id, phone)
-            : agentApi.orders.retryPayment(id, phone ? { phone_number: phone } : undefined)
-        )
+        orderIds.map((id) => {
+          if (isDepositOrder) {
+            return agentApi.orders.retryDepositPayment(id, phone ? { phone_number: phone } : {});
+          } else if (source === 'pickup') {
+            return agentApi.orders.initiatePayAtPickupPayment(id, phone);
+          } else {
+            return agentApi.orders.retryPayment(
+              id,
+              phone ? { phone_number: phone } : {}
+            );
+          }
+        })
       );
       restart();
     } catch (e: unknown) {
@@ -195,8 +198,11 @@ export default function MobileMoneyAwaitingPaymentScreen() {
 
   // When phase is 'failed', use PaymentRetryView or deposit-specific fail UI
   if (phase === 'failed') {
-    if (isDepositOrder) {
-      // Deposit fail: order cancelled server-side, navigate back to checkout
+    const isOrderDetailSource = source === 'order-detail';
+    // Place-order deposit fail: order cancelled server-side → checkout.
+    // Order-detail deposit resume fail: stay on order (PE: Back to order).
+    if (isDepositOrder && !isOrderDetailSource) {
+      // Deposit fail from checkout: order cancelled server-side, navigate back to checkout
       return (
         <View style={{ flex: 1 }}>
           <PaymentRetryView
@@ -227,12 +233,21 @@ export default function MobileMoneyAwaitingPaymentScreen() {
       );
     }
     
-    // Non-deposit fail: allow retry
+    const errorReason = error || retryError || (
+      isDepositOrder
+        ? t('deposit.paymentFailedBody', 'The deposit payment request did not succeed. You can try again or return to your order.')
+        : t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again or go back to your order.')
+    );
+    
     return (
       <View style={{ flex: 1 }}>
         <PaymentRetryView
-          errorTitle={t('orders.momoAwaiting.failedTitle', 'Payment failed')}
-          errorReason={error || retryError || t('orders.momoAwaiting.failedBody', 'The mobile money request did not succeed. You can try again or go back to your order.')}
+          errorTitle={
+            isDepositOrder
+              ? t('deposit.paymentFailedTitle', 'Deposit payment failed')
+              : t('orders.momoAwaiting.failedTitle', 'Payment failed')
+          }
+          errorReason={errorReason}
           tips={[
             {
               icon: 'wallet-outline',
@@ -247,10 +262,21 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           ]}
           onRetry={() => void onRetry()}
           retrying={retrying}
-          showOrderReservedBanner={true}
-          onEditPhone={onEditPhone}
-          retryLabel={t('orders.momoAwaiting.sendAgain', 'Send again')}
-          // onChangeMethod NOT passed - payment rail is locked by preflight
+          showOrderReservedBanner={!isOrderDetailSource}
+          onEditPhone={isOrderDetailSource ? undefined : onEditPhone}
+          retryLabel={
+            isDepositOrder
+              ? t('deposit.sendAgain', 'Send again')
+              : source === 'pickup'
+                ? t('business.pickup.momoSendAgain', 'Send again')
+                : undefined
+          }
+          onSecondary={isOrderDetailSource ? leaveToOrder : undefined}
+          secondaryLabel={
+            isOrderDetailSource
+              ? t('orders.momoAwaiting.back', 'Back to order')
+              : undefined
+          }
         />
         
         <AddPaymentPhoneDialog
@@ -305,10 +331,14 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           }}
         >
           {phase === 'paid'
-            ? t('orders.momoAwaiting.paidTitle', 'Payment confirmed')
+            ? isDepositOrder
+              ? t('deposit.paidTitle', 'Deposit confirmed')
+              : t('orders.momoAwaiting.paidTitle', 'Payment confirmed')
             : phase === 'timeout'
               ? t('orders.momoAwaiting.timeoutTitle', 'Still waiting')
-              : t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}
+              : isDepositOrder
+                ? t('deposit.awaitingTitle', 'Approve deposit payment')
+                : t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}
         </Text>
 
         <Text
@@ -321,16 +351,16 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           }}
         >
           {phase === 'paid'
-            ? isDepositOrder && orderData
+            ? isDepositOrder
               ? t(
-                  'orders.deposit.paidBody',
-                  'Deposit paid! The remaining {{remainder}} {{currency}} is due at {{timing}}.',
-                  { 
-                    remainder: orderData.amount_due || 0,
-                    currency: orderData.currency,
-                    timing: fulfillment === 'pickup' 
-                      ? t('orders.deposit.atPickup', 'pickup')
-                      : t('orders.deposit.atDelivery', 'delivery')
+                  'deposit.paidBody',
+                  'Your deposit payment is confirmed. The store will prepare your order. You will pay the remaining {{amount}} when you receive your order.',
+                  {
+                    amount: formatCurrency(
+                      amountDueParam ?? orderData?.amount_due ?? 0,
+                      currencyParam || orderData?.currency || 'XAF',
+                      'en-US'
+                    ),
                   }
                 )
               : source === 'pickup'
@@ -343,20 +373,22 @@ export default function MobileMoneyAwaitingPaymentScreen() {
                     "Waiting for the store to accept your order. We'll notify you as soon as they confirm."
                   )
             : phase === 'timeout'
-              ? isDepositOrder
+              ? t(
+                  'orders.momoAwaiting.timeoutBody',
+                  'We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.'
+                )
+              : isDepositOrder
                 ? t(
-                    'orders.deposit.timeoutBody',
-                    "No MoMo approval yet. Your order wasn't placed. Return to checkout to try again with the same or different number."
-                  )
-                : t(
-                    'orders.momoAwaiting.timeoutBody',
-                    'We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.'
-                  )
-              : isDepositOrder && orderData
-                ? t(
-                    'orders.deposit.waitingBody',
-                    "We're collecting your {{amount}} {{currency}} deposit via MoMo. Approve the prompt, then we'll place the order.",
-                    { amount: orderData.deposit_amount, currency: orderData.currency }
+                    'deposit.awaitingBody',
+                    'A deposit payment request of {{amount}} was sent to {{phone}}. Open the prompt on that phone and approve it with your PIN.',
+                    {
+                      phone: masked,
+                      amount: formatCurrency(
+                        depositAmountParam ?? orderData?.deposit_amount ?? 0,
+                        currencyParam || orderData?.currency || 'XAF',
+                        'en-US'
+                      ),
+                    }
                   )
                 : t(
                     'orders.momoAwaiting.waitingBody',
@@ -442,16 +474,15 @@ export default function MobileMoneyAwaitingPaymentScreen() {
               ) : null}
             </>
           ) : null}
-          {phase === 'timeout' && isDepositOrder ? (
+          {phase === 'timeout' && isDepositOrder && source !== 'order-detail' ? (
             <Button mode="contained" onPress={onBackToCheckout}>
               {t('orders.deposit.backToCheckout', 'Back to checkout')}
             </Button>
           ) : null}
-          {phase !== 'paid' && !(phase === 'timeout' && isDepositOrder) ? (
-            <Button mode="text" onPress={isDepositOrder && phase === 'timeout' ? onBackToCheckout : leaveToOrder}>
-              {phase === 'timeout' && isDepositOrder
-                ? t('orders.deposit.backToCheckout', 'Back to checkout')
-                : t('orders.momoAwaiting.back', 'Back to order')}
+          {phase !== 'paid' &&
+          !(phase === 'timeout' && isDepositOrder && source !== 'order-detail') ? (
+            <Button mode="text" onPress={leaveToOrder}>
+              {t('orders.momoAwaiting.back', 'Back to order')}
             </Button>
           ) : null}
         </View>

@@ -12,6 +12,11 @@ import { useOrderStripePayment } from '../../../hooks/useOrderStripePayment';
 import { formatCurrency } from '../../../utils/formatters';
 import { resolveOrderPricing } from '../../../utils/orderAmounts';
 import { OrderStatusHistoryTimeline } from './OrderStatusHistoryTimeline';
+import {
+  isDepositPending,
+  hasLivePendingDepositTx,
+  remainingAfterDeposit,
+} from '../../../utils/depositResume';
 
 function formatWhen(locale: string, iso: string): string {
   return new Date(iso).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
@@ -52,8 +57,12 @@ type Props = {
   onAwaitingPayment?: (params: {
     orderIds: string[];
     phoneE164: string;
-    source: 'retry';
+    source: 'retry' | 'order-detail';
     orderNumbers?: string[];
+    isDepositOrder?: boolean;
+    depositAmount?: number;
+    amountDue?: number;
+    currency?: string;
   }) => void;
 };
 
@@ -84,7 +93,8 @@ function showRetryPayNow(order: Order): boolean {
   return (
     order.current_status === 'pending_payment' &&
     order.payment_timing === 'pay_now' &&
-    order.payment_status !== 'paid'
+    order.payment_status !== 'paid' &&
+    !isDepositPending(order)  // Don't show retry pay-now when deposit is pending
   );
 }
 
@@ -101,6 +111,7 @@ export function OrderClientSummaryCard({
   const { pay: payWithStripeSheet } = useOrderStripePayment();
   const [historyOpen, setHistoryOpen] = useState(true);
   const [retrying, setRetrying] = useState(false);
+  const [payingDeposit, setPayingDeposit] = useState(false);
 
   const pricing = useMemo(() => resolveOrderPricing(order), [order]);
   const cur = order.currency || 'XAF';
@@ -114,7 +125,9 @@ export function OrderClientSummaryCard({
     [order.payment_status, colors]
   );
 
+  const depositIsPending = isDepositPending(order);
   const canRetry = showRetryPayNow(order) && !!onRefetch && !!onNotify;
+  const canPayDeposit = depositIsPending && !!onRefetch && !!onNotify && !!onAwaitingPayment;
 
   const handleRetryPayment = useCallback(async () => {
     if (!onRefetch || !onNotify) return;
@@ -200,6 +213,96 @@ export function OrderClientSummaryCard({
     }
   }, [onAwaitingPayment, onNotify, onRefetch, order, payWithStripeSheet, t]);
 
+  const handlePayDeposit = useCallback(async () => {
+    if (!onRefetch || !onNotify || !onAwaitingPayment) return;
+    setPayingDeposit(true);
+    
+    const phoneE164 = order.client?.user?.phone_number?.trim() || '';
+    const depositAmount = order.deposit_amount ?? 0;
+    const amountDue = remainingAfterDeposit(order);
+    
+    // Poll-only path: if live pending deposit tx exists, navigate directly to await (no POST)
+    // Per PE: prefer poll when deposit_mobile_payment_transaction_id is set AND deposit pending
+    if (hasLivePendingDepositTx(order)) {
+      onAwaitingPayment({
+        orderIds: [order.id],
+        phoneE164,
+        source: 'order-detail',
+        orderNumbers: order.order_number ? [order.order_number] : undefined,
+        isDepositOrder: true,
+        depositAmount,
+        amountDue,
+        currency: order.currency,
+      });
+      setPayingDeposit(false);
+      return;
+    }
+    
+    // Retry path: no live pending attempt → POST retry-deposit-payment
+    try {
+      const response = await agentApi.orders.retryDepositPayment(order.id, {});
+      
+      // Handle 200 with deposit_status "paid": already paid, refresh order
+      if (response.deposit_status === 'paid') {
+        onNotify(
+          response.message ||
+          t('deposit.alreadyPaid', 'Deposit is already paid')
+        );
+        await onRefetch();
+        return;
+      }
+      
+      // Handle 200 with new transaction: navigate to await screen
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to initiate deposit payment');
+      }
+      
+      onAwaitingPayment({
+        orderIds: [order.id],
+        phoneE164,
+        source: 'order-detail',
+        orderNumbers: order.order_number ? [order.order_number] : undefined,
+        isDepositOrder: true,
+        depositAmount: response.deposit_amount ?? depositAmount,
+        amountDue: response.amount_due ?? amountDue,
+        currency: order.currency,
+      });
+    } catch (e: unknown) {
+      // Handle ALL 409 codes as soft poll/retry-once: open await/poll without hard error
+      // Nest contract (PR #288 @ 1c260326):
+      // - DEPOSIT_PAYMENT_PENDING → existing pending tx
+      // - DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid
+      // - CONCURRENT_RETRY_DETECTED → soft race, poll/retry-once
+      const errorCode = (e as any)?.code;
+      if (
+        errorCode === 'DEPOSIT_PAYMENT_PENDING' ||
+        errorCode === 'DEPOSIT_PAYMENT_PROCESSING' ||
+        errorCode === 'CONCURRENT_RETRY_DETECTED'
+      ) {
+        onAwaitingPayment({
+          orderIds: [order.id],
+          phoneE164,
+          source: 'order-detail',
+          orderNumbers: order.order_number ? [order.order_number] : undefined,
+          isDepositOrder: true,
+          depositAmount,
+          amountDue,
+          currency: order.currency,
+        });
+        return;
+      }
+      
+      // Hard error: show message
+      const msg =
+        e instanceof Error
+          ? e.message
+          : t('deposit.paymentError', 'Failed to start deposit payment');
+      onNotify(msg);
+    } finally {
+      setPayingDeposit(false);
+    }
+  }, [onAwaitingPayment, onNotify, onRefetch, order, t]);
+
   return (
     <View style={cardStyle ?? undefined}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm }}>
@@ -264,6 +367,30 @@ export function OrderClientSummaryCard({
               isStripeCardOrder(order)
                 ? 'Complete card payment in the payment sheet or browser.'
                 : 'You can also cancel the order if you changed your mind.'
+            )}
+          </Text>
+        </View>
+      ) : null}
+
+      {canPayDeposit ? (
+        <View style={{ marginTop: spacing.sm, marginBottom: spacing.xs }}>
+          <Button
+            mode="contained"
+            buttonColor={colors.primary.main}
+            textColor={colors.background.paper}
+            onPress={() => void handlePayDeposit()}
+            loading={payingDeposit}
+            disabled={payingDeposit}
+          >
+            {t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+              amount: order.deposit_amount ?? 0,
+              currency: cur,
+            })}
+          </Button>
+          <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xs }}>
+            {t(
+              'deposit.resumeHelper',
+              'Pay the reservation deposit to confirm your order. You will pay the remaining amount when you receive your order.'
             )}
           </Text>
         </View>

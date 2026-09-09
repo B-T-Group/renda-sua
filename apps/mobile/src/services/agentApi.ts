@@ -322,6 +322,36 @@ const orders = {
     message?: string;
   }> => api.post(`/orders/${orderId}/retry-payment`, body ?? {}),
 
+  /** 
+   * Client: re-initiate deposit payment (mobile money) when deposit is pending.
+   * 
+   * Nest contract (PR #288 @ 1c260326):
+   * - 409 DEPOSIT_PAYMENT_PENDING → existing pending tx, soft poll
+   * - 409 DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid, soft poll
+   * - 409 CONCURRENT_RETRY_DETECTED → soft race, poll/retry-once, do NOT hard-error
+   * - 200 new → payment_transaction.transaction_id, navigate await
+   * - 200 paid → deposit_status "paid", refresh order, no await
+   * 
+   * ALL 409 codes: soft poll/retry-once, open await/poll without hard error
+   */
+  retryDepositPayment: (
+    orderId: string,
+    body?: { phone_number?: string }
+  ): Promise<{
+    success: boolean;
+    current_status?: string;
+    deposit_status?: string;
+    deposit_amount?: number;
+    amount_due?: number;
+    payment_transaction?: { 
+      transaction_id?: string | null;
+      mode?: string;
+    };
+    message?: string;
+    code?: string;
+    existing_transaction_id?: string;
+  }> => api.post(`/orders/${orderId}/retry-deposit-payment`, body ?? {}),
+
   getOrderAgentLocation: (
     orderId: string
   ): Promise<{
