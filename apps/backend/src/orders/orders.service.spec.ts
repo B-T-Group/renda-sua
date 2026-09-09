@@ -413,6 +413,23 @@ describe('OrdersService', () => {
           provide: require('../food/food-orders.service').FoodOrdersService,
           useValue: { applyConfirmationUpdates: jest.fn() },
         },
+        {
+          provide: require('./deposit-calculation.service').DepositCalculationService,
+          useValue: {
+            calculateDeposit: jest.fn().mockReturnValue({
+              depositAmount: 500,
+              amountDue: 4500,
+              totalAmount: 5000,
+            }),
+            isDepositRequired: jest.fn().mockReturnValue(false),
+          },
+        },
+        {
+          provide: require('./deposit-refund.service').DepositRefundService,
+          useValue: {
+            refundDeposit: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
