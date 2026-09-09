@@ -105,7 +105,7 @@ export interface CheckoutGroup {
   deposit_amount?: number | null;
   deposit_paid?: number | null;
   amount_due?: number | null;
-  deposit_status?: 'pending_payment' | 'paid' | 'forfeited' | 'refunded' | null;
+  deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
 }
 
 export interface CheckoutDiscountPreview {
@@ -189,7 +189,7 @@ export interface ResolvedCheckoutConfig {
   deposit_amount?: number | null;
   deposit_paid?: number | null;
   amount_due?: number | null;
-  deposit_status?: 'pending_payment' | 'paid' | 'forfeited' | 'refunded' | null;
+  deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
 }
 
 /** Input shape for POST /orders/checkout/preflight */
