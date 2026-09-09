@@ -16,6 +16,13 @@ import {
 } from './payment-callback/payment-callback-handler.interface';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function looksLikeUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
 export type MypvitCallbackProcessResult = {
   responseCode: number;
   transactionId: string;
@@ -85,9 +92,7 @@ export class MobilePaymentCallbackProcessor {
     callbackData: FreemopayCallbackDto,
     _req?: Request
   ): Promise<FreemopayCallbackProcessResult> {
-    const tx = await this.databaseService.getTransactionByTransactionId(
-      callbackData.reference
-    );
+    const tx = await this.lookupFreemopayTransaction(callbackData);
 
     if (tx?.status !== 'pending') {
       return this.handleNonPendingFreemopay(tx, callbackData);
@@ -104,6 +109,38 @@ export class MobilePaymentCallbackProcessor {
     await this.processPendingFreemopay(tx, callbackData);
 
     return { received: true, reference: callbackData.reference };
+  }
+
+  private freemopayLookupKeys(callbackData: FreemopayCallbackDto): string[] {
+    return [
+      ...new Set(
+        [callbackData.reference, callbackData.merchantRef, callbackData.externalId]
+          .map((key) => key?.trim())
+          .filter((key): key is string => !!key)
+      ),
+    ];
+  }
+
+  private async lookupFreemopayKey(
+    key: string
+  ): Promise<MobilePaymentTransaction | null> {
+    const byProviderId =
+      await this.databaseService.getTransactionByTransactionId(key);
+    if (byProviderId) return byProviderId;
+    const byReference = await this.databaseService.getTransactionByReference(key);
+    if (byReference) return byReference;
+    if (!looksLikeUuid(key)) return null;
+    return this.databaseService.getTransactionById(key);
+  }
+
+  private async lookupFreemopayTransaction(
+    callbackData: FreemopayCallbackDto
+  ): Promise<MobilePaymentTransaction | null> {
+    for (const key of this.freemopayLookupKeys(callbackData)) {
+      const found = await this.lookupFreemopayKey(key);
+      if (found) return found;
+    }
+    return null;
   }
 
   private async handleNonPendingMypvit(
@@ -140,7 +177,13 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<FreemopayCallbackProcessResult> {
     if (!tx) {
       this.logger.warn(
-        `Transaction not found for provider reference: ${callbackData.reference}`
+        `Transaction not found for provider reference: ${callbackData.reference}` +
+          (callbackData.merchantRef
+            ? ` merchantRef=${callbackData.merchantRef}`
+            : '') +
+          (callbackData.externalId
+            ? ` externalId=${callbackData.externalId}`
+            : '')
       );
       return { received: true, reference: callbackData.reference };
     }

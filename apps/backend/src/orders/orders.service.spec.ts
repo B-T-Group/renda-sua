@@ -706,6 +706,14 @@ describe('OrdersService', () => {
         'mobile_money'
       );
       expect(depositCalcService.calculateDeposit).toHaveBeenCalledWith(5500, 'XAF');
+      expect(
+        (service as any).mobilePaymentsDatabaseService.createTransaction
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payment_entity: 'order_deposit',
+          transaction_id: 'momo-tx-123',
+        })
+      );
     });
   });
 
