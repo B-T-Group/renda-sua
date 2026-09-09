@@ -7068,7 +7068,6 @@ export class OrdersService {
             accountId: platformAccountId,
             amount: depositAmount,
             referenceId: `deposit-${order.order_number}`,
-            transactionType: 'deposit',
             memo: `Deposit for order ${order.order_number}`,
           });
         }
@@ -9671,9 +9670,11 @@ export class OrdersService {
     ) {
       // MoMo reservation deposit collection for pay_at_delivery/pickup
       const railForDeposit: 'mobile_money' | 'stripe' | 'wallet' =
-        paymentRail === 'stripe' ? 'stripe' : 
-        paymentRail === 'wallet' ? 'wallet' : 
-        'mobile_money';
+        paymentRail === 'stripe'
+          ? 'stripe'
+          : payer_payment_rail === 'wallet'
+            ? 'wallet'
+            : 'mobile_money';
       const requiresDeposit = this.depositCalculationService.isDepositRequired(
         paymentTiming,
         railForDeposit
