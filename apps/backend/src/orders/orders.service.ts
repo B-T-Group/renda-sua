@@ -6535,6 +6535,14 @@ export class OrdersService {
           payment_failed_at
           payment_failure_message
           reconciliation_status
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           completed_at
           business_id
           client_id
@@ -6720,6 +6728,14 @@ export class OrdersService {
           payment_source
           payment_timing
           reconciliation_status
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           estimated_delivery_time
           special_instructions
           business_id
