@@ -322,14 +322,30 @@ const orders = {
     message?: string;
   }> => api.post(`/orders/${orderId}/retry-payment`, body ?? {}),
 
-  /** Client: re-initiate deposit payment (mobile money) when deposit is pending. */
+  /** 
+   * Client: re-initiate deposit payment (mobile money) when deposit is pending.
+   * 
+   * Nest contract (PR #288 @ 903f07dd):
+   * - 409 DEPOSIT_PAYMENT_PENDING → existing_transaction_id, poll-only, do NOT retry
+   * - 200 new → payment_transaction.transaction_id, navigate await
+   * - 200 paid → deposit_status "paid", refresh order, no await
+   */
   retryDepositPayment: (
     orderId: string,
     body?: { phone_number?: string }
   ): Promise<{
     success: boolean;
-    payment_transaction?: { transaction_id?: string | null };
+    current_status?: string;
+    deposit_status?: string;
+    deposit_amount?: number;
+    amount_due?: number;
+    payment_transaction?: { 
+      transaction_id?: string | null;
+      mode?: string;
+    };
     message?: string;
+    code?: string;
+    existing_transaction_id?: string;
   }> => api.post(`/orders/${orderId}/retry-deposit-payment`, body ?? {}),
 
   getOrderAgentLocation: (

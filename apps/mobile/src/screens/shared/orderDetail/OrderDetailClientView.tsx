@@ -465,15 +465,49 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
         orderId,
         phoneNumber?.trim() ? { phone_number: phoneNumber.trim() } : {}
       );
+      
+      // Handle 409 DEPOSIT_PAYMENT_PENDING: poll-only, do NOT retry
+      if (response.code === 'DEPOSIT_PAYMENT_PENDING') {
+        const phoneE164 =
+          phoneNumber?.trim() ||
+          order?.client?.user?.phone_number?.trim() ||
+          '';
+        const depositAmount = order.deposit_amount ?? 0;
+        const amountDue = (order.grand_total ?? 0) - depositAmount;
+        navigation.navigate('MobileMoneyAwaitingPayment', {
+          orderIds: [orderId],
+          phoneE164,
+          source: 'order-detail',
+          orderNumbers: order?.order_number ? [order.order_number] : undefined,
+          isDepositOrder: true,
+          depositAmount,
+          amountDue,
+          currency: order.currency,
+        });
+        return;
+      }
+      
+      // Handle 200 with deposit_status "paid": already paid, refresh order
+      if (response.deposit_status === 'paid') {
+        setSnack(
+          response.message ||
+          t('deposit.alreadyPaid', 'Deposit is already paid')
+        );
+        void refetch();
+        return;
+      }
+      
+      // Handle 200 with new transaction: navigate to await screen
       if (!response.success) {
         throw new Error(response.message || 'Failed to initiate deposit payment');
       }
+      
       const phoneE164 =
         phoneNumber?.trim() ||
         order?.client?.user?.phone_number?.trim() ||
         '';
-      const depositAmount = order.deposit_amount ?? 0;
-      const amountDue = (order.grand_total ?? 0) - depositAmount;
+      const depositAmount = response.deposit_amount ?? order.deposit_amount ?? 0;
+      const amountDue = response.amount_due ?? ((order.grand_total ?? 0) - depositAmount);
       navigation.navigate('MobileMoneyAwaitingPayment', {
         orderIds: [orderId],
         phoneE164,
