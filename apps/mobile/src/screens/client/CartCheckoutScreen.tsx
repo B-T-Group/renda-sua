@@ -475,19 +475,30 @@ export default observer(function CartCheckoutScreen() {
   }, [deliveryAmount, discountCode.appliedCode, discountCode.percentage, singleBusiness, subtotal]);
   const grandTotal = Math.max(0, subtotal + deliveryAmount - discountAmount);
 
-  // Deposit calculation: prefer server deposit_amount, fallback to calculation.
+  // Deposit path detection: only show deposit UI when actually on deposit path
+  // (server provides deposit_amount OR pay-at-delivery/pickup mode active)
+  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+  const isDepositPath = useMemo(() => {
+    if (isDiaspora || resolvedIsStripeRail) return false;
+    // Deposit path active when:
+    // 1. Server explicitly provides deposit_amount > 0, OR
+    // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
+    const serverDepositProvided = preflightConfig?.deposit_amount != null && preflightConfig.deposit_amount > 0;
+    const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
+    return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
+  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
+
   const depositAmount = useMemo(() => {
-    if (isDiaspora || resolvedIsStripeRail) return null;
+    if (!isDepositPath) return null;
     const serverDeposit = preflightConfig?.deposit_amount;
     return resolveDepositAmount(grandTotal, serverDeposit);
-  }, [grandTotal, preflightConfig?.deposit_amount, isDiaspora, resolvedIsStripeRail]);
+  }, [isDepositPath, grandTotal, preflightConfig?.deposit_amount]);
 
   const depositIsFloor = useMemo(() => {
     if (!depositAmount) return false;
-    return depositAmount === 151;
+    const DEPOSIT_FLOOR = 151;
+    return depositAmount === DEPOSIT_FLOOR;
   }, [depositAmount]);
-
-  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
 
   const payAtDeliveryAllowed = useMemo(() => cart.items.every((l) => l.itemData.payOnDeliveryEnabled), [cart.items]);
 

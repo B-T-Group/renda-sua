@@ -290,7 +290,6 @@
     "minimumLabel": "Acompte minimum pour cette commande",
     "refundableUntilSent": "Remboursable jusqu'à l'envoi en livraison ou jusqu'à ce que la commande soit prête pour le retrait",
     "appliedToTotal": "Appliqué à votre commande — pas de frais supplémentaires",
-    "frenchNote": "FR: Remboursable avant envoi en livraison ou avant pret au retrait · déduit du total",
     "dueNow": "À payer maintenant (acompte)",
     "dueLater": "À payer plus tard",
     "payDepositCta": "Payer l'acompte · {{amount}} {{currency}}",

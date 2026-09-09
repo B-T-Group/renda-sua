@@ -309,7 +309,6 @@
     "minimumLabel": "Minimum deposit for this order",
     "refundableUntilSent": "Refundable until we send it for delivery, or until it is ready for pickup",
     "appliedToTotal": "Applied to your order — not an extra fee",
-    "frenchNote": "FR: Remboursable avant envoi en livraison ou avant pret au retrait · déduit du total",
     "dueNow": "Due now (deposit)",
     "dueLater": "Due later",
     "payDepositCta": "Pay deposit · {{amount}} {{currency}}",

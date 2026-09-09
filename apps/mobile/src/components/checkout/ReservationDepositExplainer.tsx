@@ -4,6 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
+import { formatCatalogMoney } from '../../utils/formatters';
 
 export interface ReservationDepositExplainerProps {
   depositAmount: number;
@@ -62,7 +63,7 @@ export function ReservationDepositExplainer({
           },
         ]}
       >
-        {depositAmount} {currency}
+        {formatCatalogMoney(depositAmount, currency)}
       </Text>
 
       {isFloorAmount && (
@@ -121,22 +122,6 @@ export function ReservationDepositExplainer({
         </View>
       </View>
 
-      <Text
-        variant="bodySmall"
-        style={[
-          typography.caption,
-          {
-            color: colors.text.secondary,
-            marginTop: spacing.sm,
-            fontStyle: 'italic',
-          },
-        ]}
-      >
-        {t(
-          'deposit.frenchNote',
-          'FR: Remboursable avant envoi en livraison ou avant pret au retrait · déduit du total'
-        )}
-      </Text>
     </View>
   );
 }

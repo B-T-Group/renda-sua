@@ -673,19 +673,31 @@ export default function PlaceOrderScreen() {
 
   const grandTotal = Math.max(0, lineSubtotal + deliveryAmount - discountAmount);
 
+  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+  
+  // BLOCKER 1 FIX: Gate deposit UI on real deposit path
+  // Deposit path is active when:
+  // 1. Server explicitly provides deposit_amount > 0, OR
+  // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
+  const isDepositPath = useMemo(() => {
+    if (isDiaspora || resolvedIsStripeRail) return false;
+    const serverDepositProvided = preflightConfig?.deposit_amount != null && preflightConfig.deposit_amount > 0;
+    const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
+    return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
+  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
+
   // Deposit calculation: prefer server deposit_amount, fallback to calculation.
   const depositAmount = useMemo(() => {
-    if (isDiaspora || resolvedIsStripeRail) return null;
+    if (!isDepositPath) return null;
     const serverDeposit = preflightConfig?.deposit_amount;
     return resolveDepositAmount(grandTotal, serverDeposit);
-  }, [grandTotal, preflightConfig?.deposit_amount, isDiaspora, resolvedIsStripeRail]);
+  }, [isDepositPath, grandTotal, preflightConfig?.deposit_amount]);
 
   const depositIsFloor = useMemo(() => {
     if (!depositAmount) return false;
-    return depositAmount === 151;
+    const DEPOSIT_FLOOR = 151;
+    return depositAmount === DEPOSIT_FLOOR;
   }, [depositAmount]);
-
-  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
 
   const showFirstDeliveryDiscount = useMemo(
     () =>
@@ -1525,11 +1537,16 @@ export default function PlaceOrderScreen() {
                   ? t('checkout.payWithMoMo', 'Pay with MoMo')
                   : t('client.placeOrder.submit', 'Place order')
           }
-          total={formatCatalogMoney(grandTotal, currency)}
+          total={formatCatalogMoney(
+            depositAmount != null && depositAmount > 0 ? depositAmount : grandTotal,
+            currency
+          )}
           totalLabel={
-            preflightConfig?.tax_notice === 'calculated_at_checkout'
-              ? t('checkout.totalBeforeTax', 'Total (before tax)')
-              : t('client.placeOrder.summary.total', 'Total')
+            depositAmount != null && depositAmount > 0
+              ? t('deposit.dueNow', 'Due now')
+              : preflightConfig?.tax_notice === 'calculated_at_checkout'
+                ? t('checkout.totalBeforeTax', 'Total (before tax)')
+                : t('client.placeOrder.summary.total', 'Total')
           }
           onPress={() => { if (!submitting) void onSubmit(); }}
           loading={submitting}

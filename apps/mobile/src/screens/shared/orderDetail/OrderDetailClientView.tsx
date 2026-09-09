@@ -31,6 +31,7 @@ import { useOrderDetail } from '../../../hooks/useOrderDetail';
 import { useClientOrders } from '../../../hooks/useClientOrders';
 import { useFirstOrderClientJourney } from '../../../hooks/client/useFirstOrderClientJourney';
 import { useOrderRatingEligibility } from '../../../hooks/useOrderRatingEligibility';
+import { useCancellationPreview } from '../../../hooks/useCancellationPreview';
 import { agentApi } from '../../../services/agentApi';
 import type { Address, Order, OrderItem } from '../../../types/agent';
 import { clientCanCancelOrder, clientShowAgentLocation, clientShowDeliveryPin, clientShowNoAgentOptions } from '../../../utils/clientOrderActions';
@@ -227,6 +228,11 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [forfeitCancelOpen, setForfeitCancelOpen] = useState(false);
   const [cancellingForfeit, setCancellingForfeit] = useState(false);
+  
+  // For forfeit cancel: fetch cancellation preview to get valid reason IDs
+  const { preview: forfeitPreview } = useCancellationPreview(
+    forfeitCancelOpen ? orderId : null
+  );
   const [noAgentOpen, setNoAgentOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [rateMode, setRateMode] = useState<RateOrderMode | null>(null);
@@ -346,7 +352,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const isForfeitRiskState = 
     order.current_status === 'out_for_delivery' || 
     order.current_status === 'ready_for_pickup';
-  const depositAmount = (order as any).deposit_amount ?? null;
+  const depositAmount = order.deposit_amount ?? null;
   const showForfeitDialog = showCancel && isForfeitRiskState && depositAmount != null && depositAmount > 0;
   
   const scrollPad = {
@@ -835,9 +841,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             orderStatus: order.current_status,
           });
           try {
+            // Find a valid cancellation reason from the preview
+            // Prefer "other" reason, or use the first available reason
+            const availableReasons = forfeitPreview?.availableCancellationReasons ?? [];
+            const otherReason = availableReasons.find(r => r.value === 'other');
+            const selectedReasonId = otherReason?.id ?? availableReasons[0]?.id ?? 1;
+            
             const res = await agentApi.orders.cancel({
               orderId: order.id,
-              cancellationReasonId: undefined,
+              cancellationReasonId: selectedReasonId,
               notes: 'Cancelled with deposit forfeit',
             });
             if (res.success) {
