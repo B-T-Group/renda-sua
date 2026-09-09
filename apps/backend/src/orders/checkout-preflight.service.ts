@@ -41,6 +41,7 @@ import {
   normalizeRecipientPhone,
 } from '../diaspora/diaspora-order.util';
 import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import { DepositCalculationService } from './deposit-calculation.service';
 import {
   resolveShopperVariant,
   ShopperVariantResolveException,
@@ -150,7 +151,8 @@ export class CheckoutPreflightService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly metaConversionsService: MetaConversionsService,
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
-    private readonly fxEstimateService: FxEstimateService
+    private readonly fxEstimateService: FxEstimateService,
+    private readonly depositCalculationService: DepositCalculationService
   ) {}
 
   async resolve(
@@ -786,6 +788,49 @@ export class CheckoutPreflightService {
       asapGroups.every((g) => g.asap_available);
     const firstBlocked = asapGroups.find((g) => !g.asap_available);
 
+    // -----------------------------------------------------------------------
+    // 12. MoMo deposit calculation and market flag
+    // -----------------------------------------------------------------------
+    let momoPayNowDeliveryEnabled: boolean | null = null;
+    let depositAmount: number | null = null;
+
+    const isMoMoRail = checkoutMethod === CheckoutMethod.MOBILE_MONEY;
+    const isPayAtDeliveryOrPickup =
+      dto.payment_timing === 'pay_at_delivery' ||
+      dto.payment_timing === 'pay_at_pickup';
+
+    if (isMoMoRail) {
+      // Read market flag for delivery country (or fallback to first seller country)
+      const flagCountry = deliveryCountry ?? sellerCountries[0] ?? null;
+      if (flagCountry) {
+        momoPayNowDeliveryEnabled =
+          await this.isMarketFlagEnabled(
+            'momo_pay_now_delivery_enabled',
+            flagCountry
+          );
+      }
+
+      // Calculate deposit for pay-at-delivery/pickup when currency is XAF
+      if (isPayAtDeliveryOrPickup) {
+        const grandTotal = groups.reduce((sum, g) => sum + (g.total || 0), 0);
+        const currency = groups[0]?.currency ?? '';
+        if (currency === 'XAF' && grandTotal > 0) {
+          try {
+            const result = this.depositCalculationService.calculateDeposit(
+              grandTotal,
+              currency
+            );
+            depositAmount = result.depositAmount;
+          } catch (error: any) {
+            this.logger.warn(
+              `Deposit calculation failed for preflight: ${error?.message}`
+            );
+            // Leave depositAmount null; frontend will handle missing value
+          }
+        }
+      }
+    }
+
     return {
       success: true,
       can_proceed: canProceed,
@@ -823,6 +868,8 @@ export class CheckoutPreflightService {
         fulfillmentCountry,
         groups,
       }),
+      momo_pay_now_delivery_enabled: momoPayNowDeliveryEnabled,
+      deposit_amount: depositAmount,
     };
   }
 
@@ -989,6 +1036,52 @@ export class CheckoutPreflightService {
   // ---------------------------------------------------------------------------
 
   /**
+   * Check if a market-level application_configurations flag is enabled.
+   * @param configKey - The config key to check
+   * @param countryCode - Optional country code for country-specific config
+   * @returns true if enabled, false otherwise (default false)
+   */
+  private async isMarketFlagEnabled(
+    configKey: string,
+    countryCode?: string | null
+  ): Promise<boolean> {
+    try {
+      const query = `
+        query GetMarketFlag($configKey: String!, $countryCode: String) {
+          application_configurations(
+            where: {
+              config_key: { _eq: $configKey }
+              _or: [
+                { country_code: { _eq: $countryCode } }
+                { country_code: { _is_null: true } }
+              ]
+              status: { _eq: "active" }
+            }
+            order_by: [{ country_code: desc_nulls_last }]
+            limit: 1
+          ) {
+            boolean_value
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        configKey,
+        countryCode: countryCode || null,
+      });
+      const configs = (result as any).application_configurations || [];
+      if (configs.length === 0) {
+        return false; // Default to false if config not found
+      }
+      return configs[0].boolean_value === true;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to read market flag ${configKey} for ${countryCode || 'global'}: ${error?.message}`
+      );
+      return false; // Fail-safe: default to false
+    }
+  }
+
+  /**
    * Evaluates delivery availability once per seller group. Returns an empty
    * map for pickup fulfillment (delivery rules do not apply).
    */
@@ -1074,6 +1167,8 @@ export class CheckoutPreflightService {
       stripe_retry_unsupported: true,
       stripe_manual_capture: false,
       delivery_availability: null,
+      momo_pay_now_delivery_enabled: null,
+      deposit_amount: null,
     };
   }
 

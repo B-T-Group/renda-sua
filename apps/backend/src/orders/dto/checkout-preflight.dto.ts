@@ -561,4 +561,18 @@ export class CheckoutPreflightResponseDto {
       'Payer-vs-recipient context for diaspora checkout. Null when the payer and the fulfillment market resolve to the same rail.',
   })
   diaspora?: CheckoutDiasporaDto | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Market-level flag: when false, MoMo pay-now + delivery is hidden; clients must use pay-at-delivery (with deposit) or store pickup. Read from application_configurations.momo_pay_now_delivery_enabled for the delivery country. Null when not applicable (Stripe rail, non-MoMo context).',
+    nullable: true,
+  })
+  momo_pay_now_delivery_enabled?: boolean | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Calculated reservation deposit amount for pay-at-delivery/pickup MoMo orders (XAF only). Null when deposit is not required (Stripe, pay_now, or non-XAF currency).',
+    nullable: true,
+  })
+  deposit_amount?: number | null;
 }
