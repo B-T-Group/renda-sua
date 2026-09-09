@@ -215,8 +215,12 @@ export function OrderClientSummaryCard({
     try {
       const response = await agentApi.orders.retryDepositPayment(order.id, {});
       
-      // Handle 409 DEPOSIT_PAYMENT_PENDING: poll-only, do NOT retry
-      if (response.code === 'DEPOSIT_PAYMENT_PENDING') {
+      // Handle 409 DEPOSIT_PAYMENT_PENDING / DEPOSIT_PAYMENT_PROCESSING: poll-only, do NOT retry
+      // Both codes mean: existing attempt in flight, open/continue await without re-calling
+      if (
+        response.code === 'DEPOSIT_PAYMENT_PENDING' ||
+        response.code === 'DEPOSIT_PAYMENT_PROCESSING'
+      ) {
         const phoneE164 = order.client?.user?.phone_number?.trim() || '';
         const depositAmount = order.deposit_amount ?? 0;
         const amountDue = (order.grand_total ?? 0) - depositAmount;
