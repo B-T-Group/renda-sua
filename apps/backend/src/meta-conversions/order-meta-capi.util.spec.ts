@@ -44,4 +44,28 @@ describe('order-meta-capi.util', () => {
     expect(geo.city).toBe('Toronto');
     expect(geo.country).toBe('CA');
   });
+
+  it('falls back to the store address when delivery has no city, postal, or country', () => {
+    const geo = pickMetaGeoAddress(
+      { state: 'ON' },
+      { city: 'Douala', postal_code: '00237', country: 'CM' }
+    );
+    expect(geo.city).toBe('Douala');
+    expect(geo.country).toBe('CM');
+  });
+
+  it('ignores invalid stored jsonb types and unknown action sources', () => {
+    expect(parseOrderMetaCapiContext(null)).toEqual({});
+    expect(parseOrderMetaCapiContext(['fb.1.1.click'])).toEqual({});
+    const parsed = parseOrderMetaCapiContext({
+      fbc: 123,
+      fbp: ' fb.1.1.browser ',
+      actionSource: 'web',
+      eventSourceUrl: ' https://rendasua.com/checkout ',
+    });
+    expect(parsed.fbc).toBeUndefined();
+    expect(parsed.fbp).toBe('fb.1.1.browser');
+    expect(parsed.actionSource).toBeUndefined();
+    expect(parsed.eventSourceUrl).toBe('https://rendasua.com/checkout');
+  });
 });

@@ -284,7 +284,6 @@ export class WhatsAppOrderActionService {
   ): Promise<{ handled: boolean; message: string } | null> {
     const order = await this.loadOrderById(latest.orderId);
     if (!order || !this.actorOwnsOrder(actor, order)) return null;
-    if (!READY_ACTIONABLE_STATUSES.has(order.current_status)) return null;
     const action =
       params.action === 'DECLINE' ? 'NOT_READY' : 'MARK_AS_READY';
     return {
