@@ -4042,6 +4042,261 @@ export class OrdersService {
   }
 
   /**
+   * Client: retry deposit payment for a pending_payment order with unpaid deposit.
+   * 
+   * CRITICAL PAYMENT GUARD: Returns 409 if a prior deposit payment transaction
+   * is still pending at the provider to prevent double MoMo collect.
+   * 
+   * Only allows retry when:
+   * - Order is pending_payment with deposit_status=pending
+   * - MoMo XAF deposit path (pay_at_delivery or pay_at_pickup)
+   * - Order not cancelled
+   * - Prior deposit transaction is missing, failed, expired, or cancelled
+   */
+  async retryDepositPayment(
+    orderId: string,
+    phoneNumberOverride?: string
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'client',
+      'Only clients can retry a deposit payment'
+    );
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.client?.user_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to retry deposit payment for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | 'pay_at_pickup'
+      | undefined;
+    const depositStatus = (order as any).deposit_status as
+      | 'pending'
+      | 'paid'
+      | 'failed'
+      | 'refunded'
+      | 'forfeited'
+      | undefined;
+    const depositAmount = (order as any).deposit_amount as number | undefined;
+
+    if (order.current_status !== 'pending_payment') {
+      throw new HttpException(
+        'Deposit payment retry is only available when order is pending payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (
+      paymentTiming !== 'pay_at_delivery' &&
+      paymentTiming !== 'pay_at_pickup'
+    ) {
+      throw new HttpException(
+        'Deposit payment retry is only available for pay-at-delivery or pay-at-pickup orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (depositStatus === 'paid') {
+      return {
+        success: true,
+        message: 'Deposit is already paid',
+        current_status: order.current_status,
+        deposit_status: depositStatus,
+        deposit_amount: depositAmount || 0,
+        amount_due: Math.max(0, (order.total_amount || 0) - (depositAmount || 0)),
+      };
+    }
+
+    if (depositStatus !== 'pending') {
+      throw new HttpException(
+        `Cannot retry deposit payment when deposit_status is ${depositStatus}`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (order.current_status === 'cancelled') {
+      throw new HttpException(
+        'Cannot retry deposit payment for cancelled order',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (!depositAmount || depositAmount <= 0) {
+      throw new HttpException(
+        'Order does not have a deposit amount',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (order.currency !== 'XAF') {
+      throw new HttpException(
+        'Deposit payment retry is only available for XAF currency',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if ((order as any).payment_source !== 'mobile_money') {
+      throw new HttpException(
+        'Deposit payment retry is only available for mobile money orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const existingTxnId = (order as any).deposit_mobile_payment_transaction_id;
+    if (existingTxnId) {
+      const existingTxn = await this.mobilePaymentsDatabaseService.getTransactionById(
+        existingTxnId
+      );
+      if (existingTxn && existingTxn.status === 'pending') {
+        this.logger.warn(
+          `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} is still pending`
+        );
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Prior deposit payment is still pending. Please wait or poll the existing transaction.',
+            code: 'DEPOSIT_PAYMENT_PENDING',
+            existing_transaction_id: existingTxnId,
+            deposit_status: depositStatus,
+          },
+          HttpStatus.CONFLICT
+        );
+      }
+    }
+
+    const account = await this.hasuraSystemService.getAccount(
+      order.client!.user_id,
+      order.currency
+    );
+    if (!account) {
+      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+    }
+
+    const phoneNumber =
+      phoneNumberOverride?.trim() ||
+      order.client?.user?.phone_number ||
+      '';
+    if (!phoneNumber.trim()) {
+      throw new HttpException(
+        'Phone number is required for mobile payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const momo = this.orderMomoContext(order);
+    const provider = momo.provider;
+
+    const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
+    const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
+
+    const depositPaymentRequest = {
+      amount: depositAmount,
+      currency: order.currency,
+      description: `Deposit retry for order ${order.order_number}`,
+      customerPhone: phoneNumber,
+      itemCountry: momo.itemCountry ?? undefined,
+      transactionType: 'PAYMENT' as const,
+    };
+
+    const depositResult = await this.mobilePaymentsService.initiatePayment(
+      depositPaymentRequest,
+      depositShortReference,
+      user.id
+    );
+
+    if (!depositResult.success) {
+      throw new HttpException(
+        {
+          success: false,
+          message: depositResult.message || 'Failed to initiate deposit payment',
+          error: 'DEPOSIT_INITIATION_FAILED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const depositTransaction =
+      await this.mobilePaymentsDatabaseService.createTransaction({
+        reference: depositLongReference,
+        amount: depositAmount,
+        currency: order.currency,
+        description: `Deposit retry for order ${order.order_number}`,
+        provider,
+        payment_method: 'mobile_money',
+        customer_phone: phoneNumber,
+        account_id: account.id,
+        transaction_type: 'PAYMENT',
+        payment_entity: 'order_deposit',
+        entity_id: order.order_number,
+      });
+
+    const updateDepositMutation = `
+      mutation UpdateOrderDepositTransaction(
+        $orderId: uuid!,
+        $depositMobilePaymentTransactionId: uuid!,
+        $now: timestamptz!
+      ) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            deposit_mobile_payment_transaction_id: $depositMobilePaymentTransactionId
+            updated_at: $now
+          }
+        ) {
+          id
+          deposit_mobile_payment_transaction_id
+        }
+      }
+    `;
+
+    await this.hasuraSystemService.executeMutation(updateDepositMutation, {
+      orderId: order.id,
+      depositMobilePaymentTransactionId: depositTransaction.id,
+      now: new Date().toISOString(),
+    });
+
+    try {
+      await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+        'order.created',
+        { order_id: order.id, transaction_id: depositTransaction.id }
+      );
+    } catch (scheduleError: any) {
+      this.logger.error(
+        `Failed to schedule deposit timeout for order ${order.id}: ${
+          scheduleError instanceof Error
+            ? scheduleError.message
+            : String(scheduleError)
+        }`
+      );
+    }
+
+    return {
+      success: true,
+      message: `Deposit payment retry initiated. Awaiting payment of ${depositAmount} ${order.currency}`,
+      current_status: order.current_status,
+      deposit_status: depositStatus,
+      deposit_amount: depositAmount,
+      amount_due: Math.max(0, (order.total_amount || 0) - depositAmount),
+      payment_transaction: {
+        success: true,
+        transaction_id: depositResult.transactionId,
+        message: `Awaiting deposit payment of ${depositAmount} ${order.currency}`,
+        mode: 'mobile_money' as const,
+      },
+    };
+  }
+
+  /**
    * Cash-exception fallback: agent marks the order paid in cash.
    * Completes the order and adjusts inventory; reconciliation only settles money.
    */
