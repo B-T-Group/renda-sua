@@ -55,8 +55,10 @@ import { PayerChargeSummary } from '../../components/checkout/PayerChargeSummary
 import { CartCheckoutSummaryCard } from '../../components/cart/CartCheckoutSummaryCard';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
+import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
 import { pickMobileMoneyDefaultCountry, validateOrderPaymentPhone, validateOrderPaymentPhoneForCountry } from '../../utils/placeOrderPhoneValidation';
+import { calculateDepositFallback, resolveDepositAmount } from '../../types/deposit';
 import { alignCatalogAddressToCscFields } from '../../utils/addressRegionMatch';
 import { getCountryDisplayName } from '../../utils/phoneCountryOptions';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
@@ -472,6 +474,20 @@ export default observer(function CartCheckoutScreen() {
     return Number(((base * discountCode.percentage) / 100).toFixed(2));
   }, [deliveryAmount, discountCode.appliedCode, discountCode.percentage, singleBusiness, subtotal]);
   const grandTotal = Math.max(0, subtotal + deliveryAmount - discountAmount);
+
+  // Deposit calculation: prefer server deposit_amount, fallback to calculation.
+  const depositAmount = useMemo(() => {
+    if (isDiaspora || resolvedIsStripeRail) return null;
+    const serverDeposit = preflightConfig?.deposit_amount;
+    return resolveDepositAmount(grandTotal, serverDeposit);
+  }, [grandTotal, preflightConfig?.deposit_amount, isDiaspora, resolvedIsStripeRail]);
+
+  const depositIsFloor = useMemo(() => {
+    if (!depositAmount) return false;
+    return depositAmount === 151;
+  }, [depositAmount]);
+
+  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
 
   const payAtDeliveryAllowed = useMemo(() => cart.items.every((l) => l.itemData.payOnDeliveryEnabled), [cart.items]);
 
@@ -1109,7 +1125,7 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryAllowed && !isDiaspora ? (
+        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryAllowed && !isDiaspora && momoPayNowDeliveryEnabled ? (
           <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
             <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
               {t('client.placeOrder.paymentTiming', 'Payment')}
@@ -1165,6 +1181,15 @@ export default observer(function CartCheckoutScreen() {
           )
         ) : null}
 
+        {depositAmount != null && depositAmount > 0 && !isDiaspora && !resolvedIsStripeRail ? (
+          <ReservationDepositExplainer
+            depositAmount={depositAmount}
+            currency={currency}
+            isFloorAmount={depositIsFloor}
+            style={{ marginBottom: spacing.sm }}
+          />
+        ) : null}
+
         <CartCheckoutSummaryCard
           currency={currency}
           subtotal={subtotal}
@@ -1185,6 +1210,8 @@ export default observer(function CartCheckoutScreen() {
           discountAmount={discountAmount}
           showTaxAtCheckout={preflightConfig?.tax_notice === 'calculated_at_checkout'}
           grandTotal={grandTotal}
+          depositAmount={depositAmount}
+          showDepositBreakdown={depositAmount != null && depositAmount > 0}
         />
 
         {/* Payment method (country-locked) - driven by preflight, not client country */}
@@ -1272,7 +1299,12 @@ export default observer(function CartCheckoutScreen() {
           >
             {resolvedIsStripeRail
               ? t('checkout.payNow', 'Pay now')
-              : t('checkout.payWithMoMo', 'Pay with MoMo')}
+              : depositAmount != null && depositAmount > 0
+                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+                    amount: depositAmount,
+                    currency,
+                  })
+                : t('checkout.payWithMoMo', 'Pay with MoMo')}
           </Button>
           {isRecipientDraftIncomplete(someoneElseReceiving, recipient) ? (
             <Text variant="bodySmall" style={{ color: colors.text.secondary, textAlign: 'center' }}>

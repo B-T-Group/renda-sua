@@ -15,6 +15,10 @@ export interface CartCheckoutSummaryCardProps {
   discountAmount: number;
   showTaxAtCheckout: boolean;
   grandTotal: number;
+  /** Deposit amount (when deposit path is active). */
+  depositAmount?: number | null;
+  /** True when showing deposit breakdown (Due now / Due later). */
+  showDepositBreakdown?: boolean;
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -39,9 +43,14 @@ export function CartCheckoutSummaryCard({
   discountAmount,
   showTaxAtCheckout,
   grandTotal,
+  depositAmount,
+  showDepositBreakdown,
 }: CartCheckoutSummaryCardProps) {
   const { t } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
+
+  const dueNow = depositAmount ?? 0;
+  const dueLater = grandTotal - dueNow;
 
   return (
     <View
@@ -105,13 +114,31 @@ export function CartCheckoutSummaryCard({
         label={
           showTaxAtCheckout
             ? t('checkout.totalBeforeTax', 'Total (before tax)')
-            : t('cart.total', 'Total')
+            : t('cart.total', 'Order total')
         }
       >
-        <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.primary.main }}>
+        <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.text.primary }}>
           {formatCatalogMoney(grandTotal, currency)}
         </Text>
       </Row>
+
+      {showDepositBreakdown && depositAmount != null && depositAmount > 0 ? (
+        <>
+          <Divider style={{ marginVertical: spacing.sm }} />
+
+          <Row label={t('deposit.dueNow', 'Due now (deposit)')}>
+            <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.primary.main }}>
+              {formatCatalogMoney(dueNow, currency)}
+            </Text>
+          </Row>
+
+          <Row label={t('deposit.dueLater', 'Due later')}>
+            <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.text.secondary }}>
+              {formatCatalogMoney(dueLater, currency)}
+            </Text>
+          </Row>
+        </>
+      ) : null}
     </View>
   );
 }
