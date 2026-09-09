@@ -7,6 +7,7 @@ const ORDER_ENTITIES = new Set([
   'order',
   'claim_order',
   'order_cash_reconciliation',
+  'order_deposit',
 ]);
 
 @Injectable()
@@ -28,6 +29,20 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
   }
 
   async onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void> {
+    if (transaction.payment_entity === 'order_deposit') {
+      const orderNumber = transaction.entity_id;
+      if (!orderNumber) {
+        this.logger.error('Deposit callback missing order number (entity_id)');
+        return;
+      }
+      // Pass DB uuid (transaction.id) for FK to mobile_payment_transactions.id
+      // Place-order already set deposit_mobile_payment_transaction_id correctly
+      await this.ordersService.finalizeDepositAfterCallback(
+        orderNumber,
+        transaction.id
+      );
+      return;
+    }
     if (transaction.payment_entity === 'order') {
       await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
       return;
@@ -49,6 +64,18 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     transaction: MobilePaymentTransaction,
     message: string
   ): Promise<void> {
+    if (transaction.payment_entity === 'order_deposit') {
+      this.logger.log(
+        `Deposit payment failed for order ${transaction.entity_id}: ${message}`
+      );
+      // Deposit failure = order cannot proceed - mark deposit failed and cancel order
+      const orderNumber = transaction.entity_id || transaction.reference;
+      const order = await this.ordersService.getOrderForProcessingByNumber(
+        orderNumber
+      );
+      await this.ordersService.onDepositPaymentFailed(order.id, message);
+      return;
+    }
     if (transaction.payment_entity === 'order_cash_reconciliation') {
       this.logger.log(
         `Cash exception reconciliation payment failed for order ${

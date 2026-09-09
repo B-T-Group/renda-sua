@@ -322,6 +322,9 @@ export class RefundPaymentService {
           id order_number current_status subtotal base_delivery_fee per_km_delivery_fee
           currency completed_at client_id business_id business_location_id
           payment_source payment_status
+          deposit_amount deposit_mobile_payment_transaction_id deposit_status
+          deposit_refund_status deposit_forfeit_reason deposit_forfeited_at
+          deposit_forfeited_by_user_id deposit_refunded_at
           client { user_id }
           business { user_id }
         }

@@ -24,6 +24,7 @@ export interface MobilePaymentTransaction {
     | 'claim_order'
     | 'rental_booking'
     | 'order_cash_reconciliation'
+    | 'order_deposit'
     | 'token'
     | 'phone_verification';
   entity_id?: string;
@@ -48,6 +49,7 @@ export interface CreateTransactionData {
     | 'claim_order'
     | 'rental_booking'
     | 'order_cash_reconciliation'
+    | 'order_deposit'
     | 'token'
     | 'phone_verification';
   entity_id?: string;
