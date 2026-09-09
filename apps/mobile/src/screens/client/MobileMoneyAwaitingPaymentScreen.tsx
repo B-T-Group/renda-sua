@@ -17,6 +17,7 @@ import type {
 } from '../../navigation/types';
 import { agentApi } from '../../services/agentApi';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
+import { formatCurrency } from '../../utils/formatters';
 
 export default function MobileMoneyAwaitingPaymentScreen() {
   const { t } = useTranslation();
@@ -97,8 +98,13 @@ export default function MobileMoneyAwaitingPaymentScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+<<<<<<< HEAD
       title: isDepositOrder 
         ? t('orders.deposit.navTitle', 'Deposit')
+=======
+      title: isDepositOrder
+        ? t('deposit.awaitingTitle', 'Approve deposit payment')
+>>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
         : t('orders.momoAwaiting.navTitle', 'Approve payment'),
       headerBackTitle: t('common.back', 'Back'),
     });
@@ -132,11 +138,23 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     try {
       const phone = currentPhone.trim() || undefined;
       await Promise.all(
+<<<<<<< HEAD
         orderIds.map((id) =>
           source === 'pickup'
             ? agentApi.orders.initiatePayAtPickupPayment(id, phone)
             : agentApi.orders.retryPayment(id, phone ? { phone_number: phone } : undefined)
         )
+=======
+        orderIds.map((id) => {
+          if (isDepositOrder) {
+            return agentApi.orders.retryDepositPayment(id, phone ? { phone_number: phone } : {});
+          } else if (source === 'pickup') {
+            return agentApi.orders.initiatePayAtPickupPayment(id, phone);
+          } else {
+            return agentApi.orders.retryPayment(id);
+          }
+        })
+>>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
       );
       restart();
     } catch (e: unknown) {
@@ -227,6 +245,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
       );
     }
     
+<<<<<<< HEAD
     // Non-deposit fail: allow retry
     return (
       <View style={{ flex: 1 }}>
@@ -260,6 +279,49 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           onSave={onSavePhone}
         />
       </View>
+=======
+    // For order-detail source (deposit resume), primary action is "Back to order"
+    const isOrderDetailSource = source === 'order-detail';
+    
+    return (
+      <PaymentRetryView
+        errorTitle={
+          isDepositOrder
+            ? t('deposit.paymentFailedTitle', 'Deposit payment failed')
+            : t('orders.momoAwaiting.failedTitle', 'Payment failed')
+        }
+        errorReason={errorReason}
+        tips={[
+          {
+            icon: 'wallet-outline',
+            title: t('checkout.payment.checkBalance', 'Check your MoMo balance'),
+            description: t('checkout.payment.checkBalanceDesc', 'Top up your MoMo wallet and try again.'),
+          },
+          {
+            icon: 'phone-check-outline',
+            title: t('checkout.payment.confirmPhone', 'Confirm your phone number'),
+            description: t('checkout.payment.confirmPhoneDesc', 'Make sure {{phone}} matches the number linked to your MoMo wallet.', { phone: masked }),
+          },
+        ]}
+        onRetry={() => void onRetry()}
+        retrying={retrying}
+        showOrderReservedBanner={!isOrderDetailSource}
+        onEditPhone={undefined}
+        retryLabel={
+          isDepositOrder
+            ? t('deposit.sendAgain', 'Send again')
+            : source === 'pickup'
+              ? t('business.pickup.momoSendAgain', 'Send again')
+              : undefined
+        }
+        onSecondary={isOrderDetailSource ? leaveToOrder : undefined}
+        secondaryLabel={
+          isOrderDetailSource
+            ? t('orders.momoAwaiting.backToOrder', 'Back to order')
+            : undefined
+        }
+      />
+>>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
     );
   }
 
@@ -305,10 +367,14 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           }}
         >
           {phase === 'paid'
-            ? t('orders.momoAwaiting.paidTitle', 'Payment confirmed')
+            ? isDepositOrder
+              ? t('deposit.paidTitle', 'Deposit confirmed')
+              : t('orders.momoAwaiting.paidTitle', 'Payment confirmed')
             : phase === 'timeout'
               ? t('orders.momoAwaiting.timeoutTitle', 'Still waiting')
-              : t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}
+              : isDepositOrder
+                ? t('deposit.awaitingTitle', 'Approve deposit payment')
+                : t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}
         </Text>
 
         <Text
@@ -321,6 +387,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           }}
         >
           {phase === 'paid'
+<<<<<<< HEAD
             ? isDepositOrder && orderData
               ? t(
                   'orders.deposit.paidBody',
@@ -331,6 +398,18 @@ export default function MobileMoneyAwaitingPaymentScreen() {
                     timing: fulfillment === 'pickup' 
                       ? t('orders.deposit.atPickup', 'pickup')
                       : t('orders.deposit.atDelivery', 'delivery')
+=======
+            ? isDepositOrder
+              ? t(
+                  'deposit.paidBody',
+                  'Your deposit payment is confirmed. The store will prepare your order. You will pay the remaining {{amount}} when you receive your order.',
+                  {
+                    amount: formatCurrency(
+                      amountDue ?? 0,
+                      currency || 'XAF',
+                      'en-US'
+                    ),
+>>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
                   }
                 )
               : source === 'pickup'
@@ -343,6 +422,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
                     "Waiting for the store to accept your order. We'll notify you as soon as they confirm."
                   )
             : phase === 'timeout'
+<<<<<<< HEAD
               ? isDepositOrder
                 ? t(
                     'orders.deposit.timeoutBody',
@@ -357,12 +437,34 @@ export default function MobileMoneyAwaitingPaymentScreen() {
                     'orders.deposit.waitingBody',
                     "We're collecting your {{amount}} {{currency}} deposit via MoMo. Approve the prompt, then we'll place the order.",
                     { amount: orderData.deposit_amount, currency: orderData.currency }
+=======
+              ? t(
+                  'orders.momoAwaiting.timeoutBody',
+                  'We have not seen the payment yet. You can leave — we will update the order when it arrives. Keep your phone nearby if you still need to approve.'
+                )
+              : isDepositOrder
+                ? t(
+                    'deposit.awaitingBody',
+                    'A deposit payment request of {{amount}} was sent to {{phone}}. Open the prompt on that phone and approve it with your PIN.',
+                    {
+                      phone: masked,
+                      amount: formatCurrency(
+                        depositAmount ?? 0,
+                        currency || 'XAF',
+                        'en-US'
+                      ),
+                    }
+>>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
                   )
                 : t(
                     'orders.momoAwaiting.waitingBody',
                     'A payment request was sent to {{phone}}. Open the prompt on that phone and approve it with your PIN.',
                     { phone: masked }
                   )}
+<<<<<<< HEAD
+=======
+        </Text>
+>>>>>>> 840177c8 (feat(mobile): implement deposit resume flow for order detail)
         </Text>
 
         {waiting ? (

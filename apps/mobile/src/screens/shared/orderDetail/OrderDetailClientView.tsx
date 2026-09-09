@@ -62,6 +62,7 @@ import {
   type OrderViewModelContext,
 } from '../../../orders/model';
 import type { OrderDetailScreenProps } from './types';
+import { isDepositPending } from '../../../utils/depositResume';
 
 type Props = OrderDetailScreenProps;
 
@@ -239,6 +240,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const [actionLoading, setActionLoading] = useState(false);
   const [payPickupOpen, setPayPickupOpen] = useState(false);
   const [payPickupLoading, setPayPickupLoading] = useState(false);
+  const [payDepositLoading, setPayDepositLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const paymentSectionY = useRef(0);
   // Keyed by order + intent so a new deep link (same mounted screen, different
@@ -332,6 +334,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const canShowRatePrimary = !!(
     eligibility?.canRateAgent || eligibility?.canRateItem
   );
+  
+  // Check for deposit pending state
+  const depositIsPending = isDepositPending(order);
+  
   const stickyPrimaryId =
     primaryActionId === 'rate' && !canShowRatePrimary ? 'none' : primaryActionId;
   const showStickyPrimary = [
@@ -341,10 +347,28 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     'complete',
     'confirm_receipt',
   ].includes(stickyPrimaryId);
-  const [primaryLabelKey, primaryLabelDefault] =
-    stickyPrimaryId === 'pay' && order.payment_timing === 'pay_at_pickup'
-      ? (['orders.payAtPickup.cta', 'Pay now'] as const)
-      : ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
+  
+  // Determine the label for the sticky primary button
+  let primaryLabelKey: string;
+  let primaryLabelDefault: string;
+  
+  if (stickyPrimaryId === 'pay') {
+    if (depositIsPending) {
+      // Deposit pending: show "Pay deposit" CTA
+      primaryLabelKey = 'deposit.payDepositCta';
+      primaryLabelDefault = `Pay deposit · ${formatCurrency(order.deposit_amount ?? 0, order.currency || 'XAF', locale)}`;
+    } else if (order.payment_timing === 'pay_at_pickup') {
+      // Pay at pickup flow
+      primaryLabelKey = 'orders.payAtPickup.cta';
+      primaryLabelDefault = 'Pay now';
+    } else {
+      // Default pay label
+      [primaryLabelKey, primaryLabelDefault] = ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
+    }
+  } else {
+    [primaryLabelKey, primaryLabelDefault] = ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
+  }
+  
   const showCancel = clientCanCancelOrder(order);
   const showNoAgentOptions = clientShowNoAgentOptions(order);
   
@@ -434,12 +458,56 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     }
   };
 
+  const runPayDeposit = async (phoneNumber?: string) => {
+    setPayDepositLoading(true);
+    try {
+      const response = await agentApi.orders.retryDepositPayment(
+        orderId,
+        phoneNumber?.trim() ? { phone_number: phoneNumber.trim() } : {}
+      );
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to initiate deposit payment');
+      }
+      const phoneE164 =
+        phoneNumber?.trim() ||
+        order?.client?.user?.phone_number?.trim() ||
+        '';
+      const depositAmount = order.deposit_amount ?? 0;
+      const amountDue = (order.grand_total ?? 0) - depositAmount;
+      navigation.navigate('MobileMoneyAwaitingPayment', {
+        orderIds: [orderId],
+        phoneE164,
+        source: 'order-detail',
+        orderNumbers: order?.order_number ? [order.order_number] : undefined,
+        isDepositOrder: true,
+        depositAmount,
+        amountDue,
+        currency: order.currency,
+      });
+    } catch (e: unknown) {
+      setSnack(
+        e instanceof Error
+          ? e.message
+          : t('deposit.paymentError', 'Failed to start deposit payment')
+      );
+    } finally {
+      setPayDepositLoading(false);
+    }
+  };
+
   const onStickyPrimaryPress = () => {
     if (stickyPrimaryId === 'pay') {
+      // Check for deposit pending first
+      if (depositIsPending) {
+        void runPayDeposit();
+        return;
+      }
+      // Then check for pay at pickup
       if (order.payment_timing === 'pay_at_pickup') {
         setPayPickupOpen(true);
         return;
       }
+      // Default: scroll to payment section
       scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true });
       return;
     }
@@ -773,7 +841,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           ) : showStickyPrimary ? (
             <Button
               mode="contained"
-              loading={actionLoading}
+              loading={actionLoading || payDepositLoading}
               onPress={onStickyPrimaryPress}
             >
               {t(primaryLabelKey, primaryLabelDefault)}
@@ -804,13 +872,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       ) : null}
 
       <AgentLocationMapModal visible={mapOpen} orderId={orderId} onDismiss={() => setMapOpen(false)} />
-      <ClientPickupPaymentSheet
-        visible={payPickupOpen}
-        order={order}
-        loading={payPickupLoading}
-        onDismiss={() => setPayPickupOpen(false)}
-        onSubmit={runPayAtPickup}
-      />
+      {!depositIsPending && order.payment_timing === 'pay_at_pickup' ? (
+        <ClientPickupPaymentSheet
+          visible={payPickupOpen}
+          order={order}
+          loading={payPickupLoading}
+          onDismiss={() => setPayPickupOpen(false)}
+          onSubmit={runPayAtPickup}
+        />
+      ) : null}
       <CancellationConfirmSheet
         visible={cancelOpen}
         order={order}

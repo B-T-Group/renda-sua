@@ -322,6 +322,16 @@ const orders = {
     message?: string;
   }> => api.post(`/orders/${orderId}/retry-payment`, body ?? {}),
 
+  /** Client: re-initiate deposit payment (mobile money) when deposit is pending. */
+  retryDepositPayment: (
+    orderId: string,
+    body?: { phone_number?: string }
+  ): Promise<{
+    success: boolean;
+    payment_transaction?: { transaction_id?: string | null };
+    message?: string;
+  }> => api.post(`/orders/${orderId}/retry-deposit-payment`, body ?? {}),
+
   getOrderAgentLocation: (
     orderId: string
   ): Promise<{

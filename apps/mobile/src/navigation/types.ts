@@ -84,18 +84,18 @@ export type OrderPlacedSuccessParams = {
 export type MobileMoneyAwaitingPaymentParams = {
   orderIds: string[];
   phoneE164: string;
-  source: 'checkout' | 'pickup' | 'retry';
+  source: 'checkout' | 'pickup' | 'retry' | 'order-detail';
   /** Optional labels for success navigation after checkout. */
   orderNumbers?: string[];
   /** Passed through to OrderPlacedSuccess after checkout MoMo completes. */
   fulfillment?: 'delivery' | 'pickup' | 'shipping';
-  /** Authoritative deposit flag (prevents race before order fetch). */
+  /** Deposit resume flow: true when paying a deposit (not full pay-now). */
   isDepositOrder?: boolean;
-  /** Deposit amount for UI copy (XAF). */
+  /** Deposit amount being paid (for display). */
   depositAmount?: number;
-  /** Amount due after deposit (XAF). */
+  /** Remaining amount due after deposit (for display). */
   amountDue?: number;
-  /** Currency (defaults to XAF if omitted). */
+  /** Currency code (e.g. XAF). */
   currency?: string;
 };
 
