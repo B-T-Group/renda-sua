@@ -120,6 +120,8 @@ import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stoc
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
+import { DepositCalculationService } from './deposit-calculation.service';
+import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -470,6 +472,7 @@ export class OrdersService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
     private readonly foodOrdersService: FoodOrdersService,
+    private readonly depositCalculationService: DepositCalculationService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -6998,6 +7001,194 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Finalize deposit after successful MoMo callback.
+   * Transitions order from pending_payment to pending (ready for acceptance).
+   */
+  async finalizeDepositAfterCallback(
+    orderNumber: string,
+    transactionId: string
+  ): Promise<void> {
+    try {
+      const order = await this.requireOrderDetailsByNumber(orderNumber);
+
+      if (order.current_status === 'cancelled' || order.current_status === 'failed') {
+        this.logger.warn(
+          `Ignoring deposit callback for ${order.current_status} order ${orderNumber}`
+        );
+        return;
+      }
+
+      if ((order as any).deposit_paid === true) {
+        this.logger.warn(
+          `Deposit already captured for order ${orderNumber}`
+        );
+        return;
+      }
+
+      // Mark deposit as captured and transition to pending
+      const finalizeMutation = `
+        mutation FinalizeDeposit($orderId: uuid!, $transactionId: String!, $now: timestamptz!) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: {
+              deposit_paid: true
+              deposit_status: "captured"
+              deposit_captured_at: $now
+              deposit_transaction_id: $transactionId
+              current_status: pending
+              payment_status: "pending"
+              updated_at: $now
+            }
+          ) {
+            id
+            order_number
+            current_status
+          }
+        }
+      `;
+
+      await this.hasuraSystemService.executeMutation(finalizeMutation, {
+        orderId: order.id,
+        transactionId,
+        now: new Date().toISOString(),
+      });
+
+      this.logger.log(
+        `Deposit captured for order ${orderNumber}, transitioning to pending`
+      );
+
+      // Credit platform ledger with deposit (will be settled with rest of order later)
+      try {
+        const depositAmount = (order as any).deposit_amount;
+        if (depositAmount && depositAmount > 0) {
+          await this.accountsService.creditAccount(
+            order.business_id,
+            depositAmount,
+            (order as any).currency || 'XAF',
+            'platform_deposit',
+            `Deposit captured for order ${order.order_number}`
+          );
+        }
+      } catch (ledgerError: any) {
+        this.logger.error(
+          `Failed to credit platform ledger with deposit for ${orderNumber}:`,
+          ledgerError
+        );
+      }
+
+      // Start acceptance SLA now that deposit is captured
+      try {
+        await this.orderAcceptanceService.startAcceptanceSla(order.id);
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to start acceptance SLA after deposit for ${order.id}: ${error?.message}`
+        );
+      }
+
+      // Send order created notifications
+      try {
+        const notificationsEnabled =
+          this.configService.get('notification').orderStatusChangeEnabled;
+        if (notificationsEnabled) {
+          const orderWithDetails = await this.requireOrderDetailsByNumber(
+            order.order_number
+          );
+          const notifyAddress = resolveOrderNotificationAddress(orderWithDetails);
+          if (
+            orderWithDetails?.business_location?.business?.name &&
+            orderWithDetails?.business_location?.business?.user?.email &&
+            notifyAddress
+          ) {
+            const businessId =
+              orderWithDetails.business_id ||
+              orderWithDetails.business_location?.business?.id ||
+              orderWithDetails.business?.id;
+            const acceptanceNotify = await this.resolveAcceptanceNotifyFields(
+              businessId,
+              (orderWithDetails as any).acceptance_state,
+              (orderWithDetails as any).acceptance_activates_at
+            );
+
+            const notificationData: NotificationData = {
+              orderId: orderWithDetails.id,
+              clientId: orderWithDetails.client?.id,
+              clientUserId: orderWithDetails.client?.user?.id ?? undefined,
+              businessUserId:
+                orderWithDetails.business_location?.business?.user?.id ??
+                orderWithDetails.business?.user_id ??
+                undefined,
+              orderNumber: orderWithDetails.order_number,
+              clientName: `${orderWithDetails.client?.user?.first_name || ''} ${
+                orderWithDetails.client?.user?.last_name || ''
+              }`.trim(),
+              clientEmail: orderWithDetails.client?.user?.email,
+              clientPreferredLanguage: (
+                orderWithDetails.client?.user as { preferred_language?: string }
+              )?.preferred_language,
+              businessName: orderWithDetails.business_location.business.name,
+              businessLocationName: orderWithDetails.business_location?.name || undefined,
+              businessEmail: orderWithDetails.business_location.business.user.email,
+              businessPreferredLanguage: (
+                orderWithDetails.business_location.business.user as {
+                  preferred_language?: string;
+                }
+              )?.preferred_language,
+              businessVerified:
+                orderWithDetails.business_location.business.is_verified || false,
+              agentPreferredLanguage: (
+                orderWithDetails.assigned_agent?.user as {
+                  preferred_language?: string;
+                }
+              )?.preferred_language,
+              orderStatus: 'pending',
+              orderItems:
+                orderWithDetails.order_items?.map((item: any) => ({
+                  name: item.item_name || 'Unknown Item',
+                  quantity: item.quantity || 0,
+                  unitPrice: item.unit_price || 0,
+                  totalPrice: item.total_price || 0,
+                })) || [],
+              subtotal: orderWithDetails.subtotal || 0,
+              deliveryFee:
+                (orderWithDetails.base_delivery_fee || 0) +
+                (orderWithDetails.per_km_delivery_fee || 0),
+              fastDeliveryFee: orderWithDetails.per_km_delivery_fee || 0,
+              taxAmount: orderWithDetails.tax_amount || 0,
+              totalAmount: orderWithDetails.total_amount || 0,
+              currency: orderWithDetails.currency || 'USD',
+              deliveryAddress: this.formatAddress(notifyAddress as Addresses),
+              estimatedDeliveryTime:
+                orderWithDetails.estimated_delivery_time || undefined,
+              specialInstructions: orderWithDetails.special_instructions || undefined,
+              fulfillmentMethod:
+                (orderWithDetails as any).fulfillment_method || undefined,
+              fulfillmentTiming:
+                (orderWithDetails as any).fulfillment_timing || undefined,
+              ...acceptanceNotify,
+            };
+
+            await this.notificationsService.sendOrderCreatedNotifications(
+              notificationData
+            );
+          }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to send order created notifications after deposit: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to finalize deposit for order ${orderNumber}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
   private isTerminalOrderForPaymentFinalize(order: {
     current_status?: string;
     payment_status?: string | null;
@@ -9476,6 +9667,156 @@ export class OrdersService {
       paymentTiming === 'pay_at_delivery' ||
       paymentTiming === 'pay_at_pickup'
     ) {
+      // MoMo reservation deposit collection for pay_at_delivery/pickup
+      const requiresDeposit = this.depositCalculationService.isDepositRequired(
+        paymentTiming,
+        paymentRail === 'stripe' ? 'stripe' : paymentRail === 'wallet' ? 'wallet' : 'mobile_money'
+      );
+
+      if (requiresDeposit && currency === 'XAF') {
+        try {
+          const depositCalc = this.depositCalculationService.calculateDeposit(
+            total_amount,
+            currency
+          );
+
+          // Initiate MoMo collect for deposit
+          const depositReference = buildShortReferenceForMyPVit(
+            `DEP-${order.order_number}-${Date.now()}`
+          );
+
+          const depositPaymentRequest = {
+            amount: depositCalc.depositAmount,
+            currency,
+            description: `Deposit for order ${order.order_number}`,
+            customerPhone: phoneNumber,
+            itemCountry: itemCountry ?? undefined,
+            transactionType: 'PAYMENT' as const,
+          };
+
+          const depositResult = await this.mobilePaymentsService.initiatePayment(
+            depositPaymentRequest,
+            depositReference,
+            user.id
+          );
+
+          if (!depositResult.success) {
+            // Deposit collection failed - compensate and throw
+            await this.compensateUnpaidCreate(
+              order.id,
+              'Create failed: deposit collection initiation error',
+              { allowPendingUnpaid: true }
+            );
+            throw new HttpException(
+              {
+                success: false,
+                message: depositResult.message || 'Failed to initiate deposit payment',
+                error: 'DEPOSIT_INITIATION_FAILED',
+              },
+              HttpStatus.BAD_REQUEST
+            );
+          }
+
+          // Create mobile_payment_transaction for deposit
+          const depositTransaction =
+            await this.mobilePaymentsDatabaseService.createMobilePaymentTransaction(
+              {
+                user_id: user.id,
+                account_id: account.id,
+                amount: depositCalc.depositAmount,
+                currency,
+                payment_method: 'mobile_money',
+                transaction_id: depositResult.transactionId ?? depositReference,
+                reference: depositReference,
+                payment_entity: 'order_deposit',
+                entity_id: order.order_number,
+                status: 'pending',
+                provider,
+                customer_phone: phoneNumber,
+              }
+            );
+
+          // Update order with deposit info (keep status pending_payment until callback)
+          const updateDepositMutation = `
+            mutation UpdateOrderDeposit(
+              $orderId: uuid!,
+              $depositAmount: numeric!,
+              $depositTransactionId: String!,
+              $currentStatus: order_status!
+            ) {
+              update_orders_by_pk(
+                pk_columns: { id: $orderId }
+                _set: {
+                  deposit_amount: $depositAmount
+                  deposit_transaction_id: $depositTransactionId
+                  deposit_status: "pending"
+                  current_status: $currentStatus
+                }
+              ) {
+                id
+              }
+            }
+          `;
+
+          await this.hasuraSystemService.executeMutation(updateDepositMutation, {
+            orderId: order.id,
+            depositAmount: depositCalc.depositAmount,
+            depositTransactionId: depositResult.transactionId ?? depositReference,
+            currentStatus: 'pending_payment',
+          });
+
+          // Schedule deposit timeout (order waits for deposit callback)
+          try {
+            await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+              'order.created',
+              { order_id: order.id, transaction_id: depositTransaction.id }
+            );
+          } catch (scheduleError) {
+            this.logger.error(
+              `Failed to schedule deposit timeout for order ${order.id}: ${
+                scheduleError instanceof Error
+                  ? scheduleError.message
+                  : String(scheduleError)
+              }`
+            );
+          }
+
+          return {
+            ...order,
+            current_status: 'pending_payment',
+            total_amount: total_amount,
+            deposit_amount: depositCalc.depositAmount,
+            amount_due: depositCalc.amountDue,
+            delivery_window: deliveryWindow,
+            payment_source: 'mobile_money' as const,
+            payment_rail: 'mobile_money' as const,
+            payment_transaction: {
+              success: true,
+              transaction_id: depositResult.transactionId,
+              message: `Awaiting deposit payment of ${depositCalc.depositAmount} ${currency}`,
+              mode: 'mobile_money' as const,
+            },
+            database_transaction: {
+              id: depositTransaction.id,
+              reference: depositReference,
+              status: 'pending',
+            },
+          };
+        } catch (error: any) {
+          this.logger.error(
+            `Deposit collection failed for order ${order.order_number}:`,
+            error
+          );
+          await this.compensateUnpaidCreate(
+            order.id,
+            'Create failed: deposit collection error',
+            { allowPendingUnpaid: true }
+          );
+          throw error;
+        }
+      }
+
+      // No deposit required (non-XAF, Stripe rail, etc.) - proceed with normal deferred payment
       // Deferred-payment orders are not finalized at placement time, but we still want the
       // "order placed" notifications to go out immediately.
       try {

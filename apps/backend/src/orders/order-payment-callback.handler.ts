@@ -7,6 +7,7 @@ const ORDER_ENTITIES = new Set([
   'order',
   'claim_order',
   'order_cash_reconciliation',
+  'order_deposit',
 ]);
 
 @Injectable()
@@ -28,6 +29,13 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
   }
 
   async onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void> {
+    if (transaction.payment_entity === 'order_deposit') {
+      await this.ordersService.finalizeDepositAfterCallback(
+        transaction.entity_id,
+        transaction.transaction_id ?? transaction.reference
+      );
+      return;
+    }
     if (transaction.payment_entity === 'order') {
       await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
       return;
@@ -49,6 +57,18 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     transaction: MobilePaymentTransaction,
     message: string
   ): Promise<void> {
+    if (transaction.payment_entity === 'order_deposit') {
+      this.logger.log(
+        `Deposit payment failed for order ${transaction.entity_id}: ${message}`
+      );
+      // Deposit failure = order cannot proceed - cancel it
+      const orderNumber = transaction.entity_id || transaction.reference;
+      const order = await this.ordersService.getOrderForProcessingByNumber(
+        orderNumber
+      );
+      await this.ordersService.onOrderPaymentFailed(order.id, message);
+      return;
+    }
     if (transaction.payment_entity === 'order_cash_reconciliation') {
       this.logger.log(
         `Cash exception reconciliation payment failed for order ${
