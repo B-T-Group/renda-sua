@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DepositCalculationService, DEPOSIT_FLOOR_XAF } from './deposit-calculation.service';
+import { DepositCalculationService, MOMO_DEPOSIT_MIN_XAF } from './deposit-calculation.service';
 
 describe('DepositCalculationService', () => {
   let service: DepositCalculationService;
@@ -16,9 +16,9 @@ describe('DepositCalculationService', () => {
     it('should calculate 10% deposit for orders under 5000 XAF', () => {
       const result = service.calculateDeposit(1000, 'XAF');
       
-      expect(result.depositAmount).toBe(DEPOSIT_FLOOR_XAF); // floor wins (100 < 150)
+      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF); // floor wins (100 < 151)
       expect(result.rate).toBe(0.10);
-      expect(result.amountDue).toBe(1000 - DEPOSIT_FLOOR_XAF);
+      expect(result.amountDue).toBe(1000 - MOMO_DEPOSIT_MIN_XAF);
       expect(result.totalAmount).toBe(1000);
     });
 
@@ -52,16 +52,16 @@ describe('DepositCalculationService', () => {
     it('should enforce floor for tiny orders', () => {
       const result = service.calculateDeposit(100, 'XAF');
       
-      expect(result.depositAmount).toBe(DEPOSIT_FLOOR_XAF); // floor wins (10 < 150)
+      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF); // floor wins (10 < 151)
       expect(result.rate).toBe(0.10);
       expect(result.amountDue).toBe(0); // can't be negative
       expect(result.totalAmount).toBe(100);
     });
 
     it('should handle edge case where deposit equals total', () => {
-      const result = service.calculateDeposit(DEPOSIT_FLOOR_XAF, 'XAF');
+      const result = service.calculateDeposit(MOMO_DEPOSIT_MIN_XAF, 'XAF');
       
-      expect(result.depositAmount).toBe(DEPOSIT_FLOOR_XAF);
+      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF);
       expect(result.amountDue).toBe(0);
     });
 
@@ -88,7 +88,7 @@ describe('DepositCalculationService', () => {
     it('should handle zero amount', () => {
       const result = service.calculateDeposit(0, 'XAF');
       
-      expect(result.depositAmount).toBe(DEPOSIT_FLOOR_XAF);
+      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF);
       expect(result.amountDue).toBe(0);
     });
   });

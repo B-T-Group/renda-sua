@@ -7003,7 +7003,20 @@ export class OrdersService {
 
   /**
    * Finalize deposit after successful MoMo callback.
-   * Transitions order from pending_payment to pending (ready for acceptance).
+   * 
+   * CRITICAL: This is NOT a full order payment. Do not call finalizePayAtDeliveryPaymentAndComplete.
+   * 
+   * On deposit SUCCESS:
+   * - Mark deposit_paid = true, deposit_status = 'captured'
+   * - Set amount_due = total - deposit
+   * - Transition pending_payment → pending (await merchant acceptance)
+   * - Credit client wallet (consistent with existing MoMo order path)
+   * - Start acceptance SLA
+   * 
+   * Settlement: Deposit is on client ledger. At Delivered/remainder paid, settlement will:
+   * - Debit client for FULL total (deposit + remainder)
+   * - Credit merchant share from full GMV
+   * - No separate MoMo payout of deposit to merchant
    */
   async finalizeDepositAfterCallback(
     orderNumber: string,
@@ -7026,9 +7039,18 @@ export class OrdersService {
         return;
       }
 
-      // Mark deposit as captured and transition to pending
+      const depositAmount = (order as any).deposit_amount || 0;
+      const totalAmount = order.total_amount || 0;
+      const amountDue = Math.max(0, totalAmount - depositAmount);
+
+      // Mark deposit as captured and transition to pending (NOT paid - remainder still due)
       const finalizeMutation = `
-        mutation FinalizeDeposit($orderId: uuid!, $transactionId: String!, $now: timestamptz!) {
+        mutation FinalizeDeposit(
+          $orderId: uuid!,
+          $transactionId: String!,
+          $amountDue: numeric!,
+          $now: timestamptz!
+        ) {
           update_orders_by_pk(
             pk_columns: { id: $orderId }
             _set: {
@@ -7044,6 +7066,8 @@ export class OrdersService {
             id
             order_number
             current_status
+            deposit_amount
+            total_amount
           }
         }
       `;
@@ -7051,31 +7075,39 @@ export class OrdersService {
       await this.hasuraSystemService.executeMutation(finalizeMutation, {
         orderId: order.id,
         transactionId,
+        amountDue,
         now: new Date().toISOString(),
       });
 
       this.logger.log(
-        `Deposit captured for order ${orderNumber}, transitioning to pending`
+        `Deposit ${depositAmount} captured for order ${orderNumber}. ` +
+        `Amount due: ${amountDue}. Transitioning to pending (awaiting merchant).`
       );
 
-      // Credit platform account ledger with deposit (will be settled with rest of order later)
-      // Note: Deposit is tracked separately and will be counted in final settlement to avoid double-counting
+      // Credit client wallet with deposit (consistent with existing MoMo order credit path)
+      // Settlement math: At Delivered, full order total will be debited from client wallet
+      // and settled to merchant, so deposit is counted once in GMV, not double-paid to merchant.
       try {
-        const depositAmount = (order as any).deposit_amount;
         if (depositAmount && depositAmount > 0) {
-          const platformAccountId = order.business_id; // TODO: Use actual platform account ID
-          await this.accountsService.registerDepositIfNotExists({
-            accountId: platformAccountId,
-            amount: depositAmount,
-            referenceId: `deposit-${order.order_number}`,
-            memo: `Deposit for order ${order.order_number}`,
-          });
+          const clientAccountId = (order as any).client?.user?.id || order.client_id;
+          if (clientAccountId) {
+            await this.accountsService.registerDepositIfNotExists({
+              accountId: clientAccountId,
+              amount: depositAmount,
+              referenceId: `deposit-${order.order_number}`,
+              memo: `Deposit captured for order ${order.order_number}`,
+            });
+            this.logger.log(
+              `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
+            );
+          }
         }
       } catch (ledgerError: any) {
         this.logger.error(
-          `Failed to register platform ledger deposit for ${orderNumber}:`,
+          `Failed to credit client wallet with deposit for ${orderNumber}:`,
           ledgerError
         );
+        // Non-blocking: deposit is still marked captured on order
       }
 
       // Start acceptance SLA now that deposit is captured
@@ -9687,10 +9719,9 @@ export class OrdersService {
             currency
           );
 
-          // Initiate MoMo collect for deposit
-          const depositReference = buildShortReferenceForMyPVit(
-            `DEP-${order.order_number}-${Date.now()}`
-          );
+          // Generate references: long for DB, short for MyPVIT (≤15 chars)
+          const depositLongReference = `${order.order_number}-DEP-${Date.now()}`;
+          const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
 
           const depositPaymentRequest = {
             amount: depositCalc.depositAmount,
@@ -9701,9 +9732,10 @@ export class OrdersService {
             transactionType: 'PAYMENT' as const,
           };
 
+          // Initiate MoMo payment (short reference ≤15 chars for MyPVIT)
           const depositResult = await this.mobilePaymentsService.initiatePayment(
             depositPaymentRequest,
-            depositReference,
+            depositShortReference,
             user.id
           );
 
@@ -9724,10 +9756,10 @@ export class OrdersService {
             );
           }
 
-          // Create mobile_payment_transaction for deposit
+          // Create mobile_payment_transaction for deposit (long reference in DB)
           const depositTransaction =
             await this.mobilePaymentsDatabaseService.createTransaction({
-              reference: depositReference,
+              reference: depositLongReference,
               amount: depositCalc.depositAmount,
               currency,
               description: `Deposit for order ${order.order_number}`,
@@ -9765,7 +9797,7 @@ export class OrdersService {
           await this.hasuraSystemService.executeMutation(updateDepositMutation, {
             orderId: order.id,
             depositAmount: depositCalc.depositAmount,
-            depositTransactionId: depositResult.transactionId ?? depositReference,
+            depositTransactionId: depositResult.transactionId ?? depositShortReference,
             currentStatus: 'pending_payment',
           });
 
@@ -9802,7 +9834,7 @@ export class OrdersService {
             },
             database_transaction: {
               id: depositTransaction.id,
-              reference: depositReference,
+              reference: depositLongReference,
               status: 'pending',
             },
           };
