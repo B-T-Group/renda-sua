@@ -35,13 +35,18 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
 
   const checkOnce = useCallback(async (): Promise<MomoPaymentPollPhase> => {
     const ids = orderIdsRef.current;
-    const statuses = await Promise.all(
+    const orders = await Promise.all(
       ids.map(async (id) => {
         const order = await agentApi.orders.getById(id);
-        return order.payment_status;
+        return {
+          payment_status: order.payment_status,
+          deposit_status: order.deposit_status,
+          deposit_amount: order.deposit_amount,
+          deposit_mobile_payment_transaction_id: order.deposit_mobile_payment_transaction_id,
+        };
       })
     );
-    return resolveMomoPaymentStatuses(statuses);
+    return resolveMomoPaymentStatuses(orders);
   }, []);
 
   useEffect(() => {
