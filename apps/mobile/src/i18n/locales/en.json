@@ -317,6 +317,7 @@
     "resumeHelper": "Pay the reservation deposit to confirm your order. You will pay the remaining amount when you receive your order.",
     "alreadyPaid": "Deposit is already paid",
     "paymentError": "Failed to start deposit payment",
+    "concurrentRetry": "Another payment attempt is in progress. Please refresh and try again in a moment.",
     "awaitingTitle": "Approve deposit payment",
     "awaitingBody": "A deposit payment request of {{amount}} was sent to {{phone}}. Open the prompt on that phone and approve it with your PIN.",
     "paidTitle": "Deposit confirmed",

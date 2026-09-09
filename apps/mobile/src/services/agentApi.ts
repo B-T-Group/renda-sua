@@ -325,13 +325,15 @@ const orders = {
   /** 
    * Client: re-initiate deposit payment (mobile money) when deposit is pending.
    * 
-   * Nest contract (PR #288 @ 903f07dd, updated tip):
+   * Nest contract (PR #288 @ 9dadaee3):
    * - 409 DEPOSIT_PAYMENT_PENDING → existing pending tx, poll-only
    * - 409 DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid, poll-only
+   * - 409 CONCURRENT_RETRY_DETECTED → soft: toast refresh/retry later, do NOT open await
    * - 200 new → payment_transaction.transaction_id, navigate await
    * - 200 paid → deposit_status "paid", refresh order, no await
    * 
-   * BOTH 409 codes: open/continue poll await, do NOT re-call retry
+   * BOTH poll 409 codes: open/continue poll await, do NOT re-call retry
+   * CONCURRENT 409: soft error, toast only
    */
   retryDepositPayment: (
     orderId: string,

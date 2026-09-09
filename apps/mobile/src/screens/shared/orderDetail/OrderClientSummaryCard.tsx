@@ -215,6 +215,16 @@ export function OrderClientSummaryCard({
     try {
       const response = await agentApi.orders.retryDepositPayment(order.id, {});
       
+      // Handle 409 CONCURRENT_RETRY_DETECTED: soft error, toast and refresh, do NOT open await
+      if (response.code === 'CONCURRENT_RETRY_DETECTED') {
+        onNotify(
+          response.message ||
+          t('deposit.concurrentRetry', 'Another payment attempt is in progress. Please refresh and try again in a moment.')
+        );
+        await onRefetch();
+        return;
+      }
+      
       // Handle 409 DEPOSIT_PAYMENT_PENDING / DEPOSIT_PAYMENT_PROCESSING: poll-only, do NOT retry
       // Both codes mean: existing attempt in flight, open/continue await without re-calling
       if (

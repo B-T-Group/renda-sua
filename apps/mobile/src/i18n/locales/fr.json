@@ -298,6 +298,7 @@
     "resumeHelper": "Payez l'acompte de réservation pour confirmer votre commande. Vous paierez le montant restant à la réception de votre commande.",
     "alreadyPaid": "L'acompte est déjà payé",
     "paymentError": "Échec du paiement de l'acompte",
+    "concurrentRetry": "Une autre tentative de paiement est en cours. Veuillez actualiser et réessayer dans un instant.",
     "awaitingTitle": "Approuver le paiement de l'acompte",
     "awaitingBody": "Une demande de paiement d'acompte de {{amount}} a été envoyée à {{phone}}. Ouvrez l'invite sur ce téléphone et approuvez-la avec votre code PIN.",
     "paidTitle": "Acompte confirmé",
