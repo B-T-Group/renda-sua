@@ -4093,7 +4093,7 @@ export class OrdersService {
    * is still pending at the provider to prevent double MoMo collect.
    * 
    * Only allows retry when:
-   * - Order is pending_payment with deposit_status=pending
+   * - Order is pending_payment with deposit_status pending or failed
    * - MoMo XAF deposit path (pay_at_delivery or pay_at_pickup)
    * - Order not cancelled
    * - Prior deposit transaction is missing, failed, expired, or cancelled
@@ -4162,7 +4162,8 @@ export class OrdersService {
       };
     }
 
-    if (depositStatus !== 'pending') {
+    // pending = first attempt / in-flight; failed = MoMo declined — both are retryable
+    if (depositStatus !== 'pending' && depositStatus !== 'failed') {
       throw new HttpException(
         `Cannot retry deposit payment when deposit_status is ${depositStatus}`,
         HttpStatus.BAD_REQUEST
@@ -4272,6 +4273,8 @@ export class OrdersService {
               }
               _set: {
                 deposit_mobile_payment_transaction_id: $claimValue
+                deposit_status: "pending"
+                payment_status: "pending"
                 updated_at: $now
               }
             ) {
@@ -4279,6 +4282,7 @@ export class OrdersService {
               returning {
                 id
                 deposit_mobile_payment_transaction_id
+                deposit_status
               }
             }
           }
@@ -4296,6 +4300,8 @@ export class OrdersService {
               }
               _set: {
                 deposit_mobile_payment_transaction_id: $claimValue
+                deposit_status: "pending"
+                payment_status: "pending"
                 updated_at: $now
               }
             ) {
@@ -4303,6 +4309,7 @@ export class OrdersService {
               returning {
                 id
                 deposit_mobile_payment_transaction_id
+                deposit_status
               }
             }
           }
@@ -4473,7 +4480,7 @@ export class OrdersService {
       success: true,
       message: `Deposit payment retry initiated. Awaiting payment of ${depositAmount} ${order.currency}`,
       current_status: order.current_status,
-      deposit_status: depositStatus,
+      deposit_status: 'pending',
       deposit_amount: depositAmount,
       amount_due: Math.max(0, (order.total_amount || 0) - depositAmount),
       payment_transaction: {
@@ -8794,7 +8801,8 @@ export class OrdersService {
   }
 
   /**
-   * Handle deposit payment failure - mark deposit_status = 'failed' and cancel order
+   * Handle deposit payment failure — mark deposit_status = failed and schedule
+   * payment-timeout cleanup. Order stays pending_payment so the client can retry.
    */
   async onDepositPaymentFailed(
     orderId: string,
@@ -8825,7 +8833,6 @@ export class OrdersService {
         error
       );
     }
-    // Cancel the order (deposit failure = order cannot proceed)
     await this.orderSystemJobsService.onOrderPaymentFailed(
       orderId,
       failureMessage

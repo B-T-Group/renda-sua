@@ -134,12 +134,15 @@ export const ClientOrderDetails: React.FC<ClientOrderDetailsProps> = ({
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
           {vm.summary.depositAmount != null &&
           (vm.summary.depositStatus === 'paid' ||
-            vm.summary.depositStatus === 'pending') ? (
+            vm.summary.depositStatus === 'pending' ||
+            vm.summary.depositStatus === 'failed') ? (
             <Stack direction="row" spacing={1} alignItems="baseline">
               <Typography variant="body2" color="text.secondary">
                 {vm.summary.depositStatus === 'paid'
                   ? t('deposit.summaryPaid', 'Deposit paid')
-                  : t('deposit.summaryDue', 'Deposit due')}
+                  : vm.summary.depositStatus === 'failed'
+                    ? t('deposit.summaryFailed', 'Deposit failed — retry')
+                    : t('deposit.summaryDue', 'Deposit due')}
                 :
               </Typography>
               <MoneyDisplay

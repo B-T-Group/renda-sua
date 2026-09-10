@@ -1,5 +1,6 @@
 import type { Order } from '../types/agent';
 import {
+  isDepositPending,
   remainingAfterDeposit,
   resolveAmountDueAfterDeposit,
 } from './depositResume';
@@ -7,6 +8,45 @@ import {
 function order(partial: Partial<Order>): Order {
   return { id: 'o1', currency: 'XAF', ...partial } as Order;
 }
+
+describe('isDepositPending', () => {
+  it('is true for pending deposit on pending_payment order', () => {
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'pending_payment',
+          deposit_status: 'pending',
+          deposit_amount: 150,
+        })
+      )
+    ).toBe(true);
+  });
+
+  it('is true for failed deposit so Pay now retries deposit not pickup', () => {
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'pending_payment',
+          deposit_status: 'failed',
+          deposit_amount: 150,
+          payment_timing: 'pay_at_pickup',
+        })
+      )
+    ).toBe(true);
+  });
+
+  it('is false once deposit is paid', () => {
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'pending_payment',
+          deposit_status: 'paid',
+          deposit_amount: 150,
+        })
+      )
+    ).toBe(false);
+  });
+});
 
 describe('remainingAfterDeposit', () => {
   it('prefers server amount_due', () => {

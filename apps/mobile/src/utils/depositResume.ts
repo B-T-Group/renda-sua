@@ -1,30 +1,29 @@
 /**
  * Deposit resume utilities.
  *
- * PE RESOLUTION:
- * - isDepositPending: detect if order has a pending deposit that should gate sticky pay
+ * - isDepositPending: order still needs a deposit (pending or failed retry) — gates sticky pay
  * - Poll-only path when deposit_mobile_payment_transaction_id points to a still-pending tx
  * - Retry path (retry-deposit-payment) when no live pending attempt exists
  */
 
 import type { Order } from '../types/agent';
 
+const RETRYABLE_DEPOSIT_STATUSES = new Set(['pending', 'failed']);
+
 /**
- * Determine if an order has a pending deposit that should gate payment flow.
+ * True when the client must pay/retry the reservation deposit before any
+ * pay-at-pickup / pay-at-delivery remainder flow.
  *
- * Requirements (from PE):
- * isDepositPending = current_status === 'pending_payment'
- *   && deposit_status === 'pending'
- *   && (deposit_amount > 0 OR deposit_mobile_payment_transaction_id)
+ * Includes `deposit_status === 'failed'` so Pay now does not fall through to
+ * pickup payment (which requires ready_for_pickup).
  */
 export function isDepositPending(order: Order): boolean {
   if (order.current_status !== 'pending_payment') {
     return false;
   }
-  if (order.deposit_status !== 'pending') {
+  if (!RETRYABLE_DEPOSIT_STATUSES.has(order.deposit_status ?? '')) {
     return false;
   }
-  // deposit_amount > 0 OR deposit_mobile_payment_transaction_id exists
   const hasDepositAmount = (order.deposit_amount ?? 0) > 0;
   const hasDepositTx = !!order.deposit_mobile_payment_transaction_id;
   return hasDepositAmount || hasDepositTx;
