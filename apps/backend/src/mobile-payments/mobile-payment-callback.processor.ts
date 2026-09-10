@@ -271,6 +271,7 @@ export class MobilePaymentCallbackProcessor {
         );
         return;
       }
+      await this.completeOrderDepositRefundIfNeeded(transaction);
       await this.databaseService.updateTransaction(transaction.id, {
         status: 'success',
         transaction_id: providerTransactionId,
@@ -306,7 +307,9 @@ export class MobilePaymentCallbackProcessor {
         this.logger.error(
           `Retry debit still failing for success GIVE_CHANGE tx ${transaction.id}`
         );
+        return;
       }
+      await this.completeOrderDepositRefundIfNeeded(transaction);
       return;
     }
     if (transaction.transaction_type !== 'PAYMENT') return;
@@ -542,6 +545,13 @@ export class MobilePaymentCallbackProcessor {
       `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
     );
     return true;
+  }
+
+  private async completeOrderDepositRefundIfNeeded(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    if (transaction.payment_entity !== 'order_deposit') return;
+    await this.runHandlerSuccess(transaction);
   }
 
   private async runHandlerSuccess(

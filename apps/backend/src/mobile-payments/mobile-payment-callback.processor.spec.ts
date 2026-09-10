@@ -440,6 +440,8 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
   const accountsService = {
     hasTransactionForReference: jest.fn(),
     registerTransaction: jest.fn(),
+    registerWithdrawalIfNotExists: jest.fn(),
+    registerReleaseIfNotExists: jest.fn(),
   };
   const mockOrderDepositHandler = {
     supportsPaymentEntity: (e: string) => e === 'order_deposit',
@@ -497,6 +499,12 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     databaseService.logCallback.mockResolvedValue(undefined);
     databaseService.updateTransaction.mockResolvedValue(undefined);
     mockOrderDepositHandler.onPaymentSuccess.mockResolvedValue(undefined);
+    accountsService.registerWithdrawalIfNotExists.mockResolvedValue({
+      success: true,
+    });
+    accountsService.registerReleaseIfNotExists.mockResolvedValue({
+      success: true,
+    });
   });
 
   it('skips processor wallet credit for order_deposit, delegates to handler only', async () => {
@@ -549,6 +557,24 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     expect(mockOrderDepositHandler.onPaymentSuccess).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'success' })
     );
+  });
+
+  it('notifies the order handler after a successful deposit refund payout', async () => {
+    const refundTx = {
+      ...orderDepositTx,
+      transaction_type: 'GIVE_CHANGE' as const,
+      id: '66666666-6666-6666-6666-666666666666',
+    };
+    databaseService.getTransactionByReference.mockResolvedValue(refundTx);
+
+    await processor.processMypvitCallback(successCallback);
+
+    expect(accountsService.registerWithdrawalIfNotExists).toHaveBeenCalled();
+    expect(mockOrderDepositHandler.onPaymentSuccess).toHaveBeenCalledWith(refundTx);
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(refundTx.id, {
+      status: 'success',
+      transaction_id: 'provider-deposit-1',
+    });
   });
 });
 

@@ -8726,36 +8726,53 @@ export class OrdersService {
     orderId: string,
     failureMessage?: string | null
   ): Promise<void> {
+    const marked = await this.markDepositFailedIfPending(orderId);
+    if (!marked) {
+      this.logger.log(
+        `Skipping deposit failure side effects for ${orderId}; deposit no longer pending`
+      );
+      return;
+    }
+    await this.orderSystemJobsService.onOrderPaymentFailed(
+      orderId,
+      failureMessage
+    );
+  }
+
+  private async markDepositFailedIfPending(orderId: string): Promise<boolean> {
     try {
       const mutation = `
-        mutation MarkDepositFailed($orderId: uuid!, $now: timestamptz!) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
+        mutation MarkDepositFailedIfPending($orderId: uuid!, $now: timestamptz!) {
+          update_orders(
+            where: {
+              id: { _eq: $orderId }
+              deposit_status: { _eq: pending }
+            }
             _set: {
               deposit_status: "failed"
               updated_at: $now
             }
           ) {
-            id
+            affected_rows
           }
         }
       `;
-      await this.hasuraSystemService.executeMutation(mutation, {
+      const result = await this.hasuraSystemService.executeMutation(mutation, {
         orderId,
         now: new Date().toISOString(),
       });
-      this.logger.log(`Marked deposit_status=failed for order ${orderId}`);
+      const affected = result?.update_orders?.affected_rows ?? 0;
+      if (affected > 0) {
+        this.logger.log(`Marked deposit_status=failed for order ${orderId}`);
+      }
+      return affected > 0;
     } catch (error: any) {
       this.logger.error(
         `Failed to mark deposit_status=failed for order ${orderId}:`,
         error
       );
+      return false;
     }
-    // Cancel the order (deposit failure = order cannot proceed)
-    await this.orderSystemJobsService.onOrderPaymentFailed(
-      orderId,
-      failureMessage
-    );
   }
 
   private async getAgentStatus(agentId: string): Promise<string> {

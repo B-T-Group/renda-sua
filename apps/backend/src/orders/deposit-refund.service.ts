@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AccountsService } from '../accounts/accounts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import {
+  GiveChangePayoutResult,
+  GiveChangePayoutService,
+} from '../mobile-payments/give-change-payout.service';
 import { DepositCalculationService } from './deposit-calculation.service';
-import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 
 /**
  * Deposit forfeit reason codes (immutable audit trail)
@@ -26,8 +29,9 @@ export class DepositRefundService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly mobilePaymentsService: MobilePaymentsService,
-    private readonly depositCalculationService: DepositCalculationService
+    private readonly giveChangePayoutService: GiveChangePayoutService,
+    private readonly depositCalculationService: DepositCalculationService,
+    private readonly accountsService: AccountsService
   ) {}
 
   /**
@@ -60,13 +64,7 @@ export class DepositRefundService {
         };
       }
 
-      // Check lock point
-      const afterLock = this.depositCalculationService.isAfterRefundLockPoint(
-        order.fulfillment_method,
-        order.current_status
-      );
-
-      if (afterLock) {
+      if (this.isLockedForRefund(order)) {
         return {
           success: false,
           message:
@@ -75,53 +73,7 @@ export class DepositRefundService {
         };
       }
 
-      // Initiate MoMo withdrawal to customer phone
-      const withdrawalRequest = {
-        amount: order.deposit_amount,
-        currency: order.currency,
-        description: `Deposit refund for order ${order.order_number}`,
-        customerPhone: order.recipient_phone || order.payer_phone,
-        itemCountry: order.business_location_country,
-        transactionType: 'GIVE_CHANGE' as const,
-      };
-
-      // Generate references: long for DB, short for MyPVIT (≤15 chars)
-      const refundLongReference = `${order.order_number}-REFUND-${Date.now()}`;
-      const refundShortReference = buildShortReferenceForMyPVit(refundLongReference);
-
-      const withdrawalResult = await this.mobilePaymentsService.initiatePayment(
-        withdrawalRequest,
-        refundShortReference
-      );
-
-      if (!withdrawalResult.success) {
-        // Mark refund attempt failed
-        await this.markRefundAttempted(
-          orderId,
-          null,
-          'failed',
-          withdrawalResult.message
-        );
-
-        return {
-          success: false,
-          message: withdrawalResult.message || 'Refund initiation failed',
-          errorCode: withdrawalResult.errorCode || 'WITHDRAWAL_FAILED',
-        };
-      }
-
-      // Mark refund initiated
-      await this.markRefundAttempted(
-        orderId,
-        withdrawalResult.transactionId,
-        'pending'
-      );
-
-      return {
-        success: true,
-        transactionId: withdrawalResult.transactionId,
-        message: 'Deposit refund initiated',
-      };
+      return this.initiateDepositRefundPayout(order);
     } catch (error: any) {
       this.logger.error(`Failed to refund deposit for order ${orderId}:`, error);
       return {
@@ -168,36 +120,16 @@ export class DepositRefundService {
         };
       }
 
-      // Mark deposit as forfeited
-      const mutation = `
-        mutation ForfeitDeposit($orderId: uuid!, $reason: String!, $now: timestamptz!) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: {
-              deposit_status: "forfeited"
-              deposit_forfeit_reason: $reason
-              deposit_forfeited_at: $now
-            }
-          ) {
-            id
-          }
-        }
-      `;
+      const reversed = await this.reverseDepositWalletCredit(order, 'forfeit');
+      if (!reversed.success) {
+        return { success: false, message: reversed.message };
+      }
 
-      await this.hasuraSystemService.executeMutation(mutation, {
-        orderId,
-        reason,
-        now: new Date().toISOString(),
-      });
-
+      await this.persistForfeit(orderId, reason);
       this.logger.log(
         `Deposit forfeited for order ${order.order_number}: ${reason}`
       );
-
-      return {
-        success: true,
-        message: 'Deposit forfeited',
-      };
+      return { success: true, message: 'Deposit forfeited' };
     } catch (error: any) {
       this.logger.error(`Failed to forfeit deposit for order ${orderId}:`, error);
       return {
@@ -234,7 +166,135 @@ export class DepositRefundService {
       now: new Date().toISOString(),
     });
 
-    this.logger.log(`Deposit refund completed for order ${orderId}`);
+    this.logger.log(
+      `Deposit refund completed for order ${orderId} (txn ${transactionId})`
+    );
+  }
+
+  private isLockedForRefund(order: any): boolean {
+    return this.depositCalculationService.isAfterRefundLockPoint(
+      order.fulfillment_method,
+      order.current_status
+    );
+  }
+
+  private async initiateDepositRefundPayout(
+    order: any
+  ): Promise<DepositRefundResult> {
+    const account = await this.requireClientAccount(order);
+    if ('error' in account) {
+      return {
+        success: false,
+        message: account.error,
+        errorCode: 'ACCOUNT_NOT_FOUND',
+      };
+    }
+    const phone = String(order.recipient_phone || order.payer_phone || '').trim();
+    if (!phone) {
+      return {
+        success: false,
+        message: 'Phone number required for deposit refund',
+        errorCode: 'PHONE_REQUIRED',
+      };
+    }
+    return this.executeRefundPayout(order, account.id, phone);
+  }
+
+  private async executeRefundPayout(
+    order: any,
+    accountId: string,
+    phone: string
+  ): Promise<DepositRefundResult> {
+    const payout = await this.giveChangePayoutService.executeGiveChangePayout(
+      {
+        amount: order.deposit_amount,
+        currency: order.currency,
+        description: `Deposit refund for order ${order.order_number}`,
+        customerPhone: phone,
+        accountId,
+        entityId: order.order_number,
+        paymentEntity: 'order_deposit',
+      },
+      { throwOnWithdrawalFailure: false }
+    );
+    return this.recordRefundPayoutResult(order.id, payout);
+  }
+
+  private async recordRefundPayoutResult(
+    orderId: string,
+    payout: GiveChangePayoutResult
+  ): Promise<DepositRefundResult> {
+    if (!payout.success) {
+      await this.markRefundAttempted(
+        orderId,
+        null,
+        'failed',
+        'Refund payout initiation failed'
+      );
+      return {
+        success: false,
+        message: payout.data?.message || 'Refund initiation failed',
+        errorCode: 'WITHDRAWAL_FAILED',
+      };
+    }
+    await this.markRefundAttempted(orderId, payout.data?.transactionId, 'pending');
+    return {
+      success: true,
+      transactionId: payout.data?.transactionId,
+      message: 'Deposit refund initiated',
+    };
+  }
+
+  private async persistForfeit(
+    orderId: string,
+    reason: DepositForfeitReason
+  ): Promise<void> {
+    const mutation = `
+      mutation ForfeitDeposit($orderId: uuid!, $reason: String!, $now: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: {
+            deposit_status: "forfeited"
+            deposit_forfeit_reason: $reason
+            deposit_forfeited_at: $now
+          }
+        ) { id }
+      }
+    `;
+    await this.hasuraSystemService.executeMutation(mutation, {
+      orderId,
+      reason,
+      now: new Date().toISOString(),
+    });
+  }
+
+  private async reverseDepositWalletCredit(
+    order: any,
+    reason: string
+  ): Promise<{ success: boolean; message?: string }> {
+    const account = await this.requireClientAccount(order);
+    if ('error' in account) return { success: false, message: account.error };
+    const result = await this.accountsService.registerWithdrawalIfNotExists({
+      accountId: account.id,
+      amount: order.deposit_amount,
+      referenceId: order.id,
+      memo: `Deposit ${reason} for order ${order.order_number}`,
+    });
+    if (result?.success) return { success: true };
+    return { success: false, message: result?.error || 'Wallet reversal failed' };
+  }
+
+  private async requireClientAccount(
+    order: any
+  ): Promise<{ id: string } | { error: string }> {
+    const userId = order.client?.user_id;
+    if (!userId) return { error: 'Client user not found on order' };
+    const account = await this.hasuraSystemService.getAccount(
+      userId,
+      order.currency
+    );
+    if (!account?.id) return { error: 'Client account not found' };
+    return { id: account.id };
   }
 
   /**
@@ -349,6 +409,9 @@ export class DepositRefundService {
           deposit_refunded_at
           recipient_phone
           payer_phone
+          client {
+            user_id
+          }
           business_location {
             address {
               country
