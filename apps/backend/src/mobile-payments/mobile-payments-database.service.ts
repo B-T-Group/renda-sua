@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
+import { toStoredErrorText } from './to-stored-error-text.util';
 
 export interface MobilePaymentTransaction {
   id: string;
@@ -72,6 +73,19 @@ export interface PendingClaimOrderTransaction {
   status: 'pending' | 'success' | 'failed' | 'cancelled';
   created_at: string;
   account_id?: string;
+}
+
+function toTransactionUpdateSet(data: UpdateTransactionData) {
+  return {
+    ...data,
+    ...(data.error_message !== undefined
+      ? { error_message: toStoredErrorText(data.error_message) }
+      : {}),
+    ...(data.error_code !== undefined
+      ? { error_code: toStoredErrorText(data.error_code, 'UNKNOWN', 50) }
+      : {}),
+    updated_at: new Date().toISOString(),
+  };
 }
 
 @Injectable()
@@ -170,10 +184,7 @@ export class MobilePaymentsDatabaseService {
 
       const variables = {
         id,
-        data: {
-          ...data,
-          updated_at: new Date().toISOString(),
-        },
+        data: toTransactionUpdateSet(data),
       };
 
       const response = await this.hasuraService.executeMutation(

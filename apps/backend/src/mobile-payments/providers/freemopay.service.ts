@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { FreemopayConfig } from '../../config/configuration';
+import { toStoredErrorText } from '../to-stored-error-text.util';
 
 export interface FreemopayPaymentRequest {
   payer: string;
@@ -46,6 +47,32 @@ export interface FreemopayTransactionStatus {
   merchantRef?: string;
   reason?: string;
   message?: string;
+}
+
+function mapFreemopayFailure(
+  data: { message?: unknown; statusCode?: unknown } | undefined,
+  fallbackMessage: string,
+  fallbackCode: string
+): { message: string; errorCode: string } {
+  return {
+    message: toStoredErrorText(data?.message, fallbackMessage),
+    errorCode: toStoredErrorText(data?.statusCode, fallbackCode, 50),
+  };
+}
+
+function mapFreemopayHttpError(
+  error: { response?: { status?: number; data?: { message?: unknown; statusCode?: unknown } } },
+  fallbackMessage: string,
+  fallbackCode = 'INITIATION_FAILED'
+): { message: string; errorCode: string } {
+  const mapped = mapFreemopayFailure(error.response?.data, fallbackMessage, fallbackCode);
+  if (mapped.errorCode !== fallbackCode) {
+    return mapped;
+  }
+  return {
+    ...mapped,
+    errorCode: toStoredErrorText(error.response?.status, fallbackCode, 50),
+  };
 }
 
 @Injectable()
@@ -141,20 +168,14 @@ export class FreemopayService {
 
       return {
         success: false,
-        message: data?.message || 'Payment initiation failed',
-        errorCode: data?.statusCode?.toString() || 'UNKNOWN_ERROR',
+        ...mapFreemopayFailure(data, 'Payment initiation failed', 'UNKNOWN_ERROR'),
         status: data?.status,
       };
     } catch (error: any) {
       this.logger.error('Failed to initiate Freemopay payment:', error);
       return {
         success: false,
-        message:
-          error.response?.data?.message || 'Failed to initiate payment',
-        errorCode:
-          error.response?.data?.statusCode?.toString() ||
-          error.response?.status?.toString() ||
-          'INITIATION_FAILED',
+        ...mapFreemopayHttpError(error, 'Failed to initiate payment'),
         status: 'FAILED',
       };
     }
@@ -204,20 +225,14 @@ export class FreemopayService {
 
       return {
         success: false,
-        message: data?.message || 'Withdrawal initiation failed',
-        errorCode: data?.statusCode?.toString() || 'UNKNOWN_ERROR',
+        ...mapFreemopayFailure(data, 'Withdrawal initiation failed', 'UNKNOWN_ERROR'),
         status: data?.status,
       };
     } catch (error: any) {
       this.logger.error('Failed to initiate Freemopay withdrawal:', error);
       return {
         success: false,
-        message:
-          error.response?.data?.message || 'Failed to initiate withdrawal',
-        errorCode:
-          error.response?.data?.statusCode?.toString() ||
-          error.response?.status?.toString() ||
-          'WITHDRAWAL_FAILED',
+        ...mapFreemopayHttpError(error, 'Failed to initiate withdrawal', 'WITHDRAWAL_FAILED'),
         status: 'FAILED',
       };
     }

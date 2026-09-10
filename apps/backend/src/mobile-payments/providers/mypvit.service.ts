@@ -6,6 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
+import { toStoredErrorText } from '../to-stored-error-text.util';
 import {
   buildMypvitStatusPath,
   isNotFoundHttpError,
@@ -280,8 +281,15 @@ export class MyPVitService {
       } else {
         return {
           success: false,
-          message: response.data.message || 'Payment initiation failed',
-          errorCode: response.data.status_code || 'UNKNOWN_ERROR',
+          message: toStoredErrorText(
+            response.data.message,
+            'Payment initiation failed'
+          ),
+          errorCode: toStoredErrorText(
+            response.data.status_code,
+            'UNKNOWN_ERROR',
+            50
+          ),
           status: response.data.status,
           status_code: response.data.status_code,
         };
@@ -293,8 +301,15 @@ export class MyPVitService {
       );
       return {
         success: false,
-        message: error.response?.data?.message || 'Failed to initiate payment',
-        errorCode: error.response?.data?.error || 'INITIATION_FAILED',
+        message: toStoredErrorText(
+          error.response?.data?.message,
+          'Failed to initiate payment'
+        ),
+        errorCode: toStoredErrorText(
+          error.response?.data?.error,
+          'INITIATION_FAILED',
+          50
+        ),
         status: 'FAILED',
         status_code: error.status ??'500',
       };
