@@ -798,8 +798,15 @@ export class HasuraUserService {
     const resolved = this.resolveContext(ctx);
     const userId = resolved.userId;
     if (!userId || userId === 'anonymous') {
-      throw new Error(
-        'No authenticated user. Please provide a valid authentication token.'
+      // 404 (not 401): /users/me treats a missing DB user as "complete profile".
+      // A generic Error becomes a 500 on other callers and a Sentry issue.
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'No authenticated user. Please provide a valid authentication token.',
+        },
+        HttpStatus.NOT_FOUND
       );
     }
     requireAuthUserUuid(userId);
