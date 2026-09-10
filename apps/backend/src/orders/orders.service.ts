@@ -7487,99 +7487,29 @@ export class OrdersService {
     try {
       const order = await this.requireOrderDetailsByNumber(orderNumber);
 
-      if (order.current_status === 'cancelled' || order.current_status === 'failed') {
-        this.logger.warn(
-          `Ignoring deposit callback for ${order.current_status} order ${orderNumber}`
-        );
-        return;
-      }
+      this.assertMatchingDepositTransaction(order, transactionDbId);
 
       if ((order as any).deposit_status === 'paid') {
-        this.logger.warn(
-          `Deposit already captured for order ${orderNumber}`
-        );
+        await this.refundDepositIfOrderTerminal(order);
         return;
       }
 
-      // Verify transactionDbId matches the FK set at place-order
-      const depositTxnId = (order as any).deposit_mobile_payment_transaction_id;
-      if (transactionDbId && depositTxnId && transactionDbId !== depositTxnId) {
-        throw new Error(
-          `Transaction ID mismatch for deposit callback on ${orderNumber}: ` +
-          `callback=${transactionDbId}, order FK=${depositTxnId}`
-        );
+      await this.creditDepositWalletIfNeeded(order, transactionDbId);
+
+      if (this.isTerminalOrderForPaymentFinalize(order)) {
+        await this.captureAndRefundDepositOnTerminalOrder(order);
+        return;
+      }
+
+      const applied = await this.applyDepositPaidTransition(order.id);
+      if (!applied) {
+        const latest = await this.requireOrderDetailsByNumber(orderNumber);
+        await this.captureAndRefundDepositOnTerminalOrder(latest);
+        return;
       }
 
       const depositAmount = (order as any).deposit_amount || 0;
-      const totalAmount = order.total_amount || 0;
-      const amountDue = Math.max(0, totalAmount - depositAmount);
-
-      // CRITICAL ORDER: Credit wallet FIRST, then mark deposit as paid
-      // Fail closed: if wallet credit fails, do not mark deposit as paid
-      if (depositAmount && depositAmount > 0) {
-        // Resolve client account the same way as other MoMo credit paths
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
-        );
-        if (!clientAccount) {
-          throw new Error(
-            `No account found for client user ${order.client.user_id} currency ${order.currency}`
-          );
-        }
-        
-        // Credit wallet - fail the entire callback if this fails
-        const credit = await this.accountsService.registerDepositIfNotExists({
-          accountId: clientAccount.id,
-          amount: depositAmount,
-          referenceId: this.depositLedgerReferenceId(
-            transactionDbId,
-            depositTxnId
-          ),
-          memo: `Deposit captured for order ${order.order_number}`,
-        });
-        
-        if (!credit?.success) {
-          throw new Error(
-            `Deposit wallet credit failed for ${orderNumber}: ${credit?.error ?? 'unknown'}`
-          );
-        }
-        
-        this.logger.log(
-          `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
-        );
-      }
-
-      // Only mark deposit as paid AFTER wallet credit succeeds
-      // Note: deposit_mobile_payment_transaction_id FK already set at place-order
-      const finalizeMutation = `
-        mutation FinalizeDeposit(
-          $orderId: uuid!,
-          $now: timestamptz!
-        ) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: {
-              deposit_status: "paid"
-              current_status: pending
-              payment_status: "pending"
-              updated_at: $now
-            }
-          ) {
-            id
-            order_number
-            current_status
-            deposit_amount
-            total_amount
-          }
-        }
-      `;
-
-      await this.hasuraSystemService.executeMutation(finalizeMutation, {
-        orderId: order.id,
-        now: new Date().toISOString(),
-      });
-
+      const amountDue = Math.max(0, (order.total_amount || 0) - depositAmount);
       this.logger.log(
         `Deposit ${depositAmount} captured for order ${orderNumber}. ` +
         `Amount due: ${amountDue}. Transitioning to pending (awaiting merchant).`
@@ -7741,6 +7671,121 @@ export class OrdersService {
       throw new Error('Missing deposit mobile payment transaction id');
     }
     return referenceId;
+  }
+
+  private assertMatchingDepositTransaction(
+    order: Orders,
+    transactionDbId: string
+  ): void {
+    const depositTxnId = (order as any).deposit_mobile_payment_transaction_id;
+    if (transactionDbId && depositTxnId && transactionDbId !== depositTxnId) {
+      throw new Error(
+        `Transaction ID mismatch for deposit callback on ${order.order_number}: ` +
+          `callback=${transactionDbId}, order FK=${depositTxnId}`
+      );
+    }
+  }
+
+  private async creditDepositWalletIfNeeded(
+    order: Orders,
+    transactionDbId: string
+  ): Promise<void> {
+    const depositAmount = (order as any).deposit_amount || 0;
+    if (!depositAmount || depositAmount <= 0) {
+      return;
+    }
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (!clientAccount) {
+      throw new Error(
+        `No account found for client user ${order.client.user_id} currency ${order.currency}`
+      );
+    }
+    const credit = await this.accountsService.registerDepositIfNotExists({
+      accountId: clientAccount.id,
+      amount: depositAmount,
+      referenceId: this.depositLedgerReferenceId(
+        transactionDbId,
+        (order as any).deposit_mobile_payment_transaction_id
+      ),
+      memo: `Deposit captured for order ${order.order_number}`,
+    });
+    if (!credit?.success) {
+      throw new Error(
+        `Deposit wallet credit failed for ${order.order_number}: ${credit?.error ?? 'unknown'}`
+      );
+    }
+  }
+
+  private async applyDepositPaidTransition(orderId: string): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation FinalizeDeposit($orderId: uuid!, $now: timestamptz!) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            deposit_status: { _eq: "pending" }
+            current_status: { _in: [pending_payment, pending] }
+          }
+          _set: {
+            deposit_status: "paid"
+            current_status: pending
+            payment_status: "pending"
+            updated_at: $now
+          }
+        ) { affected_rows }
+      }
+      `,
+      { orderId, now: new Date().toISOString() }
+    );
+    return (result.update_orders?.affected_rows ?? 0) > 0;
+  }
+
+  private async markDepositPaidOnTerminalOrder(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation MarkDepositPaidOnTerminal($orderId: uuid!, $now: timestamptz!) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            deposit_status: { _eq: "pending" }
+            current_status: { _in: [cancelled, failed, refunded] }
+          }
+          _set: { deposit_status: "paid", updated_at: $now }
+        ) { affected_rows }
+      }
+      `,
+      { orderId, now: new Date().toISOString() }
+    );
+  }
+
+  private async captureAndRefundDepositOnTerminalOrder(
+    order: Orders
+  ): Promise<void> {
+    if (!this.isTerminalOrderForPaymentFinalize(order)) {
+      return;
+    }
+    this.logger.warn(
+      `Late deposit capture on ${order.current_status} order ${order.order_number}; refunding`
+    );
+    await this.markDepositPaidOnTerminalOrder(order.id);
+    await this.refundDepositIfOrderTerminal(order);
+  }
+
+  private async refundDepositIfOrderTerminal(order: Orders): Promise<void> {
+    if (!this.isTerminalOrderForPaymentFinalize(order)) {
+      return;
+    }
+    const result = await this.depositRefundService.refundDeposit(order.id);
+    if (!result.success) {
+      this.logger.error(
+        `Deposit refund after terminal capture failed for ${order.order_number}: ${result.message}`
+      );
+    }
   }
 
   private isTerminalOrderForPaymentFinalize(order: {

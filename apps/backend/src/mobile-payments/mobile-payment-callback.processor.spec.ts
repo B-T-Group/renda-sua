@@ -347,6 +347,36 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     accountsService.hasTransactionForReference.mockResolvedValue(false);
   });
 
+  it('completes deposit refund after GIVE_CHANGE debit succeeds', async () => {
+    const onPaymentSuccess = jest.fn();
+    paymentCallbackRegistry.getHandlers.mockReturnValue([
+      {
+        supportsPaymentEntity: (e: string) => e === 'order_deposit_refund',
+        onPaymentSuccess,
+        onPaymentFailure: jest.fn(),
+        finalizeCashReconciliationAfterPayment: jest.fn(),
+      },
+    ]);
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...giveChangeTx,
+      payment_entity: 'order_deposit_refund',
+      entity_id: 'order-uuid-1',
+    });
+
+    await processor.processMypvitCallback(successCallback);
+
+    expect(onPaymentSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payment_entity: 'order_deposit_refund',
+        entity_id: 'order-uuid-1',
+      })
+    );
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      giveChangeTx.id,
+      expect.objectContaining({ status: 'success' })
+    );
+  });
+
   it('debits wallet on SUCCESS callback before marking GIVE_CHANGE success', async () => {
     const callOrder: string[] = [];
     accountsService.registerReleaseIfNotExists.mockImplementation(async () => {

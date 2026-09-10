@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OrdersService } from './orders.service';
+import { DepositRefundService } from './deposit-refund.service';
 import type { PaymentCallbackHandler } from '../mobile-payments/payment-callback/payment-callback-handler.interface';
 import type { MobilePaymentTransaction } from '../mobile-payments/mobile-payments-database.service';
 
@@ -8,13 +9,17 @@ const ORDER_ENTITIES = new Set([
   'claim_order',
   'order_cash_reconciliation',
   'order_deposit',
+  'order_deposit_refund',
 ]);
 
 @Injectable()
 export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
   private readonly logger = new Logger(OrderPaymentCallbackHandler.name);
 
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly depositRefundService: DepositRefundService
+  ) {}
 
   supportsPaymentEntity(paymentEntity: string | undefined): boolean {
     return !!paymentEntity && ORDER_ENTITIES.has(paymentEntity);
@@ -28,7 +33,22 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     );
   }
 
+  private async completeDepositRefundFromCallback(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    const orderId = transaction.entity_id;
+    if (!orderId) {
+      this.logger.error('Deposit refund callback missing order id (entity_id)');
+      return;
+    }
+    await this.depositRefundService.completeDepositRefund(orderId, transaction.id);
+  }
+
   async onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void> {
+    if (transaction.payment_entity === 'order_deposit_refund') {
+      await this.completeDepositRefundFromCallback(transaction);
+      return;
+    }
     if (transaction.payment_entity === 'order_deposit') {
       const orderNumber = transaction.entity_id;
       if (!orderNumber) {
@@ -64,6 +84,13 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     transaction: MobilePaymentTransaction,
     message: string
   ): Promise<void> {
+    if (transaction.payment_entity === 'order_deposit_refund') {
+      const orderId = transaction.entity_id;
+      if (orderId) {
+        await this.depositRefundService.markRefundFailed(orderId, message);
+      }
+      return;
+    }
     if (transaction.payment_entity === 'order_deposit') {
       this.logger.log(
         `Deposit payment failed for order ${transaction.entity_id}: ${message}`

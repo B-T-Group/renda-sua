@@ -46,6 +46,7 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { DepositRefundService } from './deposit-refund.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -57,6 +58,7 @@ describe('OrdersService', () => {
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
   let stripeCaptureService: jest.Mocked<StripeCaptureService>;
+  let depositRefundService: { refundDeposit: jest.Mock };
 
   const mockUser = {
     id: 'user-123',
@@ -430,7 +432,8 @@ describe('OrdersService', () => {
         {
           provide: require('./deposit-refund.service').DepositRefundService,
           useValue: {
-            refundDeposit: jest.fn().mockResolvedValue(undefined),
+            refundDeposit: jest.fn().mockResolvedValue({ success: true }),
+            forfeitDeposit: jest.fn().mockResolvedValue({ success: true }),
           },
         },
         {
@@ -456,6 +459,7 @@ describe('OrdersService', () => {
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
     stripeCaptureService = module.get(StripeCaptureService);
+    depositRefundService = module.get(DepositRefundService);
   });
 
   describe('createOrder', () => {
@@ -2523,6 +2527,44 @@ describe('OrdersService', () => {
         expect.objectContaining({
           referenceId: 'deposit-49520979',
         })
+      );
+    });
+
+    it('credits wallet and refunds instead of resurrecting a cancelled order', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ ...depositOrder, current_status: 'cancelled' });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+      expect(depositRefundService.refundDeposit).toHaveBeenCalledWith(
+        'order-uuid-123'
+      );
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('MarkDepositPaidOnTerminal'),
+        expect.objectContaining({ orderId: 'order-uuid-123' })
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('FinalizeDeposit'),
+        expect.anything()
+      );
+    });
+
+    it('retries refund when deposit is already paid on a cancelled order', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          current_status: 'cancelled',
+          deposit_status: 'paid',
+        });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+      expect(depositRefundService.refundDeposit).toHaveBeenCalledWith(
+        'order-uuid-123'
       );
     });
   });

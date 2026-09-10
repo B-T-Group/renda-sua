@@ -257,27 +257,7 @@ export class MobilePaymentCallbackProcessor {
     providerTransactionId: string
   ): Promise<void> {
     if (transaction.transaction_type === 'GIVE_CHANGE') {
-      const debited = await this.debitWalletIfNeeded(transaction);
-      if (!debited) {
-        await this.databaseService.updateTransaction(transaction.id, {
-          status: 'success',
-          transaction_id: providerTransactionId,
-          error_message:
-            'Provider payout succeeded but wallet debit failed; manual reconciliation required',
-          error_code: 'WITHDRAWAL_FAILED',
-        });
-        this.logger.error(
-          `GIVE_CHANGE ${transaction.id} provider success with ledger debit failure`
-        );
-        return;
-      }
-      await this.databaseService.updateTransaction(transaction.id, {
-        status: 'success',
-        transaction_id: providerTransactionId,
-      });
-      this.logger.log(
-        `GIVE_CHANGE ${transaction.id} finalized with wallet debit`
-      );
+      await this.finalizeGiveChangeSuccess(transaction, providerTransactionId);
       return;
     }
 
@@ -306,7 +286,9 @@ export class MobilePaymentCallbackProcessor {
         this.logger.error(
           `Retry debit still failing for success GIVE_CHANGE tx ${transaction.id}`
         );
+        return;
       }
+      await this.runGiveChangeHandlerSuccess(transaction);
       return;
     }
     if (transaction.transaction_type !== 'PAYMENT') return;
@@ -318,6 +300,45 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
     await this.runHandlerSuccess(transaction);
+  }
+
+  private async finalizeGiveChangeSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    const debited = await this.debitWalletIfNeeded(transaction);
+    if (!debited) {
+      await this.databaseService.updateTransaction(transaction.id, {
+        status: 'success',
+        transaction_id: providerTransactionId,
+        error_message:
+          'Provider payout succeeded but wallet debit failed; manual reconciliation required',
+        error_code: 'WITHDRAWAL_FAILED',
+      });
+      this.logger.error(
+        `GIVE_CHANGE ${transaction.id} provider success with ledger debit failure`
+      );
+      return;
+    }
+    await this.runGiveChangeHandlerSuccess(transaction);
+    await this.databaseService.updateTransaction(transaction.id, {
+      status: 'success',
+      transaction_id: providerTransactionId,
+    });
+    this.logger.log(`GIVE_CHANGE ${transaction.id} finalized with wallet debit`);
+  }
+
+  private async runGiveChangeHandlerSuccess(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    const handler = findPaymentCallbackHandler(
+      this.resolveHandlers(),
+      transaction.payment_entity
+    );
+    if (!handler) {
+      return;
+    }
+    await handler.onPaymentSuccess(transaction);
   }
 
   private async applyFailedStatus(
@@ -510,6 +531,7 @@ export class MobilePaymentCallbackProcessor {
       !transaction.account_id ||
       transaction.payment_entity === 'token' ||
       transaction.payment_entity === 'order_deposit' ||
+      transaction.payment_entity === 'order_deposit_refund' ||
       transaction.transaction_type !== 'PAYMENT'
     ) {
       return true;

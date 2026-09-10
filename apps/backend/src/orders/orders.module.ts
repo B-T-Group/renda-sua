@@ -63,6 +63,7 @@ import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
+import { MobilePaymentsPayoutModule } from '../mobile-payments/mobile-payments-payout.module';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositRefundService } from './deposit-refund.service';
 
@@ -94,6 +95,7 @@ import { DepositRefundService } from './deposit-refund.service';
     RepresentativeCompensationModule,
     CreditsModule,
     FoodModule,
+    MobilePaymentsPayoutModule,
   ],
   controllers: [
     OrdersController,
