@@ -1,5 +1,7 @@
 import type { Order } from '../types/agent';
 import {
+  hasLivePendingDepositTx,
+  isDepositPending,
   remainingAfterDeposit,
   resolveAmountDueAfterDeposit,
 } from './depositResume';
@@ -43,5 +45,84 @@ describe('resolveAmountDueAfterDeposit', () => {
         order({ amount_due: 50, deposit_amount: 150, deposit_status: 'paid' })
       )
     ).toBe(50);
+  });
+});
+
+describe('isDepositPending', () => {
+  it('is true only for pending_payment + pending deposit with amount or txn', () => {
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'pending_payment',
+          deposit_status: 'pending',
+          deposit_amount: 150,
+        })
+      )
+    ).toBe(true);
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'pending_payment',
+          deposit_status: 'pending',
+          deposit_mobile_payment_transaction_id: 'txn-1',
+        })
+      )
+    ).toBe(true);
+  });
+
+  it('is false after capture, on failed deposit, or once the order leaves pending_payment', () => {
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'pending_payment',
+          deposit_status: 'paid',
+          deposit_amount: 150,
+        })
+      )
+    ).toBe(false);
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'confirmed',
+          deposit_status: 'pending',
+          deposit_amount: 150,
+        })
+      )
+    ).toBe(false);
+    expect(
+      isDepositPending(
+        order({
+          current_status: 'pending_payment',
+          deposit_status: 'pending',
+          deposit_amount: 0,
+        })
+      )
+    ).toBe(false);
+  });
+});
+
+describe('hasLivePendingDepositTx', () => {
+  it('requires both pending status and a stored transaction id', () => {
+    expect(
+      hasLivePendingDepositTx(
+        order({
+          deposit_status: 'pending',
+          deposit_mobile_payment_transaction_id: 'txn-1',
+        })
+      )
+    ).toBe(true);
+    expect(
+      hasLivePendingDepositTx(
+        order({ deposit_status: 'pending', deposit_amount: 150 })
+      )
+    ).toBe(false);
+    expect(
+      hasLivePendingDepositTx(
+        order({
+          deposit_status: 'paid',
+          deposit_mobile_payment_transaction_id: 'txn-1',
+        })
+      )
+    ).toBe(false);
   });
 });

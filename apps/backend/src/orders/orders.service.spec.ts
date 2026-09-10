@@ -46,6 +46,7 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { LocationsService } from '../locations/locations.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { DepositRefundService } from './deposit-refund.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -57,6 +58,16 @@ describe('OrdersService', () => {
   let accountsService: jest.Mocked<any>;
   let orderStatusService: jest.Mocked<any>;
   let stripeCaptureService: jest.Mocked<StripeCaptureService>;
+  let depositRefundService: {
+    refundDeposit: jest.Mock;
+    forfeitDeposit: jest.Mock;
+  };
+  let depositCalculationService: {
+    calculateDeposit: jest.Mock;
+    isDepositRequired: jest.Mock;
+    isAfterRefundLockPoint: jest.Mock;
+  };
+  let orderSystemJobsService: { onOrderPaymentFailed: jest.Mock };
 
   const mockUser = {
     id: 'user-123',
@@ -335,7 +346,10 @@ describe('OrdersService', () => {
           provide: LocationsService,
           useValue: { getLatestAgentLocation: jest.fn().mockResolvedValue(null) },
         },
-        { provide: OrderSystemJobsService, useValue: {} },
+        {
+          provide: OrderSystemJobsService,
+          useValue: { onOrderPaymentFailed: jest.fn().mockResolvedValue(undefined) },
+        },
         {
           provide: require('./order-cleanup.service').OrderCleanupService,
           useValue: {},
@@ -425,12 +439,14 @@ describe('OrdersService', () => {
               totalAmount: 5000,
             }),
             isDepositRequired: jest.fn().mockReturnValue(false),
+            isAfterRefundLockPoint: jest.fn().mockReturnValue(false),
           },
         },
         {
           provide: require('./deposit-refund.service').DepositRefundService,
           useValue: {
-            refundDeposit: jest.fn().mockResolvedValue(undefined),
+            refundDeposit: jest.fn().mockResolvedValue({ success: true }),
+            forfeitDeposit: jest.fn().mockResolvedValue({ success: true }),
           },
         },
         {
@@ -456,6 +472,9 @@ describe('OrdersService', () => {
     accountsService = module.get(AccountsService);
     orderStatusService = module.get(OrderStatusService);
     stripeCaptureService = module.get(StripeCaptureService);
+    depositRefundService = module.get(DepositRefundService);
+    depositCalculationService = module.get(DepositCalculationService);
+    orderSystemJobsService = module.get(OrderSystemJobsService);
   });
 
   describe('createOrder', () => {
@@ -2523,6 +2542,151 @@ describe('OrdersService', () => {
         expect.objectContaining({
           referenceId: 'deposit-49520979',
         })
+      );
+    });
+
+    it('ignores deposit callbacks on cancelled or failed orders', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ ...depositOrder, current_status: 'cancelled' });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent when deposit_status is already paid', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ ...depositOrder, deposit_status: 'paid' });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('rejects a callback whose transaction uuid does not match the order FK', async () => {
+      await expect(
+        service.finalizeDepositAfterCallback(
+          '49520979',
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+        )
+      ).rejects.toThrow('Transaction ID mismatch');
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('does not mark the deposit paid when wallet credit fails', async () => {
+      accountsService.registerDepositIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'duplicate blocked',
+      });
+
+      await expect(
+        service.finalizeDepositAfterCallback('49520979', depositTxnId)
+      ).rejects.toThrow('Deposit wallet credit failed');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleDepositOnCancellation', () => {
+    const paidDepositOrder = {
+      id: 'order-uuid-123',
+      order_number: '49520979',
+      current_status: 'confirmed',
+      deposit_status: 'paid',
+      deposit_amount: 500,
+      fulfillment_method: 'delivery',
+    };
+
+    it('no-ops when the deposit was never captured', async () => {
+      await (service as any).handleDepositOnCancellation(
+        { ...paidDepositOrder, deposit_status: 'pending' },
+        paidDepositOrder.id,
+        'confirmed',
+        'client'
+      );
+
+      expect(depositRefundService.refundDeposit).not.toHaveBeenCalled();
+      expect(depositRefundService.forfeitDeposit).not.toHaveBeenCalled();
+    });
+
+    it('refunds a client cancel before the lock point', async () => {
+      depositCalculationService.isAfterRefundLockPoint.mockReturnValue(false);
+
+      await (service as any).handleDepositOnCancellation(
+        paidDepositOrder,
+        paidDepositOrder.id,
+        'confirmed',
+        'client'
+      );
+
+      expect(depositRefundService.refundDeposit).toHaveBeenCalledWith(
+        paidDepositOrder.id
+      );
+      expect(depositRefundService.forfeitDeposit).not.toHaveBeenCalled();
+    });
+
+    it('forfeits a client cancel after the lock point', async () => {
+      depositCalculationService.isAfterRefundLockPoint.mockReturnValue(true);
+
+      await (service as any).handleDepositOnCancellation(
+        paidDepositOrder,
+        paidDepositOrder.id,
+        'out_for_delivery',
+        'client'
+      );
+
+      expect(depositRefundService.forfeitDeposit).toHaveBeenCalledWith(
+        paidDepositOrder.id,
+        'customer_cancel_after_lock'
+      );
+      expect(depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    });
+
+    it('always attempts refund for business or system cancel, even after lock', async () => {
+      depositCalculationService.isAfterRefundLockPoint.mockReturnValue(true);
+
+      await (service as any).handleDepositOnCancellation(
+        paidDepositOrder,
+        paidDepositOrder.id,
+        'out_for_delivery',
+        'business'
+      );
+
+      expect(depositRefundService.refundDeposit).toHaveBeenCalledWith(
+        paidDepositOrder.id
+      );
+      expect(depositRefundService.forfeitDeposit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onDepositPaymentFailed', () => {
+    it('marks deposit_status failed then cancels via system jobs', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await service.onDepositPaymentFailed('order-uuid-123', 'provider timeout');
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('MarkDepositFailed'),
+        expect.objectContaining({ orderId: 'order-uuid-123' })
+      );
+      expect(orderSystemJobsService.onOrderPaymentFailed).toHaveBeenCalledWith(
+        'order-uuid-123',
+        'provider timeout'
+      );
+    });
+
+    it('still cancels the order if the failed-status write throws', async () => {
+      hasuraSystemService.executeMutation.mockRejectedValue(
+        new Error('hasura down')
+      );
+
+      await service.onDepositPaymentFailed('order-uuid-123', 'declined');
+
+      expect(orderSystemJobsService.onOrderPaymentFailed).toHaveBeenCalledWith(
+        'order-uuid-123',
+        'declined'
       );
     });
   });
