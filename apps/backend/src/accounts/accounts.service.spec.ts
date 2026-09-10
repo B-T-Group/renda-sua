@@ -115,6 +115,25 @@ describe('AccountsService', () => {
     });
   });
 
+  describe('registerPaymentIfNotExists', () => {
+    it('skips insert when a payment already exists for the reference', async () => {
+      executeQuery.mockResolvedValue({
+        account_transactions: [{ id: 'pay-1' }],
+      });
+
+      await expect(
+        service.registerPaymentIfNotExists({
+          accountId,
+          amount: 150,
+          memo: 'Deposit forfeited for order 123',
+          referenceId,
+        })
+      ).resolves.toEqual({ success: true, alreadyExists: true });
+
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+  });
+
   describe('registerDepositIfNotExists', () => {
     it('skips insert when a deposit already exists for the reference', async () => {
       executeQuery.mockResolvedValue({

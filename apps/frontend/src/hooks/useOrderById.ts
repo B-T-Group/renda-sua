@@ -52,6 +52,16 @@ export interface OrderData {
   payment_source?: 'wallet' | 'mobile_payment' | 'credit_card';
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   reconciliation_status?: 'none' | 'pending_manual_reconciliation' | 'reconciled';
+  deposit_amount?: number | null;
+  deposit_status?:
+    | 'none'
+    | 'pending'
+    | 'paid'
+    | 'failed'
+    | 'forfeited'
+    | 'refunded'
+    | null;
+  amount_due?: number | null;
   verified_agent_delivery: boolean;
   created_at: string;
   updated_at: string;

@@ -687,7 +687,7 @@ export class CheckoutPreflightService {
       const totalFee = shippingFee ?? deliveryFee ?? 0;
       const grandTotal = subtotal + totalFee;
 
-      // Calculate deposit for MoMo + XAF + pay_at_delivery/pickup
+      // Calculate deposit for MoMo + pay_at_delivery/pickup (any MM currency)
       let depositRequired = false;
       let depositAmount: number | undefined;
       let amountDue: number | undefined;
@@ -698,7 +698,6 @@ export class CheckoutPreflightService {
 
       if (
         rail === 'mobile_money' &&
-        currency === 'XAF' &&
         (requestedOrAvailableTiming === 'pay_at_delivery' || requestedOrAvailableTiming === 'pay_at_pickup')
       ) {
         try {

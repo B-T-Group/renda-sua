@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { FreemopayConfig } from '../../config/configuration';
+import { normalizeProviderMessage } from '../normalize-provider-message';
 
 export interface FreemopayPaymentRequest {
   payer: string;
@@ -135,13 +136,16 @@ export class FreemopayService {
           transactionId: data.reference,
           reference: data.reference,
           status: data.status,
-          message: data.message,
+          message: normalizeProviderMessage(data.message, 'Payment initiated'),
         };
       }
 
       return {
         success: false,
-        message: data?.message || 'Payment initiation failed',
+        message: normalizeProviderMessage(
+          data?.message,
+          'Payment initiation failed'
+        ),
         errorCode: data?.statusCode?.toString() || 'UNKNOWN_ERROR',
         status: data?.status,
       };
@@ -149,8 +153,10 @@ export class FreemopayService {
       this.logger.error('Failed to initiate Freemopay payment:', error);
       return {
         success: false,
-        message:
-          error.response?.data?.message || 'Failed to initiate payment',
+        message: normalizeProviderMessage(
+          error.response?.data?.message,
+          'Failed to initiate payment'
+        ),
         errorCode:
           error.response?.data?.statusCode?.toString() ||
           error.response?.status?.toString() ||
@@ -198,13 +204,19 @@ export class FreemopayService {
           transactionId: data.reference ?? externalId,
           reference: data.reference ?? externalId,
           status: data.status,
-          message: data.message,
+          message: normalizeProviderMessage(
+            data.message,
+            'Withdrawal initiated'
+          ),
         };
       }
 
       return {
         success: false,
-        message: data?.message || 'Withdrawal initiation failed',
+        message: normalizeProviderMessage(
+          data?.message,
+          'Withdrawal initiation failed'
+        ),
         errorCode: data?.statusCode?.toString() || 'UNKNOWN_ERROR',
         status: data?.status,
       };
@@ -212,8 +224,10 @@ export class FreemopayService {
       this.logger.error('Failed to initiate Freemopay withdrawal:', error);
       return {
         success: false,
-        message:
-          error.response?.data?.message || 'Failed to initiate withdrawal',
+        message: normalizeProviderMessage(
+          error.response?.data?.message,
+          'Failed to initiate withdrawal'
+        ),
         errorCode:
           error.response?.data?.statusCode?.toString() ||
           error.response?.status?.toString() ||
@@ -245,8 +259,14 @@ export class FreemopayService {
         amount: data.amount,
         reference: data.reference,
         merchantRef,
-        reason: data.reason,
-        message: data.reason || data.message,
+        reason:
+          typeof data.reason === 'string'
+            ? data.reason
+            : normalizeProviderMessage(data.reason, ''),
+        message: normalizeProviderMessage(
+          data.reason || data.message,
+          'Status check completed'
+        ),
       };
     } catch (error: any) {
       this.logger.error(

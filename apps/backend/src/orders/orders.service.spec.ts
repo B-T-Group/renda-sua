@@ -425,12 +425,27 @@ describe('OrdersService', () => {
               totalAmount: 5000,
             }),
             isDepositRequired: jest.fn().mockReturnValue(false),
+            remainderPaymentAmount: jest.fn((o: any) =>
+              o?.deposit_status === 'paid'
+                ? Math.max(0, (o.total_amount || 0) - (o.deposit_amount || 0))
+                : o?.total_amount || 0
+            ),
+          },
+        },
+        {
+          provide: require('./deposit-ledger.service').DepositLedgerService,
+          useValue: {
+            creditAndHoldDeposit: jest.fn().mockResolvedValue(undefined),
+            releaseDepositToAvailable: jest.fn().mockResolvedValue(undefined),
+            forfeitDepositToHq: jest.fn().mockResolvedValue(undefined),
+            ensureDepositHeld: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
           provide: require('./deposit-refund.service').DepositRefundService,
           useValue: {
-            refundDeposit: jest.fn().mockResolvedValue(undefined),
+            refundDeposit: jest.fn().mockResolvedValue({ success: true }),
+            forfeitDeposit: jest.fn().mockResolvedValue({ success: true }),
           },
         },
         {
@@ -2493,9 +2508,9 @@ describe('OrdersService', () => {
       hasuraSystemService.getAccount.mockResolvedValue({
         id: 'acct-client',
       } as any);
-      accountsService.registerDepositIfNotExists.mockResolvedValue({
-        success: true,
-      });
+      (service as any).depositLedgerService.creditAndHoldDeposit = jest
+        .fn()
+        .mockResolvedValue(undefined);
       hasuraSystemService.executeMutation.mockResolvedValue({});
       configService.get.mockImplementation((key: string) => {
         if (key === 'notification') {
@@ -2505,25 +2520,27 @@ describe('OrdersService', () => {
       });
     });
 
-    it('credits the client wallet using the MoMo transaction uuid', async () => {
+    it('credits and holds the client wallet using the MoMo transaction uuid', async () => {
       await service.finalizeDepositAfterCallback('49520979', depositTxnId);
 
-      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
-        accountId: 'acct-client',
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).toHaveBeenCalledWith({
+        clientAccountId: 'acct-client',
         amount: 2000,
-        referenceId: depositTxnId,
-        memo: 'Deposit captured for order 49520979',
+        orderNumber: '49520979',
+        depositTransactionId: depositTxnId,
       });
     });
 
-    it('does not use a non-uuid deposit-orderNumber ledger reference', async () => {
-      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+    it('does not mark deposit paid when credit+hold fails', async () => {
+      (service as any).depositLedgerService.creditAndHoldDeposit = jest
+        .fn()
+        .mockRejectedValue(new Error('hold failed'));
 
-      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          referenceId: 'deposit-49520979',
-        })
-      );
+      await expect(
+        service.finalizeDepositAfterCallback('49520979', depositTxnId)
+      ).rejects.toThrow('hold failed');
     });
   });
 });

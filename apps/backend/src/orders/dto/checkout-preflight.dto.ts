@@ -303,13 +303,13 @@ export class CheckoutGroupDto {
 
   @ApiPropertyOptional({
     description:
-      'True when a MoMo reservation deposit is required for this group (MoMo rail + XAF + pay_at_delivery/pickup).',
+      'True when a MoMo reservation deposit is required for this group (MoMo rail + pay_at_delivery/pickup).',
   })
   deposit_required?: boolean;
 
   @ApiPropertyOptional({
     description:
-      'Deposit amount in XAF when deposit_required is true.',
+      'Deposit amount in the group currency when deposit_required is true.',
   })
   deposit_amount?: number;
 

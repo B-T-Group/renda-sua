@@ -133,6 +133,29 @@ export function ClientPickupPaymentSheet({
                   'We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.'
                 )}
           </Text>
+          {depositPaid ? (
+            <View style={{ marginTop: spacing.sm, gap: 4 }}>
+              <View style={styles.row}>
+                <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                  {t('deposit.summaryPaid', 'Deposit paid')}
+                </Text>
+                <Text variant="bodySmall" style={{ fontWeight: '600' }}>
+                  {order.deposit_amount} {currency}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <Text variant="titleSmall" style={{ fontWeight: '700' }}>
+                  {t('deposit.requestAmount', 'Amount to request')}
+                </Text>
+                <Text
+                  variant="titleSmall"
+                  style={{ fontWeight: '700', color: colors.primary.main }}
+                >
+                  {remainder} {currency}
+                </Text>
+              </View>
+            </View>
+          ) : null}
           {clientPhone && !useDifferent ? (
             <Text variant="bodySmall" style={{ marginTop: spacing.sm }}>
               {t('orders.payAtPickup.phoneLabel', 'Payment phone')}: {clientPhone}

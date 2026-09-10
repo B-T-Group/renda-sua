@@ -156,20 +156,6 @@ describe('OrdersService - retryDepositPayment', () => {
       );
     });
 
-    it('should reject if currency is not XAF', async () => {
-      const order = { ...mockOrder, currency: 'USD' };
-      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
-
-      await expect(
-        service.retryDepositPayment('order-123')
-      ).rejects.toThrow(
-        new HttpException(
-          'Deposit payment retry is only available for XAF currency',
-          HttpStatus.BAD_REQUEST
-        )
-      );
-    });
-
     it('should reject if payment_source is not mobile_payment', async () => {
       const order = { ...mockOrder, payment_source: 'credit_card' };
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);

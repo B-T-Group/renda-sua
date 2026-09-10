@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
+import { normalizeProviderMessage } from './normalize-provider-message';
 
 export interface MobilePaymentTransaction {
   id: string;
@@ -60,7 +61,8 @@ export interface CreateTransactionData {
 export interface UpdateTransactionData {
   status?: 'pending' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
-  error_message?: string;
+  /** May arrive as bilingual provider object; coerced to string before write. */
+  error_message?: string | Record<string, unknown> | null;
   error_code?: string;
 }
 
@@ -172,6 +174,14 @@ export class MobilePaymentsDatabaseService {
         id,
         data: {
           ...data,
+          ...(data.error_message !== undefined
+            ? {
+                error_message: normalizeProviderMessage(
+                  data.error_message,
+                  'Payment failed'
+                ),
+              }
+            : {}),
           updated_at: new Date().toISOString(),
         },
       };

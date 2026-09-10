@@ -5,26 +5,32 @@ import { Injectable, Logger } from '@nestjs/common';
  * MyPVIT docs: amount > 150 XAF (strict greater-than, not >=).
  * Samuel locked: 150 XAF floor. If MyPVIT rejects, revert to 151.
  * Freemopay: same floor for UX parity unless code shows different min.
+ * Other MM currencies: 10% with no floor (config later).
  */
 export const MOMO_DEPOSIT_MIN_XAF = 150;
 
 /**
- * Deposit rate for orders under 5000 XAF
+ * Deposit rate for XAF orders under 5000
  */
-const DEPOSIT_RATE_SMALL = 0.10;
+const DEPOSIT_RATE_SMALL = 0.1;
 
 /**
- * Deposit rate for orders 5000 XAF and above
+ * Deposit rate for XAF orders 5000 and above
  */
 const DEPOSIT_RATE_LARGE = 0.05;
 
 /**
- * Threshold for switching deposit rates (in XAF)
+ * Flat rate for non-XAF Mobile Money currencies
+ */
+const DEPOSIT_RATE_OTHER = 0.1;
+
+/**
+ * Threshold for switching deposit rates (XAF only)
  */
 const RATE_THRESHOLD_XAF = 5000;
 
 export interface DepositCalculationResult {
-  /** Calculated deposit amount in XAF (integer) */
+  /** Calculated deposit amount (integer) */
   depositAmount: number;
   /** Rate used for calculation (0.10 or 0.05) */
   rate: number;
@@ -40,44 +46,40 @@ export class DepositCalculationService {
 
   /**
    * Calculate deposit amount for a MoMo pay-at-delivery/pickup order.
-   * 
-   * Formula:
+   *
+   * XAF:
    *   rate = grand_total < 5000 ? 0.10 : 0.05
-   *   deposit = max(FLOOR, round(grand_total * rate))
-   * 
-   * @param grandTotal Total order amount at place-order (items + fees)
-   * @param currency Order currency (must be XAF)
-   * @returns Deposit calculation result
+   *   deposit = min(grandTotal, max(150, round(grand_total * rate)))
+   *
+   * Other currencies:
+   *   deposit = min(grandTotal, round(grand_total * 0.10))  // no floor
    */
   calculateDeposit(
     grandTotal: number,
     currency: string
   ): DepositCalculationResult {
-    if (currency !== 'XAF') {
-      throw new Error(
-        `Deposit calculation only supported for XAF, got ${currency}`
-      );
-    }
-
     if (grandTotal < 0) {
       throw new Error('Grand total cannot be negative');
     }
 
-    // Determine rate based on total
-    const rate =
-      grandTotal < RATE_THRESHOLD_XAF ? DEPOSIT_RATE_SMALL : DEPOSIT_RATE_LARGE;
+    const isXaf = currency === 'XAF';
+    const rate = isXaf
+      ? grandTotal < RATE_THRESHOLD_XAF
+        ? DEPOSIT_RATE_SMALL
+        : DEPOSIT_RATE_LARGE
+      : DEPOSIT_RATE_OTHER;
 
-    // Calculate deposit: max(150, round(total * rate))
     const calculated = Math.round(grandTotal * rate);
-    const depositAmount = Math.max(MOMO_DEPOSIT_MIN_XAF, calculated);
-
-    // Calculate remaining amount due
+    const withFloor = isXaf
+      ? Math.max(MOMO_DEPOSIT_MIN_XAF, calculated)
+      : calculated;
+    // Never collect more than the order total (tiny XAF orders vs 150 floor)
+    const depositAmount = Math.min(grandTotal, withFloor);
     const amountDue = Math.max(0, grandTotal - depositAmount);
 
     this.logger.debug(
-      `Deposit calculation: total=${grandTotal} XAF, rate=${rate}, ` +
-        `calculated=${calculated}, floor=${MOMO_DEPOSIT_MIN_XAF}, ` +
-        `deposit=${depositAmount}, due=${amountDue}`
+      `Deposit calculation: total=${grandTotal} ${currency}, rate=${rate}, ` +
+        `calculated=${calculated}, deposit=${depositAmount}, due=${amountDue}`
     );
 
     return {
@@ -90,17 +92,14 @@ export class DepositCalculationService {
 
   /**
    * Check if deposit is required for the given payment configuration.
-   * 
-   * @param paymentTiming Order payment timing
-   * @param paymentRail Payment rail (mobile_money, stripe, wallet)
-   * @returns True if deposit should be collected
    */
   isDepositRequired(
     paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup',
     paymentRail: 'mobile_money' | 'stripe' | 'wallet'
   ): boolean {
     return (
-      (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') &&
+      (paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup') &&
       paymentRail === 'mobile_money'
     );
   }
@@ -123,31 +122,29 @@ export class DepositCalculationService {
   }
 
   /**
-   * Get deposit lock point for refund eligibility based on fulfillment method.
-   * 
-   * Refund via MoMo withdraw until lock:
+   * Refund eligibility lock point:
    * - Delivery: Out for delivery
    * - Pickup: Ready for pickup
-   * 
-   * After lock: forfeit only
-   * 
-   * @param fulfillmentMethod Order fulfillment method
-   * @param currentStatus Current order status
-   * @returns True if order has passed the refund lock point
+   * After lock: customer cancel → forfeit only (business/system may still refund)
    */
   isAfterRefundLockPoint(
     fulfillmentMethod: 'delivery' | 'pickup' | 'shipping',
     currentStatus: string
   ): boolean {
     if (fulfillmentMethod === 'delivery') {
-      return currentStatus === 'out_for_delivery' || currentStatus === 'delivered';
+      return (
+        currentStatus === 'out_for_delivery' || currentStatus === 'delivered'
+      );
     }
 
     if (fulfillmentMethod === 'pickup') {
-      return currentStatus === 'ready_for_pickup' || currentStatus === 'picked_up';
+      return (
+        currentStatus === 'ready_for_pickup' || currentStatus === 'picked_up'
+      );
     }
 
-    // Shipping: treat like delivery
-    return currentStatus === 'out_for_delivery' || currentStatus === 'delivered';
+    return (
+      currentStatus === 'out_for_delivery' || currentStatus === 'delivered'
+    );
   }
 }

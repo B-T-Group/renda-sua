@@ -121,6 +121,7 @@ interface OrderSummaryProps {
   discountLoading: boolean;
   discountError: string | null;
   showTaxAtCheckoutNotice?: boolean;
+  depositBreakdown?: { depositAmount: number; amountDue: number } | null;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -140,6 +141,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   discountLoading,
   discountError,
   showTaxAtCheckoutNotice = false,
+  depositBreakdown = null,
 }) => {
   const { t } = useTranslation();
   const { getCartByBusiness } = useCart();
@@ -370,6 +372,27 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
           </Box>
         </Box>
       ))}
+
+      {depositBreakdown ? (
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('deposit.dueNow', 'Due now (deposit)')}
+            </Typography>
+            <Typography variant="body2" fontWeight="medium">
+              {formatCurrency(depositBreakdown.depositAmount, currency)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('deposit.amountDue', 'Amount due')}
+            </Typography>
+            <Typography variant="body2" fontWeight="medium">
+              {formatCurrency(depositBreakdown.amountDue, currency)}
+            </Typography>
+          </Box>
+        </Box>
+      ) : null}
 
       {cartByBusiness.size > 1 && (
         <>
@@ -676,6 +699,26 @@ const CheckoutPage: React.FC = () => {
   const pickupEligible =
     preflightGroups.length > 0 &&
     preflightGroups.every((g) => g.pickup_eligible === true);
+
+  const depositBreakdown = useMemo(() => {
+    const withDeposit = preflightGroups.filter(
+      (g) => g.deposit_required && (Number(g.deposit_amount) || 0) > 0
+    );
+    if (withDeposit.length === 0) return null;
+    const depositAmount = withDeposit.reduce(
+      (sum, g) => sum + (Number(g.deposit_amount) || 0),
+      0
+    );
+    const amountDue = withDeposit.reduce(
+      (sum, g) =>
+        sum +
+        (g.amount_due != null
+          ? Number(g.amount_due)
+          : Math.max(0, (Number(g.total) || 0) - (Number(g.deposit_amount) || 0))),
+      0
+    );
+    return { depositAmount, amountDue };
+  }, [preflightGroups]);
 
   // Reason-blind delivery availability (aggregated + per seller group).
   const deliveryUnavailable =
@@ -1574,6 +1617,7 @@ const CheckoutPage: React.FC = () => {
             discountLoading={discountLoading}
             discountError={discountError}
             showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
+            depositBreakdown={depositBreakdown}
           />
 
           {(crossBorderCheckout || sendingToSomeoneElse) && (

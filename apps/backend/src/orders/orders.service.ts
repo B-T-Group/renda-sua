@@ -121,6 +121,7 @@ import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
 import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 
@@ -475,6 +476,7 @@ export class OrdersService {
     private readonly eventEmitter: EventEmitter2,
     private readonly foodOrdersService: FoodOrdersService,
     private readonly depositCalculationService: DepositCalculationService,
+    private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
@@ -3513,6 +3515,18 @@ export class OrdersService {
     const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
       order as any
     );
+
+    // Deposit already covers the full total — skip MoMo and complete
+    if (chargeAmount <= 0) {
+      await this.finalizePayAtDeliveryPaymentAndComplete(order);
+      return {
+        success: true,
+        message: 'Order covered by deposit; completed without further payment',
+        amount_due: 0,
+        deposit_amount: (order as any).deposit_amount ?? 0,
+      };
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -3713,6 +3727,18 @@ export class OrdersService {
     const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
       order as any
     );
+
+    // Deposit already covers the full total — skip MoMo and complete
+    if (chargeAmount <= 0) {
+      await this.finalizePayAtDeliveryPaymentAndComplete(order);
+      return {
+        success: true,
+        message: 'Order covered by deposit; completed without further payment',
+        amount_due: 0,
+        deposit_amount: (order as any).deposit_amount ?? 0,
+      };
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4146,13 +4172,6 @@ export class OrdersService {
     if (!depositAmount || depositAmount <= 0) {
       throw new HttpException(
         'Order does not have a deposit amount',
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
-    if (order.currency !== 'XAF') {
-      throw new HttpException(
-        'Deposit payment retry is only available for XAF currency',
         HttpStatus.BAD_REQUEST
       );
     }
@@ -7469,16 +7488,14 @@ export class OrdersService {
    * CRITICAL: This is NOT a full order payment. Do not call finalizePayAtDeliveryPaymentAndComplete.
    * 
    * On deposit SUCCESS:
-   * - Mark deposit_status = 'paid' (enum value)
+   * - Credit client wallet then hold (withheld) so client cannot withdraw
+   * - Mark deposit_status = 'paid' (fail-closed if credit/hold fails)
    * - deposit_mobile_payment_transaction_id FK already set at place-order
    * - Transition pending_payment → pending (await merchant acceptance)
-   * - Credit client wallet (consistent with existing MoMo order path)
    * - Start acceptance SLA
    * 
-   * Settlement: Deposit is on client ledger. At Delivered/remainder paid, settlement will:
-   * - Debit client for FULL total (deposit + remainder)
-   * - Credit merchant share from full GMV
-   * - No separate MoMo payout of deposit to merchant
+   * Settlement: At Delivered/remainder paid, release the deposit hold then debit
+   * client for FULL total (deposit + remainder) and credit merchant from full GMV.
    */
   async finalizeDepositAfterCallback(
     orderNumber: string,
@@ -7513,11 +7530,14 @@ export class OrdersService {
       const depositAmount = (order as any).deposit_amount || 0;
       const totalAmount = order.total_amount || 0;
       const amountDue = Math.max(0, totalAmount - depositAmount);
+      const ledgerTxnId = this.depositLedgerReferenceId(
+        transactionDbId,
+        depositTxnId
+      );
 
-      // CRITICAL ORDER: Credit wallet FIRST, then mark deposit as paid
-      // Fail closed: if wallet credit fails, do not mark deposit as paid
+      // CRITICAL ORDER: Credit then hold wallet FIRST, then mark deposit as paid.
+      // Fail closed: if credit or hold fails, do not mark deposit as paid.
       if (depositAmount && depositAmount > 0) {
-        // Resolve client account the same way as other MoMo credit paths
         const clientAccount = await this.hasuraSystemService.getAccount(
           order.client.user_id,
           order.currency
@@ -7527,30 +7547,16 @@ export class OrdersService {
             `No account found for client user ${order.client.user_id} currency ${order.currency}`
           );
         }
-        
-        // Credit wallet - fail the entire callback if this fails
-        const credit = await this.accountsService.registerDepositIfNotExists({
-          accountId: clientAccount.id,
+
+        await this.depositLedgerService.creditAndHoldDeposit({
+          clientAccountId: clientAccount.id,
           amount: depositAmount,
-          referenceId: this.depositLedgerReferenceId(
-            transactionDbId,
-            depositTxnId
-          ),
-          memo: `Deposit captured for order ${order.order_number}`,
+          orderNumber: order.order_number,
+          depositTransactionId: ledgerTxnId,
         });
-        
-        if (!credit?.success) {
-          throw new Error(
-            `Deposit wallet credit failed for ${orderNumber}: ${credit?.error ?? 'unknown'}`
-          );
-        }
-        
-        this.logger.log(
-          `Client wallet credited with deposit ${depositAmount} for order ${orderNumber}`
-        );
       }
 
-      // Only mark deposit as paid AFTER wallet credit succeeds
+      // Only mark deposit as paid AFTER wallet credit+hold succeeds
       // Note: deposit_mobile_payment_transaction_id FK already set at place-order
       const finalizeMutation = `
         mutation FinalizeDeposit(
@@ -7581,7 +7587,7 @@ export class OrdersService {
       });
 
       this.logger.log(
-        `Deposit ${depositAmount} captured for order ${orderNumber}. ` +
+        `Deposit ${depositAmount} captured and held for order ${orderNumber}. ` +
         `Amount due: ${amountDue}. Transitioning to pending (awaiting merchant).`
       );
 
@@ -7741,6 +7747,29 @@ export class OrdersService {
       throw new Error('Missing deposit mobile payment transaction id');
     }
     return referenceId;
+  }
+
+  /**
+   * Move paid reservation deposit from withheld → available before settlement debit.
+   * Idempotent via deposit txn release reference.
+   */
+  private async releasePaidDepositHoldIfNeeded(
+    order: Orders,
+    clientAccountId: string
+  ): Promise<void> {
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    const depositStatus = (order as any).deposit_status;
+    const depositTxnId = (order as any)
+      .deposit_mobile_payment_transaction_id as string | undefined;
+    if (depositStatus !== 'paid' || depositAmount <= 0 || !depositTxnId) {
+      return;
+    }
+    await this.depositLedgerService.releaseDepositToAvailable({
+      clientAccountId,
+      amount: depositAmount,
+      orderNumber: order.order_number,
+      depositTransactionId: depositTxnId,
+    });
   }
 
   private isTerminalOrderForPaymentFinalize(order: {
@@ -8497,10 +8526,13 @@ export class OrdersService {
       previousStatus
     );
 
-    // Business/system cancel → always refund (product rule: business cancel refunds even after lock)
+    // Business/system cancel → always refund (even after lock)
     if (cancelledBy === 'business' || cancelledBy === 'system') {
       try {
-        const refundResult = await this.depositRefundService.refundDeposit(orderId);
+        const refundResult = await this.depositRefundService.refundDeposit(
+          orderId,
+          { allowAfterLock: true }
+        );
         if (!refundResult.success) {
           this.logger.error(
             `Deposit refund failed for ${cancelledBy} cancel of order ${orderId}: ${refundResult.message}`
@@ -8521,16 +8553,18 @@ export class OrdersService {
     // Customer cancel
     if (cancelledBy === 'client') {
       if (!afterLock) {
-        // Before lock → refund
+        // Before lock → refund (release hold to available)
         try {
-          const refundResult = await this.depositRefundService.refundDeposit(orderId);
+          const refundResult = await this.depositRefundService.refundDeposit(
+            orderId
+          );
           if (!refundResult.success) {
             this.logger.error(
               `Deposit refund failed for client cancel (before lock) of order ${orderId}: ${refundResult.message}`
             );
           } else {
             this.logger.log(
-              `Deposit refund initiated for client cancel (before lock) of order ${orderId}`
+              `Deposit refunded for client cancel (before lock) of order ${orderId}`
             );
           }
         } catch (error: any) {
@@ -8539,7 +8573,7 @@ export class OrdersService {
           );
         }
       } else {
-        // After lock → forfeit
+        // After lock → forfeit to Rendasua HQ
         try {
           const forfeitResult = await this.depositRefundService.forfeitDeposit(
             orderId,
@@ -10076,9 +10110,8 @@ export class OrdersService {
         paymentTiming,
         railForDepositCheck
       );
-      // If deposit required + XAF currency, start in pending_payment
-      // Otherwise start in pending (existing behavior for non-deposit PAD/pickup)
-      current_status = requiresDeposit && currency === 'XAF' ? 'pending_payment' : 'pending';
+      // If deposit required, start in pending_payment until deposit is captured
+      current_status = requiresDeposit ? 'pending_payment' : 'pending';
     } else {
       current_status = 'pending_payment';
     }
@@ -10467,8 +10500,7 @@ export class OrdersService {
     // (Stripe, pay_now, wallet, non-XAF PAD/pickup all send immediately)
     const isMomoDepositRequiredCreate =
       (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') &&
-      current_status === 'pending_payment' &&
-      currency === 'XAF';
+      current_status === 'pending_payment';
     
     if (!isMomoDepositRequiredCreate) {
       try {
@@ -10495,7 +10527,7 @@ export class OrdersService {
         railForDeposit
       );
 
-      if (requiresDeposit && currency === 'XAF') {
+      if (requiresDeposit) {
         try {
           const depositCalc = this.depositCalculationService.calculateDeposit(
             total_amount,
@@ -12000,6 +12032,8 @@ export class OrdersService {
               HttpStatus.NOT_FOUND
             );
           }
+          // Release withheld deposit into available before full GMV payment debit
+          await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
           await this.accountsService.registerTransaction({
             accountId: clientAccount.id,
             amount: subtotalPortion,
