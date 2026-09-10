@@ -155,6 +155,31 @@ describe('HasuraUserService (singleton + CLS)', () => {
     ).not.toThrow();
   });
 
+  it('getUser rejects anonymous callers with 401 before querying Hasura', async () => {
+    const { service, hasuraSystem } = makeService();
+
+    await expect(service.getUser()).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+    try {
+      await service.getUser(emptyRequestContext({ userId: 'anonymous' }));
+      fail('expected UnauthorizedException');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+    }
+    expect(hasuraSystem.getUserByIdWithRelations).not.toHaveBeenCalled();
+  });
+
+  it('getUserIdentity rejects anonymous callers with 401 before querying Hasura', async () => {
+    const { service, hasuraSystem } = makeService();
+
+    await expect(service.getUserIdentity()).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+    expect(hasuraSystem.getUserByIdWithRelations).not.toHaveBeenCalled();
+  });
+
   it('getUser rejects Auth0-style JWT user ids before querying Hasura', async () => {
     const { service, hasuraSystem } = makeService();
     const ctx = emptyRequestContext({

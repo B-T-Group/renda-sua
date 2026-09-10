@@ -2,6 +2,7 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import { Logger } from 'winston';
@@ -53,6 +54,19 @@ describe('AllExceptionsFilter', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     filter = new AllExceptionsFilter(logger);
+  });
+
+  it('returns 401 for missing auth and does not report to Sentry', () => {
+    (Sentry.getClient as jest.Mock).mockReturnValue({});
+    const exception = new UnauthorizedException(
+      'No authenticated user. Please provide a valid authentication token.'
+    );
+
+    filter.catch(exception, host);
+
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
   });
 
   it('preserves HttpException response body for 4xx and does not report to Sentry', () => {

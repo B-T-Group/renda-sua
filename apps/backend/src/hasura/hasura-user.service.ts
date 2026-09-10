@@ -3,6 +3,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphQLClient } from 'graphql-request';
@@ -798,7 +799,7 @@ export class HasuraUserService {
     const resolved = this.resolveContext(ctx);
     const userId = resolved.userId;
     if (!userId || userId === 'anonymous') {
-      throw new Error(
+      throw new UnauthorizedException(
         'No authenticated user. Please provide a valid authentication token.'
       );
     }
