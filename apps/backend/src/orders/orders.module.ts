@@ -142,6 +142,7 @@ import { DepositRefundService } from './deposit-refund.service';
     AdminOrdersService,
     WhatsAppOrderActionService,
     DepositCalculationService,
+    DepositLedgerService,
     DepositRefundService,
   ],
   exports: [

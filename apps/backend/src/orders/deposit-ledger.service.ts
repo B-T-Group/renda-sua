@@ -20,7 +20,7 @@ export class DepositLedgerService {
 
   /**
    * After MoMo deposit SUCCESS: credit available, then hold so client cannot withdraw.
-   * Fail-closed: if hold fails after credit, throw (caller must not mark deposit paid).
+   * Fail-closed: if credit or hold fails, throw (caller must not mark deposit paid).
    */
   async creditAndHoldDeposit(params: {
     clientAccountId: string;
@@ -41,21 +41,40 @@ export class DepositLedgerService {
       );
     }
 
-    const hold = await this.accountsService.registerHoldIfNotExists({
-      accountId: params.clientAccountId,
-      amount: params.amount,
-      referenceId: params.depositTransactionId,
-      memo: `Deposit hold for order ${params.orderNumber}`,
-    });
+    await this.holdDepositWithRetry(params);
+
+    this.logger.log(
+      `Deposit ${params.amount} credited and held for order ${params.orderNumber}`
+    );
+  }
+
+  /**
+   * Hold may race the deposit balance update (Hasura read-after-write). Retry once.
+   */
+  private async holdDepositWithRetry(params: {
+    clientAccountId: string;
+    amount: number;
+    orderNumber: string;
+    depositTransactionId: string;
+  }): Promise<void> {
+    const attempt = () =>
+      this.accountsService.registerHoldIfNotExists({
+        accountId: params.clientAccountId,
+        amount: params.amount,
+        referenceId: params.depositTransactionId,
+        memo: `Deposit hold for order ${params.orderNumber}`,
+      });
+
+    let hold = await attempt();
+    if (!hold?.success) {
+      await new Promise((r) => setTimeout(r, 150));
+      hold = await attempt();
+    }
     if (!hold?.success) {
       throw new Error(
         `Deposit wallet hold failed for ${params.orderNumber}: ${hold?.error ?? 'unknown'}`
       );
     }
-
-    this.logger.log(
-      `Deposit ${params.amount} credited and held for order ${params.orderNumber}`
-    );
   }
 
   /**

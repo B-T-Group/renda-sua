@@ -7525,6 +7525,8 @@ export class OrdersService {
         this.logger.warn(
           `Deposit already captured for order ${orderNumber}`
         );
+        // Repair older credits that never created a hold (pre-hold deploy / race).
+        await this.repairPaidDepositHoldIfMissing(order, transactionDbId);
         return;
       }
 
@@ -7757,6 +7759,34 @@ export class OrdersService {
       throw new Error('Missing deposit mobile payment transaction id');
     }
     return referenceId;
+  }
+
+  /** Idempotent catch-up when deposit was credited without a hold. */
+  private async repairPaidDepositHoldIfMissing(
+    order: any,
+    transactionDbId?: string
+  ): Promise<void> {
+    const depositAmount = Number(order.deposit_amount) || 0;
+    const depositTxnId =
+      transactionDbId || order.deposit_mobile_payment_transaction_id;
+    if (depositAmount <= 0 || !depositTxnId) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (!clientAccount?.id) return;
+    try {
+      await this.depositLedgerService.ensureDepositHeld({
+        clientAccountId: clientAccount.id,
+        amount: depositAmount,
+        orderNumber: order.order_number,
+        depositTransactionId: depositTxnId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to repair deposit hold for order ${order.order_number}: ${error?.message}`
+      );
+    }
   }
 
   /**
