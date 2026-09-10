@@ -1,3 +1,4 @@
+import { describe, expect, it, vi } from 'vitest';
 import {
   leaveClientOrderDetail,
   resolveClientOrderDetailBackTo,
@@ -51,7 +52,7 @@ describe('resolveClientOrderDetailBackTo', () => {
 
 describe('leaveClientOrderDetail', () => {
   it('navigates to ClientOrders or ClientBrowse', () => {
-    const navigate = jest.fn();
+    const navigate = vi.fn();
     const navigation = {
       navigate,
       getState: () => ({ index: 0, routes: [] }),
