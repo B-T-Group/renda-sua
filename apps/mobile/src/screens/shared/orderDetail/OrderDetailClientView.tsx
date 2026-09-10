@@ -67,6 +67,7 @@ import {
   hasLivePendingDepositTx,
   remainingAfterDeposit,
 } from '../../../utils/depositResume';
+import { leaveClientOrderDetail } from '../../../utils/clientOrderDetailBack';
 
 type Props = OrderDetailScreenProps;
 
@@ -322,7 +323,13 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     return (
       <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: 24 }]}>
         <Text style={{ color: colors.error.main, textAlign: 'center' }}>{error || t('orders.notFound', 'Order not found')}</Text>
-        <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+        <Button
+          mode="contained"
+          onPress={() =>
+            leaveClientOrderDetail(navigation, route.params.backTo)
+          }
+          style={{ marginTop: 16 }}
+        >
           {t('common.back', 'Back')}
         </Button>
       </View>

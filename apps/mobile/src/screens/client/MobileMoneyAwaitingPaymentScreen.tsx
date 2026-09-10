@@ -18,6 +18,7 @@ import type {
 import { agentApi } from '../../services/agentApi';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 import { formatCurrency } from '../../utils/formatters';
+import { remainingAfterDeposit } from '../../utils/depositResume';
 
 export default function MobileMoneyAwaitingPaymentScreen() {
   const { t } = useTranslation();
@@ -57,39 +58,72 @@ export default function MobileMoneyAwaitingPaymentScreen() {
   const [currentPhone, setCurrentPhone] = useState(phoneE164);
   const [editPhoneDialogVisible, setEditPhoneDialogVisible] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
-  const [orderData, setOrderData] = useState<{ deposit_amount?: number; amount_due?: number; currency?: string } | null>(
-    isDepositOrderParam 
-      ? { deposit_amount: depositAmountParam, amount_due: amountDueParam, currency: currencyParam || 'XAF' }
+  const [orderData, setOrderData] = useState<{
+    deposit_amount?: number;
+    amount_due?: number;
+    total_amount?: number;
+    deposit_status?: string | null;
+    currency?: string;
+  } | null>(
+    isDepositOrderParam
+      ? {
+          deposit_amount: depositAmountParam,
+          amount_due: amountDueParam,
+          currency: currencyParam || 'XAF',
+        }
       : null
   );
   const masked = useMemo(() => maskPhoneE164(currentPhone), [currentPhone]);
 
-  // Fetch order to enrich copy (but route params are authoritative for isDepositOrder)
+  // Enrich from GET /orders/:id — route params often omit amountDue (preflight
+  // keeps it on groups only). Need total_amount + deposit to compute remainder.
   useEffect(() => {
     if (!orderIds.length) return;
-    // If route params already provided deposit info, only fetch if missing
-    if (isDepositOrderParam && depositAmountParam) {
-      return; // Already have authoritative deposit info from route params
-    }
     let cancelled = false;
     void (async () => {
       try {
         const order = await agentApi.orders.getById(orderIds[0]);
         if (!cancelled) {
           setOrderData({
-            deposit_amount: order.deposit_amount,
-            amount_due: order.amount_due,
-            currency: order.currency || 'XAF',
+            deposit_amount: order.deposit_amount ?? depositAmountParam,
+            amount_due: order.amount_due ?? amountDueParam,
+            total_amount: order.total_amount,
+            deposit_status: order.deposit_status,
+            currency: order.currency || currencyParam || 'XAF',
           });
         }
       } catch {
-        // If fetch fails, continue with default copy
+        // If fetch fails, continue with route-param copy
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [orderIds, isDepositOrderParam, depositAmountParam]);
+  }, [
+    orderIds,
+    isDepositOrderParam,
+    depositAmountParam,
+    amountDueParam,
+    currencyParam,
+  ]);
+
+  const remainingAfterDepositAmount = useMemo(
+    () =>
+      remainingAfterDeposit({
+        amount_due: amountDueParam ?? orderData?.amount_due,
+        total_amount: orderData?.total_amount,
+        deposit_amount: depositAmountParam ?? orderData?.deposit_amount,
+        deposit_status: orderData?.deposit_status ?? 'paid',
+      }),
+    [
+      amountDueParam,
+      depositAmountParam,
+      orderData?.amount_due,
+      orderData?.total_amount,
+      orderData?.deposit_amount,
+      orderData?.deposit_status,
+    ]
+  );
 
   // Route param / pickup source are authoritative. Never infer deposit from
   // deposit_amount alone after deposit is already paid (remainder flow).
@@ -103,7 +137,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     stop();
     const firstId = orderIds[0];
     if (firstId) {
-      navigation.replace('OrderDetail', { orderId: firstId });
+      navigation.replace('OrderDetail', { orderId: firstId, backTo: 'home' });
       return;
     }
     navigation.navigate('ClientMainTabs', { screen: 'ClientOrders' });
@@ -370,7 +404,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
                   'Your deposit payment is confirmed. The store will prepare your order. You will pay the remaining {{amount}} when you receive your order.',
                   {
                     amount: formatCurrency(
-                      amountDueParam ?? orderData?.amount_due ?? 0,
+                      remainingAfterDepositAmount,
                       currencyParam || orderData?.currency || 'XAF',
                       'en-US'
                     ),

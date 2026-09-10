@@ -95,10 +95,16 @@ export default function ClientOrdersScreen() {
       <ClientOrderListRow
         order={item}
         locale={locale}
-        onPress={() => rootNav?.navigate('OrderDetail', { orderId: item.id })}
+        onPress={() =>
+          rootNav?.navigate('OrderDetail', { orderId: item.id, backTo: 'orders' })
+        }
         onOrderMutated={refresh}
         onRatePress={(mode) =>
-          rootNav?.navigate('OrderDetail', { orderId: item.id, rate: mode })
+          rootNav?.navigate('OrderDetail', {
+            orderId: item.id,
+            rate: mode,
+            backTo: 'orders',
+          })
         }
       />
     ),
@@ -255,10 +261,19 @@ export default function ClientOrdersScreen() {
             <ClientOrderListRow
               order={order}
               locale={locale}
-              onPress={() => rootNav?.navigate('OrderDetail', { orderId: order.id })}
+              onPress={() =>
+                rootNav?.navigate('OrderDetail', {
+                  orderId: order.id,
+                  backTo: 'orders',
+                })
+              }
               onOrderMutated={refresh}
               onRatePress={(mode) =>
-                rootNav?.navigate('OrderDetail', { orderId: order.id, rate: mode })
+                rootNav?.navigate('OrderDetail', {
+                  orderId: order.id,
+                  rate: mode,
+                  backTo: 'orders',
+                })
               }
             />
           )}

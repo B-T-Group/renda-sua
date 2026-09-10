@@ -8,6 +8,7 @@ export type OrdersStackParamList = {
     openMessages?: boolean;
     highlightMessageId?: string;
     rate?: 'agent' | 'item';
+    backTo?: 'orders' | 'home';
   };
   OrderMessages: {
     orderId: string;
@@ -22,6 +23,7 @@ export type OrderDetailStackParamList = ParamListBase & {
     openMessages?: boolean;
     highlightMessageId?: string;
     rate?: 'agent' | 'item';
+    backTo?: 'orders' | 'home';
   };
   OrderMessages: {
     orderId: string;

@@ -118,7 +118,10 @@ export function ForfeitDepositCancelDialog({
             style={[
               styles.forfeitBox,
               {
-                backgroundColor: colors.error.light,
+                backgroundColor: colors.pageBackground,
+                borderColor: colors.error.main,
+                borderWidth: 1,
+                borderLeftWidth: 4,
                 marginHorizontal: spacing.lg,
                 padding: spacing.md,
                 borderRadius: borderRadius.md,
@@ -130,7 +133,13 @@ export function ForfeitDepositCancelDialog({
               variant="labelSmall"
               style={[
                 typography.caption,
-                { color: colors.error.dark, textTransform: 'uppercase', fontWeight: '700', marginBottom: 4 },
+                {
+                  color: colors.error.main,
+                  textTransform: 'uppercase',
+                  fontWeight: '700',
+                  letterSpacing: 0.6,
+                  marginBottom: 4,
+                },
               ]}
             >
               {mode === 'out_for_delivery'
@@ -139,17 +148,21 @@ export function ForfeitDepositCancelDialog({
             </Text>
             <Text
               variant="titleMedium"
-              style={[typography.h6, { color: colors.error.main, fontWeight: '700' }]}
+              style={[
+                typography.h6,
+                { color: colors.text.primary, fontWeight: '700' },
+              ]}
             >
               {depositAmount} {currency}
             </Text>
             <Text
               variant="bodySmall"
               style={[
-                typography.caption,
+                typography.body2,
                 {
-                  color: colors.text.secondary,
-                  marginTop: spacing.xs,
+                  color: colors.text.primary,
+                  marginTop: spacing.sm,
+                  lineHeight: 20,
                 },
               ]}
             >
@@ -165,13 +178,23 @@ export function ForfeitDepositCancelDialog({
             </Text>
           </View>
 
-          <View style={[styles.actions, { paddingHorizontal: spacing.lg, gap: spacing.sm }]}>
+          <View
+            style={[
+              styles.actions,
+              {
+                paddingHorizontal: spacing.lg,
+                paddingTop: spacing.sm,
+                gap: spacing.sm,
+              },
+            ]}
+          >
             <Button
               mode="outlined"
               onPress={onKeep}
               disabled={loading}
-              style={{ flex: 1 }}
-              contentStyle={{ height: 48 }}
+              style={styles.actionButton}
+              contentStyle={styles.actionButtonContent}
+              labelStyle={{ color: colors.text.primary }}
             >
               {primaryCta}
             </Button>
@@ -180,9 +203,10 @@ export function ForfeitDepositCancelDialog({
               onPress={onCancelAndForfeit}
               loading={loading}
               disabled={loading}
-              style={{ flex: 1, backgroundColor: colors.error.main }}
-              contentStyle={{ height: 48 }}
+              style={[styles.actionButton, { backgroundColor: colors.error.main }]}
+              contentStyle={styles.actionButtonContent}
               buttonColor={colors.error.main}
+              textColor="#FFFFFF"
             >
               {dangerCta}
             </Button>
@@ -204,6 +228,7 @@ const styles = StyleSheet.create({
   sheet: {
     width: '100%',
     maxWidth: 500,
+    overflow: 'hidden',
   },
   header: {
     alignItems: 'center',
@@ -215,5 +240,14 @@ const styles = StyleSheet.create({
   forfeitBox: {},
   actions: {
     flexDirection: 'column',
+    width: '100%',
+  },
+  actionButton: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  actionButtonContent: {
+    height: 48,
+    justifyContent: 'center',
   },
 });

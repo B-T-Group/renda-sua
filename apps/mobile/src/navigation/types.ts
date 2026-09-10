@@ -151,6 +151,8 @@ export type ClientRootStackParamList = {
     openMessages?: boolean;
     highlightMessageId?: string;
     rate?: 'agent' | 'item';
+    /** Where Back should land when stack history is ambiguous. */
+    backTo?: 'orders' | 'home';
   };
   OrderMessages: {
     orderId: string;

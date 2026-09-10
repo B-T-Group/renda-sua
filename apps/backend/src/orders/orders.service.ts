@@ -6561,6 +6561,16 @@ export class OrdersService {
     return {
       ...withDeliveryContact(orderData),
       access_reason: accessReason,
+      // Clients need remainder for deposit UI (not a DB column)
+      ...(Number(orderData.deposit_amount) > 0
+        ? {
+            amount_due: Math.max(
+              0,
+              Number(orderData.total_amount || 0) -
+                Number(orderData.deposit_amount || 0)
+            ),
+          }
+        : {}),
     };
   }
 

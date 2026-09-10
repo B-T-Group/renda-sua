@@ -895,6 +895,11 @@ export class CheckoutPreflightService {
         fulfillmentCountry,
         groups,
       }),
+      // Hoist first-group deposit fields for single-seller checkout UIs
+      deposit_required: groups[0]?.deposit_required,
+      deposit_amount: groups[0]?.deposit_amount,
+      amount_due: groups[0]?.amount_due,
+      momo_pay_now_delivery_enabled: groups[0]?.momo_pay_now_delivery_enabled,
     };
   }
 

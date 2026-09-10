@@ -501,16 +501,41 @@ export default observer(function CartCheckoutScreen() {
     // Deposit path active when:
     // 1. Server explicitly provides deposit_amount > 0, OR
     // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
-    const serverDepositProvided = preflightConfig?.deposit_amount != null && preflightConfig.deposit_amount > 0;
+    const serverDepositProvided =
+      (preflightConfig?.deposit_amount != null &&
+        preflightConfig.deposit_amount > 0) ||
+      (preflightConfig?.groups?.[0]?.deposit_amount != null &&
+        (preflightConfig.groups[0].deposit_amount ?? 0) > 0);
     const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
     return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
   }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
 
   const depositAmount = useMemo(() => {
     if (!isDepositPath) return null;
-    const serverDeposit = preflightConfig?.deposit_amount;
+    const serverDeposit =
+      preflightConfig?.deposit_amount ??
+      preflightConfig?.groups?.[0]?.deposit_amount;
     return resolveDepositAmount(grandTotal, serverDeposit);
-  }, [isDepositPath, grandTotal, preflightConfig?.deposit_amount]);
+  }, [
+    isDepositPath,
+    grandTotal,
+    preflightConfig?.deposit_amount,
+    preflightConfig?.groups,
+  ]);
+
+  const amountDueAfterDeposit = useMemo(() => {
+    if (depositAmount == null || depositAmount <= 0) return null;
+    const serverDue =
+      preflightConfig?.amount_due ??
+      preflightConfig?.groups?.[0]?.amount_due;
+    if (serverDue != null) return Math.max(0, Number(serverDue));
+    return Math.max(0, grandTotal - depositAmount);
+  }, [
+    depositAmount,
+    grandTotal,
+    preflightConfig?.amount_due,
+    preflightConfig?.groups,
+  ]);
 
   const depositIsFloor = useMemo(() => {
     if (!depositAmount) return false;
@@ -755,7 +780,7 @@ export default observer(function CartCheckoutScreen() {
               // Pay_now full-pay gets Nest retry + onEditPhone
               isDepositOrder: outcome.isDepositOrder === true ? true : undefined,
               depositAmount: depositAmount || undefined,
-              amountDue: preflightConfig?.amount_due || undefined,
+              amountDue: amountDueAfterDeposit ?? undefined,
               currency,
             },
           },
@@ -803,6 +828,8 @@ export default observer(function CartCheckoutScreen() {
     useDifferentPhone,
     overrideCountryIso,
     overrideNationalDigits,
+    depositAmount,
+    amountDueAfterDeposit,
   ]);
 
   useEffect(() => {
