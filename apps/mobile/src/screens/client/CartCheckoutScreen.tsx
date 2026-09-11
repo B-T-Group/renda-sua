@@ -753,11 +753,7 @@ export default observer(function CartCheckoutScreen() {
       });
     }
 
-    cart.clear();
-    // Navigate to MoMo waiting screen for:
-    // 1. Deposit orders (deposit collect initiated), OR
-    // 2. Pay_now full-pay MoMo orders
-    // Non-deposit PAD/PAP MoMo must NOT enter await (would poll-timeout).
+    // Keep cart until MoMo succeeds so deposit-fail can return to checkout with items.
     const momoWaitingRequired =
       !resolvedIsStripeRail &&
       outcome.type === 'pending' &&
@@ -784,18 +780,19 @@ export default observer(function CartCheckoutScreen() {
               source: 'checkout',
               orderNumbers: outcome.orderNumbers,
               fulfillment,
-              // Only pass isDepositOrder=true for deposits (enables Back-to-checkout fail UX)
-              // Pay_now full-pay gets Nest retry + onEditPhone
               isDepositOrder: outcome.isDepositOrder === true ? true : undefined,
               depositAmount: depositAmount || undefined,
               amountDue: amountDueAfterDeposit ?? undefined,
               currency,
+              checkoutReturn: { to: 'cart-checkout' },
             },
           },
         ],
       });
       return;
     }
+
+    cart.clear();
 
     const cardAuthorized = outcome.type === 'success' && !!outcome.cardAuthorized;
     const paymentCompleted = outcome.type === 'success' && !cardAuthorized;

@@ -1022,6 +1022,15 @@ export default function PlaceOrderScreen() {
               depositAmount: depositAmount || undefined,
               amountDue: amountDueAfterDeposit ?? undefined,
               currency,
+              checkoutReturn: {
+                to: 'place-order',
+                inventoryItemId,
+                ...(initialVariantId
+                  ? { variantId: initialVariantId }
+                  : toOrderItemVariantId(variantId)
+                    ? { variantId: toOrderItemVariantId(variantId) }
+                    : {}),
+              },
             },
           },
         ],
@@ -1071,6 +1080,8 @@ export default function PlaceOrderScreen() {
     depositAmount,
     amountDueAfterDeposit,
     currency,
+    inventoryItemId,
+    initialVariantId,
   ]);
 
   if (itemLoading) {

@@ -80,6 +80,11 @@ export type OrderPlacedSuccessParams = {
   fulfillment?: 'delivery' | 'pickup' | 'shipping';
 };
 
+/** Where deposit-fail “Back to checkout” should return. */
+export type MobileMoneyCheckoutReturn =
+  | { to: 'place-order'; inventoryItemId: string; variantId?: string }
+  | { to: 'cart-checkout' };
+
 /** MoMo push pending: wait for customer to approve on their phone. */
 export type MobileMoneyAwaitingPaymentParams = {
   orderIds: string[];
@@ -97,6 +102,8 @@ export type MobileMoneyAwaitingPaymentParams = {
   amountDue?: number;
   /** Currency code (e.g. XAF). */
   currency?: string;
+  /** Deposit fail/timeout: return to Place Order or cart checkout. */
+  checkoutReturn?: MobileMoneyCheckoutReturn;
 };
 
 /** Guest shell: root stack (tabs + item detail). */
