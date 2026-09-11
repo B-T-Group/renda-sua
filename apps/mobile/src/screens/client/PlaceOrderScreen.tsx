@@ -676,6 +676,16 @@ export default function PlaceOrderScreen() {
     return deliveryFeeState.data?.deliveryFee ?? 0;
   }, [deliveryFeeState.data, fulfillment, preflightConfig]);
 
+  const pickupLocations = useMemo(() => {
+    const loc = item?.business_location;
+    if (!loc) return [];
+    const addr = loc.address;
+    const address = addr
+      ? [addr.address_line_1, addr.city, addr.state, addr.country].filter(Boolean).join(', ')
+      : undefined;
+    return [{ name: loc.name, address }];
+  }, [item]);
+
   const discountAmount = useMemo(() => {
     if (!discountCode.appliedCode || discountCode.percentage <= 0) return 0;
     const base = lineSubtotal + deliveryAmount;
@@ -1151,6 +1161,23 @@ export default function PlaceOrderScreen() {
             )}
             pickupAvailable={pickupEnabled}
             shippingAvailable={shippingEnabled}
+            pickupLocations={pickupLocations}
+            deliveryPriceLabel={
+              !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
+                ? formatCatalogMoney(deliveryAmount, currency)
+                : undefined
+            }
+            deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
+            deliveryPriceHint={
+              deliveryAddressMissing
+                ? t(
+                    'client.placeOrder.deliveryPriceAddressRequired',
+                    'Choose an address to see the delivery price.'
+                  )
+                : deliveryFeeState.error
+                  ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
+                  : undefined
+            }
           />
         ) : null}
 

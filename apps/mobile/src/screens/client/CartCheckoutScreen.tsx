@@ -362,6 +362,14 @@ export default observer(function CartCheckoutScreen() {
 
   const businessGroups = useMemo(() => [...cart.groupedByBusiness.values()] as CartLine[][], [cart.groupedByBusiness, cart.items]);
 
+  const pickupLocations = useMemo(
+    () =>
+      businessGroups.map((lines) => ({
+        name: lines[0].businessName,
+      })),
+    [businessGroups]
+  );
+
   const feeRows = useMemo(
     () =>
       [...cart.groupedByBusiness.entries()].map(([businessId, lines]) => ({
@@ -903,6 +911,21 @@ export default observer(function CartCheckoutScreen() {
             pickupAvailable={pickupEligible}
             shippingAvailable={shippingEligible}
             shippingDisabled={shippingPartial}
+            pickupLocations={pickupLocations}
+            deliveryPriceLabel={
+              !!deliveryAddressId && !feeLoading
+                ? formatCatalogMoney(deliveryAmount, currency)
+                : undefined
+            }
+            deliveryPriceLoading={fulfillment === 'delivery' && feeLoading}
+            deliveryPriceHint={
+              !deliveryAddressId
+                ? t(
+                    'client.placeOrder.deliveryPriceAddressRequired',
+                    'Choose an address to see the delivery price.'
+                  )
+                : undefined
+            }
           />
         ) : null}
 
