@@ -32,6 +32,10 @@ export interface PendingWithdrawalResolveResult {
   success: boolean;
   outcome: PendingWithdrawalOutcome;
   message: string;
+  /** Provider transaction reference when known (null if never accepted by MoMo). */
+  transaction_id: string | null;
+  /** Live provider status when checked; otherwise the resulting local transaction status. */
+  status: MobileTransactionStatus;
   data?: {
     providerStatus?: MobileTransactionStatus;
     provider?: MobilePaymentIntegrationProvider;
@@ -162,6 +166,10 @@ export class PendingWithdrawalResolveService {
           outcome: 'still_pending',
           message:
             'Withdrawal has no provider reference yet; waiting for grace period',
+          transaction_id: null,
+          status: this.statusFromLocalTx(tx, 'pending', {
+            message: 'Waiting for provider reference',
+          }),
         };
       }
     }
@@ -189,10 +197,17 @@ export class PendingWithdrawalResolveService {
       error_code: 'USER_CANCELLED',
     });
 
+    const status = this.statusFromLocalTx(tx, 'cancelled', {
+      message: 'Cancelled before provider accepted withdrawal',
+    });
     return {
       success: true,
       outcome: 'cancelled',
-      message: 'Pending withdrawal cancelled. Funds returned to available balance.',
+      message:
+        'Pending withdrawal cancelled. Funds returned to available balance.',
+      transaction_id: tx.transaction_id?.trim() || null,
+      status,
+      data: { providerStatus: status },
     };
   }
 
@@ -241,6 +256,7 @@ export class PendingWithdrawalResolveService {
 
     const normalizedStatus = this.normalizeLiveStatus(live.status);
     live = { ...live, status: normalizedStatus };
+    const transactionId = live.transactionId?.trim() || providerTxId;
 
     if (live.status === 'pending' || live.status === 'ambiguous') {
       return {
@@ -250,6 +266,8 @@ export class PendingWithdrawalResolveService {
           live.status === 'ambiguous'
             ? 'Mobile Money status is uncertain. Try again later.'
             : 'Withdrawal is still pending with Mobile Money.',
+        transaction_id: transactionId,
+        status: live,
         data: { providerStatus: live, provider },
       };
     }
@@ -265,7 +283,25 @@ export class PendingWithdrawalResolveService {
         outcome === 'paid'
           ? 'Withdrawal completed. Funds have been sent.'
           : 'Withdrawal failed. Funds returned to available balance.',
+      transaction_id: transactionId,
+      status: live,
       data: { providerStatus: live, provider },
+    };
+  }
+
+  private statusFromLocalTx(
+    tx: MobilePaymentTransaction,
+    status: MobileTransactionStatus['status'],
+    extras?: { message?: string }
+  ): MobileTransactionStatus {
+    return {
+      transactionId: tx.transaction_id?.trim() || tx.id,
+      status,
+      amount: tx.amount,
+      currency: tx.currency,
+      reference: tx.reference,
+      message: extras?.message,
+      provider: tx.provider,
     };
   }
 
