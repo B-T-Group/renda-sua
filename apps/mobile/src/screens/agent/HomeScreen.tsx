@@ -45,6 +45,7 @@ import type { AppNavScreen } from '../../navigation/AppNavigator';
 import type { RootStackParamList as AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
 import { useNotifications } from '../../hooks/useNotifications';
 import { formatCurrency } from '../../utils/formatters';
+import { initiatePaymentUserMessage } from '../../utils/initiatePaymentMessage';
 import { resolveWithdrawDefaultPhone } from '../../utils/resolveWithdrawDefaultPhone';
 import { useAgentReferredBusinesses } from '../../hooks/useAgentReferredBusinesses';
 import { useReferralProjectedPayout } from '../../hooks/useReferralProjectedPayout';
@@ -243,7 +244,10 @@ export default function HomeScreen() {
           setWalletSnack(t('accounts.withdrawSuccess', 'Withdrawal started. Your balance will update when it completes.'));
           return { success: true as const };
         }
-        return { success: false as const, message: res.message };
+        return {
+          success: false as const,
+          message: initiatePaymentUserMessage(res),
+        };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : undefined;
         return { success: false as const, message };
