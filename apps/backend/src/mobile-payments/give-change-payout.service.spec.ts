@@ -72,6 +72,7 @@ describe('GiveChangePayoutService', () => {
     });
     expect(databaseService.updateTransaction).toHaveBeenCalledWith('mobile-tx-1', {
       transaction_id: 'provider-ref-1',
+      status: 'pending',
     });
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
   });
@@ -126,5 +127,61 @@ describe('GiveChangePayoutService', () => {
       expect.objectContaining({ status: 'failed' })
     );
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+  });
+
+  it('marks failed and releases hold when initiatePayment throws', async () => {
+    mobilePaymentsService.initiatePayment.mockRejectedValue(
+      new Error('network down')
+    );
+
+    const result = await service.executeGiveChangePayout(
+      {
+        amount: 5000,
+        currency: 'XAF',
+        description: 'Auto payout',
+        customerPhone: '+237600000000',
+        accountId: 'acct-1',
+      },
+      { throwOnWithdrawalFailure: false }
+    );
+
+    expect(result.success).toBe(false);
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      'mobile-tx-1',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'INITIATION_EXCEPTION',
+      })
+    );
+    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
+  });
+
+  it('marks failed before releasing when provider returns no transaction id', async () => {
+    mobilePaymentsService.initiatePayment.mockResolvedValue({
+      success: true,
+      message: 'CREATED',
+      provider: 'freemopay',
+    });
+
+    const result = await service.executeGiveChangePayout(
+      {
+        amount: 5000,
+        currency: 'XAF',
+        description: 'Auto payout',
+        customerPhone: '+237600000000',
+        accountId: 'acct-1',
+      },
+      { throwOnWithdrawalFailure: false }
+    );
+
+    expect(result.success).toBe(false);
+    const statusCallOrder = databaseService.updateTransaction.mock.invocationCallOrder[0];
+    const releaseCallOrder =
+      accountsService.registerReleaseIfNotExists.mock.invocationCallOrder[0];
+    expect(statusCallOrder).toBeLessThan(releaseCallOrder);
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      'mobile-tx-1',
+      expect.objectContaining({ status: 'failed' })
+    );
   });
 });

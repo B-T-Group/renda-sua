@@ -61,7 +61,26 @@ export class PendingWithdrawalResolveService {
   ): Promise<PendingWithdrawalResolveResult> {
     const tx = await this.loadPendingGiveChange(id);
     await this.assertAccountOwnedByUser(tx.account_id, userId);
-    return this.resolveTransaction(tx, req, { allowImmediateCancel: true });
+    const result = await this.resolveTransaction(tx, req, {
+      allowImmediateCancel: true,
+    });
+    // Do not treat "still waiting on MoMo" as a successful resolve for users.
+    if (result.outcome === 'still_pending') {
+      throw new HttpException(
+        {
+          success: false,
+          message: result.message,
+          error: 'STILL_PENDING',
+          data: {
+            outcome: result.outcome,
+            transaction_id: result.transaction_id,
+            status: result.status,
+          },
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    return result;
   }
 
   async resolveAsSystem(
@@ -174,6 +193,12 @@ export class PendingWithdrawalResolveService {
       }
     }
 
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'cancelled',
+      error_message: 'Cancelled before provider accepted withdrawal',
+      error_code: 'USER_CANCELLED',
+    });
+
     const released = await this.accountsService.registerReleaseIfNotExists({
       accountId: tx.account_id as string,
       amount: tx.amount,
@@ -190,12 +215,6 @@ export class PendingWithdrawalResolveService {
         HttpStatus.BAD_REQUEST
       );
     }
-
-    await this.databaseService.updateTransaction(tx.id, {
-      status: 'cancelled',
-      error_message: 'Cancelled before provider accepted withdrawal',
-      error_code: 'USER_CANCELLED',
-    });
 
     const status = this.statusFromLocalTx(tx, 'cancelled', {
       message: 'Cancelled before provider accepted withdrawal',

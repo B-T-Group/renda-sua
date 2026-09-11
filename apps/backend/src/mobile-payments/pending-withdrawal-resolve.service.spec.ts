@@ -89,17 +89,21 @@ describe('PendingWithdrawalResolveService', () => {
       message: 'Cancelled before provider accepted withdrawal',
       provider: 'freemopay',
     });
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
+      status: 'cancelled',
+      error_message: 'Cancelled before provider accepted withdrawal',
+      error_code: 'USER_CANCELLED',
+    });
     expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith({
       accountId: 'acct-1',
       amount: 1000,
       referenceId: 'tx-1',
       memo: expect.stringContaining('GIVE_CHANGE release'),
     });
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
-      status: 'cancelled',
-      error_message: 'Cancelled before provider accepted withdrawal',
-      error_code: 'USER_CANCELLED',
-    });
+    const statusCallOrder = databaseService.updateTransaction.mock.invocationCallOrder[0];
+    const releaseCallOrder =
+      accountsService.registerReleaseIfNotExists.mock.invocationCallOrder[0];
+    expect(statusCallOrder).toBeLessThan(releaseCallOrder);
   });
 
   it('finalizes paid withdrawal when provider reports success', async () => {
@@ -153,7 +157,7 @@ describe('PendingWithdrawalResolveService', () => {
     expect(callbackProcessor.processFreemopayCallback).toHaveBeenCalled();
   });
 
-  it('returns still_pending when provider is still pending', async () => {
+  it('rejects user resolve with 409 when provider is still pending', async () => {
     databaseService.getTransactionById.mockResolvedValue(
       baseTx({ transaction_id: 'prov-1' })
     );
@@ -165,7 +169,33 @@ describe('PendingWithdrawalResolveService', () => {
       reference: 'P123',
     });
 
-    const result = await service.resolveForUser('tx-1', 'user-1');
+    try {
+      await service.resolveForUser('tx-1', 'user-1');
+      fail('expected HttpException');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error.getStatus()).toBe(409);
+      expect(error.getResponse()).toEqual(
+        expect.objectContaining({ error: 'STILL_PENDING' })
+      );
+    }
+    expect(callbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('system path returns still_pending when provider is still pending', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_id: 'prov-1' })
+    );
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'prov-1',
+      status: 'pending',
+      amount: 1000,
+      currency: 'XAF',
+      reference: 'P123',
+    });
+
+    const result = await service.resolveAsSystem('tx-1');
 
     expect(result.outcome).toBe('still_pending');
     expect(result.transaction_id).toBe('prov-1');
