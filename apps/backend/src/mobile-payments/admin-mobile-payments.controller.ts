@@ -24,12 +24,11 @@ import {
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
-import type {
-  FreemopayCallbackDto,
-  MyPVitCallbackDto,
-} from './mobile-payment-callback.dto';
+import {
+  buildFreemopayReplayDto,
+  buildMypvitReplayDto,
+} from './callback-replay.util';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
-import type { MobilePaymentTransaction } from './mobile-payments-database.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import type {
   MobilePaymentIntegrationProvider,
@@ -191,7 +190,11 @@ export class AdminMobilePaymentsController {
     }
 
     if (provider === 'mypvit') {
-      const dto = this.buildMypvitReplayDto(tx, live);
+      const dto = buildMypvitReplayDto(
+        tx,
+        live,
+        this.mobilePaymentsService.nationalCustomerIdForMypvit(tx.customer_phone)
+      );
       const result = await this.callbackProcessor.processMypvitCallback(dto, req);
       return {
         success: true,
@@ -200,48 +203,12 @@ export class AdminMobilePaymentsController {
       };
     }
 
-    const dto = this.buildFreemopayReplayDto(tx, live);
+    const dto = buildFreemopayReplayDto(tx, live);
     const result = await this.callbackProcessor.processFreemopayCallback(dto, req);
     return {
       success: true,
       replayed: !result.skipped,
       data: { providerStatus: live, processor: result, provider },
-    };
-  }
-
-  private buildMypvitReplayDto(
-    tx: MobilePaymentTransaction,
-    live: MobileTransactionStatus
-  ): MyPVitCallbackDto {
-    const ok = live.status === 'success';
-    return {
-      transactionId: live.transactionId || tx.transaction_id || '',
-      merchantReferenceId: tx.reference,
-      status: ok ? 'SUCCESS' : 'FAILED',
-      amount: Number(live.amount ?? tx.amount),
-      customerID: this.mobilePaymentsService.nationalCustomerIdForMypvit(
-        tx.customer_phone
-      ),
-      fees: 0,
-      chargeOwner: 'CUSTOMER',
-      transactionOperation: 'PAYMENT',
-      operator: 'MOBILE_MONEY',
-      code: ok ? 200 : 400,
-    };
-  }
-
-  private buildFreemopayReplayDto(
-    tx: MobilePaymentTransaction,
-    live: MobileTransactionStatus
-  ): FreemopayCallbackDto {
-    const ok = live.status === 'success';
-    return {
-      reference: tx.transaction_id || '',
-      externalId: tx.reference,
-      status: ok ? 'SUCCESS' : 'FAILED',
-      amount: Number(live.amount ?? tx.amount),
-      reason: ok ? undefined : live.message || 'Payment failed',
-      message: live.message,
     };
   }
 }

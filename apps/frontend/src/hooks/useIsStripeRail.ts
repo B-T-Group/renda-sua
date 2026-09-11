@@ -14,8 +14,8 @@ export interface UseIsStripeRailResult {
  * current user is on the Stripe payment rail (vs mobile money) and whether
  * their Connect account is ready for payouts.
  */
-export function useIsStripeRail(): UseIsStripeRailResult {
-  const { status, loading } = useStripeConnect();
+export function useIsStripeRail(enabled = true): UseIsStripeRailResult {
+  const { status, loading } = useStripeConnect(enabled);
 
   const isStripeRail = status?.paymentRail === 'stripe';
   const stripeReady =

@@ -3,12 +3,15 @@ import { TextInput, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Portal, Dialog, Button, Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { Order } from '../../types/agent';
+import { resolveAmountDueAfterDeposit } from '../../utils/depositResume';
 
 export interface MarkPaidCashExceptionDialogProps {
   visible: boolean;
   onDismiss: () => void;
   onConfirm: (notes: string) => Promise<void>;
   submitting: boolean;
+  order?: Order | null;
 }
 
 export function MarkPaidCashExceptionDialog({
@@ -16,10 +19,18 @@ export function MarkPaidCashExceptionDialog({
   onDismiss,
   onConfirm,
   submitting,
+  order,
 }: MarkPaidCashExceptionDialogProps) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius } = useTheme();
   const [notes, setNotes] = useState('');
+  const remainder = order ? resolveAmountDueAfterDeposit(order) : null;
+  const showRemainder =
+    !!order &&
+    (order.deposit_amount ?? 0) > 0 &&
+    order.deposit_status === 'paid' &&
+    remainder != null;
+  const currency = order?.currency || 'XAF';
 
   useEffect(() => {
     if (!visible) setNotes('');
@@ -33,10 +44,17 @@ export function MarkPaidCashExceptionDialog({
         </Dialog.Title>
         <Dialog.Content>
           <Text variant="bodyMedium" style={{ color: colors.warning.main, marginBottom: 12 }}>
-            {t('agent.orders.payAtDelivery.cashWarning', {
-              defaultValue:
-                'Use this only if the client cannot complete mobile payment at delivery. The business will need to reconcile this manually.',
-            })}
+            {showRemainder
+              ? t('agent.orders.payAtDelivery.cashWarningRemainder', {
+                  defaultValue:
+                    'Collect only the remaining {{amount}} {{currency}} in cash (deposit already paid). The business will need to reconcile this manually.',
+                  amount: remainder,
+                  currency,
+                })
+              : t('agent.orders.payAtDelivery.cashWarning', {
+                  defaultValue:
+                    'Use this only if the client cannot complete mobile payment at delivery. The business will need to reconcile this manually.',
+                })}
           </Text>
           <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: 6 }}>
             {t('agent.orders.payAtDelivery.cashNotesLabel', { defaultValue: 'Notes (optional)' })}

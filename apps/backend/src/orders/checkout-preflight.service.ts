@@ -35,6 +35,7 @@ import {
   VerificationMethod,
 } from './dto/checkout-preflight.dto';
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import { DepositCalculationService } from './deposit-calculation.service';
 import {
   DIASPORA_ERROR_CODES,
   normalizeCountryCode,
@@ -150,7 +151,8 @@ export class CheckoutPreflightService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly metaConversionsService: MetaConversionsService,
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
-    private readonly fxEstimateService: FxEstimateService
+    private readonly fxEstimateService: FxEstimateService,
+    private readonly depositCalculationService: DepositCalculationService
   ) {}
 
   async resolve(
@@ -485,12 +487,45 @@ export class CheckoutPreflightService {
           inv.item?.shipping_enabled === true &&
           this.isValidShippingPrice(inv.item?.shipping_price)
       );
-      const allowedPaymentTimings: Array<'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'> = ['pay_now'];
+      
+      // Check momo_pay_now_delivery_enabled flag for this fulfillment country
+      const momoPayNowDeliveryEnabled = await this.isMarketFlagEnabled(
+        'momo_pay_now_delivery_enabled',
+        fulfillmentCountry
+      );
+      
+      const allowedPaymentTimings: Array<'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'> = [];
+      
+      // Add pay_now if:
+      // - Rail is Stripe (always allowed), OR
+      // - Rail is MoMo AND (fulfillment is NOT delivery OR flag is enabled)
+      if (
+        rail === 'stripe' ||
+        (rail === 'mobile_money' && (fulfillment !== 'delivery' || momoPayNowDeliveryEnabled))
+      ) {
+        allowedPaymentTimings.push('pay_now');
+      }
+      
       if (allPayOnDelivery && rail !== 'stripe') allowedPaymentTimings.push('pay_at_delivery');
       if (allPayAtPickup && rail !== 'stripe') allowedPaymentTimings.push('pay_at_pickup');
 
+      // Safety: If no payment timings available (shouldn't happen in valid config), block checkout
+      if (allowedPaymentTimings.length === 0) {
+        blockers.push({
+          code: 'NO_PAYMENT_TIMING_AVAILABLE',
+          message: `No payment options are available for items from ${group.businessName || businessId}. Please contact support.`,
+        });
+      }
+
       // Validate requested payment timing
-      const requestedTiming = dto.payment_timing ?? 'pay_now';
+      // When omitted, prefer PAD/pickup over pay_now if those are available
+      const requestedTiming =
+        dto.payment_timing ??
+        (allowedPaymentTimings.includes('pay_at_delivery')
+          ? 'pay_at_delivery'
+          : allowedPaymentTimings.includes('pay_at_pickup')
+            ? 'pay_at_pickup'
+            : 'pay_now');
       if (requestedTiming === 'pay_at_delivery' && !allPayOnDelivery) {
         blockers.push({
           code: 'PAY_AT_DELIVERY_UNAVAILABLE',
@@ -650,6 +685,37 @@ export class CheckoutPreflightService {
       }
 
       const totalFee = shippingFee ?? deliveryFee ?? 0;
+      const grandTotal = subtotal + totalFee;
+
+      // Calculate deposit for MoMo + pay_at_delivery/pickup (any MM currency)
+      let depositRequired = false;
+      let depositAmount: number | undefined;
+      let amountDue: number | undefined;
+
+      const requestedOrAvailableTiming = dto.payment_timing ?? 
+        (allowedPaymentTimings.includes('pay_at_delivery') ? 'pay_at_delivery' :
+         allowedPaymentTimings.includes('pay_at_pickup') ? 'pay_at_pickup' : 'pay_now');
+
+      if (
+        rail === 'mobile_money' &&
+        (requestedOrAvailableTiming === 'pay_at_delivery' || requestedOrAvailableTiming === 'pay_at_pickup')
+      ) {
+        try {
+          const depositCalc = this.depositCalculationService.calculateDeposit(
+            grandTotal,
+            currency
+          );
+          depositRequired = true;
+          depositAmount = depositCalc.depositAmount;
+          amountDue = depositCalc.amountDue;
+        } catch (error: any) {
+          this.logger.warn(
+            `Deposit calculation failed for group ${businessId}`,
+            error?.message
+          );
+        }
+      }
+
       const location = group.inventoryRows[0]?.business_location;
       const configuredPrep =
         this.configService.get<Configuration['order']>('order')
@@ -683,7 +749,13 @@ export class CheckoutPreflightService {
         subtotal,
         delivery_fee: deliveryFee ?? shippingFee,
         is_first_order_client: isFirstOrderClient,
-        total: subtotal + totalFee,
+        total: grandTotal,
+        deposit_required: depositRequired || undefined,
+        deposit_amount: depositAmount,
+        amount_due: amountDue,
+        momo_pay_now_delivery_enabled: rail === 'mobile_money' && fulfillment === 'delivery' 
+          ? momoPayNowDeliveryEnabled 
+          : undefined,
         mobile_money_provider: mobileMoneyProvider,
         delivery_availability: availabilityByBusiness.get(businessId) ?? null,
         pickup_eligible: allPayAtPickup,
@@ -823,6 +895,11 @@ export class CheckoutPreflightService {
         fulfillmentCountry,
         groups,
       }),
+      // Hoist first-group deposit fields for single-seller checkout UIs
+      deposit_required: groups[0]?.deposit_required,
+      deposit_amount: groups[0]?.deposit_amount,
+      amount_due: groups[0]?.amount_due,
+      momo_pay_now_delivery_enabled: groups[0]?.momo_pay_now_delivery_enabled,
     };
   }
 
@@ -1104,5 +1181,49 @@ export class CheckoutPreflightService {
     if (price === null || price === undefined || price === '') return false;
     const n = Number(price);
     return Number.isFinite(n) && n >= 0;
+  }
+
+  /**
+   * Check if a market flag is enabled via application_configurations.
+   * Prefers country-specific config, falls back to NULL country default.
+   */
+  private async isMarketFlagEnabled(
+    configKey: string,
+    countryCode?: string | null
+  ): Promise<boolean> {
+    try {
+      const query = `
+        query GetMarketFlag($configKey: String!, $countryCode: String) {
+          application_configurations(
+            where: {
+              config_key: { _eq: $configKey }
+              _or: [
+                { country_code: { _eq: $countryCode } }
+                { country_code: { _is_null: true } }
+              ]
+            }
+            order_by: { country_code: desc_nulls_last }
+            limit: 1
+          ) {
+            boolean_value
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        configKey,
+        countryCode: countryCode || null,
+      });
+      const configs = (result as any).application_configurations || [];
+      if (configs.length === 0) {
+        return false;
+      }
+      return configs[0].boolean_value === true;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to fetch market flag ${configKey} for country ${countryCode}`,
+        error?.message
+      );
+      return false;
+    }
   }
 }

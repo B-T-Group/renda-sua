@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { AccountInfoRow, InitiateMobilePaymentResponse } from '../types/accountWallet';
+import { initiatePaymentUserMessage } from '../utils/initiatePaymentMessage';
 
 async function openPaymentUrlIfPresent(url: string): Promise<boolean> {
   const trimmed = url.trim();
@@ -67,7 +68,10 @@ export function useWalletAccountActions(deps: WalletAccountActionsDeps) {
           );
           return { success: true as const };
         }
-        return { success: false as const, message: res.message };
+        return {
+          success: false as const,
+          message: initiatePaymentUserMessage(res),
+        };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : undefined;
         return { success: false as const, message };

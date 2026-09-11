@@ -80,15 +80,30 @@ export type OrderPlacedSuccessParams = {
   fulfillment?: 'delivery' | 'pickup' | 'shipping';
 };
 
+/** Where deposit-fail “Back to checkout” should return. */
+export type MobileMoneyCheckoutReturn =
+  | { to: 'place-order'; inventoryItemId: string; variantId?: string }
+  | { to: 'cart-checkout' };
+
 /** MoMo push pending: wait for customer to approve on their phone. */
 export type MobileMoneyAwaitingPaymentParams = {
   orderIds: string[];
   phoneE164: string;
-  source: 'checkout' | 'pickup' | 'retry';
+  source: 'checkout' | 'pickup' | 'retry' | 'order-detail';
   /** Optional labels for success navigation after checkout. */
   orderNumbers?: string[];
   /** Passed through to OrderPlacedSuccess after checkout MoMo completes. */
   fulfillment?: 'delivery' | 'pickup' | 'shipping';
+  /** Deposit resume flow: true when paying a deposit (not full pay-now). */
+  isDepositOrder?: boolean;
+  /** Deposit amount being paid (for display). */
+  depositAmount?: number;
+  /** Remaining amount due after deposit (for display). */
+  amountDue?: number;
+  /** Currency code (e.g. XAF). */
+  currency?: string;
+  /** Deposit fail/timeout: return to Place Order or cart checkout. */
+  checkoutReturn?: MobileMoneyCheckoutReturn;
 };
 
 /** Guest shell: root stack (tabs + item detail). */
@@ -143,6 +158,8 @@ export type ClientRootStackParamList = {
     openMessages?: boolean;
     highlightMessageId?: string;
     rate?: 'agent' | 'item';
+    /** Where Back should land when stack history is ambiguous. */
+    backTo?: 'orders' | 'home';
   };
   OrderMessages: {
     orderId: string;

@@ -36,6 +36,9 @@ const ORDER_FIELDS = `
   pickup_state pickup_due_at estimated_delivery_time
   promised_fulfill_by total_amount currency
   open_risk_rank open_risk_since open_risk_type
+  deposit_amount deposit_mobile_payment_transaction_id deposit_status
+  deposit_refund_status deposit_forfeit_reason deposit_forfeited_at
+  deposit_forfeited_by_user_id deposit_refunded_at
   risk_incidents(where: { resolved_at: { _is_null: true } }) { ${INCIDENT_FIELDS} }
   client { id user { id first_name last_name email phone_number } }
   business { id name user { id first_name last_name email phone_number } }

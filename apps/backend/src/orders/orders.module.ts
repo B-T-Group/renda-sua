@@ -63,6 +63,9 @@ import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
+import { DepositCalculationService } from './deposit-calculation.service';
+import { DepositLedgerService } from './deposit-ledger.service';
+import { DepositRefundService } from './deposit-refund.service';
 
 @Module({
   imports: [
@@ -138,6 +141,9 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
     AdminOrderContactService,
     AdminOrdersService,
     WhatsAppOrderActionService,
+    DepositCalculationService,
+    DepositLedgerService,
+    DepositRefundService,
   ],
   exports: [
     OrdersService,
@@ -157,6 +163,9 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
     OrderRiskMonitorService,
     FailedDeliveriesService,
     WhatsAppOrderActionService,
+    DepositCalculationService,
+    DepositLedgerService,
+    DepositRefundService,
   ],
 })
 export class OrdersModule {}

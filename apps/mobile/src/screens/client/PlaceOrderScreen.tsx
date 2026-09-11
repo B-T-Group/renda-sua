@@ -44,7 +44,9 @@ import { RecipientPicker } from '../../components/checkout/RecipientPicker';
 import { PayerChargeSummary } from '../../components/checkout/PayerChargeSummary';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
+import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { useClientAddresses } from '../../hooks/useClientAddresses';
+import { calculateDepositFallback, resolveDepositAmount } from '../../types/deposit';
 import { useClientProfileForPlaceOrder } from '../../hooks/useClientProfileForPlaceOrder';
 import { useCheckoutOrchestrator } from '../../hooks/useCheckoutOrchestrator';
 import { useCompleteAddressPrompt } from '../../hooks/useCompleteAddressPrompt';
@@ -152,7 +154,8 @@ export default function PlaceOrderScreen() {
   const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery');
   // Delivery is the default when both options exist; confirmed immediately.
   const [hasChosenFulfillment, setHasChosenFulfillment] = useState(true);
-  const [payTiming, setPayTiming] = useState<PayTiming>('pay_now');
+  // Default to pay_at_delivery (safe default when momo_pay_now_delivery_enabled may be false)
+  const [payTiming, setPayTiming] = useState<PayTiming>('pay_at_delivery');
   const [instructions, setInstructions] = useState('');
   const [snack, setSnack] = useState<string | null>(null);
   const [deliveryScheduleOk, setDeliveryScheduleOk] = useState(true);
@@ -441,17 +444,27 @@ export default function PlaceOrderScreen() {
       return;
     }
 
+    const momoPayNowEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+
     if (fulfillment === 'pickup') {
       setPayTiming(resolvedIsStripeRail ? 'pay_now' : 'pay_at_pickup');
-    }
-    if (fulfillment === 'shipping') setPayTiming('pay_now');
-  }, [fulfillment, resolvedIsStripeRail, isDiaspora]);
-
-  useEffect(() => {
-    if (fulfillmentNeedsAddress(fulfillment) && payTiming === 'pay_at_pickup') {
+    } else if (fulfillment === 'shipping') {
       setPayTiming('pay_now');
+    } else if (fulfillment === 'delivery') {
+      // For delivery: respect momo_pay_now_delivery_enabled flag
+      if (resolvedIsStripeRail) {
+        setPayTiming('pay_now');
+      } else if (momoPayNowEnabled) {
+        // Flag enabled: keep current timing or default to pay_now if invalid
+        if (payTiming === 'pay_at_pickup') {
+          setPayTiming('pay_now');
+        }
+      } else {
+        // Flag disabled: force pay_at_delivery
+        setPayTiming('pay_at_delivery');
+      }
     }
-  }, [fulfillment, payTiming]);
+  }, [fulfillment, resolvedIsStripeRail, isDiaspora, preflightConfig?.momo_pay_now_delivery_enabled, payTiming]);
 
   const selectedAddress = useMemo(
     () => addressesForDelivery.find((a) => a.id === deliveryAddressId),
@@ -663,6 +676,16 @@ export default function PlaceOrderScreen() {
     return deliveryFeeState.data?.deliveryFee ?? 0;
   }, [deliveryFeeState.data, fulfillment, preflightConfig]);
 
+  const pickupLocations = useMemo(() => {
+    const loc = item?.business_location;
+    if (!loc) return [];
+    const addr = loc.address;
+    const address = addr
+      ? [addr.address_line_1, addr.city, addr.state, addr.country].filter(Boolean).join(', ')
+      : undefined;
+    return [{ name: loc.name, address }];
+  }, [item]);
+
   const discountAmount = useMemo(() => {
     if (!discountCode.appliedCode || discountCode.percentage <= 0) return 0;
     const base = lineSubtotal + deliveryAmount;
@@ -670,6 +693,57 @@ export default function PlaceOrderScreen() {
   }, [deliveryAmount, discountCode.appliedCode, discountCode.percentage, lineSubtotal]);
 
   const grandTotal = Math.max(0, lineSubtotal + deliveryAmount - discountAmount);
+
+  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+  
+  // BLOCKER 1 FIX: Gate deposit UI on real deposit path
+  // Deposit path is active when:
+  // 1. Server explicitly provides deposit_amount > 0, OR
+  // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
+  const isDepositPath = useMemo(() => {
+    if (isDiaspora || resolvedIsStripeRail) return false;
+    const serverDepositProvided =
+      (preflightConfig?.deposit_amount != null &&
+        preflightConfig.deposit_amount > 0) ||
+      (preflightConfig?.groups?.[0]?.deposit_amount != null &&
+        (preflightConfig.groups[0].deposit_amount ?? 0) > 0);
+    const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
+    return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
+  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
+
+  // Deposit calculation: prefer server deposit_amount, fallback to calculation.
+  const depositAmount = useMemo(() => {
+    if (!isDepositPath) return null;
+    const serverDeposit =
+      preflightConfig?.deposit_amount ??
+      preflightConfig?.groups?.[0]?.deposit_amount;
+    return resolveDepositAmount(grandTotal, serverDeposit);
+  }, [
+    isDepositPath,
+    grandTotal,
+    preflightConfig?.deposit_amount,
+    preflightConfig?.groups,
+  ]);
+
+  const amountDueAfterDeposit = useMemo(() => {
+    if (depositAmount == null || depositAmount <= 0) return null;
+    const serverDue =
+      preflightConfig?.amount_due ??
+      preflightConfig?.groups?.[0]?.amount_due;
+    if (serverDue != null) return Math.max(0, Number(serverDue));
+    return Math.max(0, grandTotal - depositAmount);
+  }, [
+    depositAmount,
+    grandTotal,
+    preflightConfig?.amount_due,
+    preflightConfig?.groups,
+  ]);
+
+  const depositIsFloor = useMemo(() => {
+    if (!depositAmount) return false;
+    const DEPOSIT_FLOOR = 150;
+    return depositAmount === DEPOSIT_FLOOR;
+  }, [depositAmount]);
 
   const showFirstDeliveryDiscount = useMemo(
     () =>
@@ -912,14 +986,16 @@ export default function PlaceOrderScreen() {
     }
 
     const orderNumber = outcome.orderNumbers[0] ?? '';
-    const momoPending =
+    // Navigate to MoMo waiting screen for:
+    // 1. Deposit orders (deposit collect initiated), OR
+    // 2. Pay_now full-pay MoMo orders
+    // Non-deposit PAD/PAP MoMo must NOT enter await (would poll-timeout).
+    const momoWaitingRequired =
       !resolvedIsStripeRail &&
-      payTiming === 'pay_now' &&
-      (outcome.type === 'pending' ||
-        (outcome.type === 'success' &&
-          outcome.paymentRail === 'mobile_money' &&
-          !outcome.cardAuthorized));
-    if (momoPending && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
+      outcome.type === 'pending' &&
+      outcome.paymentRail === 'mobile_money' &&
+      (outcome.isDepositOrder === true || payTiming === 'pay_now');
+    if (momoWaitingRequired) {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
         overrideNationalDigits
@@ -940,6 +1016,21 @@ export default function PlaceOrderScreen() {
               source: 'checkout',
               orderNumbers: outcome.orderNumbers,
               fulfillment,
+              // Only pass isDepositOrder=true for deposits (enables Back-to-checkout fail UX)
+              // Pay_now full-pay gets Nest retry + onEditPhone
+              isDepositOrder: outcome.isDepositOrder === true ? true : undefined,
+              depositAmount: depositAmount || undefined,
+              amountDue: amountDueAfterDeposit ?? undefined,
+              currency,
+              checkoutReturn: {
+                to: 'place-order',
+                inventoryItemId,
+                ...(initialVariantId
+                  ? { variantId: initialVariantId }
+                  : toOrderItemVariantId(variantId)
+                    ? { variantId: toOrderItemVariantId(variantId) }
+                    : {}),
+              },
             },
           },
         ],
@@ -986,6 +1077,11 @@ export default function PlaceOrderScreen() {
     t,
     useDifferentPhone,
     variantId,
+    depositAmount,
+    amountDueAfterDeposit,
+    currency,
+    inventoryItemId,
+    initialVariantId,
   ]);
 
   if (itemLoading) {
@@ -1076,6 +1172,23 @@ export default function PlaceOrderScreen() {
             )}
             pickupAvailable={pickupEnabled}
             shippingAvailable={shippingEnabled}
+            pickupLocations={pickupLocations}
+            deliveryPriceLabel={
+              !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
+                ? formatCatalogMoney(deliveryAmount, currency)
+                : undefined
+            }
+            deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
+            deliveryPriceHint={
+              deliveryAddressMissing
+                ? t(
+                    'client.placeOrder.deliveryPriceAddressRequired',
+                    'Choose an address to see the delivery price.'
+                  )
+                : deliveryFeeState.error
+                  ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
+                  : undefined
+            }
           />
         ) : null}
 
@@ -1149,6 +1262,16 @@ export default function PlaceOrderScreen() {
           </>
         ) : null}
 
+        {depositAmount != null && depositAmount > 0 && !isDiaspora && !resolvedIsStripeRail ? (
+          <ReservationDepositExplainer
+            depositAmount={depositAmount}
+            currency={currency}
+            isFloorAmount={depositIsFloor}
+            grandTotal={grandTotal}
+            style={{ marginBottom: spacing.sm }}
+          />
+        ) : null}
+
         <PlaceOrderSummaryCard
           thumb={thumb}
           itemName={item.item.name}
@@ -1180,6 +1303,8 @@ export default function PlaceOrderScreen() {
           discountPercentage={discountCode.percentage}
           discountAmount={discountAmount}
           grandTotal={grandTotal}
+          depositAmount={depositAmount}
+          showDepositBreakdown={depositAmount != null && depositAmount > 0}
           showTaxAtCheckoutNotice={
             preflightConfig?.tax_notice === 'calculated_at_checkout'
           }
@@ -1385,7 +1510,7 @@ export default function PlaceOrderScreen() {
         ) : null}
 
         {/* Payment timing (Pay now / Pay at delivery) */}
-        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryEnabled && !isDiaspora ? (
+        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryEnabled && !isDiaspora && momoPayNowDeliveryEnabled ? (
           <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
             <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
               {t('client.placeOrder.paymentTiming', 'Payment')}
@@ -1489,15 +1614,25 @@ export default function PlaceOrderScreen() {
           label={
             resolvedIsStripeRail
               ? t('checkout.payNow', 'Pay now')
-              : payTiming === 'pay_now'
-                ? t('checkout.payWithMoMo', 'Pay with MoMo')
-                : t('client.placeOrder.submit', 'Place order')
+              : depositAmount != null && depositAmount > 0
+                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+                    amount: depositAmount,
+                    currency,
+                  })
+                : payTiming === 'pay_now'
+                  ? t('checkout.payWithMoMo', 'Pay with MoMo')
+                  : t('client.placeOrder.submit', 'Place order')
           }
-          total={formatCatalogMoney(grandTotal, currency)}
+          total={formatCatalogMoney(
+            depositAmount != null && depositAmount > 0 ? depositAmount : grandTotal,
+            currency
+          )}
           totalLabel={
-            preflightConfig?.tax_notice === 'calculated_at_checkout'
-              ? t('checkout.totalBeforeTax', 'Total (before tax)')
-              : t('client.placeOrder.summary.total', 'Total')
+            depositAmount != null && depositAmount > 0
+              ? t('deposit.dueNow', 'Due now')
+              : preflightConfig?.tax_notice === 'calculated_at_checkout'
+                ? t('checkout.totalBeforeTax', 'Total (before tax)')
+                : t('client.placeOrder.summary.total', 'Total')
           }
           onPress={() => { if (!submitting) void onSubmit(); }}
           loading={submitting}

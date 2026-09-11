@@ -9,6 +9,16 @@ export interface AccountTransactionRow {
   created_at: string;
 }
 
+export interface PendingWithdrawalRow {
+  id: string;
+  amount: number;
+  currency: string;
+  customer_phone?: string | null;
+  transaction_id?: string | null;
+  provider?: string | null;
+  created_at: string;
+}
+
 export interface AccountInfoRow {
   id: string;
   user_id: string;
@@ -22,6 +32,7 @@ export interface AccountInfoRow {
   business_location_id?: string | null;
   business_location?: { id: string; name: string; phone?: string } | null;
   account_transactions: AccountTransactionRow[];
+  mobile_payment_transactions?: PendingWithdrawalRow[];
 }
 
 export interface AccountInfoData {
@@ -63,4 +74,17 @@ export interface InitiateMobilePaymentResponse {
   };
   message?: string;
   errorCode?: string;
+}
+
+export type PendingWithdrawalOutcome =
+  | 'cancelled'
+  | 'paid'
+  | 'failed'
+  | 'still_pending';
+
+export interface ResolvePendingWithdrawalResponse {
+  success: boolean;
+  outcome?: PendingWithdrawalOutcome;
+  message?: string;
+  error?: string;
 }

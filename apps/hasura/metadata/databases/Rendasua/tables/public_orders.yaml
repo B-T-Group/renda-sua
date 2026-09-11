@@ -20,6 +20,9 @@ object_relationships:
   - name: delivery_time_window
     using:
       foreign_key_constraint_on: delivery_time_window_id
+  - name: deposit_mobile_payment_transaction
+    using:
+      foreign_key_constraint_on: deposit_mobile_payment_transaction_id
   - name: discount_code
     using:
       foreign_key_constraint_on: discount_code_id
@@ -262,6 +265,14 @@ select_permissions:
         - is_third_party_recipient
         - is_diaspora_order
         - fulfillment_country
+        - deposit_amount
+        - deposit_mobile_payment_transaction_id
+        - deposit_status
+        - deposit_refund_status
+        - deposit_forfeit_reason
+        - deposit_forfeited_at
+        - deposit_forfeited_by_user_id
+        - deposit_refunded_at
       filter:
         assigned_agent:
           user:
@@ -356,6 +367,14 @@ select_permissions:
         - is_third_party_recipient
         - is_diaspora_order
         - fulfillment_country
+        - deposit_amount
+        - deposit_mobile_payment_transaction_id
+        - deposit_status
+        - deposit_refund_status
+        - deposit_forfeit_reason
+        - deposit_forfeited_at
+        - deposit_forfeited_by_user_id
+        - deposit_refunded_at
       filter:
         business:
           user:
@@ -453,6 +472,14 @@ select_permissions:
         - presentment_amount
         - presentment_fx_rate
         - presentment_fx_source
+        - deposit_amount
+        - deposit_mobile_payment_transaction_id
+        - deposit_status
+        - deposit_refund_status
+        - deposit_forfeit_reason
+        - deposit_forfeited_at
+        - deposit_forfeited_by_user_id
+        - deposit_refunded_at
       filter:
         client:
           user:

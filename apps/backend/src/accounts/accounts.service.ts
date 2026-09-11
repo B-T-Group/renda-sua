@@ -241,12 +241,21 @@ export class AccountsService {
     return this.registerLedgerEntryIfNotExists(request, 'release');
   }
 
+  async registerPaymentIfNotExists(
+    request: Pick<
+      TransactionRequest,
+      'accountId' | 'amount' | 'memo' | 'referenceId'
+    >
+  ): Promise<IdempotentTransactionResult> {
+    return this.registerLedgerEntryIfNotExists(request, 'payment');
+  }
+
   private async registerLedgerEntryIfNotExists(
     request: Pick<
       TransactionRequest,
       'accountId' | 'amount' | 'memo' | 'referenceId'
     >,
-    transactionType: 'deposit' | 'withdrawal' | 'hold' | 'release'
+    transactionType: 'deposit' | 'withdrawal' | 'hold' | 'release' | 'payment'
   ): Promise<IdempotentTransactionResult> {
     if (!request.referenceId) {
       return { success: false, error: 'referenceId is required' };

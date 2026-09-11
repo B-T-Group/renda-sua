@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { agentApi } from '../services/agentApi';
 import type { AccountInfoRow, AccountTransactionRow } from '../types/accountWallet';
+import { initiatePaymentUserMessage } from '../utils/initiatePaymentMessage';
 import { isLegacyWallet } from '../utils/walletAccounts';
 import { useStripeConnect } from './useStripeConnect';
 
@@ -125,7 +126,7 @@ export function useAgentXafWallet(
       phoneE164?: string,
       pin?: string
     ) => {
-      return agentApi.mobilePayments.initiate({
+      const res = await agentApi.mobilePayments.initiate({
         amount,
         currency: target.currency,
         description: 'Withdrawal',
@@ -134,6 +135,10 @@ export function useAgentXafWallet(
         transactionType: 'GIVE_CHANGE',
         withdrawalPin: pin,
       });
+      return {
+        success: res.success,
+        message: initiatePaymentUserMessage(res),
+      };
     },
     []
   );

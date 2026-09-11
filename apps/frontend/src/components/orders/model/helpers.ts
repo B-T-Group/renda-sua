@@ -82,12 +82,24 @@ export function mapTimeline(order: OrderLike): TimelineEntry[] {
 export function moneySummary(order: OrderLike): OrderMoneySummary {
   const deliveryFee =
     (order.base_delivery_fee ?? 0) + (order.per_km_delivery_fee ?? 0);
+  const depositAmount = Number(order.deposit_amount) || 0;
+  const depositPaid =
+    order.deposit_status === 'paid' && depositAmount > 0;
+  const amountDue =
+    order.amount_due != null
+      ? Math.max(0, Number(order.amount_due))
+      : depositPaid
+        ? Math.max(0, (Number(order.total_amount) || 0) - depositAmount)
+        : null;
   return {
     subtotal: order.subtotal,
     deliveryFee: deliveryFee || null,
     tax: order.tax_amount,
     total: order.total_amount,
     currency: order.currency,
+    depositAmount: depositAmount > 0 ? depositAmount : null,
+    depositStatus: order.deposit_status ?? null,
+    amountDue,
   };
 }
 

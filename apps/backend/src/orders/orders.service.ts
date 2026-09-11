@@ -120,6 +120,10 @@ import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stoc
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
+import { DepositCalculationService } from './deposit-calculation.service';
+import { DepositLedgerService } from './deposit-ledger.service';
+import { DepositRefundService } from './deposit-refund.service';
+import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -172,6 +176,7 @@ export interface GetOrderRequest {
 
 export interface RetryOrderPaymentOptions {
   stripePaymentMethod?: 'payment_sheet';
+  phoneNumber?: string;
 }
 
 export interface ClaimAvailabilityResponse {
@@ -470,6 +475,9 @@ export class OrdersService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
     private readonly foodOrdersService: FoodOrdersService,
+    private readonly depositCalculationService: DepositCalculationService,
+    private readonly depositLedgerService: DepositLedgerService,
+    private readonly depositRefundService: DepositRefundService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -813,6 +821,13 @@ export class OrdersService {
         ...restOrder
       } = order;
 
+      // Agents must not see GMV (total_amount), but need remainder when deposit is paid
+      const depositPaid =
+        order.deposit_status === 'paid' && Number(order.deposit_amount) > 0;
+      const amountDue = depositPaid
+        ? this.depositCalculationService.remainderPaymentAmount(order)
+        : undefined;
+
       // Restrict order_items to agent-allowed fields only (no name, image, brand)
       const orderItems = restOrder.order_items?.map((item: any) => {
         const {
@@ -846,6 +861,7 @@ export class OrdersService {
 
       return withDeliveryContactForFulfiller({
         ...restOrder,
+        ...(amountDue != null ? { amount_due: amountDue } : {}),
         delivery_commission: earnings.totalEarnings,
         agent_hold_amount: agentHoldAmount,
         order_items: orderItems,
@@ -3496,9 +3512,24 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
+      order as any
+    );
+
+    // Deposit already covers the full total — skip MoMo and complete
+    if (chargeAmount <= 0) {
+      await this.finalizePayAtDeliveryPaymentAndComplete(order);
+      return {
+        success: true,
+        message: 'Order covered by deposit; completed without further payment',
+        amount_due: 0,
+        deposit_amount: (order as any).deposit_amount ?? 0,
+      };
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `order ${order.order_number} (pay at delivery)`,
       provider,
@@ -3514,7 +3545,7 @@ export class OrdersService {
     });
 
     const paymentRequest = {
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `Order ${order.order_number}`,
       customerPhone: phoneNumber,
@@ -3693,9 +3724,24 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
+      order as any
+    );
+
+    // Deposit already covers the full total — skip MoMo and complete
+    if (chargeAmount <= 0) {
+      await this.finalizePayAtDeliveryPaymentAndComplete(order);
+      return {
+        success: true,
+        message: 'Order covered by deposit; completed without further payment',
+        amount_due: 0,
+        deposit_amount: (order as any).deposit_amount ?? 0,
+      };
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `order ${order.order_number} (pay at pickup)`,
       provider,
@@ -3711,7 +3757,7 @@ export class OrdersService {
     });
 
     const paymentRequest = {
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `Order ${order.order_number}`,
       customerPhone: phoneNumber,
@@ -3817,7 +3863,7 @@ export class OrdersService {
       return this.retryStripeOrderPayment(order, options);
     }
 
-    return this.retryMobileMoneyOrderPayment(order, orderId);
+    return this.retryMobileMoneyOrderPayment(order, orderId, options?.phoneNumber);
   }
 
   private async retryStripeOrderPayment(
@@ -3911,7 +3957,11 @@ export class OrdersService {
     };
   }
 
-  private async retryMobileMoneyOrderPayment(order: Orders, orderId: string) {
+  private async retryMobileMoneyOrderPayment(
+    order: Orders,
+    orderId: string,
+    phoneNumberOverride?: string
+  ) {
     const existing =
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
@@ -3929,7 +3979,7 @@ export class OrdersService {
       };
     }
 
-    const phoneNumber = order.client?.user?.phone_number || '';
+    const phoneNumber = phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Phone number is required to retry payment',
@@ -4034,6 +4084,412 @@ export class OrdersService {
   private buildOrderPaymentAttemptReference(orderNumber: string): string {
     const nonce = Math.random().toString(36).slice(2, 8);
     return `${orderNumber}-${Date.now()}-${nonce}`;
+  }
+
+  /**
+   * Client: retry deposit payment for a pending_payment order with unpaid deposit.
+   * 
+   * CRITICAL PAYMENT GUARD: Returns 409 if a prior deposit payment transaction
+   * is still pending at the provider to prevent double MoMo collect.
+   * 
+   * Only allows retry when:
+   * - Order is pending_payment with deposit_status pending or failed
+   * - MoMo XAF deposit path (pay_at_delivery or pay_at_pickup)
+   * - Order not cancelled
+   * - Prior deposit transaction is missing, failed, expired, or cancelled
+   */
+  async retryDepositPayment(
+    orderId: string,
+    phoneNumberOverride?: string
+  ) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(
+      user,
+      'client',
+      'Only clients can retry a deposit payment'
+    );
+
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.client?.user_id !== user.id) {
+      throw new HttpException(
+        'Unauthorized to retry deposit payment for this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const paymentTiming = (order as any).payment_timing as
+      | 'pay_now'
+      | 'pay_at_delivery'
+      | 'pay_at_pickup'
+      | undefined;
+    const depositStatus = (order as any).deposit_status as
+      | 'pending'
+      | 'paid'
+      | 'failed'
+      | 'refunded'
+      | 'forfeited'
+      | undefined;
+    const depositAmount = (order as any).deposit_amount as number | undefined;
+
+    if (order.current_status !== 'pending_payment') {
+      throw new HttpException(
+        'Deposit payment retry is only available when order is pending payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (
+      paymentTiming !== 'pay_at_delivery' &&
+      paymentTiming !== 'pay_at_pickup'
+    ) {
+      throw new HttpException(
+        'Deposit payment retry is only available for pay-at-delivery or pay-at-pickup orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (depositStatus === 'paid') {
+      return {
+        success: true,
+        message: 'Deposit is already paid',
+        current_status: order.current_status,
+        deposit_status: depositStatus,
+        deposit_amount: depositAmount || 0,
+        amount_due: Math.max(0, (order.total_amount || 0) - (depositAmount || 0)),
+      };
+    }
+
+    // pending = first attempt / in-flight; failed = MoMo declined — both are retryable
+    if (depositStatus !== 'pending' && depositStatus !== 'failed') {
+      throw new HttpException(
+        `Cannot retry deposit payment when deposit_status is ${depositStatus}`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (!depositAmount || depositAmount <= 0) {
+      throw new HttpException(
+        'Order does not have a deposit amount',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if ((order as any).payment_source !== 'mobile_payment') {
+      throw new HttpException(
+        'Deposit payment retry is only available for mobile payment orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const existingTxnId = (order as any).deposit_mobile_payment_transaction_id;
+    if (existingTxnId) {
+      const existingTxn = await this.mobilePaymentsDatabaseService.getTransactionById(
+        existingTxnId
+      );
+      if (existingTxn) {
+        if (existingTxn.status === 'pending') {
+          this.logger.warn(
+            `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} is still pending`
+          );
+          throw new HttpException(
+            {
+              success: false,
+              message: 'Prior deposit payment is still pending. Please wait or poll the existing transaction.',
+              code: 'DEPOSIT_PAYMENT_PENDING',
+              existing_transaction_id: existingTxnId,
+              deposit_status: depositStatus,
+            },
+            HttpStatus.CONFLICT
+          );
+        }
+        if (existingTxn.status === 'success' || (existingTxn.status as any) === 'authorized') {
+          return this.completePaidDepositFromSucceededTxn(
+            order.order_number,
+            existingTxnId
+          );
+        }
+      }
+    }
+
+    const account = await this.hasuraSystemService.getAccount(
+      order.client!.user_id,
+      order.currency
+    );
+    if (!account) {
+      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+    }
+
+    const phoneNumber =
+      phoneNumberOverride?.trim() ||
+      order.client?.user?.phone_number ||
+      '';
+    if (!phoneNumber.trim()) {
+      throw new HttpException(
+        'Phone number is required for mobile payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const momo = this.orderMomoContext(order);
+    const provider = momo.provider;
+
+    const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
+    const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
+
+    // Step 1: Create pending mobile_payment_transactions row FIRST (real FK target)
+    const depositTransaction =
+      await this.mobilePaymentsDatabaseService.createTransaction({
+        reference: depositLongReference,
+        amount: depositAmount,
+        currency: order.currency,
+        description: `Deposit retry for order ${order.order_number}`,
+        provider,
+        payment_method: 'mobile_money',
+        customer_phone: phoneNumber,
+        account_id: account.id,
+        transaction_type: 'PAYMENT',
+        payment_entity: 'order_deposit',
+        entity_id: order.order_number,
+      });
+
+    // Step 2: TOCTOU guard - CAS FK to the real transaction id before initiating payment.
+    // This prevents concurrent retries from both passing the guard and both initiating payment.
+    // Hasura _eq: null does NOT match NULL columns; use _is_null: true for null prior FK.
+    const claimDepositMutation = existingTxnId
+      ? `
+          mutation ClaimDepositRetry(
+            $orderId: uuid!,
+            $expectedPriorTxnId: uuid!,
+            $claimValue: uuid!,
+            $now: timestamptz!
+          ) {
+            update_orders(
+              where: {
+                id: { _eq: $orderId }
+                deposit_mobile_payment_transaction_id: { _eq: $expectedPriorTxnId }
+              }
+              _set: {
+                deposit_mobile_payment_transaction_id: $claimValue
+                deposit_status: "pending"
+                payment_status: "pending"
+                updated_at: $now
+              }
+            ) {
+              affected_rows
+              returning {
+                id
+                deposit_mobile_payment_transaction_id
+                deposit_status
+              }
+            }
+          }
+        `
+      : `
+          mutation ClaimDepositRetryNull(
+            $orderId: uuid!,
+            $claimValue: uuid!,
+            $now: timestamptz!
+          ) {
+            update_orders(
+              where: {
+                id: { _eq: $orderId }
+                deposit_mobile_payment_transaction_id: { _is_null: true }
+              }
+              _set: {
+                deposit_mobile_payment_transaction_id: $claimValue
+                deposit_status: "pending"
+                payment_status: "pending"
+                updated_at: $now
+              }
+            ) {
+              affected_rows
+              returning {
+                id
+                deposit_mobile_payment_transaction_id
+                deposit_status
+              }
+            }
+          }
+        `;
+
+    const claimVariables = existingTxnId
+      ? {
+          orderId: order.id,
+          expectedPriorTxnId: existingTxnId,
+          claimValue: depositTransaction.id,
+          now: new Date().toISOString(),
+        }
+      : {
+          orderId: order.id,
+          claimValue: depositTransaction.id,
+          now: new Date().toISOString(),
+        };
+
+    const claimResult = await this.hasuraSystemService.executeMutation(
+      claimDepositMutation,
+      claimVariables
+    );
+
+    if (claimResult.update_orders.affected_rows === 0) {
+      this.logger.warn(
+        `Concurrent retry-deposit-payment detected for order ${order.order_number} — FK changed since read`
+      );
+      await this.mobilePaymentsDatabaseService.updateTransaction(
+        depositTransaction.id,
+        {
+          status: 'failed',
+          error_message: 'Concurrent retry detected',
+          error_code: 'CONCURRENT_RETRY',
+        }
+      );
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Another deposit payment retry is already in progress. Please refresh and try again.',
+          code: 'CONCURRENT_RETRY_DETECTED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+
+    // Step 3: Initiate provider payment
+    const depositPaymentRequest = {
+      amount: depositAmount,
+      currency: order.currency,
+      description: `Deposit retry for order ${order.order_number}`,
+      customerPhone: phoneNumber,
+      itemCountry: momo.itemCountry ?? undefined,
+      transactionType: 'PAYMENT' as const,
+    };
+
+    const depositResult = await this.mobilePaymentsService.initiatePayment(
+      depositPaymentRequest,
+      depositShortReference,
+      user.id
+    );
+
+    if (!depositResult.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(
+        depositTransaction.id,
+        {
+          status: 'failed',
+          error_message: depositResult.message || 'Payment initiation failed',
+          error_code: depositResult.errorCode || 'INITIATION_FAILED',
+        }
+      );
+
+      const restoreMutation = existingTxnId
+        ? `
+            mutation RestoreDepositFKAfterInitiateFail(
+              $orderId: uuid!,
+              $failedTxnId: uuid!,
+              $priorTxnId: uuid!,
+              $now: timestamptz!
+            ) {
+              update_orders(
+                where: {
+                  id: { _eq: $orderId }
+                  deposit_mobile_payment_transaction_id: { _eq: $failedTxnId }
+                }
+                _set: {
+                  deposit_mobile_payment_transaction_id: $priorTxnId
+                  updated_at: $now
+                }
+              ) {
+                affected_rows
+              }
+            }
+          `
+        : `
+            mutation RestoreDepositFKToNullAfterInitiateFail(
+              $orderId: uuid!,
+              $failedTxnId: uuid!,
+              $now: timestamptz!
+            ) {
+              update_orders(
+                where: {
+                  id: { _eq: $orderId }
+                  deposit_mobile_payment_transaction_id: { _eq: $failedTxnId }
+                }
+                _set: {
+                  deposit_mobile_payment_transaction_id: null
+                  updated_at: $now
+                }
+              ) {
+                affected_rows
+              }
+            }
+          `;
+
+      const restoreVariables = existingTxnId
+        ? {
+            orderId: order.id,
+            failedTxnId: depositTransaction.id,
+            priorTxnId: existingTxnId,
+            now: new Date().toISOString(),
+          }
+        : {
+            orderId: order.id,
+            failedTxnId: depositTransaction.id,
+            now: new Date().toISOString(),
+          };
+
+      await this.hasuraSystemService.executeMutation(
+        restoreMutation,
+        restoreVariables
+      );
+
+      throw new HttpException(
+        {
+          success: false,
+          message: depositResult.message || 'Failed to initiate deposit payment',
+          error: 'DEPOSIT_INITIATION_FAILED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (depositResult.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(
+        depositTransaction.id,
+        {
+          transaction_id: depositResult.transactionId,
+        }
+      );
+    }
+
+    try {
+      await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+        'order.created',
+        { order_id: order.id, transaction_id: depositTransaction.id }
+      );
+    } catch (scheduleError: any) {
+      this.logger.error(
+        `Failed to schedule deposit timeout for order ${order.id}: ${
+          scheduleError instanceof Error
+            ? scheduleError.message
+            : String(scheduleError)
+        }`
+      );
+    }
+
+    return {
+      success: true,
+      message: `Deposit payment retry initiated. Awaiting payment of ${depositAmount} ${order.currency}`,
+      current_status: order.current_status,
+      deposit_status: 'pending',
+      deposit_amount: depositAmount,
+      amount_due: Math.max(0, (order.total_amount || 0) - depositAmount),
+      payment_transaction: {
+        success: true,
+        transaction_id: depositResult.transactionId,
+        message: `Awaiting deposit payment of ${depositAmount} ${order.currency}`,
+        mode: 'mobile_money' as const,
+      },
+    };
   }
 
   /**
@@ -4273,9 +4729,12 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
+      order as any
+    );
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `order ${order.order_number} (cash exception reconciliation)`,
       provider,
@@ -4290,7 +4749,7 @@ export class OrdersService {
     });
 
     const paymentRequest = {
-      amount: Number(order.total_amount),
+      amount: chargeAmount,
       currency: order.currency,
       description: `Order ${order.order_number} reconciliation`,
       customerPhone: phone,
@@ -5613,6 +6072,14 @@ export class OrdersService {
           acceptance_state
           acceptance_deadline_at
           acceptance_activates_at
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           grace_deadline_at
           accepted_at
           busy_extra_prep_minutes
@@ -5855,6 +6322,14 @@ export class OrdersService {
           payment_timing
           reconciliation_status
           verified_agent_delivery
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           created_at
           updated_at
           completed_at
@@ -6093,6 +6568,16 @@ export class OrdersService {
     return {
       ...withDeliveryContact(orderData),
       access_reason: accessReason,
+      // Clients need remainder for deposit UI (not a DB column)
+      ...(Number(orderData.deposit_amount) > 0
+        ? {
+            amount_due: Math.max(
+              0,
+              Number(orderData.total_amount || 0) -
+                Number(orderData.deposit_amount || 0)
+            ),
+          }
+        : {}),
     };
   }
 
@@ -6530,6 +7015,14 @@ export class OrdersService {
           payment_failed_at
           payment_failure_message
           reconciliation_status
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           completed_at
           business_id
           client_id
@@ -6715,6 +7208,14 @@ export class OrdersService {
           payment_source
           payment_timing
           reconciliation_status
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           estimated_delivery_time
           special_instructions
           business_id
@@ -6996,6 +7497,326 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Finalize deposit after successful MoMo callback.
+   * 
+   * CRITICAL: This is NOT a full order payment. Do not call finalizePayAtDeliveryPaymentAndComplete.
+   * 
+   * On deposit SUCCESS:
+   * - Credit client wallet then hold (withheld) so client cannot withdraw
+   * - Mark deposit_status = 'paid' (fail-closed if credit/hold fails)
+   * - deposit_mobile_payment_transaction_id FK already set at place-order
+   * - Transition pending_payment → pending (await merchant acceptance)
+   * - Start acceptance SLA
+   * 
+   * Settlement: At Delivered/remainder paid, release the deposit hold then debit
+   * client for FULL total (deposit + remainder) and credit merchant from full GMV.
+   */
+  async finalizeDepositAfterCallback(
+    orderNumber: string,
+    transactionDbId: string
+  ): Promise<void> {
+    try {
+      const order = await this.requireOrderDetailsByNumber(orderNumber);
+
+      if (order.current_status === 'cancelled' || order.current_status === 'failed') {
+        this.logger.warn(
+          `Ignoring deposit callback for ${order.current_status} order ${orderNumber}`
+        );
+        return;
+      }
+
+      if ((order as any).deposit_status === 'paid') {
+        this.logger.warn(
+          `Deposit already captured for order ${orderNumber}`
+        );
+        // Repair older credits that never created a hold (pre-hold deploy / race).
+        await this.repairPaidDepositHoldIfMissing(order, transactionDbId);
+        return;
+      }
+
+      // Verify transactionDbId matches the FK set at place-order
+      const depositTxnId = (order as any).deposit_mobile_payment_transaction_id;
+      if (transactionDbId && depositTxnId && transactionDbId !== depositTxnId) {
+        throw new Error(
+          `Transaction ID mismatch for deposit callback on ${orderNumber}: ` +
+          `callback=${transactionDbId}, order FK=${depositTxnId}`
+        );
+      }
+
+      const depositAmount = (order as any).deposit_amount || 0;
+      const totalAmount = order.total_amount || 0;
+      const amountDue = Math.max(0, totalAmount - depositAmount);
+      const ledgerTxnId = this.depositLedgerReferenceId(
+        transactionDbId,
+        depositTxnId
+      );
+
+      // CRITICAL ORDER: Credit then hold wallet FIRST, then mark deposit as paid.
+      // Fail closed: if credit or hold fails, do not mark deposit as paid.
+      if (depositAmount && depositAmount > 0) {
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new Error(
+            `No account found for client user ${order.client.user_id} currency ${order.currency}`
+          );
+        }
+
+        await this.depositLedgerService.creditAndHoldDeposit({
+          clientAccountId: clientAccount.id,
+          amount: depositAmount,
+          orderNumber: order.order_number,
+          depositTransactionId: ledgerTxnId,
+        });
+      }
+
+      // Only mark deposit as paid AFTER wallet credit+hold succeeds
+      // Note: deposit_mobile_payment_transaction_id FK already set at place-order
+      const finalizeMutation = `
+        mutation FinalizeDeposit(
+          $orderId: uuid!,
+          $now: timestamptz!
+        ) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: {
+              deposit_status: "paid"
+              current_status: pending
+              payment_status: "pending"
+              updated_at: $now
+            }
+          ) {
+            id
+            order_number
+            current_status
+            deposit_amount
+            total_amount
+          }
+        }
+      `;
+
+      await this.hasuraSystemService.executeMutation(finalizeMutation, {
+        orderId: order.id,
+        now: new Date().toISOString(),
+      });
+
+      this.logger.log(
+        `Deposit ${depositAmount} captured and held for order ${orderNumber}. ` +
+        `Amount due: ${amountDue}. Transitioning to pending (awaiting merchant).`
+      );
+
+      // Settlement math: At Delivered, full order total will be debited from client wallet
+      // and settled to merchant, so deposit is counted once in GMV, not double-paid to merchant.
+
+      // Start acceptance SLA now that deposit is captured
+      try {
+        await this.orderAcceptanceService.startAcceptanceSla(order.id);
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to start acceptance SLA after deposit for ${order.id}: ${error?.message}`
+        );
+      }
+
+      // Send order.created message to SQS queue after deposit success
+      try {
+        await this.orderQueueService.sendOrderCreatedMessage(order.id);
+      } catch (error) {
+        this.logger.error(
+          `Failed to send order.created message to SQS after deposit: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+
+      // Send order created notifications
+      try {
+        const notificationsEnabled =
+          this.configService.get('notification').orderStatusChangeEnabled;
+        if (notificationsEnabled) {
+          const orderWithDetails = await this.requireOrderDetailsByNumber(
+            order.order_number
+          );
+          const notifyAddress = resolveOrderNotificationAddress(orderWithDetails);
+          if (
+            orderWithDetails?.business_location?.business?.name &&
+            orderWithDetails?.business_location?.business?.user?.email &&
+            notifyAddress
+          ) {
+            const businessId =
+              orderWithDetails.business_id ||
+              orderWithDetails.business_location?.business?.id ||
+              orderWithDetails.business?.id;
+            const acceptanceNotify = await this.resolveAcceptanceNotifyFields(
+              businessId,
+              (orderWithDetails as any).acceptance_state,
+              (orderWithDetails as any).acceptance_activates_at
+            );
+
+            const notificationData: NotificationData = {
+              orderId: orderWithDetails.id,
+              clientId: orderWithDetails.client?.id,
+              clientUserId: orderWithDetails.client?.user?.id ?? undefined,
+              businessUserId:
+                orderWithDetails.business_location?.business?.user?.id ??
+                orderWithDetails.business?.user_id ??
+                undefined,
+              orderNumber: orderWithDetails.order_number,
+              clientName: `${orderWithDetails.client?.user?.first_name || ''} ${
+                orderWithDetails.client?.user?.last_name || ''
+              }`.trim(),
+              clientEmail: orderWithDetails.client?.user?.email,
+              clientPreferredLanguage: (
+                orderWithDetails.client?.user as { preferred_language?: string }
+              )?.preferred_language,
+              businessName: orderWithDetails.business_location.business.name,
+              businessLocationName: orderWithDetails.business_location?.name || undefined,
+              businessEmail: orderWithDetails.business_location.business.user.email,
+              businessPreferredLanguage: (
+                orderWithDetails.business_location.business.user as {
+                  preferred_language?: string;
+                }
+              )?.preferred_language,
+              businessVerified:
+                orderWithDetails.business_location.business.is_verified || false,
+              agentPreferredLanguage: (
+                orderWithDetails.assigned_agent?.user as {
+                  preferred_language?: string;
+                }
+              )?.preferred_language,
+              orderStatus: 'pending',
+              orderItems:
+                orderWithDetails.order_items?.map((item: any) => ({
+                  name: item.item_name || 'Unknown Item',
+                  quantity: item.quantity || 0,
+                  unitPrice: item.unit_price || 0,
+                  totalPrice: item.total_price || 0,
+                })) || [],
+              subtotal: orderWithDetails.subtotal || 0,
+              deliveryFee:
+                (orderWithDetails.base_delivery_fee || 0) +
+                (orderWithDetails.per_km_delivery_fee || 0),
+              fastDeliveryFee: orderWithDetails.per_km_delivery_fee || 0,
+              taxAmount: orderWithDetails.tax_amount || 0,
+              totalAmount: orderWithDetails.total_amount || 0,
+              currency: orderWithDetails.currency || 'USD',
+              deliveryAddress: this.formatAddress(notifyAddress as Addresses),
+              estimatedDeliveryTime:
+                orderWithDetails.estimated_delivery_time || undefined,
+              specialInstructions: orderWithDetails.special_instructions || undefined,
+              fulfillmentMethod:
+                (orderWithDetails as any).fulfillment_method || undefined,
+              fulfillmentTiming:
+                (orderWithDetails as any).fulfillment_timing || undefined,
+              ...acceptanceNotify,
+            };
+
+            await this.notificationsService.sendOrderCreatedNotifications(
+              notificationData
+            );
+          }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to send order created notifications after deposit: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to finalize deposit for order ${orderNumber}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  private async completePaidDepositFromSucceededTxn(
+    orderNumber: string,
+    transactionDbId: string
+  ): Promise<{
+    success: true;
+    message: string;
+    current_status: string;
+    deposit_status: 'paid';
+  }> {
+    this.logger.warn(
+      `Replaying deposit finalize for order ${orderNumber} — prior txn ${transactionDbId} succeeded but deposit still pending`
+    );
+    await this.finalizeDepositAfterCallback(orderNumber, transactionDbId);
+    return {
+      success: true,
+      message: 'Deposit payment completed',
+      current_status: 'pending',
+      deposit_status: 'paid',
+    };
+  }
+
+  private depositLedgerReferenceId(
+    transactionDbId: string,
+    orderDepositTxnId?: string
+  ): string {
+    const referenceId = transactionDbId || orderDepositTxnId;
+    if (!referenceId) {
+      throw new Error('Missing deposit mobile payment transaction id');
+    }
+    return referenceId;
+  }
+
+  /** Idempotent catch-up when deposit was credited without a hold. */
+  private async repairPaidDepositHoldIfMissing(
+    order: any,
+    transactionDbId?: string
+  ): Promise<void> {
+    const depositAmount = Number(order.deposit_amount) || 0;
+    const depositTxnId =
+      transactionDbId || order.deposit_mobile_payment_transaction_id;
+    if (depositAmount <= 0 || !depositTxnId) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (!clientAccount?.id) return;
+    try {
+      await this.depositLedgerService.ensureDepositHeld({
+        clientAccountId: clientAccount.id,
+        amount: depositAmount,
+        orderNumber: order.order_number,
+        depositTransactionId: depositTxnId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to repair deposit hold for order ${order.order_number}: ${error?.message}`
+      );
+    }
+  }
+
+  /**
+   * Move paid reservation deposit from withheld → available before settlement debit.
+   * Idempotent via deposit txn release reference.
+   */
+  private async releasePaidDepositHoldIfNeeded(
+    order: Orders,
+    clientAccountId: string
+  ): Promise<void> {
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    const depositStatus = (order as any).deposit_status;
+    const depositTxnId = (order as any)
+      .deposit_mobile_payment_transaction_id as string | undefined;
+    if (depositStatus !== 'paid' || depositAmount <= 0 || !depositTxnId) {
+      return;
+    }
+    await this.depositLedgerService.releaseDepositToAvailable({
+      clientAccountId,
+      amount: depositAmount,
+      orderNumber: order.order_number,
+      depositTransactionId: depositTxnId,
+    });
   }
 
   private isTerminalOrderForPaymentFinalize(order: {
@@ -7693,6 +8514,15 @@ export class OrdersService {
       }
     }
 
+    // MUST-FIX 3: Handle deposit refund/forfeit on cancellation
+    await this.handleDepositOnCancellation(
+      order,
+      orderId,
+      previousStatus,
+      cancelledBy,
+      notes
+    );
+
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
@@ -7704,6 +8534,113 @@ export class OrdersService {
       this.logger.error(
         `Failed to send order.cancelled message to SQS: ${error?.message}`
       );
+    }
+  }
+
+  /**
+   * Handle deposit refund/forfeit when order is cancelled.
+   * 
+   * Product rules:
+   * - Business cancel / platform / delivery failure → refund (even after lock)
+   * - Customer cancel / refuse / no-show:
+   *   - Before lock point → refund
+   *   - After lock point → forfeit with reason code
+   * - Lock point: delivery = out_for_delivery, pickup = ready_for_pickup
+   */
+  private async handleDepositOnCancellation(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    cancelledBy: 'client' | 'business' | 'system',
+    notes?: string
+  ): Promise<void> {
+    const depositStatus = (order as any).deposit_status;
+    const depositAmount = (order as any).deposit_amount;
+    
+    // Only process if deposit was captured
+    if (depositStatus !== 'paid' || !depositAmount || depositAmount <= 0) {
+      return;
+    }
+
+    const fulfillmentMethod = (order as any).fulfillment_method as
+      | 'delivery'
+      | 'pickup'
+      | 'shipping';
+
+    // Determine if after lock point
+    const afterLock = this.depositCalculationService.isAfterRefundLockPoint(
+      fulfillmentMethod,
+      previousStatus
+    );
+
+    // Business/system cancel → always refund (even after lock)
+    if (cancelledBy === 'business' || cancelledBy === 'system') {
+      try {
+        const refundResult = await this.depositRefundService.refundDeposit(
+          orderId,
+          { allowAfterLock: true }
+        );
+        if (!refundResult.success) {
+          this.logger.error(
+            `Deposit refund failed for ${cancelledBy} cancel of order ${orderId}: ${refundResult.message}`
+          );
+        } else {
+          this.logger.log(
+            `Deposit refund initiated for ${cancelledBy} cancel of order ${orderId}`
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to process deposit refund for ${cancelledBy} cancel: ${error.message}`
+        );
+      }
+      return;
+    }
+
+    // Customer cancel
+    if (cancelledBy === 'client') {
+      if (!afterLock) {
+        // Before lock → refund (release hold to available)
+        try {
+          const refundResult = await this.depositRefundService.refundDeposit(
+            orderId
+          );
+          if (!refundResult.success) {
+            this.logger.error(
+              `Deposit refund failed for client cancel (before lock) of order ${orderId}: ${refundResult.message}`
+            );
+          } else {
+            this.logger.log(
+              `Deposit refunded for client cancel (before lock) of order ${orderId}`
+            );
+          }
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to process deposit refund for client cancel (before lock): ${error.message}`
+          );
+        }
+      } else {
+        // After lock → forfeit to Rendasua HQ
+        try {
+          const forfeitResult = await this.depositRefundService.forfeitDeposit(
+            orderId,
+            'customer_cancel_after_lock'
+          );
+          if (!forfeitResult.success) {
+            this.logger.error(
+              `Deposit forfeit failed for client cancel (after lock) of order ${orderId}: ${forfeitResult.message}`
+            );
+          } else {
+            this.logger.log(
+              `Deposit forfeited for client cancel (after lock) of order ${orderId}`
+            );
+          }
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to process deposit forfeit for client cancel (after lock): ${error.message}`
+          );
+        }
+      }
     }
   }
 
@@ -7863,6 +8800,45 @@ export class OrdersService {
     );
   }
 
+  /**
+   * Handle deposit payment failure — mark deposit_status = failed and schedule
+   * payment-timeout cleanup. Order stays pending_payment so the client can retry.
+   */
+  async onDepositPaymentFailed(
+    orderId: string,
+    failureMessage?: string | null
+  ): Promise<void> {
+    try {
+      const mutation = `
+        mutation MarkDepositFailed($orderId: uuid!, $now: timestamptz!) {
+          update_orders_by_pk(
+            pk_columns: { id: $orderId }
+            _set: {
+              deposit_status: "failed"
+              updated_at: $now
+            }
+          ) {
+            id
+          }
+        }
+      `;
+      await this.hasuraSystemService.executeMutation(mutation, {
+        orderId,
+        now: new Date().toISOString(),
+      });
+      this.logger.log(`Marked deposit_status=failed for order ${orderId}`);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to mark deposit_status=failed for order ${orderId}:`,
+        error
+      );
+    }
+    await this.orderSystemJobsService.onOrderPaymentFailed(
+      orderId,
+      failureMessage
+    );
+  }
+
   private async getAgentStatus(agentId: string): Promise<string> {
     const query = `
       query GetAgentStatus($agentId: uuid!) {
@@ -7875,6 +8851,52 @@ export class OrdersService {
       agentId,
     });
     return (result as any).agents_by_pk?.status ?? 'active';
+  }
+
+  /**
+   * Check if a market-level application_configurations flag is enabled
+   * @param configKey - The config key to check
+   * @param countryCode - Optional country code for country-specific config
+   * @returns true if enabled, false otherwise (default false)
+   */
+  private async isMarketFlagEnabled(
+    configKey: string,
+    countryCode?: string | null
+  ): Promise<boolean> {
+    try {
+      const query = `
+        query GetMarketFlag($configKey: String!, $countryCode: String) {
+          application_configurations(
+            where: {
+              config_key: { _eq: $configKey }
+              _or: [
+                { country_code: { _eq: $countryCode } }
+                { country_code: { _is_null: true } }
+              ]
+            }
+            order_by: { country_code: desc_nulls_last }
+            limit: 1
+          ) {
+            boolean_value
+          }
+        }
+      `;
+      const result = await this.hasuraSystemService.executeQuery(query, {
+        configKey,
+        countryCode: countryCode || null,
+      });
+      const configs = (result as any).application_configurations || [];
+      if (configs.length === 0) {
+        return false; // Default to false if config not found
+      }
+      return configs[0].boolean_value === true;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to read market flag ${configKey} for ${countryCode}:`,
+        error
+      );
+      return false; // Default to false on error
+    }
   }
 
   /**
@@ -8056,6 +9078,14 @@ export class OrdersService {
           payment_source
           payment_timing
           payment_status
+          deposit_amount
+          deposit_mobile_payment_transaction_id
+          deposit_status
+          deposit_refund_status
+          deposit_forfeit_reason
+          deposit_forfeited_at
+          deposit_forfeited_by_user_id
+          deposit_refunded_at
           business {
             user_id
           }
@@ -9010,6 +10040,31 @@ export class OrdersService {
       paymentTiming,
     });
 
+    // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
+    // Block MoMo pay_now + delivery when flag is false (default)
+    if (
+      paymentTiming === 'pay_now' &&
+      fulfillmentMethod === 'delivery' &&
+      railResolution.rail === 'mobile_money'
+    ) {
+      const momoPayNowDeliveryEnabled =
+        await this.isMarketFlagEnabled(
+          'momo_pay_now_delivery_enabled',
+          fulfillmentCountry
+        );
+      if (!momoPayNowDeliveryEnabled) {
+        throw new HttpException(
+          {
+            success: false,
+            message:
+              'Pay now with mobile money is not available for delivery in this market. Please choose pay at delivery or store pickup.',
+            error: 'MOMO_PAY_NOW_DELIVERY_NOT_ENABLED',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
     if (
       (paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup') &&
@@ -9077,10 +10132,37 @@ export class OrdersService {
       )
         ? 'estimated'
         : 'none';
-    const current_status =
-      paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup'
-        ? 'pending'
-        : 'pending_payment';
+    
+    // Helper: Determine deposit rail for PAD/PAP orders using same logic everywhere
+    // Must be called AFTER payment_source and payer_payment_rail are set
+    const getDepositRailForPayAtTiming = (): 'mobile_money' | 'stripe' | 'wallet' => {
+      if (paymentRail === 'stripe') return 'stripe';
+      // For PAD/PAP, payer_payment_rail is derived from payment_source
+      // payment_source = wallet for zero/negative orders, else mobile_payment
+      // This ensures status decision and deposit collect use identical logic
+      const payment_source: 'wallet' | 'mobile_payment' | 'credit_card' =
+        canPayWithWallet || isZeroOrNegativeOrder
+          ? 'wallet'
+          : 'mobile_payment';
+      return payment_source === 'wallet' ? 'wallet' : 'mobile_money';
+    };
+    
+    // Determine initial status for pay_at_delivery/pickup orders
+    // When deposit is required, start in pending_payment (not pending)
+    // to avoid triggering acceptance SLA before deposit is paid
+    let current_status: string;
+    if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
+      const railForDepositCheck = getDepositRailForPayAtTiming();
+      const requiresDeposit = this.depositCalculationService.isDepositRequired(
+        paymentTiming,
+        railForDepositCheck
+      );
+      // If deposit required, start in pending_payment until deposit is captured
+      current_status = requiresDeposit ? 'pending_payment' : 'pending';
+    } else {
+      current_status = 'pending_payment';
+    }
+    
     const business_id = businessInventories[0].business_location.business_id;
     const payment_method =
       paymentTiming === 'pay_at_delivery'
@@ -9460,22 +10542,181 @@ export class OrdersService {
       }
     }
 
-    // Send order.created message to SQS queue
-    try {
-      await this.orderQueueService.sendOrderCreatedMessage(order.id);
-    } catch (error) {
-      // Log but don't throw - order creation should succeed
-      this.logger.error(
-        `Failed to send order.created message to SQS: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+    // Send order.created message to SQS queue for all creates EXCEPT MoMo deposit-required
+    // MoMo deposit-required orders get this message after deposit SUCCESS in finalizeDepositAfterCallback
+    // (Stripe, pay_now, wallet, non-XAF PAD/pickup all send immediately)
+    const isMomoDepositRequiredCreate =
+      (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') &&
+      current_status === 'pending_payment';
+    
+    if (!isMomoDepositRequiredCreate) {
+      try {
+        await this.orderQueueService.sendOrderCreatedMessage(order.id);
+      } catch (error) {
+        // Log but don't throw - order creation should succeed
+        this.logger.error(
+          `Failed to send order.created message to SQS: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
     }
 
     if (
       paymentTiming === 'pay_at_delivery' ||
       paymentTiming === 'pay_at_pickup'
     ) {
+      // MoMo reservation deposit collection for pay_at_delivery/pickup
+      // Use same rail logic as status decision above
+      const railForDeposit = getDepositRailForPayAtTiming();
+      const requiresDeposit = this.depositCalculationService.isDepositRequired(
+        paymentTiming,
+        railForDeposit
+      );
+
+      if (requiresDeposit) {
+        try {
+          const depositCalc = this.depositCalculationService.calculateDeposit(
+            total_amount,
+            currency
+          );
+
+          // Generate references: long for DB, short for MyPVIT (≤15 chars)
+          const depositLongReference = `${order.order_number}-DEP-${Date.now()}`;
+          const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
+
+          const depositPaymentRequest = {
+            amount: depositCalc.depositAmount,
+            currency,
+            description: `Deposit for order ${order.order_number}`,
+            customerPhone: phoneNumber,
+            itemCountry: itemCountry ?? undefined,
+            transactionType: 'PAYMENT' as const,
+          };
+
+          // Initiate MoMo payment (short reference ≤15 chars for MyPVIT)
+          const depositResult = await this.mobilePaymentsService.initiatePayment(
+            depositPaymentRequest,
+            depositShortReference,
+            user.id
+          );
+
+          if (!depositResult.success) {
+            // Deposit collection failed - compensate and throw
+            await this.compensateUnpaidCreate(
+              order.id,
+              'Create failed: deposit collection initiation error',
+              { allowPendingUnpaid: true }
+            );
+            throw new HttpException(
+              {
+                success: false,
+                message: depositResult.message || 'Failed to initiate deposit payment',
+                error: 'DEPOSIT_INITIATION_FAILED',
+              },
+              HttpStatus.BAD_REQUEST
+            );
+          }
+
+          // Create mobile_payment_transaction for deposit (long reference in DB)
+          const depositTransaction =
+            await this.mobilePaymentsDatabaseService.createTransaction({
+              reference: depositLongReference,
+              amount: depositCalc.depositAmount,
+              currency,
+              description: `Deposit for order ${order.order_number}`,
+              provider,
+              payment_method: 'mobile_money',
+              customer_phone: phoneNumber,
+              account_id: account.id,
+              transaction_type: 'PAYMENT',
+              payment_entity: 'order_deposit',
+              entity_id: order.order_number,
+              transaction_id: depositResult.transactionId,
+            });
+
+          // Update order with deposit info (keep status pending_payment until callback)
+          const updateDepositMutation = `
+            mutation UpdateOrderDeposit(
+              $orderId: uuid!,
+              $depositAmount: numeric!,
+              $depositMobilePaymentTransactionId: uuid!,
+              $currentStatus: order_status!
+            ) {
+              update_orders_by_pk(
+                pk_columns: { id: $orderId }
+                _set: {
+                  deposit_amount: $depositAmount
+                  deposit_mobile_payment_transaction_id: $depositMobilePaymentTransactionId
+                  deposit_status: "pending"
+                  current_status: $currentStatus
+                }
+              ) {
+                id
+              }
+            }
+          `;
+
+          await this.hasuraSystemService.executeMutation(updateDepositMutation, {
+            orderId: order.id,
+            depositAmount: depositCalc.depositAmount,
+            depositMobilePaymentTransactionId: depositTransaction.id,
+            currentStatus: 'pending_payment',
+          });
+
+          // Schedule deposit timeout (order waits for deposit callback)
+          try {
+            await this.waitAndExecuteScheduleService.schedulePaymentTimeout(
+              'order.created',
+              { order_id: order.id, transaction_id: depositTransaction.id }
+            );
+          } catch (scheduleError) {
+            this.logger.error(
+              `Failed to schedule deposit timeout for order ${order.id}: ${
+                scheduleError instanceof Error
+                  ? scheduleError.message
+                  : String(scheduleError)
+              }`
+            );
+          }
+
+          return {
+            ...order,
+            current_status: 'pending_payment',
+            total_amount: total_amount,
+            deposit_amount: depositCalc.depositAmount,
+            deposit_status: 'pending',
+            amount_due: depositCalc.amountDue,
+            delivery_window: deliveryWindow,
+            payment_source: 'mobile_money' as const,
+            payment_rail: 'mobile_money' as const,
+            payment_transaction: {
+              success: true,
+              transaction_id: depositResult.transactionId,
+              message: `Awaiting deposit payment of ${depositCalc.depositAmount} ${currency}`,
+              mode: 'mobile_money' as const,
+            },
+            database_transaction: {
+              id: depositTransaction.id,
+              reference: depositLongReference,
+              status: 'pending',
+            },
+          };
+        } catch (error: any) {
+          this.logger.error(
+            `Deposit collection failed for order ${order.order_number}:`,
+            error
+          );
+          await this.compensateUnpaidCreate(
+            order.id,
+            'Create failed: deposit collection error',
+            { allowPendingUnpaid: true }
+          );
+          throw error;
+        }
+      }
+
+      // No deposit required (non-XAF, Stripe rail, etc.) - proceed with normal deferred payment
       // Deferred-payment orders are not finalized at placement time, but we still want the
       // "order placed" notifications to go out immediately.
       try {
@@ -10323,6 +11564,23 @@ export class OrdersService {
         throw new Error('Order not found');
       }
 
+      // Calculate client hold amount
+      // CRITICAL: When deposit is paid, client only owes the remainder (total - deposit)
+      // The deposit is already on the platform ledger (client wallet was credited on deposit SUCCESS)
+      // Merchant settlement will still use the FULL order total (deposit + remainder)
+      const depositAmount = (order as any).deposit_amount || 0;
+      const depositStatus = (order as any).deposit_status;
+      const depositPaid = depositStatus === 'paid';
+      
+      const clientHoldAmount = depositPaid
+        ? Math.max(0, order.total_amount - depositAmount)
+        : order.total_amount;
+
+      this.logger.log(
+        `Creating order hold for ${orderId}: total=${order.total_amount}, ` +
+        `deposit=${depositAmount} (${depositStatus}), client_hold=${clientHoldAmount}`
+      );
+
       // Create a new order hold
       const createOrderHoldMutation = `
         mutation CreateOrderHold(
@@ -10365,7 +11623,7 @@ export class OrdersService {
           orderId: order.id,
           clientId: order.client_id,
           currency: order.currency,
-          clientHoldAmount: order.total_amount,
+          clientHoldAmount,
           deliveryFees: deliveryFees ?? 0,
         }
       );
@@ -10821,6 +12079,8 @@ export class OrdersService {
               HttpStatus.NOT_FOUND
             );
           }
+          // Release withheld deposit into available before full GMV payment debit
+          await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
           await this.accountsService.registerTransaction({
             accountId: clientAccount.id,
             amount: subtotalPortion,

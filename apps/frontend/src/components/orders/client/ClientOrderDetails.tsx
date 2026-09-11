@@ -131,15 +131,53 @@ export const ClientOrderDetails: React.FC<ClientOrderDetailsProps> = ({
       <Stack spacing={2}>
         <Timeline entries={vm.timeline} />
         <ProductList items={vm.items} />
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Typography variant="subtitle1" fontWeight={700}>
-            {t('orders.total', 'Total')}:
-          </Typography>
-          <MoneyDisplay
-            amount={vm.summary.total}
-            currency={vm.summary.currency}
-            variant="h6"
-          />
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+          {vm.summary.depositAmount != null &&
+          (vm.summary.depositStatus === 'paid' ||
+            vm.summary.depositStatus === 'pending' ||
+            vm.summary.depositStatus === 'failed') ? (
+            <Stack direction="row" spacing={1} alignItems="baseline">
+              <Typography variant="body2" color="text.secondary">
+                {vm.summary.depositStatus === 'paid'
+                  ? t('deposit.summaryPaid', 'Deposit paid')
+                  : vm.summary.depositStatus === 'failed'
+                    ? t('deposit.summaryFailed', 'Deposit failed — retry')
+                    : t('deposit.summaryDue', 'Deposit due')}
+                :
+              </Typography>
+              <MoneyDisplay
+                amount={vm.summary.depositAmount}
+                currency={vm.summary.currency}
+                variant="body2"
+              />
+            </Stack>
+          ) : null}
+          {vm.summary.amountDue != null &&
+          vm.summary.depositStatus === 'paid' &&
+          order.payment_status !== 'paid' ? (
+            <Stack direction="row" spacing={1} alignItems="baseline">
+              <Typography variant="subtitle1" fontWeight={700}>
+                {t('deposit.amountDue', 'Amount due')}:
+              </Typography>
+              <MoneyDisplay
+                amount={vm.summary.amountDue}
+                currency={vm.summary.currency}
+                variant="h6"
+                color="primary"
+              />
+            </Stack>
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <Typography variant="subtitle1" fontWeight={700}>
+                {t('orders.total', 'Total')}:
+              </Typography>
+              <MoneyDisplay
+                amount={vm.summary.total}
+                currency={vm.summary.currency}
+                variant="h6"
+              />
+            </Box>
+          )}
         </Box>
         {extras}
       </Stack>

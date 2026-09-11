@@ -17,10 +17,16 @@ export function useBusinessAvailability(enabled: boolean) {
   const [mutating, setMutating] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!apiClient || !enabled) {
+    if (!apiClient) {
       setLoading(false);
       return;
     }
+    // Stay loading until enabled so the UI does not flash default accepting=true.
+    if (!enabled) {
+      setLoading(true);
+      return;
+    }
+    setLoading(true);
     try {
       const res = await apiClient.get<BusinessReliability>(
         '/business/reliability'

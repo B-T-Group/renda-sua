@@ -255,6 +255,10 @@ interface OrderSummaryProps {
   showTaxAtCheckoutNotice?: boolean;
   /** True when the platform cannot currently deliver this order. */
   deliveryUnavailable?: boolean;
+  /** MoMo reservation deposit due now (from preflight). */
+  depositAmount?: number | null;
+  /** Remaining after deposit (from preflight). */
+  amountDueAfterDeposit?: number | null;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -293,6 +297,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   error,
   showTaxAtCheckoutNotice = false,
   deliveryUnavailable = false,
+  depositAmount = null,
+  amountDueAfterDeposit = null,
 }) => {
   const { t } = useTranslation();
   const hasDealPrices = resolvedPricing.hasDeal;
@@ -686,6 +692,31 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               {formatCurrency(totalAfterDiscount, selectedItem.item.currency)}
             </Typography>
           </Box>
+
+          {depositAmount != null && depositAmount > 0 ? (
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('deposit.dueNow', 'Due now (deposit)')}
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  {formatCurrency(depositAmount, selectedItem.item.currency)}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('deposit.amountDue', 'Amount due')}
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  {formatCurrency(
+                    amountDueAfterDeposit ??
+                      Math.max(0, totalAfterDiscount - depositAmount),
+                    selectedItem.item.currency
+                  )}
+                </Typography>
+              </Box>
+            </Box>
+          ) : null}
         </Box>
 
         {/* Trust Indicators */}
@@ -1869,6 +1900,19 @@ const PlaceOrderPage: React.FC = () => {
   const deliveryUnavailable =
     !isPickupOrder &&
     checkoutPreflight?.delivery_availability?.available === false;
+
+  const preflightDeposit = useMemo(() => {
+    const group = checkoutPreflight?.groups?.[0];
+    const deposit = Number(group?.deposit_amount) || 0;
+    if (!group?.deposit_required || deposit <= 0) {
+      return { depositAmount: null as number | null, amountDue: null as number | null };
+    }
+    return {
+      depositAmount: deposit,
+      amountDue:
+        group.amount_due != null ? Number(group.amount_due) : null,
+    };
+  }, [checkoutPreflight?.groups]);
 
   // Funnel analytics: track the first time the unavailable notice is shown.
   const unavailableTrackedRef = useRef(false);
@@ -3126,6 +3170,8 @@ const PlaceOrderPage: React.FC = () => {
               error={error}
               showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
               deliveryUnavailable={deliveryUnavailable}
+              depositAmount={preflightDeposit.depositAmount}
+              amountDueAfterDeposit={preflightDeposit.amountDue}
             />
 
             {/* Fixed bottom nav */}
@@ -4020,6 +4066,8 @@ const PlaceOrderPage: React.FC = () => {
               error={error}
               showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
               deliveryUnavailable={deliveryUnavailable}
+              depositAmount={preflightDeposit.depositAmount}
+              amountDueAfterDeposit={preflightDeposit.amountDue}
             />
           </Grid>
         </Grid>

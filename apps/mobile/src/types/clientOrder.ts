@@ -51,8 +51,20 @@ export interface CreatedOrder {
     message?: string;
     mode?: string;
   };
+  /** Database transaction ID (for MoMo deposit collect). */
+  database_transaction?: {
+    id?: string;
+  };
   payment_status?: string;
   current_status?: string;
+  /** Deposit amount charged (XAF). Present on MoMo deposit orders. #275 merged @ 3ed60fab. */
+  deposit_amount?: number | null;
+  /** Remaining amount due after deposit (= total − deposit). #275 merged @ 3ed60fab. */
+  amount_due?: number | null;
+  /** Deposit payment status (backend enum: none|pending|paid|failed|forfeited|refunded; pending_payment is current_status). #275 merged @ 3ed60fab. */
+  deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
+  /** Database transaction ID for MoMo deposit collect (FK to mobile_payment_transactions). #275 merged @ 3ed60fab. */
+  deposit_mobile_payment_transaction_id?: string | null;
 }
 
 export interface CreateOrderResponse {

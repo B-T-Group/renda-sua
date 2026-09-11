@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
+import { normalizeProviderMessage } from './normalize-provider-message';
 
 export interface MobilePaymentTransaction {
   id: string;
@@ -24,6 +25,7 @@ export interface MobilePaymentTransaction {
     | 'claim_order'
     | 'rental_booking'
     | 'order_cash_reconciliation'
+    | 'order_deposit'
     | 'token'
     | 'phone_verification';
   entity_id?: string;
@@ -41,6 +43,8 @@ export interface CreateTransactionData {
   customer_phone?: string;
   customer_email?: string;
   account_id?: string;
+  /** Provider reference (e.g. Freemopay `reference`) so callbacks can look up the row. */
+  transaction_id?: string;
   transaction_type?: 'PAYMENT' | 'GIVE_CHANGE';
   payment_entity?:
     | 'order'
@@ -48,6 +52,7 @@ export interface CreateTransactionData {
     | 'claim_order'
     | 'rental_booking'
     | 'order_cash_reconciliation'
+    | 'order_deposit'
     | 'token'
     | 'phone_verification';
   entity_id?: string;
@@ -56,7 +61,8 @@ export interface CreateTransactionData {
 export interface UpdateTransactionData {
   status?: 'pending' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
-  error_message?: string;
+  /** May arrive as bilingual provider object; coerced to string before write. */
+  error_message?: string | Record<string, unknown> | null;
   error_code?: string;
 }
 
@@ -168,6 +174,14 @@ export class MobilePaymentsDatabaseService {
         id,
         data: {
           ...data,
+          ...(data.error_message !== undefined
+            ? {
+                error_message: normalizeProviderMessage(
+                  data.error_message,
+                  'Payment failed'
+                ),
+              }
+            : {}),
           updated_at: new Date().toISOString(),
         },
       };
@@ -211,6 +225,7 @@ export class MobilePaymentsDatabaseService {
             error_code
             created_at
             updated_at
+            entity_id
           }
         }
       `;
@@ -837,6 +852,57 @@ export class MobilePaymentsDatabaseService {
       return response.mobile_payment_transactions;
     } catch (error) {
       this.logger.error('Failed to get mobile payment transactions:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Pending GIVE_CHANGE withdrawals for wallet reconcile / cron.
+   */
+  async getPendingGiveChangeWithdrawals(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<MobilePaymentTransaction[]> {
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
+    const query = `
+      query GetPendingGiveChangeWithdrawals {
+        mobile_payment_transactions(
+          where: {
+            status: { _eq: "pending" }
+            transaction_type: { _eq: "GIVE_CHANGE" }
+          }
+          order_by: { created_at: asc }
+          limit: ${limit}
+          offset: ${offset}
+        ) {
+          id
+          reference
+          amount
+          currency
+          description
+          provider
+          payment_method
+          status
+          transaction_id
+          account_id
+          transaction_type
+          payment_entity
+          customer_phone
+          customer_email
+          error_message
+          error_code
+          created_at
+          updated_at
+          entity_id
+        }
+      }
+    `;
+    try {
+      const response = await this.hasuraService.executeQuery(query);
+      return response.mobile_payment_transactions;
+    } catch (error) {
+      this.logger.error('Failed to get pending GIVE_CHANGE withdrawals:', error);
       throw error;
     }
   }

@@ -19,6 +19,10 @@ import type { OrderData } from '../../hooks/useOrderById';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import {
+  isDepositPaid,
+  remainingAfterDeposit,
+} from '../../utils/depositRemainder';
 
 interface RequestPayAtDeliveryPaymentDialogProps {
   open: boolean;
@@ -41,6 +45,10 @@ export default function RequestPayAtDeliveryPaymentDialog({
   const [error, setError] = useState<string | null>(null);
 
   const clientPhone = order.client?.user?.phone_number?.trim() || '';
+  const currency = order.currency || 'XAF';
+  const depositPaid = isDepositPaid(order);
+  const remainder = remainingAfterDeposit(order);
+  const depositAmount = Number(order.deposit_amount) || 0;
 
   const effectivePhone = useMemo(() => {
     if (useDifferentPhone) return overridePhoneNumber.trim();
@@ -75,7 +83,7 @@ export default function RequestPayAtDeliveryPaymentDialog({
   return (
     <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="sm">
       <DialogTitle>
-        {t('orders.paymentTiming.label', 'When do you want to pay?')}
+        {t('orderActions.requestPayment', 'Request payment')}
       </DialogTitle>
       <DialogContent>
         {!isPayAtDelivery ? (
@@ -87,12 +95,45 @@ export default function RequestPayAtDeliveryPaymentDialog({
           </Alert>
         ) : (
           <Alert severity="info" sx={{ mb: 2 }}>
-            {t(
-              'orders.payAtDelivery.agentInitiateHelp',
-              'Send a mobile payment request to the client. Once they approve it, the order will complete automatically.'
-            )}
+            {depositPaid
+              ? t(
+                  'orders.payAtDelivery.requestHelpRemainder',
+                  'The client already paid a deposit of {{deposit}} {{currency}}. Request the remaining {{amount}} {{currency}}.',
+                  {
+                    deposit: depositAmount,
+                    amount: remainder,
+                    currency,
+                  }
+                )
+              : t(
+                  'orders.payAtDelivery.agentInitiateHelp',
+                  'Send a mobile payment request to the client. Once they approve it, the order will complete automatically.'
+                )}
           </Alert>
         )}
+
+        {depositPaid ? (
+          <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, mb: 2 }}>
+            <Stack spacing={0.5}>
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="body2" color="text.secondary">
+                  {t('deposit.summaryPaid', 'Deposit paid')}
+                </Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {depositAmount} {currency}
+                </Typography>
+              </Stack>
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="subtitle2" fontWeight={700}>
+                  {t('deposit.requestAmount', 'Amount to request')}
+                </Typography>
+                <Typography variant="subtitle2" fontWeight={700} color="primary.main">
+                  {remainder} {currency}
+                </Typography>
+              </Stack>
+            </Stack>
+          </Paper>
+        ) : null}
 
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -195,7 +236,13 @@ export default function RequestPayAtDeliveryPaymentDialog({
           onClick={handleSubmit}
           disabled={loading || !isPayAtDelivery || !effectivePhone}
         >
-          {t('orderActions.requestPayment', 'Request payment')}
+          {depositPaid
+            ? t(
+                'orderActions.requestPaymentAmount',
+                'Request {{amount}} {{currency}}',
+                { amount: remainder, currency }
+              )
+            : t('orderActions.requestPayment', 'Request payment')}
         </Button>
       </DialogActions>
     </Dialog>

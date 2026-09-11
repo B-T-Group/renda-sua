@@ -5,6 +5,7 @@ import {
   MOMO_POLL_TIMEOUT_MS,
   resolveMomoPaymentStatuses,
   type MomoPaymentPollPhase,
+  type ResolveMomoPaymentOptions,
 } from '../utils/momoPaymentPoll';
 
 export type MobileMoneyPollState =
@@ -13,7 +14,10 @@ export type MobileMoneyPollState =
   | { phase: 'failed' }
   | { phase: 'timeout' };
 
-export function useMobileMoneyPaymentPoll(orderIds: string[]) {
+export function useMobileMoneyPaymentPoll(
+  orderIds: string[],
+  options?: ResolveMomoPaymentOptions
+) {
   const [state, setState] = useState<MobileMoneyPollState>({ phase: 'waiting' });
   const [error, setError] = useState<string | null>(null);
   const [restartToken, setRestartToken] = useState(0);
@@ -21,6 +25,9 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
   const idsKey = orderIds.join(',');
   const orderIdsRef = useRef(orderIds);
   orderIdsRef.current = orderIds;
+  const expectDeposit = options?.expectDeposit;
+  const expectDepositRef = useRef(expectDeposit);
+  expectDepositRef.current = expectDeposit;
 
   const stop = useCallback(() => {
     stoppedRef.current = true;
@@ -35,13 +42,20 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
 
   const checkOnce = useCallback(async (): Promise<MomoPaymentPollPhase> => {
     const ids = orderIdsRef.current;
-    const statuses = await Promise.all(
+    const orders = await Promise.all(
       ids.map(async (id) => {
         const order = await agentApi.orders.getById(id);
-        return order.payment_status;
+        return {
+          payment_status: order.payment_status,
+          deposit_status: order.deposit_status,
+          deposit_amount: order.deposit_amount,
+          deposit_mobile_payment_transaction_id: order.deposit_mobile_payment_transaction_id,
+        };
       })
     );
-    return resolveMomoPaymentStatuses(statuses);
+    return resolveMomoPaymentStatuses(orders, {
+      expectDeposit: expectDepositRef.current,
+    });
   }, []);
 
   useEffect(() => {
@@ -80,7 +94,7 @@ export function useMobileMoneyPaymentPoll(orderIds: string[]) {
       stoppedRef.current = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [idsKey, restartToken, checkOnce, orderIds.length]);
+  }, [idsKey, restartToken, checkOnce, orderIds.length, expectDeposit]);
 
   return { state, error, stop, restart };
 }

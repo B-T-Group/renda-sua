@@ -127,6 +127,14 @@ function UserAccountsScreenBase() {
     setTopUpOpen(true);
   }, []);
 
+  const handlePendingResolved = useCallback(
+    (message: string) => {
+      actions.setSnack(message);
+      void refetch();
+    },
+    [actions, refetch]
+  );
+
   const withdrawDefaultPhone = resolveWithdrawDefaultPhone({
     isLocationAccount: !!activeAccount && !isLegacyWallet(activeAccount),
     locationPhone: activeAccount?.business_location?.phone,
@@ -148,6 +156,7 @@ function UserAccountsScreenBase() {
         onViewTransactions={openTransactions}
         onWithdraw={openWithdraw}
         onTopUp={openTopUp}
+        onPendingResolved={handlePendingResolved}
       />
     ));
 

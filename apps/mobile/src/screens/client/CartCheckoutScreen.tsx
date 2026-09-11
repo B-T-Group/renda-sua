@@ -55,8 +55,10 @@ import { PayerChargeSummary } from '../../components/checkout/PayerChargeSummary
 import { CartCheckoutSummaryCard } from '../../components/cart/CartCheckoutSummaryCard';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
+import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
 import { pickMobileMoneyDefaultCountry, validateOrderPaymentPhone, validateOrderPaymentPhoneForCountry } from '../../utils/placeOrderPhoneValidation';
+import { calculateDepositFallback, resolveDepositAmount } from '../../types/deposit';
 import { alignCatalogAddressToCscFields } from '../../utils/addressRegionMatch';
 import { getCountryDisplayName } from '../../utils/phoneCountryOptions';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
@@ -137,7 +139,8 @@ export default observer(function CartCheckoutScreen() {
   // Delivery is the default when both options exist; confirmed immediately.
   const [hasChosenFulfillment, setHasChosenFulfillment] = useState(true);
   const [couponExpanded, setCouponExpanded] = useState(false);
-  const [payTiming, setPayTiming] = useState<PayTiming>('pay_now');
+  // Default to pay_at_delivery (safe default when momo_pay_now_delivery_enabled may be false)
+  const [payTiming, setPayTiming] = useState<PayTiming>('pay_at_delivery');
   const [instructions, setInstructions] = useState('');
   const [snack, setSnack] = useState<string | null>(null);
   const [deliveryScheduleOk, setDeliveryScheduleOk] = useState(true);
@@ -242,6 +245,10 @@ export default observer(function CartCheckoutScreen() {
   const fulfillmentConfirmed =
     !(pickupEligible || shippingEligible) || hasChosenFulfillment;
 
+  // Diaspora orders require Stripe pay-now only
+  const diasporaContext = preflightConfig?.diaspora;
+  const isDiaspora = requiresStripePayNow(diasporaContext);
+
   // Sticky latch: preflight only returns delivery_availability for delivery
   // fulfillment. Keep Delivery grayed out after auto-switching to pickup.
   const [deliveryUnavailable, setDeliveryUnavailable] = useState(false);
@@ -299,15 +306,28 @@ export default observer(function CartCheckoutScreen() {
       setPayTiming('pay_now');
       return;
     }
-    
+
+    const momoPayNowEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+
     if (fulfillment === 'pickup') {
       setPayTiming(resolvedIsStripeRail ? 'pay_now' : 'pay_at_pickup');
     } else if (fulfillment === 'shipping') {
       setPayTiming('pay_now');
-    } else if (payTiming === 'pay_at_pickup') {
-      setPayTiming('pay_now');
+    } else if (fulfillment === 'delivery') {
+      // For delivery: respect momo_pay_now_delivery_enabled flag
+      if (resolvedIsStripeRail) {
+        setPayTiming('pay_now');
+      } else if (momoPayNowEnabled) {
+        // Flag enabled: keep current timing or default to pay_now if invalid
+        if (payTiming === 'pay_at_pickup') {
+          setPayTiming('pay_now');
+        }
+      } else {
+        // Flag disabled: force pay_at_delivery
+        setPayTiming('pay_at_delivery');
+      }
     }
-  }, [fulfillment, payTiming, resolvedIsStripeRail, isDiaspora]);
+  }, [fulfillment, resolvedIsStripeRail, isDiaspora, preflightConfig?.momo_pay_now_delivery_enabled, payTiming]);
 
   useEffect(() => {
     setDeliveryScheduleOk(true);
@@ -341,6 +361,14 @@ export default observer(function CartCheckoutScreen() {
   }, []);
 
   const businessGroups = useMemo(() => [...cart.groupedByBusiness.values()] as CartLine[][], [cart.groupedByBusiness, cart.items]);
+
+  const pickupLocations = useMemo(
+    () =>
+      businessGroups.map((lines) => ({
+        name: lines[0].businessName,
+      })),
+    [businessGroups]
+  );
 
   const feeRows = useMemo(
     () =>
@@ -473,6 +501,56 @@ export default observer(function CartCheckoutScreen() {
   }, [deliveryAmount, discountCode.appliedCode, discountCode.percentage, singleBusiness, subtotal]);
   const grandTotal = Math.max(0, subtotal + deliveryAmount - discountAmount);
 
+  // Deposit path detection: only show deposit UI when actually on deposit path
+  // (server provides deposit_amount OR pay-at-delivery/pickup mode active)
+  const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
+  const isDepositPath = useMemo(() => {
+    if (isDiaspora || resolvedIsStripeRail) return false;
+    // Deposit path active when:
+    // 1. Server explicitly provides deposit_amount > 0, OR
+    // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
+    const serverDepositProvided =
+      (preflightConfig?.deposit_amount != null &&
+        preflightConfig.deposit_amount > 0) ||
+      (preflightConfig?.groups?.[0]?.deposit_amount != null &&
+        (preflightConfig.groups[0].deposit_amount ?? 0) > 0);
+    const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
+    return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
+  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
+
+  const depositAmount = useMemo(() => {
+    if (!isDepositPath) return null;
+    const serverDeposit =
+      preflightConfig?.deposit_amount ??
+      preflightConfig?.groups?.[0]?.deposit_amount;
+    return resolveDepositAmount(grandTotal, serverDeposit);
+  }, [
+    isDepositPath,
+    grandTotal,
+    preflightConfig?.deposit_amount,
+    preflightConfig?.groups,
+  ]);
+
+  const amountDueAfterDeposit = useMemo(() => {
+    if (depositAmount == null || depositAmount <= 0) return null;
+    const serverDue =
+      preflightConfig?.amount_due ??
+      preflightConfig?.groups?.[0]?.amount_due;
+    if (serverDue != null) return Math.max(0, Number(serverDue));
+    return Math.max(0, grandTotal - depositAmount);
+  }, [
+    depositAmount,
+    grandTotal,
+    preflightConfig?.amount_due,
+    preflightConfig?.groups,
+  ]);
+
+  const depositIsFloor = useMemo(() => {
+    if (!depositAmount) return false;
+    const DEPOSIT_FLOOR = 150;
+    return depositAmount === DEPOSIT_FLOOR;
+  }, [depositAmount]);
+
   const payAtDeliveryAllowed = useMemo(() => cart.items.every((l) => l.itemData.payOnDeliveryEnabled), [cart.items]);
 
   const wizardPhase = useMemo((): 'loading' | 'address' | 'checkout' => {
@@ -557,10 +635,6 @@ export default observer(function CartCheckoutScreen() {
   }, [savingProfilePhone]);
 
   const onAddPhonePress = useCallback(() => setAddPhoneDialogVisible(true), []);
-
-  // Diaspora orders require Stripe pay-now only
-  const diasporaContext = preflightConfig?.diaspora;
-  const isDiaspora = requiresStripePayNow(diasporaContext);
 
   /**
    * Payment rail resolution (server-authoritative):
@@ -679,15 +753,13 @@ export default observer(function CartCheckoutScreen() {
       });
     }
 
-    cart.clear();
-    const momoPending =
+    // Keep cart until MoMo succeeds so deposit-fail can return to checkout with items.
+    const momoWaitingRequired =
       !resolvedIsStripeRail &&
-      payTiming === 'pay_now' &&
-      (outcome.type === 'pending' ||
-        (outcome.type === 'success' &&
-          outcome.paymentRail === 'mobile_money' &&
-          !outcome.cardAuthorized));
-    if (momoPending && outcome.type !== 'error' && outcome.type !== 'busy' && outcome.type !== 'cancelled') {
+      outcome.type === 'pending' &&
+      outcome.paymentRail === 'mobile_money' &&
+      (outcome.isDepositOrder === true || payTiming === 'pay_now');
+    if (momoWaitingRequired) {
       const overrideValidated = validateOrderPaymentPhoneForCountry(
         overrideCountryIso,
         overrideNationalDigits
@@ -708,12 +780,19 @@ export default observer(function CartCheckoutScreen() {
               source: 'checkout',
               orderNumbers: outcome.orderNumbers,
               fulfillment,
+              isDepositOrder: outcome.isDepositOrder === true ? true : undefined,
+              depositAmount: depositAmount || undefined,
+              amountDue: amountDueAfterDeposit ?? undefined,
+              currency,
+              checkoutReturn: { to: 'cart-checkout' },
             },
           },
         ],
       });
       return;
     }
+
+    cart.clear();
 
     const cardAuthorized = outcome.type === 'success' && !!outcome.cardAuthorized;
     const paymentCompleted = outcome.type === 'success' && !cardAuthorized;
@@ -754,6 +833,8 @@ export default observer(function CartCheckoutScreen() {
     useDifferentPhone,
     overrideCountryIso,
     overrideNationalDigits,
+    depositAmount,
+    amountDueAfterDeposit,
   ]);
 
   useEffect(() => {
@@ -827,6 +908,21 @@ export default observer(function CartCheckoutScreen() {
             pickupAvailable={pickupEligible}
             shippingAvailable={shippingEligible}
             shippingDisabled={shippingPartial}
+            pickupLocations={pickupLocations}
+            deliveryPriceLabel={
+              !!deliveryAddressId && !feeLoading
+                ? formatCatalogMoney(deliveryAmount, currency)
+                : undefined
+            }
+            deliveryPriceLoading={fulfillment === 'delivery' && feeLoading}
+            deliveryPriceHint={
+              !deliveryAddressId
+                ? t(
+                    'client.placeOrder.deliveryPriceAddressRequired',
+                    'Choose an address to see the delivery price.'
+                  )
+                : undefined
+            }
           />
         ) : null}
 
@@ -1109,7 +1205,7 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryAllowed && !isDiaspora ? (
+        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryAllowed && !isDiaspora && momoPayNowDeliveryEnabled ? (
           <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
             <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
               {t('client.placeOrder.paymentTiming', 'Payment')}
@@ -1165,6 +1261,16 @@ export default observer(function CartCheckoutScreen() {
           )
         ) : null}
 
+        {depositAmount != null && depositAmount > 0 && !isDiaspora && !resolvedIsStripeRail ? (
+          <ReservationDepositExplainer
+            depositAmount={depositAmount}
+            currency={currency}
+            isFloorAmount={depositIsFloor}
+            grandTotal={grandTotal}
+            style={{ marginBottom: spacing.sm }}
+          />
+        ) : null}
+
         <CartCheckoutSummaryCard
           currency={currency}
           subtotal={subtotal}
@@ -1185,6 +1291,8 @@ export default observer(function CartCheckoutScreen() {
           discountAmount={discountAmount}
           showTaxAtCheckout={preflightConfig?.tax_notice === 'calculated_at_checkout'}
           grandTotal={grandTotal}
+          depositAmount={depositAmount}
+          showDepositBreakdown={depositAmount != null && depositAmount > 0}
         />
 
         {/* Payment method (country-locked) - driven by preflight, not client country */}
@@ -1272,7 +1380,12 @@ export default observer(function CartCheckoutScreen() {
           >
             {resolvedIsStripeRail
               ? t('checkout.payNow', 'Pay now')
-              : t('checkout.payWithMoMo', 'Pay with MoMo')}
+              : depositAmount != null && depositAmount > 0
+                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+                    amount: depositAmount,
+                    currency,
+                  })
+                : t('checkout.payWithMoMo', 'Pay with MoMo')}
           </Button>
           {isRecipientDraftIncomplete(someoneElseReceiving, recipient) ? (
             <Text variant="bodySmall" style={{ color: colors.text.secondary, textAlign: 'center' }}>

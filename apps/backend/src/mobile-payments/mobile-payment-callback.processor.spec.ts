@@ -430,3 +430,228 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     });
   });
 });
+
+describe('MobilePaymentCallbackProcessor order_deposit', () => {
+  const databaseService = {
+    getTransactionByReference: jest.fn(),
+    logCallback: jest.fn(),
+    updateTransaction: jest.fn(),
+  };
+  const accountsService = {
+    hasTransactionForReference: jest.fn(),
+    registerTransaction: jest.fn(),
+  };
+  const mockOrderDepositHandler = {
+    supportsPaymentEntity: (e: string) => e === 'order_deposit',
+    onPaymentSuccess: jest.fn(),
+    onPaymentFailure: jest.fn(),
+    finalizeCashReconciliationAfterPayment: jest.fn(),
+  };
+  const paymentCallbackRegistry = {
+    getHandlers: jest.fn().mockReturnValue([mockOrderDepositHandler]),
+  };
+  const mobilePaymentsService = {
+    assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+  };
+
+  let processor: MobilePaymentCallbackProcessor;
+
+  const orderDepositTx: MobilePaymentTransaction = {
+    id: '44444444-4444-4444-4444-444444444444',
+    reference: 'DEP12345678abcd',
+    amount: 10000,
+    currency: 'XAF',
+    status: 'pending',
+    account_id: '55555555-5555-5555-5555-555555555555',
+    transaction_type: 'PAYMENT',
+    payment_entity: 'order_deposit',
+    entity_id: 'ORD123456',
+    provider: 'mypvit',
+    payment_method: 'mobile_money',
+    created_at: '2026-09-09T00:00:00.000Z',
+    updated_at: '2026-09-09T00:00:00.000Z',
+  } as MobilePaymentTransaction;
+
+  const successCallback = {
+    transactionId: 'provider-deposit-1',
+    merchantReferenceId: 'DEP12345678abcd',
+    status: 'SUCCESS' as const,
+    amount: 10000,
+    customerID: '+237600000000',
+    fees: 0,
+    chargeOwner: 'MERCHANT',
+    transactionOperation: 'PAYMENT',
+    operator: 'MTN',
+    code: 200,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    processor = new MobilePaymentCallbackProcessor(
+      databaseService as never,
+      accountsService as never,
+      paymentCallbackRegistry as never,
+      mobilePaymentsService as never
+    );
+    databaseService.getTransactionByReference.mockResolvedValue(orderDepositTx);
+    databaseService.logCallback.mockResolvedValue(undefined);
+    databaseService.updateTransaction.mockResolvedValue(undefined);
+    mockOrderDepositHandler.onPaymentSuccess.mockResolvedValue(undefined);
+  });
+
+  it('skips processor wallet credit for order_deposit, delegates to handler only', async () => {
+    await processor.processMypvitCallback(successCallback);
+
+    // Should NOT credit via registerTransaction with referenceId=tx.id
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    expect(accountsService.hasTransactionForReference).not.toHaveBeenCalled();
+    
+    // Should still call handler which does the single credit
+    expect(mockOrderDepositHandler.onPaymentSuccess).toHaveBeenCalledWith(
+      orderDepositTx
+    );
+    
+    // Should mark transaction success
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      orderDepositTx.id,
+      {
+        status: 'success',
+        transaction_id: 'provider-deposit-1',
+      }
+    );
+  });
+
+  it('fails closed when order_deposit handler throws during finalize', async () => {
+    const finalizeError = new Error('Order deposit finalization failed');
+    mockOrderDepositHandler.onPaymentSuccess.mockRejectedValue(finalizeError);
+
+    await expect(processor.processMypvitCallback(successCallback)).rejects.toThrow(
+      'Order deposit finalization failed'
+    );
+
+    // Should NOT mark transaction as success when handler fails
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('does not credit processor wallet in retry for already-success order_deposit', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...orderDepositTx,
+      status: 'success',
+    });
+
+    const result = await processor.processMypvitCallback(successCallback);
+
+    expect(result.skipped).toBe(true);
+    // Should NOT credit via processor
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    expect(accountsService.hasTransactionForReference).not.toHaveBeenCalled();
+    // Should still retry handler side effects
+    expect(mockOrderDepositHandler.onPaymentSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'success' })
+    );
+  });
+});
+
+describe('MobilePaymentCallbackProcessor Freemopay lookup', () => {
+  const depositTx: MobilePaymentTransaction = {
+    id: '11111111-1111-4111-8111-111111111111',
+    reference: 'ORD-DEP-123',
+    amount: 150,
+    currency: 'XAF',
+    description: 'Deposit',
+    provider: 'freemopay',
+    payment_method: 'mobile_money',
+    status: 'pending',
+    transaction_id: '942b4b0d-3cf1-484e-8509-eca52cb15678',
+    account_id: 'acct-1',
+    transaction_type: 'PAYMENT',
+    payment_entity: 'order_deposit',
+    entity_id: 'ORD-1',
+    created_at: '2026-09-09T00:00:00.000Z',
+    updated_at: '2026-09-09T00:00:00.000Z',
+  };
+
+  const databaseService = {
+    getTransactionByTransactionId: jest.fn(),
+    getTransactionByReference: jest.fn(),
+    getTransactionById: jest.fn(),
+    logCallback: jest.fn(),
+    updateTransaction: jest.fn(),
+  };
+  const accountsService = {
+    hasTransactionForReference: jest.fn(),
+    registerTransaction: jest.fn(),
+  };
+  const onPaymentSuccess = jest.fn();
+  const paymentCallbackRegistry = {
+    getHandlers: jest.fn().mockReturnValue([
+      {
+        supportsPaymentEntity: (e: string) => e === 'order_deposit',
+        onPaymentSuccess,
+        onPaymentFailure: jest.fn(),
+        finalizeCashReconciliationAfterPayment: jest.fn(),
+      },
+    ]),
+  };
+  const mobilePaymentsService = {
+    assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+  };
+
+  let processor: MobilePaymentCallbackProcessor;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    processor = new MobilePaymentCallbackProcessor(
+      databaseService as never,
+      accountsService as never,
+      paymentCallbackRegistry as never,
+      mobilePaymentsService as never
+    );
+    databaseService.logCallback.mockResolvedValue(undefined);
+    databaseService.updateTransaction.mockResolvedValue(undefined);
+    accountsService.hasTransactionForReference.mockResolvedValue(false);
+    accountsService.registerTransaction.mockResolvedValue({ success: true });
+  });
+
+  it('finds the row by Freemopay provider reference', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(depositTx);
+
+    const result = await processor.processFreemopayCallback({
+      reference: depositTx.transaction_id as string,
+      status: 'SUCCESS',
+    });
+
+    expect(result.received).toBe(true);
+    expect(onPaymentSuccess).toHaveBeenCalled();
+    expect(databaseService.getTransactionById).not.toHaveBeenCalled();
+  });
+
+  it('falls back to merchantRef when provider id is missing', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(null);
+    databaseService.getTransactionByReference.mockImplementation(
+      async (ref: string) => (ref === depositTx.reference ? depositTx : null)
+    );
+
+    await processor.processFreemopayCallback({
+      reference: '942b4b0d-3cf1-484e-8509-eca52cb15678',
+      merchantRef: depositTx.reference,
+      status: 'SUCCESS',
+    });
+
+    expect(onPaymentSuccess).toHaveBeenCalled();
+  });
+
+  it('falls back to our row uuid', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(null);
+    databaseService.getTransactionByReference.mockResolvedValue(null);
+    databaseService.getTransactionById.mockResolvedValue(depositTx);
+
+    await processor.processFreemopayCallback({
+      reference: depositTx.id,
+      status: 'SUCCESS',
+    });
+
+    expect(databaseService.getTransactionById).toHaveBeenCalledWith(depositTx.id);
+    expect(onPaymentSuccess).toHaveBeenCalled();
+  });
+});

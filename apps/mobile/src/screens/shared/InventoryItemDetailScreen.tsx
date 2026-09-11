@@ -874,11 +874,7 @@ function InventoryItemDetailScreen() {
             ) : null}
           </View>
 
-          <InventoryItemDetailHowItWorks
-            isStripeRail={isStripeRail}
-            pickupEnabled={Boolean(item.item.pay_at_pickup_enabled)}
-            payAtDeliveryEnabled={Boolean(item.item.pay_on_delivery_enabled)}
-          />
+          <InventoryItemDetailHowItWorks />
           <ItemDetailFtueNudge />
 
           <InventoryItemDetailProductInfo

@@ -24,6 +24,10 @@ import {
   buildMomoAwaitingPaymentTo,
   type MobileMoneyAwaitingPaymentState,
 } from '../../utils/momoAwaitingPaymentNav';
+import {
+  isDepositPaid,
+  remainingAfterDeposit,
+} from '../../utils/depositRemainder';
 import { useNavigate } from 'react-router-dom';
 
 function isPickupMomoPhone(phone: string): boolean {
@@ -63,6 +67,10 @@ export default function RequestPayAtPickupPaymentDialog({
 
   const clientPhone = order.client?.user?.phone_number?.trim() || '';
   const profilePhoneOk = isPickupMomoPhone(clientPhone);
+  const currency = order.currency || 'XAF';
+  const depositPaid = isDepositPaid(order);
+  const remainder = remainingAfterDeposit(order);
+  const depositAmount = Number(order.deposit_amount) || 0;
 
   useEffect(() => {
     if (!open) {
@@ -138,17 +146,46 @@ export default function RequestPayAtPickupPaymentDialog({
           </Alert>
         ) : (
           <Alert severity="info" sx={{ mb: 2 }}>
-            {audience === 'client'
+            {depositPaid
               ? t(
-                  'orders.payAtPickup.hint',
-                  'We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.'
+                  'orders.payAtPickup.hintRemainder',
+                  'You already paid a deposit. We will request the remaining {{amount}} {{currency}} on this number.',
+                  { amount: remainder, currency }
                 )
-              : t(
-                  'orders.pickup.businessInitiateHelp',
-                  'If the client needs help, send a mobile payment request. When they approve it, the order will complete automatically.'
-                )}
+              : audience === 'client'
+                ? t(
+                    'orders.payAtPickup.hint',
+                    'We will send a mobile money request to this number. Approve it on your phone. The store will see the payment, then you can collect your order.'
+                  )
+                : t(
+                    'orders.pickup.businessInitiateHelp',
+                    'If the client needs help, send a mobile payment request. When they approve it, the order will complete automatically.'
+                  )}
           </Alert>
         )}
+
+        {depositPaid ? (
+          <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, mb: 2 }}>
+            <Stack spacing={0.5}>
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="body2" color="text.secondary">
+                  {t('deposit.summaryPaid', 'Deposit paid')}
+                </Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {depositAmount} {currency}
+                </Typography>
+              </Stack>
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="subtitle2" fontWeight={700}>
+                  {t('deposit.requestAmount', 'Amount to request')}
+                </Typography>
+                <Typography variant="subtitle2" fontWeight={700} color="primary.main">
+                  {remainder} {currency}
+                </Typography>
+              </Stack>
+            </Stack>
+          </Paper>
+        ) : null}
 
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -254,8 +291,20 @@ export default function RequestPayAtPickupPaymentDialog({
           }
         >
           {audience === 'client'
-            ? t('orders.payAtPickup.cta', 'Pay now')
-            : t('orderActions.requestPickupPayment', 'Request pickup payment')}
+            ? depositPaid
+              ? t(
+                  'orders.payAtPickup.ctaAmount',
+                  'Pay now · {{amount}} {{currency}}',
+                  { amount: remainder, currency }
+                )
+              : t('orders.payAtPickup.cta', 'Pay now')
+            : depositPaid
+              ? t(
+                  'orderActions.requestPaymentAmount',
+                  'Request {{amount}} {{currency}}',
+                  { amount: remainder, currency }
+                )
+              : t('orderActions.requestPickupPayment', 'Request pickup payment')}
         </Button>
       </DialogActions>
     </Dialog>

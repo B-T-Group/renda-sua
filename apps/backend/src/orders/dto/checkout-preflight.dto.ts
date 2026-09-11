@@ -303,6 +303,30 @@ export class CheckoutGroupDto {
 
   @ApiPropertyOptional({
     description:
+      'True when a MoMo reservation deposit is required for this group (MoMo rail + pay_at_delivery/pickup).',
+  })
+  deposit_required?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Deposit amount in the group currency when deposit_required is true.',
+  })
+  deposit_amount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Remaining amount due after deposit (total - deposit_amount).',
+  })
+  amount_due?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'True when MoMo pay_now is enabled for delivery in this market. False means pay_now is hidden for MoMo + delivery.',
+  })
+  momo_pay_now_delivery_enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description:
       'Mobile Money provider selected for the supplied phone number. Null when rail is Stripe or phone not supplied.',
     example: 'freemopay',
   })
@@ -561,4 +585,28 @@ export class CheckoutPreflightResponseDto {
       'Payer-vs-recipient context for diaspora checkout. Null when the payer and the fulfillment market resolve to the same rail.',
   })
   diaspora?: CheckoutDiasporaDto | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: true when a MoMo reservation deposit is required.',
+  })
+  deposit_required?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: deposit amount when deposit_required is true.',
+  })
+  deposit_amount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: remaining amount due after deposit (total - deposit_amount).',
+  })
+  amount_due?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: true when MoMo pay_now is enabled for delivery in this market.',
+  })
+  momo_pay_now_delivery_enabled?: boolean;
 }

@@ -12,6 +12,7 @@ import {
 } from 'react-native-paper';
 import { AgentLocationMapModal } from '../../../components/client/AgentLocationMapModal';
 import { CancellationConfirmSheet } from '../../../components/client/CancellationConfirmSheet';
+import { ForfeitDepositCancelDialog } from '../../../components/dialogs/ForfeitDepositCancelDialog';
 import { ClientPickupPaymentSheet } from '../../../components/client/ClientPickupPaymentSheet';
 import { NoAgentOptionsSheet } from '../../../components/client/NoAgentOptionsSheet';
 import { SendDeliveryPinButton } from '../../../components/client/SendDeliveryPinButton';
@@ -30,6 +31,7 @@ import { useOrderDetail } from '../../../hooks/useOrderDetail';
 import { useClientOrders } from '../../../hooks/useClientOrders';
 import { useFirstOrderClientJourney } from '../../../hooks/client/useFirstOrderClientJourney';
 import { useOrderRatingEligibility } from '../../../hooks/useOrderRatingEligibility';
+import { useCancellationPreview } from '../../../hooks/useCancellationPreview';
 import { agentApi } from '../../../services/agentApi';
 import type { Address, Order, OrderItem } from '../../../types/agent';
 import { clientCanCancelOrder, clientShowAgentLocation, clientShowDeliveryPin, clientShowNoAgentOptions } from '../../../utils/clientOrderActions';
@@ -60,6 +62,12 @@ import {
   type OrderViewModelContext,
 } from '../../../orders/model';
 import type { OrderDetailScreenProps } from './types';
+import {
+  isDepositPending,
+  hasLivePendingDepositTx,
+  remainingAfterDeposit,
+} from '../../../utils/depositResume';
+import { leaveClientOrderDetail } from '../../../utils/clientOrderDetailBack';
 
 type Props = OrderDetailScreenProps;
 
@@ -224,12 +232,20 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
 
   const [mapOpen, setMapOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [forfeitCancelOpen, setForfeitCancelOpen] = useState(false);
+  const [cancellingForfeit, setCancellingForfeit] = useState(false);
+  
+  // For forfeit cancel: fetch cancellation preview to get valid reason IDs
+  const { preview: forfeitPreview } = useCancellationPreview(
+    forfeitCancelOpen ? orderId : null
+  );
   const [noAgentOpen, setNoAgentOpen] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [rateMode, setRateMode] = useState<RateOrderMode | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [payPickupOpen, setPayPickupOpen] = useState(false);
   const [payPickupLoading, setPayPickupLoading] = useState(false);
+  const [payDepositLoading, setPayDepositLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const paymentSectionY = useRef(0);
   // Keyed by order + intent so a new deep link (same mounted screen, different
@@ -307,7 +323,13 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     return (
       <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: 24 }]}>
         <Text style={{ color: colors.error.main, textAlign: 'center' }}>{error || t('orders.notFound', 'Order not found')}</Text>
-        <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+        <Button
+          mode="contained"
+          onPress={() =>
+            leaveClientOrderDetail(navigation, route.params.backTo)
+          }
+          style={{ marginTop: 16 }}
+        >
           {t('common.back', 'Back')}
         </Button>
       </View>
@@ -323,6 +345,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const canShowRatePrimary = !!(
     eligibility?.canRateAgent || eligibility?.canRateItem
   );
+  
+  // Check for deposit pending state
+  const depositIsPending = isDepositPending(order);
+  
   const stickyPrimaryId =
     primaryActionId === 'rate' && !canShowRatePrimary ? 'none' : primaryActionId;
   const showStickyPrimary = [
@@ -332,12 +358,43 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     'complete',
     'confirm_receipt',
   ].includes(stickyPrimaryId);
-  const [primaryLabelKey, primaryLabelDefault] =
-    stickyPrimaryId === 'pay' && order.payment_timing === 'pay_at_pickup'
-      ? (['orders.payAtPickup.cta', 'Pay now'] as const)
-      : ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
+  
+  // Determine the label for the sticky primary button
+  let primaryLabelKey: string;
+  let primaryLabelDefault: string;
+  
+  if (stickyPrimaryId === 'pay') {
+    if (depositIsPending) {
+      // Deposit pending: show "Pay deposit" CTA
+      primaryLabelKey = 'deposit.payDepositCta';
+      primaryLabelDefault = 'Pay deposit · {{amount}} {{currency}}';
+    } else if (order.payment_timing === 'pay_at_pickup') {
+      // Pay at pickup: show remainder when deposit already paid
+      if ((order.deposit_amount ?? 0) > 0 && order.deposit_status === 'paid') {
+        primaryLabelKey = 'orders.payAtPickup.ctaAmount';
+        primaryLabelDefault = 'Pay now · {{amount}} {{currency}}';
+      } else {
+        primaryLabelKey = 'orders.payAtPickup.cta';
+        primaryLabelDefault = 'Pay now';
+      }
+    } else {
+      // Default pay label
+      [primaryLabelKey, primaryLabelDefault] = ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
+    }
+  } else {
+    [primaryLabelKey, primaryLabelDefault] = ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
+  }
+  
   const showCancel = clientCanCancelOrder(order);
   const showNoAgentOptions = clientShowNoAgentOptions(order);
+  
+  // Determine if cancel should show forfeit warning (Out for delivery or Ready for pickup)
+  const isForfeitRiskState = 
+    order.current_status === 'out_for_delivery' || 
+    order.current_status === 'ready_for_pickup';
+  const depositAmount = order.deposit_amount ?? null;
+  const showForfeitDialog = showCancel && isForfeitRiskState && depositAmount != null && depositAmount > 0;
+  
   const scrollPad = {
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
@@ -405,6 +462,9 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
         phoneE164,
         source: 'pickup',
         orderNumbers: order?.order_number ? [order.order_number] : undefined,
+        isDepositOrder: false,
+        amountDue: remainingAfterDeposit(order),
+        currency: order?.currency || 'XAF',
       });
     } catch (e: unknown) {
       setSnack(
@@ -417,12 +477,115 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     }
   };
 
+  const runPayDeposit = async (phoneNumber?: string) => {
+    if (!order) return;
+    setPayDepositLoading(true);
+    
+    const phoneE164 =
+      phoneNumber?.trim() ||
+      order.client?.user?.phone_number?.trim() ||
+      '';
+    const depositAmount = order.deposit_amount ?? 0;
+    const amountDue = remainingAfterDeposit(order);
+    
+    // Poll-only path: if live pending deposit tx exists, navigate directly to await (no POST)
+    // Per PE: prefer poll when deposit_mobile_payment_transaction_id is set AND deposit pending
+    if (hasLivePendingDepositTx(order)) {
+      navigation.navigate('MobileMoneyAwaitingPayment', {
+        orderIds: [orderId],
+        phoneE164,
+        source: 'order-detail',
+        orderNumbers: order.order_number ? [order.order_number] : undefined,
+        isDepositOrder: true,
+        depositAmount,
+        amountDue,
+        currency: order.currency,
+      });
+      setPayDepositLoading(false);
+      return;
+    }
+    
+    // Retry path: no live pending attempt → POST retry-deposit-payment
+    try {
+      const response = await agentApi.orders.retryDepositPayment(
+        orderId,
+        phoneNumber?.trim() ? { phone_number: phoneNumber.trim() } : {}
+      );
+      
+      // Handle 200 with deposit_status "paid": already paid, refresh order
+      if (response.deposit_status === 'paid') {
+        setSnack(
+          response.message ||
+          t('deposit.alreadyPaid', 'Deposit is already paid')
+        );
+        void refetch();
+        return;
+      }
+      
+      // Handle 200 with new transaction: navigate to await screen
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to initiate deposit payment');
+      }
+      
+      navigation.navigate('MobileMoneyAwaitingPayment', {
+        orderIds: [orderId],
+        phoneE164,
+        source: 'order-detail',
+        orderNumbers: order.order_number ? [order.order_number] : undefined,
+        isDepositOrder: true,
+        depositAmount: response.deposit_amount ?? depositAmount,
+        amountDue: response.amount_due ?? amountDue,
+        currency: order.currency,
+      });
+    } catch (e: unknown) {
+      // Handle ALL 409 codes as soft poll/retry-once: open await/poll without hard error
+      // Nest contract (PR #288 @ 1c260326):
+      // - DEPOSIT_PAYMENT_PENDING → existing pending tx
+      // - DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid
+      // - CONCURRENT_RETRY_DETECTED → soft race, poll/retry-once
+      const errorCode = (e as any)?.code;
+      if (
+        errorCode === 'DEPOSIT_PAYMENT_PENDING' ||
+        errorCode === 'DEPOSIT_PAYMENT_PROCESSING' ||
+        errorCode === 'CONCURRENT_RETRY_DETECTED'
+      ) {
+        navigation.navigate('MobileMoneyAwaitingPayment', {
+          orderIds: [orderId],
+          phoneE164,
+          source: 'order-detail',
+          orderNumbers: order.order_number ? [order.order_number] : undefined,
+          isDepositOrder: true,
+          depositAmount,
+          amountDue,
+          currency: order.currency,
+        });
+        return;
+      }
+      
+      // Hard error: show message
+      setSnack(
+        e instanceof Error
+          ? e.message
+          : t('deposit.paymentError', 'Failed to start deposit payment')
+      );
+    } finally {
+      setPayDepositLoading(false);
+    }
+  };
+
   const onStickyPrimaryPress = () => {
     if (stickyPrimaryId === 'pay') {
+      // Check for deposit pending first
+      if (depositIsPending) {
+        void runPayDeposit();
+        return;
+      }
+      // Then check for pay at pickup
       if (order.payment_timing === 'pay_at_pickup') {
         setPayPickupOpen(true);
         return;
       }
+      // Default: scroll to payment section
       scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true });
       return;
     }
@@ -756,10 +919,23 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           ) : showStickyPrimary ? (
             <Button
               mode="contained"
-              loading={actionLoading}
+              loading={actionLoading || payDepositLoading}
               onPress={onStickyPrimaryPress}
             >
-              {t(primaryLabelKey, primaryLabelDefault)}
+              {depositIsPending
+                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+                    amount: order.deposit_amount ?? 0,
+                    currency: order.currency || 'XAF',
+                  })
+                : stickyPrimaryId === 'pay' &&
+                    order.payment_timing === 'pay_at_pickup' &&
+                    (order.deposit_amount ?? 0) > 0 &&
+                    order.deposit_status === 'paid'
+                  ? t(primaryLabelKey, primaryLabelDefault, {
+                      amount: remainingAfterDeposit(order),
+                      currency: order.currency || 'XAF',
+                    })
+                  : t(primaryLabelKey, primaryLabelDefault)}
             </Button>
           ) : null}
           {showCancel ? (
@@ -768,7 +944,11 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             textColor={colors.error.main}
             icon="close-circle-outline"
             onPress={() => {
-              setCancelOpen(true);
+              if (showForfeitDialog) {
+                setForfeitCancelOpen(true);
+              } else {
+                setCancelOpen(true);
+              }
               trackCancellationEvent('cancellation_dialog_opened', {
                 orderId: order.id,
                 orderStatus: status,
@@ -783,13 +963,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       ) : null}
 
       <AgentLocationMapModal visible={mapOpen} orderId={orderId} onDismiss={() => setMapOpen(false)} />
-      <ClientPickupPaymentSheet
-        visible={payPickupOpen}
-        order={order}
-        loading={payPickupLoading}
-        onDismiss={() => setPayPickupOpen(false)}
-        onSubmit={runPayAtPickup}
-      />
+      {!depositIsPending && order.payment_timing === 'pay_at_pickup' ? (
+        <ClientPickupPaymentSheet
+          visible={payPickupOpen}
+          order={order}
+          loading={payPickupLoading}
+          onDismiss={() => setPayPickupOpen(false)}
+          onSubmit={runPayAtPickup}
+        />
+      ) : null}
       <CancellationConfirmSheet
         visible={cancelOpen}
         order={order}
@@ -800,6 +982,54 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           void refetch();
         }}
       />
+      
+      <ForfeitDepositCancelDialog
+        visible={forfeitCancelOpen}
+        mode={order.current_status === 'ready_for_pickup' ? 'ready_for_pickup' : 'out_for_delivery'}
+        depositAmount={depositAmount ?? 0}
+        currency={order.currency ?? 'XAF'}
+        onKeep={() => {
+          setForfeitCancelOpen(false);
+          trackCancellationEvent('forfeit_cancel_abandoned', {
+            orderId: order.id,
+            orderStatus: order.current_status,
+          });
+        }}
+        onCancelAndForfeit={async () => {
+          setCancellingForfeit(true);
+          trackCancellationEvent('forfeit_cancel_confirmed', {
+            orderId: order.id,
+            orderStatus: order.current_status,
+          });
+          try {
+            // Find a valid cancellation reason from the preview
+            // Prefer "other" reason, or use the first available reason
+            const availableReasons = forfeitPreview?.availableCancellationReasons ?? [];
+            const otherReason = availableReasons.find(r => r.value === 'other');
+            const selectedReasonId = otherReason?.id ?? availableReasons[0]?.id ?? 1;
+            
+            const res = await agentApi.orders.cancel({
+              orderId: order.id,
+              cancellationReasonId: selectedReasonId,
+              notes: 'Cancelled with deposit forfeit',
+            });
+            if (res.success) {
+              setForfeitCancelOpen(false);
+              setSnack(t('orderActions.cancelSuccess', 'Order cancelled successfully.'));
+              void refetch();
+            } else {
+              setSnack(res.message ?? t('orderActions.cancelFailed', 'Could not cancel order.'));
+            }
+          } catch (e: any) {
+            setSnack(e?.message ?? t('orderActions.cancelFailed', 'Could not cancel order.'));
+          } finally {
+            setCancellingForfeit(false);
+          }
+        }}
+        onDismiss={() => setForfeitCancelOpen(false)}
+        loading={cancellingForfeit}
+      />
+      
       <NoAgentOptionsSheet
         visible={noAgentOpen}
         order={order}

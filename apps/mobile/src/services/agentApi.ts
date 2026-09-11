@@ -34,6 +34,7 @@ import type {
   AccountInfoResponse,
   InitiateMobilePaymentBody,
   InitiateMobilePaymentResponse,
+  ResolvePendingWithdrawalResponse,
   WithdrawalConfigResponse,
 } from '../types/accountWallet';
 import type {
@@ -313,7 +314,7 @@ const orders = {
   /** Client: re-initiate pay-now payment (mobile money or Stripe PaymentSheet). */
   retryPayment: (
     orderId: string,
-    body?: { stripe_payment_method?: 'payment_sheet' }
+    body?: { stripe_payment_method?: 'payment_sheet'; phone_number?: string }
   ): Promise<{
     success: boolean;
     checkout_url?: string;
@@ -321,6 +322,36 @@ const orders = {
     payment_transaction?: { transaction_id?: string | null };
     message?: string;
   }> => api.post(`/orders/${orderId}/retry-payment`, body ?? {}),
+
+  /** 
+   * Client: re-initiate deposit payment (mobile money) when deposit is pending.
+   * 
+   * Nest contract (PR #288 @ 1c260326):
+   * - 409 DEPOSIT_PAYMENT_PENDING → existing pending tx, soft poll
+   * - 409 DEPOSIT_PAYMENT_PROCESSING → prior MoMo success/authorized, deposit unpaid, soft poll
+   * - 409 CONCURRENT_RETRY_DETECTED → soft race, poll/retry-once, do NOT hard-error
+   * - 200 new → payment_transaction.transaction_id, navigate await
+   * - 200 paid → deposit_status "paid", refresh order, no await
+   * 
+   * ALL 409 codes: soft poll/retry-once, open await/poll without hard error
+   */
+  retryDepositPayment: (
+    orderId: string,
+    body?: { phone_number?: string }
+  ): Promise<{
+    success: boolean;
+    current_status?: string;
+    deposit_status?: string;
+    deposit_amount?: number;
+    amount_due?: number;
+    payment_transaction?: { 
+      transaction_id?: string | null;
+      mode?: string;
+    };
+    message?: string;
+    code?: string;
+    existing_transaction_id?: string;
+  }> => api.post(`/orders/${orderId}/retry-deposit-payment`, body ?? {}),
 
   getOrderAgentLocation: (
     orderId: string
@@ -766,6 +797,11 @@ const accounts = {
 const mobilePayments = {
   initiate: (body: InitiateMobilePaymentBody): Promise<InitiateMobilePaymentResponse> =>
     api.post<InitiateMobilePaymentResponse>('/mobile-payments/initiate', body),
+  resolveWithdrawal: (id: string): Promise<ResolvePendingWithdrawalResponse> =>
+    api.post<ResolvePendingWithdrawalResponse>(
+      `/mobile-payments/withdrawals/${id}/resolve`,
+      {}
+    ),
 };
 
 const stripe = {

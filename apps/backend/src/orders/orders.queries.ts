@@ -217,6 +217,14 @@ export const GET_ORDER_BY_ID = gql`
       payment_method
       payment_status
       verified_agent_delivery
+      deposit_amount
+      deposit_mobile_payment_transaction_id
+      deposit_status
+      deposit_refund_status
+      deposit_forfeit_reason
+      deposit_forfeited_at
+      deposit_forfeited_by_user_id
+      deposit_refunded_at
       fulfillment_method
       fulfillment_timing
       promised_ready_at

@@ -61,7 +61,7 @@ function ClientBrowseHomeScreenBase({
 
   const onOpenHomeOrder = useCallback(
     (order: Order) => {
-      rootNav?.navigate('OrderDetail', { orderId: order.id });
+      rootNav?.navigate('OrderDetail', { orderId: order.id, backTo: 'home' });
     },
     [rootNav]
   );

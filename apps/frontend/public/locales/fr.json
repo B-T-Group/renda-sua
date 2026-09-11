@@ -132,7 +132,15 @@
     "withdrawalPhoneNoteLocation": "Ce numéro est utilisé pour les retraits du compte de cet emplacement.",
     "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Retenu",
-    "withheldBalance": "Solde retenu"
+    "withheldBalance": "Solde retenu",
+    "pendingWithdrawals": {
+      "title": "Retraits en attente",
+      "hint": "Résolvez-les avant de démarrer un nouveau retrait. Appuyez sur Résoudre pour vérifier le Mobile Money ou annuler une demande bloquée.",
+      "resolve": "Résoudre le retrait en attente",
+      "resolveDone": "Statut du retrait mis à jour.",
+      "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau."
+    }
   },
   "addresses": {
     "addAddress": "Ajouter une adresse",
@@ -2071,6 +2079,10 @@
       "agreementPageTitle": "Contrat de partenariat marchand",
       "agreeCheckbox": "J'ai lu et j'accepte le Contrat de partenariat marchand.",
       "scrollHint": "Veuillez faire défiler jusqu'à la fin du contrat avant d'accepter.",
+      "scrollForMore": "Faites défiler pour la suite",
+      "acceptBySigning": "En appuyant sur Accepter et signer, vous acceptez le Contrat de partenariat marchand.",
+      "acceptTermsHintLocked": "Faites défiler jusqu'à la fin du contrat ci-dessus pour déverrouiller cette case.",
+      "acceptTermsHintUnlocked": "Prêt à accepter. Confirmez avoir lu le contrat.",
       "acceptAgreement": "Accepter le contrat",
       "agreementSuccess": "Contrat accepté. Votre boutique est active — retournez au tableau de bord pour continuer. Vous pourrez obtenir le badge Vérifié plus tard.",
       "backToDashboard": "Retour au tableau de bord",
@@ -6749,6 +6761,9 @@
       "title": "Rejoignez des milliers de personnes déjà sur Rendasua",
       "subtitle": "De vrais clients, commerces et produits dans votre ville — mis à jour en direct.",
       "liveLabel": "Mise à jour toutes les quelques minutes",
+      "hubSubtitle": "Marché",
+      "illustrationAria": "Marketplace Rendasua reliant clients, agents, entreprises et produits",
+      "networkCaption": "Quatre faces du même marché — qui grandissent ensemble dans votre ville.",
       "clients": "Clients",
       "agents": "Agents",
       "businesses": "Entreprises",

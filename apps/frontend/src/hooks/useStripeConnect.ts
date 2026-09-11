@@ -10,13 +10,17 @@ export interface StripeConnectStatus {
   paymentRail?: 'stripe' | 'mobile_money';
 }
 
-export function useStripeConnect() {
+export function useStripeConnect(enabled = true) {
   const apiClient = useApiClient();
   const [status, setStatus] = useState<StripeConnectStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async (): Promise<void> => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -27,7 +31,7 @@ export function useStripeConnect() {
     } finally {
       setLoading(false);
     }
-  }, [apiClient]);
+  }, [apiClient, enabled]);
 
   const startOnboarding = useCallback(async (): Promise<void> => {
     setLoading(true);

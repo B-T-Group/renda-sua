@@ -50,6 +50,9 @@ export interface OrderMoneySummary {
   tax?: number | null;
   total?: number | null;
   currency?: string | null;
+  depositAmount?: number | null;
+  depositStatus?: string | null;
+  amountDue?: number | null;
 }
 
 export interface ClientOrderViewModel {
@@ -178,6 +181,9 @@ export interface OrderLike {
   tax_amount?: number | null;
   total_amount?: number | null;
   currency?: string | null;
+  deposit_amount?: number | null;
+  deposit_status?: string | null;
+  amount_due?: number | null;
   delivery_commission?: number | null;
   tip_amount?: number | null;
   bonus_amount?: number | null;

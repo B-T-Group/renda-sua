@@ -36,6 +36,7 @@ import {
   CheckoutPreflightDto,
   CheckoutPreflightResponseDto,
 } from './dto/checkout-preflight.dto';
+import { RetryDepositPaymentDto } from './dto/retry-deposit-payment.dto';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderMarkReadyService } from './order-mark-ready.service';
 import { OrderStatusService } from './order-status.service';
@@ -1355,6 +1356,11 @@ export class OrdersController {
           description:
             'For Stripe-rail orders, return a PaymentIntent client secret for native PaymentSheet instead of a hosted Checkout URL.',
         },
+        phone_number: {
+          type: 'string',
+          description:
+            'For mobile money orders, optionally override the phone number for this payment attempt. Must be in E.164 format.',
+        },
       },
     },
   })
@@ -1363,11 +1369,83 @@ export class OrdersController {
   @ApiResponse({ status: 403, description: 'Not authorized for this order' })
   async retryOrderPayment(
     @Param('id') orderId: string,
-    @Body() body?: { stripe_payment_method?: 'payment_sheet' }
+    @Body() body?: { stripe_payment_method?: 'payment_sheet'; phone_number?: string }
   ) {
     return this.ordersService.retryOrderPayment(orderId, {
       stripePaymentMethod: body?.stripe_payment_method,
+      phoneNumber: body?.phone_number,
     });
+  }
+
+  @Post(':id/retry-deposit-payment')
+  @ApiOperation({
+    summary: 'Retry deposit payment (client only)',
+    description:
+      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. If the prior MoMo transaction already succeeded, replays deposit finalize. Returns 409 if a prior deposit payment request is still pending at the provider (client should poll that transaction instead).',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID', type: String })
+  @ApiBody({
+    required: false,
+    type: RetryDepositPaymentDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deposit payment retry initiated, already paid, or finalize replayed',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        current_status: { type: 'string' },
+        deposit_status: { type: 'string' },
+        deposit_amount: { type: 'number' },
+        amount_due: { type: 'number' },
+        payment_transaction: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            transaction_id: { type: 'string' },
+            message: { type: 'string' },
+            mode: { type: 'string', enum: ['mobile_money'] },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Prior deposit payment still pending at provider (client should poll existing transaction). Code: DEPOSIT_PAYMENT_PENDING',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        message: {
+          type: 'string',
+          example: 'Prior deposit payment still pending; please wait',
+        },
+        code: {
+          type: 'string',
+          enum: ['DEPOSIT_PAYMENT_PENDING'],
+        },
+        existing_transaction_id: { type: 'string', format: 'uuid' },
+        deposit_status: { type: 'string', example: 'pending' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid order state or not a deposit order',
+  })
+  @ApiResponse({ status: 403, description: 'Not authorized for this order' })
+  async retryDepositPayment(
+    @Param('id') orderId: string,
+    @Body() body?: RetryDepositPaymentDto
+  ) {
+    return this.ordersService.retryDepositPayment(
+      orderId,
+      body?.phone_number
+    );
   }
 
   @Post('drop_order')

@@ -111,10 +111,12 @@ export class DashboardService {
       );
     }
     const businessId = user.business.id;
-    const includePlatformStats = await this.canViewPlatformStats(user.id);
+    const adminAggregatesPromise = this.canViewPlatformStats(user.id).then(
+      (include) => (include ? this.getAdminAggregates() : null)
+    );
 
     const [
-      ordersByStatus,
+      orders,
       pendingCashReconciliationCount,
       itemCount,
       rentalItemCount,
@@ -123,7 +125,7 @@ export class DashboardService {
       pendingFailedDeliveriesCount,
       uniqueClientCount,
       productViewStats,
-      topViewedProducts,
+      topViewed,
       readiness,
       adminAggregates,
     ] = await Promise.all([
@@ -138,20 +140,12 @@ export class DashboardService {
       this.getProductViewStats(businessId),
       this.getTopViewedProducts(businessId),
       this.getStoreReadinessSignals(businessId),
-      includePlatformStats
-        ? this.getAdminAggregates()
-        : Promise.resolve(null),
+      adminAggregatesPromise,
     ]);
 
-    const ordersTotal = Object.values(ordersByStatus).reduce((a, b) => a + b, 0);
-    const topViewedOutOfStockCount = await this.countTopViewedOutOfStock(
-      businessId,
-      topViewedProducts
-    );
-
     const result: DashboardAggregatesDto = {
-      ordersTotal,
-      ordersByStatus,
+      ordersTotal: orders.ordersTotal,
+      ordersByStatus: orders.ordersByStatus,
       pendingCashReconciliationCount,
       itemCount,
       rentalItemCount,
@@ -161,9 +155,9 @@ export class DashboardService {
       uniqueClientCount,
       totalProductViews: productViewStats.totalProductViews,
       productViewsLast7d: productViewStats.productViewsLast7d,
-      topViewedProducts,
+      topViewedProducts: topViewed.products,
       ...readiness,
-      topViewedOutOfStockCount,
+      topViewedOutOfStockCount: topViewed.topViewedOutOfStockCount,
     };
     if (adminAggregates) {
       result.clientCount = adminAggregates.clientCount;
@@ -569,31 +563,74 @@ export class DashboardService {
 
   private static readonly CLIENT_PAGE_SIZE = 500;
 
-  private async getOrdersByStatus(
-    businessId: string
-  ): Promise<Record<string, number>> {
-    const query = `
-      query DashboardOrdersByStatus($businessId: uuid!) {
-        orders(
+  /**
+   * Known order_status enum values excluding cancelled.
+   * Add new Hasura enum values here when they ship.
+   */
+  private static readonly DASHBOARD_ORDER_STATUSES = [
+    'pending_payment',
+    'pending',
+    'confirmed',
+    'preparing',
+    'ready_for_pickup',
+    'assigned_to_agent',
+    'picked_up',
+    'in_transit',
+    'out_for_delivery',
+    'delivered',
+    'complete',
+    'failed',
+    'refunded',
+    'refund_requested',
+    'refund_approved_full',
+    'refund_approved_partial',
+    'refund_approved_replace',
+    'refund_rejected',
+    'refund_processing',
+    'refund_failed',
+    'awaiting_shipment',
+    'shipped',
+    'in_delivery',
+  ] as const;
+
+  private async getOrdersByStatus(businessId: string): Promise<{
+    ordersByStatus: Record<string, number>;
+    ordersTotal: number;
+  }> {
+    const statusAliases = DashboardService.DASHBOARD_ORDER_STATUSES.map(
+      (status) => `
+        ${status}: orders_aggregate(
           where: {
             business_id: { _eq: $businessId }
-            current_status: { _neq: "cancelled" }
+            current_status: { _eq: ${status} }
           }
-        ) {
-          current_status
-        }
+        ) { aggregate { count } }`
+    ).join('\n');
+    const query = `
+      query DashboardOrdersByStatus($businessId: uuid!) {
+        ${statusAliases}
+        total: orders_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            current_status: { _neq: cancelled }
+          }
+        ) { aggregate { count } }
       }
     `;
-    const result = await this.hasuraSystemService.executeQuery(query, {
-      businessId,
-    });
-    const rows = (result?.orders ?? []) as { current_status: string }[];
-    const byStatus: Record<string, number> = {};
-    rows.forEach((r) => {
-      const s = r.current_status || '';
-      byStatus[s] = (byStatus[s] ?? 0) + 1;
-    });
-    return byStatus;
+    const result = await this.hasuraSystemService.executeQuery<
+      Record<string, { aggregate?: { count?: number | null } | null } | null>
+    >(query, { businessId });
+    const ordersByStatus: Record<string, number> = {};
+    for (const status of DashboardService.DASHBOARD_ORDER_STATUSES) {
+      const count = Number(result?.[status]?.aggregate?.count ?? 0);
+      if (count > 0) {
+        ordersByStatus[status] = count;
+      }
+    }
+    return {
+      ordersByStatus,
+      ordersTotal: Number(result?.total?.aggregate?.count ?? 0),
+    };
   }
 
   private async getPendingCashReconciliationCount(
@@ -760,45 +797,104 @@ export class DashboardService {
     };
   }
 
+  /** Candidate inventory rows by per-location views (before multi-location expand). */
+  private static readonly TOP_VIEWED_FETCH_LIMIT = 40;
+
   private async getTopViewedProducts(
     businessId: string,
     limit = 5
-  ): Promise<TopViewedProductDto[]> {
-    const rows = await this.fetchInventoryViewRows(businessId);
-    const byItem = this.mergeTopViewedByItem(rows);
-    return byItem
-      .sort((a, b) => b.viewsCount - a.viewsCount)
+  ): Promise<{
+    products: TopViewedProductDto[];
+    topViewedOutOfStockCount: number;
+  }> {
+    const candidateRows = await this.fetchTopViewedCandidateRows(businessId);
+    const itemIds = [
+      ...new Set(
+        candidateRows
+          .map((row) => row.item?.id ?? row.item_id)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const rows =
+      itemIds.length === 0
+        ? []
+        : await this.fetchInventoryRowsForItems(businessId, itemIds);
+    const merged = this.mergeTopViewedByItem(rows)
+      .sort((a, b) => b.product.viewsCount - a.product.viewsCount)
       .slice(0, limit);
+    const products = merged.map((m) => m.product);
+    const topViewedOutOfStockCount = merged.filter(
+      (m) => m.product.viewsCount > 0 && m.availableQty <= 0
+    ).length;
+    return { products, topViewedOutOfStockCount };
   }
 
-  private mergeTopViewedByItem(rows: InventoryViewRow[]): TopViewedProductDto[] {
-    const byItem = new Map<string, TopViewedProductDto>();
+  private mergeTopViewedByItem(
+    rows: InventoryViewRow[]
+  ): Array<{ product: TopViewedProductDto; availableQty: number }> {
+    const byItem = new Map<
+      string,
+      { product: TopViewedProductDto; availableQty: number }
+    >();
     for (const row of rows) {
       const product = this.toTopViewedProduct(row);
       if (!product.itemId || product.viewsCount <= 0) continue;
+      const qty = Number(row.computed_available_quantity ?? 0);
       const existing = byItem.get(product.itemId);
       if (!existing) {
-        byItem.set(product.itemId, product);
+        byItem.set(product.itemId, { product, availableQty: qty });
         continue;
       }
-      existing.viewsCount += product.viewsCount;
+      existing.product.viewsCount += product.viewsCount;
+      existing.availableQty += qty;
     }
     return Array.from(byItem.values());
   }
 
-  private async fetchInventoryViewRows(
+  private async fetchTopViewedCandidateRows(
     businessId: string
   ): Promise<InventoryViewRow[]> {
     const query = `
-      query DashboardTopViewedProducts($businessId: uuid!) {
+      query DashboardTopViewedCandidates($businessId: uuid!, $limit: Int!) {
         business_inventory(
           where: {
             is_active: { _eq: true }
             business_location: { business_id: { _eq: $businessId } }
           }
+          order_by: { item_view_events_aggregate: { count: desc } }
+          limit: $limit
         ) {
           id
           item_id
+          item { id }
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery<{
+      business_inventory: InventoryViewRow[];
+    }>(query, {
+      businessId,
+      limit: DashboardService.TOP_VIEWED_FETCH_LIMIT,
+    });
+    return result?.business_inventory ?? [];
+  }
+
+  private async fetchInventoryRowsForItems(
+    businessId: string,
+    itemIds: string[]
+  ): Promise<InventoryViewRow[]> {
+    const query = `
+      query DashboardTopViewedProducts($businessId: uuid!, $itemIds: [uuid!]!) {
+        business_inventory(
+          where: {
+            is_active: { _eq: true }
+            item_id: { _in: $itemIds }
+            business_location: { business_id: { _eq: $businessId } }
+          }
+        ) {
+          id
+          item_id
+          computed_available_quantity
           item {
             id
             name
@@ -815,7 +911,7 @@ export class DashboardService {
     `;
     const result = await this.hasuraSystemService.executeQuery<{
       business_inventory: InventoryViewRow[];
-    }>(query, { businessId });
+    }>(query, { businessId, itemIds });
     return result?.business_inventory ?? [];
   }
 
@@ -1019,49 +1115,6 @@ export class DashboardService {
     return Number(res?.items_aggregate?.aggregate?.count ?? 0);
   }
 
-  private async countTopViewedOutOfStock(
-    businessId: string,
-    topViewed: TopViewedProductDto[]
-  ): Promise<number> {
-    const itemIds = topViewed
-      .filter((p) => p.viewsCount > 0 && p.itemId)
-      .map((p) => p.itemId);
-    if (itemIds.length === 0) return 0;
-    const query = `
-      query DashboardTopViewedStock($businessId: uuid!, $itemIds: [uuid!]!) {
-        business_inventory(
-          where: {
-            is_active: { _eq: true }
-            item_id: { _in: $itemIds }
-            business_location: { business_id: { _eq: $businessId } }
-          }
-        ) {
-          item_id
-          computed_available_quantity
-        }
-      }
-    `;
-    const res = await this.hasuraSystemService.executeQuery<{
-      business_inventory: Array<{
-        item_id: string;
-        computed_available_quantity?: number | null;
-      }>;
-    }>(query, { businessId, itemIds });
-    const qtyByItem = new Map<string, number>();
-    for (const row of res?.business_inventory ?? []) {
-      const prev = qtyByItem.get(row.item_id) ?? 0;
-      qtyByItem.set(
-        row.item_id,
-        prev + Number(row.computed_available_quantity ?? 0)
-      );
-    }
-    let count = 0;
-    for (const id of itemIds) {
-      if ((qtyByItem.get(id) ?? 0) <= 0) count += 1;
-    }
-    return count;
-  }
-
   private async getAdminAggregates(): Promise<{
     clientCount: number;
     agentsVerified: number;
@@ -1238,6 +1291,7 @@ interface BusinessClientCityRow {
 interface InventoryViewRow {
   id: string;
   item_id?: string | null;
+  computed_available_quantity?: number | null;
   item?: {
     id?: string | null;
     name?: string | null;

@@ -47,6 +47,11 @@ export interface CheckoutPreflightGroup {
   currency?: string;
   /** Group total in the merchant currency. */
   total?: number;
+  /** True when a MoMo reservation deposit is required. */
+  deposit_required?: boolean;
+  deposit_amount?: number;
+  amount_due?: number;
+  momo_pay_now_delivery_enabled?: boolean;
 }
 
 export interface CheckoutPreflightBlocker {

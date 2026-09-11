@@ -75,6 +75,13 @@ export interface Order {
   total_amount?: number;
   currency: string;
   current_status: string;
+  deposit_amount?: number | null;
+  deposit_paid?: number | null;
+  amount_due?: number | null;
+  /** Deposit payment status (backend enum: none|pending|paid|failed|forfeited|refunded; pending_payment is current_status). #275 merged @ 3ed60fab. */
+  deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
+  /** Database transaction ID for MoMo deposit collect (FK to mobile_payment_transactions). #275 merged @ 3ed60fab. */
+  deposit_mobile_payment_transaction_id?: string | null;
   acceptance_state?: string | null;
   acceptance_deadline_at?: string | null;
   acceptance_activates_at?: string | null;

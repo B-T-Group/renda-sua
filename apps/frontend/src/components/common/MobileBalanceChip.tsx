@@ -29,6 +29,7 @@ import {
   useUserProfileContext,
 } from '../../contexts/UserProfileContext';
 import WithdrawModal from '../business/WithdrawModal';
+import PendingWithdrawalsPanel from './PendingWithdrawalsPanel';
 
 const XAF_CURRENCY = 'XAF';
 const TRANSACTIONS_LIMIT = 20;
@@ -125,6 +126,9 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
   const displayAccount = liveAccount ?? walletAccount ?? null;
   const walletCurrency =
     walletAccount?.currency ?? preferredCurrency ?? XAF_CURRENCY;
+  const pendingWithdrawals = walletAccount?.mobile_payment_transactions ?? [];
+  const hasPendingWithdrawals =
+    !isStripeRail && pendingWithdrawals.length > 0;
 
   useAccountSubscription({
     accountId: walletAccount?.id ?? '',
@@ -348,11 +352,23 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
         {displayAccount && displayAccount.available_balance > 0 && (
           <MenuItem
             onClick={handleWithdrawClick}
-            disabled={isStripeRail && !stripeReady}
+            disabled={(isStripeRail && !stripeReady) || hasPendingWithdrawals}
             sx={{ py: 1.5 }}
           >
             {t('accounts.withdraw')}
           </MenuItem>
+        )}
+        {hasPendingWithdrawals && (
+          <Box sx={{ px: 1.5, py: 1, maxWidth: 280 }}>
+            <PendingWithdrawalsPanel
+              items={pendingWithdrawals}
+              compact
+              onResolved={(message) => {
+                enqueueSnackbar(message, { variant: 'info' });
+                void refetchAccounts();
+              }}
+            />
+          </Box>
         )}
         {isStripeRail &&
           !stripeReady &&
@@ -375,6 +391,24 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
               )}
             </Typography>
           )}
+        {hasPendingWithdrawals && (
+          <Typography
+            variant="caption"
+            color="warning.main"
+            sx={{
+              px: 2,
+              py: 0.5,
+              display: 'block',
+              whiteSpace: 'normal',
+              maxWidth: 240,
+            }}
+          >
+            {t(
+              'accounts.pendingWithdrawals.withdrawDisabled',
+              'Resolve pending withdrawals before starting a new one.'
+            )}
+          </Typography>
+        )}
         {agentAutoWithdrawEnabled && (
           <>
             <Divider sx={{ my: 0.5 }} />
