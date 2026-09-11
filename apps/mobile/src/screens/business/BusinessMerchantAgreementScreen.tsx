@@ -1,17 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { KeyboardAwareScrollView } from '../../components/layout/KeyboardAwareScrollView';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { ActivityIndicator, Button, Snackbar, Text, TextInput } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { AgreementHtmlEmbed } from '../../components/business/AgreementHtmlEmbed';
-import { MerchantAgreementAcceptRow } from '../../components/business/MerchantAgreementAcceptRow';
 import { MerchantAgreementSignedView } from '../../components/business/MerchantAgreementSignedView';
 import { MerchantAgreementSuccessView } from '../../components/business/MerchantAgreementSuccessView';
+import { KeyboardAwareScrollView } from '../../components/layout/KeyboardAwareScrollView';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useProfileMe } from '../../hooks/useProfileMe';
+import { useKeyboardVerticalOffset } from '../../hooks/useKeyboardVerticalOffset';
 import {
   businessVerificationApi,
   type MerchantContractStatus,
@@ -27,14 +32,14 @@ type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
 export default function BusinessMerchantAgreementScreen() {
   const { t } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, spacing, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
+  const keyboardOffset = useKeyboardVerticalOffset();
   const navigation = useNavigation<Nav>();
   const { me } = useProfileMe();
   const [html, setHtml] = useState('');
   const [version, setVersion] = useState('');
   const [legalName, setLegalName] = useState('');
-  const [agreed, setAgreed] = useState(false);
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,7 +89,6 @@ export default function BusinessMerchantAgreementScreen() {
         const { html: raw, version: v, locale } = res.data;
         setVersion(v);
         setHasScrolledToEnd(false);
-        setAgreed(false);
         const vars = merchantAgreementPreviewVars(me, v, locale ?? 'en');
         setHtml(renderMerchantAgreementHtml(raw, vars));
       }
@@ -147,7 +151,7 @@ export default function BusinessMerchantAgreementScreen() {
   }, [loadStatus, t]);
 
   const handleSubmit = useCallback(async () => {
-    if (!agreed || !hasScrolledToEnd || !legalName.trim() || !version) return;
+    if (!hasScrolledToEnd || !legalName.trim() || !version) return;
     setBusy(true);
     try {
       await businessVerificationApi.acceptMerchantAgreement({
@@ -162,7 +166,7 @@ export default function BusinessMerchantAgreementScreen() {
     } finally {
       setBusy(false);
     }
-  }, [agreed, hasScrolledToEnd, legalName, version, t]);
+  }, [hasScrolledToEnd, legalName, version, t]);
 
   const goDashboard = useCallback(() => {
     navigation.navigate('BusinessMainTabs', { screen: 'BusinessDashboard' });
@@ -175,7 +179,6 @@ export default function BusinessMerchantAgreementScreen() {
           styles.flex,
           {
             backgroundColor: colors.pageBackground,
-            paddingTop: insets.top,
             justifyContent: 'center',
             alignItems: 'center',
           },
@@ -213,12 +216,7 @@ export default function BusinessMerchantAgreementScreen() {
     );
 
     return (
-      <View
-        style={[
-          styles.flex,
-          { backgroundColor: colors.pageBackground, paddingTop: insets.top },
-        ]}
-      >
+      <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
         <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
           <Text variant="headlineSmall" style={{ marginBottom: 12 }}>
             {t('business.contract.pendingTitle', 'Sign your merchant agreement')}
@@ -264,41 +262,79 @@ export default function BusinessMerchantAgreementScreen() {
     );
   }
 
+  const acceptHint = hasScrolledToEnd
+    ? t(
+        'business.verification.acceptBySigning',
+        'By tapping Accept and sign, you agree to the Merchant Partnership Agreement.'
+      )
+    : t(
+        'business.verification.scrollHint',
+        'Please scroll to the end of the agreement before accepting.'
+      );
+
   return (
-    <View style={[styles.flex, { backgroundColor: colors.pageBackground, paddingTop: insets.top }]}>
-      <KeyboardAwareScrollView
-        avoidingViewStyle={{ flex: 1 }}
-        contentContainerStyle={styles.scroll}
+    <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
+      <View
+        style={[
+          styles.webWrap,
+          {
+            borderColor: colors.divider,
+            marginHorizontal: spacing.md,
+            marginTop: spacing.sm,
+            backgroundColor: '#fff',
+          },
+        ]}
       >
-        <Text variant="headlineSmall" style={{ marginBottom: 12 }}>
-          {t('business.verification.agreementTitle', 'Merchant agreement')}
-        </Text>
         {loading ? (
           <ActivityIndicator style={{ marginVertical: 24 }} />
         ) : (
-          <View style={[styles.webWrap, { borderColor: colors.divider }]}>
-            <AgreementHtmlEmbed
-              html={html}
-              style={styles.webview}
-              onScrolledToEnd={() => setHasScrolledToEnd(true)}
-              onScrollReset={() => {
-                setHasScrolledToEnd(false);
-                setAgreed(false);
-              }}
-            />
-          </View>
+          <AgreementHtmlEmbed
+            html={html}
+            style={styles.webview}
+            onScrolledToEnd={() => setHasScrolledToEnd(true)}
+            onScrollReset={() => setHasScrolledToEnd(false)}
+          />
         )}
         {!hasScrolledToEnd && !loading ? (
-          <Text
-            variant="bodySmall"
-            style={{ color: colors.text.secondary, marginBottom: 8 }}
-          >
-            {t(
-              'business.verification.scrollHint',
-              'Please scroll to the end of the agreement before accepting.'
-            )}
-          </Text>
+          <View pointerEvents="none" style={styles.scrollChipWrap}>
+            <View
+              style={[
+                styles.scrollChip,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.divider,
+                  borderRadius: borderRadius.lg,
+                },
+              ]}
+            >
+              <Text variant="labelSmall" style={{ color: colors.text.secondary }}>
+                {t('business.verification.scrollForMore', 'Scroll for more')}
+              </Text>
+            </View>
+          </View>
         ) : null}
+      </View>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={keyboardOffset}
+        style={[
+          styles.footer,
+          {
+            borderTopColor: colors.divider,
+            paddingHorizontal: spacing.md,
+            paddingTop: spacing.sm,
+            paddingBottom: Math.max(insets.bottom, spacing.md),
+            backgroundColor: colors.pageBackground,
+          },
+        ]}
+      >
+        <Text
+          variant="bodySmall"
+          style={{ color: colors.text.secondary, marginBottom: spacing.xs }}
+        >
+          {acceptHint}
+        </Text>
         <TextInput
           label={t('business.verification.legalName', 'Full legal name')}
           value={legalName}
@@ -306,32 +342,18 @@ export default function BusinessMerchantAgreementScreen() {
           mode="outlined"
           style={styles.field}
         />
-        <MerchantAgreementAcceptRow
-          label={t(
-            'business.verification.agreeCheckbox',
-            'I have read and agree to the Merchant Partnership Agreement.'
-          )}
-          hint={t(
-            'business.verification.acceptTermsHint',
-            'Required. Tap here to confirm you have read the agreement above.'
-          )}
-          checked={agreed}
-          onToggle={() => setAgreed((v) => !v)}
-          disabled={loading || busy || !hasScrolledToEnd}
-        />
         <Button
           mode="contained"
           loading={busy}
-          disabled={
-            busy || !agreed || !hasScrolledToEnd || !legalName.trim() || loading
-          }
+          disabled={busy || !hasScrolledToEnd || !legalName.trim() || loading}
           onPress={() => void handleSubmit()}
         >
           {busy
             ? t('business.verification.submitting', 'Submitting…')
             : t('business.verification.submit', 'Accept and sign')}
         </Button>
-      </KeyboardAwareScrollView>
+      </KeyboardAvoidingView>
+
       <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar(null)} duration={4000}>
         {snackbar}
       </Snackbar>
@@ -342,8 +364,30 @@ export default function BusinessMerchantAgreementScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 40 },
-  webWrap: { height: 320, borderWidth: 1, borderRadius: 8, overflow: 'hidden', marginBottom: 16 },
+  webWrap: {
+    flex: 1,
+    minHeight: 180,
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
   webview: { flex: 1, backgroundColor: '#fff' },
+  scrollChipWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 12,
+    alignItems: 'center',
+  },
+  scrollChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  footer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   field: { marginBottom: 8 },
   statusCard: {
     borderWidth: 1,

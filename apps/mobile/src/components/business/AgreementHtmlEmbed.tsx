@@ -49,13 +49,24 @@ export function AgreementHtmlEmbed({
   var stableCount = 0;
   function metrics() {
     var doc = document.documentElement || document.body;
-    var scrollTop = window.pageYOffset || doc.scrollTop || 0;
+    var body = document.body || doc;
+    var scrollTop = window.pageYOffset
+      || doc.scrollTop
+      || body.scrollTop
+      || 0;
     var clientHeight = window.innerHeight || doc.clientHeight || 0;
-    var scrollHeight = Math.max(doc.scrollHeight || 0, document.body.scrollHeight || 0);
+    var scrollHeight = Math.max(
+      doc.scrollHeight || 0,
+      body.scrollHeight || 0,
+      doc.offsetHeight || 0,
+      body.offsetHeight || 0
+    );
     return { scrollTop: scrollTop, clientHeight: clientHeight, scrollHeight: scrollHeight };
   }
   function nearBottom(m) {
     if (m.scrollHeight <= 0 || m.clientHeight <= 0) return false;
+    // Content fits without scrolling — treat as already at end.
+    if (m.scrollHeight <= m.clientHeight + ${SCROLL_END_THRESHOLD_PX}) return true;
     return m.scrollTop + m.clientHeight >= m.scrollHeight - ${SCROLL_END_THRESHOLD_PX};
   }
   function post(type) {
@@ -66,7 +77,6 @@ export function AgreementHtmlEmbed({
     var m = metrics();
     if (m.scrollHeight <= 0) return;
     if (unlocked && m.scrollHeight > lastHeight + 8) {
-      // Content grew after unlock — require another scroll-to-end.
       unlocked = false;
       stableCount = 0;
       lastHeight = m.scrollHeight;
@@ -86,6 +96,10 @@ export function AgreementHtmlEmbed({
     }
   }
   window.addEventListener('scroll', sample, { passive: true });
+  document.addEventListener('scroll', sample, { passive: true, capture: true });
+  if (document.body) {
+    document.body.addEventListener('scroll', sample, { passive: true });
+  }
   window.addEventListener('resize', sample);
   setInterval(sample, 400);
   true;
@@ -133,7 +147,11 @@ export function AgreementHtmlEmbed({
           const check = () => {
             if (generation !== generationRef.current) return;
             const el = doc.documentElement;
-            const scrollHeight = el.scrollHeight || 0;
+            const body = doc.body || el;
+            const scrollHeight = Math.max(
+              el.scrollHeight || 0,
+              body.scrollHeight || 0
+            );
             const clientHeight = win.innerHeight || 0;
             if (scrollHeight <= 0 || clientHeight <= 0) return;
             if (unlocked && scrollHeight > lastHeight + 8) {
@@ -151,16 +169,16 @@ export function AgreementHtmlEmbed({
               stableCount = 0;
               return;
             }
-            if (
-              !unlocked &&
-              stableCount >= 2 &&
-              win.scrollY + clientHeight >= scrollHeight - SCROLL_END_THRESHOLD_PX
-            ) {
+            const atEnd =
+              scrollHeight <= clientHeight + SCROLL_END_THRESHOLD_PX ||
+              win.scrollY + clientHeight >= scrollHeight - SCROLL_END_THRESHOLD_PX;
+            if (!unlocked && stableCount >= 2 && atEnd) {
               unlocked = true;
               reportEnd(generation);
             }
           };
           win.addEventListener('scroll', check, { passive: true });
+          doc.addEventListener('scroll', check, { passive: true, capture: true });
           const interval = win.setInterval(check, 400);
           win.addEventListener('unload', () => win.clearInterval(interval));
         } catch {
@@ -185,6 +203,8 @@ export function AgreementHtmlEmbed({
       source={{ html: content }}
       style={[styles.webview, style]}
       scrollEnabled
+      nestedScrollEnabled
+      overScrollMode="content"
       onMessage={handleMessage}
       injectedJavaScript={buildInjectedJs(generationRef.current)}
       onLoadEnd={() => {
