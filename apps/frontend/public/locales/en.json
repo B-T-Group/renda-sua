@@ -7460,7 +7460,22 @@
     "viewItem": "View item",
     "clientLabel": "Client",
     "unknownItem": "Item",
-    "merchantToggle": "Pricing not applicable (interest only)"
+    "merchantToggle": "Available for export"
+  },
+  "exportCatalog": {
+    "merchantToggle": "Available for export",
+    "marketsHelp": "Choose markets where shoppers can discover this item and submit interest. List the item at one home location only.",
+    "singleLocationHelp": "Export items are listed at one location only. Use export markets on the item to show this product in other countries.",
+    "singleLocationError": "Export items can only be listed at one location. Use export markets instead.",
+    "sectionTitle": "Available for export",
+    "sectionSubtitle": "Goods listed from Canada — request interest to import",
+    "seeAll": "See all exports",
+    "chip": "Exports",
+    "badge": "Export",
+    "pageTitle": "Available for export",
+    "pageSubtitle": "Browse goods available for export into this market. Submit interest and the seller will contact you.",
+    "empty": "No export items for this market yet.",
+    "illustrationLabel": "Products available for export into your market"
   },
   "incomingOrder": {
     "awaitingAction": "Awaiting action",

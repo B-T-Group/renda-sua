@@ -38,7 +38,7 @@ describe('ProductInterestService', () => {
     item: {
       id: 'item-1',
       name: 'Part',
-      interest_only: true,
+      export_available: true,
       moderation_status: 'approved',
       is_active: true,
     },
@@ -75,17 +75,17 @@ describe('ProductInterestService', () => {
     ).rejects.toBeInstanceOf(HttpException);
   });
 
-  it('rejects listings that are not interest_only', async () => {
+  it('rejects listings that are not export_available', async () => {
     hasuraUser.getUser.mockResolvedValue(clientUser);
     hasuraSystem.executeQuery.mockResolvedValueOnce({
       business_inventory_by_pk: {
         ...eligibleInventory,
-        item: { ...eligibleInventory.item, interest_only: false },
+        item: { ...eligibleInventory.item, export_available: false },
       },
     });
     await expect(
       service.createInterest({ businessInventoryId: 'inv-1' })
-    ).rejects.toMatchObject({ response: { error: 'NOT_INTEREST_ONLY' } });
+    ).rejects.toMatchObject({ response: { error: 'NOT_EXPORT_AVAILABLE' } });
   });
 
   it('rejects a missing listing', async () => {
@@ -266,7 +266,6 @@ describe('ProductInterestService', () => {
     expect(result.total).toBe(12);
     expect(result.totalPages).toBe(2);
     expect(hasuraSystem.executeQuery.mock.calls[0][1]).toEqual({
-      businessId: 'biz-1',
       where: {
         business_id: { _eq: 'biz-1' },
         business_location_id: { _eq: 'loc-9' },

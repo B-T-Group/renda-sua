@@ -13,6 +13,8 @@ export interface Item {
   item_sub_category_id: number;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
+  export_available?: boolean;
+  export_markets?: Array<{ country_code: string }>;
   weight: number | null;
   weight_unit: string | null;
   dimensions?: string | null;
@@ -158,6 +160,10 @@ export interface CreateItemData {
   is_active?: boolean;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
+  /** When true, shoppers submit export interest instead of buying. */
+  export_available?: boolean;
+  /** Destination ISO-2 markets for export_available items. */
+  export_market_country_codes?: string[];
   stripe_tax_code_id?: string;
   business_id: string;
 }

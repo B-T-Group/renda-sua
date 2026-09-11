@@ -391,6 +391,20 @@ function BrowseCatalogScreenInner({
     enabled: bagComplementsStopEnabled,
   });
 
+  const {
+    items: exportStopItems,
+    loading: exportStopLoading,
+  } = useInventoryCatalog({
+    search: '',
+    sort: 'relevance',
+    countryCode: catalogCountryCode,
+    state: catalogState,
+    origin: catalogOrigin,
+    export_only: true,
+    withAuth: inventoryRequestsWithAuth,
+    enabled: stopsEnabled && !suppressStops && !foodOnly,
+  });
+
   const feedRows = useCatalogFeedComposition({
     inventoryItems: items,
     suppressStops,
@@ -405,6 +419,8 @@ function BrowseCatalogScreenInner({
     collectionsLoading: essentialsLoading,
     stores: featuredStores,
     storesLoading: featuredStoreLoading,
+    exportItems: exportStopItems,
+    exportLoading: exportStopLoading,
   });
 
   const resultsLabel = useMemo(() => {

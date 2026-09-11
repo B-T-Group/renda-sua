@@ -21,7 +21,7 @@ Create **ready catalog + inventory** rows for one `business_location_id` from a 
 Treat as ambiguous (examples, not exhaustive):
 
 - Env, location, or business ownership unclear or conflicting
-- Price unclear (range, “from / quote / sur demande”, unit mismatch, missing when required) — **unless** the import is explicitly **interest-only / sur demande** mode (see below), in which case skip positive-price requirement and set `items.interest_only = true`
+- Price unclear (range, “from / quote / sur demande”, unit mismatch, missing when required) — **unless** the import is explicitly **export / sur demande** mode (see below), in which case skip positive-price requirement and set `items.export_available = true` (alias `interest_only`)
 - Category/subcategory could match multiple existing rows, or creating new taxonomy is speculative
 - Near-duplicate name/SKU — unclear whether to reuse or create
 - Brand unclear when multiple candidates exist
@@ -110,14 +110,14 @@ Required effective fields after enrichment (may be filled by AI):
 | Field | Notes |
 |-------|--------|
 | `name` | Required |
-| `price` / `selling_price` | > 0 for ready product — **or** omit / placeholder when `interest_only` |
+| `price` / `selling_price` | > 0 for ready product — **or** omit / placeholder when `export_available` |
 | `quantity` | Default **10** if blank |
 | `image_url` or usable `image_path` | Prefer ≥1 usable image. **No image → insert with `is_active=false`.** Generate image only if user explicitly allows |
-| `interest_only` | Optional boolean / aliases `pricing_not_applicable`, `sur_demande`. Default **false**. When true (or CSV/import default for sur-demande catalogs): set `items.interest_only = true`; price may be `0` or kept for merchant reference but shoppers see “I’m interested” instead of buy |
+| `export_available` / `interest_only` | Optional boolean / aliases `pricing_not_applicable`, `sur_demande`. Default **false**. When true: set `items.export_available = true`; price may be `0`; shoppers submit interest. List at **one** home location (e.g. Joliette) and insert `item_export_markets` for destination countries (`CM`, `GA`, `PH`) — do **not** clone inventory into other countries |
 
 Optional: description, sku, brand, category, subcategory, unit_cost, reorder_*, weight, color, model, dimensions, is_used, etc. Full alias map: [reference.md](reference.md). Example: [scripts/products.example.csv](scripts/products.example.csv).
 
-**Interest-only / sur demande catalogs:** If the user says pricing is not applicable (quote / “sur demande” / interest mode), either pass a CSV column `interest_only=true` per row or apply a **batch default** `interest_only=true` for the whole import. Do not block those rows for missing/zero price.
+**Export / sur demande catalogs:** If the user says pricing is not applicable (quote / “sur demande” / export mode), either pass a CSV column `export_available=true` (or legacy `interest_only=true`) per row or apply a **batch default** for the whole import. Do not block those rows for missing/zero price. Prefer one item + home inventory + export markets over per-country inventory clones.
 
 ### 3) AI enrichment (per row)
 
@@ -165,8 +165,8 @@ When inserting `items`, set:
 | `currency` | Business currency |
 | `description` | `''` if still empty after AI |
 | `item_sub_category_id` | Resolved NOT NULL id |
-| `price` | Catalog price (> 0), or `0` / retained numeric when `interest_only` |
-| `interest_only` | `true` when CSV/default says so; else `false` |
+| `price` | Catalog price (> 0), or `0` / retained numeric when `export_available` |
+| `export_available` | `true` when CSV/default says so (alias `interest_only`); else `false` |
 | `sku` | Provided or generated unique per business |
 | `status` | `'active'` |
 | `moderation_status` | `'approved'` |

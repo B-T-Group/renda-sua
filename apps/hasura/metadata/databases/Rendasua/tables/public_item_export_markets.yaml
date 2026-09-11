@@ -1,0 +1,81 @@
+table:
+  name: item_export_markets
+  schema: public
+object_relationships:
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+insert_permissions:
+  - role: business
+    permission:
+      check:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+      columns:
+        - item_id
+        - country_code
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - item_id
+        - country_code
+        - created_at
+      filter: {}
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - item_id
+        - country_code
+        - created_at
+      filter: {}
+  - role: business
+    permission:
+      columns:
+        - id
+        - item_id
+        - country_code
+        - created_at
+      filter: {}
+  - role: client
+    permission:
+      columns:
+        - id
+        - item_id
+        - country_code
+        - created_at
+      filter: {}
+  - role: user
+    permission:
+      columns:
+        - id
+        - item_id
+        - country_code
+        - created_at
+      filter: {}
+update_permissions:
+  - role: business
+    permission:
+      columns:
+        - country_code
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+      check: null
+delete_permissions:
+  - role: business
+    permission:
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

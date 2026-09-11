@@ -37,6 +37,7 @@ import {
 import { Tag, useTags } from '../../hooks/useTags';
 import ImageUploadDialog from './ImageUploadDialog';
 import ProductTaxCategorySelect from './ProductTaxCategorySelect';
+import ExportMarketsField from './ExportMarketsField';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../hooks/useStripeTaxCodes';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { isFoodCategoryName } from '../../constants/food';
@@ -98,7 +99,8 @@ export default function AddItemDialog({
     is_active: true,
     // MM markets default on once rail resolves; Stripe stays off.
     pay_on_delivery_enabled: false,
-    interest_only: false,
+    export_available: false,
+    export_market_country_codes: [],
     pay_at_pickup_enabled: true,
     min_order_quantity: 1,
     max_order_quantity: 1,
@@ -926,22 +928,27 @@ export default function AddItemDialog({
                   'Allow payment at pickup'
                 )}
               />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={newItemData.interest_only ?? false}
-                    onChange={(e) =>
-                      setNewItemData({
-                        ...newItemData,
-                        interest_only: e.target.checked,
-                      })
-                    }
-                  />
+              <ExportMarketsField
+                exportAvailable={newItemData.export_available ?? false}
+                selectedCountryCodes={
+                  newItemData.export_market_country_codes ?? []
                 }
-                label={t(
-                  'productInterest.merchantToggle',
-                  'Pricing not applicable (interest only)'
-                )}
+                disabled={itemsLoading}
+                onExportAvailableChange={(enabled) =>
+                  setNewItemData({
+                    ...newItemData,
+                    export_available: enabled,
+                    ...(enabled
+                      ? {}
+                      : { export_market_country_codes: [] }),
+                  })
+                }
+                onMarketsChange={(codes) =>
+                  setNewItemData({
+                    ...newItemData,
+                    export_market_country_codes: codes,
+                  })
+                }
               />
             </Stack>
           </Stack>
@@ -975,7 +982,7 @@ export default function AddItemDialog({
               !businessId ||
               !newItemData.name ||
               !newItemData.item_sub_category_id ||
-              (!(newItemData.interest_only ?? false) && !newItemData.price)
+              (!(newItemData.export_available ?? false) && !newItemData.price)
             }
           >
             {t('business.inventory.createItem')}

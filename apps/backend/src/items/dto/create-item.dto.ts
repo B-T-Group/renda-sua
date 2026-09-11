@@ -79,10 +79,17 @@ export class CreateItemDto {
 
   @ApiPropertyOptional({
     description:
-      'When true, shoppers cannot buy; they submit interest and the business follows up externally.',
+      'When true, shoppers cannot buy; they submit export interest. Visible in selected markets via export_market_country_codes.',
     default: false,
   })
-  interest_only?: boolean;
+  export_available?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'ISO-2 country codes where this export item should appear (destination markets). Home country is implied by inventory location.',
+    type: [String],
+  })
+  export_market_country_codes?: string[];
 
   @ApiPropertyOptional({
     description: 'When true, this item can be shipped via carrier. Default false.',

@@ -6334,7 +6334,14 @@
     "viewItem": "Voir l’article",
     "clientLabel": "Client",
     "unknownItem": "Article",
-    "merchantToggle": "Prix non applicable (intérêt uniquement)"
+    "merchantToggle": "Disponible à l’export"
+  },
+  "exportCatalog": {
+    "sectionTitle": "Disponible à l’export",
+    "sectionSubtitle": "Produits listés depuis le Canada — demandez un intérêt pour importer",
+    "seeAll": "Voir tous les exports",
+    "badge": "Export",
+    "chip": "Exports"
   },
   "assistant": {
     "title": "Assistant Rendasua",

@@ -6423,7 +6423,14 @@
     "viewItem": "View item",
     "clientLabel": "Client",
     "unknownItem": "Item",
-    "merchantToggle": "Pricing not applicable (interest only)"
+    "merchantToggle": "Available for export"
+  },
+  "exportCatalog": {
+    "sectionTitle": "Available for export",
+    "sectionSubtitle": "Goods listed from Canada — request interest to import",
+    "seeAll": "See all exports",
+    "badge": "Export",
+    "chip": "Exports"
   },
   "assistant": {
     "title": "Rendasua Assistant",
