@@ -60,6 +60,7 @@ import { requestStockAvailabilityCheck } from '../../services/inventoryItemsApi'
 import { scheduleMetaAddToCart } from '../../services/metaConversionsApi';
 import { ProductInterestSheet } from '../../components/product-interest/ProductInterestSheet';
 import { useProductInterest } from '../../hooks/useProductInterest';
+import { useMarket } from '../../hooks/useMarket';
 
 function InventoryItemDetailScreen() {
   const { t } = useTranslation();
@@ -69,6 +70,7 @@ function InventoryItemDetailScreen() {
   const route = useRoute<RouteProp<{ InventoryItemDetail: InventoryItemDetailParams }, 'InventoryItemDetail'>>();
   const { inventoryItemId, availabilityResult, availabilityQuantity } = route.params;
   const { auth, cart, ftue } = useStore();
+  const { selectedMarket } = useMarket();
   const { item, loading, error, refetch } = useInventoryItemDetail(inventoryItemId, {
     withAuth: auth.isAuthenticated,
   });
@@ -326,6 +328,17 @@ function InventoryItemDetailScreen() {
     ? t('cart.addMore', 'Add more')
     : t('cart.addToCart', 'Add to cart');
   const exportAvailable = item?.item?.export_available === true;
+  const viewerCountry =
+    selectedMarket?.countryCode?.trim().toUpperCase() ?? '';
+  const listingCountry = itemCountryCode ?? '';
+  // Buy/cart only when shopper is clearly in the listing's home market.
+  const isExportInterestOnly =
+    exportAvailable &&
+    !(
+      !!listingCountry &&
+      !!viewerCountry &&
+      listingCountry === viewerCountry
+    );
 
   const breadcrumb = useMemo(() => {
     if (!item) return '';
@@ -576,13 +589,13 @@ function InventoryItemDetailScreen() {
               originalPrice={item.original_price}
               discountedPrice={item.discounted_price}
               currency={currency}
-              hidePrices={exportAvailable}
+              hidePrices={isExportInterestOnly}
             />
           ) : null}
 
           {/* Amazon-style price block under variants */}
           <View style={{ marginTop: spacing.md }}>
-            {exportAvailable ? (
+            {isExportInterestOnly ? (
               <Text
                 style={[
                   typography.h3,
@@ -923,7 +936,7 @@ function InventoryItemDetailScreen() {
             },
           ]}
         >
-          {exportAvailable ? (
+          {isExportInterestOnly ? (
             <View style={{ gap: spacing.sm }}>
               <Text
                 style={[
@@ -987,7 +1000,7 @@ function InventoryItemDetailScreen() {
               </Text>
             </View>
           )}
-          {!exportAvailable ? (
+          {!isExportInterestOnly ? (
           <View style={styles.bottomBarRow}>
             <Button
               mode={inCart ? 'contained-tonal' : 'outlined'}
@@ -1039,7 +1052,7 @@ function InventoryItemDetailScreen() {
             </Button>
           </View>
           ) : null}
-          {!exportAvailable && inCart ? (
+          {!isExportInterestOnly && inCart ? (
             <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
               <StatusPill
                 label={inCartLabel}
@@ -1062,11 +1075,8 @@ function InventoryItemDetailScreen() {
           try {
             await submitInterest(inventoryItemId, note);
             setInterestOpen(false);
-            setSnack(
-              t(
-                'productInterest.success',
-                'Interest sent. The seller will contact you.'
-              )
+            (navigation as { navigate: (name: string) => void }).navigate(
+              'ProductInterestSuccess'
             );
           } catch (e: any) {
             setSnack(

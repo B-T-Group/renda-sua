@@ -17,6 +17,7 @@ import ManageRecipientsScreen from '../screens/client/ManageRecipientsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import UserLikesScreen from '../screens/shared/UserLikesScreen';
 import ClientProductInterestScreen from '../screens/client/ClientProductInterestScreen';
+import ProductInterestSuccessScreen from '../screens/client/ProductInterestSuccessScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
 import DocumentsScreen from '../screens/shared/DocumentsScreen';
@@ -406,6 +407,16 @@ export function ClientRootNavigator() {
           component={ClientProductInterestScreen}
           options={{
             title: t('productInterest.clientTitle', 'My interest requests'),
+          }}
+        />
+        <ClientRootStack.Screen
+          name="ProductInterestSuccess"
+          component={ProductInterestSuccessScreen}
+          options={{
+            title: t(
+              'productInterest.successScreen.navTitle',
+              'Interest submitted'
+            ),
           }}
         />
         <ClientRootStack.Screen

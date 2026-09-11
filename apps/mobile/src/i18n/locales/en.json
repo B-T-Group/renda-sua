@@ -6423,7 +6423,14 @@
     "viewItem": "View item",
     "clientLabel": "Client",
     "unknownItem": "Item",
-    "merchantToggle": "Available for export"
+    "merchantToggle": "Available for export",
+    "successScreen": {
+      "navTitle": "Interest submitted",
+      "title": "Interest submitted successfully",
+      "body": "A representative will reach out to you about this item.",
+      "browseMore": "Continue browsing",
+      "viewRequests": "View my interest requests"
+    }
   },
   "exportCatalog": {
     "sectionTitle": "Available for export",

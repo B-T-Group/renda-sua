@@ -6334,7 +6334,14 @@
     "viewItem": "Voir l’article",
     "clientLabel": "Client",
     "unknownItem": "Article",
-    "merchantToggle": "Disponible à l’export"
+    "merchantToggle": "Disponible à l’export",
+    "successScreen": {
+      "navTitle": "Intérêt envoyé",
+      "title": "Intérêt envoyé avec succès",
+      "body": "Un représentant vous contactera au sujet de cet article.",
+      "browseMore": "Continuer à parcourir",
+      "viewRequests": "Voir mes demandes d’intérêt"
+    }
   },
   "exportCatalog": {
     "sectionTitle": "Disponible à l’export",

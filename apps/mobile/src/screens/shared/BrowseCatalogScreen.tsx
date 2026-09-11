@@ -226,6 +226,7 @@ function BrowseCatalogScreenInner({
     business: '',
     collection: '',
   });
+  const [exportOnly, setExportOnly] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [pullRefreshing, setPullRefreshing] = useState(false);
@@ -287,6 +288,7 @@ function BrowseCatalogScreenInner({
     business_name: catalogFilters.business,
     collection: catalogFilters.collection,
     food_only: foodOnly || undefined,
+    export_only: exportOnly || undefined,
     withAuth: inventoryRequestsWithAuth,
     enabled: catalogReady,
   });
@@ -298,8 +300,9 @@ function BrowseCatalogScreenInner({
     if (catalogFilters.brand) n += 1;
     if (catalogFilters.business) n += 1;
     if (catalogFilters.collection) n += 1;
+    if (exportOnly) n += 1;
     return n;
-  }, [catalogFilters]);
+  }, [catalogFilters, exportOnly]);
 
   // Non-category filter count for Top in Category stop
   // (category filter alone shouldn't suppress the category rail)
@@ -309,8 +312,9 @@ function BrowseCatalogScreenInner({
     if (catalogFilters.brand) n += 1;
     if (catalogFilters.business) n += 1;
     if (catalogFilters.collection) n += 1;
+    if (exportOnly) n += 1;
     return n;
-  }, [catalogFilters]);
+  }, [catalogFilters, exportOnly]);
 
   // Compose feed items (inventory + mid-feed stops)
   const suppressStops =
@@ -556,11 +560,28 @@ function BrowseCatalogScreenInner({
       business: '',
       collection: '',
     });
+    setExportOnly(false);
+  }, []);
+
+  const onToggleExportOnly = useCallback(() => {
+    setExportOnly((prev) => !prev);
+  }, []);
+
+  const onClearExportOnly = useCallback(() => {
+    setExportOnly(false);
+  }, []);
+
+  const onSeeAllExports = useCallback(() => {
+    setExportOnly(true);
   }, []);
 
   const onSeeAllDeals = useCallback(() => {
     setSort('deals');
   }, []);
+
+  const showExportsChip =
+    !foodOnly &&
+    (exportOnly || exportStopLoading || exportStopItems.length > 0);
 
   const listHeaderElement = useMemo(
     () => (
@@ -593,20 +614,10 @@ function BrowseCatalogScreenInner({
           error={error}
           itemsLength={items.length}
           onListRefresh={onListRefresh}
-          dealsSpotlightItems={[]}
-          dealsSpotlightLoading={false}
-          onDealSpotlightItemPress={undefined}
-          onSeeAllDeals={undefined}
-          featuredCollections={[]}
-          collectionsLoading={false}
-          onCollectionPress={undefined}
-          featuredStores={[]}
-          storesLoading={false}
-          onStorePress={undefined}
-          onSeeAllStores={undefined}
-          previewItems={[]}
-          previewLoading={false}
-          onPreviewItemPress={undefined}
+          showExportsChip={showExportsChip}
+          exportOnly={exportOnly}
+          onToggleExportOnly={onToggleExportOnly}
+          onClearExportOnly={onClearExportOnly}
         />
       </>
     ),
@@ -634,6 +645,10 @@ function BrowseCatalogScreenInner({
       items.length,
       onListRefresh,
       foodOnly,
+      showExportsChip,
+      exportOnly,
+      onToggleExportOnly,
+      onClearExportOnly,
     ]
   );
 
@@ -649,6 +664,7 @@ function BrowseCatalogScreenInner({
               onStorePress={onStorePress}
               onSeeAllDeals={onSeeAllDeals}
               onSeeAllStores={onSeeAllStores}
+              onSeeAllExports={onSeeAllExports}
             />
           </View>
         );
@@ -685,6 +701,7 @@ function BrowseCatalogScreenInner({
       onStorePress,
       onSeeAllDeals,
       onSeeAllStores,
+      onSeeAllExports,
     ]
   );
 
@@ -700,7 +717,8 @@ function BrowseCatalogScreenInner({
       return <CatalogItemSkeleton count={6} />;
     }
     if (error) return null;
-    const hasFilters = activeFilterCount > 0 || debouncedSearch.length > 0;
+    const hasFilters =
+      activeFilterCount > 0 || debouncedSearch.length > 0;
     return (
       <View style={styles.centerPad}>
         <CatalogEmptyIllustration />
