@@ -42,6 +42,8 @@ function relativeTime(iso: string, t: TFunction): string {
   });
 }
 
+const COLLAPSED_VISIBLE = 2;
+
 export interface PendingWithdrawalsSectionProps {
   items: PendingWithdrawalRow[];
   onResolved: (message: string) => void;
@@ -56,6 +58,7 @@ export function PendingWithdrawalsSection({
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const handleResolve = useCallback(
     async (id: string) => {
@@ -88,6 +91,11 @@ export function PendingWithdrawalsSection({
 
   if (!items.length) return null;
 
+  const canCollapse = items.length > COLLAPSED_VISIBLE;
+  const visibleItems =
+    canCollapse && !expanded ? items.slice(0, COLLAPSED_VISIBLE) : items;
+  const hiddenCount = items.length - COLLAPSED_VISIBLE;
+
   return (
     <View
       style={[
@@ -108,6 +116,9 @@ export function PendingWithdrawalsSection({
         ]}
       >
         {t('accounts.pendingWithdrawals.title', 'Pending withdrawals')}
+        {items.length > 1
+          ? ` (${items.length})`
+          : ''}
       </Text>
       <Text
         style={[
@@ -120,7 +131,7 @@ export function PendingWithdrawalsSection({
           'Resolve these before starting a new withdrawal. Tap Resolve to check Mobile Money or cancel a stuck request.'
         )}
       </Text>
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const busy = busyId === item.id;
         return (
           <View
@@ -175,6 +186,41 @@ export function PendingWithdrawalsSection({
           </View>
         );
       })}
+      {canCollapse ? (
+        <Pressable
+          onPress={() => setExpanded((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityLabel={
+            expanded
+              ? t('accounts.pendingWithdrawals.showLess', 'Show less')
+              : t('accounts.pendingWithdrawals.showMore', 'Show {{count}} more', {
+                  count: hiddenCount,
+                })
+          }
+          style={({ pressed }) => [
+            styles.expandBtn,
+            { opacity: pressed ? 0.7 : 1, marginTop: spacing.xs },
+          ]}
+        >
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.primary.main, fontWeight: '700' },
+            ]}
+          >
+            {expanded
+              ? t('accounts.pendingWithdrawals.showLess', 'Show less')
+              : t('accounts.pendingWithdrawals.showMore', 'Show {{count}} more', {
+                  count: hiddenCount,
+                })}
+          </Text>
+          <MaterialCommunityIcons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={colors.primary.main}
+          />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -194,5 +240,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  expandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 4,
   },
 });

@@ -396,7 +396,9 @@
       "resolve": "Resolve pending withdrawal",
       "resolveDone": "Withdrawal status updated.",
       "resolveFailed": "Could not resolve this withdrawal. Try again.",
-      "withdrawDisabled": "Resolve pending withdrawals before starting a new one."
+      "withdrawDisabled": "Resolve pending withdrawals before starting a new one.",
+      "showMore": "Show {{count}} more",
+      "showLess": "Show less"
     }
   },
   "addresses": {

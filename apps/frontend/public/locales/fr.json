@@ -139,7 +139,9 @@
       "resolve": "Résoudre le retrait en attente",
       "resolveDone": "Statut du retrait mis à jour.",
       "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
-      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau."
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau.",
+      "showMore": "Afficher {{count}} de plus",
+      "showLess": "Afficher moins"
     }
   },
   "addresses": {
