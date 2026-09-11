@@ -4572,6 +4572,7 @@ export class OrdersService {
       at,
       notes: notes?.trim() || null,
     });
+    await this.applyPaidDepositForExternalSettlementSafe(order);
     await this.creditAgentReferralIfDelivered(order);
     void this.representativeCompensationService?.evaluateForOrderSafe(
       order.id,
@@ -7800,6 +7801,59 @@ export class OrdersService {
    * Move paid reservation deposit from withheld → available before settlement debit.
    * Idempotent via deposit txn release reference.
    */
+  /**
+   * Cash exception completes without remainder wallet credit. Still consume the
+   * held reservation deposit so it is not locked (or withdrawable) forever.
+   */
+  private paidDepositApplyParams(order: Orders): {
+    amount: number;
+    depositTxnId: string;
+    userId: string;
+  } | null {
+    const amount = Number((order as any).deposit_amount) || 0;
+    const depositTxnId = (order as any)
+      .deposit_mobile_payment_transaction_id as string | undefined;
+    const userId = order.client?.user_id;
+    if ((order as any).deposit_status !== 'paid' || amount <= 0 || !depositTxnId || !userId) {
+      return null;
+    }
+    return { amount, depositTxnId, userId };
+  }
+
+  private async applyPaidDepositForExternalSettlement(
+    order: Orders
+  ): Promise<void> {
+    const params = this.paidDepositApplyParams(order);
+    if (!params) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      params.userId,
+      order.currency
+    );
+    if (!clientAccount?.id) {
+      throw new Error(
+        `Client account not found for deposit apply on ${order.order_number}`
+      );
+    }
+    await this.depositLedgerService.applyHeldDepositAsPayment({
+      clientAccountId: clientAccount.id,
+      amount: params.amount,
+      orderNumber: order.order_number,
+      depositTransactionId: params.depositTxnId,
+    });
+  }
+
+  private async applyPaidDepositForExternalSettlementSafe(
+    order: Orders
+  ): Promise<void> {
+    try {
+      await this.applyPaidDepositForExternalSettlement(order);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to apply deposit after cash exception for ${order.id}: ${error?.message}`
+      );
+    }
+  }
+
   private async releasePaidDepositHoldIfNeeded(
     order: Orders,
     clientAccountId: string
@@ -12062,33 +12116,34 @@ export class OrdersService {
 
     const subtotalPortion = Number(orderHold.client_hold_amount);
     const skipClient = options?.skipClientLedgerMovements === true;
+    if (skipClient) {
+      await this.applyPaidDepositForExternalSettlement(order);
+    }
 
-    if (subtotalPortion > 0) {
+    if (subtotalPortion > 0 && !skipClient) {
       if (
         paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup'
       ) {
-        if (!skipClient) {
-          const clientAccount = await this.hasuraSystemService.getAccount(
-            order.client.user_id,
-            order.currency
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new HttpException(
+            'Client account not found',
+            HttpStatus.NOT_FOUND
           );
-          if (!clientAccount) {
-            throw new HttpException(
-              'Client account not found',
-              HttpStatus.NOT_FOUND
-            );
-          }
-          // Release withheld deposit into available before full GMV payment debit
-          await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
-          await this.accountsService.registerTransaction({
-            accountId: clientAccount.id,
-            amount: subtotalPortion,
-            transactionType: 'payment',
-            memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
-            referenceId: orderId,
-          });
         }
+        // Release withheld deposit into available before full GMV payment debit
+        await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: subtotalPortion,
+          transactionType: 'payment',
+          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
+          referenceId: orderId,
+        });
       } else {
         const clientAccount = await this.hasuraSystemService.getAccount(
           order.client.user_id,

@@ -68,6 +68,58 @@ describe('DepositLedgerService', () => {
     });
   });
 
+  describe('applyHeldDepositAsPayment', () => {
+    it('releases the hold then debits the deposit amount', async () => {
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      accountsService.registerPaymentIfNotExists.mockResolvedValue({
+        success: true,
+      });
+
+      await service.applyHeldDepositAsPayment({
+        clientAccountId: 'acct-1',
+        amount: 2000,
+        orderNumber: '49520979',
+        depositTransactionId: txnId,
+      });
+
+      expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith({
+        accountId: 'acct-1',
+        amount: 2000,
+        referenceId: txnId,
+        memo: 'Deposit released for settlement of order 49520979',
+      });
+      expect(accountsService.registerPaymentIfNotExists).toHaveBeenCalledWith({
+        accountId: 'acct-1',
+        amount: 2000,
+        referenceId: txnId,
+        memo: 'Deposit applied for order 49520979',
+      });
+    });
+
+    it('throws when the deposit debit fails after release', async () => {
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      accountsService.registerPaymentIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'insufficient',
+      });
+
+      await expect(
+        service.applyHeldDepositAsPayment({
+          clientAccountId: 'acct-1',
+          amount: 2000,
+          orderNumber: '49520979',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/apply payment failed/i);
+    });
+  });
+
   describe('releaseDepositToAvailable', () => {
     it('ensures hold then releases', async () => {
       accountsService.hasTransactionForReference.mockResolvedValue(true);
