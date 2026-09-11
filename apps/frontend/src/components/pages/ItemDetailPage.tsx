@@ -874,8 +874,8 @@ export default function ItemDetailPage() {
   const hasDeal = lp.hasDeal;
   const checkoutUnitPrice = lp.unit;
   const checkoutPriceText = formatCurrency(checkoutUnitPrice, item.currency);
-  const interestOnly = item.interest_only === true;
-  const displayPriceText = interestOnly
+  const exportAvailable = item.export_available === true;
+  const displayPriceText = exportAvailable
     ? t('productInterest.priceNotApplicable', 'Price on request')
     : checkoutPriceText;
   const showMobileStickyOrderBar =
@@ -883,10 +883,10 @@ export default function ItemDetailPage() {
     hasStock &&
     merchantCanAcceptOrders &&
     paymentsEnabled &&
-    !interestOnly;
+    !exportAvailable;
   const showInlineOrderNow = !showMobileStickyOrderBar;
   const showOrderCtaStack =
-    interestOnly ||
+    exportAvailable ||
     !hasStock ||
     !paymentsEnabled ||
     !merchantCanAcceptOrders ||
@@ -1181,6 +1181,14 @@ export default function ItemDetailPage() {
             >
               {item.name}
             </Typography>
+            {exportAvailable ? (
+              <Chip
+                size="small"
+                color="secondary"
+                label={t('exportCatalog.badge', 'Export')}
+                sx={{ fontWeight: 700, alignSelf: 'flex-start', mb: 1 }}
+              />
+            ) : null}
 
             <ItemDetailRatingSummary
               ratings={ratings}
@@ -1227,7 +1235,7 @@ export default function ItemDetailPage() {
                 })}
               >
                 <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
-                  {interestOnly ? (
+                  {exportAvailable ? (
                     <Typography variant="h6" color="primary.main" fontWeight={700}>
                       {t('productInterest.priceNotApplicable', 'Price on request')}
                     </Typography>
@@ -1461,7 +1469,7 @@ export default function ItemDetailPage() {
             {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
             {showOrderCtaStack ? (
               <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
-                {interestOnly ? (
+                {exportAvailable ? (
                   <Button
                     variant="contained"
                     size="medium"
@@ -1662,7 +1670,9 @@ export default function ItemDetailPage() {
                 value={item.max_order_quantity}
               />
             )}
-            {item.max_delivery_distance != null && item.max_delivery_distance > 0 && (
+            {item.max_delivery_distance != null &&
+              item.max_delivery_distance > 0 &&
+              !exportAvailable && (
               <ProductSpecRow
                 label={t('items.maxDeliveryDistance', 'Max. delivery distance')}
                 value={`${item.max_delivery_distance} km`}

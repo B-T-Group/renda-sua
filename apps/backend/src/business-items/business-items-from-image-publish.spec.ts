@@ -345,7 +345,7 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
           description: null,
           status: 'active',
           price: null,
-          interest_only: true,
+          export_available: true,
         },
       });
       hasuraSystemService.executeMutation.mockResolvedValue({
@@ -376,7 +376,7 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
           description: null,
           status: 'active',
           price: null,
-          interest_only: false,
+          export_available: false,
         },
       });
 

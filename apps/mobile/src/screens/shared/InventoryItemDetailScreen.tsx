@@ -325,7 +325,7 @@ function InventoryItemDetailScreen() {
   const addToCartLabel = inCart
     ? t('cart.addMore', 'Add more')
     : t('cart.addToCart', 'Add to cart');
-  const interestOnly = item?.item?.interest_only === true;
+  const exportAvailable = item?.item?.export_available === true;
 
   const breadcrumb = useMemo(() => {
     if (!item) return '';
@@ -576,13 +576,13 @@ function InventoryItemDetailScreen() {
               originalPrice={item.original_price}
               discountedPrice={item.discounted_price}
               currency={currency}
-              hidePrices={interestOnly}
+              hidePrices={exportAvailable}
             />
           ) : null}
 
           {/* Amazon-style price block under variants */}
           <View style={{ marginTop: spacing.md }}>
-            {interestOnly ? (
+            {exportAvailable ? (
               <Text
                 style={[
                   typography.h3,
@@ -923,7 +923,7 @@ function InventoryItemDetailScreen() {
             },
           ]}
         >
-          {interestOnly ? (
+          {exportAvailable ? (
             <View style={{ gap: spacing.sm }}>
               <Text
                 style={[
@@ -987,7 +987,7 @@ function InventoryItemDetailScreen() {
               </Text>
             </View>
           )}
-          {!interestOnly ? (
+          {!exportAvailable ? (
           <View style={styles.bottomBarRow}>
             <Button
               mode={inCart ? 'contained-tonal' : 'outlined'}
@@ -1039,7 +1039,7 @@ function InventoryItemDetailScreen() {
             </Button>
           </View>
           ) : null}
-          {!interestOnly && inCart ? (
+          {!exportAvailable && inCart ? (
             <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
               <StatusPill
                 label={inCartLabel}

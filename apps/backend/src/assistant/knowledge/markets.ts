@@ -9,6 +9,8 @@ const EN = `Markets we currently serve for shopping, delivery, and checkout:
 
 The United States (US) is enabled for Stripe card payments. Groupe BT also has a presence in Congo, Togo, and Côte d'Ivoire; these are not currently listed as live Rendasua markets.
 
+Some goods listed from Canada are available for export into Cameroon, Gabon, and the Philippines. Shoppers in those markets see an “Available for export” section and can submit interest (not local checkout); the seller follows up outside the app.
+
 Only the markets listed above are live. Any other country (for example Brazil) is not currently served by Rendasua — do not invent coverage, local payment rails, or launch status.
 When unsure about a country, say we will confirm availability and get back shortly rather than inventing coverage.`;
 
@@ -20,6 +22,8 @@ const FR = `Marchés actuellement desservis pour l'achat, la livraison et le pai
 - Philippines (PH) — cartes via Stripe
 
 Les États-Unis (US) sont activés pour les paiements par carte Stripe. Le Groupe BT est aussi présent au Congo, au Togo et en Côte d'Ivoire ; ces pays ne figurent pas actuellement parmi les marchés Rendasua actifs.
+
+Certains produits listés depuis le Canada sont disponibles à l'export vers le Cameroun, le Gabon et les Philippines. Les acheteurs de ces marchés voient une section « Disponible à l'export » et peuvent manifester leur intérêt (pas de paiement local) ; le vendeur assure le suivi hors application.
 
 Seuls les marchés listés ci-dessus sont actifs. Tout autre pays (par exemple le Brésil) n'est pas actuellement desservi par Rendasua — n'inventez ni couverture, ni moyens de paiement locaux, ni statut de lancement.
 En cas de doute sur un pays, indiquez que nous confirmerons la disponibilité et reviendrons sous peu, sans inventer de couverture.`;

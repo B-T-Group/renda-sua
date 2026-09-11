@@ -29,6 +29,8 @@ export interface FetchInventoryItemsParams {
   origin_lng?: number;
   /** Restrict the list to cooked food sold by restaurants (the Food tab). */
   food_only?: boolean;
+  /** Only export_available items for the viewer market. */
+  export_only?: boolean;
 }
 
 export interface FetchCatalogStoresParams {
@@ -64,6 +66,7 @@ export function buildInventoryItemsQuery(
   if (params.brand) search.set('brand', params.brand);
   if (params.collection) search.set('collection', params.collection);
   if (params.food_only === true) search.set('food_only', 'true');
+  if (params.export_only === true) search.set('export_only', 'true');
   if (params.sort) search.set('sort', params.sort);
   if (params.include_unavailable === true) search.set('include_unavailable', 'true');
   if (params.owner_preview === true) search.set('owner_preview', 'true');

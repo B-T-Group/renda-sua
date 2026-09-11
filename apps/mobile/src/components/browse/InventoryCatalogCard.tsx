@@ -75,7 +75,7 @@ function InventoryCatalogCardInner({
 }: InventoryCatalogCardProps) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing } = useTheme();
-  const interestOnly = item.item.interest_only === true;
+  const exportAvailable = item.item.export_available === true;
   const defaultLabel = t('orders.variant.defaultOption', 'Default');
   const variantOptionCount = useMemo(
     () => shopperVariantOptionCount(item),
@@ -351,7 +351,7 @@ function InventoryCatalogCardInner({
                 {item.item.name}
               </Text>
               <View style={styles.priceRow}>
-                {interestOnly ? (
+                {exportAvailable ? (
                   <Text
                     style={[
                       typography.subtitle2,
@@ -422,7 +422,7 @@ function InventoryCatalogCardInner({
           </View>
         </View>
 
-        {!interestOnly && hasDeal && dealPercent > 0 ? (
+        {!exportAvailable && hasDeal && dealPercent > 0 ? (
           <StatusPill
             label={t('public.items.card.savePercent', 'Save {{pct}}%', {
               pct: dealPercent,
@@ -433,7 +433,7 @@ function InventoryCatalogCardInner({
             compact
             style={{ marginTop: spacing.xs }}
           />
-        ) : !interestOnly && hasDeal ? (
+        ) : !exportAvailable && hasDeal ? (
           <StatusPill
             label={t('public.items.card.dealBadge', 'Deal')}
             backgroundColor={colors.secondary.light + '40'}
@@ -564,7 +564,7 @@ function InventoryCatalogCardInner({
         <Divider style={{ marginTop: spacing.sm }} />
 
         <View style={[styles.ctaRow, { marginTop: spacing.xs }]}>
-          {interestOnly ? (
+          {exportAvailable ? (
             <Button
               mode="contained"
               icon="hand-wave-outline"

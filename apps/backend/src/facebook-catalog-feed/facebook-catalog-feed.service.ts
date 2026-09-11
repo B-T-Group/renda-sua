@@ -103,7 +103,7 @@ export class FacebookCatalogFeedService {
         {
           item: {
             moderation_status: { _eq: 'approved' },
-            interest_only: { _eq: false },
+            export_available: { _eq: false },
           },
         },
         {

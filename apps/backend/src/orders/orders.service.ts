@@ -9585,7 +9585,7 @@ export class OrdersService {
             name
             description
             pay_on_delivery_enabled
-            interest_only
+            export_available
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -9771,11 +9771,11 @@ export class OrdersService {
         );
       }
 
-      if (businessInventory.item?.interest_only === true) {
+      if (businessInventory.item?.export_available === true) {
         throw new HttpException(
           {
             success: false,
-            error: 'INTEREST_ONLY_ITEM',
+            error: 'EXPORT_AVAILABLE_ITEM',
             message: `${businessInventory.item.name} cannot be purchased. Submit interest instead.`,
           },
           HttpStatus.BAD_REQUEST
