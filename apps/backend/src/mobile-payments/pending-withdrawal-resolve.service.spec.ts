@@ -79,6 +79,16 @@ describe('PendingWithdrawalResolveService', () => {
     const result = await service.resolveForUser('tx-1', 'user-1');
 
     expect(result.outcome).toBe('cancelled');
+    expect(result.transaction_id).toBeNull();
+    expect(result.status).toEqual({
+      transactionId: 'tx-1',
+      status: 'cancelled',
+      amount: 1000,
+      currency: 'XAF',
+      reference: 'P123',
+      message: 'Cancelled before provider accepted withdrawal',
+      provider: 'freemopay',
+    });
     expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith({
       accountId: 'acct-1',
       amount: 1000,
@@ -110,6 +120,8 @@ describe('PendingWithdrawalResolveService', () => {
     const result = await service.resolveForUser('tx-1', 'user-1');
 
     expect(result.outcome).toBe('paid');
+    expect(result.transaction_id).toBe('prov-1');
+    expect(result.status.status).toBe('success');
     expect(callbackProcessor.processFreemopayCallback).toHaveBeenCalled();
   });
 
@@ -132,6 +144,12 @@ describe('PendingWithdrawalResolveService', () => {
     const result = await service.resolveForUser('tx-1', 'user-1');
 
     expect(result.outcome).toBe('failed');
+    expect(result.transaction_id).toBe('prov-1');
+    expect(result.status).toMatchObject({
+      transactionId: 'prov-1',
+      status: 'failed',
+      message: 'Rejected',
+    });
     expect(callbackProcessor.processFreemopayCallback).toHaveBeenCalled();
   });
 
@@ -150,6 +168,8 @@ describe('PendingWithdrawalResolveService', () => {
     const result = await service.resolveForUser('tx-1', 'user-1');
 
     expect(result.outcome).toBe('still_pending');
+    expect(result.transaction_id).toBe('prov-1');
+    expect(result.status.status).toBe('pending');
     expect(callbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
   });
@@ -179,6 +199,8 @@ describe('PendingWithdrawalResolveService', () => {
     });
 
     expect(result.outcome).toBe('still_pending');
+    expect(result.transaction_id).toBeNull();
+    expect(result.status.status).toBe('pending');
     expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
   });
 
