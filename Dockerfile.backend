@@ -9,7 +9,8 @@ RUN apk add --no-cache libc6-compat
 
 COPY dist/apps/backend/ ./
 
-RUN npm i --only=production --legacy-peer-deps
+# Pin installs via apps/backend package.json exact @aws-sdk versions — no lockfile in dist/
+RUN npm i --omit=dev --legacy-peer-deps
 
 
 # Create non-root user
