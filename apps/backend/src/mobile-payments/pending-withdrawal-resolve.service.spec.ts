@@ -89,23 +89,22 @@ describe('PendingWithdrawalResolveService', () => {
       message: 'Cancelled before provider accepted withdrawal',
       provider: 'freemopay',
     });
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
-      status: 'cancelled',
-      error_message: 'Cancelled before provider accepted withdrawal',
-      error_code: 'USER_CANCELLED',
-    });
     expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith({
       accountId: 'acct-1',
       amount: 1000,
       referenceId: 'tx-1',
       memo: expect.stringContaining('GIVE_CHANGE release'),
     });
-    const statusCallOrder = databaseService.updateTransaction.mock.invocationCallOrder[0];
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
+      status: 'cancelled',
+      error_message: 'Cancelled before provider accepted withdrawal',
+      error_code: 'USER_CANCELLED',
+    });
     const releaseCallOrder =
       accountsService.registerReleaseIfNotExists.mock.invocationCallOrder[0];
-    expect(statusCallOrder).toBeLessThan(releaseCallOrder);
+    const statusCallOrder = databaseService.updateTransaction.mock.invocationCallOrder[0];
+    expect(releaseCallOrder).toBeLessThan(statusCallOrder);
   });
-
   it('finalizes paid withdrawal when provider reports success', async () => {
     databaseService.getTransactionById.mockResolvedValue(
       baseTx({ transaction_id: 'prov-1' })

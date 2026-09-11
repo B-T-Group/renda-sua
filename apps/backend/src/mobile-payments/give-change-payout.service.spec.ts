@@ -156,6 +156,35 @@ describe('GiveChangePayoutService', () => {
     expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
   });
 
+  it('does not release hold when provider accepted but local update fails', async () => {
+    databaseService.updateTransaction.mockRejectedValueOnce(
+      new Error('hasura down')
+    );
+
+    await expect(
+      service.executeGiveChangePayout(
+        {
+          amount: 5000,
+          currency: 'XAF',
+          description: 'Auto payout',
+          customerPhone: '+237600000000',
+          accountId: 'acct-1',
+          provider: 'freemopay',
+        },
+        { throwOnWithdrawalFailure: false }
+      )
+    ).rejects.toThrow('hasura down');
+
+    expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      'mobile-tx-1',
+      expect.objectContaining({
+        transaction_id: 'provider-ref-1',
+        status: 'pending',
+      })
+    );
+  });
+
   it('marks failed before releasing when provider returns no transaction id', async () => {
     mobilePaymentsService.initiatePayment.mockResolvedValue({
       success: true,

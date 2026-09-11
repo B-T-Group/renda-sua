@@ -202,12 +202,14 @@ export class GiveChangePayoutService {
       );
     }
 
+    // Only catch provider-call failures here. After Freemopay/MyPVit accepts,
+    // failInitiation must not run (would release hold while payout may proceed).
+    let paymentResponse: MobilePaymentResponse;
     try {
-      return await this.initiateAndFinalize(
-        transaction.id,
-        reference,
+      paymentResponse = await this.callProviderInitiate(
         params,
         callbackUrl,
+        reference,
         options.initiatorUserId ?? params.mtnUserId
       );
     } catch (error: any) {
@@ -232,19 +234,25 @@ export class GiveChangePayoutService {
       }
       return { success: false };
     }
+
+    return this.finalizeAfterProvider(
+      transaction.id,
+      reference,
+      params,
+      paymentResponse
+    );
   }
 
-  private async initiateAndFinalize(
-    mobileTxId: string,
-    reference: string,
+  private async callProviderInitiate(
     params: GiveChangePayoutParams,
     callbackUrl: string,
+    reference: string,
     mtnUserId?: string
-  ): Promise<GiveChangePayoutResult> {
+  ): Promise<MobilePaymentResponse> {
     const paymentMethod =
       (params.paymentMethod as 'mobile_money' | 'card' | 'bank_transfer' | undefined) ||
       'mobile_money';
-    const paymentResponse = await this.mobilePaymentsService.initiatePayment(
+    return this.mobilePaymentsService.initiatePayment(
       {
         amount: params.amount,
         currency: params.currency,
@@ -258,12 +266,6 @@ export class GiveChangePayoutService {
       },
       reference,
       mtnUserId
-    );
-    return this.finalizeAfterProvider(
-      mobileTxId,
-      reference,
-      params,
-      paymentResponse
     );
   }
 

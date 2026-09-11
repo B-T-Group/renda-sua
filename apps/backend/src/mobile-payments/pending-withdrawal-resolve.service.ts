@@ -193,12 +193,7 @@ export class PendingWithdrawalResolveService {
       }
     }
 
-    await this.databaseService.updateTransaction(tx.id, {
-      status: 'cancelled',
-      error_message: 'Cancelled before provider accepted withdrawal',
-      error_code: 'USER_CANCELLED',
-    });
-
+    // Release first so a failed release leaves the row pending and retryable.
     const released = await this.accountsService.registerReleaseIfNotExists({
       accountId: tx.account_id as string,
       amount: tx.amount,
@@ -215,6 +210,12 @@ export class PendingWithdrawalResolveService {
         HttpStatus.BAD_REQUEST
       );
     }
+
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'cancelled',
+      error_message: 'Cancelled before provider accepted withdrawal',
+      error_code: 'USER_CANCELLED',
+    });
 
     const status = this.statusFromLocalTx(tx, 'cancelled', {
       message: 'Cancelled before provider accepted withdrawal',
