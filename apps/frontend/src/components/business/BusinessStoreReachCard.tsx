@@ -27,6 +27,8 @@ export interface BusinessStoreReachCardProps {
   productViews: number | null;
   metricsLoading?: boolean;
   compact?: boolean;
+  /** When false, skips /business/reliability until ready. */
+  fetchEnabled?: boolean;
 }
 
 const PAUSE_DURATIONS: PauseDuration[] = [
@@ -42,9 +44,10 @@ export function BusinessStoreReachCard({
   productViews,
   metricsLoading = false,
   compact = false,
+  fetchEnabled = true,
 }: BusinessStoreReachCardProps) {
   const { t } = useTranslation();
-  const availability = useBusinessAvailability(true);
+  const availability = useBusinessAvailability(fetchEnabled);
   const [pauseAnchor, setPauseAnchor] = useState<null | HTMLElement>(null);
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'shared'>(
     'idle'

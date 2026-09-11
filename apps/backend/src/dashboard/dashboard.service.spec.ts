@@ -341,22 +341,42 @@ describe('DashboardService', () => {
               last7d: { aggregate: { count: 3 } },
             };
           }
+          if (query.includes('DashboardTopViewedCandidates')) {
+            return {
+              business_inventory: [
+                { id: 'inv-1a', item_id: 'item-1', item: { id: 'item-1' } },
+              ],
+            };
+          }
           if (query.includes('DashboardTopViewedProducts')) {
             return {
               business_inventory: [
                 {
-                  id: 'inv-1',
+                  id: 'inv-1a',
                   item_id: 'item-1',
+                  computed_available_quantity: 0,
                   item: {
                     id: 'item-1',
                     name: 'Coffee',
                     item_images: [{ image_url: 'https://img/coffee.jpg' }],
                   },
-                  item_view_events_aggregate: { aggregate: { count: 8 } },
+                  item_view_events_aggregate: { aggregate: { count: 5 } },
+                },
+                {
+                  id: 'inv-1b',
+                  item_id: 'item-1',
+                  computed_available_quantity: 0,
+                  item: {
+                    id: 'item-1',
+                    name: 'Coffee',
+                    item_images: [{ image_url: 'https://img/coffee.jpg' }],
+                  },
+                  item_view_events_aggregate: { aggregate: { count: 3 } },
                 },
                 {
                   id: 'inv-2',
                   item_id: 'item-2',
+                  computed_available_quantity: 3,
                   item: { id: 'item-2', name: 'Tea', item_images: [] },
                   item_view_events_aggregate: { aggregate: { count: 0 } },
                 },
@@ -391,15 +411,14 @@ describe('DashboardService', () => {
           if (query.includes('BusinessTipsReminders')) {
             return { businesses_by_pk: { tips_reminders_enabled: true } };
           }
-          if (query.includes('DashboardTopViewedStock')) {
+          if (query.includes('DashboardOrdersByStatus')) {
             return {
-              business_inventory: [
-                { item_id: 'item-1', computed_available_quantity: 0 },
-              ],
+              pending: { aggregate: { count: 1 } },
+              confirmed: { aggregate: { count: 2 } },
+              total: { aggregate: { count: 3 } },
             };
           }
           return {
-            orders: [],
             orders_aggregate: { nodes: [], aggregate: { count: 0 } },
             items_aggregate: { aggregate: { count: 0 } },
             rental_items_aggregate: { aggregate: { count: 0 } },
@@ -417,7 +436,7 @@ describe('DashboardService', () => {
       expect(result.productViewsLast7d).toBe(3);
       expect(result.topViewedProducts).toEqual([
         {
-          inventoryItemId: 'inv-1',
+          inventoryItemId: 'inv-1a',
           itemId: 'item-1',
           itemName: 'Coffee',
           imageUrl: 'https://img/coffee.jpg',
@@ -430,6 +449,18 @@ describe('DashboardService', () => {
       expect(result.itemsNeedingAiCleanupCount).toBe(2);
       expect(result.tipsRemindersEnabled).toBe(true);
       expect(result.topViewedOutOfStockCount).toBe(1);
+      expect(result.ordersByStatus).toEqual({ pending: 1, confirmed: 2 });
+      expect(result.ordersTotal).toBe(3);
+      expect(
+        hasuraSystemService.executeQuery.mock.calls.some((c) =>
+          String(c[0]).includes('DashboardTopViewedCandidates')
+        )
+      ).toBe(true);
+      expect(
+        hasuraSystemService.executeQuery.mock.calls.some((c) =>
+          String(c[0]).includes('DashboardTopViewedStock')
+        )
+      ).toBe(false);
     });
   });
 });
