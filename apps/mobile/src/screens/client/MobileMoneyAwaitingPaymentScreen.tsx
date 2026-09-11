@@ -15,44 +15,13 @@ import { useMobileMoneyPaymentPoll } from '../../hooks/useMobileMoneyPaymentPoll
 import type {
   ClientRootStackParamList,
   MobileMoneyAwaitingPaymentParams,
-  MobileMoneyCheckoutReturn,
 } from '../../navigation/types';
 import { agentApi } from '../../services/agentApi';
 import { useStore } from '../../stores/RootStore';
+import { checkoutReturnReset } from '../../utils/checkoutReturnReset';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 import { formatCurrency } from '../../utils/formatters';
 import { remainingAfterDeposit } from '../../utils/depositResume';
-
-function checkoutReturnReset(checkoutReturn?: MobileMoneyCheckoutReturn) {
-  if (checkoutReturn?.to === 'place-order') {
-    return {
-      index: 1 as const,
-      routes: [
-        { name: 'ClientMainTabs' as const },
-        {
-          name: 'PlaceOrder' as const,
-          params: {
-            inventoryItemId: checkoutReturn.inventoryItemId,
-            ...(checkoutReturn.variantId
-              ? { variantId: checkoutReturn.variantId }
-              : {}),
-          },
-        },
-      ],
-    };
-  }
-  if (checkoutReturn?.to === 'cart-checkout') {
-    return {
-      index: 2 as const,
-      routes: [
-        { name: 'ClientMainTabs' as const },
-        { name: 'Cart' as const },
-        { name: 'CartCheckout' as const },
-      ],
-    };
-  }
-  return { index: 0 as const, routes: [{ name: 'ClientMainTabs' as const }] };
-}
 
 export default function MobileMoneyAwaitingPaymentScreen() {
   const { t } = useTranslation();

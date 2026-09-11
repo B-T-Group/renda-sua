@@ -27,4 +27,15 @@ describe('normalizeProviderMessage', () => {
     expect(normalizeProviderMessage('')).toBe('Payment failed');
     expect(normalizeProviderMessage(undefined, 'Custom')).toBe('Custom');
   });
+
+  it('reads message/reason/error keys when en/fr are absent', () => {
+    expect(normalizeProviderMessage({ message: ' Declined ' })).toBe('Declined');
+    expect(normalizeProviderMessage({ reason: 'Timeout' })).toBe('Timeout');
+    expect(normalizeProviderMessage({ error: 'Network' })).toBe('Network');
+  });
+
+  it('stringifies leftover objects and coerces primitives', () => {
+    expect(normalizeProviderMessage({ code: 400 })).toBe('{"code":400}');
+    expect(normalizeProviderMessage(404)).toBe('404');
+  });
 });

@@ -37,6 +37,10 @@ describe('DepositLedgerService', () => {
     hasuraSystemService = module.get(HasuraSystemService);
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   const txnId = '99a3bd0d-262c-4d4c-80da-5071b4bfbfa2';
 
   describe('creditAndHoldDeposit', () => {
@@ -66,6 +70,45 @@ describe('DepositLedgerService', () => {
         memo: 'Deposit hold for order 123',
       });
     });
+
+    it('fails closed when the wallet credit is rejected', async () => {
+      accountsService.registerDepositIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'duplicate blocked',
+      });
+
+      await expect(
+        service.creditAndHoldDeposit({
+          clientAccountId: 'acct-1',
+          amount: 150,
+          orderNumber: '123',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/credit failed/i);
+      expect(accountsService.registerHoldIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('retries hold once after a read-after-write miss', async () => {
+      jest.useFakeTimers();
+      accountsService.registerDepositIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      accountsService.registerHoldIfNotExists
+        .mockResolvedValueOnce({ success: false, error: 'insufficient' })
+        .mockResolvedValueOnce({ success: true });
+
+      const done = service.creditAndHoldDeposit({
+        clientAccountId: 'acct-1',
+        amount: 150,
+        orderNumber: '123',
+        depositTransactionId: txnId,
+      });
+      await jest.advanceTimersByTimeAsync(150);
+      await done;
+
+      expect(accountsService.registerHoldIfNotExists).toHaveBeenCalledTimes(2);
+      jest.useRealTimers();
+    });
   });
 
   describe('releaseDepositToAvailable', () => {
@@ -88,6 +131,39 @@ describe('DepositLedgerService', () => {
         referenceId: txnId,
         memo: 'Deposit refund released for order 123',
       });
+    });
+
+    it('skips a second hold when the deposit is already withheld', async () => {
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: true,
+      });
+
+      await service.releaseDepositToAvailable({
+        clientAccountId: 'acct-1',
+        amount: 150,
+        orderNumber: '123',
+        depositTransactionId: txnId,
+      });
+
+      expect(accountsService.registerHoldIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('throws when release is rejected after the hold exists', async () => {
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'no withheld',
+      });
+
+      await expect(
+        service.releaseDepositToAvailable({
+          clientAccountId: 'acct-1',
+          amount: 150,
+          orderNumber: '123',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/release failed/i);
     });
   });
 
@@ -160,6 +236,30 @@ describe('DepositLedgerService', () => {
       ).resolves.toBeUndefined();
 
       expect(accountsService.registerPaymentIfNotExists).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails closed when Rendasua HQ account is missing', async () => {
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      accountsService.registerPaymentIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      hasuraSystemService.getRendasuaHQUser.mockResolvedValue({
+        id: 'hq-user',
+      } as any);
+      hasuraSystemService.getAccount.mockResolvedValue(null as any);
+
+      await expect(
+        service.forfeitDepositToHq({
+          clientAccountId: 'acct-1',
+          amount: 150,
+          currency: 'XAF',
+          orderNumber: '123',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/HQ account not found/i);
     });
   });
 });
