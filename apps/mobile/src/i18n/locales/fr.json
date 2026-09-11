@@ -4579,7 +4579,10 @@
       "resolve": "Résoudre le retrait en attente",
       "resolveDone": "Statut du retrait mis à jour.",
       "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
-      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau."
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau.",
+      "minutesAgo": "il y a {{count}} min",
+      "hoursAgo": "il y a {{count}} h",
+      "daysAgo": "il y a {{count}} j"
     }
   },
   "legal": {

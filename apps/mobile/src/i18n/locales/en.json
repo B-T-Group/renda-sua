@@ -4683,7 +4683,10 @@
       "resolve": "Resolve pending withdrawal",
       "resolveDone": "Withdrawal status updated.",
       "resolveFailed": "Could not resolve this withdrawal. Try again.",
-      "withdrawDisabled": "Resolve pending withdrawals before starting a new one."
+      "withdrawDisabled": "Resolve pending withdrawals before starting a new one.",
+      "minutesAgo": "{{count}} min ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
     }
   },
   "legal": {
