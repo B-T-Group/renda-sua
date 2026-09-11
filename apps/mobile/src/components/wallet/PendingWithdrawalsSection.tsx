@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useTheme } from '../../contexts/ThemeContext';
 import { agentApi } from '../../services/agentApi';
 import type { PendingWithdrawalRow } from '../../types/accountWallet';
@@ -16,28 +17,29 @@ function formatAmount(amount: number, currency: string): string {
   }).format(amount);
 }
 
-function relativeTime(iso: string, locale: string): string {
+/**
+ * Hermes omits `Intl.RelativeTimeFormat` on many RN builds — do not use it.
+ * Format with i18n instead (same pattern as active-order "received X ago").
+ */
+function relativeTime(iso: string, t: TFunction): string {
   const then = new Date(iso).getTime();
-  const diffMs = Date.now() - then;
-  const minutes = Math.max(1, Math.round(diffMs / 60000));
+  if (!Number.isFinite(then)) return '';
+  const minutes = Math.max(1, Math.round((Date.now() - then) / 60000));
   if (minutes < 60) {
-    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(
-      -minutes,
-      'minute'
-    );
+    return t('accounts.pendingWithdrawals.minutesAgo', '{{count}} min ago', {
+      count: minutes,
+    });
   }
   const hours = Math.round(minutes / 60);
   if (hours < 48) {
-    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(
-      -hours,
-      'hour'
-    );
+    return t('accounts.pendingWithdrawals.hoursAgo', '{{count}}h ago', {
+      count: hours,
+    });
   }
   const days = Math.round(hours / 24);
-  return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(
-    -days,
-    'day'
-  );
+  return t('accounts.pendingWithdrawals.daysAgo', '{{count}}d ago', {
+    count: days,
+  });
 }
 
 export interface PendingWithdrawalsSectionProps {
@@ -51,7 +53,7 @@ export function PendingWithdrawalsSection({
   onResolved,
   compact = false,
 }: PendingWithdrawalsSectionProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -139,10 +141,7 @@ export function PendingWithdrawalsSection({
                 {formatAmount(item.amount, item.currency)}
               </Text>
               <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                {[
-                  item.customer_phone,
-                  relativeTime(item.created_at, i18n.language || 'en'),
-                ]
+                {[item.customer_phone, relativeTime(item.created_at, t)]
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
