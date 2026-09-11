@@ -27,6 +27,7 @@ import type {
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
+import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 
@@ -68,8 +69,45 @@ export class MobilePaymentsController {
     private readonly giveChangePayoutService: GiveChangePayoutService,
     private readonly hasuraUserService: HasuraUserService,
     private readonly callbackProcessor: MobilePaymentCallbackProcessor,
-    private readonly withdrawalPinService: WithdrawalPinService
+    private readonly withdrawalPinService: WithdrawalPinService,
+    private readonly pendingWithdrawalResolveService: PendingWithdrawalResolveService
   ) {}
+
+  /**
+   * Resolve a pending wallet withdrawal (cancel if never sent, or finalize from provider).
+   */
+  @Post('withdrawals/:id/resolve')
+  async resolvePendingWithdrawal(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string,
+    @Req() req: Request
+  ) {
+    try {
+      const user = await this.hasuraUserService.getUser(ctx);
+      if (!user?.id) {
+        throw new HttpException(
+          { success: false, message: 'User not found' },
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+      return await this.pendingWithdrawalResolveService.resolveForUser(
+        id,
+        user.id,
+        req
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: error?.message || 'Failed to resolve withdrawal',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
   /**
    * Get available payment providers

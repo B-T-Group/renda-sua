@@ -31,6 +31,7 @@ import { AgentWithdrawDialog } from '../../components/dialogs/AgentWithdrawDialo
 import { AgentAccountTransactionsDialog } from '../../components/dialogs/AgentAccountTransactionsDialog';
 import { SimpleMessageDialog } from '../../components/dialogs/SimpleMessageDialog';
 import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePaymentPhoneVerifyModal';
+import { PendingWithdrawalsSection } from '../../components/wallet/PendingWithdrawalsSection';
 import { OrderCardCompact } from '../../components/agent/OrderCardCompact';
 import { OrderCardActive } from '../../components/agent/OrderCardCompact';
 import { statusToPrimaryAction } from '../../components/agent/DeliveryStatusIndicator';
@@ -265,7 +266,19 @@ export default function HomeScreen() {
     ]
   );
 
-  const withdrawDisabled = walletLoading || walletAvailable <= 0 || (walletIsStripeRail && !walletStripeReady);
+  const withdrawDisabled =
+    walletLoading ||
+    walletAvailable <= 0 ||
+    (walletIsStripeRail && !walletStripeReady) ||
+    (!walletIsStripeRail && (xafWallet?.mobile_payment_transactions?.length ?? 0) > 0);
+
+  const handlePendingResolved = useCallback(
+    (message: string) => {
+      setWalletSnack(message);
+      void refetchWallet();
+    },
+    [refetchWallet]
+  );
 
   const defaultWithdrawPhone = resolveWithdrawDefaultPhone({
     isLocationAccount: false,
@@ -793,6 +806,14 @@ export default function HomeScreen() {
                   {t('agent.unverifiedHoldNote', 'Verify your account to reduce hold amounts.')} ({holdPercentage}%)
                 </Text>
               )}
+              {!walletIsStripeRail &&
+              (xafWallet?.mobile_payment_transactions?.length ?? 0) > 0 ? (
+                <PendingWithdrawalsSection
+                  items={xafWallet?.mobile_payment_transactions ?? []}
+                  onResolved={handlePendingResolved}
+                  compact
+                />
+              ) : null}
             </View>
           </>
         )}

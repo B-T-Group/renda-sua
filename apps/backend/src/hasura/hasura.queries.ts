@@ -179,6 +179,21 @@ export const GET_ACCOUNT_BY_ID_FOR_USER = gql`
         memo
         created_at
       }
+      mobile_payment_transactions(
+        where: {
+          status: { _eq: "pending" }
+          transaction_type: { _eq: "GIVE_CHANGE" }
+        }
+        order_by: { created_at: desc }
+      ) {
+        id
+        amount
+        currency
+        customer_phone
+        transaction_id
+        provider
+        created_at
+      }
     }
   }
 `;

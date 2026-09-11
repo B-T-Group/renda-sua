@@ -132,7 +132,15 @@
     "withdrawalPhoneNoteLocation": "Ce numéro est utilisé pour les retraits du compte de cet emplacement.",
     "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Retenu",
-    "withheldBalance": "Solde retenu"
+    "withheldBalance": "Solde retenu",
+    "pendingWithdrawals": {
+      "title": "Retraits en attente",
+      "hint": "Résolvez-les avant de démarrer un nouveau retrait. Appuyez sur Résoudre pour vérifier le Mobile Money ou annuler une demande bloquée.",
+      "resolve": "Résoudre le retrait en attente",
+      "resolveDone": "Statut du retrait mis à jour.",
+      "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau."
+    }
   },
   "addresses": {
     "addAddress": "Ajouter une adresse",

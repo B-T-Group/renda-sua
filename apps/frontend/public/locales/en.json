@@ -389,7 +389,15 @@
     "withdrawalPhoneNoteLocation": "This is the phone number used for withdrawals from this location's account.",
     "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Withheld",
-    "withheldBalance": "Withheld Balance"
+    "withheldBalance": "Withheld Balance",
+    "pendingWithdrawals": {
+      "title": "Pending withdrawals",
+      "hint": "Resolve these before starting a new withdrawal. Tap Resolve to check Mobile Money or cancel a stuck request.",
+      "resolve": "Resolve pending withdrawal",
+      "resolveDone": "Withdrawal status updated.",
+      "resolveFailed": "Could not resolve this withdrawal. Try again.",
+      "withdrawDisabled": "Resolve pending withdrawals before starting a new one."
+    }
   },
   "addresses": {
     "addAddress": "Add Address",

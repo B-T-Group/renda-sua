@@ -4568,7 +4568,15 @@
     "withdrawalConfigFailed": "Impossible de charger les paramètres de retrait. Réessayez.",
     "withdrawalPhoneNoteLocation": "Il s’agit du numéro utilisé pour les retraits depuis le compte de cet emplacement.",
     "stripePayoutsFooterTitle": "Paiements Stripe",
-    "stripePayoutsFooterHint": "Les paiements de tous vos portefeuilles sont envoyés vers votre compte Stripe connecté."
+    "stripePayoutsFooterHint": "Les paiements de tous vos portefeuilles sont envoyés vers votre compte Stripe connecté.",
+    "pendingWithdrawals": {
+      "title": "Retraits en attente",
+      "hint": "Résolvez-les avant de démarrer un nouveau retrait. Appuyez sur Résoudre pour vérifier le Mobile Money ou annuler une demande bloquée.",
+      "resolve": "Résoudre le retrait en attente",
+      "resolveDone": "Statut du retrait mis à jour.",
+      "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau."
+    }
   },
   "legal": {
     "terms": {

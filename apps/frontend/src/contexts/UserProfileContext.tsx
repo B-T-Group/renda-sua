@@ -50,6 +50,15 @@ export interface Account {
   updated_at: string;
   /** When set, account is scoped to a business location; header balance uses legacy (null) wallets only. */
   business_location_id?: string | null;
+  mobile_payment_transactions?: Array<{
+    id: string;
+    amount: number;
+    currency: string;
+    customer_phone?: string | null;
+    transaction_id?: string | null;
+    provider?: string | null;
+    created_at: string;
+  }>;
 }
 
 /** Personal / legacy wallet: not tied to a specific business location. */
