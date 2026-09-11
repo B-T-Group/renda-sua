@@ -214,6 +214,31 @@ describe('PendingWithdrawalResolveService', () => {
     );
   });
 
+  it('does not cancel a young null-id withdrawal on the user path', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({
+        transaction_id: undefined,
+        created_at: new Date().toISOString(),
+      })
+    );
+
+    try {
+      await service.resolveForUser('tx-1', 'user-1');
+      fail('expected HttpException');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error.getStatus()).toBe(409);
+      expect(error.getResponse()).toEqual(
+        expect.objectContaining({
+          error: 'STILL_PENDING',
+          data: expect.objectContaining({ outcome: 'still_pending' }),
+        })
+      );
+    }
+    expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
   it('system path skips null-id cancel inside grace window', async () => {
     databaseService.getTransactionById.mockResolvedValue(
       baseTx({
