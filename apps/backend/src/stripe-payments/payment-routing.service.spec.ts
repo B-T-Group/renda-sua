@@ -18,7 +18,7 @@ describe('PaymentRoutingService', () => {
     };
     configService = {
       get: jest.fn((key: string) =>
-        key === 'stripe' ? { enabledCountries: ['US', 'CA'] } : undefined
+        key === 'stripe' ? { enabledCountries: ['US', 'CA', 'PH'] } : undefined
       ),
     };
     service = new PaymentRoutingService(
@@ -33,6 +33,15 @@ describe('PaymentRoutingService', () => {
     expect(hasuraService.executeQuery).toHaveBeenCalledWith(
       expect.stringContaining('supported_payment_systems'),
       { country: 'CA' }
+    );
+  });
+
+  it('uses Stripe for the Philippines when allowlisted and active in Hasura', async () => {
+    await expect(service.resolveRailForCountry('ph')).resolves.toBe('stripe');
+
+    expect(hasuraService.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('supported_payment_systems'),
+      { country: 'PH' }
     );
   });
 
@@ -221,7 +230,7 @@ describe('PaymentRoutingService', () => {
 
     it('stays on mobile money when diaspora checkout is disabled', async () => {
       configService.get.mockImplementation((key: string) => {
-        if (key === 'stripe') return { enabledCountries: ['US', 'CA'] };
+        if (key === 'stripe') return { enabledCountries: ['US', 'CA', 'PH'] };
         if (key === 'diaspora') return { enabled: false, payerCountries: [] };
         return undefined;
       });
@@ -237,7 +246,7 @@ describe('PaymentRoutingService', () => {
 
     it('honours an explicit payer country allowlist that excludes the payer', async () => {
       configService.get.mockImplementation((key: string) => {
-        if (key === 'stripe') return { enabledCountries: ['US', 'CA'] };
+        if (key === 'stripe') return { enabledCountries: ['US', 'CA', 'PH'] };
         if (key === 'diaspora') return { enabled: true, payerCountries: ['US'] };
         return undefined;
       });

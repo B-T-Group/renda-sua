@@ -20,10 +20,12 @@ describe('resolveCurrencyForCountry', () => {
     ).toBe('CAD');
   });
 
-  it('falls back to CAD, USD, or XAF when the catalog has no currency', () => {
+  it('falls back to CAD, USD, PHP, or XAF when the catalog has no currency', () => {
     expect(resolveCurrencyForCountry('CA', [])).toBe('CAD');
     expect(resolveCurrencyForCountry('US', [])).toBe('USD');
+    expect(resolveCurrencyForCountry('PH', [])).toBe('PHP');
     expect(resolveCurrencyForCountry('', [])).toBe('XAF');
     expect(resolveCurrencyForCountry('FR', [])).toBe('XAF');
+    expect(CURRENCIES).toContain('PHP');
   });
 });
