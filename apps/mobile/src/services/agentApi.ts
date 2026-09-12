@@ -34,6 +34,7 @@ import type {
   AccountInfoResponse,
   InitiateMobilePaymentBody,
   InitiateMobilePaymentResponse,
+  ResolvePendingWithdrawalResponse,
   WithdrawalConfigResponse,
 } from '../types/accountWallet';
 import type {
@@ -796,6 +797,11 @@ const accounts = {
 const mobilePayments = {
   initiate: (body: InitiateMobilePaymentBody): Promise<InitiateMobilePaymentResponse> =>
     api.post<InitiateMobilePaymentResponse>('/mobile-payments/initiate', body),
+  resolveWithdrawal: (id: string): Promise<ResolvePendingWithdrawalResponse> =>
+    api.post<ResolvePendingWithdrawalResponse>(
+      `/mobile-payments/withdrawals/${id}/resolve`,
+      {}
+    ),
 };
 
 const stripe = {

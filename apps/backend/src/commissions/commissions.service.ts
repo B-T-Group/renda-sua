@@ -773,7 +773,11 @@ export class CommissionsService {
         accountId: account.id,
         amount: amount,
         transactionType: 'deposit',
-        memo: `Commission payment for order ${order.order_number} (${commissionType})`,
+        memo: this.commissionDepositMemo(
+          order.order_number,
+          recipientType,
+          commissionType
+        ),
         referenceId: order.id,
       });
 
@@ -838,6 +842,30 @@ export class CommissionsService {
       );
       throw error;
     }
+  }
+
+  /** Human-readable wallet memo — merchant cut is settlement, not “commission”. */
+  private commissionDepositMemo(
+    orderNumber: string,
+    recipientType: 'partner' | 'rendasua' | 'agent' | 'business',
+    commissionType:
+      | 'base_delivery_fee'
+      | 'per_km_delivery_fee'
+      | 'item_sale'
+      | 'order_subtotal'
+  ): string {
+    const labels: Record<string, string> = {
+      'business:order_subtotal': `Merchant earnings for order ${orderNumber} (after platform commission)`,
+      'rendasua:item_sale': `Platform commission for order ${orderNumber}`,
+      'partner:item_sale': `Partner share of platform commission for order ${orderNumber}`,
+      'base_delivery_fee': `Delivery commission (base) for order ${orderNumber} (${recipientType})`,
+      'per_km_delivery_fee': `Delivery commission (per km) for order ${orderNumber} (${recipientType})`,
+    };
+    return (
+      labels[`${recipientType}:${commissionType}`] ??
+      labels[commissionType] ??
+      `Commission payment for order ${orderNumber} (${commissionType})`
+    );
   }
 
   private preferredLanguageForCommissionRecipient(

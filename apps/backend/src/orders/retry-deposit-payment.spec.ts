@@ -46,6 +46,7 @@ describe('OrdersService - retryDepositPayment', () => {
     mobilePaymentsDatabaseService = {
       getTransactionById: jest.fn(),
       createTransaction: jest.fn(),
+      updateTransaction: jest.fn(),
     } as any;
 
     mobilePaymentsService = {
@@ -128,18 +129,36 @@ describe('OrdersService - retryDepositPayment', () => {
       expect(result.deposit_status).toBe('paid');
     });
 
-    it('should reject if deposit_status is failed', async () => {
-      const order = { ...mockOrder, deposit_status: 'failed' };
+    it('should allow retry when deposit_status is failed', async () => {
+      const order = {
+        ...mockOrder,
+        deposit_status: 'failed',
+        deposit_mobile_payment_transaction_id: 'txn-old-failed',
+      };
       jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
+        id: 'txn-old-failed',
+        status: 'failed',
+      });
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-123',
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'acct-1' });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: {
+          affected_rows: 1,
+          returning: [{ id: 'order-123', deposit_status: 'pending' }],
+        },
+      });
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: true,
+        transactionId: 'provider-tx-1',
+      });
 
-      await expect(
-        service.retryDepositPayment('order-123')
-      ).rejects.toThrow(
-        new HttpException(
-          'Cannot retry deposit payment when deposit_status is failed',
-          HttpStatus.BAD_REQUEST
-        )
-      );
+      const result = await service.retryDepositPayment('order-123');
+
+      expect(result.success).toBe(true);
+      expect(result.deposit_status).toBe('pending');
     });
 
     it('should reject if order is cancelled', async () => {

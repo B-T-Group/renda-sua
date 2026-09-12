@@ -2,10 +2,13 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import {
   formatHasuraNetworkError,
   HASURA_UNAVAILABLE_MESSAGE,
+  isMissingItemsInterestOnlyField,
   isTransientHasuraNetworkError,
   isWrappedTransientHasuraHttpException,
   mapExhaustedHasuraQueryError,
+  requestHasuraQueryWithInterestOnlyFallback,
   requestHasuraWithRetry,
+  stripItemsInterestOnlyFromGraphql,
 } from './hasura-request.util';
 
 function graphqlUnavailableError() {
@@ -190,6 +193,89 @@ describe('hasura-request.util', () => {
     expect((thrown as HttpException).getStatus()).toBe(
       HttpStatus.SERVICE_UNAVAILABLE
     );
+  });
+
+  it('detects missing items.interest_only GraphQL validation errors', () => {
+    const error = {
+      message: "field 'interest_only' not found in type: 'items'",
+      response: {
+        errors: [
+          { message: "field 'interest_only' not found in type: 'items'" },
+        ],
+      },
+    };
+    expect(isMissingItemsInterestOnlyField(error)).toBe(true);
+    expect(isMissingItemsInterestOnlyField({ message: 'invalid uuid' })).toBe(
+      false
+    );
+  });
+
+  it('strips interest_only selections and filters from GraphQL', () => {
+    const query = `
+      query Catalog($where: business_inventory_bool_exp!) {
+        business_inventory(where: { item: { interest_only: { _eq: false } } }) {
+          item {
+            id
+            interest_only
+            name
+          }
+        }
+      }
+    `;
+    const stripped = stripItemsInterestOnlyFromGraphql(query);
+    expect(stripped).not.toMatch(/interest_only/);
+    expect(stripped).toContain('name');
+  });
+
+  it('retries once without interest_only when the schema is missing that field', async () => {
+    const missing = {
+      message: "field 'interest_only' not found in type: 'items'",
+      response: {
+        errors: [
+          { message: "field 'interest_only' not found in type: 'items'" },
+        ],
+      },
+    };
+    const request = jest
+      .fn()
+      .mockRejectedValueOnce(missing)
+      .mockResolvedValueOnce({ items: [{ id: 'item-1' }] });
+    const query = `
+      query GetItem {
+        items_by_pk(id: "item-1") {
+          id
+          interest_only
+        }
+      }
+    `;
+
+    const result = await requestHasuraQueryWithInterestOnlyFallback(
+      request,
+      query,
+      undefined,
+      { delayMs: 0 }
+    );
+
+    expect(result).toEqual({ items: [{ id: 'item-1' }] });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][0]).not.toMatch(/interest_only/);
+  });
+
+  it('does not strip-retry unrelated GraphQL application errors', async () => {
+    const error = {
+      message: 'invalid input syntax for type uuid',
+      response: { errors: [{ message: 'invalid input syntax for type uuid' }] },
+    };
+    const request = jest.fn().mockRejectedValue(error);
+    await expect(
+      requestHasuraQueryWithInterestOnlyFallback(
+        request,
+        'query { items { id interest_only } }',
+        undefined,
+        { delayMs: 0 }
+      )
+    ).rejects.toBe(error);
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it('detects controller-wrapped 500s that hide a Hasura 503', () => {

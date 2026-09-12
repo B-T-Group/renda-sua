@@ -1,11 +1,18 @@
 import { Card, CardContent, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBusinessVerification } from '../../hooks/useBusinessVerification';
+import type { BusinessVerificationStatus } from '../../hooks/useBusinessVerification';
 
-const LaunchPromoBanner: React.FC = () => {
+export interface LaunchPromoBannerProps {
+  status: BusinessVerificationStatus | null;
+  loading?: boolean;
+}
+
+const LaunchPromoBanner: React.FC<LaunchPromoBannerProps> = ({
+  status,
+  loading = false,
+}) => {
   const { t } = useTranslation();
-  const { status, loading } = useBusinessVerification();
   const promo = status?.launchPromo;
 
   if (loading || !promo || promo.ordersRemaining <= 0) {

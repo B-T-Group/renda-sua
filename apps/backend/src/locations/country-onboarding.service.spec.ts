@@ -36,6 +36,13 @@ describe('CountryOnboardingService fallbacks', () => {
     });
     expect(byCode.CM.defaultCurrency).toBe('XAF');
     expect(byCode.CA.verificationFlow).toBe('stripe_connect');
+    expect(byCode.PH).toEqual({
+      countryCode: 'PH',
+      signupEnabled: true,
+      postalCodeRequired: true,
+      verificationFlow: 'stripe_connect',
+      defaultCurrency: 'PHP',
+    });
   }
 
   it('seeds Togo, Benin, Côte d\'Ivoire, and Congo when the table is empty', async () => {
@@ -45,7 +52,7 @@ describe('CountryOnboardingService fallbacks', () => {
 
     expectSeededCfaMarkets(configs);
     await expect(service.getSignupEnabledCodes()).resolves.toEqual(
-      expect.arrayContaining(['TG', 'BJ', 'CI', 'CG', 'CM', 'GA', 'US', 'CA'])
+      expect.arrayContaining(['TG', 'BJ', 'CI', 'CG', 'CM', 'GA', 'US', 'CA', 'PH'])
     );
   });
 

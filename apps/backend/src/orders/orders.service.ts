@@ -4093,7 +4093,7 @@ export class OrdersService {
    * is still pending at the provider to prevent double MoMo collect.
    * 
    * Only allows retry when:
-   * - Order is pending_payment with deposit_status=pending
+   * - Order is pending_payment with deposit_status pending or failed
    * - MoMo XAF deposit path (pay_at_delivery or pay_at_pickup)
    * - Order not cancelled
    * - Prior deposit transaction is missing, failed, expired, or cancelled
@@ -4162,7 +4162,8 @@ export class OrdersService {
       };
     }
 
-    if (depositStatus !== 'pending') {
+    // pending = first attempt / in-flight; failed = MoMo declined — both are retryable
+    if (depositStatus !== 'pending' && depositStatus !== 'failed') {
       throw new HttpException(
         `Cannot retry deposit payment when deposit_status is ${depositStatus}`,
         HttpStatus.BAD_REQUEST
@@ -4272,6 +4273,8 @@ export class OrdersService {
               }
               _set: {
                 deposit_mobile_payment_transaction_id: $claimValue
+                deposit_status: "pending"
+                payment_status: "pending"
                 updated_at: $now
               }
             ) {
@@ -4279,6 +4282,7 @@ export class OrdersService {
               returning {
                 id
                 deposit_mobile_payment_transaction_id
+                deposit_status
               }
             }
           }
@@ -4296,6 +4300,8 @@ export class OrdersService {
               }
               _set: {
                 deposit_mobile_payment_transaction_id: $claimValue
+                deposit_status: "pending"
+                payment_status: "pending"
                 updated_at: $now
               }
             ) {
@@ -4303,6 +4309,7 @@ export class OrdersService {
               returning {
                 id
                 deposit_mobile_payment_transaction_id
+                deposit_status
               }
             }
           }
@@ -4473,7 +4480,7 @@ export class OrdersService {
       success: true,
       message: `Deposit payment retry initiated. Awaiting payment of ${depositAmount} ${order.currency}`,
       current_status: order.current_status,
-      deposit_status: depositStatus,
+      deposit_status: 'pending',
       deposit_amount: depositAmount,
       amount_due: Math.max(0, (order.total_amount || 0) - depositAmount),
       payment_transaction: {
@@ -4559,6 +4566,7 @@ export class OrdersService {
       }
     `;
 
+    await this.requirePaidDepositAppliedForCashException(order);
     await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
       agentId: agent.id,
@@ -7525,6 +7533,8 @@ export class OrdersService {
         this.logger.warn(
           `Deposit already captured for order ${orderNumber}`
         );
+        // Repair older credits that never created a hold (pre-hold deploy / race).
+        await this.repairPaidDepositHoldIfMissing(order, transactionDbId);
         return;
       }
 
@@ -7759,10 +7769,94 @@ export class OrdersService {
     return referenceId;
   }
 
+  /** Idempotent catch-up when deposit was credited without a hold. */
+  private async repairPaidDepositHoldIfMissing(
+    order: any,
+    transactionDbId?: string
+  ): Promise<void> {
+    const depositAmount = Number(order.deposit_amount) || 0;
+    const depositTxnId =
+      transactionDbId || order.deposit_mobile_payment_transaction_id;
+    if (depositAmount <= 0 || !depositTxnId) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (!clientAccount?.id) return;
+    try {
+      await this.depositLedgerService.ensureDepositHeld({
+        clientAccountId: clientAccount.id,
+        amount: depositAmount,
+        orderNumber: order.order_number,
+        depositTransactionId: depositTxnId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to repair deposit hold for order ${order.order_number}: ${error?.message}`
+      );
+    }
+  }
+
   /**
-   * Move paid reservation deposit from withheld → available before settlement debit.
-   * Idempotent via deposit txn release reference.
+   * Cash exception consumes the held reservation deposit before complete.
+   * Fail closed: do not mark complete if apply throws (partial release+debit).
    */
+  private paidDepositApplyParams(order: Orders): {
+    amount: number;
+    depositTxnId: string;
+    userId: string;
+  } | null {
+    const amount = Number((order as any).deposit_amount) || 0;
+    const depositTxnId = (order as any)
+      .deposit_mobile_payment_transaction_id as string | undefined;
+    const userId = order.client?.user_id;
+    if ((order as any).deposit_status !== 'paid' || amount <= 0 || !depositTxnId || !userId) {
+      return null;
+    }
+    return { amount, depositTxnId, userId };
+  }
+
+  private async applyPaidDepositForExternalSettlement(
+    order: Orders
+  ): Promise<void> {
+    const params = this.paidDepositApplyParams(order);
+    if (!params) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      params.userId,
+      order.currency
+    );
+    if (!clientAccount?.id) {
+      throw new Error(
+        `Client account not found for deposit apply on ${order.order_number}`
+      );
+    }
+    await this.depositLedgerService.applyHeldDepositAsPayment({
+      clientAccountId: clientAccount.id,
+      amount: params.amount,
+      orderNumber: order.order_number,
+      depositTransactionId: params.depositTxnId,
+    });
+  }
+
+  private async requirePaidDepositAppliedForCashException(
+    order: Orders
+  ): Promise<void> {
+    try {
+      await this.applyPaidDepositForExternalSettlement(order);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          message: error?.message || 'Failed to apply reservation deposit',
+          error: 'DEPOSIT_APPLY_FAILED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  /** Idempotent via deposit txn release reference. */
   private async releasePaidDepositHoldIfNeeded(
     order: Orders,
     clientAccountId: string
@@ -8764,7 +8858,8 @@ export class OrdersService {
   }
 
   /**
-   * Handle deposit payment failure - mark deposit_status = 'failed' and cancel order
+   * Handle deposit payment failure — mark deposit_status = failed and schedule
+   * payment-timeout cleanup. Order stays pending_payment so the client can retry.
    */
   async onDepositPaymentFailed(
     orderId: string,
@@ -8795,7 +8890,6 @@ export class OrdersService {
         error
       );
     }
-    // Cancel the order (deposit failure = order cannot proceed)
     await this.orderSystemJobsService.onOrderPaymentFailed(
       orderId,
       failureMessage
@@ -9548,7 +9642,7 @@ export class OrdersService {
             name
             description
             pay_on_delivery_enabled
-            interest_only
+            export_available
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -9734,11 +9828,11 @@ export class OrdersService {
         );
       }
 
-      if (businessInventory.item?.interest_only === true) {
+      if (businessInventory.item?.export_available === true) {
         throw new HttpException(
           {
             success: false,
-            error: 'INTEREST_ONLY_ITEM',
+            error: 'EXPORT_AVAILABLE_ITEM',
             message: `${businessInventory.item.name} cannot be purchased. Submit interest instead.`,
           },
           HttpStatus.BAD_REQUEST
@@ -12025,33 +12119,34 @@ export class OrdersService {
 
     const subtotalPortion = Number(orderHold.client_hold_amount);
     const skipClient = options?.skipClientLedgerMovements === true;
+    if (skipClient) {
+      await this.applyPaidDepositForExternalSettlement(order);
+    }
 
-    if (subtotalPortion > 0) {
+    if (subtotalPortion > 0 && !skipClient) {
       if (
         paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup'
       ) {
-        if (!skipClient) {
-          const clientAccount = await this.hasuraSystemService.getAccount(
-            order.client.user_id,
-            order.currency
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new HttpException(
+            'Client account not found',
+            HttpStatus.NOT_FOUND
           );
-          if (!clientAccount) {
-            throw new HttpException(
-              'Client account not found',
-              HttpStatus.NOT_FOUND
-            );
-          }
-          // Release withheld deposit into available before full GMV payment debit
-          await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
-          await this.accountsService.registerTransaction({
-            accountId: clientAccount.id,
-            amount: subtotalPortion,
-            transactionType: 'payment',
-            memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
-            referenceId: orderId,
-          });
         }
+        // Release withheld deposit into available before full GMV payment debit
+        await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: subtotalPortion,
+          transactionType: 'payment',
+          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
+          referenceId: orderId,
+        });
       } else {
         const clientAccount = await this.hasuraSystemService.getAccount(
           order.client.user_id,

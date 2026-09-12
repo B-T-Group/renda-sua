@@ -184,11 +184,11 @@ export class GiveChangePayoutService {
       memo: `GIVE_CHANGE hold - ${reference}`,
     });
     if (!holdResult.success) {
-      await this.databaseService.updateTransaction(transaction.id, {
-        status: 'failed',
-        error_message: holdResult.error || 'Failed to reserve payout funds',
-        error_code: 'HOLD_FAILED',
-      });
+      await this.markFailed(
+        transaction.id,
+        holdResult.error || 'Failed to reserve payout funds',
+        'HOLD_FAILED'
+      );
       return this.handlePrecheckError(
         {
           status: HttpStatus.BAD_REQUEST,
@@ -202,11 +202,57 @@ export class GiveChangePayoutService {
       );
     }
 
-    const mtnUserId = options.initiatorUserId ?? params.mtnUserId;
+    // Only catch provider-call failures here. After Freemopay/MyPVit accepts,
+    // failInitiation must not run (would release hold while payout may proceed).
+    let paymentResponse: MobilePaymentResponse;
+    try {
+      paymentResponse = await this.callProviderInitiate(
+        params,
+        callbackUrl,
+        reference,
+        options.initiatorUserId ?? params.mtnUserId
+      );
+    } catch (error: any) {
+      await this.failInitiation(
+        transaction.id,
+        reference,
+        params,
+        error?.message || 'Withdrawal initiation failed',
+        'INITIATION_EXCEPTION'
+      );
+      if (options.throwOnWithdrawalFailure) {
+        throw error instanceof HttpException
+          ? error
+          : new HttpException(
+              {
+                success: false,
+                message: 'Failed to initiate withdrawal',
+                error: 'INITIATION_EXCEPTION',
+              },
+              HttpStatus.BAD_GATEWAY
+            );
+      }
+      return { success: false };
+    }
+
+    return this.finalizeAfterProvider(
+      transaction.id,
+      reference,
+      params,
+      paymentResponse
+    );
+  }
+
+  private async callProviderInitiate(
+    params: GiveChangePayoutParams,
+    callbackUrl: string,
+    reference: string,
+    mtnUserId?: string
+  ): Promise<MobilePaymentResponse> {
     const paymentMethod =
       (params.paymentMethod as 'mobile_money' | 'card' | 'bank_transfer' | undefined) ||
       'mobile_money';
-    const paymentResponse = await this.mobilePaymentsService.initiatePayment(
+    return this.mobilePaymentsService.initiatePayment(
       {
         amount: params.amount,
         currency: params.currency,
@@ -220,14 +266,6 @@ export class GiveChangePayoutService {
       },
       reference,
       mtnUserId
-    );
-
-    return this.finalizeAfterProvider(
-      transaction.id,
-      reference,
-      params,
-      paymentResponse,
-      options.throwOnWithdrawalFailure
     );
   }
 
@@ -261,38 +299,75 @@ export class GiveChangePayoutService {
     return { success: false };
   }
 
+  /**
+   * Mark failed first (so we never leave pending without provider id), then release hold.
+   */
+  private async failInitiation(
+    mobileTxId: string,
+    reference: string,
+    params: GiveChangePayoutParams,
+    message: string | undefined,
+    errorCode: string | undefined
+  ): Promise<void> {
+    await this.markFailed(mobileTxId, message, errorCode);
+    await this.releaseGiveChangeHold(
+      params.accountId,
+      params.amount,
+      mobileTxId,
+      reference
+    );
+  }
+
+  private async markFailed(
+    mobileTxId: string,
+    message: string | undefined,
+    errorCode: string | undefined
+  ): Promise<void> {
+    try {
+      await this.databaseService.updateTransaction(mobileTxId, {
+        status: 'failed',
+        error_message: message,
+        error_code: errorCode,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to mark GIVE_CHANGE ${mobileTxId} as failed: ${
+          error?.message || error
+        }`
+      );
+    }
+  }
+
   private async finalizeAfterProvider(
     mobileTxId: string,
     reference: string,
     params: GiveChangePayoutParams,
-    paymentResponse: MobilePaymentResponse,
-    _throwOnWithdrawalFailure: boolean
+    paymentResponse: MobilePaymentResponse
   ): Promise<GiveChangePayoutResult> {
+    const providerTxId = paymentResponse.transactionId?.trim();
     const data = {
       transactionId: mobileTxId,
-      providerTransactionId: paymentResponse.transactionId,
+      providerTransactionId: providerTxId,
       paymentUrl: paymentResponse.paymentUrl,
       message: paymentResponse.message,
       provider: paymentResponse.provider,
     };
 
-    if (!paymentResponse.success || !paymentResponse.transactionId) {
-      await this.releaseGiveChangeHold(
-        params.accountId,
-        params.amount,
+    if (!paymentResponse.success || !providerTxId) {
+      await this.failInitiation(
         mobileTxId,
-        reference
+        reference,
+        params,
+        paymentResponse.message,
+        paymentResponse.errorCode || 'PROVIDER_INIT_FAILED'
       );
-      await this.databaseService.updateTransaction(mobileTxId, {
-        status: 'failed',
-        error_message: paymentResponse.message,
-        error_code: paymentResponse.errorCode,
-      });
-      return { success: paymentResponse.success, data };
+      return { success: false, data };
     }
 
+    // Pending is only valid once we have a provider transaction_id.
     await this.databaseService.updateTransaction(mobileTxId, {
-      transaction_id: paymentResponse.transactionId,
+      transaction_id: providerTxId,
+      status: 'pending',
     });
 
     this.logger.log(

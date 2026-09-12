@@ -7,6 +7,7 @@ export const ACTIVE_PHONE_COUNTRY_ISO_CODES = [
   'CG',
   'CA',
   'US',
+  'PH',
 ] as const;
 
 export type ActivePhoneCountryIsoCode =

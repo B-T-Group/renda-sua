@@ -52,7 +52,7 @@ export interface InventoryItem {
     id: string;
     name: string;
     description: string;
-    interest_only?: boolean;
+    export_available?: boolean;
     price: number;
     currency: string;
     weight: number;
@@ -171,6 +171,8 @@ export interface GetInventoryItemsQuery {
   collection?: string;
   /** Restrict the list to cooked food sold by restaurants (the Food tab). */
   food_only?: boolean;
+  /** Only export_available items for the viewer market. */
+  export_only?: boolean;
   /** When false, skip fetching (e.g. wait for store header). */
   enabled?: boolean;
 }
@@ -234,6 +236,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     query.collection ?? '',
     query.is_active ?? '',
     query.food_only ?? '',
+    query.export_only ?? '',
     locationScoped ? '' : `${catalogGeo.country_code ?? ''}:${catalogGeo.state ?? ''}`,
   ].join('|');
 
@@ -312,6 +315,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
             collection: query.collection.trim(),
           }),
           ...(query.food_only === true && { food_only: true }),
+          ...(query.export_only === true && { export_only: true }),
           ...(!isAuthenticated &&
             query.anonymousOrigin && {
               origin_lat: query.anonymousOrigin.lat,

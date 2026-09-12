@@ -9,10 +9,12 @@ function countrySection(country: string | null | undefined, locale: KnowledgeLoc
     if (code === 'GA') {
       return `Pour le Gabon : Airtel Money et Moov. Paiement maintenant, à la livraison ou au retrait selon le commerçant. Pour payer à la livraison ou au retrait en mobile money, un acompte de réservation est prélevé à la commande ; le reste est demandé à la porte ou en magasin.`;
     }
-    if (code === 'CA' || code === 'US') {
-      return `Pour ${code === 'CA' ? 'le Canada' : "les États-Unis"} : cartes bancaires via Stripe. Le paiement à la livraison n'est pas disponible pour les vendeurs sur le rail Stripe.`;
+    if (code === 'CA' || code === 'US' || code === 'PH') {
+      const label =
+        code === 'CA' ? 'le Canada' : code === 'PH' ? 'les Philippines' : "les États-Unis";
+      return `Pour ${label} : cartes bancaires via Stripe. Le paiement à la livraison n'est pas disponible pour les vendeurs sur le rail Stripe.`;
     }
-    return `Rails de paiement : Afrique centrale/ouest (GA/CM) = mobile money ; CA/US = Stripe (cartes). Le paiement à la livraison n'est pas disponible pour les vendeurs Stripe.`;
+    return `Rails de paiement : Afrique centrale/ouest (GA/CM) = mobile money ; CA/US/PH = Stripe (cartes). Le paiement à la livraison n'est pas disponible pour les vendeurs Stripe.`;
   }
   if (code === 'CM') {
     return `For Cameroon: MTN Mobile Money and Orange Money. Customers can pay now, at delivery (pay_at_delivery), or at pickup (pay_at_pickup) depending on the merchant. For mobile-money pay-at-delivery or pay-at-pickup, a reservation deposit is collected when the order is placed; the remainder is requested at the door or in store.`;
@@ -20,10 +22,12 @@ function countrySection(country: string | null | undefined, locale: KnowledgeLoc
   if (code === 'GA') {
     return `For Gabon: Airtel Money and Moov. Customers can pay now, at delivery, or at pickup depending on the merchant. For mobile-money pay-at-delivery or pay-at-pickup, a reservation deposit is collected when the order is placed; the remainder is requested at the door or in store.`;
   }
-  if (code === 'CA' || code === 'US') {
-    return `For ${code === 'CA' ? 'Canada' : 'the United States'}: card payments via Stripe. Pay-at-delivery is not available for Stripe-rail sellers.`;
+  if (code === 'CA' || code === 'US' || code === 'PH') {
+    const label =
+      code === 'CA' ? 'Canada' : code === 'PH' ? 'the Philippines' : 'the United States';
+    return `For ${label}: card payments via Stripe. Pay-at-delivery is not available for Stripe-rail sellers.`;
   }
-  return `Payment rails: Central/West Africa (GA/CM) use mobile money; CA/US use Stripe cards. Pay-at-delivery is blocked for Stripe-rail sellers.`;
+  return `Payment rails: Central/West Africa (GA/CM) use mobile money; CA/US/PH use Stripe cards. Pay-at-delivery is blocked for Stripe-rail sellers.`;
 }
 
 export function getPaymentsKnowledge(
@@ -32,22 +36,22 @@ export function getPaymentsKnowledge(
 ): string {
   const base =
     locale === 'fr'
-      ? `Rendasua prend en charge le mobile money en Afrique et les cartes (Stripe) au Canada et aux États-Unis.
+      ? `Rendasua prend en charge le mobile money en Afrique et les cartes (Stripe) au Canada, aux États-Unis et aux Philippines.
 
 - Cameroun : MTN Mobile Money, Orange Money
 - Gabon : Airtel Money, Moov
-- Canada / États-Unis : cartes via Stripe
+- Canada / États-Unis / Philippines : cartes via Stripe
 
 Options de moment de paiement : payer maintenant, payer à la livraison, ou payer au retrait en magasin (selon le commerçant et le rail). Le paiement à la livraison n'est pas disponible lorsque le vendeur utilise Stripe.
 
 Acompte de réservation (mobile money, payer à la livraison ou au retrait) : un acompte est prélevé à la commande et bloqué sur le portefeuille Rendasua du client (il ne peut pas le retirer). Le reste est demandé à la porte ou en magasin. Si la commande est annulée avant le point de verrouillage (en livraison : « en cours de livraison » ; au retrait : « prêt au retrait »), l'acompte est libéré vers le solde disponible du portefeuille client. Après ce point, une annulation client entraîne la confiscation de l'acompte au profit de Rendasua. Une annulation commerçant ou plateforme rembourse l'acompte même après le verrouillage.
 
 Pour le paiement à la livraison, le livreur envoie une demande de paiement mobile à la porte ; le client l'approuve sur son téléphone (il n'appuie pas sur Payer dans l'application). Pour un retrait en mobile money, le client appuie sur Payer dans l'application à son arrivée et approuve la demande sur son téléphone ; une fois payée, la commande est finalisée et il peut récupérer ses articles. Le commerçant peut aussi envoyer une demande s'il a besoin d'aide.`
-      : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada and the United States.
+      : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada, the United States, and the Philippines.
 
 - Cameroon: MTN Mobile Money, Orange Money
 - Gabon: Airtel Money, Moov
-- Canada / United States: cards via Stripe
+- Canada / United States / Philippines: cards via Stripe
 
 Payment timing options: pay now, pay at delivery, or pay at in-store pickup (depending on the merchant and payment rail). Pay-at-delivery is not available when the seller uses the Stripe rail.
 

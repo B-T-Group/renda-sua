@@ -2,9 +2,7 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Container,
-  FormControlLabel,
   Paper,
   TextField,
   Typography,
@@ -49,7 +47,6 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   const { profile } = useUserProfileContext();
   const [html, setHtml] = useState('');
   const [version, setVersion] = useState('');
-  const [agreed, setAgreed] = useState(false);
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
   const [legalName, setLegalName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,7 +56,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   const [agreementComplete, setAgreementComplete] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
   const [openingSigned, setOpeningSigned] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const defaultName = profile
     ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim()
@@ -70,17 +67,45 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   }, [defaultName, legalName]);
 
   const checkScrollEnd = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const nearBottom =
-      el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_END_THRESHOLD_PX;
-    if (nearBottom) setHasScrolledToEnd(true);
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const rect = sentinel.getBoundingClientRect();
+    // Unlock once the end of the agreement has entered (or nearly entered) the viewport.
+    if (rect.top <= window.innerHeight - SCROLL_END_THRESHOLD_PX) {
+      setHasScrolledToEnd(true);
+    }
   }, []);
 
   useEffect(() => {
-    // Content may fit without scrolling.
+    setHasScrolledToEnd(false);
     const id = window.setTimeout(checkScrollEnd, 150);
     return () => window.clearTimeout(id);
+  }, [html, checkScrollEnd]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') {
+      window.addEventListener('scroll', checkScrollEnd, { passive: true });
+      window.addEventListener('resize', checkScrollEnd);
+      return () => {
+        window.removeEventListener('scroll', checkScrollEnd);
+        window.removeEventListener('resize', checkScrollEnd);
+      };
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setHasScrolledToEnd(true);
+        }
+      },
+      { root: null, rootMargin: `0px 0px -${SCROLL_END_THRESHOLD_PX}px 0px`, threshold: 0 }
+    );
+    observer.observe(sentinel);
+    window.addEventListener('scroll', checkScrollEnd, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', checkScrollEnd);
+    };
   }, [html, checkScrollEnd]);
 
   const loadStatus = useCallback(async () => {
@@ -206,7 +231,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   };
 
   const submit = async () => {
-    if (!apiClient || !agreed || !hasScrolledToEnd || !legalName.trim()) return;
+    if (!apiClient || !hasScrolledToEnd || !legalName.trim()) return;
     setBusy(true);
     setError(null);
     try {
@@ -354,12 +379,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         {t('business.verification.agreementPageTitle', 'Merchant partnership agreement')}
       </Typography>
-      <Paper
-        ref={scrollRef}
-        variant="outlined"
-        onScroll={checkScrollEnd}
-        sx={{ p: 2, mb: 2, maxHeight: 420, overflow: 'auto' }}
-      >
+      <Paper variant="outlined" sx={{ p: 2, mb: 1 }}>
         <Box
           dangerouslySetInnerHTML={{ __html: html }}
           sx={{
@@ -373,6 +393,11 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
             '& .meta': { fontSize: '0.875rem', color: 'text.secondary' },
           }}
         />
+        <Box
+          ref={sentinelRef}
+          aria-hidden
+          sx={{ height: 1, width: '100%', mt: 1 }}
+        />
       </Paper>
       {!hasScrolledToEnd ? (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -381,20 +406,14 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
             'Please scroll to the end of the agreement before accepting.'
           )}
         </Typography>
-      ) : null}
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={agreed}
-            disabled={!hasScrolledToEnd}
-            onChange={(e) => setAgreed(e.target.checked)}
-          />
-        }
-        label={t(
-          'business.verification.agreeCheckbox',
-          'I have read and agree to the Merchant Partnership Agreement.'
-        )}
-      />
+      ) : (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {t(
+            'business.verification.acceptBySigning',
+            'By tapping Accept and sign, you agree to the Merchant Partnership Agreement.'
+          )}
+        </Typography>
+      )}
       <TextField
         fullWidth
         label={t('business.verification.legalName', 'Full legal name')}
@@ -409,7 +428,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
       ) : null}
       <Button
         variant="contained"
-        disabled={busy || !agreed || !hasScrolledToEnd || !legalName.trim() || !version}
+        disabled={busy || !hasScrolledToEnd || !legalName.trim() || !version}
         onClick={() => void submit()}
       >
         {t('business.verification.acceptAgreement', 'Accept agreement')}

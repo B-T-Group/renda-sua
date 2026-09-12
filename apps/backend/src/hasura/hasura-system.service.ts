@@ -35,7 +35,7 @@ import {
 } from './hasura.queries';
 import {
   mapExhaustedHasuraQueryError,
-  requestHasuraWithRetry,
+  requestHasuraQueryWithInterestOnlyFallback,
 } from './hasura-request.util';
 import type { LocationConsentPlatform } from '../agents/dto/update-location-tracking-consent.dto';
 import { isUuid } from '../common/uuid.util';
@@ -89,8 +89,9 @@ export class HasuraSystemService {
    */
   async executeQuery<T = any>(query: string, variables?: any): Promise<T> {
     try {
-      return await requestHasuraWithRetry(
-        () => this.client.request<T>(query, variables),
+      return await requestHasuraQueryWithInterestOnlyFallback(
+        (nextQuery) => this.client.request<T>(nextQuery, variables),
+        query,
         this.logger
       );
     } catch (error: any) {

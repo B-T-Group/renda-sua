@@ -389,7 +389,17 @@
     "withdrawalPhoneNoteLocation": "This is the phone number used for withdrawals from this location's account.",
     "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Withheld",
-    "withheldBalance": "Withheld Balance"
+    "withheldBalance": "Withheld Balance",
+    "pendingWithdrawals": {
+      "title": "Pending withdrawals",
+      "hint": "Resolve these before starting a new withdrawal. Tap Resolve to check Mobile Money or cancel a stuck request.",
+      "resolve": "Resolve pending withdrawal",
+      "resolveDone": "Withdrawal status updated.",
+      "resolveFailed": "Could not resolve this withdrawal. Try again.",
+      "withdrawDisabled": "Resolve pending withdrawals before starting a new one.",
+      "showMore": "Show {{count}} more",
+      "showLess": "Show less"
+    }
   },
   "addresses": {
     "addAddress": "Add Address",
@@ -2348,6 +2358,10 @@
       "agreementPageTitle": "Merchant partnership agreement",
       "agreeCheckbox": "I have read and agree to the Merchant Partnership Agreement.",
       "scrollHint": "Please scroll to the end of the agreement before accepting.",
+      "scrollForMore": "Scroll for more",
+      "acceptBySigning": "By tapping Accept and sign, you agree to the Merchant Partnership Agreement.",
+      "acceptTermsHintLocked": "Scroll to the end of the agreement above to unlock this checkbox.",
+      "acceptTermsHintUnlocked": "Ready to accept. Confirm you have read the agreement.",
       "acceptAgreement": "Accept agreement",
       "agreementSuccess": "Agreement accepted. Your store is active — return to the dashboard to keep selling. You can earn a Verified badge later.",
       "backToDashboard": "Back to dashboard",
@@ -7446,7 +7460,22 @@
     "viewItem": "View item",
     "clientLabel": "Client",
     "unknownItem": "Item",
-    "merchantToggle": "Pricing not applicable (interest only)"
+    "merchantToggle": "Available for export"
+  },
+  "exportCatalog": {
+    "merchantToggle": "Available for export",
+    "marketsHelp": "Choose markets where shoppers can discover this item and submit interest. List the item at one home location only.",
+    "singleLocationHelp": "Export items are listed at one location only. Use export markets on the item to show this product in other countries.",
+    "singleLocationError": "Export items can only be listed at one location. Use export markets instead.",
+    "sectionTitle": "Available for export",
+    "sectionSubtitle": "Goods listed from Canada — request interest to import",
+    "seeAll": "See all exports",
+    "chip": "Exports",
+    "badge": "Export",
+    "pageTitle": "Available for export",
+    "pageSubtitle": "Browse goods available for export into this market. Submit interest and the seller will contact you.",
+    "empty": "No export items for this market yet.",
+    "illustrationLabel": "Products available for export into your market"
   },
   "incomingOrder": {
     "awaitingAction": "Awaiting action",

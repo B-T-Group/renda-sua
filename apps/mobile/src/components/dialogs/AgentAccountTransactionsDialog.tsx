@@ -74,24 +74,65 @@ function tabLabel(account: AccountInfoRow): string {
   return account.currency;
 }
 
-interface TransactionListProps {
-  transactions: AccountTransactionRow[];
+interface ListHeaderProps {
   currency: string;
   availableBalance: number;
   colors: ReturnType<typeof useTheme>['colors'];
   t: TFunction;
+  multiMode: boolean;
+  accounts: AccountInfoRow[];
+  selectedIndex: number;
+  onSelectIndex: (index: number) => void;
 }
 
-function TransactionList({
-  transactions,
+function TransactionListHeader({
   currency,
   availableBalance,
   colors,
   t,
-}: TransactionListProps) {
-  const sorted = useMemo(() => sortDesc(transactions), [transactions]);
+  multiMode,
+  accounts,
+  selectedIndex,
+  onSelectIndex,
+}: ListHeaderProps) {
   return (
-    <>
+    <View>
+      {multiMode && accounts.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabRow}
+          contentContainerStyle={styles.tabRowContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {accounts.map((acc, i) => {
+            const active = i === selectedIndex;
+            return (
+              <Pressable
+                key={acc.id}
+                onPress={() => onSelectIndex(i)}
+                style={[
+                  styles.tab,
+                  {
+                    borderBottomColor: active ? colors.primary.main : 'transparent',
+                    borderBottomWidth: 2,
+                  },
+                ]}
+              >
+                <Text
+                  variant="labelMedium"
+                  style={{
+                    color: active ? colors.primary.main : colors.text.secondary,
+                    fontWeight: active ? '700' : '400',
+                  }}
+                >
+                  {tabLabel(acc)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
       <View style={[styles.balanceBar, { backgroundColor: colors.pageBackground }]}>
         <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
           {t('accounts.availableBalance', 'Available balance')}
@@ -101,51 +142,7 @@ function TransactionList({
         </Text>
       </View>
       <Divider style={{ marginBottom: 8 }} />
-      <FlatList
-        data={sorted}
-        keyExtractor={(item) => item.id}
-        style={{ maxHeight: 320 }}
-        scrollEnabled
-        ListEmptyComponent={
-          <Text
-            variant="bodyMedium"
-            style={{ color: colors.text.secondary, paddingVertical: 16 }}
-          >
-            {t('accounts.noTransactions', 'No transactions yet.')}
-          </Text>
-        }
-        renderItem={({ item }) => (
-          <View style={[styles.row, { borderBottomColor: colors.divider }]}>
-            <View style={styles.rowLeft}>
-              <Text variant="labelMedium" style={{ color: colors.text.primary }}>
-                {item.transaction_type}
-              </Text>
-              {item.memo ? (
-                <Text
-                  variant="bodySmall"
-                  style={{ color: colors.text.secondary }}
-                  numberOfLines={2}
-                >
-                  {item.memo}
-                </Text>
-              ) : null}
-              <Text variant="bodySmall" style={{ color: colors.text.disabled }}>
-                {formatWhen(item.created_at)}
-              </Text>
-            </View>
-            <Text
-              variant="titleSmall"
-              style={{
-                color: lineColor(item.transaction_type, item.amount, colors),
-                marginLeft: 8,
-              }}
-            >
-              {formatSignedAmount(item.transaction_type, item.amount, currency)}
-            </Text>
-          </View>
-        )}
-      />
-    </>
+    </View>
   );
 }
 
@@ -165,14 +162,18 @@ export function AgentAccountTransactionsDialog({
   const { height: screenHeight } = useWindowDimensions();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const multiMode = accounts && accounts.length > 0;
+  const multiMode = Boolean(accounts && accounts.length > 0);
+  const accountList = accounts ?? [];
 
   const activeAccount = multiMode
-    ? accounts[Math.min(selectedIndex, accounts.length - 1)]
+    ? accountList[Math.min(selectedIndex, accountList.length - 1)]
     : null;
   const activeCurrency = activeAccount?.currency ?? currency ?? 'XAF';
   const activeBalance = activeAccount?.available_balance ?? availableBalance ?? 0;
   const activeTransactions = activeAccount?.account_transactions ?? transactions ?? [];
+  const sorted = useMemo(() => sortDesc(activeTransactions), [activeTransactions]);
+
+  const listMaxHeight = Math.min(420, Math.round(screenHeight * 0.55));
 
   return (
     <AppModal
@@ -182,13 +183,15 @@ export function AgentAccountTransactionsDialog({
       onRequestClose={onDismiss}
       statusBarTranslucent
     >
-      <Pressable
-        style={styles.scrim}
-        onPress={onDismiss}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.close', 'Close')}
-      >
+      <View style={styles.scrim}>
         <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close', 'Close')}
+        />
+        {/* View (not Pressable) so FlatList can receive scroll gestures */}
+        <View
           style={[
             styles.sheet,
             shadows.md ?? {},
@@ -199,7 +202,6 @@ export function AgentAccountTransactionsDialog({
               maxHeight: screenHeight * 0.85,
             },
           ]}
-          onPress={(e) => e.stopPropagation()}
         >
           <Text
             variant="titleLarge"
@@ -224,76 +226,81 @@ export function AgentAccountTransactionsDialog({
             <View style={{ height: spacing.sm }} />
           )}
 
-          <ScrollView
-            style={{ flexShrink: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: spacing.lg,
-              paddingBottom: spacing.md,
-            }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {loading ? (
-              <View style={styles.centered}>
-                <ActivityIndicator color={colors.primary.main} />
-                <Text
-                  variant="bodySmall"
-                  style={{ color: colors.text.secondary, marginTop: 8 }}
-                >
-                  {t('common.loading', 'Loading…')}
-                </Text>
-              </View>
-            ) : (
-              <>
-                {multiMode && accounts.length > 1 && (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.tabRow}
-                    contentContainerStyle={styles.tabRowContent}
-                  >
-                    {accounts.map((acc, i) => {
-                      const active = i === selectedIndex;
-                      return (
-                        <Pressable
-                          key={acc.id}
-                          onPress={() => setSelectedIndex(i)}
-                          style={[
-                            styles.tab,
-                            {
-                              borderBottomColor: active
-                                ? colors.primary.main
-                                : 'transparent',
-                              borderBottomWidth: 2,
-                            },
-                          ]}
-                        >
-                          <Text
-                            variant="labelMedium"
-                            style={{
-                              color: active
-                                ? colors.primary.main
-                                : colors.text.secondary,
-                              fontWeight: active ? '700' : '400',
-                            }}
-                          >
-                            {tabLabel(acc)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                )}
-                <TransactionList
-                  transactions={activeTransactions}
+          {loading ? (
+            <View style={[styles.centered, { paddingHorizontal: spacing.lg }]}>
+              <ActivityIndicator color={colors.primary.main} />
+              <Text
+                variant="bodySmall"
+                style={{ color: colors.text.secondary, marginTop: 8 }}
+              >
+                {t('common.loading', 'Loading…')}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={sorted}
+              keyExtractor={(item) => item.id}
+              style={{ height: listMaxHeight, paddingHorizontal: spacing.lg }}
+              contentContainerStyle={{ paddingBottom: spacing.sm }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+              bounces
+              ListHeaderComponent={
+                <TransactionListHeader
                   currency={activeCurrency}
                   availableBalance={activeBalance}
                   colors={colors}
                   t={t}
+                  multiMode={multiMode}
+                  accounts={accountList}
+                  selectedIndex={selectedIndex}
+                  onSelectIndex={setSelectedIndex}
                 />
-              </>
-            )}
-          </ScrollView>
+              }
+              ListEmptyComponent={
+                <Text
+                  variant="bodyMedium"
+                  style={{ color: colors.text.secondary, paddingVertical: 16 }}
+                >
+                  {t('accounts.noTransactions', 'No transactions yet.')}
+                </Text>
+              }
+              renderItem={({ item }) => (
+                <View style={[styles.row, { borderBottomColor: colors.divider }]}>
+                  <View style={styles.rowLeft}>
+                    <Text variant="labelMedium" style={{ color: colors.text.primary }}>
+                      {item.transaction_type}
+                    </Text>
+                    {item.memo ? (
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: colors.text.secondary }}
+                        numberOfLines={2}
+                      >
+                        {item.memo}
+                      </Text>
+                    ) : null}
+                    <Text variant="bodySmall" style={{ color: colors.text.disabled }}>
+                      {formatWhen(item.created_at)}
+                    </Text>
+                  </View>
+                  <Text
+                    variant="titleSmall"
+                    style={{
+                      color: lineColor(item.transaction_type, item.amount, colors),
+                      marginLeft: 8,
+                    }}
+                  >
+                    {formatSignedAmount(
+                      item.transaction_type,
+                      item.amount,
+                      activeCurrency
+                    )}
+                  </Text>
+                </View>
+              )}
+            />
+          )}
 
           <View
             style={[
@@ -308,8 +315,8 @@ export function AgentAccountTransactionsDialog({
               {t('common.close', 'Close')}
             </Button>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </AppModal>
   );
 }
@@ -324,6 +331,7 @@ const styles = StyleSheet.create({
   sheet: {
     overflow: 'hidden',
     paddingTop: 20,
+    zIndex: 1,
   },
   title: { fontWeight: '700' },
   balanceBar: {

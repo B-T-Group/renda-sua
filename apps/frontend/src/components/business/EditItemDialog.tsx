@@ -33,6 +33,7 @@ import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency
 import { Item, useItems } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
 import ImageUploadDialog from './ImageUploadDialog';
+import ExportMarketsField from './ExportMarketsField';
 
 interface EditItemDialogProps {
   open: boolean;
@@ -61,7 +62,9 @@ export default function EditItemDialog({
   } = useItems(businessId);
 
   const { tags, fetchTags, createTag, setItemTags } = useTags();
-  const [formData, setFormData] = useState<Partial<Item>>({});
+  const [formData, setFormData] = useState<
+    Partial<Item> & { export_market_country_codes?: string[] }
+  >({});
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
@@ -105,7 +108,10 @@ export default function EditItemDialog({
         max_order_quantity: item.max_order_quantity,
         is_active: item.is_active,
         pay_on_delivery_enabled: item.pay_on_delivery_enabled ?? false,
-        interest_only: item.interest_only ?? false,
+        export_available: item.export_available ?? false,
+        export_market_country_codes: (item.export_markets ?? []).map((m) =>
+          m.country_code.toUpperCase()
+        ),
         pay_at_pickup_enabled: item.pay_at_pickup_enabled ?? false,
       });
     }
@@ -131,7 +137,7 @@ export default function EditItemDialog({
       errors.category = t('business.inventory.categoryRequired');
     }
 
-    if (!formData.interest_only && (!formData.price || formData.price <= 0)) {
+    if (!formData.export_available && (!formData.price || formData.price <= 0)) {
       errors.price = t('business.inventory.priceRequired');
     }
 
@@ -655,20 +661,30 @@ export default function EditItemDialog({
                       'Allow payment at delivery'
                     )}
                   />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.interest_only ?? false}
-                      onChange={(e) =>
-                        handleInputChange('interest_only', e.target.checked)
-                      }
-                    />
-                  }
-                  label={t(
-                    'productInterest.merchantToggle',
-                    'Pricing not applicable (interest only)'
-                  )}
-                />
+              </Stack>
+              <ExportMarketsField
+                exportAvailable={formData.export_available ?? false}
+                selectedCountryCodes={
+                  (formData as { export_market_country_codes?: string[] })
+                    .export_market_country_codes ?? []
+                }
+                onExportAvailableChange={(enabled) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    export_available: enabled,
+                    ...(enabled
+                      ? {}
+                      : { export_market_country_codes: [] as string[] }),
+                  }));
+                }}
+                onMarketsChange={(codes) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    export_market_country_codes: codes,
+                  }));
+                }}
+              />
+              <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
                   <FormControlLabel
                     control={
                       <Switch

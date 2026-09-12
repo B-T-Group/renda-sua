@@ -5,8 +5,9 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
 import { StatusPill } from '../common/StatusPill';
-import type { AccountInfoRow } from '../../types/accountWallet';
+import type { AccountInfoRow, PendingWithdrawalRow } from '../../types/accountWallet';
 import { isLegacyWallet } from '../../utils/walletAccounts';
+import { PendingWithdrawalsSection } from './PendingWithdrawalsSection';
 
 function formatWalletBalance(amount: number, currency: string): string {
   return new Intl.NumberFormat(undefined, {
@@ -24,6 +25,7 @@ export interface WalletAccountCardProps {
   onViewTransactions: (account: AccountInfoRow) => void;
   onWithdraw: (account: AccountInfoRow) => void;
   onTopUp: (account: AccountInfoRow) => void;
+  onPendingResolved?: (message: string) => void;
 }
 
 export function WalletAccountCard({
@@ -33,6 +35,7 @@ export function WalletAccountCard({
   onViewTransactions,
   onWithdraw,
   onTopUp,
+  onPendingResolved,
 }: WalletAccountCardProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography, shadows } = useTheme();
@@ -42,8 +45,14 @@ export function WalletAccountCard({
     : (account.business_location?.name ??
       t('accounts.locationsSection', 'Business locations'));
 
+  const pendingWithdrawals: PendingWithdrawalRow[] =
+    account.mobile_payment_transactions ?? [];
+  const hasPendingWithdrawals = pendingWithdrawals.length > 0;
+
   const withdrawDisabled =
-    account.available_balance <= 0 || (isStripeRail && !stripeReady);
+    account.available_balance <= 0 ||
+    (isStripeRail && !stripeReady) ||
+    hasPendingWithdrawals;
 
   const handleTx = useCallback(() => onViewTransactions(account), [onViewTransactions, account]);
   const handleWithdraw = useCallback(() => onWithdraw(account), [onWithdraw, account]);
@@ -179,6 +188,27 @@ export function WalletAccountCard({
             'Set up and activate Stripe payouts to withdraw.'
           )}
         </Text>
+      ) : null}
+
+      {hasPendingWithdrawals && !isStripeRail ? (
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.warning.main, marginTop: spacing.xs, textAlign: 'center' },
+          ]}
+        >
+          {t(
+            'accounts.pendingWithdrawals.withdrawDisabled',
+            'Resolve pending withdrawals before starting a new one.'
+          )}
+        </Text>
+      ) : null}
+
+      {!isStripeRail && onPendingResolved ? (
+        <PendingWithdrawalsSection
+          items={pendingWithdrawals}
+          onResolved={onPendingResolved}
+        />
       ) : null}
     </View>
   );

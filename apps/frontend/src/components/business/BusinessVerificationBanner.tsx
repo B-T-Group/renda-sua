@@ -32,12 +32,28 @@ function needsMobilePaymentPhone(status: BusinessVerificationStatus): boolean {
   return needing > 0;
 }
 
-export const BusinessVerificationBanner: React.FC = () => {
+export interface BusinessVerificationBannerProps {
+  /** When provided, skips an extra /business-verification/status fetch. */
+  status?: BusinessVerificationStatus | null;
+  loading?: boolean;
+  refresh?: () => Promise<void>;
+}
+
+export const BusinessVerificationBanner: React.FC<
+  BusinessVerificationBannerProps
+> = ({
+  status: statusProp,
+  loading: loadingProp,
+  refresh: refreshProp,
+}) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { profile } = useUserProfileContext();
-  const { status, loading, refresh } = useBusinessVerification();
+  const hook = useBusinessVerification(statusProp === undefined);
+  const status = statusProp !== undefined ? statusProp : hook.status;
+  const loading = loadingProp !== undefined ? loadingProp : hook.loading;
+  const refresh = refreshProp ?? hook.refresh;
   const [refreshing, setRefreshing] = useState(false);
   const businessId = profile?.business?.id;
   const mainInterest = profile?.business?.main_interest ?? 'sell_items';

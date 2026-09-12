@@ -26,6 +26,15 @@ export interface Account {
     memo: string;
     created_at: string;
   }>;
+  mobile_payment_transactions?: Array<{
+    id: string;
+    amount: number;
+    currency: string;
+    customer_phone?: string | null;
+    transaction_id?: string | null;
+    provider?: string | null;
+    created_at: string;
+  }>;
 }
 
 export interface ClientInfo {

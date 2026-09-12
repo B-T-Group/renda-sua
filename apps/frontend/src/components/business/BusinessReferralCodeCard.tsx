@@ -14,11 +14,18 @@ import { useBusinessReferrals } from '../../hooks/useBusinessReferrals';
 import { useReferredBusinesses } from '../../hooks/useReferredBusinesses';
 import { ReferredBusinessesList } from '../referrals/ReferredBusinessesList';
 
-const BusinessReferralCodeCard: React.FC = () => {
+interface BusinessReferralCodeCardProps {
+  /** When false, skips referrals-summary and referred-businesses fetches. */
+  fetchEnabled?: boolean;
+}
+
+const BusinessReferralCodeCard: React.FC<BusinessReferralCodeCardProps> = ({
+  fetchEnabled = true,
+}) => {
   const { t } = useTranslation();
-  const { summary, loading } = useBusinessReferrals();
+  const { summary, loading } = useBusinessReferrals(fetchEnabled);
   const { businesses, loading: listLoading, error: listError } =
-    useReferredBusinesses('business');
+    useReferredBusinesses('business', fetchEnabled);
   const [copied, setCopied] = useState(false);
 
   if (loading || !summary?.businessCode) {

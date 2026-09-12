@@ -25,6 +25,7 @@ describe('OrdersService cash-exception inventory', () => {
   let hasuraSystemService: {
     executeMutation: jest.Mock;
     executeQuery: jest.Mock;
+    getAccount: jest.Mock;
   };
 
   const agentUser = {
@@ -35,8 +36,11 @@ describe('OrdersService cash-exception inventory', () => {
 
   const cashOrder = {
     id: 'order-123',
+    order_number: '49520979',
+    currency: 'XAF',
     assigned_agent_id: 'agent-123',
     assigned_agent: { user_id: 'agent-user' },
+    client: { user_id: 'client-user' },
     payment_timing: 'pay_at_delivery',
     current_status: 'out_for_delivery',
     reconciliation_status: null,
@@ -57,6 +61,7 @@ describe('OrdersService cash-exception inventory', () => {
     hasuraSystemService = {
       executeMutation: jest.fn().mockResolvedValue({}),
       executeQuery: jest.fn().mockResolvedValue({}),
+      getAccount: jest.fn().mockResolvedValue({ id: 'acct-1' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -81,6 +86,9 @@ describe('OrdersService cash-exception inventory', () => {
       .compile();
 
     service = module.get(OrdersService);
+    (service as any).representativeCompensationService = {
+      evaluateForOrderSafe: jest.fn(),
+    };
     jest.spyOn(service as any, 'createStatusHistoryEntry').mockResolvedValue(undefined);
     jest.spyOn(service as any, 'handleOrderCompletionRewards').mockResolvedValue(undefined);
     jest.spyOn(service as any, 'sendRateAgentPromptToClient').mockResolvedValue(undefined);
@@ -163,6 +171,69 @@ describe('OrdersService cash-exception inventory', () => {
       status: HttpStatus.FORBIDDEN,
     });
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('applies a paid reservation deposit when cash exception completes', async () => {
+    stubOrder({
+      deposit_status: 'paid',
+      deposit_amount: 2000,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+    });
+    const apply = jest.fn().mockResolvedValue(undefined);
+    (service as any).depositLedgerService = {
+      applyHeldDepositAsPayment: apply,
+    };
+
+    await expect(service.markPaidInCashException('order-123')).resolves.toEqual({
+      success: true,
+      message: 'Cash exception recorded',
+    });
+
+    expect(hasuraSystemService.getAccount).toHaveBeenCalledWith(
+      'client-user',
+      'XAF'
+    );
+    expect(apply).toHaveBeenCalledWith({
+      clientAccountId: 'acct-1',
+      amount: 2000,
+      orderNumber: '49520979',
+      depositTransactionId: 'dep-txn-1',
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('MarkCashException'),
+      expect.objectContaining({ orderId: 'order-123' })
+    );
+  });
+
+  it('fails cash exception without completing when deposit apply throws', async () => {
+    stubOrder({
+      deposit_status: 'paid',
+      deposit_amount: 2000,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+    });
+    (service as any).depositLedgerService = {
+      applyHeldDepositAsPayment: jest
+        .fn()
+        .mockRejectedValue(new Error('Deposit apply payment failed')),
+    };
+
+    await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+    });
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    expect(inventoryCalls()).toEqual([]);
+  });
+
+  it('does not apply a deposit when cash exception has no captured deposit', async () => {
+    stubOrder();
+    const apply = jest.fn();
+    (service as any).depositLedgerService = {
+      applyHeldDepositAsPayment: apply,
+    };
+
+    await service.markPaidInCashException('order-123');
+
+    expect(apply).not.toHaveBeenCalled();
   });
 
   it('rejects cash exception unless the order is pay-at-delivery and out for delivery', async () => {

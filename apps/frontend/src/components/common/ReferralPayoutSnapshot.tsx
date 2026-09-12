@@ -29,17 +29,20 @@ function formatMoney(amount: number, currency: string): string {
 interface ReferralPayoutSnapshotProps {
   source: 'agent' | 'business';
   walletPath: string;
+  /** When false, skips payout projection and Stripe status fetches. */
+  fetchEnabled?: boolean;
 }
 
 const ReferralPayoutSnapshot: React.FC<ReferralPayoutSnapshotProps> = ({
   source,
   walletPath,
+  fetchEnabled = true,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { accounts, profile } = useUserProfileContext();
-  const { isStripeRail } = useIsStripeRail();
-  const { projection } = useReferralProjectedPayout(source, true);
+  const { isStripeRail } = useIsStripeRail(fetchEnabled);
+  const { projection } = useReferralProjectedPayout(source, fetchEnabled);
   const projectedAmount = projection?.projectedAmount ?? 0;
   const payoutCurrency = projection?.currency ?? XAF;
   const walletCurrency =

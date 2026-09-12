@@ -1,0 +1,4 @@
+# Local reports (may contain item UUIDs)
+reports/
+__pycache__/
+*.pyc

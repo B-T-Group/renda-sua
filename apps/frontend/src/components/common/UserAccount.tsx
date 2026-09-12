@@ -39,6 +39,7 @@ import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { useStripeWithdraw } from '../../hooks/useStripeWithdraw';
 import TopUpModal from '../business/TopUpModal';
 import WithdrawModal from '../business/WithdrawModal';
+import PendingWithdrawalsPanel from './PendingWithdrawalsPanel';
 
 // GraphQL query for fetching account transactions
 const GET_ACCOUNT_TRANSACTIONS = `
@@ -95,7 +96,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const isClientPersona = personas.length > 0 && personas.every((p) => p === 'client');
 
   // Use the new hook to fetch account data
-  const { account, loading, error, subscriptionFailed } =
+  const { account, loading, error, subscriptionFailed, refetch } =
     useAccountById(accountId);
 
   // Modal states
@@ -111,6 +112,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
   const [showTopUpSuccess, setShowTopUpSuccess] = useState(false);
   const [showWithdrawSuccess, setShowWithdrawSuccess] = useState(false);
   const [withdrawRequirePin, setWithdrawRequirePin] = useState(false);
+  const [pendingSnack, setPendingSnack] = useState<string | null>(null);
 
   // Hooks for payment operations
   const { requestTopUp, loading: topUpLoading } = useMtnMomoTopUp();
@@ -133,9 +135,19 @@ const UserAccount: React.FC<UserAccountProps> = ({
     stripeConnected &&
     (connectStatus?.status === 'active' ||
       (!!connectStatus?.chargesEnabled && !!connectStatus?.payoutsEnabled));
-  const withdrawDisabled = loading || (isStripeRail && !stripeReady);
-  const withdrawTooltip =
-    isStripeRail && !stripeReady
+  const pendingWithdrawals = account?.mobile_payment_transactions ?? [];
+  const hasPendingWithdrawals =
+    !isStripeRail && pendingWithdrawals.length > 0;
+  const withdrawDisabled =
+    loading ||
+    (isStripeRail && !stripeReady) ||
+    hasPendingWithdrawals;
+  const withdrawTooltip = hasPendingWithdrawals
+    ? t(
+        'accounts.pendingWithdrawals.withdrawDisabled',
+        'Resolve pending withdrawals before starting a new one.'
+      )
+    : isStripeRail && !stripeReady
       ? t(
           'accounts.stripePayoutSetupRequired',
           'Set up and activate Stripe payouts to withdraw.'
@@ -152,6 +164,12 @@ const UserAccount: React.FC<UserAccountProps> = ({
     } else {
       void startStripeOnboarding();
     }
+  };
+
+  const handlePendingResolved = (message: string) => {
+    setPendingSnack(message);
+    void refetch();
+    if (onRefresh) void onRefresh();
   };
 
   // GraphQL hook for transactions
@@ -405,18 +423,19 @@ const UserAccount: React.FC<UserAccountProps> = ({
   // Minimal view for business dashboard
   if (compactView) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          p: 1.5,
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          backgroundColor: 'background.paper',
-        }}
-      >
+      <Box>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            p: 1.5,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+          }}
+        >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" color="text.secondary">
             {account.business_location?.name
@@ -475,6 +494,20 @@ const UserAccount: React.FC<UserAccountProps> = ({
             </Tooltip>
           )}
         </Box>
+      </Box>
+        {!isStripeRail ? (
+          <PendingWithdrawalsPanel
+            items={pendingWithdrawals}
+            onResolved={handlePendingResolved}
+            compact
+          />
+        ) : null}
+        <Snackbar
+          open={!!pendingSnack}
+          autoHideDuration={6000}
+          onClose={() => setPendingSnack(null)}
+          message={pendingSnack}
+        />
       </Box>
     );
   }
@@ -586,6 +619,13 @@ const UserAccount: React.FC<UserAccountProps> = ({
             </Box>
           )}
 
+          {!isStripeRail ? (
+            <PendingWithdrawalsPanel
+              items={pendingWithdrawals}
+              onResolved={handlePendingResolved}
+            />
+          ) : null}
+
           {showTransactions && (
             <Box
               sx={{
@@ -658,6 +698,21 @@ const UserAccount: React.FC<UserAccountProps> = ({
           sx={{ width: '100%' }}
         >
           {t('accounts.withdrawSuccess')}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={!!pendingSnack}
+        autoHideDuration={6000}
+        onClose={() => setPendingSnack(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setPendingSnack(null)}
+          severity="info"
+          sx={{ width: '100%' }}
+        >
+          {pendingSnack}
         </Alert>
       </Snackbar>
 

@@ -105,8 +105,12 @@ const BusinessDashboard: React.FC = () => {
   useEffect(() => {
     if (!profile?.business?.id) return;
     void loadCleanupPending();
+  }, [loadCleanupPending, profile?.business?.id]);
+
+  useEffect(() => {
+    if (!profile?.business?.id || aggregatesLoading) return;
     void hydrateActivity();
-  }, [hydrateActivity, loadCleanupPending, profile?.business?.id]);
+  }, [aggregatesLoading, hydrateActivity, profile?.business?.id]);
 
   const prevBusinessIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -145,6 +149,7 @@ const BusinessDashboard: React.FC = () => {
   const mainInterest = profile?.business?.main_interest ?? 'sell_items';
   const isRentalFocused = mainInterest === 'rent_items';
   const isLoading = aggregatesLoading;
+  const belowFoldReady = !aggregatesLoading;
   const itemCount = aggregates?.itemCount ?? 0;
   const rentalItemCount = aggregates?.rentalItemCount ?? 0;
   const { aggregatesReady, quietHomeMode, fulfillmentMode } =
@@ -389,6 +394,7 @@ const BusinessDashboard: React.FC = () => {
             }
             metricsLoading={isLoading}
             compact={fulfillmentMode}
+            fetchEnabled={belowFoldReady}
           />
           {aggregatesReady ? (
             <BusinessCatalogHealthCard
@@ -410,7 +416,11 @@ const BusinessDashboard: React.FC = () => {
       <AssistantHomeEntry />
 
       {!setupMode && !verificationLoading && !quietHomeMode ? (
-        <BusinessVerificationBanner />
+        <BusinessVerificationBanner
+          status={verificationStatus}
+          loading={verificationLoading}
+          refresh={refreshVerification}
+        />
       ) : null}
 
       {fulfillmentMode && topViewed.length > 0 ? (
@@ -510,12 +520,16 @@ const BusinessDashboard: React.FC = () => {
           <ReferralPayoutSnapshot
             source="business"
             walletPath="/business/accounts"
+            fetchEnabled={belowFoldReady}
           />
         </Box>
       ) : null}
 
       <Box sx={{ mb: 2 }}>
-        <LaunchPromoBanner />
+        <LaunchPromoBanner
+          status={verificationStatus}
+          loading={verificationLoading}
+        />
       </Box>
 
       {hasAdminAccess ? (
@@ -531,7 +545,7 @@ const BusinessDashboard: React.FC = () => {
       ) : null}
 
       <Box sx={{ mb: 2 }}>
-        <BusinessReferralCodeCard />
+        <BusinessReferralCodeCard fetchEnabled={belowFoldReady} />
       </Box>
 
       <BusinessGoLiveCelebration

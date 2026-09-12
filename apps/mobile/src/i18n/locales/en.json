@@ -1325,29 +1325,19 @@
         "subtitle": "Choose the option that suits you best",
         "delivery": {
           "tab": "Delivery",
-          "title": "Pay & get it delivered",
-          "bodyCard": "Pay securely by card at checkout — a courier brings it to your door.",
-          "bodyMomo": "Pay with mobile money at checkout — a courier brings it to your door.",
-          "step1Card": "Pay by card",
-          "step1Momo": "Pay MoMo",
-          "step2": "Courier delivers",
-          "step3": "Confirm receipt"
-        },
-        "pickup": {
-          "tab": "Store pickup",
-          "title": "Pick up at the store",
-          "body": "Order in the app and collect it at the store when it’s ready.",
-          "step1": "Order ahead",
-          "step2": "Store prepares",
-          "step3": "Collect in store"
-        },
-        "payAtDelivery": {
-          "tab": "Pay at delivery",
           "title": "Pay at delivery",
           "body": "Nothing charged now — pay when the courier hands you your order.",
           "step1": "Order now",
-          "step2": "Courier arrives",
+          "step2": "Courier delivers",
           "step3": "Pay on the spot"
+        },
+        "pickup": {
+          "tab": "Pickup",
+          "title": "Pay at pickup",
+          "body": "Order in the app, collect it at the store, and pay when you pick it up.",
+          "step1": "Order ahead",
+          "step2": "Store prepares",
+          "step3": "Pay and collect"
         }
       }
     },
@@ -1971,7 +1961,11 @@
       "acceptTerms": "I have read and accept the merchant agreement",
       "agreeCheckbox": "I have read and agree to the Merchant Partnership Agreement.",
       "scrollHint": "Please scroll to the end of the agreement before accepting.",
+      "scrollForMore": "Scroll for more",
+      "acceptBySigning": "By tapping Accept and sign, you agree to the Merchant Partnership Agreement.",
       "acceptTermsHint": "Required. Tap here to confirm you have read the agreement above.",
+      "acceptTermsHintLocked": "Scroll to the end of the agreement above to unlock this checkbox.",
+      "acceptTermsHintUnlocked": "Ready to accept. Tap here to confirm you have read the agreement.",
       "submit": "Accept and sign",
       "submitting": "Submitting…",
       "successTitle": "Agreement signed",
@@ -3674,17 +3668,18 @@
       "quantity": "Quantity",
       "quantityHint": "Max {{max}} available",
       "fulfillment": "Fulfillment",
-      "fulfillmentQuestion": "How would you like to receive your order?",
+      "fulfillmentQuestion": "How do you want it?",
       "fulfillmentRequired": "Choose one option to continue.",
       "fulfillmentHint": "You can change this anytime.",
       "delivery": "Delivery",
-      "deliveryChoiceHint": "Have your order brought to your delivery address.",
+      "deliveryChoiceHint": "To your address",
+      "deliveryPriceAddressRequired": "Choose an address to see the delivery price.",
       "pickup": "Pickup",
-      "pickupChoiceHint": "Collect your order directly from the store.",
+      "pickupChoiceHint": "At the store",
       "pickupHint": "Pay when you pick up at the store.",
       "pickupHintStripe": "Pay securely by card when you place your order, then pick up at the store.",
       "shipping": "Shipping",
-      "shippingChoiceHint": "The seller sends this with a carrier to your address.",
+      "shippingChoiceHint": "By carrier",
       "shippingNotice": "The seller ships this with a carrier. Pay now to place the order.",
       "shippingUnavailableMixed": "Shipping is only available when every item in your cart can be shipped.",
       "addressTitle": "Delivery address",
@@ -3798,6 +3793,7 @@
         "trackHint": "Track progress in My orders",
         "chipPayNow": "Payment confirmation required",
         "chipPaid": "Order confirmed and paid",
+        "chipDepositPaid": "Deposit paid",
         "chipCardAuthorized": "Card authorized",
         "cardAuthorizedTitle": "Card authorized",
         "cardAuthorizedBody": "Your card has been authorized. You will only be charged when the delivery agent picks up your order from the business.",
@@ -3814,6 +3810,8 @@
         "payAtPickupTitle": "Pay when you pick up",
         "payAtPickupBody": "Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.",
         "viewOrders": "My orders",
+        "goToOrder": "Go to the order",
+        "goToHome": "Go to home",
         "returnToDashboard": "Return to dashboard",
         "continueShopping": "Continue shopping",
         "emailPrompt": "Add an email so we can send you receipts and updates about this order.",
@@ -4678,7 +4676,20 @@
     "withdrawalConfigFailed": "Could not load withdrawal settings. Try again.",
     "withdrawalPhoneNoteLocation": "This is the phone number used for withdrawals from this location's account.",
     "stripePayoutsFooterTitle": "Stripe payouts",
-    "stripePayoutsFooterHint": "Payouts for all your wallets go to your connected Stripe account."
+    "stripePayoutsFooterHint": "Payouts for all your wallets go to your connected Stripe account.",
+    "pendingWithdrawals": {
+      "title": "Pending withdrawals",
+      "hint": "Resolve these before starting a new withdrawal. Tap Resolve to check Mobile Money or cancel a stuck request.",
+      "resolve": "Resolve pending withdrawal",
+      "resolveDone": "Withdrawal status updated.",
+      "resolveFailed": "Could not resolve this withdrawal. Try again.",
+      "withdrawDisabled": "Resolve pending withdrawals before starting a new one.",
+      "minutesAgo": "{{count}} min ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago",
+      "showMore": "Show {{count}} more",
+      "showLess": "Show less"
+    }
   },
   "legal": {
     "terms": {
@@ -6412,7 +6423,21 @@
     "viewItem": "View item",
     "clientLabel": "Client",
     "unknownItem": "Item",
-    "merchantToggle": "Pricing not applicable (interest only)"
+    "merchantToggle": "Available for export",
+    "successScreen": {
+      "navTitle": "Interest submitted",
+      "title": "Interest submitted successfully",
+      "body": "A representative will reach out to you about this item.",
+      "browseMore": "Continue browsing",
+      "viewRequests": "View my interest requests"
+    }
+  },
+  "exportCatalog": {
+    "sectionTitle": "Available for export",
+    "sectionSubtitle": "Goods listed from Canada — request interest to import",
+    "seeAll": "See all exports",
+    "badge": "Export",
+    "chip": "Exports"
   },
   "assistant": {
     "title": "Rendasua Assistant",

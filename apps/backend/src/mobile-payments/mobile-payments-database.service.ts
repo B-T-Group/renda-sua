@@ -857,6 +857,57 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
+   * Pending GIVE_CHANGE withdrawals for wallet reconcile / cron.
+   */
+  async getPendingGiveChangeWithdrawals(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<MobilePaymentTransaction[]> {
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
+    const query = `
+      query GetPendingGiveChangeWithdrawals {
+        mobile_payment_transactions(
+          where: {
+            status: { _eq: "pending" }
+            transaction_type: { _eq: "GIVE_CHANGE" }
+          }
+          order_by: { created_at: asc }
+          limit: ${limit}
+          offset: ${offset}
+        ) {
+          id
+          reference
+          amount
+          currency
+          description
+          provider
+          payment_method
+          status
+          transaction_id
+          account_id
+          transaction_type
+          payment_entity
+          customer_phone
+          customer_email
+          error_message
+          error_code
+          created_at
+          updated_at
+          entity_id
+        }
+      }
+    `;
+    try {
+      const response = await this.hasuraService.executeQuery(query);
+      return response.mobile_payment_transactions;
+    } catch (error) {
+      this.logger.error('Failed to get pending GIVE_CHANGE withdrawals:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Pending MyPVit / Freemopay rows for admin reconciliation.
    */
   async getPendingIntegrationTransactions(options?: {

@@ -125,6 +125,8 @@ function CatalogSection({
   orderButtonText,
   addToCartButtonText,
   buyNowButtonText,
+  seeAllLabel,
+  onSeeAll,
 }: {
   title: string;
   subtitle?: string;
@@ -146,6 +148,8 @@ function CatalogSection({
   orderButtonText: string;
   addToCartButtonText: string;
   buyNowButtonText: string;
+  seeAllLabel?: string;
+  onSeeAll?: () => void;
 }) {
   if (!loading && items.length === 0) return null;
 
@@ -157,14 +161,29 @@ function CatalogSection({
         minWidth: 0,
       }}
     >
-      <Box sx={{ mb: 1.5 }}>
-        <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.25 }}>
-          {title}
-        </Typography>
-        {subtitle ? (
-          <Typography variant="body2" color="text.secondary">
-            {subtitle}
+      <Box
+        sx={{
+          mb: 1.5,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 1,
+        }}
+      >
+        <Box>
+          <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.25 }}>
+            {title}
           </Typography>
+          {subtitle ? (
+            <Typography variant="body2" color="text.secondary">
+              {subtitle}
+            </Typography>
+          ) : null}
+        </Box>
+        {onSeeAll && seeAllLabel ? (
+          <Button size="small" onClick={onSeeAll} sx={{ flexShrink: 0 }}>
+            {seeAllLabel}
+          </Button>
         ) : null}
       </Box>
       <Box sx={ITEMS_CATALOG_GRID_SX}>
@@ -378,6 +397,15 @@ const ItemsPage: React.FC = () => {
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
     enabled: shouldFetchCurated && !popularDuplicatesMain,
+  });
+
+  const { inventoryItems: exportItems, loading: exportLoading } = useInventoryItems({
+    page: 1,
+    limit: 24,
+    is_active: true,
+    export_only: true,
+    anonymousOrigin: browserGeo,
+    enabled: shouldFetchCurated && !businessLocationId,
   });
 
   const { collections: featuredCollections, loading: collectionsLoading } =
@@ -599,6 +627,7 @@ const ItemsPage: React.FC = () => {
     dealsDisplay,
     topRatedDisplay,
     popularDisplay,
+    exportDisplay,
     catalogDisplay,
   } = useMemo(() => {
     if (hasActiveFilters || !showCuratedSections) {
@@ -606,6 +635,7 @@ const ItemsPage: React.FC = () => {
         dealsDisplay: dealsItems,
         topRatedDisplay: topRatedItems,
         popularDisplay: popularItems,
+        exportDisplay: exportItems,
         catalogDisplay: inventoryItems,
       };
     }
@@ -617,15 +647,23 @@ const ItemsPage: React.FC = () => {
     // When popular would duplicate main grid, derive from inventoryItems instead
     const popularSource = popularDuplicatesMain ? inventoryItems : popularItems;
     const popularDisplay = pickUniqueCatalogItems(popularSource, seen, 8);
+    const exportDisplay = pickUniqueCatalogItems(exportItems, seen, 8);
     const catalogDisplay = filterExcludedCatalogItems(inventoryItems, seen);
 
-    return { dealsDisplay, topRatedDisplay, popularDisplay, catalogDisplay };
+    return {
+      dealsDisplay,
+      topRatedDisplay,
+      popularDisplay,
+      exportDisplay,
+      catalogDisplay,
+    };
   }, [
     hasActiveFilters,
     showCuratedSections,
     dealsItems,
     topRatedItems,
     popularItems,
+    exportItems,
     inventoryItems,
     popularDuplicatesMain,
   ]);
@@ -807,6 +845,16 @@ const ItemsPage: React.FC = () => {
 
           {/* Quick picks */}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            {!businessLocationId &&
+            (exportLoading || exportDisplay.length > 0) ? (
+              <Chip
+                label={t('exportCatalog.chip', 'Exports')}
+                onClick={() => navigate('/exports')}
+                color="secondary"
+                variant="outlined"
+                size="medium"
+              />
+            ) : null}
             {(
               [
                 'deals',
@@ -1109,6 +1157,28 @@ const ItemsPage: React.FC = () => {
             orderButtonText={t('common.orderNow', 'Order Now')}
             addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
             buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+          />
+
+          <CatalogSection
+            title={t('exportCatalog.sectionTitle', 'Available for export')}
+            subtitle={t(
+              'exportCatalog.sectionSubtitle',
+              'Goods listed from Canada — request interest to import'
+            )}
+            items={exportDisplay}
+            loading={exportLoading}
+            formatCurrency={formatCurrency}
+            onOrderClick={handleOrderClick}
+            onAddToCart={handleAddToCart}
+            isPublicView={!isAuthenticated}
+            canOrder={!isAuthenticated || isClientUser}
+            showCartButtons={isAuthenticated && isClientUser}
+            loginButtonText={t('public.items.login', 'Sign In to Order')}
+            orderButtonText={t('common.orderNow', 'Order Now')}
+            addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
+            buyNowButtonText={t('cart.buyNow', 'Buy Now')}
+            seeAllLabel={t('exportCatalog.seeAll', 'See all exports')}
+            onSeeAll={() => navigate('/exports')}
           />
           </Box>
         )}

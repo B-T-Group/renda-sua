@@ -132,7 +132,17 @@
     "withdrawalPhoneNoteLocation": "Ce numéro est utilisé pour les retraits du compte de cet emplacement.",
     "locationAccountLabel": "{{name}} - {{currency}}",
     "withheld": "Retenu",
-    "withheldBalance": "Solde retenu"
+    "withheldBalance": "Solde retenu",
+    "pendingWithdrawals": {
+      "title": "Retraits en attente",
+      "hint": "Résolvez-les avant de démarrer un nouveau retrait. Appuyez sur Résoudre pour vérifier le Mobile Money ou annuler une demande bloquée.",
+      "resolve": "Résoudre le retrait en attente",
+      "resolveDone": "Statut du retrait mis à jour.",
+      "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau.",
+      "showMore": "Afficher {{count}} de plus",
+      "showLess": "Afficher moins"
+    }
   },
   "addresses": {
     "addAddress": "Ajouter une adresse",
@@ -2071,6 +2081,10 @@
       "agreementPageTitle": "Contrat de partenariat marchand",
       "agreeCheckbox": "J'ai lu et j'accepte le Contrat de partenariat marchand.",
       "scrollHint": "Veuillez faire défiler jusqu'à la fin du contrat avant d'accepter.",
+      "scrollForMore": "Faites défiler pour la suite",
+      "acceptBySigning": "En appuyant sur Accepter et signer, vous acceptez le Contrat de partenariat marchand.",
+      "acceptTermsHintLocked": "Faites défiler jusqu'à la fin du contrat ci-dessus pour déverrouiller cette case.",
+      "acceptTermsHintUnlocked": "Prêt à accepter. Confirmez avoir lu le contrat.",
       "acceptAgreement": "Accepter le contrat",
       "agreementSuccess": "Contrat accepté. Votre boutique est active — retournez au tableau de bord pour continuer. Vous pourrez obtenir le badge Vérifié plus tard.",
       "backToDashboard": "Retour au tableau de bord",
@@ -7462,7 +7476,22 @@
     "viewItem": "Voir l’article",
     "clientLabel": "Client",
     "unknownItem": "Article",
-    "merchantToggle": "Prix non applicable (intérêt uniquement)"
+    "merchantToggle": "Disponible à l’export"
+  },
+  "exportCatalog": {
+    "merchantToggle": "Disponible à l’export",
+    "marketsHelp": "Choisissez les marchés où les acheteurs peuvent découvrir cet article et manifester leur intérêt. Listez l’article à un seul emplacement d’origine.",
+    "singleLocationHelp": "Les articles d’export ne sont listés qu’à un seul emplacement. Utilisez les marchés d’export sur l’article pour le montrer dans d’autres pays.",
+    "singleLocationError": "Les articles d’export ne peuvent être listés qu’à un seul emplacement. Utilisez les marchés d’export à la place.",
+    "sectionTitle": "Disponible à l’export",
+    "sectionSubtitle": "Produits listés depuis le Canada — demandez un intérêt pour importer",
+    "seeAll": "Voir tous les exports",
+    "chip": "Exports",
+    "badge": "Export",
+    "pageTitle": "Disponible à l’export",
+    "pageSubtitle": "Parcourez les produits disponibles à l’export vers ce marché. Manifestez votre intérêt et le vendeur vous contactera.",
+    "empty": "Aucun article d’export pour ce marché pour le moment.",
+    "illustrationLabel": "Produits disponibles à l’export vers votre marché"
   },
   "incomingOrder": {
     "awaitingAction": "En attente d’action",

@@ -7,7 +7,8 @@ export type CatalogFeedStopType =
   | 'top-in-category'
   | 'deals'
   | 'collections'
-  | 'stores';
+  | 'stores'
+  | 'exports';
 
 export interface CatalogFeedStop {
   type: 'stop';

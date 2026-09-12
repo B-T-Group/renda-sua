@@ -52,7 +52,7 @@ export interface CatalogInventoryItem {
     /** Typical minutes to cook the dish (cooked food only). */
     preparation_minutes?: number | null;
     pay_on_delivery_enabled?: boolean;
-    interest_only?: boolean;
+    export_available?: boolean;
     dimensions?: string | null;
     is_fragile?: boolean;
     is_perishable?: boolean;

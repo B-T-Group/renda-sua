@@ -7,6 +7,7 @@ import { CatalogFeedTopInCategoryStop } from './CatalogFeedTopInCategoryStop';
 import { CatalogFeedDealsStop } from './CatalogFeedDealsStop';
 import { CatalogFeedCollectionsStop } from './CatalogFeedCollectionsStop';
 import { CatalogFeedStoresStop } from './CatalogFeedStoresStop';
+import { CatalogFeedExportsStop } from './CatalogFeedExportsStop';
 
 export interface CatalogFeedStopProps {
   stop: FeedStop;
@@ -15,6 +16,7 @@ export interface CatalogFeedStopProps {
   onStorePress?: (businessLocationId: string) => void;
   onSeeAllDeals?: () => void;
   onSeeAllStores?: () => void;
+  onSeeAllExports?: () => void;
 }
 
 /**
@@ -28,6 +30,7 @@ export const CatalogFeedStop = memo(function CatalogFeedStop({
   onStorePress,
   onSeeAllDeals,
   onSeeAllStores,
+  onSeeAllExports,
 }: CatalogFeedStopProps) {
   const { spacing } = useTheme();
 
@@ -56,6 +59,15 @@ export const CatalogFeedStop = memo(function CatalogFeedStop({
             items={stop.data.items ?? []}
             onItemPress={onItemPress}
             onSeeAllDeals={onSeeAllDeals}
+          />
+        );
+
+      case 'exports':
+        return (
+          <CatalogFeedExportsStop
+            items={stop.data.items ?? []}
+            onItemPress={onItemPress}
+            onSeeAllExports={onSeeAllExports}
           />
         );
 

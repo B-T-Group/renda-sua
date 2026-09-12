@@ -128,6 +128,21 @@ export class AccountsController {
               memo
               created_at
             }
+            mobile_payment_transactions(
+              where: {
+                status: { _eq: "pending" }
+                transaction_type: { _eq: "GIVE_CHANGE" }
+              }
+              order_by: { created_at: desc }
+            ) {
+              id
+              amount
+              currency
+              customer_phone
+              transaction_id
+              provider
+              created_at
+            }
           }
           clients(where: { user_id: { _eq: $userId } }) {
             id
@@ -237,12 +252,13 @@ export class AccountsController {
         );
       }
 
-      const result = await this.hasuraUserService.executeQuery<{
-        accounts: unknown[];
-      }>(GET_ACCOUNT_BY_ID_FOR_USER, {
-        accountId,
-        userId: user.id,
-      });
+      const result = await this.hasuraSystemService.executeQuery(
+        GET_ACCOUNT_BY_ID_FOR_USER,
+        {
+          accountId,
+          userId: user.id,
+        }
+      );
 
       const account = result.accounts?.[0];
       if (!account) {
@@ -334,6 +350,21 @@ export class AccountsController {
               id
               name
               phone
+            }
+            mobile_payment_transactions(
+              where: {
+                status: { _eq: "pending" }
+                transaction_type: { _eq: "GIVE_CHANGE" }
+              }
+              order_by: { created_at: desc }
+            ) {
+              id
+              amount
+              currency
+              customer_phone
+              transaction_id
+              provider
+              created_at
             }
           }
         }

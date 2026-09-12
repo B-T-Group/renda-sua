@@ -7,6 +7,8 @@ import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.proces
 import { MobilePaymentsCoreModule } from './mobile-payments-core.module';
 import { MobilePaymentsController } from './mobile-payments.controller';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
+import { PendingWithdrawalReconcilerService } from './pending-withdrawal-reconciler.service';
+import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 
 @Module({
   imports: [MobilePaymentsCoreModule, AdminModule, AuthModule],
@@ -15,7 +17,9 @@ import { PaymentCallbackRegistryService } from './payment-callback/payment-callb
     MobilePaymentCallbackProcessor,
     PaymentCallbackRegistryService,
     GiveChangePayoutService,
+    PendingWithdrawalResolveService,
+    PendingWithdrawalReconcilerService,
   ],
-  exports: [GiveChangePayoutService],
+  exports: [GiveChangePayoutService, PendingWithdrawalResolveService],
 })
 export class MobilePaymentsModule {}

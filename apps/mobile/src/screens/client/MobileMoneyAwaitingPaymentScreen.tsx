@@ -9,19 +9,54 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { MobileMoneyConfirmIllustration } from '../../components/illustrations/MobileMoneyConfirmIllustration';
 import { PaymentRetryView } from '../../components/checkout/PaymentRetryView';
 import { AddPaymentPhoneDialog } from '../../components/dialogs/AddPaymentPhoneDialog';
+import { OrderPlacedSuccessView } from '../../components/client/OrderPlacedSuccessView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMobileMoneyPaymentPoll } from '../../hooks/useMobileMoneyPaymentPoll';
 import type {
   ClientRootStackParamList,
   MobileMoneyAwaitingPaymentParams,
+  MobileMoneyCheckoutReturn,
 } from '../../navigation/types';
 import { agentApi } from '../../services/agentApi';
+import { useStore } from '../../stores/RootStore';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 import { formatCurrency } from '../../utils/formatters';
 import { remainingAfterDeposit } from '../../utils/depositResume';
 
+function checkoutReturnReset(checkoutReturn?: MobileMoneyCheckoutReturn) {
+  if (checkoutReturn?.to === 'place-order') {
+    return {
+      index: 1 as const,
+      routes: [
+        { name: 'ClientMainTabs' as const },
+        {
+          name: 'PlaceOrder' as const,
+          params: {
+            inventoryItemId: checkoutReturn.inventoryItemId,
+            ...(checkoutReturn.variantId
+              ? { variantId: checkoutReturn.variantId }
+              : {}),
+          },
+        },
+      ],
+    };
+  }
+  if (checkoutReturn?.to === 'cart-checkout') {
+    return {
+      index: 2 as const,
+      routes: [
+        { name: 'ClientMainTabs' as const },
+        { name: 'Cart' as const },
+        { name: 'CartCheckout' as const },
+      ],
+    };
+  }
+  return { index: 0 as const, routes: [{ name: 'ClientMainTabs' as const }] };
+}
+
 export default function MobileMoneyAwaitingPaymentScreen() {
   const { t } = useTranslation();
+  const { cart } = useStore();
   const { colors, spacing, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation =
@@ -43,6 +78,7 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     depositAmount: depositAmountParam,
     amountDue: amountDueParam,
     currency: currencyParam,
+    checkoutReturn,
   } = route.params;
   const { state, error, stop, restart } = useMobileMoneyPaymentPoll(orderIds, {
     // Pickup remainder / full-pay must poll payment_status, not deposit_status.
@@ -143,29 +179,38 @@ export default function MobileMoneyAwaitingPaymentScreen() {
     navigation.navigate('ClientMainTabs', { screen: 'ClientOrders' });
   }, [navigation, orderIds, stop]);
 
+  const goHome = useCallback(() => {
+    stop();
+    navigation.navigate('ClientMainTabs', { screen: 'ClientBrowse' });
+  }, [navigation, stop]);
+
+  const paidCheckout = state.phase === 'paid' && source === 'checkout';
+
+  useEffect(() => {
+    if (!paidCheckout || checkoutReturn?.to !== 'cart-checkout') return;
+    cart.clear();
+  }, [cart, checkoutReturn, paidCheckout]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: isDepositOrder 
-        ? t('deposit.awaitingTitle', 'Approve deposit payment')
-        : t('orders.momoAwaiting.navTitle', 'Approve payment'),
+      title: paidCheckout
+        ? t('client.placeOrder.successScreen.navTitle', 'Order placed')
+        : isDepositOrder
+          ? t('deposit.awaitingTitle', 'Approve deposit payment')
+          : t('orders.momoAwaiting.navTitle', 'Approve payment'),
       headerBackTitle: t('common.back', 'Back'),
+      headerBackVisible: !paidCheckout,
+      headerLeft: paidCheckout ? () => null : undefined,
+      gestureEnabled: !paidCheckout,
     });
-  }, [navigation, t, isDepositOrder]);
+  }, [navigation, t, isDepositOrder, paidCheckout]);
 
-  // Deposit fail/timeout: navigate back to checkout (order cancelled server-side).
-  // No retry endpoint exists for deposits. Must land on Place Order or Cart for retry.
+  // Deposit fail/timeout: order cancelled server-side. Return to the screen
+  // the shopper started checkout from so they can place a new order.
   const onBackToCheckout = useCallback(() => {
     stop();
-    // Explicitly navigate to Cart (source is always 'checkout' for deposits from cart/place-order)
-    // User must be able to edit phone and create a NEW order
-    navigation.reset({
-      index: 1,
-      routes: [
-        { name: 'ClientMainTabs' },
-        { name: 'Cart' },
-      ],
-    });
-  }, [navigation, stop]);
+    navigation.reset(checkoutReturnReset(checkoutReturn));
+  }, [checkoutReturn, navigation, stop]);
 
   // Retry payment: deposit orders call retryDepositPayment
   const onRetry = async () => {
@@ -225,20 +270,6 @@ export default function MobileMoneyAwaitingPaymentScreen() {
       setEditPhoneDialogVisible(false);
     }
   }, [savingPhone]);
-
-  const onContinueAfterPaid = () => {
-    stop();
-    if (source === 'checkout') {
-      navigation.replace('OrderPlacedSuccess', {
-        orderNumbers: orderNumbers?.length ? orderNumbers : orderIds,
-        paymentTiming: 'pay_now',
-        paymentCompleted: true,
-        fulfillment,
-      });
-      return;
-    }
-    leaveToOrder();
-  };
 
   const phase = state.phase;
   const waiting = phase === 'waiting';
@@ -333,6 +364,38 @@ export default function MobileMoneyAwaitingPaymentScreen() {
           onSave={onSavePhone}
         />
       </View>
+    );
+  }
+
+  if (paidCheckout) {
+    const remainingLabel = formatCurrency(
+      remainingAfterDepositAmount,
+      currencyParam || orderData?.currency || 'XAF',
+      'en-US'
+    );
+    return (
+      <OrderPlacedSuccessView
+        orderNumbers={orderNumbers?.length ? orderNumbers : orderIds}
+        paymentTiming={
+          isDepositOrder
+            ? fulfillment === 'pickup'
+              ? 'pay_at_pickup'
+              : 'pay_at_delivery'
+            : 'pay_now'
+        }
+        paymentCompleted={!isDepositOrder}
+        fulfillment={fulfillment}
+        depositConfirmed={isDepositOrder}
+        remainingAmountLabel={remainingLabel}
+        primaryAction={{
+          label: t('client.placeOrder.successScreen.goToOrder', 'Go to the order'),
+          onPress: leaveToOrder,
+        }}
+        secondaryAction={{
+          label: t('client.placeOrder.successScreen.goToHome', 'Go to home'),
+          onPress: goHome,
+        }}
+      />
     );
   }
 
@@ -505,21 +568,9 @@ export default function MobileMoneyAwaitingPaymentScreen() {
 
         <View style={{ width: '100%', marginTop: spacing.xl, gap: spacing.sm }}>
           {phase === 'paid' ? (
-            <>
-              <Button mode="contained" onPress={onContinueAfterPaid}>
-                {isDepositOrder
-                  ? t('orders.deposit.continue', 'Continue')
-                  : source === 'pickup'
-                    ? t('orders.momoAwaiting.viewOrder', 'View order')
-                    : t('orders.momoAwaiting.viewOrder', 'View order')}
-              </Button>
-              {/* Only show Track on map for delivery orders, not pickup */}
-              {source === 'checkout' && fulfillment === 'delivery' && !isDepositOrder ? (
-                <Button mode="outlined" icon="map-marker-outline" onPress={leaveToOrder}>
-                  {t('orders.momoAwaiting.trackOnMap', 'Track on map')}
-                </Button>
-              ) : null}
-            </>
+            <Button mode="contained" onPress={leaveToOrder}>
+              {t('orders.momoAwaiting.viewOrder', 'View order')}
+            </Button>
           ) : null}
           {phase === 'timeout' && isDepositOrder && source !== 'order-detail' ? (
             <Button mode="contained" onPress={onBackToCheckout}>

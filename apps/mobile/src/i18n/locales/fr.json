@@ -1247,29 +1247,19 @@
         "subtitle": "Choisissez l’option qui vous convient",
         "delivery": {
           "tab": "Livraison",
-          "title": "Payez et faites-vous livrer",
-          "bodyCard": "Payez par carte au moment de la commande — un coursier vous livre à domicile.",
-          "bodyMomo": "Payez par mobile money au moment de la commande — un coursier vous livre à domicile.",
-          "step1Card": "Payez par carte",
-          "step1Momo": "Payez MoMo",
-          "step2": "Livraison par coursier",
-          "step3": "Confirmez la réception"
-        },
-        "pickup": {
-          "tab": "Retrait",
-          "title": "Retrait en magasin",
-          "body": "Commandez dans l’app et récupérez votre article en magasin dès qu’il est prêt.",
-          "step1": "Commandez",
-          "step2": "Le magasin prépare",
-          "step3": "Récupérez en magasin"
-        },
-        "payAtDelivery": {
-          "tab": "Payer à la livraison",
           "title": "Paiement à la livraison",
           "body": "Rien à payer maintenant — payez quand le coursier vous remet la commande.",
           "step1": "Commandez",
-          "step2": "Le coursier arrive",
+          "step2": "Livraison par coursier",
           "step3": "Payez sur place"
+        },
+        "pickup": {
+          "tab": "Retrait",
+          "title": "Paiement au retrait",
+          "body": "Commandez dans l’app, récupérez l’article en magasin et payez au moment du retrait.",
+          "step1": "Commandez",
+          "step2": "Le magasin prépare",
+          "step3": "Payez et récupérez"
         }
       }
     },
@@ -1893,7 +1883,11 @@
       "acceptTerms": "J'ai lu et j'accepte le contrat marchand",
       "agreeCheckbox": "J'ai lu et j'accepte le Contrat de partenariat marchand.",
       "scrollHint": "Veuillez faire défiler jusqu'à la fin du contrat avant d'accepter.",
+      "scrollForMore": "Faites défiler pour la suite",
+      "acceptBySigning": "En appuyant sur Accepter et signer, vous acceptez le Contrat de partenariat marchand.",
       "acceptTermsHint": "Obligatoire. Appuyez ici pour confirmer avoir lu le contrat ci-dessus.",
+      "acceptTermsHintLocked": "Faites défiler jusqu'à la fin du contrat ci-dessus pour déverrouiller cette case.",
+      "acceptTermsHintUnlocked": "Prêt à accepter. Appuyez ici pour confirmer avoir lu le contrat.",
       "submit": "Accepter et signer",
       "submitting": "Envoi en cours…",
       "successTitle": "Contrat signé",
@@ -3570,17 +3564,18 @@
       "quantity": "Quantité",
       "quantityHint": "Jusqu’à {{max}} disponibles",
       "fulfillment": "Retrait ou livraison",
-      "fulfillmentQuestion": "Comment souhaitez-vous recevoir votre commande ?",
+      "fulfillmentQuestion": "Comment le recevoir ?",
       "fulfillmentRequired": "Choisissez une option pour continuer.",
       "fulfillmentHint": "Vous pouvez modifier ce choix à tout moment.",
       "delivery": "Livraison",
-      "deliveryChoiceHint": "Faites livrer votre commande à votre adresse.",
-      "pickup": "Retrait au magasin",
-      "pickupChoiceHint": "Récupérez votre commande directement au magasin.",
+      "deliveryChoiceHint": "À votre adresse",
+      "deliveryPriceAddressRequired": "Choisissez une adresse pour voir le prix de la livraison.",
+      "pickup": "Retrait",
+      "pickupChoiceHint": "Au magasin",
       "pickupHint": "Vous paierez lors du retrait en magasin.",
       "pickupHintStripe": "Payez en toute sécurité par carte lors de la commande, puis récupérez votre commande en magasin.",
       "shipping": "Expédition",
-      "shippingChoiceHint": "Le vendeur l’envoie avec un transporteur à votre adresse.",
+      "shippingChoiceHint": "Par transporteur",
       "shippingNotice": "Le vendeur expédie avec un transporteur. Payez maintenant pour passer la commande.",
       "shippingUnavailableMixed": "L’expédition n’est disponible que si tous les articles du panier peuvent être expédiés.",
       "addressTitle": "Adresse de livraison",
@@ -3694,6 +3689,7 @@
         "trackHint": "Suivez l’avancement dans Mes commandes",
         "chipPayNow": "Confirmation de paiement requise",
         "chipPaid": "Commande confirmée et payée",
+        "chipDepositPaid": "Acompte payé",
         "chipCardAuthorized": "Carte autorisée",
         "cardAuthorizedTitle": "Carte autorisée",
         "cardAuthorizedBody": "Votre carte a été autorisée. Le débit n'interviendra que lorsque le livreur récupérera votre commande chez le commerce.",
@@ -3710,6 +3706,8 @@
         "payAtPickupTitle": "Paiement au retrait",
         "payAtPickupBody": "Payez au magasin lors du retrait. Quand la commande est prête, appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
         "viewOrders": "Mes commandes",
+        "goToOrder": "Aller à la commande",
+        "goToHome": "Aller à l'accueil",
         "returnToDashboard": "Retour au tableau de bord",
         "continueShopping": "Continuer mes achats",
         "emailPrompt": "Ajoutez un e-mail pour recevoir vos reçus et les mises à jour concernant cette commande.",
@@ -4574,7 +4572,20 @@
     "withdrawalConfigFailed": "Impossible de charger les paramètres de retrait. Réessayez.",
     "withdrawalPhoneNoteLocation": "Il s’agit du numéro utilisé pour les retraits depuis le compte de cet emplacement.",
     "stripePayoutsFooterTitle": "Paiements Stripe",
-    "stripePayoutsFooterHint": "Les paiements de tous vos portefeuilles sont envoyés vers votre compte Stripe connecté."
+    "stripePayoutsFooterHint": "Les paiements de tous vos portefeuilles sont envoyés vers votre compte Stripe connecté.",
+    "pendingWithdrawals": {
+      "title": "Retraits en attente",
+      "hint": "Résolvez-les avant de démarrer un nouveau retrait. Appuyez sur Résoudre pour vérifier le Mobile Money ou annuler une demande bloquée.",
+      "resolve": "Résoudre le retrait en attente",
+      "resolveDone": "Statut du retrait mis à jour.",
+      "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau.",
+      "minutesAgo": "il y a {{count}} min",
+      "hoursAgo": "il y a {{count}} h",
+      "daysAgo": "il y a {{count}} j",
+      "showMore": "Afficher {{count}} de plus",
+      "showLess": "Afficher moins"
+    }
   },
   "legal": {
     "terms": {
@@ -6323,7 +6334,21 @@
     "viewItem": "Voir l’article",
     "clientLabel": "Client",
     "unknownItem": "Article",
-    "merchantToggle": "Prix non applicable (intérêt uniquement)"
+    "merchantToggle": "Disponible à l’export",
+    "successScreen": {
+      "navTitle": "Intérêt envoyé",
+      "title": "Intérêt envoyé avec succès",
+      "body": "Un représentant vous contactera au sujet de cet article.",
+      "browseMore": "Continuer à parcourir",
+      "viewRequests": "Voir mes demandes d’intérêt"
+    }
+  },
+  "exportCatalog": {
+    "sectionTitle": "Disponible à l’export",
+    "sectionSubtitle": "Produits listés depuis le Canada — demandez un intérêt pour importer",
+    "seeAll": "Voir tous les exports",
+    "badge": "Export",
+    "chip": "Exports"
   },
   "assistant": {
     "title": "Assistant Rendasua",

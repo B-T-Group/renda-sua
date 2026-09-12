@@ -50,17 +50,19 @@ describe('DashboardService tips reminders fallback', () => {
             last7d: { aggregate: { count: 3 } },
           };
         }
-        if (query.includes('DashboardTopViewedProducts')) {
+        if (query.includes('DashboardTopViewedCandidates')) {
           return { business_inventory: [] };
         }
-        if (query.includes('DashboardTopViewedStock')) {
+        if (query.includes('DashboardTopViewedProducts')) {
           return { business_inventory: [] };
         }
         if (query.includes('DashboardUniqueClientCount')) {
           return { clients_aggregate: { aggregate: { count: 1 } } };
         }
+        if (query.includes('DashboardOrdersByStatus')) {
+          return { total: { aggregate: { count: 0 } } };
+        }
         return {
-          orders: [],
           orders_aggregate: { nodes: [], aggregate: { count: 0 } },
           items_aggregate: { aggregate: { count: 0 } },
           rental_items_aggregate: { aggregate: { count: 0 } },

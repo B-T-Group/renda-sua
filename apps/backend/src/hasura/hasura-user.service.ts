@@ -33,7 +33,7 @@ import {
   formatHasuraNetworkError,
   isTransientHasuraNetworkError,
   mapExhaustedHasuraQueryError,
-  requestHasuraWithRetry,
+  requestHasuraQueryWithInterestOnlyFallback,
 } from './hasura-request.util';
 
 export type MeAgent = Agents & {
@@ -215,8 +215,10 @@ export class HasuraUserService {
     ctx?: RequestContext
   ): Promise<T> {
     try {
-      return await requestHasuraWithRetry(
-        () => this.createGraphQLClient(ctx).request<T>(query, variables),
+      return await requestHasuraQueryWithInterestOnlyFallback(
+        (nextQuery) =>
+          this.createGraphQLClient(ctx).request<T>(nextQuery, variables),
+        query,
         this.logger
       );
     } catch (error: any) {
