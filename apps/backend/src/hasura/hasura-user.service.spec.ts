@@ -181,6 +181,29 @@ describe('HasuraUserService (singleton + CLS)', () => {
     expect(hasuraSystem.getUserByIdWithRelations).not.toHaveBeenCalled();
   });
 
+  it('getUser returns 404 for anonymous callers instead of throwing Error', async () => {
+    const { service, hasuraSystem } = makeService();
+
+    await expect(
+      service.getUser(emptyRequestContext({ userId: 'anonymous' }))
+    ).rejects.toMatchObject({
+      status: HttpStatus.NOT_FOUND,
+    });
+    await expect(service.getUser()).rejects.toMatchObject({
+      status: HttpStatus.NOT_FOUND,
+    });
+    expect(hasuraSystem.getUserByIdWithRelations).not.toHaveBeenCalled();
+  });
+
+  it('getUserIdentity returns 404 for anonymous callers instead of throwing Error', async () => {
+    const { service, hasuraSystem } = makeService();
+
+    await expect(service.getUserIdentity()).rejects.toMatchObject({
+      status: HttpStatus.NOT_FOUND,
+    });
+    expect(hasuraSystem.getUserByIdWithRelations).not.toHaveBeenCalled();
+  });
+
   it('getUser loads the user when JWT user id is a UUID', async () => {
     const { service, hasuraSystem } = makeService();
     (hasuraSystem.getUserByIdWithRelations as jest.Mock).mockResolvedValue({
