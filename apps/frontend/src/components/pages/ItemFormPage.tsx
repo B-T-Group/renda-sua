@@ -51,6 +51,7 @@ import { CreateItemData, Item, useItems } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
 import VariantsManagerSection from '../business/variants/VariantsManagerSection';
 import ProductTaxCategorySelect from '../business/ProductTaxCategorySelect';
+import ExportMarketsField from '../business/ExportMarketsField';
 import { STRIPE_TAX_CODE_GENERAL_TANGIBLE } from '../../hooks/useStripeTaxCodes';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import SEOHead from '../seo/SEOHead';
@@ -112,6 +113,8 @@ interface ItemFormData {
   requires_special_handling: boolean;
   pay_on_delivery_enabled: boolean;
   pay_at_pickup_enabled: boolean;
+  export_available: boolean;
+  export_market_country_codes: string[];
   min_order_quantity: number;
   max_order_quantity: number | null;
   item_sub_category_id: number | null;
@@ -157,6 +160,8 @@ const ItemFormPage: React.FC = () => {
     requires_special_handling: false,
     pay_on_delivery_enabled: false,
     pay_at_pickup_enabled: true,
+    export_available: false,
+    export_market_country_codes: [],
     min_order_quantity: 1,
     max_order_quantity: null,
     item_sub_category_id: null,
@@ -312,6 +317,12 @@ const ItemFormPage: React.FC = () => {
                 (foundItem as any).pay_on_delivery_enabled || false,
               pay_at_pickup_enabled:
                 (foundItem as any).pay_at_pickup_enabled || false,
+              export_available:
+                (foundItem as Item & { export_available?: boolean })
+                  .export_available === true,
+              export_market_country_codes: (
+                (foundItem as Item).export_markets ?? []
+              ).map((m) => m.country_code.toUpperCase()),
               min_order_quantity: foundItem.min_order_quantity || 1,
               max_order_quantity: foundItem.max_order_quantity || null,
               item_sub_category_id: foundItem.item_sub_category_id || null,
@@ -1574,6 +1585,21 @@ const ItemFormPage: React.FC = () => {
                       'Allow store pickup (pay at pickup)'
                     )}
                   />
+
+                  <ExportMarketsField
+                    exportAvailable={formData.export_available}
+                    selectedCountryCodes={formData.export_market_country_codes}
+                    excludeCountryCodes={
+                      profile?.country ? [profile.country] : []
+                    }
+                    disabled={loading}
+                    onExportAvailableChange={(enabled) =>
+                      handleInputChange('export_available', enabled)
+                    }
+                    onMarketsChange={(codes) =>
+                      handleInputChange('export_market_country_codes', codes)
+                    }
+                  />
                 </Stack>
 
                 <Grid container spacing={2}>
@@ -1773,7 +1799,7 @@ const ItemFormPage: React.FC = () => {
                   loading ||
                   skusLoading ||
                   !formData.name ||
-                  formData.price <= 0 ||
+                  (!formData.export_available && formData.price <= 0) ||
                   !!skuError
                 }
                 sx={{ minWidth: 120 }}

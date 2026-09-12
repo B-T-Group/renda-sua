@@ -110,7 +110,7 @@ describe('FacebookCatalogFeedService', () => {
           expect.objectContaining({
             item: expect.objectContaining({
               moderation_status: { _eq: 'approved' },
-              interest_only: { _eq: false },
+              export_available: { _eq: false },
             }),
           }),
         ]),

@@ -25,6 +25,8 @@ export interface UseInventoryCatalogOptions {
   owner_preview?: boolean;
   /** Restrict the list to cooked food sold by restaurants (the Food tab). */
   food_only?: boolean;
+  /** Only export_available items for the viewer market. */
+  export_only?: boolean;
   /** When true, GET /inventory-items uses Bearer + active persona (client catalog). */
   withAuth?: boolean;
   /**
@@ -50,6 +52,7 @@ export function useInventoryCatalog({
   business_location_id,
   owner_preview,
   food_only,
+  export_only,
   withAuth = false,
   enabled = true,
 }: UseInventoryCatalogOptions) {
@@ -95,6 +98,7 @@ export function useInventoryCatalog({
             ...(owner_preview === true && { owner_preview: true }),
             ...(collection?.trim() && { collection: collection.trim() }),
             ...(food_only === true && { food_only: true }),
+            ...(export_only === true && { export_only: true }),
           },
           { signal: controller.signal }
         );
@@ -142,6 +146,7 @@ export function useInventoryCatalog({
       owner_preview,
       collection,
       food_only,
+      export_only,
       withAuth,
       enabled,
     ]

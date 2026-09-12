@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 
-const BATCH_LIMIT = 100;
+const BATCH_LIMIT = 200;
 const NULL_PROVIDER_ID_GRACE_HOURS = 24;
 
 @Injectable()
@@ -15,7 +15,8 @@ export class PendingWithdrawalReconcilerService {
     private readonly resolveService: PendingWithdrawalResolveService
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  /** Poll provider status for hung withdrawals more often than once a day. */
+  @Cron(CronExpression.EVERY_6_HOURS)
   async reconcilePendingWithdrawals(): Promise<void> {
     const items =
       await this.databaseService.getPendingGiveChangeWithdrawals({

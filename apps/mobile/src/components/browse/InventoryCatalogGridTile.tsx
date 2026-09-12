@@ -39,7 +39,7 @@ function InventoryCatalogGridTileInner({
 }: InventoryCatalogGridTileProps) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing, shadows } = useTheme();
-  const interestOnly = item.item.interest_only === true;
+  const exportAvailable = item.item.export_available === true;
 
   const variantOptionCount = useMemo(
     () => shopperVariantOptionCount(item),
@@ -141,7 +141,7 @@ function InventoryCatalogGridTileInner({
           {item.item.name}
         </Text>
 
-        {interestOnly ? (
+        {exportAvailable ? (
           <Text
             style={[
               typography.caption,
@@ -165,7 +165,7 @@ function InventoryCatalogGridTileInner({
           </Text>
         )}
 
-        {!interestOnly && hasDeal && dealPercent > 0 ? (
+        {!exportAvailable && hasDeal && dealPercent > 0 ? (
           <StatusPill
             label={`-${dealPercent}%`}
             backgroundColor={colors.error.light + '30'}

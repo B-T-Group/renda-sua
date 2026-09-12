@@ -12,12 +12,16 @@ export interface CatalogBrowseActiveFilterChipsProps {
   values: CatalogFilterState;
   onClearField: (field: Field) => void;
   onClearAll: () => void;
+  exportOnly?: boolean;
+  onClearExportOnly?: () => void;
 }
 
 export const CatalogBrowseActiveFilterChips = memo(function CatalogBrowseActiveFilterChips({
   values,
   onClearField,
   onClearAll,
+  exportOnly = false,
+  onClearExportOnly,
 }: CatalogBrowseActiveFilterChipsProps) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
@@ -54,7 +58,7 @@ export const CatalogBrowseActiveFilterChips = memo(function CatalogBrowseActiveF
     return out;
   }, [values.brand, values.category, values.business, values.collection, values.subcategory, t]);
 
-  if (entries.length === 0) return null;
+  if (entries.length === 0 && !exportOnly) return null;
 
   return (
     <View style={{ marginBottom: spacing.sm }}>
@@ -62,6 +66,42 @@ export const CatalogBrowseActiveFilterChips = memo(function CatalogBrowseActiveF
         {t('public.items.activeFiltersLabel', 'Active filters')}
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {exportOnly ? (
+          <View
+            key="exportOnly"
+            style={[
+              styles.activeChip,
+              {
+                backgroundColor: colors.primaryTint,
+                borderColor: colors.primary.main + '60',
+              },
+            ]}
+          >
+            <Text
+              style={[styles.activeChipLabel, { color: colors.primary.dark }]}
+              numberOfLines={1}
+            >
+              {t('exportCatalog.chip', 'Exports')}
+            </Text>
+            {onClearExportOnly ? (
+              <Pressable
+                onPress={onClearExportOnly}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('common.remove', 'Remove')} ${t(
+                  'exportCatalog.chip',
+                  'Exports'
+                )}`}
+              >
+                <MaterialCommunityIcons
+                  name="close-circle"
+                  size={15}
+                  color={colors.primary.main}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {entries.map((e) => {
           const label = e.label.length > 36 ? `${e.label.slice(0, 34)}…` : e.label;
           return (

@@ -4579,7 +4579,12 @@
       "resolve": "Résoudre le retrait en attente",
       "resolveDone": "Statut du retrait mis à jour.",
       "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
-      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau."
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau.",
+      "minutesAgo": "il y a {{count}} min",
+      "hoursAgo": "il y a {{count}} h",
+      "daysAgo": "il y a {{count}} j",
+      "showMore": "Afficher {{count}} de plus",
+      "showLess": "Afficher moins"
     }
   },
   "legal": {
@@ -6329,7 +6334,21 @@
     "viewItem": "Voir l’article",
     "clientLabel": "Client",
     "unknownItem": "Article",
-    "merchantToggle": "Prix non applicable (intérêt uniquement)"
+    "merchantToggle": "Disponible à l’export",
+    "successScreen": {
+      "navTitle": "Intérêt envoyé",
+      "title": "Intérêt envoyé avec succès",
+      "body": "Un représentant vous contactera au sujet de cet article.",
+      "browseMore": "Continuer à parcourir",
+      "viewRequests": "Voir mes demandes d’intérêt"
+    }
+  },
+  "exportCatalog": {
+    "sectionTitle": "Disponible à l’export",
+    "sectionSubtitle": "Produits listés depuis le Canada — demandez un intérêt pour importer",
+    "seeAll": "Voir tous les exports",
+    "badge": "Export",
+    "chip": "Exports"
   },
   "assistant": {
     "title": "Assistant Rendasua",

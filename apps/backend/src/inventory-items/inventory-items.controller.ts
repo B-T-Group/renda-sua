@@ -55,6 +55,7 @@ interface GetInventoryItemsQueryParams {
   origin_lng?: string;
   collection?: string;
   food_only?: string;
+  export_only?: string;
 }
 
 interface GetInventorySearchSuggestionsQueryParams
@@ -539,6 +540,13 @@ export class InventoryItemsController {
     description:
       'Restrict results to cooked food sold by restaurants. Each row then carries a food_availability block and dishes being served now rank first.',
   })
+  @ApiQuery({
+    name: 'export_only',
+    required: false,
+    type: Boolean,
+    description:
+      'When true, return only export_available items exported to the viewer country (destination markets section / /exports).',
+  })
   async getInventoryItems(
     @Query() query: GetInventoryItemsQueryParams
   ): Promise<{
@@ -597,6 +605,7 @@ export class InventoryItemsController {
         ...(Number.isFinite(oLng) && { origin_lng: oLng }),
         collection: query.collection?.trim() || undefined,
         food_only: query.food_only === 'true',
+        export_only: query.export_only === 'true',
       };
 
       const requestedLimit = processedQuery.limit || 20;
@@ -632,6 +641,7 @@ export class InventoryItemsController {
           businessLocationId: processedQuery.business_location_id,
           collection: processedQuery.collection,
           foodOnly: processedQuery.food_only,
+          exportOnly: processedQuery.export_only,
         });
 
         return await this.catalogCacheService.getOrCompute(

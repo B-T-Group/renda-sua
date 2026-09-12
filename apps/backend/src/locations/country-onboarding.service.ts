@@ -69,6 +69,13 @@ const FALLBACK_CONFIGS: CountryOnboardingConfig[] = [
     verificationFlow: 'stripe_connect',
     defaultCurrency: 'CAD',
   },
+  {
+    countryCode: 'PH',
+    signupEnabled: true,
+    postalCodeRequired: true,
+    verificationFlow: 'stripe_connect',
+    defaultCurrency: 'PHP',
+  },
 ];
 
 @Injectable()

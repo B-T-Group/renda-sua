@@ -22,6 +22,7 @@ export const SIGNUP_COUNTRY_CODES = [
   ...AFRICAN_MARKET_COUNTRY_CODES,
   'US',
   'CA',
+  'PH',
 ] as const;
 
 export type SignupCountryCode = (typeof SIGNUP_COUNTRY_CODES)[number];

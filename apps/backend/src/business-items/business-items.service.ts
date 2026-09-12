@@ -40,7 +40,10 @@ const GET_ITEMS = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
-      interest_only
+      export_available
+      export_markets {
+        country_code
+      }
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -297,7 +300,10 @@ const GET_SINGLE_ITEM = `
       description
       item_sub_category_id
       pay_on_delivery_enabled
-      interest_only
+      export_available
+      export_markets {
+        country_code
+      }
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -534,7 +540,10 @@ const GET_AVAILABLE_ITEMS = `
       name
       description
       pay_on_delivery_enabled
-      interest_only
+      export_available
+      export_markets {
+        country_code
+      }
       pay_at_pickup_enabled
       shipping_enabled
       shipping_price
@@ -737,7 +746,7 @@ const GET_ITEM_BY_ID = `
       description
       sku
       price
-      interest_only
+      export_available
       moderation_status
       item_sub_category {
         item_category {
@@ -1830,15 +1839,23 @@ export class BusinessItemsService {
     const invResult = await this.hasuraUserService.executeQuery<{
       business_inventory_by_pk: {
         id: string;
+        item_id: string;
+        business_location_id: string;
         business_location: { business_id: string };
+        item?: { export_available?: boolean } | null;
       } | null;
     }>(
       `
       query GetInventoryWithBusiness($id: uuid!) {
         business_inventory_by_pk(id: $id) {
           id
+          item_id
+          business_location_id
           business_location {
             business_id
+          }
+          item {
+            export_available
           }
         }
       }
@@ -1850,6 +1867,15 @@ export class BusinessItemsService {
       throw new HttpException(
         { success: false, error: 'Inventory not found' },
         HttpStatus.NOT_FOUND
+      );
+    }
+    if (
+      inv.item?.export_available === true &&
+      updates.is_active !== false
+    ) {
+      await this.assertExportItemSingleLocation(
+        inv.item_id,
+        inv.business_location_id
       );
     }
 
@@ -1910,6 +1936,7 @@ export class BusinessItemsService {
       items_by_pk: {
         id: string;
         business_id: string;
+        export_available?: boolean;
         item_sub_category?: {
           item_category?: { name?: string | null } | null;
         } | null;
@@ -1920,6 +1947,12 @@ export class BusinessItemsService {
       throw new HttpException(
         { success: false, error: 'Item not found' },
         HttpStatus.NOT_FOUND
+      );
+    }
+    if (item.export_available === true) {
+      await this.assertExportItemSingleLocation(
+        data.item_id,
+        data.business_location_id
       );
     }
     const quantity = resolveInitialInventoryQuantity({
@@ -1979,6 +2012,41 @@ export class BusinessItemsService {
     this.triggerLifecycleRecompute(businessId);
     void this.invalidateCatalogCache();
     return created;
+  }
+
+  private async assertExportItemSingleLocation(
+    itemId: string,
+    locationId: string
+  ): Promise<void> {
+    const existing = await this.hasuraSystemService.executeQuery<{
+      business_inventory: Array<{
+        id: string;
+        business_location_id: string;
+      }>;
+    }>(
+      `query ExportItemInventory($itemId: uuid!) {
+        business_inventory(
+          where: { item_id: { _eq: $itemId }, is_active: { _eq: true } }
+        ) {
+          id
+          business_location_id
+        }
+      }`,
+      { itemId }
+    );
+    const rows = existing.business_inventory ?? [];
+    const other = rows.filter((r) => r.business_location_id !== locationId);
+    if (other.length > 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'EXPORT_SINGLE_LOCATION',
+          message:
+            'Export items can only be listed at one business location. Use export markets instead of additional locations.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   private promotionPayloadFromDto(
@@ -2111,7 +2179,7 @@ export class BusinessItemsService {
         id: string;
         business_id: string;
         price: number | null;
-        interest_only?: boolean;
+        export_available?: boolean;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = itemRow.items_by_pk;
@@ -2122,7 +2190,7 @@ export class BusinessItemsService {
       );
     }
     if (
-      !item.interest_only &&
+      !item.export_available &&
       (item.price == null || Number.isNaN(item.price) || item.price <= 0)
     ) {
       throw new HttpException(
@@ -2156,7 +2224,7 @@ export class BusinessItemsService {
         id: string;
         business_id: string;
         price: number | null;
-        interest_only?: boolean;
+        export_available?: boolean;
         moderation_status: string;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
@@ -2186,7 +2254,7 @@ export class BusinessItemsService {
         ? input.sellingPrice
         : item.price;
     if (
-      !item.interest_only &&
+      !item.export_available &&
       (sellingPrice == null || Number.isNaN(sellingPrice) || sellingPrice <= 0)
     ) {
       throw new HttpException(
@@ -2771,6 +2839,14 @@ export class BusinessItemsService {
           selling_price: row.selling_price,
           is_active: row.is_active ?? true,
         };
+
+        const csvInventoryActive = (row.is_active ?? true) !== false;
+        if (
+          existingItem?.export_available === true &&
+          csvInventoryActive
+        ) {
+          await this.assertExportItemSingleLocation(itemId, location.id);
+        }
 
         if (existingInv) {
           const updatePayload = {

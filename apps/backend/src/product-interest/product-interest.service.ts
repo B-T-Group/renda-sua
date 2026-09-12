@@ -31,7 +31,7 @@ const GET_INVENTORY_FOR_INTEREST = `
       item {
         id
         name
-        interest_only
+        export_available
         moderation_status
         is_active
       }
@@ -146,7 +146,7 @@ type InventoryForInterest = {
   item: {
     id: string;
     name: string;
-    interest_only: boolean;
+    export_available: boolean;
     moderation_status: string;
     is_active: boolean;
   } | null;
@@ -252,11 +252,11 @@ export class ProductInterestService {
     if (item.moderation_status !== 'approved') {
       throw new HttpException('Listing is unavailable', HttpStatus.BAD_REQUEST);
     }
-    if (!item.interest_only) {
+    if (!item.export_available) {
       throw new HttpException(
         {
           success: false,
-          error: 'NOT_INTEREST_ONLY',
+          error: 'NOT_EXPORT_AVAILABLE',
           message: 'This listing is not configured for interest requests',
         },
         HttpStatus.BAD_REQUEST

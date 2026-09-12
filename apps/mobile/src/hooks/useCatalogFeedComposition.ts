@@ -45,6 +45,12 @@ export interface UseCatalogFeedCompositionOptions {
    */
   stores: CatalogStore[];
   storesLoading: boolean;
+
+  /**
+   * Export catalog stop items for the viewer market.
+   */
+  exportItems: CatalogInventoryItem[];
+  exportLoading: boolean;
 }
 
 export type CatalogFeedRow =
@@ -76,6 +82,8 @@ export function useCatalogFeedComposition({
   collectionsLoading,
   stores,
   storesLoading,
+  exportItems,
+  exportLoading,
 }: UseCatalogFeedCompositionOptions): CatalogFeedRow[] {
   return useMemo(() => {
     // If stops are suppressed (search/filters active), just return product pairs
@@ -116,7 +124,17 @@ export function useCatalogFeedComposition({
       });
     }
 
-    // 4. "Deals" — only when backend returns deal items
+    // 4. Exports for destination markets
+    if (!exportLoading && exportItems.length > 0) {
+      stops.push({
+        type: 'stop',
+        stopType: 'exports',
+        id: 'stop-exports',
+        data: { items: exportItems },
+      });
+    }
+
+    // 5. "Deals" — only when backend returns deal items
     if (!dealsLoading && dealsItems.length > 0) {
       stops.push({
         type: 'stop',
@@ -126,7 +144,7 @@ export function useCatalogFeedComposition({
       });
     }
 
-    // 5. "Featured stores" — only when backend returns stores
+    // 6. "Featured stores" — only when backend returns stores
     if (!storesLoading && stores.length > 0) {
       stops.push({
         type: 'stop',
@@ -192,6 +210,8 @@ export function useCatalogFeedComposition({
     collectionsLoading,
     stores,
     storesLoading,
+    exportItems,
+    exportLoading,
   ]);
 }
 

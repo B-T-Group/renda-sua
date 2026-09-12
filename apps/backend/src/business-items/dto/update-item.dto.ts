@@ -29,7 +29,9 @@ export class UpdateItemDto {
   max_order_quantity?: number | null;
   is_active?: boolean;
   pay_on_delivery_enabled?: boolean;
-  interest_only?: boolean;
+  export_available?: boolean;
+  /** ISO-2 destination markets; omit to leave unchanged, empty array to clear. */
+  export_market_country_codes?: string[];
   pay_at_pickup_enabled?: boolean;
   shipping_enabled?: boolean;
   shipping_price?: number | null;
