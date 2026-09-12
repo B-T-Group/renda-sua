@@ -179,24 +179,48 @@ export class PendingWithdrawalResolveService {
     tx: MobilePaymentTransaction,
     options: { allowImmediateCancel: boolean; minAgeHours?: number }
   ): Promise<PendingWithdrawalResolveResult> {
-    if (!options.allowImmediateCancel) {
-      const minAgeMs = (options.minAgeHours ?? 24) * 60 * 60 * 1000;
-      const ageMs = Date.now() - new Date(tx.created_at).getTime();
-      if (ageMs < minAgeMs) {
-        return {
-          success: true,
-          outcome: 'still_pending',
-          message:
-            'Withdrawal has no provider reference yet; waiting for grace period',
-          transaction_id: null,
-          status: this.statusFromLocalTx(tx, 'pending', {
-            message: 'Waiting for provider reference',
-          }),
-        };
-      }
+    if (this.isWithinNullIdGrace(tx, options)) {
+      return this.stillPendingWithoutProvider(tx);
     }
+    await this.releaseHoldIfPresent(tx);
+    return this.markCancelledWithoutProvider(tx);
+  }
 
-    // Release first so a failed release leaves the row pending and retryable.
+  private isWithinNullIdGrace(
+    tx: MobilePaymentTransaction,
+    options: { allowImmediateCancel: boolean; minAgeHours?: number }
+  ): boolean {
+    if (options.allowImmediateCancel) {
+      return false;
+    }
+    const minAgeMs = (options.minAgeHours ?? 24) * 60 * 60 * 1000;
+    return Date.now() - new Date(tx.created_at).getTime() < minAgeMs;
+  }
+
+  private stillPendingWithoutProvider(
+    tx: MobilePaymentTransaction
+  ): PendingWithdrawalResolveResult {
+    return {
+      success: true,
+      outcome: 'still_pending',
+      message:
+        'Withdrawal has no provider reference yet; waiting for grace period',
+      transaction_id: null,
+      status: this.statusFromLocalTx(tx, 'pending', {
+        message: 'Waiting for provider reference',
+      }),
+    };
+  }
+
+  /**
+   * Ghost pending rows (never held) must still cancel. Only release when a hold exists.
+   */
+  private async releaseHoldIfPresent(
+    tx: MobilePaymentTransaction
+  ): Promise<void> {
+    if (!(await this.hasGiveChangeHold(tx))) {
+      return;
+    }
     const released = await this.accountsService.registerReleaseIfNotExists({
       accountId: tx.account_id as string,
       amount: tx.amount,
@@ -204,22 +228,37 @@ export class PendingWithdrawalResolveService {
       memo: `GIVE_CHANGE release - ${tx.reference}`,
     });
     if (!released.success) {
-      throw new HttpException(
-        {
-          success: false,
-          message: released.error || 'Failed to release withdrawal hold',
-          error: 'RELEASE_FAILED',
-        },
-        HttpStatus.BAD_REQUEST
-      );
+      this.throwReleaseFailed(released.error);
     }
+  }
 
+  private hasGiveChangeHold(tx: MobilePaymentTransaction): Promise<boolean> {
+    return this.accountsService.hasTransactionForReference({
+      accountId: tx.account_id as string,
+      transactionType: 'hold',
+      referenceId: tx.id,
+    });
+  }
+
+  private throwReleaseFailed(error?: string): never {
+    throw new HttpException(
+      {
+        success: false,
+        message: error || 'Failed to release withdrawal hold',
+        error: 'RELEASE_FAILED',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private async markCancelledWithoutProvider(
+    tx: MobilePaymentTransaction
+  ): Promise<PendingWithdrawalResolveResult> {
     await this.databaseService.updateTransaction(tx.id, {
       status: 'cancelled',
       error_message: 'Cancelled before provider accepted withdrawal',
       error_code: 'USER_CANCELLED',
     });
-
     const status = this.statusFromLocalTx(tx, 'cancelled', {
       message: 'Cancelled before provider accepted withdrawal',
     });

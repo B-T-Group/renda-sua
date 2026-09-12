@@ -40,6 +40,7 @@ describe('PendingWithdrawalResolveService', () => {
   const accountsService = {
     registerReleaseIfNotExists: jest.fn(),
     registerWithdrawalIfNotExists: jest.fn(),
+    hasTransactionForReference: jest.fn(),
   };
   const hasuraSystemService = {
     executeQuery: jest.fn(),
@@ -62,6 +63,7 @@ describe('PendingWithdrawalResolveService', () => {
     accountsService.registerReleaseIfNotExists.mockResolvedValue({
       success: true,
     });
+    accountsService.hasTransactionForReference.mockResolvedValue(true);
     accountsService.registerWithdrawalIfNotExists.mockResolvedValue({
       success: true,
     });
@@ -105,6 +107,44 @@ describe('PendingWithdrawalResolveService', () => {
     const statusCallOrder = databaseService.updateTransaction.mock.invocationCallOrder[0];
     expect(releaseCallOrder).toBeLessThan(statusCallOrder);
   });
+
+  it('cancels null-id withdrawal with no hold without releasing', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_id: undefined })
+    );
+    accountsService.hasTransactionForReference.mockResolvedValue(false);
+
+    const result = await service.resolveForUser('tx-1', 'user-1');
+
+    expect(result.outcome).toBe('cancelled');
+    expect(accountsService.hasTransactionForReference).toHaveBeenCalledWith({
+      accountId: 'acct-1',
+      transactionType: 'hold',
+      referenceId: 'tx-1',
+    });
+    expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
+      status: 'cancelled',
+      error_message: 'Cancelled before provider accepted withdrawal',
+      error_code: 'USER_CANCELLED',
+    });
+  });
+
+  it('leaves row pending when hold exists but release fails', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_id: undefined })
+    );
+    accountsService.registerReleaseIfNotExists.mockResolvedValue({
+      success: false,
+      error: 'Insufficient funds for this transaction',
+    });
+
+    await expect(service.resolveForUser('tx-1', 'user-1')).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
   it('finalizes paid withdrawal when provider reports success', async () => {
     databaseService.getTransactionById.mockResolvedValue(
       baseTx({ transaction_id: 'prov-1' })
@@ -354,7 +394,7 @@ describe('PendingWithdrawalResolveService', () => {
       currency: 'XAF',
       reference: 'P123',
     });
-    const pending = await service.resolveForUser('tx-1', 'user-1');
+    const pending = await service.resolveAsSystem('tx-1');
     expect(pending.outcome).toBe('still_pending');
   });
 
@@ -369,7 +409,7 @@ describe('PendingWithdrawalResolveService', () => {
       currency: 'XAF',
       reference: 'P123',
     });
-    const ambiguous = await service.resolveForUser('tx-1', 'user-1');
+    const ambiguous = await service.resolveAsSystem('tx-1');
     expect(ambiguous.outcome).toBe('still_pending');
     expect(callbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
 
