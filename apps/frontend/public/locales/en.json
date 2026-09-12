@@ -7535,5 +7535,30 @@
     "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
     "homeEntryCta": "Open assistant",
     "headerLabel": "Ask Rendasua assistant"
+  },
+  "dashboardComposing": {
+    "client": {
+      "headline": "Building your personalized dashboard",
+      "line1": "Finding shops near you",
+      "line2": "Preparing today's picks",
+      "line3": "Almost ready"
+    },
+    "agent": {
+      "headline": "Preparing your delivery board",
+      "line1": "Checking nearby orders",
+      "line2": "Getting your routes ready",
+      "line3": "Almost ready"
+    },
+    "business": {
+      "headline": "Setting up your store",
+      "line1": "Gathering today's orders",
+      "line2": "Arranging your dashboard",
+      "line3": "Almost ready"
+    },
+    "delegate": {
+      "headline": "Opening this location",
+      "line1": "Loading orders and inventory",
+      "line2": "Almost ready"
+    }
   }
 }

@@ -40,6 +40,8 @@ import { BrowseCatalogListHeader } from '../../components/browse/BrowseCatalogLi
 import { CatalogBrowseSearchBar } from '../../components/browse/CatalogBrowseSearchBar';
 import { CatalogBrowseFilterSheet } from '../../components/browse/CatalogBrowseFilterSheet';
 import { CatalogItemSkeleton } from '../../components/browse/CatalogItemSkeleton';
+import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
+import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { CatalogEmptyIllustration } from '../../components/illustrations/CatalogEmptyIllustration';
 import { CatalogFeedStop } from '../../components/browse/CatalogFeedStop';
 import { CATALOG_SORT_OPTIONS } from '../../constants/catalogSortOptions';
@@ -198,7 +200,7 @@ function BrowseCatalogScreenInner({
   foodOnly = false,
 }: BrowseCatalogScreenProps) {
   const { t } = useTranslation();
-  const { cart, auth } = useStore();
+  const { cart, auth, persona } = useStore();
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const { colors, typography, spacing } = theme;
@@ -303,6 +305,19 @@ function BrowseCatalogScreenInner({
     if (exportOnly) n += 1;
     return n;
   }, [catalogFilters, exportOnly]);
+
+  const isClientHome =
+    auth.isAuthenticated && persona.activePersona === 'client' && !foodOnly;
+  const firstCatalogLoading =
+    isClientHome &&
+    loading &&
+    items.length === 0 &&
+    activeFilterCount === 0 &&
+    debouncedSearch.length === 0;
+  const { showComposing } = useDashboardComposingSession(
+    isClientHome ? 'client' : null,
+    firstCatalogLoading
+  );
 
   // Non-category filter count for Top in Category stop
   // (category filter alone shouldn't suppress the category rail)
@@ -764,6 +779,10 @@ function BrowseCatalogScreenInner({
     typography.body2,
     typography.caption,
   ]);
+
+  if (showComposing) {
+    return <DashboardComposingOverlay persona="client" />;
+  }
 
   return (
     <SafeAreaView

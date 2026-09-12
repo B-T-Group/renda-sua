@@ -240,15 +240,16 @@
     "payNow": "Payer maintenant",
     "heldUntilAccept": "Retenu jusqu'à l'acceptation du magasin",
     "groupDeliveryUnavailable": "Ce vendeur ne peut pas livrer pour le moment.",
-    "summary": "Récapitulatif de la commande",
-    "taxCalculatedAtCheckout": "Calculé lors du paiement",
-    "totalBeforeTax": "Total (avant taxes)",
+    "summary": "Récapitulatif",
+    "taxCalculatedAtCheckout": "Calculée au paiement",
+    "totalBeforeTax": "Total (hors taxes)",
     "deliveryFee": "Livraison",
-    "discount": "Réduction",
-    "pickupNoFee": "Dispensé (retrait en magasin)",
+    "discount": "Remise",
+    "pickupNoFee": "Offert (retrait en magasin)",
     "incompleteAddress": {
-      "banner": "Votre adresse de livraison est incomplète. Ajoutez la ville, la région et le code postal pour continuer avec le paiement par carte.",
-      "cta": "Compléter l'adresse"
+      "banner": "Votre adresse de livraison est incomplète. Ajoutez la ville, la région et le code postal pour payer par carte.",
+      "cta": "Compléter l'adresse",
+      "rowWarning": "Incomplète — ville, région ou code postal manquant"
     },
     "tipsToResolve": "Conseils pour résoudre",
     "tryAgain": "Réessayer",
@@ -257,21 +258,9 @@
     "contactSupport": "Besoin d'aide? Contactez-nous sur WhatsApp",
     "orderStillReserved": "Bonne nouvelle : votre commande est toujours réservée ! Nous avons sauvegardé vos articles pendant que vous complétez votre paiement.",
     "businessOrder": "Commande chez le vendeur",
-    "deliveryFee": "Livraison",
-    "summary": "Récapitulatif",
-    "discount": "Remise",
     "placeOrders": "Passer les commandes",
     "merchantNotAcceptingOrders": "Ce marchand termine la configuration de son compte et n'accepte pas encore les commandes.",
     "taxAtCheckout": "La taxe de vente est calculée au paiement",
-    "totalBeforeTax": "Total (hors taxes)",
-    "taxCalculatedAtCheckout": "Calculée au paiement",
-    "incompleteAddress": {
-      "banner": "Votre adresse de livraison est incomplète. Ajoutez la ville, la région et le code postal pour payer par carte.",
-      "cta": "Compléter l'adresse",
-      "rowWarning": "Incomplète — ville, région ou code postal manquant"
-    },
-    "pickupNoFee": "Offert (retrait en magasin)",
-    "groupDeliveryUnavailable": "Ce vendeur ne peut pas livrer pour le moment.",
     "payment": {
       "mobileMoney": "Mobile Money",
       "cardPayment": "Paiement par carte",
@@ -1048,35 +1037,7 @@
     }
   },
   "nav": {
-    "home": "Accueil",
-    "orders": "Commandes",
-    "earnings": "Gains",
-    "profile": "Profil",
-    "documents": "Documents",
-    "terms": "Conditions de service",
-    "privacy": "Politique de confidentialité",
-    "faq": "FAQ",
-    "messages": "Messages",
-    "notifications": "Notifications",
-    "supportTickets": "Mes tickets",
-    "tabs": {
-      "dashboard": "Accueil",
-      "openOrders": "Disponibles",
-      "orders": "Actives",
-      "menu": "Menu"
-    },
-    "clientTabs": {
-      "browseItems": "Articles",
-      "rentals": "Locations",
-      "foods": "Restauration",
-      "orders": "Mes commandes"
-    },
-    "guestTabs": {
-      "browse": "Articles",
-      "login": "Connexion",
-      "rentals": "Locations",
-      "foods": "Restauration"
-    }
+    "manageRecipients": "Destinataires enregistrés"
   },
   "public": {
     "items": {
@@ -1280,41 +1241,7 @@
     }
   },
   "menuTab": {
-    "subtitle": "Raccourcis et paramètres",
-    "clientSubtitle": "Raccourcis et paramètres",
-    "switchPersonaSection": "Changer de mode",
-    "checkUpdates": "Vérifier les mises à jour",
-    "updateCheck": "Mises à jour",
-    "updateUpToDate": "Vous avez la dernière version.",
-    "updateReloading": "Mise à jour téléchargée. Redémarrage…",
-    "updateCheckFailed": "Impossible de vérifier les mises à jour.",
-    "updateUnavailableWeb": "Les mises à jour OTA sont disponibles uniquement sur l'application installée (iOS ou Android).",
-    "updateUnavailableDev": "Impossible de vérifier les mises à jour en mode développement. Utilisez une build de production.",
-    "updateUnavailableDisabled": "Les mises à jour ne sont pas activées pour cette version.",
-    "sectionNav": "Navigation",
-    "sectionAccount": "Compte",
-    "quickAccess": "Accès rapide",
-    "earningsSubtitle": "Gains et retraits",
-    "documentsSubtitle": "Pièces d'identité",
-    "profileSubtitle": "Compte et adresses",
-    "messagesSubtitle": "Centre de messages",
-    "notificationsSubtitle": "Alertes et paramètres",
-    "supportTicketsSubtitle": "Support et réclamations",
-    "preferencesSection": "Préférences",
-    "languageSubtitle": "Langue d'affichage de l'application",
-    "walletSection": "Portefeuille",
-    "accountsTitle": "Mon portefeuille",
-    "accountsSubtitle": "Recharger et retirer",
-    "viewProfile": "Voir le profil",
-    "sections": {
-      "account": "Compte",
-      "payments": "Paiements",
-      "settings": "Paramètres",
-      "operations": "Opérations",
-      "catalog": "Catalogue",
-      "support": "Support",
-      "legal": "Légal"
-    }
+    "recipientsSubtitle": "Gérer les destinataires des commandes diaspora"
   },
   "documents": {
     "title": "Mes documents",
@@ -6367,7 +6294,7 @@
     "clear": "Effacer la conversation",
     "statusOnline": "En ligne · Propulsé par l'IA",
     "statusThinking": "Génération de la réponse",
-    "openA11y": "Demander à l'assistant Rendasua",
+    "openA11y": "Ouvrir l'assistant IA",
     "suggestion": {
       "location": "Où êtes-vous situés ?",
       "payDelivery": "Acceptez-vous le paiement à la livraison ?",
@@ -6376,8 +6303,7 @@
     },
     "homeEntryTitle": "Demandez à l'assistant IA",
     "homeEntryBody": "Obtenez des réponses rapides sur la livraison, les paiements, le retrait et votre compte.",
-    "homeEntryCta": "Ouvrir l'assistant",
-    "openA11y": "Ouvrir l'assistant IA"
+    "homeEntryCta": "Ouvrir l'assistant"
   },
   "diaspora": {
     "someoneElseReceiving": "Quelqu'un d'autre recevra cette commande",
@@ -6422,10 +6348,29 @@
     "addRecipientAddress": "Ajouter l’adresse du destinataire",
     "selectRecipientAddressToPay": "Ajoutez l’adresse de livraison du destinataire avant de payer"
   },
-  "nav": {
-    "manageRecipients": "Destinataires enregistrés"
-  },
-  "menuTab": {
-    "recipientsSubtitle": "Gérer les destinataires des commandes diaspora"
+  "dashboardComposing": {
+    "client": {
+      "headline": "Préparation de votre tableau de bord",
+      "line1": "Recherche des boutiques près de chez vous",
+      "line2": "Préparation des sélections du jour",
+      "line3": "Presque prêt"
+    },
+    "agent": {
+      "headline": "Préparation de votre tableau de livraisons",
+      "line1": "Vérification des commandes à proximité",
+      "line2": "Préparation de vos trajets",
+      "line3": "Presque prêt"
+    },
+    "business": {
+      "headline": "Mise en place de votre boutique",
+      "line1": "Collecte des commandes du jour",
+      "line2": "Organisation de votre tableau de bord",
+      "line3": "Presque prêt"
+    },
+    "delegate": {
+      "headline": "Ouverture de cet emplacement",
+      "line1": "Chargement des commandes et du stock",
+      "line2": "Presque prêt"
+    }
   }
 }
