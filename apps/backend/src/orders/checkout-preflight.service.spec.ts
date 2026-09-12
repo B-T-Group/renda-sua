@@ -55,6 +55,7 @@ function makeInventoryRow(overrides: {
   itemName?: string;
   canAcceptOrders?: boolean;
   phoneVerified?: boolean;
+  exportAvailable?: boolean;
 } = {}) {
   const sellerCountry = overrides.sellerCountry ?? 'CM';
   const isStripeCountry = sellerCountry === 'CA';
@@ -86,6 +87,7 @@ function makeInventoryRow(overrides: {
       currency: overrides.currency ?? 'XAF',
       weight: 0,
       max_order_quantity: null,
+      export_available: overrides.exportAvailable ?? false,
       pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
       shipping_enabled: overrides.shippingEnabled ?? false,
@@ -865,6 +867,60 @@ describe('CheckoutPreflightService', () => {
     });
   });
 
+  describe('export-available purchase blockers', () => {
+    it('blocks checkout when a line is export_available', async () => {
+      mockInventory([
+        makeInventoryRow({
+          itemName: 'Quote part',
+          exportAvailable: true,
+        }),
+      ]);
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          provisional_country: 'CM',
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        'EXPORT_AVAILABLE_ITEM',
+      ]);
+    });
+
+    it('blocks only the export line in a mixed cart', async () => {
+      mockInventory([
+        makeInventoryRow({
+          id: 'inv-export',
+          itemName: 'Quote part',
+          exportAvailable: true,
+        }),
+        makeInventoryRow({
+          id: 'inv-retail',
+          itemName: 'Phone charger',
+        }),
+      ]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            { business_inventory_id: 'inv-export', quantity: 1 },
+            { business_inventory_id: 'inv-retail', quantity: 1 },
+          ],
+          provisional_country: 'CM',
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        'EXPORT_AVAILABLE_ITEM',
+      ]);
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Diaspora checkout: payer abroad, recipient local
   // -------------------------------------------------------------------------
@@ -1094,6 +1150,9 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.deposit_required).toBe(true);
       expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF (>= 5000)
       expect(result.groups[0]?.amount_due).toBe(9500);
+      expect(result.deposit_required).toBe(true);
+      expect(result.deposit_amount).toBe(500);
+      expect(result.amount_due).toBe(9500);
     });
 
     it('calculates deposit for MoMo + XAF + pay_at_pickup', async () => {

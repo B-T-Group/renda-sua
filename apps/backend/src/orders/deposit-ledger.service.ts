@@ -115,6 +115,7 @@ export class DepositLedgerService {
     amount: number;
     orderNumber: string;
     depositTransactionId: string;
+    memo?: string;
   }): Promise<void> {
     await this.ensureDepositHeld(params);
 
@@ -122,13 +123,56 @@ export class DepositLedgerService {
       accountId: params.clientAccountId,
       amount: params.amount,
       referenceId: params.depositTransactionId,
-      memo: `Deposit refund released for order ${params.orderNumber}`,
+      memo:
+        params.memo ??
+        `Deposit refund released for order ${params.orderNumber}`,
     });
     if (!release?.success) {
       throw new Error(
         `Deposit release failed for order ${params.orderNumber}: ${release?.error ?? 'unknown'}`
       );
     }
+  }
+
+  /**
+   * Cash exception / off-ledger remainder: release hold then debit the deposit.
+   * Remainder stays off-wallet. Idempotent via deposit txn reference.
+   */
+  async applyHeldDepositAsPayment(params: {
+    clientAccountId: string;
+    amount: number;
+    orderNumber: string;
+    depositTransactionId: string;
+  }): Promise<void> {
+    if (await this.hasAppliedDepositPayment(params)) return;
+
+    await this.releaseDepositToAvailable({
+      ...params,
+      memo: `Deposit released for settlement of order ${params.orderNumber}`,
+    });
+
+    const debit = await this.accountsService.registerPaymentIfNotExists({
+      accountId: params.clientAccountId,
+      amount: params.amount,
+      referenceId: params.depositTransactionId,
+      memo: `Deposit applied for order ${params.orderNumber}`,
+    });
+    if (!debit?.success) {
+      throw new Error(
+        `Deposit apply payment failed for ${params.orderNumber}: ${debit?.error ?? 'unknown'}`
+      );
+    }
+  }
+
+  private async hasAppliedDepositPayment(params: {
+    clientAccountId: string;
+    depositTransactionId: string;
+  }): Promise<boolean> {
+    return this.accountsService.hasTransactionForReference({
+      accountId: params.clientAccountId,
+      transactionType: 'payment',
+      referenceId: params.depositTransactionId,
+    });
   }
 
   /**

@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
-import { catalogImageDisplayUrl } from '../../utils/catalogInventoryDisplay';
+import { primaryCatalogImageUrl } from '../../utils/catalogInventoryDisplay';
 
 export interface CatalogFeedExportsStopProps {
   items: CatalogInventoryItem[];
@@ -101,7 +101,7 @@ export const CatalogFeedExportsStop = memo(function CatalogFeedExportsStop({
         }}
       >
         {items.slice(0, 8).map((item) => {
-          const uri = catalogImageDisplayUrl(item);
+          const uri = primaryCatalogImageUrl(item);
           return (
             <Pressable
               key={item.id}
@@ -119,7 +119,7 @@ export const CatalogFeedExportsStop = memo(function CatalogFeedExportsStop({
               <View
                 style={{
                   height: CARD_IMAGE_HEIGHT,
-                  backgroundColor: colors.grey[200],
+                  backgroundColor: colors.pageBackground,
                   borderTopLeftRadius: borderRadius.md,
                   borderTopRightRadius: borderRadius.md,
                   overflow: 'hidden',

@@ -756,6 +756,46 @@ export default function ItemDetailPage() {
     };
   }, [id, loading, error, inventoryItem, t]);
 
+  // Must stay above loading/error early returns — same hook order every render.
+  const foodAvailability = inventoryItem?.food_availability;
+  const deliveryEstimateParams = React.useMemo(() => {
+    if (!selectedMarket || !inventoryItem) return null;
+    return {
+      marketId: selectedMarket.countryCode,
+      areaId: selectedMarket.stateCode || undefined,
+      category: (foodAvailability ? 'food' : 'store') as 'store' | 'food' | 'rental',
+      sellerId: inventoryItem.business_location?.business_id,
+      skuId: inventoryItem.item_id,
+    };
+  }, [selectedMarket, inventoryItem, foodAvailability]);
+
+  const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } =
+    useDeliveryEstimate(deliveryEstimateParams);
+
+  const deliveryBlocked = React.useMemo(() => {
+    if (!deliveryEstimate) return { blocked: false, reason: null };
+
+    if (deliveryEstimate.coverage === 'out') {
+      return {
+        blocked: true,
+        reason: t('delivery.outOfCoverage', 'Delivery not available in this area'),
+      };
+    }
+
+    if (
+      deliveryEstimate.servingStatus &&
+      deliveryEstimate.servingStatus !== 'available'
+    ) {
+      const reason =
+        deliveryEstimate.servingStatus === 'sold_out'
+          ? t('foods.status.soldOutToday', 'Sold out today')
+          : t('foods.status.notServingNow', 'Not serving now');
+      return { blocked: true, reason };
+    }
+
+    return { blocked: false, reason: null };
+  }, [deliveryEstimate, t]);
+
   if (loading) {
     return (
       <>
@@ -813,42 +853,8 @@ export default function ItemDetailPage() {
   const location = inventoryItem.business_location;
   const businessCountry = inventoryItem.business_location?.address?.country;
   const isCameroonBusiness = businessCountry?.trim().toUpperCase() === 'CM';
-  const foodAvailability = inventoryItem.food_availability;
   const foodStatus = resolveFoodAvailabilityStatus(foodAvailability);
   const isFoodClosed = foodStatus != null && foodStatus !== 'available';
-
-  const deliveryEstimateParams = React.useMemo(() => {
-    if (!selectedMarket || !inventoryItem) return null;
-    return {
-      marketId: selectedMarket.countryCode,
-      areaId: selectedMarket.stateCode || undefined,
-      category: (foodAvailability ? 'food' : 'store') as 'store' | 'food' | 'rental',
-      sellerId: inventoryItem.business_location?.business_id,
-      skuId: inventoryItem.item_id,
-    };
-  }, [selectedMarket, inventoryItem, foodAvailability]);
-
-  const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } = useDeliveryEstimate(deliveryEstimateParams);
-
-  const deliveryBlocked = React.useMemo(() => {
-    if (!deliveryEstimate) return { blocked: false, reason: null };
-    
-    if (deliveryEstimate.coverage === 'out') {
-      return { 
-        blocked: true, 
-        reason: t('delivery.outOfCoverage', 'Delivery not available in this area') 
-      };
-    }
-    
-    if (deliveryEstimate.servingStatus && deliveryEstimate.servingStatus !== 'available') {
-      const reason = deliveryEstimate.servingStatus === 'sold_out'
-        ? t('foods.status.soldOutToday', 'Sold out today')
-        : t('foods.status.notServingNow', 'Not serving now');
-      return { blocked: true, reason };
-    }
-    
-    return { blocked: false, reason: null };
-  }, [deliveryEstimate, t]);
 
   const hasStock =
     inventoryItem.computed_available_quantity > 0 &&

@@ -430,6 +430,7 @@ describe('OrdersService', () => {
                 ? Math.max(0, (o.total_amount || 0) - (o.deposit_amount || 0))
                 : o?.total_amount || 0
             ),
+            isAfterRefundLockPoint: jest.fn().mockReturnValue(false),
           },
         },
         {
@@ -2511,7 +2512,9 @@ describe('OrdersService', () => {
       (service as any).depositLedgerService.creditAndHoldDeposit = jest
         .fn()
         .mockResolvedValue(undefined);
-      hasuraSystemService.executeMutation.mockResolvedValue({});
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1 },
+      });
       configService.get.mockImplementation((key: string) => {
         if (key === 'notification') {
           return { orderStatusChangeEnabled: false };
@@ -2531,6 +2534,9 @@ describe('OrdersService', () => {
         orderNumber: '49520979',
         depositTransactionId: depositTxnId,
       });
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
     });
 
     it('does not mark deposit paid when credit+hold fails', async () => {
@@ -2541,6 +2547,191 @@ describe('OrdersService', () => {
       await expect(
         service.finalizeDepositAfterCallback('49520979', depositTxnId)
       ).rejects.toThrow('hold failed');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('credits then refunds a late deposit on a cancelled order without resurrecting', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          current_status: 'cancelled',
+        });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-uuid-123', { allowAfterLock: true });
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('MarkDepositCapturedOnly'),
+        expect.objectContaining({ orderId: 'order-uuid-123' })
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('CasActivatePaidDeposit'),
+        expect.anything()
+      );
+    });
+
+    it('refunds without resurrecting when the live CAS loses to cancel', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce(depositOrder)
+        .mockResolvedValueOnce({
+          ...depositOrder,
+          current_status: 'cancelled',
+        });
+      hasuraSystemService.executeMutation.mockImplementation(
+        (mutation: string) => {
+          if (String(mutation).includes('CasActivatePaidDeposit')) {
+            return Promise.resolve({ update_orders: { affected_rows: 0 } });
+          }
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+      );
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-uuid-123', { allowAfterLock: true });
+    });
+
+    it('does not refund when the live CAS loses to a concurrent SUCCESS winner', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce(depositOrder)
+        .mockResolvedValueOnce({
+          ...depositOrder,
+          current_status: 'pending',
+          deposit_status: 'paid',
+        });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+      expect(
+        (service as any).depositLedgerService.ensureDepositHeld
+      ).toHaveBeenCalled();
+    });
+
+    it('fails closed without refund when CAS loses on a live unpaid order', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce(depositOrder)
+        .mockResolvedValueOnce(depositOrder);
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('MarkDepositCapturedOnly'),
+        expect.anything()
+      );
+    });
+  });
+
+  describe('handleDepositOnCancellation', () => {
+    const paidOrder = {
+      deposit_status: 'paid',
+      deposit_amount: 500,
+      fulfillment_method: 'delivery',
+    };
+
+    beforeEach(() => {
+      (service as any).depositRefundService.refundDeposit.mockClear();
+      (service as any).depositRefundService.forfeitDeposit.mockClear();
+      (service as any).depositCalculationService.isAfterRefundLockPoint =
+        jest.fn();
+    });
+
+    it('refunds after lock for business and system cancels', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(true);
+
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'out_for_delivery',
+        'business'
+      );
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'out_for_delivery',
+        'system'
+      );
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenNthCalledWith(1, 'order-1', { allowAfterLock: true });
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenNthCalledWith(2, 'order-1', { allowAfterLock: true });
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).not.toHaveBeenCalled();
+    });
+
+    it('forfeits after lock and refunds before lock for client cancel', async () => {
+      const lock =
+        (service as any).depositCalculationService.isAfterRefundLockPoint;
+      lock.mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'out_for_delivery',
+        'client'
+      );
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'confirmed',
+        'client'
+      );
+
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).toHaveBeenCalledWith('order-1', 'customer_cancel_after_lock');
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-1');
+    });
+
+    it('skips unpaid deposits', async () => {
+      await (service as any).handleDepositOnCancellation(
+        { deposit_status: 'pending', deposit_amount: 500 },
+        'order-1',
+        'confirmed',
+        'client'
+      );
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).not.toHaveBeenCalled();
     });
   });
 });

@@ -303,4 +303,92 @@ describe('ItemsService privileged field filtering', () => {
       price: 2500,
     });
   });
+
+  it('replaces destination markets when creating an export item', async () => {
+    const { service, hasuraSystem } = createService();
+    hasuraSystem.executeMutation.mockResolvedValue({
+      insert_items_one: {
+        id: 'item-1',
+        name: 'Quote part',
+        description: '',
+        sku: null,
+      },
+    });
+
+    await service.createItem('business-1', {
+      name: 'Quote part',
+      export_available: true,
+      export_market_country_codes: [' cm ', 'CM', 'CAMEROON'],
+      price: 0,
+    });
+
+    const replaceCall = hasuraSystem.executeMutation.mock.calls.find((call) =>
+      String(call[0]).includes('insert_item_export_markets')
+    );
+    expect(replaceCall?.[1]).toEqual({
+      itemId: 'item-1',
+      objects: [{ item_id: 'item-1', country_code: 'CM' }],
+    });
+  });
+
+  it('rejects invalid or inactive export destination markets', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await expect(
+      service.createItem('business-1', {
+        name: 'Quote part',
+        export_available: true,
+        export_market_country_codes: ['CAMEROON'],
+        price: 0,
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'INVALID_EXPORT_MARKETS' },
+    });
+
+    await expect(
+      service.createItem('business-1', {
+        name: 'Quote part',
+        export_available: true,
+        export_market_country_codes: 'CM' as unknown as string[],
+        price: 0,
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'INVALID_EXPORT_MARKETS' },
+    });
+
+    await expect(
+      service.createItem('business-1', {
+        name: 'Quote part',
+        export_available: true,
+        export_market_country_codes: ['US'],
+        price: 0,
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'INVALID_EXPORT_MARKETS' },
+    });
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('clears destination markets when export is turned off', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      export_available: true,
+      price: 1500,
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', export_available: false },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      export_available: false,
+    });
+
+    const clearCall = hasuraSystem.executeMutation.mock.calls.find((call) =>
+      String(call[0]).includes('ClearExportMarkets')
+    );
+    expect(clearCall?.[1]).toEqual({ itemId: 'item-1' });
+  });
 });

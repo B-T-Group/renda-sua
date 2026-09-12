@@ -495,6 +495,21 @@ const RentalListingDetailPage: React.FC = () => {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [location.hash, row]);
 
+  // Must stay above loading/not-found early returns — same hook order every render.
+  const deliveryEstimateParams = React.useMemo(() => {
+    if (!selectedMarket || !row) return null;
+    return {
+      marketId: selectedMarket.countryCode,
+      areaId: selectedMarket.stateCode || undefined,
+      category: 'rental' as const,
+      sellerId: row.rental_item.business.id,
+      skuId: row.rental_item.id,
+    };
+  }, [selectedMarket, row]);
+
+  const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } =
+    useDeliveryEstimate(deliveryEstimateParams);
+
   if (loading || !listingId) {
     return (
       <LoadingPage
@@ -560,19 +575,6 @@ const RentalListingDetailPage: React.FC = () => {
     Number(row.base_price_per_day ?? 0),
     row.rental_item.currency
   );
-
-  const deliveryEstimateParams = React.useMemo(() => {
-    if (!selectedMarket) return null;
-    return {
-      marketId: selectedMarket.countryCode,
-      areaId: selectedMarket.stateCode || undefined,
-      category: 'rental' as const,
-      sellerId: row.rental_item.business.id,
-      skuId: row.rental_item.id,
-    };
-  }, [selectedMarket, row.rental_item.business.id, row.rental_item.id]);
-
-  const { estimate: deliveryEstimate, loading: deliveryEstimateLoading } = useDeliveryEstimate(deliveryEstimateParams);
 
   return (
     <>
