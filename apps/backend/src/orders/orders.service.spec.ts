@@ -2512,7 +2512,9 @@ describe('OrdersService', () => {
       (service as any).depositLedgerService.creditAndHoldDeposit = jest
         .fn()
         .mockResolvedValue(undefined);
-      hasuraSystemService.executeMutation.mockResolvedValue({});
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1 },
+      });
       configService.get.mockImplementation((key: string) => {
         if (key === 'notification') {
           return { orderStatusChangeEnabled: false };
@@ -2532,6 +2534,9 @@ describe('OrdersService', () => {
         orderNumber: '49520979',
         depositTransactionId: depositTxnId,
       });
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
     });
 
     it('does not mark deposit paid when credit+hold fails', async () => {
@@ -2542,6 +2547,53 @@ describe('OrdersService', () => {
       await expect(
         service.finalizeDepositAfterCallback('49520979', depositTxnId)
       ).rejects.toThrow('hold failed');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('credits then refunds a late deposit on a cancelled order without resurrecting', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          current_status: 'cancelled',
+        });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-uuid-123', { allowAfterLock: true });
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('MarkDepositCapturedOnly'),
+        expect.objectContaining({ orderId: 'order-uuid-123' })
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('CasActivatePaidDeposit'),
+        expect.anything()
+      );
+    });
+
+    it('refunds without resurrecting when the live CAS loses to cancel', async () => {
+      hasuraSystemService.executeMutation.mockImplementation(
+        (mutation: string) => {
+          if (String(mutation).includes('CasActivatePaidDeposit')) {
+            return Promise.resolve({ update_orders: { affected_rows: 0 } });
+          }
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+      );
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-uuid-123', { allowAfterLock: true });
     });
   });
 
