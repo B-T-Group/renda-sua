@@ -123,6 +123,67 @@ export async function requestHasuraWithRetry<T>(
   return retryHasuraAttempt(request, logger, maxAttempts, delayMs, 1);
 }
 
+const MISSING_ITEMS_INTEREST_ONLY =
+  /field 'interest_only' not found in type: 'items'/i;
+
+export function isMissingItemsInterestOnlyField(error: unknown): boolean {
+  return MISSING_ITEMS_INTEREST_ONLY.test(hasuraValidationErrorText(error));
+}
+
+export function stripItemsInterestOnlyFromGraphql(query: string): string {
+  return query
+    .replace(/^\s*interest_only\s*$/gm, '')
+    .replace(/interest_only\s*:\s*\{[^}]*\}\s*,?/g, '');
+}
+
+export async function requestHasuraQueryWithInterestOnlyFallback<T>(
+  request: (query: string) => Promise<T>,
+  query: string,
+  logger?: HasuraRetryLogger,
+  options?: { maxAttempts?: number; delayMs?: number }
+): Promise<T> {
+  try {
+    return await requestHasuraWithRetry(() => request(query), logger, options);
+  } catch (error: any) {
+    return retryQueryWithoutInterestOnly(request, query, logger, options, error);
+  }
+}
+
+async function retryQueryWithoutInterestOnly<T>(
+  request: (query: string) => Promise<T>,
+  query: string,
+  logger: HasuraRetryLogger | undefined,
+  options: { maxAttempts?: number; delayMs?: number } | undefined,
+  error: unknown
+): Promise<T> {
+  const stripped = stripItemsInterestOnlyFromGraphql(query);
+  if (stripped === query || !isMissingItemsInterestOnlyField(error)) {
+    throw error;
+  }
+  logger?.warn(
+    'Hasura schema is missing items.interest_only; retrying without that field'
+  );
+  return requestHasuraWithRetry(() => request(stripped), logger, options);
+}
+
+function hasuraValidationErrorText(error: unknown): string {
+  if (!error || typeof error !== 'object') return String(error || '');
+  const err = error as HasuraErrorShape;
+  return `${err.message || ''} ${graphqlErrorMessages(err)}`;
+}
+
+function graphqlErrorMessages(err: HasuraErrorShape): string {
+  const errors = err.response?.errors;
+  if (!Array.isArray(errors)) return '';
+  return errors
+    .map((entry) =>
+      entry && typeof entry === 'object' && 'message' in entry
+        ? String((entry as { message?: unknown }).message || '')
+        : ''
+    )
+    .join(' ');
+}
+
 function httpStatusOf(err: HasuraErrorShape): number | undefined {
   return err.response?.status ?? err.response?.statusCode;
 }

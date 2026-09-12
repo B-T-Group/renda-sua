@@ -1780,10 +1780,14 @@ export class InventoryItemsService {
         totalPages,
       };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error('Failed to fetch inventory items:', error);
       throw new HttpException(
         'Failed to fetch inventory items',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
@@ -2669,7 +2673,8 @@ export class InventoryItemsService {
       this.logger.error(`Failed to fetch inventory item ${id}:`, error);
       throw new HttpException(
         'Failed to fetch inventory item',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
