@@ -419,6 +419,48 @@ export interface OrderWithDetails {
   delivery_time_windows?: Array<Delivery_Time_Windows>;
 }
 
+const CAS_ACTIVATE_PAID_DEPOSIT = `
+  mutation CasActivatePaidDeposit(
+    $orderId: uuid!
+    $now: timestamptz!
+    $liveStatuses: [order_status!]!
+    $pendingDeposit: [order_deposit_status_enum!]!
+  ) {
+    update_orders(
+      where: {
+        _and: [
+          { id: { _eq: $orderId } }
+          { current_status: { _in: $liveStatuses } }
+          { deposit_status: { _in: $pendingDeposit } }
+        ]
+      }
+      _set: {
+        deposit_status: paid
+        current_status: pending
+        payment_status: "pending"
+        updated_at: $now
+      }
+    ) { affected_rows }
+  }
+`;
+
+const MARK_DEPOSIT_CAPTURED_ONLY = `
+  mutation MarkDepositCapturedOnly(
+    $orderId: uuid!
+    $pendingDeposit: [order_deposit_status_enum!]!
+  ) {
+    update_orders(
+      where: {
+        _and: [
+          { id: { _eq: $orderId } }
+          { deposit_status: { _in: $pendingDeposit } }
+        ]
+      }
+      _set: { deposit_status: paid }
+    ) { affected_rows }
+  }
+`;
+
 /**
  * Singleton order orchestration.
  * Request identity is resolved via nestjs-cls through HasuraUserService
@@ -7502,16 +7544,16 @@ export class OrdersService {
 
   /**
    * Finalize deposit after successful MoMo callback.
-   * 
+   *
    * CRITICAL: This is NOT a full order payment. Do not call finalizePayAtDeliveryPaymentAndComplete.
-   * 
+   *
    * On deposit SUCCESS:
    * - Credit client wallet then hold (withheld) so client cannot withdraw
-   * - Mark deposit_status = 'paid' (fail-closed if credit/hold fails)
-   * - deposit_mobile_payment_transaction_id FK already set at place-order
-   * - Transition pending_payment → pending (await merchant acceptance)
-   * - Start acceptance SLA
-   * 
+   * - CAS-mark deposit paid + pending only while the order is still live
+   * - Terminal or CAS lose to cancel: capture ledger then refund (never resurrect)
+   * - CAS lose to a concurrent SUCCESS winner: repair hold only, do not refund
+   * - Start acceptance SLA only after a successful live CAS
+   *
    * Settlement: At Delivered/remainder paid, release the deposit hold then debit
    * client for FULL total (deposit + remainder) and credit merchant from full GMV.
    */
@@ -7521,91 +7563,30 @@ export class OrdersService {
   ): Promise<void> {
     try {
       const order = await this.requireOrderDetailsByNumber(orderNumber);
-
-      if (order.current_status === 'cancelled' || order.current_status === 'failed') {
-        this.logger.warn(
-          `Ignoring deposit callback for ${order.current_status} order ${orderNumber}`
-        );
-        return;
-      }
+      this.assertDepositCallbackTxnMatches(order, transactionDbId);
 
       if ((order as any).deposit_status === 'paid') {
-        this.logger.warn(
-          `Deposit already captured for order ${orderNumber}`
-        );
-        // Repair older credits that never created a hold (pre-hold deploy / race).
         await this.repairPaidDepositHoldIfMissing(order, transactionDbId);
+        if (this.isTerminalForDepositCallback(order.current_status)) {
+          await this.refundPaidDepositOnTerminalOrder(order.id);
+        }
         return;
       }
 
-      // Verify transactionDbId matches the FK set at place-order
-      const depositTxnId = (order as any).deposit_mobile_payment_transaction_id;
-      if (transactionDbId && depositTxnId && transactionDbId !== depositTxnId) {
-        throw new Error(
-          `Transaction ID mismatch for deposit callback on ${orderNumber}: ` +
-          `callback=${transactionDbId}, order FK=${depositTxnId}`
-        );
+      await this.creditAndHoldOrderDeposit(order, transactionDbId);
+      if (this.isTerminalForDepositCallback(order.current_status)) {
+        await this.refundLateDepositWithoutResurrecting(order.id);
+        return;
+      }
+
+      const claimed = await this.casActivatePaidDeposit(order.id);
+      if (!claimed) {
+        await this.resolveLostPaidDepositCas(orderNumber, transactionDbId);
+        return;
       }
 
       const depositAmount = (order as any).deposit_amount || 0;
-      const totalAmount = order.total_amount || 0;
-      const amountDue = Math.max(0, totalAmount - depositAmount);
-      const ledgerTxnId = this.depositLedgerReferenceId(
-        transactionDbId,
-        depositTxnId
-      );
-
-      // CRITICAL ORDER: Credit then hold wallet FIRST, then mark deposit as paid.
-      // Fail closed: if credit or hold fails, do not mark deposit as paid.
-      if (depositAmount && depositAmount > 0) {
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
-        );
-        if (!clientAccount) {
-          throw new Error(
-            `No account found for client user ${order.client.user_id} currency ${order.currency}`
-          );
-        }
-
-        await this.depositLedgerService.creditAndHoldDeposit({
-          clientAccountId: clientAccount.id,
-          amount: depositAmount,
-          orderNumber: order.order_number,
-          depositTransactionId: ledgerTxnId,
-        });
-      }
-
-      // Only mark deposit as paid AFTER wallet credit+hold succeeds
-      // Note: deposit_mobile_payment_transaction_id FK already set at place-order
-      const finalizeMutation = `
-        mutation FinalizeDeposit(
-          $orderId: uuid!,
-          $now: timestamptz!
-        ) {
-          update_orders_by_pk(
-            pk_columns: { id: $orderId }
-            _set: {
-              deposit_status: "paid"
-              current_status: pending
-              payment_status: "pending"
-              updated_at: $now
-            }
-          ) {
-            id
-            order_number
-            current_status
-            deposit_amount
-            total_amount
-          }
-        }
-      `;
-
-      await this.hasuraSystemService.executeMutation(finalizeMutation, {
-        orderId: order.id,
-        now: new Date().toISOString(),
-      });
-
+      const amountDue = Math.max(0, (order.total_amount || 0) - depositAmount);
       this.logger.log(
         `Deposit ${depositAmount} captured and held for order ${orderNumber}. ` +
         `Amount due: ${amountDue}. Transitioning to pending (awaiting merchant).`
@@ -7767,6 +7748,119 @@ export class OrdersService {
       throw new Error('Missing deposit mobile payment transaction id');
     }
     return referenceId;
+  }
+
+  private isTerminalForDepositCallback(status?: string): boolean {
+    return (
+      status === 'cancelled' || status === 'failed' || status === 'refunded'
+    );
+  }
+
+  private assertDepositCallbackTxnMatches(
+    order: { order_number: string },
+    transactionDbId: string
+  ): void {
+    const depositTxnId = (order as any).deposit_mobile_payment_transaction_id;
+    if (transactionDbId && depositTxnId && transactionDbId !== depositTxnId) {
+      throw new Error(
+        `Transaction ID mismatch for deposit callback on ${order.order_number}: ` +
+          `callback=${transactionDbId}, order FK=${depositTxnId}`
+      );
+    }
+  }
+
+  private async creditAndHoldOrderDeposit(
+    order: any,
+    transactionDbId: string
+  ): Promise<void> {
+    const depositAmount = order.deposit_amount || 0;
+    if (!depositAmount || depositAmount <= 0) return;
+    const clientAccount = await this.requireClientAccountForDeposit(order);
+    await this.depositLedgerService.creditAndHoldDeposit({
+      clientAccountId: clientAccount.id,
+      amount: depositAmount,
+      orderNumber: order.order_number,
+      depositTransactionId: this.depositLedgerReferenceId(
+        transactionDbId,
+        order.deposit_mobile_payment_transaction_id
+      ),
+    });
+  }
+
+  private async requireClientAccountForDeposit(
+    order: any
+  ): Promise<{ id: string }> {
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (!clientAccount?.id) {
+      throw new Error(
+        `No account found for client user ${order.client.user_id} currency ${order.currency}`
+      );
+    }
+    return clientAccount;
+  }
+
+  private async resolveLostPaidDepositCas(
+    orderNumber: string,
+    transactionDbId: string
+  ): Promise<void> {
+    const fresh = await this.requireOrderDetailsByNumber(orderNumber);
+    if (this.isTerminalForDepositCallback(fresh.current_status)) {
+      await this.refundLateDepositWithoutResurrecting(fresh.id);
+      return;
+    }
+    if ((fresh as any).deposit_status === 'paid') {
+      await this.repairPaidDepositHoldIfMissing(fresh, transactionDbId);
+      return;
+    }
+    this.logger.error(
+      `Deposit CAS lost for live unpaid order ${orderNumber} ` +
+        `(status=${fresh.current_status}, deposit=${(fresh as any).deposit_status}); not refunding`
+    );
+  }
+
+  private async casActivatePaidDeposit(orderId: string): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(CAS_ACTIVATE_PAID_DEPOSIT, {
+      orderId,
+      now: new Date().toISOString(),
+      liveStatuses: ['pending_payment', 'pending'],
+      pendingDeposit: ['pending', 'failed'],
+    });
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
+  }
+
+  private async markDepositCapturedOnly(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(MARK_DEPOSIT_CAPTURED_ONLY, {
+      orderId,
+      pendingDeposit: ['pending', 'failed'],
+    });
+  }
+
+  private async refundLateDepositWithoutResurrecting(
+    orderId: string
+  ): Promise<void> {
+    await this.markDepositCapturedOnly(orderId);
+    await this.refundPaidDepositOnTerminalOrder(orderId);
+  }
+
+  private async refundPaidDepositOnTerminalOrder(
+    orderId: string
+  ): Promise<void> {
+    const result = await this.depositRefundService.refundDeposit(orderId, {
+      allowAfterLock: true,
+    });
+    if (
+      result.success ||
+      result.errorCode === 'ALREADY_REFUNDED' ||
+      result.errorCode === 'DEPOSIT_NOT_CAPTURED'
+    ) {
+      return;
+    }
+    throw new Error(result.message || 'Late deposit refund failed');
   }
 
   /** Idempotent catch-up when deposit was credited without a hold. */
