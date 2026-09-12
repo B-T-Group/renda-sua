@@ -7550,7 +7550,8 @@ export class OrdersService {
    * On deposit SUCCESS:
    * - Credit client wallet then hold (withheld) so client cannot withdraw
    * - CAS-mark deposit paid + pending only while the order is still live
-   * - Terminal / lost CAS: capture ledger then refund to wallet (never resurrect)
+   * - Terminal or CAS lose to cancel: capture ledger then refund (never resurrect)
+   * - CAS lose to a concurrent SUCCESS winner: repair hold only, do not refund
    * - Start acceptance SLA only after a successful live CAS
    *
    * Settlement: At Delivered/remainder paid, release the deposit hold then debit
@@ -7580,10 +7581,7 @@ export class OrdersService {
 
       const claimed = await this.casActivatePaidDeposit(order.id);
       if (!claimed) {
-        this.logger.warn(
-          `Deposit CAS lost for ${orderNumber}; refunding without resurrecting`
-        );
-        await this.refundLateDepositWithoutResurrecting(order.id);
+        await this.resolveLostPaidDepositCas(orderNumber, transactionDbId);
         return;
       }
 
@@ -7802,6 +7800,25 @@ export class OrdersService {
       );
     }
     return clientAccount;
+  }
+
+  private async resolveLostPaidDepositCas(
+    orderNumber: string,
+    transactionDbId: string
+  ): Promise<void> {
+    const fresh = await this.requireOrderDetailsByNumber(orderNumber);
+    if (this.isTerminalForDepositCallback(fresh.current_status)) {
+      await this.refundLateDepositWithoutResurrecting(fresh.id);
+      return;
+    }
+    if ((fresh as any).deposit_status === 'paid') {
+      await this.repairPaidDepositHoldIfMissing(fresh, transactionDbId);
+      return;
+    }
+    this.logger.error(
+      `Deposit CAS lost for live unpaid order ${orderNumber} ` +
+        `(status=${fresh.current_status}, deposit=${(fresh as any).deposit_status}); not refunding`
+    );
   }
 
   private async casActivatePaidDeposit(orderId: string): Promise<boolean> {

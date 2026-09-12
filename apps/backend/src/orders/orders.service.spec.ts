@@ -2577,6 +2577,13 @@ describe('OrdersService', () => {
     });
 
     it('refunds without resurrecting when the live CAS loses to cancel', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce(depositOrder)
+        .mockResolvedValueOnce({
+          ...depositOrder,
+          current_status: 'cancelled',
+        });
       hasuraSystemService.executeMutation.mockImplementation(
         (mutation: string) => {
           if (String(mutation).includes('CasActivatePaidDeposit')) {
@@ -2594,6 +2601,52 @@ describe('OrdersService', () => {
       expect(
         (service as any).depositRefundService.refundDeposit
       ).toHaveBeenCalledWith('order-uuid-123', { allowAfterLock: true });
+    });
+
+    it('does not refund when the live CAS loses to a concurrent SUCCESS winner', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce(depositOrder)
+        .mockResolvedValueOnce({
+          ...depositOrder,
+          current_status: 'pending',
+          deposit_status: 'paid',
+        });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+      expect(
+        (service as any).depositLedgerService.ensureDepositHeld
+      ).toHaveBeenCalled();
+    });
+
+    it('fails closed without refund when CAS loses on a live unpaid order', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce(depositOrder)
+        .mockResolvedValueOnce(depositOrder);
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('MarkDepositCapturedOnly'),
+        expect.anything()
+      );
     });
   });
 
