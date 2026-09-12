@@ -134,12 +134,31 @@ describe('buildInventoryItemsCacheKey', () => {
     });
     expect(inactive).toContain(':inactive:');
     expect(inactive).toContain(':incl:');
-    expect(inactive.endsWith(':food')).toBe(true);
+    expect(inactive).toContain(':food:');
+    expect(inactive.endsWith(':local')).toBe(true);
   });
 
   it('does not collapse omitted is_active into the inactive key', () => {
     const omitted = buildInventoryItemsCacheKey({ generation: 1, limit: 20 });
     expect(omitted).toContain(':active:');
     expect(omitted).not.toContain(':inactive:');
+  });
+
+  it('isolates export-only listings from the local catalog cache', () => {
+    const local = buildInventoryItemsCacheKey({
+      generation: 1,
+      limit: 20,
+      countryCode: 'CA',
+    });
+    const exported = buildInventoryItemsCacheKey({
+      generation: 1,
+      limit: 20,
+      countryCode: 'CA',
+      exportOnly: true,
+    });
+
+    expect(local.endsWith(':local')).toBe(true);
+    expect(exported.endsWith(':export')).toBe(true);
+    expect(local).not.toEqual(exported);
   });
 });

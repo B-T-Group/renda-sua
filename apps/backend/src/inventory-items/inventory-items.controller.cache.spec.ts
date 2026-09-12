@@ -78,6 +78,24 @@ describe('InventoryItemsController catalog cache gates', () => {
     expect(inventoryItemsService.getInventoryItems).toHaveBeenCalledTimes(4);
   });
 
+  it('uses a distinct cache key for export-only catalog listings', async () => {
+    await controller.getInventoryItems({
+      country_code: 'CA',
+      export_only: 'true',
+    });
+
+    expect(catalogCache.getOrCompute).toHaveBeenCalledWith(
+      buildInventoryItemsCacheKey({
+        generation: 5,
+        limit: 20,
+        countryCode: 'CA',
+        exportOnly: true,
+      }),
+      expect.any(Function),
+      { ttlSeconds: inventoryItemsCacheTtlSeconds(undefined, undefined) }
+    );
+  });
+
   it('still caches anonymous traffic when Hasura reports the anonymous sentinel', async () => {
     hasuraUserService.getUserId.mockReturnValue('anonymous');
 

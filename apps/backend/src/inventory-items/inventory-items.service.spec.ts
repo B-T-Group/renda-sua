@@ -117,6 +117,76 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     expect(json).toContain('"sku"');
     expect(json).toContain('"_in":["CA","CM"]');
   });
+
+  it('excludes export listings from the default local catalog', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ country_code: 'CA', state: 'Ontario' });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"export_available":{"_eq":false}');
+    expect(json).not.toContain('"export_markets"');
+  });
+
+  it('returns unsupported when export-only is requested without a viewer country', async () => {
+    const { buildWhere } = createService();
+    await expect(buildWhere({ export_only: true })).resolves.toEqual({
+      unsupported: true,
+    });
+  });
+
+  it('returns unsupported when the export-only destination market is not onboarded', async () => {
+    const { buildWhere } = createService({ validateLocationSupport: false });
+    await expect(
+      buildWhere({ export_only: true, country_code: 'XX' })
+    ).resolves.toEqual({ unsupported: true });
+  });
+
+  it('scopes export-only listings to export_available items for the viewer market', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({
+      export_only: true,
+      country_code: 'ca',
+      state: 'Ontario',
+    });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"export_available":{"_eq":true}');
+    expect(json).toContain('"export_markets":{"country_code":{"_eq":"CA"}}');
+    expect(hasCountryEq(json, 'CA')).toBe(false);
+    expect(json).not.toContain('"state":{"_eq":"Ontario"}');
+  });
+
+  it('includes matching export listings in search without dropping local stock', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({
+      includeExportInSearch: true,
+      country_code: 'ca',
+      state: 'Ontario',
+    });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"_or"');
+    expect(json).toContain('"export_available":{"_eq":false}');
+    expect(json).toContain('"export_available":{"_eq":true}');
+    expect(json).toContain('"export_markets":{"country_code":{"_eq":"CA"}}');
+    expect(json).toContain('"state":{"_eq":"Ontario"}');
+  });
+
+  it('does not apply the default export exclude on store or wishlist rails', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({
+      includeExportListings: true,
+      country_code: 'CA',
+    });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).not.toContain('"export_available":{"_eq":false}');
+    expect(json).not.toContain('"export_markets"');
+  });
 });
 
 describe('InventoryItemsService.resolveSemanticSearch', () => {
@@ -322,6 +392,118 @@ describe('InventoryItemsService.clampInventoryListLimit', () => {
     expect(clamp(0)).toBe(20);
     expect(clamp(12)).toBe(12);
     expect(clamp(200)).toBe(50);
+  });
+});
+
+describe('InventoryItemsService.getInventoryItems export flags', () => {
+  function createService() {
+    const hasuraUser = {
+      getUser: jest.fn().mockRejectedValue(new Error('anonymous')),
+    };
+    const itemEmbeddingService = {
+      normalizeSearchQuery: (q: string) => q.trim(),
+      isEmbeddingsSearchEnabled: () => false,
+    };
+    const service = new InventoryItemsService(
+      {} as any,
+      hasuraUser as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      itemEmbeddingService as any,
+      {} as any
+    );
+    const buildWhere = jest
+      .spyOn(service as any, 'buildInventoryCatalogWhere')
+      .mockResolvedValue({ where: { _and: [] } });
+    jest
+      .spyOn(service as any, 'countDistinctCatalogItemIds')
+      .mockResolvedValue(0);
+    return { service, buildWhere };
+  }
+
+  it('wires export_only, search, and store rails to the catalog where-builder', async () => {
+    const { service, buildWhere } = createService();
+
+    await service.getInventoryItems({
+      export_only: true,
+      country_code: 'CA',
+    });
+    await service.getInventoryItems({
+      search: 'phone',
+      country_code: 'CA',
+    });
+    await service.getInventoryItems({
+      business_location_id: 'loc-1',
+      country_code: 'CA',
+    });
+
+    expect(buildWhere.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        export_only: true,
+        includeExportInSearch: false,
+        includeExportListings: false,
+      })
+    );
+    expect(buildWhere.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        export_only: false,
+        includeExportInSearch: true,
+        includeExportListings: false,
+        searchTextQuery: 'phone',
+      })
+    );
+    expect(buildWhere.mock.calls[2][0]).toEqual(
+      expect.objectContaining({
+        includeExportListings: true,
+        export_only: false,
+        includeExportInSearch: false,
+      })
+    );
+  });
+});
+
+describe('InventoryItemsService.getSimilarInventoryItems', () => {
+  it('keeps similar suggestions in the same export vs local catalog', async () => {
+    let similarWhere: Record<string, unknown> | undefined;
+    const hasuraSystemService = {
+      executeQuery: jest.fn().mockImplementation(async (query: string, vars: any) => {
+        if (query.includes('GetItemTags')) {
+          return {
+            business_inventory_by_pk: {
+              item_id: 'item-1',
+              item: {
+                export_available: true,
+                item_tags: [{ tag_id: 'tag-1' }],
+              },
+            },
+          };
+        }
+        if (query.includes('GetSimilarInventoryItems')) {
+          similarWhere = vars.where;
+          return { business_inventory: [] };
+        }
+        if (query.includes('StripeCountries')) {
+          return { supported_payment_systems: [{ country: 'CA' }] };
+        }
+        return {};
+      }),
+    };
+    const service = new InventoryItemsService(
+      hasuraSystemService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+
+    await service.getSimilarInventoryItems('inv-1');
+
+    expect(JSON.stringify(similarWhere)).toContain(
+      '"export_available":{"_eq":true}'
+    );
   });
 });
 
