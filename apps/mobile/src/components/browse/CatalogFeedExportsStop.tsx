@@ -119,7 +119,7 @@ export const CatalogFeedExportsStop = memo(function CatalogFeedExportsStop({
               <View
                 style={{
                   height: CARD_IMAGE_HEIGHT,
-                  backgroundColor: colors.grey[200],
+                  backgroundColor: colors.pageBackground,
                   borderTopLeftRadius: borderRadius.md,
                   borderTopRightRadius: borderRadius.md,
                   overflow: 'hidden',
