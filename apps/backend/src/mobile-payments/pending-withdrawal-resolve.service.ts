@@ -61,8 +61,11 @@ export class PendingWithdrawalResolveService {
   ): Promise<PendingWithdrawalResolveResult> {
     const tx = await this.loadPendingGiveChange(id);
     await this.assertAccountOwnedByUser(tx.account_id, userId);
+    // Never cancel immediately: GiveChangePayoutService inserts the pending
+    // row (no provider id yet) before initiatePayment returns. A user who taps
+    // Resolve during that window would release the hold while MoMo still pays.
     const result = await this.resolveTransaction(tx, req, {
-      allowImmediateCancel: true,
+      allowImmediateCancel: false,
     });
     // Do not treat "still waiting on MoMo" as a successful resolve for users.
     if (result.outcome === 'still_pending') {
