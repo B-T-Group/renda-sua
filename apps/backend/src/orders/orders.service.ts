@@ -4566,13 +4566,13 @@ export class OrdersService {
       }
     `;
 
+    await this.requirePaidDepositAppliedForCashException(order);
     await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
       agentId: agent.id,
       at,
       notes: notes?.trim() || null,
     });
-    await this.applyPaidDepositForExternalSettlementSafe(order);
     await this.creditAgentReferralIfDelivered(order);
     void this.representativeCompensationService?.evaluateForOrderSafe(
       order.id,
@@ -7798,12 +7798,8 @@ export class OrdersService {
   }
 
   /**
-   * Move paid reservation deposit from withheld → available before settlement debit.
-   * Idempotent via deposit txn release reference.
-   */
-  /**
-   * Cash exception completes without remainder wallet credit. Still consume the
-   * held reservation deposit so it is not locked (or withdrawable) forever.
+   * Cash exception consumes the held reservation deposit before complete.
+   * Fail closed: do not mark complete if apply throws (partial release+debit).
    */
   private paidDepositApplyParams(order: Orders): {
     amount: number;
@@ -7842,18 +7838,25 @@ export class OrdersService {
     });
   }
 
-  private async applyPaidDepositForExternalSettlementSafe(
+  private async requirePaidDepositAppliedForCashException(
     order: Orders
   ): Promise<void> {
     try {
       await this.applyPaidDepositForExternalSettlement(order);
     } catch (error: any) {
-      this.logger.error(
-        `Failed to apply deposit after cash exception for ${order.id}: ${error?.message}`
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          message: error?.message || 'Failed to apply reservation deposit',
+          error: 'DEPOSIT_APPLY_FAILED',
+        },
+        HttpStatus.CONFLICT
       );
     }
   }
 
+  /** Idempotent via deposit txn release reference. */
   private async releasePaidDepositHoldIfNeeded(
     order: Orders,
     clientAccountId: string

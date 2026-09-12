@@ -70,7 +70,9 @@ describe('DepositLedgerService', () => {
 
   describe('applyHeldDepositAsPayment', () => {
     it('releases the hold then debits the deposit amount', async () => {
-      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.hasTransactionForReference
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
       accountsService.registerReleaseIfNotExists.mockResolvedValue({
         success: true,
       });
@@ -100,7 +102,9 @@ describe('DepositLedgerService', () => {
     });
 
     it('throws when the deposit debit fails after release', async () => {
-      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.hasTransactionForReference
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
       accountsService.registerReleaseIfNotExists.mockResolvedValue({
         success: true,
       });
@@ -117,6 +121,20 @@ describe('DepositLedgerService', () => {
           depositTransactionId: txnId,
         })
       ).rejects.toThrow(/apply payment failed/i);
+    });
+
+    it('skips release and debit when payment already exists for deposit ref', async () => {
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+
+      await service.applyHeldDepositAsPayment({
+        clientAccountId: 'acct-1',
+        amount: 2000,
+        orderNumber: '49520979',
+        depositTransactionId: txnId,
+      });
+
+      expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+      expect(accountsService.registerPaymentIfNotExists).not.toHaveBeenCalled();
     });
   });
 

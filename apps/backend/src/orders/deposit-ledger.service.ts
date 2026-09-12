@@ -144,6 +144,8 @@ export class DepositLedgerService {
     orderNumber: string;
     depositTransactionId: string;
   }): Promise<void> {
+    if (await this.hasAppliedDepositPayment(params)) return;
+
     await this.releaseDepositToAvailable({
       ...params,
       memo: `Deposit released for settlement of order ${params.orderNumber}`,
@@ -160,6 +162,17 @@ export class DepositLedgerService {
         `Deposit apply payment failed for ${params.orderNumber}: ${debit?.error ?? 'unknown'}`
       );
     }
+  }
+
+  private async hasAppliedDepositPayment(params: {
+    clientAccountId: string;
+    depositTransactionId: string;
+  }): Promise<boolean> {
+    return this.accountsService.hasTransactionForReference({
+      accountId: params.clientAccountId,
+      transactionType: 'payment',
+      referenceId: params.depositTransactionId,
+    });
   }
 
   /**

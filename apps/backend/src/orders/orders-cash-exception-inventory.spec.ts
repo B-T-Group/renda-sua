@@ -199,6 +199,29 @@ describe('OrdersService cash-exception inventory', () => {
       orderNumber: '49520979',
       depositTransactionId: 'dep-txn-1',
     });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('MarkCashException'),
+      expect.objectContaining({ orderId: 'order-123' })
+    );
+  });
+
+  it('fails cash exception without completing when deposit apply throws', async () => {
+    stubOrder({
+      deposit_status: 'paid',
+      deposit_amount: 2000,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+    });
+    (service as any).depositLedgerService = {
+      applyHeldDepositAsPayment: jest
+        .fn()
+        .mockRejectedValue(new Error('Deposit apply payment failed')),
+    };
+
+    await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+    });
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    expect(inventoryCalls()).toEqual([]);
   });
 
   it('does not apply a deposit when cash exception has no captured deposit', async () => {
