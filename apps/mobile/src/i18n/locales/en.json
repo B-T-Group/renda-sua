@@ -240,14 +240,8 @@
       "contact": "Contact"
     },
     "payment": {
-      "mobileMoney": "Mobile Money",
-      "cardPayment": "Card payment",
-      "basedOnCountry": "Based on your country",
-      "mustMatchMomo": "Must match your MoMo number",
-      "checkBalance": "Check your MoMo balance",
-      "checkBalanceDesc": "Top up your MoMo wallet and try again.",
-      "confirmPhone": "Confirm your phone number",
-      "confirmPhoneDesc": "Make sure {{phone}} matches the number linked to your MoMo wallet."
+      "encrypted": "Encrypted",
+      "secure": "Secure checkout"
     },
     "paymentMethod": "Payment method",
     "yourMoMoNumber": "Your MoMo number",
@@ -264,7 +258,8 @@
     "pickupNoFee": "Waived (store pickup)",
     "incompleteAddress": {
       "banner": "Your delivery address is incomplete. Add city, region, and postal code to continue with card payment.",
-      "cta": "Complete address"
+      "cta": "Complete address",
+      "rowWarning": "Incomplete — missing city, region, or postal code"
     },
     "tipsToResolve": "Tips to resolve this",
     "tryAgain": "Try again",
@@ -273,9 +268,6 @@
     "contactSupport": "Need help? Contact us on WhatsApp",
     "orderStillReserved": "Good news: your order is still reserved! We've saved your items while you complete your payment.",
     "businessOrder": "Order from seller",
-    "deliveryFee": "Delivery",
-    "summary": "Order summary",
-    "discount": "Discount",
     "placeOrders": "Place orders",
     "resolving": "Preparing your checkout…",
     "blocked": "Checkout unavailable",
@@ -289,20 +281,7 @@
     "invalidAddress": "The delivery address is incomplete or unsupported. Please choose a different address.",
     "stripeRetryUnsupported": "To retry the payment, please go to your order details and follow the payment instructions.",
     "merchantNotAcceptingOrders": "This merchant is currently completing account setup and is not yet accepting orders.",
-    "taxAtCheckout": "Sales tax is calculated at checkout",
-    "totalBeforeTax": "Total (before tax)",
-    "taxCalculatedAtCheckout": "Calculated at checkout",
-    "incompleteAddress": {
-      "banner": "Your delivery address is incomplete. Add city, region, and postal code to continue with card payment.",
-      "cta": "Complete address",
-      "rowWarning": "Incomplete — missing city, region, or postal code"
-    },
-    "pickupNoFee": "Waived (store pickup)",
-    "groupDeliveryUnavailable": "This seller cannot deliver right now.",
-    "payment": {
-      "encrypted": "Encrypted",
-      "secure": "Secure checkout"
-    }
+    "taxAtCheckout": "Sales tax is calculated at checkout"
   },
   "deposit": {
     "reservationTitle": "Reservation deposit",
@@ -1116,35 +1095,7 @@
     }
   },
   "nav": {
-    "home": "Home",
-    "orders": "Orders",
-    "earnings": "Earnings",
-    "profile": "Profile",
-    "documents": "Documents",
-    "terms": "Terms of Service",
-    "privacy": "Privacy Policy",
-    "faq": "FAQ",
-    "messages": "Messages",
-    "notifications": "Notifications",
-    "supportTickets": "My tickets",
-    "tabs": {
-      "dashboard": "Home",
-      "openOrders": "Available",
-      "orders": "Active",
-      "menu": "Menu"
-    },
-    "clientTabs": {
-      "browseItems": "Browse Items",
-      "rentals": "Rentals",
-      "foods": "Food",
-      "orders": "My orders"
-    },
-    "guestTabs": {
-      "browse": "Items",
-      "login": "Sign in",
-      "rentals": "Rentals",
-      "foods": "Food"
-    }
+    "manageRecipients": "Saved recipients"
   },
   "public": {
     "items": {
@@ -1358,41 +1309,7 @@
     }
   },
   "menuTab": {
-    "subtitle": "Shortcuts and settings",
-    "clientSubtitle": "Shortcuts and settings",
-    "switchPersonaSection": "Switch mode",
-    "checkUpdates": "Check for updates",
-    "updateCheck": "Updates",
-    "updateUpToDate": "You are on the latest version.",
-    "updateReloading": "Update downloaded. Restarting…",
-    "updateCheckFailed": "Could not check for updates.",
-    "updateUnavailableWeb": "Over-the-air updates are only available in the installed app (iOS or Android).",
-    "updateUnavailableDev": "Updates cannot be checked in development mode. Use a production build.",
-    "updateUnavailableDisabled": "Updates are not enabled for this build.",
-    "sectionNav": "Navigation",
-    "sectionAccount": "Account",
-    "quickAccess": "Quick access",
-    "earningsSubtitle": "Earnings and withdrawals",
-    "documentsSubtitle": "ID documents",
-    "profileSubtitle": "Account and addresses",
-    "messagesSubtitle": "Message center",
-    "notificationsSubtitle": "Alerts and settings",
-    "supportTicketsSubtitle": "Support and claims",
-    "preferencesSection": "Preferences",
-    "languageSubtitle": "App display language",
-    "walletSection": "Wallet",
-    "accountsTitle": "My wallet",
-    "accountsSubtitle": "Top up and withdraw",
-    "viewProfile": "View profile",
-    "sections": {
-      "account": "Account",
-      "payments": "Payments",
-      "settings": "Settings",
-      "operations": "Operations",
-      "catalog": "Catalog",
-      "support": "Support",
-      "legal": "Legal"
-    }
+    "recipientsSubtitle": "Manage diaspora order recipients"
   },
   "documents": {
     "title": "My documents",
@@ -6456,7 +6373,7 @@
     "clear": "Clear chat",
     "statusOnline": "Online · AI powered",
     "statusThinking": "Generating response",
-    "openA11y": "Ask Rendasua assistant",
+    "openA11y": "Open AI assistant",
     "suggestion": {
       "location": "Where are you located?",
       "payDelivery": "Do you support payment at delivery?",
@@ -6465,8 +6382,7 @@
     },
     "homeEntryTitle": "Ask the AI assistant",
     "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
-    "homeEntryCta": "Open assistant",
-    "openA11y": "Open AI assistant"
+    "homeEntryCta": "Open assistant"
   },
   "diaspora": {
     "someoneElseReceiving": "Someone else is receiving this order",
@@ -6511,10 +6427,29 @@
     "addRecipientAddress": "Add recipient address",
     "selectRecipientAddressToPay": "Add the recipient’s delivery address before paying"
   },
-  "nav": {
-    "manageRecipients": "Saved recipients"
-  },
-  "menuTab": {
-    "recipientsSubtitle": "Manage diaspora order recipients"
+  "dashboardComposing": {
+    "client": {
+      "headline": "Building your personalized dashboard",
+      "line1": "Finding shops near you",
+      "line2": "Preparing today's picks",
+      "line3": "Almost ready"
+    },
+    "agent": {
+      "headline": "Preparing your delivery board",
+      "line1": "Checking nearby orders",
+      "line2": "Getting your routes ready",
+      "line3": "Almost ready"
+    },
+    "business": {
+      "headline": "Setting up your store",
+      "line1": "Gathering today's orders",
+      "line2": "Arranging your dashboard",
+      "line3": "Almost ready"
+    },
+    "delegate": {
+      "headline": "Opening this location",
+      "line1": "Loading orders and inventory",
+      "line2": "Almost ready"
+    }
   }
 }

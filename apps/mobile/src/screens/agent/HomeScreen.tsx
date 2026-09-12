@@ -25,6 +25,8 @@ import { shadows } from '../../theme/shadows';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
 import { ListCardSkeleton } from '../../components/common/DashboardSkeleton';
 import { SkeletonBone } from '../../components/common/SkeletonBone';
+import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
+import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { AgentReferredBusinessesHero } from '../../components/agent/AgentReferredBusinessesHero';
 import { ReferralPayoutSnapshot } from '../../components/common/ReferralPayoutSnapshot';
 import { AgentWithdrawDialog } from '../../components/dialogs/AgentWithdrawDialog';
@@ -347,6 +349,18 @@ export default function HomeScreen() {
   const goToActiveOrders = useCallback(() => {
     (navigation as any).navigate('Orders');
   }, [navigation]);
+
+  const firstHomeLoading =
+    (showDelivery && openOrdersLoading && openOrders.length === 0) ||
+    (earningsLoading && !summary);
+  const { showComposing } = useDashboardComposingSession(
+    'agent',
+    firstHomeLoading
+  );
+
+  if (showComposing) {
+    return <DashboardComposingOverlay persona="agent" />;
+  }
 
   return (
     <SafeAreaView

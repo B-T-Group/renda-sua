@@ -2,9 +2,24 @@ import React, { lazy, Suspense } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import type { DashboardComposingPersona } from '../../hooks/useDashboardComposingSession';
+import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
+import DashboardComposingOverlay from '../common/DashboardComposingOverlay';
 import LoadingPage from '../common/LoadingPage';
 
 const HomePage = lazy(() => import('../pages/HomePage'));
+
+function resolveComposingPersona(
+  userType: string | null,
+  isDelegationContext: boolean
+): DashboardComposingPersona | null {
+  if (isDelegationContext) return 'delegate';
+  // Client home is /items — composing runs there on first catalog paint.
+  if (userType === 'agent' || userType === 'business') {
+    return userType;
+  }
+  return null;
+}
 
 /**
  * Root path `/`: anonymous visitors see the marketing homepage; authenticated
@@ -23,6 +38,19 @@ const SmartHome: React.FC = () => {
     delegations,
     personas,
   } = useUserProfileContext();
+
+  const composingPersona = resolveComposingPersona(
+    userType,
+    isDelegationContext
+  );
+  const { showComposing } = useDashboardComposingSession(
+    isAuthenticated ? composingPersona : null,
+    isAuthenticated && loading
+  );
+
+  if (showComposing && composingPersona) {
+    return <DashboardComposingOverlay persona={composingPersona} />;
+  }
 
   if (isAuthenticated && loading) {
     return (

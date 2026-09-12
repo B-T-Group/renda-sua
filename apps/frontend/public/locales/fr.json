@@ -7551,5 +7551,30 @@
     "homeEntryBody": "Obtenez des réponses rapides sur la livraison, les paiements, le retrait et votre compte.",
     "homeEntryCta": "Ouvrir l'assistant",
     "headerLabel": "Demandez à l'assistant Rendasua"
+  },
+  "dashboardComposing": {
+    "client": {
+      "headline": "Préparation de votre tableau de bord",
+      "line1": "Recherche des boutiques près de chez vous",
+      "line2": "Préparation des sélections du jour",
+      "line3": "Presque prêt"
+    },
+    "agent": {
+      "headline": "Préparation de votre tableau de livraisons",
+      "line1": "Vérification des commandes à proximité",
+      "line2": "Préparation de vos trajets",
+      "line3": "Presque prêt"
+    },
+    "business": {
+      "headline": "Mise en place de votre boutique",
+      "line1": "Collecte des commandes du jour",
+      "line2": "Organisation de votre tableau de bord",
+      "line3": "Presque prêt"
+    },
+    "delegate": {
+      "headline": "Ouverture de cet emplacement",
+      "line1": "Chargement des commandes et du stock",
+      "line2": "Presque prêt"
+    }
   }
 }

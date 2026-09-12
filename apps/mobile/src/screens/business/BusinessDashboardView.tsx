@@ -28,6 +28,8 @@ import { NotificationBellButton } from '../../components/common/NotificationBell
 import { AssistantIconButton } from '../../components/common/AssistantIconButton';
 import { TintedHeaderBlock } from '../../components/common/TintedHeaderBlock';
 import { DashboardSkeleton } from '../../components/common/DashboardSkeleton';
+import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
+import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
 import { ActiveOrdersCarousel } from '../../components/business/ActiveOrdersCarousel';
 import { ActiveOrderCtaHost } from '../../components/business/ActiveOrderCtaHost';
@@ -151,6 +153,11 @@ export function BusinessDashboardView({
     !error &&
     ((setupMode && !verificationStatus) || (!setupMode && initialLoading));
 
+  const { showComposing } = useDashboardComposingSession(
+    'business',
+    showSkeleton
+  );
+
   const showWalletSnapshot =
     !showSkeleton &&
     ((walletAvailable ?? 0) > 0 ||
@@ -167,6 +174,10 @@ export function BusinessDashboardView({
   const openAssistant = useCallback(() => {
     navigation.navigate('AssistantChat');
   }, [navigation]);
+
+  if (showComposing) {
+    return <DashboardComposingOverlay persona="business" />;
+  }
 
   return (
     <>

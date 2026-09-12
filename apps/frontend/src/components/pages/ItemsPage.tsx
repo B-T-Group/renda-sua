@@ -37,6 +37,8 @@ import { useNearbyAgents } from '../../hooks/useNearbyAgents';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
+import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
+import DashboardComposingOverlay from '../common/DashboardComposingOverlay';
 import {
   SITE_EVENT_INVENTORY_SORT_SELECT,
   useTrackSiteEvent,
@@ -565,6 +567,13 @@ const ItemsPage: React.FC = () => {
     profile?.client !== null &&
     profile?.client !== undefined;
 
+  const firstCatalogLoading =
+    isClientUser && loading && inventoryItems.length === 0 && !hasActiveFilters;
+  const { showComposing: showCatalogComposing } = useDashboardComposingSession(
+    isClientUser ? 'client' : null,
+    firstCatalogLoading
+  );
+
   const { trackView } = useTrackItemView(null);
   const trackAddToCart = useMetaAddToCartTrack();
   const { trackSiteEvent } = useTrackSiteEvent();
@@ -701,6 +710,10 @@ const ItemsPage: React.FC = () => {
         <Alert severity="error">{t('common.errorLoadingData')}</Alert>
       </Container>
     );
+  }
+
+  if (showCatalogComposing) {
+    return <DashboardComposingOverlay persona="client" />;
   }
 
   return (
