@@ -37,7 +37,7 @@ const MUTABLE_ITEM_FIELDS = [
   'max_order_quantity',
   'is_active',
   'pay_on_delivery_enabled',
-  'interest_only',
+  'export_available',
   'pay_at_pickup_enabled',
   'shipping_enabled',
   'shipping_price',
@@ -57,7 +57,7 @@ const GET_ITEM_BY_ID = `
       shipping_enabled
       shipping_price
       price
-      interest_only
+      export_available
     }
   }
 `;
@@ -155,6 +155,7 @@ export class ItemsService {
     businessId: string,
     input: ItemsInsertInput
   ): Promise<Record<string, unknown>> {
+    const marketCodes = this.extractExportMarketCodes(input);
     const itemData = {
       ...this.pickMutableFields(input),
       business_id: businessId,
@@ -165,6 +166,11 @@ export class ItemsService {
       moderation_status: 'draft',
     };
     this.assertShippingFields(itemData);
+    const isExport =
+      (itemData as Record<string, unknown>).export_available === true;
+    if (marketCodes !== undefined || isExport) {
+      await this.assertExportDestinations(isExport, marketCodes ?? [], true);
+    }
     const result = await this.mutateItem<{
       insert_items_one: {
         id: string;
@@ -181,6 +187,9 @@ export class ItemsService {
       );
     }
     await this.syncEmbeddings(row.id, row.name, row.description ?? '');
+    if (marketCodes !== undefined || isExport) {
+      await this.syncExportMarkets(row.id, marketCodes ?? [], isExport);
+    }
     return row as Record<string, unknown>;
   }
 
@@ -211,14 +220,27 @@ export class ItemsService {
       shipping_enabled?: boolean | null;
       shipping_price?: number | null;
       price?: number | null;
-      interest_only?: boolean | null;
+      export_available?: boolean | null;
     },
     updates: UpdateItemDto | Record<string, unknown>
   ): Promise<Record<string, unknown> | null> {
+    const marketCodes = this.extractExportMarketCodes(updates);
     const itemData = this.normalizeUpdatePayload(updates);
     this.assertShippingFields(itemData, item);
-    this.assertInterestOnlyClearRequiresPrice(itemData, item);
+    this.assertExportAvailableClearRequiresPrice(itemData, item);
     await this.assertActivationAllowed(item, itemData, itemId);
+    const nextExportAvailable =
+      itemData.export_available !== undefined
+        ? itemData.export_available === true
+        : item.export_available === true;
+    if (marketCodes !== undefined || itemData.export_available !== undefined) {
+      await this.assertExportDestinations(
+        nextExportAvailable,
+        marketCodes,
+        false,
+        itemId
+      );
+    }
     const result = await this.mutateItem<{
       update_items_by_pk: Record<string, unknown> | null;
     }>(UPDATE_ITEM, { id: itemId, itemData });
@@ -233,14 +255,199 @@ export class ItemsService {
       previousName: item.name,
       previousDescription: item.description ?? '',
     });
+    if (marketCodes !== undefined || itemData.export_available !== undefined) {
+      await this.syncExportMarkets(
+        itemId,
+        marketCodes ?? (nextExportAvailable ? undefined : []),
+        nextExportAvailable
+      );
+    }
     return updated;
   }
 
-  private assertInterestOnlyClearRequiresPrice(
+  private async assertExportDestinations(
+    exportAvailable: boolean,
+    countryCodes: string[] | undefined,
+    isCreate: boolean,
+    itemId?: string
+  ): Promise<void> {
+    if (!exportAvailable) return;
+    if (countryCodes !== undefined) {
+      if (countryCodes.length === 0) throw this.exportMarketsRequiredError();
+      await this.normalizeExportMarketCodes(countryCodes);
+      return;
+    }
+    if (isCreate || !itemId) throw this.exportMarketsRequiredError();
+    const count = await this.countExportMarkets(itemId);
+    if (count === 0) throw this.exportMarketsRequiredError();
+  }
+
+  private async countExportMarkets(itemId: string): Promise<number> {
+    const existing = await this.hasuraSystemService.executeQuery<{
+      item_export_markets_aggregate: { aggregate: { count: number } | null };
+    }>(
+      `query CountExportMarkets($itemId: uuid!) {
+        item_export_markets_aggregate(where: { item_id: { _eq: $itemId } }) {
+          aggregate { count }
+        }
+      }`,
+      { itemId }
+    );
+    return existing.item_export_markets_aggregate?.aggregate?.count ?? 0;
+  }
+
+  private exportMarketsRequiredError(): HttpException {
+    return new HttpException(
+      {
+        success: false,
+        error: 'EXPORT_MARKETS_REQUIRED',
+        message:
+          'Select at least one destination export market when export is available',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  /**
+   * Replace destination markets for an export item.
+   * When export_available is false, clears all markets.
+   * When codes is undefined and still export-available, leaves markets unchanged.
+   */
+  async syncExportMarkets(
+    itemId: string,
+    countryCodes: string[] | undefined,
+    exportAvailable: boolean
+  ): Promise<void> {
+    if (!exportAvailable) {
+      await this.hasuraSystemService.executeMutation(
+        `mutation ClearExportMarkets($itemId: uuid!) {
+          delete_item_export_markets(where: { item_id: { _eq: $itemId } }) {
+            affected_rows
+          }
+        }`,
+        { itemId }
+      );
+      return;
+    }
+    if (countryCodes === undefined) return;
+    const normalized = await this.normalizeExportMarketCodes(countryCodes);
+    if (normalized.length === 0) {
+      throw this.exportMarketsRequiredError();
+    }
+    await this.hasuraSystemService.executeMutation(
+      `mutation ReplaceExportMarkets(
+        $itemId: uuid!
+        $objects: [item_export_markets_insert_input!]!
+      ) {
+        delete_item_export_markets(where: { item_id: { _eq: $itemId } }) {
+          affected_rows
+        }
+        insert_item_export_markets(objects: $objects) {
+          affected_rows
+        }
+      }`,
+      {
+        itemId,
+        objects: normalized.map((country_code) => ({
+          item_id: itemId,
+          country_code,
+        })),
+      }
+    );
+  }
+
+  private extractExportMarketCodes(
+    input: Record<string, unknown> | UpdateItemDto
+  ): string[] | undefined {
+    const source = input as Record<string, unknown>;
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        source,
+        'export_market_country_codes'
+      )
+    ) {
+      return undefined;
+    }
+    const raw = source.export_market_country_codes;
+    if (!Array.isArray(raw)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'INVALID_EXPORT_MARKETS',
+          message: 'export_market_country_codes must be an array of country codes',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return raw.map((c) => String(c));
+  }
+
+  private async normalizeExportMarketCodes(
+    countryCodes: string[]
+  ): Promise<string[]> {
+    const unique = [
+      ...new Set(
+        countryCodes
+          .map((c) => c.trim().toUpperCase())
+          .filter((c) => /^[A-Z]{2}$/.test(c))
+      ),
+    ];
+    if (unique.length === 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'INVALID_EXPORT_MARKETS',
+          message:
+            'export_market_country_codes must include valid ISO-2 country codes',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const result = await this.hasuraSystemService.executeQuery<{
+      supported_country_states: Array<{
+        country_code: string;
+        service_status: string;
+      }>;
+    }>(
+      `query ActiveExportMarkets($codes: [String!]!) {
+        supported_country_states(
+          where: {
+            country_code: { _in: $codes }
+            service_status: { _eq: "active" }
+          }
+        ) {
+          country_code
+          service_status
+        }
+      }`,
+      { codes: unique }
+    );
+    const active = new Set(
+      (result.supported_country_states ?? []).map((r) =>
+        r.country_code.toUpperCase()
+      )
+    );
+    const invalid = unique.filter((c) => !active.has(c));
+    if (invalid.length > 0) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'INVALID_EXPORT_MARKETS',
+          message: `Export markets must be active supported countries: ${invalid.join(
+            ', '
+          )}`,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return unique;
+  }
+
+  private assertExportAvailableClearRequiresPrice(
     itemData: Record<string, unknown>,
-    existing: { price?: number | null; interest_only?: boolean | null }
+    existing: { price?: number | null; export_available?: boolean | null }
   ): void {
-    if (itemData.interest_only !== false) return;
+    if (itemData.export_available !== false) return;
     const nextPrice =
       itemData.price !== undefined ? itemData.price : existing.price;
     if (
@@ -255,7 +462,7 @@ export class ItemsService {
         success: false,
         error: 'PRICE_REQUIRED',
         message:
-          'A valid price is required before turning off interest-only mode',
+          'A valid price is required before turning off export availability',
       },
       HttpStatus.BAD_REQUEST
     );
@@ -291,7 +498,7 @@ export class ItemsService {
     shipping_enabled?: boolean | null;
     shipping_price?: number | null;
     price?: number | null;
-    interest_only?: boolean | null;
+    export_available?: boolean | null;
   }> {
     const result = await this.hasuraUserService.executeQuery<{
       items_by_pk: {
@@ -303,7 +510,7 @@ export class ItemsService {
         shipping_enabled?: boolean | null;
         shipping_price?: number | null;
         price?: number | null;
-        interest_only?: boolean | null;
+        export_available?: boolean | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
@@ -323,7 +530,7 @@ export class ItemsService {
     shipping_enabled?: boolean | null;
     shipping_price?: number | null;
     price?: number | null;
-    interest_only?: boolean | null;
+    export_available?: boolean | null;
   }> {
     const result = await this.hasuraSystemService.executeQuery<{
       items_by_pk: {
@@ -334,7 +541,7 @@ export class ItemsService {
         shipping_enabled?: boolean | null;
         shipping_price?: number | null;
         price?: number | null;
-        interest_only?: boolean | null;
+        export_available?: boolean | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;

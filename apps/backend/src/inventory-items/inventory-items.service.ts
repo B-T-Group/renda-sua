@@ -115,7 +115,8 @@ export interface InventoryItem {
     min_order_quantity: number;
     max_order_quantity: number;
     is_active: boolean;
-    interest_only?: boolean;
+    export_available?: boolean;
+    export_markets?: Array<{ country_code: string }>;
     created_at: string;
     updated_at: string;
     item_sub_category: {
@@ -242,6 +243,11 @@ export interface GetInventoryItemsQuery {
   collection?: string;
   /** Restrict the list to the cooked-food category (the Food tab). */
   food_only?: boolean;
+  /**
+   * When true, return only export_available items exported to the viewer market
+   * (no home-location country filter).
+   */
+  export_only?: boolean;
 }
 
 export type InventorySearchSuggestion =
@@ -332,7 +338,10 @@ const CATALOG_INVENTORY_LIST_GQL = `
         name
         description
         pay_on_delivery_enabled
-        interest_only
+        export_available
+        export_markets {
+          country_code
+        }
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
@@ -718,6 +727,15 @@ export class InventoryItemsService {
     requireCanAcceptOrders?: boolean;
     /** Owner preview: skip storefront visibility + geo scope. */
     ownerPreview?: boolean;
+    /** Only export items for the viewer market (no location-country filter). */
+    export_only?: boolean;
+    /**
+     * Include export_available listings without the default exclude filter
+     * (store pages, wishlist).
+     */
+    includeExportListings?: boolean;
+    /** Search mode: local non-export OR export markets matching viewer country. */
+    includeExportInSearch?: boolean;
   }): Promise<{ unsupported: true } | { where: Record<string, unknown> }> {
     const {
       is_active,
@@ -740,6 +758,9 @@ export class InventoryItemsService {
       collection,
       food_only,
       ownerPreview,
+      export_only = false,
+      includeExportListings = false,
+      includeExportInSearch = false,
     } = params;
 
     const whereConditions: any[] = [];
@@ -860,17 +881,86 @@ export class InventoryItemsService {
     const skipCallerGeo =
       ownerPreview || Boolean(business_location_id?.trim());
 
-    if (!skipCallerGeo && (country_code || state)) {
+    if (!skipCallerGeo && !export_only && (country_code || state)) {
       const ok = await this.validateLocationSupport(country_code, state);
       if (!ok) {
         return { unsupported: true };
       }
     }
 
-    let supportedLocationFilter: any = {};
-    if (skipCallerGeo) {
-      supportedLocationFilter = {};
-    } else if (country_code || state) {
+    if (export_only) {
+      if (!country_code?.trim()) {
+        return { unsupported: true };
+      }
+      const ok = await this.validateLocationSupport(country_code, undefined);
+      if (!ok) {
+        return { unsupported: true };
+      }
+      whereConditions.push({
+        item: {
+          export_available: { _eq: true },
+          export_markets: {
+            country_code: { _eq: country_code.trim().toUpperCase() },
+          },
+        },
+      });
+    } else if (includeExportInSearch && country_code?.trim()) {
+      const code = country_code.trim().toUpperCase();
+      const localAnd: Record<string, unknown>[] = [
+        { item: { export_available: { _eq: false } } },
+        {
+          business_location: {
+            address: { country: { _eq: code } },
+          },
+        },
+      ];
+      if (state) {
+        localAnd.push({
+          business_location: {
+            address: { state: { _eq: state } },
+          },
+        });
+      }
+      whereConditions.push({
+        _or: [
+          { _and: localAnd },
+          {
+            item: {
+              export_available: { _eq: true },
+              export_markets: { country_code: { _eq: code } },
+            },
+          },
+        ],
+      });
+    } else if (skipCallerGeo || includeExportListings) {
+      if (!skipCallerGeo) {
+        const geo = await this.buildSupportedLocationFilter(
+          country_code,
+          state
+        );
+        if (Object.keys(geo).length > 0) {
+          whereConditions.push(geo);
+        }
+      }
+    } else {
+      whereConditions.push({
+        item: { export_available: { _eq: false } },
+      });
+      const geo = await this.buildSupportedLocationFilter(country_code, state);
+      if (Object.keys(geo).length > 0) {
+        whereConditions.push(geo);
+      }
+    }
+
+    const where = whereConditions.length > 0 ? { _and: whereConditions } : {};
+    return { where };
+  }
+
+  private async buildSupportedLocationFilter(
+    country_code?: string,
+    state?: string
+  ): Promise<Record<string, unknown>> {
+    if (country_code || state) {
       const locationConditions: any[] = [];
       if (country_code) {
         locationConditions.push({
@@ -886,23 +976,17 @@ export class InventoryItemsService {
           },
         });
       }
-      supportedLocationFilter = { _and: locationConditions };
-    } else {
-      supportedLocationFilter = {
-        business_location: {
-          address: {
-            country: {
-              _in: await this.getSupportedCountryCodes(),
-            },
+      return { _and: locationConditions };
+    }
+    return {
+      business_location: {
+        address: {
+          country: {
+            _in: await this.getSupportedCountryCodes(),
           },
         },
-      };
-    }
-    if (Object.keys(supportedLocationFilter).length > 0) {
-      whereConditions.push(supportedLocationFilter);
-    }
-    const where = whereConditions.length > 0 ? { _and: whereConditions } : {};
-    return { where };
+      },
+    };
   }
 
   private async resolveTopLocationsOrigin(query: {
@@ -1522,6 +1606,7 @@ export class InventoryItemsService {
       collection,
       food_only = false,
       owner_preview: ownerPreviewRequested = false,
+      export_only = false,
     } = query;
     const limit = this.clampInventoryListLimit(query.limit);
 
@@ -1560,6 +1645,7 @@ export class InventoryItemsService {
       }
     }
 
+    const hasSearch = Boolean(search?.trim());
     const built = await this.buildInventoryCatalogWhere({
       is_active,
       include_unavailable: effectiveIncludeUnavailable,
@@ -1580,6 +1666,9 @@ export class InventoryItemsService {
       food_only,
       requireCanAcceptOrders: sort === 'deals' || sort === 'top_rated',
       ownerPreview,
+      export_only: export_only === true,
+      includeExportListings: Boolean(business_location_id?.trim()),
+      includeExportInSearch: hasSearch && export_only !== true,
     });
     if ('unsupported' in built) {
       return {
@@ -1691,10 +1780,14 @@ export class InventoryItemsService {
         totalPages,
       };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error('Failed to fetch inventory items:', error);
       throw new HttpException(
         'Failed to fetch inventory items',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
@@ -1979,6 +2072,7 @@ export class InventoryItemsService {
       business_location_id: query.business_location_id,
       country_code,
       state,
+      includeExportInSearch: true,
     });
     if ('unsupported' in built) return [];
 
@@ -2072,6 +2166,7 @@ export class InventoryItemsService {
       is_active: true,
       include_unavailable: true,
       searchItemIds: uniqueIds,
+      includeExportListings: true,
     });
     if ('unsupported' in built) return [];
 
@@ -2340,7 +2435,10 @@ export class InventoryItemsService {
             name
             description
             pay_on_delivery_enabled
-            interest_only
+            export_available
+            export_markets {
+              country_code
+            }
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -2575,7 +2673,8 @@ export class InventoryItemsService {
       this.logger.error(`Failed to fetch inventory item ${id}:`, error);
       throw new HttpException(
         'Failed to fetch inventory item',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
@@ -2668,6 +2767,7 @@ export class InventoryItemsService {
         business_inventory_by_pk(id: $id) {
           item_id
           item {
+            export_available
             item_tags {
               tag_id
             }
@@ -2684,6 +2784,7 @@ export class InventoryItemsService {
         return [];
       }
       const tagIds = row.item.item_tags.map((it: any) => it.tag_id);
+      const seedExport = row.item.export_available === true;
       const itemId = row.item_id;
 
       const similarQuery = `
@@ -2792,6 +2893,7 @@ export class InventoryItemsService {
           },
           {
             item: {
+              export_available: { _eq: seedExport },
               item_tags: {
                 tag_id: { _in: tagIds },
               },

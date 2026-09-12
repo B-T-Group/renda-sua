@@ -277,8 +277,29 @@ export default function UpdateInventoryDialog({
       return;
     }
 
+    const inventoryToUpdate = selectedInventory || currentInventoryRecord;
+    if (
+      item.export_available &&
+      !inventoryToUpdate?.id &&
+      Array.isArray(item.business_inventories) &&
+      item.business_inventories.some(
+        (inv: { business_location_id?: string; is_active?: boolean }) =>
+          inv.is_active !== false &&
+          inv.business_location_id &&
+          inv.business_location_id !== formData.business_location_id
+      )
+    ) {
+      enqueueSnackbar(
+        t(
+          'exportCatalog.singleLocationError',
+          'Export items can only be listed at one location. Use export markets instead.'
+        ),
+        { variant: 'error' }
+      );
+      return;
+    }
+
     try {
-      const inventoryToUpdate = selectedInventory || currentInventoryRecord;
       let inventoryId: string | null = inventoryToUpdate?.id ?? null;
       const wasUpdate = !!inventoryId;
 
@@ -373,6 +394,14 @@ export default function UpdateInventoryDialog({
       </DialogTitle>
       <DialogContent>
         <Stack spacing={3} sx={{ mt: 1 }}>
+          {item.export_available ? (
+            <Alert severity="info">
+              {t(
+                'exportCatalog.singleLocationHelp',
+                'Export items are listed at one location only. Use export markets on the item to show this product in other countries.'
+              )}
+            </Alert>
+          ) : null}
           {/* Item Information */}
           <Stack spacing={1}>
             <Typography variant="h6" gutterBottom>

@@ -169,6 +169,7 @@ export type ClientRootStackParamList = {
   Profile: undefined;
   UserLikes: undefined;
   ClientProductInterest: undefined;
+  ProductInterestSuccess: undefined;
   NotificationPreferences: undefined;
   SavedAccounts: { mode?: 'continue' | 'switch' };
   AccountManagement: undefined;

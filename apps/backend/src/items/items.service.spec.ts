@@ -17,6 +17,10 @@ describe('ItemsService privileged field filtering', () => {
     };
     const hasuraSystem = {
       executeMutation: jest.fn(),
+      executeQuery: jest.fn().mockResolvedValue({
+        supported_country_states: [{ country_code: 'CM', service_status: 'active' }],
+        item_export_markets_aggregate: { aggregate: { count: 1 } },
+      }),
     };
     const embeddings = {
       syncItemEmbeddings: jest.fn().mockResolvedValue(undefined),
@@ -183,7 +187,7 @@ describe('ItemsService privileged field filtering', () => {
     expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
   });
 
-  it('persists interest_only on create', async () => {
+  it('persists export_available on create', async () => {
     const { service, hasuraSystem } = createService();
     hasuraSystem.executeMutation.mockResolvedValue({
       insert_items_one: {
@@ -196,13 +200,14 @@ describe('ItemsService privileged field filtering', () => {
 
     await service.createItem('business-1', {
       name: 'Quote part',
-      interest_only: true,
+      export_available: true,
+      export_market_country_codes: ['CM'],
       price: 0,
     });
 
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
       name: 'Quote part',
-      interest_only: true,
+      export_available: true,
       price: 0,
       business_id: 'business-1',
       is_active: false,
@@ -210,15 +215,31 @@ describe('ItemsService privileged field filtering', () => {
     });
   });
 
+  it('rejects export_available create without destination markets', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await expect(
+      service.createItem('business-1', {
+        name: 'Quote part',
+        export_available: true,
+        price: 0,
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'EXPORT_MARKETS_REQUIRED' },
+    });
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
   it('rejects turning off interest-only without a shopper price', async () => {
     const { service, hasuraSystem } = createService({
       ...ownedItem,
-      interest_only: true,
+      export_available: true,
       price: 0,
     });
 
     await expect(
-      service.updateItem('business-1', 'item-1', { interest_only: false })
+      service.updateItem('business-1', 'item-1', { export_available: false })
     ).rejects.toMatchObject({
       status: 400,
       response: { error: 'PRICE_REQUIRED' },
@@ -229,13 +250,13 @@ describe('ItemsService privileged field filtering', () => {
   it('rejects turning off interest-only when the new price is not positive', async () => {
     const { service, hasuraSystem } = createService({
       ...ownedItem,
-      interest_only: true,
+      export_available: true,
       price: 1500,
     });
 
     await expect(
       service.updateItem('business-1', 'item-1', {
-        interest_only: false,
+        export_available: false,
         price: 0,
       })
     ).rejects.toMatchObject({
@@ -248,37 +269,37 @@ describe('ItemsService privileged field filtering', () => {
   it('allows turning off interest-only when a positive price is already stored', async () => {
     const { service, hasuraSystem } = createService({
       ...ownedItem,
-      interest_only: true,
+      export_available: true,
       price: 1500,
     });
     hasuraSystem.executeMutation.mockResolvedValue({
-      update_items_by_pk: { id: 'item-1', interest_only: false },
+      update_items_by_pk: { id: 'item-1', export_available: false },
     });
 
-    await service.updateItem('business-1', 'item-1', { interest_only: false });
+    await service.updateItem('business-1', 'item-1', { export_available: false });
 
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
-      interest_only: false,
+      export_available: false,
     });
   });
 
   it('allows turning off interest-only when the update supplies a price', async () => {
     const { service, hasuraSystem } = createService({
       ...ownedItem,
-      interest_only: true,
+      export_available: true,
       price: null,
     });
     hasuraSystem.executeMutation.mockResolvedValue({
-      update_items_by_pk: { id: 'item-1', interest_only: false },
+      update_items_by_pk: { id: 'item-1', export_available: false },
     });
 
     await service.updateItem('business-1', 'item-1', {
-      interest_only: false,
+      export_available: false,
       price: 2500,
     });
 
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
-      interest_only: false,
+      export_available: false,
       price: 2500,
     });
   });

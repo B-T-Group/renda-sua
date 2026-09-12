@@ -324,3 +324,25 @@ describe('InventoryItemsService.clampInventoryListLimit', () => {
     expect(clamp(200)).toBe(50);
   });
 });
+
+describe('InventoryItemsService.getInventoryItemById', () => {
+  it('rethrows unexpected errors as 500 and keeps the original cause', async () => {
+    const cause = new Error('graphql validation failed');
+    const service = new InventoryItemsService(
+      { executeQuery: jest.fn().mockRejectedValue(cause) } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+
+    await expect(
+      service.getInventoryItemById('11111111-1111-1111-1111-111111111111')
+    ).rejects.toMatchObject({
+      message: 'Failed to fetch inventory item',
+      cause,
+    });
+  });
+});

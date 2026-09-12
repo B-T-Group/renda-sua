@@ -35,6 +35,11 @@ export interface BrowseCatalogListHeaderProps {
   itemsLength: number;
   onListRefresh: () => void;
   foodOnly?: boolean;
+  /** Show Exports quick-pick (destination markets with export catalog). */
+  showExportsChip?: boolean;
+  exportOnly?: boolean;
+  onToggleExportOnly?: () => void;
+  onClearExportOnly?: () => void;
 }
 
 export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
@@ -60,6 +65,10 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
   itemsLength,
   onListRefresh,
   foodOnly = false,
+  showExportsChip = false,
+  exportOnly = false,
+  onToggleExportOnly,
+  onClearExportOnly,
 }: BrowseCatalogListHeaderProps) {
   const { t } = useTranslation();
   const { colors, typography, spacing } = theme;
@@ -127,12 +136,26 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
         >
           {sortSummaryLabel}
         </Chip>
+        {!foodOnly && showExportsChip && onToggleExportOnly ? (
+          <Chip
+            icon="airplane"
+            mode={exportOnly ? 'flat' : 'outlined'}
+            selected={exportOnly}
+            onPress={onToggleExportOnly}
+            style={styles.sortChip}
+            elevated
+          >
+            {t('exportCatalog.chip', 'Exports')}
+          </Chip>
+        ) : null}
       </View>
 
       <CatalogBrowseActiveFilterChips
         values={catalogFilters}
         onClearField={onClearFilterField}
         onClearAll={onClearAllFilters}
+        exportOnly={exportOnly}
+        onClearExportOnly={onClearExportOnly}
       />
 
       <Text

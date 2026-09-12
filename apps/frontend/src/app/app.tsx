@@ -294,6 +294,7 @@ function App() {
             <Route path="/store/:businessId" element={<LazyPages.StorePage />} />
             <Route path="/collections" element={<LazyPages.CollectionsIndexPage />} />
             <Route path="/collections/:slug" element={<LazyPages.CollectionLandingPage />} />
+            <Route path="/exports" element={<LazyPages.ExportsPage />} />
             <Route path="/deals" element={<LazyPages.DealsPage />} />
             <Route path="/assistant" element={<LazyPages.AssistantPage />} />
             <Route path="/support" element={<LazyPages.SupportPage />} />

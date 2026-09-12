@@ -1,7 +1,10 @@
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   IconButton,
   Stack,
@@ -11,6 +14,8 @@ import {
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
+
+const COLLAPSED_VISIBLE = 2;
 
 export interface PendingWithdrawalItem {
   id: string;
@@ -45,6 +50,7 @@ export const PendingWithdrawalsPanel: React.FC<PendingWithdrawalsPanelProps> = (
   const { t } = useTranslation();
   const apiClient = useApiClient();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const handleResolve = useCallback(
     async (id: string) => {
@@ -82,6 +88,11 @@ export const PendingWithdrawalsPanel: React.FC<PendingWithdrawalsPanelProps> = (
 
   if (!items.length) return null;
 
+  const canCollapse = items.length > COLLAPSED_VISIBLE;
+  const visibleItems =
+    canCollapse && !expanded ? items.slice(0, COLLAPSED_VISIBLE) : items;
+  const hiddenCount = items.length - COLLAPSED_VISIBLE;
+
   return (
     <Alert
       severity="warning"
@@ -90,6 +101,7 @@ export const PendingWithdrawalsPanel: React.FC<PendingWithdrawalsPanelProps> = (
     >
       <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
         {t('accounts.pendingWithdrawals.title', 'Pending withdrawals')}
+        {items.length > 1 ? ` (${items.length})` : ''}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
         {t(
@@ -98,7 +110,7 @@ export const PendingWithdrawalsPanel: React.FC<PendingWithdrawalsPanelProps> = (
         )}
       </Typography>
       <Stack spacing={1}>
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const busy = busyId === item.id;
           return (
             <Box
@@ -155,6 +167,21 @@ export const PendingWithdrawalsPanel: React.FC<PendingWithdrawalsPanelProps> = (
           );
         })}
       </Stack>
+      {canCollapse ? (
+        <Button
+          size="small"
+          color="primary"
+          onClick={() => setExpanded((prev) => !prev)}
+          endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          sx={{ mt: 1, textTransform: 'none', fontWeight: 700 }}
+        >
+          {expanded
+            ? t('accounts.pendingWithdrawals.showLess', 'Show less')
+            : t('accounts.pendingWithdrawals.showMore', 'Show {{count}} more', {
+                count: hiddenCount,
+              })}
+        </Button>
+      ) : null}
     </Alert>
   );
 };

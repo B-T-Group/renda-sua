@@ -87,4 +87,16 @@ export interface ResolvePendingWithdrawalResponse {
   outcome?: PendingWithdrawalOutcome;
   message?: string;
   error?: string;
+  /** Provider transaction reference when known. */
+  transaction_id?: string | null;
+  /** Live provider status when checked; otherwise resulting local status. */
+  status?: {
+    transactionId: string;
+    status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous';
+    amount: number;
+    currency: string;
+    reference: string;
+    message?: string;
+    provider?: string;
+  };
 }

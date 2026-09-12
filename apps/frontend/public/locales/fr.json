@@ -139,7 +139,9 @@
       "resolve": "Résoudre le retrait en attente",
       "resolveDone": "Statut du retrait mis à jour.",
       "resolveFailed": "Impossible de résoudre ce retrait. Réessayez.",
-      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau."
+      "withdrawDisabled": "Résolvez les retraits en attente avant d’en démarrer un nouveau.",
+      "showMore": "Afficher {{count}} de plus",
+      "showLess": "Afficher moins"
     }
   },
   "addresses": {
@@ -7474,7 +7476,22 @@
     "viewItem": "Voir l’article",
     "clientLabel": "Client",
     "unknownItem": "Article",
-    "merchantToggle": "Prix non applicable (intérêt uniquement)"
+    "merchantToggle": "Disponible à l’export"
+  },
+  "exportCatalog": {
+    "merchantToggle": "Disponible à l’export",
+    "marketsHelp": "Choisissez les marchés où les acheteurs peuvent découvrir cet article et manifester leur intérêt. Listez l’article à un seul emplacement d’origine.",
+    "singleLocationHelp": "Les articles d’export ne sont listés qu’à un seul emplacement. Utilisez les marchés d’export sur l’article pour le montrer dans d’autres pays.",
+    "singleLocationError": "Les articles d’export ne peuvent être listés qu’à un seul emplacement. Utilisez les marchés d’export à la place.",
+    "sectionTitle": "Disponible à l’export",
+    "sectionSubtitle": "Produits listés depuis le Canada — demandez un intérêt pour importer",
+    "seeAll": "Voir tous les exports",
+    "chip": "Exports",
+    "badge": "Export",
+    "pageTitle": "Disponible à l’export",
+    "pageSubtitle": "Parcourez les produits disponibles à l’export vers ce marché. Manifestez votre intérêt et le vendeur vous contactera.",
+    "empty": "Aucun article d’export pour ce marché pour le moment.",
+    "illustrationLabel": "Produits disponibles à l’export vers votre marché"
   },
   "incomingOrder": {
     "awaitingAction": "En attente d’action",

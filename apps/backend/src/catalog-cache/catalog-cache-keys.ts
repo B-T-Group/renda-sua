@@ -90,6 +90,7 @@ export interface InventoryItemsCacheKeyInput {
   businessLocationId?: string;
   collection?: string;
   foodOnly?: boolean;
+  exportOnly?: boolean;
 }
 
 function inventoryItemsFilterKeyParts(
@@ -112,6 +113,7 @@ function inventoryItemsFilterKeyParts(
     input.businessLocationId || '',
     input.collection || '',
     input.foodOnly ? 'food' : 'all',
+    input.exportOnly ? 'export' : 'local',
   ];
 }
 

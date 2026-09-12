@@ -123,7 +123,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const { submitInterest } = useProductInterest();
   const { trackSiteEvent } = useTrackSiteEvent();
   const { getListingQuantityInCart } = useCart();
-  const interestOnly = inventory.item?.interest_only === true;
+  const exportAvailable = inventory.item?.export_available === true;
   const inCartQuantity = getListingQuantityInCart(inventory.id);
   const inCart = inCartQuantity > 0;
   const inCartLabel =
@@ -374,6 +374,20 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           >
             {displayImageUrl ? (
               <>
+                {exportAvailable ? (
+                  <Chip
+                    label={t('exportCatalog.badge', 'Export')}
+                    size="small"
+                    color="secondary"
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      left: 8,
+                      zIndex: 1,
+                      fontWeight: 700,
+                    }}
+                  />
+                ) : null}
                 {hasMultipleImages && (
                   <Chip
                     label={t(
@@ -495,7 +509,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 pointerEvents: 'none',
               }}
             >
-              {interestOnly ? (
+              {exportAvailable ? (
                 <Typography variant="body2" color="primary" fontWeight="bold">
                   {t('productInterest.priceNotApplicable', 'Price on request')}
                 </Typography>
@@ -1057,10 +1071,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
             </Box>
           )}
 
-          {/* Distance Information */}
-          {(distanceLoading ||
-            distanceError ||
-            (estimatedDistance && estimatedDuration)) && (
+          {/* Distance Information — hidden for export catalog items */}
+          {!exportAvailable &&
+            (distanceLoading ||
+              distanceError ||
+              (estimatedDistance && estimatedDuration)) && (
             <Box sx={{ mb: 1 }}>
               {distanceLoading && (
                 <Typography
@@ -1119,7 +1134,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           >
             {viewDetailsLabel}
           </Button>
-          {interestOnly ? (
+          {exportAvailable ? (
             <Button
               variant="contained"
               size="small"

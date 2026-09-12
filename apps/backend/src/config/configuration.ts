@@ -677,7 +677,7 @@ export default (): Configuration => {
         process.env.PUBLIC_WEB_APP_URL ||
         'https://rendasua.com'
       ).replace(/\/$/, ''),
-      enabledCountries: (process.env.STRIPE_ENABLED_COUNTRIES || 'CA,US')
+      enabledCountries: (process.env.STRIPE_ENABLED_COUNTRIES || 'CA,US,PH')
         .split(',')
         .map((c) => c.trim().toUpperCase())
         .filter((c) => c.length === 2),

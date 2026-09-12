@@ -288,6 +288,9 @@ export const CollectionsIndexPage = lazy(() =>
 export const CollectionLandingPage = lazy(() =>
   import('../components/pages/CollectionLandingPage')
 );
+export const ExportsPage = lazy(() =>
+  import('../components/pages/ExportsPage')
+);
 export const ForBusinessPage = lazy(() =>
   import('../components/pages/ForBusinessPage')
 );
