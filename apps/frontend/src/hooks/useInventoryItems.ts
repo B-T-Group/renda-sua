@@ -203,7 +203,8 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
   const { isAuthenticated } = useAuth0();
   const catalogGeo = useCatalogGeoParams();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start true so catalog pages can show skeletons on first paint (avoids empty-state flash).
+  const [loading, setLoading] = useState(() => query.enabled !== false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<{

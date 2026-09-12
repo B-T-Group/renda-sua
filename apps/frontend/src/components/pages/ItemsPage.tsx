@@ -76,17 +76,26 @@ import { useMarket } from '../../hooks/useMarket';
 
 // ItemCardSkeleton component for better loading UX
 const ItemCardSkeleton: React.FC = () => (
-  <Card sx={{ height: '100%' }}>
-    <Skeleton variant="rectangular" height={240} />
+  <Card
+    elevation={0}
+    sx={{
+      height: '100%',
+      border: 1,
+      borderColor: 'divider',
+      borderRadius: 2,
+      overflow: 'hidden',
+    }}
+  >
+    <Skeleton variant="rectangular" height={240} animation="wave" />
     <CardContent sx={{ p: 2 }}>
-      <Skeleton variant="text" width="80%" height={24} sx={{ mb: 1 }} />
-      <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
-      <Skeleton variant="text" width="40%" height={16} sx={{ mb: 2 }} />
+      <Skeleton variant="text" width="80%" height={24} sx={{ mb: 1 }} animation="wave" />
+      <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} animation="wave" />
+      <Skeleton variant="text" width="40%" height={16} sx={{ mb: 2 }} animation="wave" />
       <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-        <Skeleton variant="rounded" width={60} height={24} />
-        <Skeleton variant="rounded" width={80} height={24} />
+        <Skeleton variant="rounded" width={60} height={24} animation="wave" />
+        <Skeleton variant="rounded" width={80} height={24} animation="wave" />
       </Box>
-      <Skeleton variant="rectangular" width="100%" height={36} />
+      <Skeleton variant="rounded" width="100%" height={36} animation="wave" />
     </CardContent>
   </Card>
 );
@@ -104,6 +113,9 @@ const ITEMS_CATALOG_GRID_SX = {
   width: '100%',
   minWidth: 0,
 } as const;
+
+/** Placeholder cards shown while the first catalog page loads. */
+const ITEMS_CATALOG_SKELETON_COUNT = 8;
 
 /** Server page size for the main catalog grid (reduces payload and DOM). */
 const ITEMS_CATALOG_PAGE_SIZE = 25;
@@ -1211,9 +1223,15 @@ const ItemsPage: React.FC = () => {
 
         {/* Items Grid */}
         {loading ? (
-          <Box sx={ITEMS_CATALOG_GRID_SX}>
-            {Array.from(new Array(ITEMS_CATALOG_PAGE_SIZE)).map((_, index) => (
-              <ItemCardSkeleton key={index} />
+          <Box
+            sx={ITEMS_CATALOG_GRID_SX}
+            aria-busy="true"
+            aria-label={t('public.items.results.loading', 'Loading items…')}
+          >
+            {Array.from({ length: ITEMS_CATALOG_SKELETON_COUNT }).map((_, index) => (
+              <Box key={index} sx={{ minWidth: 0 }}>
+                <ItemCardSkeleton />
+              </Box>
             ))}
           </Box>
         ) : inventoryItems.length === 0 ? (
