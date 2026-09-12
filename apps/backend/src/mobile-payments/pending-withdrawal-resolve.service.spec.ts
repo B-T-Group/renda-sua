@@ -299,4 +299,129 @@ describe('PendingWithdrawalResolveService', () => {
       accountsService.registerWithdrawalIfNotExists
     ).not.toHaveBeenCalled();
   });
+
+  it('rejects missing, non-withdrawal, and unlinked rows', async () => {
+    databaseService.getTransactionById.mockResolvedValue(null);
+    await expect(service.resolveForUser('tx-1', 'user-1')).rejects.toBeInstanceOf(
+      HttpException
+    );
+
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_type: 'PAYMENT' })
+    );
+    await expect(service.resolveForUser('tx-1', 'user-1')).rejects.toMatchObject({
+      status: 400,
+    });
+
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ account_id: undefined })
+    );
+    await expect(service.resolveForUser('tx-1', 'user-1')).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+
+  it('replays MyPVit callbacks and treats created/paid as pending/success', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_id: 'prov-1', provider: 'mypvit' })
+    );
+    mobilePaymentsService.resolveAdminIntegrationProvider.mockReturnValue(
+      'mypvit'
+    );
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'prov-1',
+      status: 'paid',
+      amount: 1000,
+      currency: 'XAF',
+      reference: 'P123',
+    });
+
+    const paid = await service.resolveForUser('tx-1', 'user-1');
+    expect(paid.outcome).toBe('paid');
+    expect(callbackProcessor.processMypvitCallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        merchantReferenceId: 'P123',
+        status: 'SUCCESS',
+        customerID: '690000000',
+      }),
+      undefined
+    );
+
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'prov-1',
+      status: 'created',
+      amount: 1000,
+      currency: 'XAF',
+      reference: 'P123',
+    });
+    const pending = await service.resolveForUser('tx-1', 'user-1');
+    expect(pending.outcome).toBe('still_pending');
+  });
+
+  it('leaves uncertain or unreachable provider status unresolved', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_id: 'prov-1' })
+    );
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'prov-1',
+      status: 'ambiguous',
+      amount: 1000,
+      currency: 'XAF',
+      reference: 'P123',
+    });
+    const ambiguous = await service.resolveForUser('tx-1', 'user-1');
+    expect(ambiguous.outcome).toBe('still_pending');
+    expect(callbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
+
+    mobilePaymentsService.checkTransactionStatus.mockRejectedValue(
+      new Error('provider timeout')
+    );
+    await expect(service.resolveForUser('tx-1', 'user-1')).rejects.toMatchObject({
+      status: 502,
+    });
+  });
+
+  it('cancels null-id withdrawals after the system grace window', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({
+        transaction_id: undefined,
+        created_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+      })
+    );
+
+    const result = await service.resolveAsSystem('tx-1', {
+      allowImmediateCancel: false,
+      minAgeHours: 24,
+    });
+
+    expect(result.outcome).toBe('cancelled');
+    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
+  });
+
+  it('releases and marks failed when MTN reports provider failure', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_id: 'prov-1', provider: 'mtn' })
+    );
+    mobilePaymentsService.resolveAdminIntegrationProvider.mockReturnValue('mtn');
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'prov-1',
+      status: 'failed',
+      amount: 1000,
+      currency: 'XAF',
+      reference: 'P123',
+      message: 'Rejected',
+    });
+
+    const result = await service.resolveForUser('tx-1', 'user-1');
+
+    expect(result.outcome).toBe('failed');
+    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      'tx-1',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'PROVIDER_FAILED',
+      })
+    );
+  });
 });

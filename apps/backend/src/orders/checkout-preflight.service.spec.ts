@@ -1094,6 +1094,9 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.deposit_required).toBe(true);
       expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF (>= 5000)
       expect(result.groups[0]?.amount_due).toBe(9500);
+      expect(result.deposit_required).toBe(true);
+      expect(result.deposit_amount).toBe(500);
+      expect(result.amount_due).toBe(9500);
     });
 
     it('calculates deposit for MoMo + XAF + pay_at_pickup', async () => {

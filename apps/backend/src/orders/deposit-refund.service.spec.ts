@@ -113,4 +113,59 @@ describe('DepositRefundService', () => {
       depositTransactionId: txnId,
     });
   });
+
+  it('rejects refund when deposit was already refunded or forfeited', async () => {
+    mockPaidOrder({ deposit_status: 'refunded' });
+    const refunded = await service.refundDeposit(orderId);
+    expect(refunded.errorCode).toBe('ALREADY_REFUNDED');
+
+    mockPaidOrder({ deposit_status: 'forfeited' });
+    const forfeited = await service.refundDeposit(orderId);
+    expect(forfeited.errorCode).toBe('DEPOSIT_FORFEITED');
+    expect(depositLedgerService.releaseDepositToAvailable).not.toHaveBeenCalled();
+  });
+
+  it('rejects refund when the deposit transaction or account is missing', async () => {
+    mockPaidOrder({ deposit_mobile_payment_transaction_id: null });
+    const noTx = await service.refundDeposit(orderId);
+    expect(noTx.errorCode).toBe('NO_DEPOSIT_TX');
+
+    mockPaidOrder();
+    hasuraSystemService.getAccount.mockResolvedValue(null as any);
+    const noAccount = await service.refundDeposit(orderId);
+    expect(noAccount.errorCode).toBe('ACCOUNT_NOT_FOUND');
+  });
+
+  it('marks refund failed when ledger release throws', async () => {
+    mockPaidOrder();
+    depositLedgerService.releaseDepositToAvailable.mockRejectedValue(
+      new Error('hold missing')
+    );
+
+    const result = await service.refundDeposit(orderId);
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('REFUND_ERROR');
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('MarkDepositRefundFailed'),
+      { orderId }
+    );
+  });
+
+  it('does not forfeit a deposit that is unpaid or already forfeited', async () => {
+    mockPaidOrder({ deposit_status: 'pending' });
+    const unpaid = await service.forfeitDeposit(
+      orderId,
+      'customer_cancel_after_lock'
+    );
+    expect(unpaid.success).toBe(false);
+
+    mockPaidOrder({ deposit_forfeited_at: '2026-09-10T00:00:00.000Z' });
+    const already = await service.forfeitDeposit(
+      orderId,
+      'customer_cancel_after_lock'
+    );
+    expect(already.success).toBe(false);
+    expect(depositLedgerService.forfeitDepositToHq).not.toHaveBeenCalled();
+  });
 });

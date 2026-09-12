@@ -430,6 +430,7 @@ describe('OrdersService', () => {
                 ? Math.max(0, (o.total_amount || 0) - (o.deposit_amount || 0))
                 : o?.total_amount || 0
             ),
+            isAfterRefundLockPoint: jest.fn().mockReturnValue(false),
           },
         },
         {
@@ -2541,6 +2542,91 @@ describe('OrdersService', () => {
       await expect(
         service.finalizeDepositAfterCallback('49520979', depositTxnId)
       ).rejects.toThrow('hold failed');
+    });
+  });
+
+  describe('handleDepositOnCancellation', () => {
+    const paidOrder = {
+      deposit_status: 'paid',
+      deposit_amount: 500,
+      fulfillment_method: 'delivery',
+    };
+
+    beforeEach(() => {
+      (service as any).depositRefundService.refundDeposit.mockClear();
+      (service as any).depositRefundService.forfeitDeposit.mockClear();
+      (service as any).depositCalculationService.isAfterRefundLockPoint =
+        jest.fn();
+    });
+
+    it('refunds after lock for business and system cancels', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(true);
+
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'out_for_delivery',
+        'business'
+      );
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'out_for_delivery',
+        'system'
+      );
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenNthCalledWith(1, 'order-1', { allowAfterLock: true });
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenNthCalledWith(2, 'order-1', { allowAfterLock: true });
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).not.toHaveBeenCalled();
+    });
+
+    it('forfeits after lock and refunds before lock for client cancel', async () => {
+      const lock =
+        (service as any).depositCalculationService.isAfterRefundLockPoint;
+      lock.mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'out_for_delivery',
+        'client'
+      );
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'confirmed',
+        'client'
+      );
+
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).toHaveBeenCalledWith('order-1', 'customer_cancel_after_lock');
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-1');
+    });
+
+    it('skips unpaid deposits', async () => {
+      await (service as any).handleDepositOnCancellation(
+        { deposit_status: 'pending', deposit_amount: 500 },
+        'order-1',
+        'confirmed',
+        'client'
+      );
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).not.toHaveBeenCalled();
     });
   });
 });
