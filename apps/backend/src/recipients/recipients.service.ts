@@ -23,6 +23,7 @@ interface UserRecipient {
   name: string;
   phone: string;
   notify_whatsapp: boolean;
+  address_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,7 @@ const RECIPIENT_FIELDS = `
   name
   phone
   notify_whatsapp
+  address_id
   created_at
   updated_at
 `;
@@ -67,18 +69,7 @@ export class RecipientsService {
     ctx: RequestContext,
     country?: string
   ): Promise<RecipientResponseDto[]> {
-    const userId = this.hasuraUserService.getUserId(ctx);
-    if (!userId) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-
+    const userId = this.requireUserId(ctx);
     const normalizedCountry = country
       ? normalizeCountryCode(country)
       : null;
@@ -112,17 +103,7 @@ export class RecipientsService {
     ctx: RequestContext,
     id: string
   ): Promise<RecipientResponseDto> {
-    const userId = this.hasuraUserService.getUserId(ctx);
-    if (!userId) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
+    const userId = this.requireUserId(ctx);
 
     const query = `
       query GetRecipient($id: uuid!, $userId: uuid!) {
@@ -132,14 +113,7 @@ export class RecipientsService {
             user_id: { _eq: $userId }
           }
         ) {
-          id
-          user_id
-          country
-          name
-          phone
-          notify_whatsapp
-          created_at
-          updated_at
+          ${RECIPIENT_FIELDS}
         }
       }
     `;
@@ -150,14 +124,7 @@ export class RecipientsService {
       }>(query, { id, userId }, ctx);
 
       if (response.user_recipients.length === 0) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'NOT_FOUND',
-            message: 'Recipient not found',
-          },
-          HttpStatus.NOT_FOUND
-        );
+        throw this.notFound();
       }
 
       return response.user_recipients[0];
@@ -180,44 +147,15 @@ export class RecipientsService {
     ctx: RequestContext,
     dto: CreateRecipientDto
   ): Promise<RecipientResponseDto> {
-    const userId = this.hasuraUserService.getUserId(ctx);
-    if (!userId) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-
-    const normalizedCountry = normalizeCountryCode(dto.country);
-    if (!normalizedCountry) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'INVALID_COUNTRY',
-          message: 'Invalid country code',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
-    const normalizedPhone = normalizeRecipientPhone(
-      dto.phone,
+    const userId = this.requireUserId(ctx);
+    const normalizedCountry = this.requireCountry(dto.country);
+    const normalizedPhone = this.requirePhone(dto.phone, normalizedCountry);
+    const addressId = await this.resolveAddressId(
+      ctx,
+      userId,
+      dto.address_id,
       normalizedCountry
     );
-    if (!normalizedPhone) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'INVALID_PHONE',
-          message: `Phone number is not valid for country ${normalizedCountry}`,
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
 
     const mutation = `
       mutation CreateRecipient(
@@ -226,6 +164,7 @@ export class RecipientsService {
         $name: String!
         $phone: String!
         $notifyWhatsapp: Boolean!
+        $addressId: uuid
       ) {
         insert_user_recipients_one(
           object: {
@@ -234,16 +173,10 @@ export class RecipientsService {
             name: $name
             phone: $phone
             notify_whatsapp: $notifyWhatsapp
+            address_id: $addressId
           }
         ) {
-          id
-          user_id
-          country
-          name
-          phone
-          notify_whatsapp
-          created_at
-          updated_at
+          ${RECIPIENT_FIELDS}
         }
       }
     `;
@@ -259,6 +192,7 @@ export class RecipientsService {
           name: dto.name.trim(),
           phone: normalizedPhone,
           notifyWhatsapp: dto.notify_whatsapp ?? false,
+          addressId,
         },
         ctx
       );
@@ -269,79 +203,14 @@ export class RecipientsService {
     }
   }
 
-  private isUniqueRecipientConflict(error: any): boolean {
-    const message = String(error?.message ?? '');
-    return (
-      message.includes('Uniqueness violation') ||
-      message.includes('user_recipients_user_country_phone_key')
-    );
-  }
-
-  private toCreateRecipientHttpException(error: any): HttpException {
-    if (this.isUniqueRecipientConflict(error)) {
-      return new HttpException(
-        {
-          success: false,
-          error: 'RECIPIENT_EXISTS',
-          message:
-            'A recipient with this phone already exists for this country',
-        },
-        HttpStatus.CONFLICT
-      );
-    }
-    this.logger.error('Failed to create recipient', error);
-    return new HttpException(
-      {
-        success: false,
-        message: 'Failed to create recipient',
-      },
-      HttpStatus.INTERNAL_SERVER_ERROR
-    );
-  }
-
   async updateRecipient(
     ctx: RequestContext,
     id: string,
     dto: UpdateRecipientDto
   ): Promise<RecipientResponseDto> {
-    const userId = this.hasuraUserService.getUserId(ctx);
-    if (!userId) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-
+    const userId = this.requireUserId(ctx);
     const existing = await this.getRecipient(ctx, id);
-
-    const updates: Record<string, any> = {};
-    if (dto.name !== undefined) {
-      updates.name = dto.name.trim();
-    }
-    if (dto.phone !== undefined) {
-      const normalizedPhone = normalizeRecipientPhone(
-        dto.phone,
-        existing.country
-      );
-      if (!normalizedPhone) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'INVALID_PHONE',
-            message: `Phone number is not valid for country ${existing.country}`,
-          },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      updates.phone = normalizedPhone;
-    }
-    if (dto.notify_whatsapp !== undefined) {
-      updates.notify_whatsapp = dto.notify_whatsapp;
-    }
+    const updates = await this.buildUpdatePayload(ctx, userId, existing, dto);
 
     if (Object.keys(updates).length === 0) {
       return existing;
@@ -361,14 +230,7 @@ export class RecipientsService {
           _set: $updates
         ) {
           returning {
-            id
-            user_id
-            country
-            name
-            phone
-            notify_whatsapp
-            created_at
-            updated_at
+            ${RECIPIENT_FIELDS}
           }
         }
       }
@@ -377,30 +239,18 @@ export class RecipientsService {
     try {
       const response = await this.hasuraUserService.executeMutation<{
         update_user_recipients: { returning: UserRecipient[] };
-      }>(
-        mutation,
-        {
-          id,
-          userId,
-          updates,
-        },
-        ctx
-      );
+      }>(mutation, { id, userId, updates }, ctx);
 
       if (response.update_user_recipients.returning.length === 0) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'NOT_FOUND',
-            message: 'Recipient not found',
-          },
-          HttpStatus.NOT_FOUND
-        );
+        throw this.notFound();
       }
 
       return response.update_user_recipients.returning[0];
     } catch (error: any) {
       if (error.status === HttpStatus.NOT_FOUND) {
+        throw error;
+      }
+      if (error.status === HttpStatus.BAD_REQUEST) {
         throw error;
       }
       this.logger.error('Failed to update recipient', error);
@@ -418,18 +268,7 @@ export class RecipientsService {
     ctx: RequestContext,
     id: string
   ): Promise<{ success: boolean }> {
-    const userId = this.hasuraUserService.getUserId(ctx);
-    if (!userId) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-
+    const userId = this.requireUserId(ctx);
     await this.getRecipient(ctx, id);
 
     const mutation = `
@@ -451,14 +290,7 @@ export class RecipientsService {
       }>(mutation, { id, userId }, ctx);
 
       if (response.delete_user_recipients.affected_rows === 0) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'NOT_FOUND',
-            message: 'Recipient not found',
-          },
-          HttpStatus.NOT_FOUND
-        );
+        throw this.notFound();
       }
 
       return { success: true };
@@ -475,5 +307,212 @@ export class RecipientsService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private requireUserId(ctx: RequestContext): string {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    if (!userId) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    return userId;
+  }
+
+  private requireCountry(country: string): string {
+    const normalized = normalizeCountryCode(country);
+    if (!normalized) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'INVALID_COUNTRY',
+          message: 'Invalid country code',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return normalized;
+  }
+
+  private requirePhone(phone: string, country: string): string {
+    const normalized = normalizeRecipientPhone(phone, country);
+    if (!normalized) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'INVALID_PHONE',
+          message: `Phone number is not valid for country ${country}`,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return normalized;
+  }
+
+  private notFound(): HttpException {
+    return new HttpException(
+      {
+        success: false,
+        error: 'NOT_FOUND',
+        message: 'Recipient not found',
+      },
+      HttpStatus.NOT_FOUND
+    );
+  }
+
+  private async buildUpdatePayload(
+    ctx: RequestContext,
+    userId: string,
+    existing: RecipientResponseDto,
+    dto: UpdateRecipientDto
+  ): Promise<Record<string, unknown>> {
+    const updates: Record<string, unknown> = {};
+    if (dto.name !== undefined) {
+      updates.name = dto.name.trim();
+    }
+    if (dto.phone !== undefined) {
+      updates.phone = this.requirePhone(dto.phone, existing.country);
+    }
+    if (dto.notify_whatsapp !== undefined) {
+      updates.notify_whatsapp = dto.notify_whatsapp;
+    }
+    if (dto.address_id !== undefined) {
+      updates.address_id = await this.resolveAddressId(
+        ctx,
+        userId,
+        dto.address_id,
+        existing.country
+      );
+    }
+    return updates;
+  }
+
+  /**
+   * Returns null when clearing / omitted; otherwise validates ownership + country.
+   */
+  private async resolveAddressId(
+    ctx: RequestContext,
+    userId: string,
+    addressId: string | null | undefined,
+    recipientCountry: string
+  ): Promise<string | null> {
+    if (addressId === undefined || addressId === null) {
+      return null;
+    }
+    await this.assertOwnedAddressMatchesCountry(
+      ctx,
+      userId,
+      addressId,
+      recipientCountry
+    );
+    return addressId;
+  }
+
+  private async assertOwnedAddressMatchesCountry(
+    ctx: RequestContext,
+    userId: string,
+    addressId: string,
+    recipientCountry: string
+  ): Promise<void> {
+    const query = `
+      query ValidateRecipientAddress($addressId: uuid!, $userId: uuid!) {
+        client_addresses(
+          where: {
+            address_id: { _eq: $addressId }
+            client: { user_id: { _eq: $userId } }
+            address: { status: { _eq: active } }
+          }
+          limit: 1
+        ) {
+          id
+          address {
+            id
+            country
+          }
+        }
+      }
+    `;
+
+    let links: {
+      id: string;
+      address: { id: string; country: string | null } | null;
+    }[] = [];
+    try {
+      const response = await this.hasuraUserService.executeQuery<{
+        client_addresses: typeof links;
+      }>(query, { addressId, userId }, ctx);
+      links = response.client_addresses ?? [];
+    } catch (error: any) {
+      this.logger.error('Failed to validate recipient address', error);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to validate address',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    if (links.length === 0 || !links[0].address) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'INVALID_ADDRESS',
+          message: 'Address not found or not owned by this user',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const addressCountry = normalizeCountryCode(links[0].address.country ?? '');
+    if (!addressCountry || addressCountry !== recipientCountry) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'ADDRESS_COUNTRY_MISMATCH',
+          message:
+            'Address country must match the recipient fulfillment country',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private isUniqueRecipientConflict(error: any): boolean {
+    const message = String(error?.message ?? '');
+    return (
+      message.includes('Uniqueness violation') ||
+      message.includes('user_recipients_user_country_phone_key')
+    );
+  }
+
+  private toCreateRecipientHttpException(error: any): HttpException {
+    if (error?.status === HttpStatus.BAD_REQUEST) {
+      return error;
+    }
+    if (this.isUniqueRecipientConflict(error)) {
+      return new HttpException(
+        {
+          success: false,
+          error: 'RECIPIENT_EXISTS',
+          message:
+            'A recipient with this phone already exists for this country',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    this.logger.error('Failed to create recipient', error);
+    return new HttpException(
+      {
+        success: false,
+        message: 'Failed to create recipient',
+      },
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
 }

@@ -49,15 +49,14 @@ const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
 
   const handleSelectRecipient = (saved: SavedRecipient | null) => {
     if (saved) {
-      // User selected an existing saved recipient
       onChange({
         name: saved.name,
         phone: saved.phone,
         notifyWhatsapp: saved.notify_whatsapp,
         recipient_id: saved.id,
+        address_id: saved.address_id,
       });
     } else {
-      // User wants to add a new recipient
       setFormDialogOpen(true);
     }
   };
@@ -65,12 +64,12 @@ const RecipientDetailsSection: React.FC<RecipientDetailsSectionProps> = ({
   const handleSaveNewRecipient = async (data: CreateRecipientDto) => {
     try {
       const saved = await createMutation.mutateAsync(data);
-      // After creating, select the newly saved recipient
       onChange({
         name: saved.name,
         phone: saved.phone,
         notifyWhatsapp: saved.notify_whatsapp,
         recipient_id: saved.id,
+        address_id: saved.address_id ?? null,
       });
       setFormDialogOpen(false);
     } catch (error) {

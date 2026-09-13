@@ -8,6 +8,7 @@ export interface SavedRecipient {
   name: string;
   phone: string;
   notify_whatsapp: boolean;
+  address_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -17,12 +18,14 @@ export interface CreateRecipientDto {
   name: string;
   phone: string;
   notify_whatsapp?: boolean;
+  address_id?: string | null;
 }
 
 export interface UpdateRecipientDto {
   name?: string;
   phone?: string;
   notify_whatsapp?: boolean;
+  address_id?: string | null;
 }
 
 type RecipientListener = () => void;
@@ -33,12 +36,24 @@ function emitRecipientChanges() {
 }
 
 export function parseRecipientList(payload: unknown): SavedRecipient[] {
-  if (Array.isArray(payload)) return payload as SavedRecipient[];
-  if (payload && typeof payload === 'object' && 'recipients' in payload) {
-    const nested = (payload as { recipients?: unknown }).recipients;
-    if (Array.isArray(nested)) return nested as SavedRecipient[];
-  }
-  return [];
+  const rows = (() => {
+    if (Array.isArray(payload)) return payload;
+    if (payload && typeof payload === 'object' && 'recipients' in payload) {
+      const nested = (payload as { recipients?: unknown }).recipients;
+      if (Array.isArray(nested)) return nested;
+    }
+    return [];
+  })();
+  return rows.map((row) => {
+    const r = row as SavedRecipient;
+    return {
+      ...r,
+      address_id:
+        typeof r.address_id === 'string' && r.address_id.trim()
+          ? r.address_id
+          : null,
+    };
+  });
 }
 
 export function useRecipients(country?: string) {

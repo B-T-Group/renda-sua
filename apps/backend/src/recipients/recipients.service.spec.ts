@@ -38,6 +38,7 @@ describe('RecipientsService', () => {
     name: 'John Doe',
     phone: '+241077123456',
     notify_whatsapp: true,
+    address_id: null as string | null,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
   };
@@ -158,8 +159,78 @@ describe('RecipientsService', () => {
           name: 'Jane Smith',
           phone: expect.stringMatching(/^\+241\d+$/),
           notifyWhatsapp: false,
+          addressId: null,
         })
       );
+    });
+
+    it('links address_id when the address is owned and in the same country', async () => {
+      const addressId = 'addr-789';
+      executeQuery.mockResolvedValue({
+        client_addresses: [
+          { id: 'link-1', address: { id: addressId, country: 'GA' } },
+        ],
+      });
+      executeMutation.mockResolvedValue({
+        insert_user_recipients_one: { ...mockRecipient, address_id: addressId },
+      });
+
+      const result = await service.createRecipient(mockCtx, {
+        ...createDto,
+        address_id: addressId,
+      });
+
+      expect(result.address_id).toBe(addressId);
+      expect(executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('ValidateRecipientAddress'),
+        { addressId, userId },
+        mockCtx
+      );
+      expect(executeMutation.mock.calls[0][1]).toEqual(
+        expect.objectContaining({ addressId })
+      );
+    });
+
+    it('rejects address_id that is not owned by the user', async () => {
+      executeQuery.mockResolvedValue({ client_addresses: [] });
+
+      try {
+        await service.createRecipient(mockCtx, {
+          ...createDto,
+          address_id: 'addr-missing',
+        });
+        fail('expected HttpException');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+        expect(error.getResponse()).toEqual(
+          expect.objectContaining({ error: 'INVALID_ADDRESS' })
+        );
+      }
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects address_id when country does not match recipient', async () => {
+      executeQuery.mockResolvedValue({
+        client_addresses: [
+          { id: 'link-1', address: { id: 'addr-789', country: 'CM' } },
+        ],
+      });
+
+      try {
+        await service.createRecipient(mockCtx, {
+          ...createDto,
+          address_id: 'addr-789',
+        });
+        fail('expected HttpException');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+        expect(error.getResponse()).toEqual(
+          expect.objectContaining({ error: 'ADDRESS_COUNTRY_MISMATCH' })
+        );
+      }
+      expect(executeMutation).not.toHaveBeenCalled();
     });
 
     it('throws bad request for invalid country code', async () => {
@@ -280,6 +351,44 @@ describe('RecipientsService', () => {
       await expect(
         service.updateRecipient(mockCtx, recipientId, updateDto)
       ).rejects.toThrow(HttpException);
+    });
+
+    it('clears address_id when null is provided', async () => {
+      executeMutation.mockResolvedValue({
+        update_user_recipients: {
+          returning: [{ ...mockRecipient, address_id: null }],
+        },
+      });
+
+      await service.updateRecipient(mockCtx, recipientId, {
+        address_id: null,
+      });
+
+      expect(executeMutation.mock.calls[0][1].updates).toEqual({
+        address_id: null,
+      });
+    });
+
+    it('sets address_id after ownership validation', async () => {
+      const addressId = 'addr-789';
+      executeQuery
+        .mockResolvedValueOnce({ user_recipients: [mockRecipient] })
+        .mockResolvedValueOnce({
+          client_addresses: [
+            { id: 'link-1', address: { id: addressId, country: 'GA' } },
+          ],
+        });
+      executeMutation.mockResolvedValue({
+        update_user_recipients: {
+          returning: [{ ...mockRecipient, address_id: addressId }],
+        },
+      });
+
+      const result = await service.updateRecipient(mockCtx, recipientId, {
+        address_id: addressId,
+      });
+
+      expect(result.address_id).toBe(addressId);
     });
   });
 
@@ -406,7 +515,17 @@ describe('RecipientsService', () => {
         const roleBlock = insertOnly.split(`- role: ${role}`)[1];
         const columns = roleBlock.split('columns:')[1].split('- role:')[0];
         expect(columns).toContain('- user_id');
+        expect(columns).toContain('- address_id');
       }
+    });
+
+    it('Hasura metadata exposes address relationship and address_id on select', () => {
+      const yaml = loadUserRecipientsMetadata();
+      expect(yaml).toContain('name: address');
+      expect(yaml).toContain('foreign_key_constraint_on: address_id');
+      const selectSection = yaml.split('select_permissions:')[1];
+      const selectOnly = selectSection.split('update_permissions:')[0];
+      expect(selectOnly).toContain('- address_id');
     });
 
     it('should NOT accept fake RequestContext with empty authToken', async () => {

@@ -6387,6 +6387,7 @@
   "diaspora": {
     "someoneElseReceiving": "Someone else is receiving this order",
     "someoneElseHelp": "Turn this on to choose who will receive the order. We will send them delivery updates.",
+    "checkoutHeader": "Diaspora checkout",
     "selectRecipientTitle": "Who is receiving this order?",
     "selectRecipientPrompt": "Tap a recipient to continue",
     "selectRecipientToPay": "Select a recipient before paying",
@@ -6422,10 +6423,16 @@
     "editRecipient": "Edit recipient",
     "whatsAppEnabled": "WhatsApp enabled",
     "recipientAddressTitle": "Recipient delivery address",
+    "recipientAddressTitleFor": "Delivery address for {{name}}",
     "recipientAddressHelp": "Enter the address where the recipient will receive this order. We share it with the delivery agent.",
     "recipientAddressEmpty": "Add the recipient’s delivery address in the destination country.",
     "addRecipientAddress": "Add recipient address",
-    "selectRecipientAddressToPay": "Add the recipient’s delivery address before paying"
+    "selectRecipientAddressToPay": "Add the recipient’s delivery address before paying",
+    "linkAddressFailed": "Could not save this address for the recipient.",
+    "linkedAddress": "Default address",
+    "linkedAddressMissing": "Linked address unavailable",
+    "clearLinkedAddress": "Clear linked address",
+    "clearAddressFailed": "Could not clear the linked address."
   },
   "dashboardComposing": {
     "client": {

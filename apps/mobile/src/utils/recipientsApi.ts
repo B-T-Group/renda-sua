@@ -24,20 +24,36 @@ function isSavedRecipient(value: unknown): value is SavedRecipient {
   );
 }
 
+function normalizeSavedRecipient(value: SavedRecipient): SavedRecipient {
+  return {
+    ...value,
+    address_id:
+      typeof value.address_id === 'string' && value.address_id.trim()
+        ? value.address_id
+        : null,
+    notify_whatsapp: Boolean(value.notify_whatsapp),
+  };
+}
+
 /**
  * Backend GET /recipients returns a raw array. Older clients expected
  * `{ success, recipients }`. Accept both so an empty list is not an error.
  */
 export function normalizeRecipientsList(raw: unknown): RecipientsListResponse {
   if (Array.isArray(raw)) {
-    return { success: true, recipients: raw.filter(isSavedRecipient) };
+    return {
+      success: true,
+      recipients: raw.filter(isSavedRecipient).map(normalizeSavedRecipient),
+    };
   }
   if (raw && typeof raw === 'object') {
     const obj = raw as RecipientsListResponse;
     if (Array.isArray(obj.recipients)) {
       return {
         success: obj.success !== false,
-        recipients: obj.recipients.filter(isSavedRecipient),
+        recipients: obj.recipients
+          .filter(isSavedRecipient)
+          .map(normalizeSavedRecipient),
         error: obj.error,
       };
     }
@@ -54,12 +70,15 @@ export function normalizeRecipientsList(raw: unknown): RecipientsListResponse {
  */
 export function normalizeRecipientResponse(raw: unknown): RecipientResponse {
   if (isSavedRecipient(raw)) {
-    return { success: true, recipient: raw };
+    return { success: true, recipient: normalizeSavedRecipient(raw) };
   }
   if (raw && typeof raw === 'object') {
     const obj = raw as RecipientResponse;
     if (obj.recipient && isSavedRecipient(obj.recipient)) {
-      return { success: true, recipient: obj.recipient };
+      return {
+        success: true,
+        recipient: normalizeSavedRecipient(obj.recipient),
+      };
     }
     if (obj.success === false) {
       return {

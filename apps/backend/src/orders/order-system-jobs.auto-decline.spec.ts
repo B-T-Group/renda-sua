@@ -15,6 +15,16 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
     order_items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
   };
 
+  const momoDepositOrder = {
+    ...pendingOrder,
+    payment_status: 'pending',
+    payment_source: 'mobile_money',
+    payment_timing: 'pay_at_delivery',
+    deposit_amount: 1500,
+    deposit_status: 'paid',
+    deposit_mobile_payment_transaction_id: 'dep-tx-1',
+  };
+
   function buildService(overrides?: {
     claimAffectedRows?: number;
     order?: typeof pendingOrder | null;
@@ -61,6 +71,10 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
       sendOrderAutoDeclinedPush: jest.fn().mockResolvedValue(undefined),
     } as any;
     const configService = { get: jest.fn() } as any;
+    const orderCleanupService = {} as any;
+    const depositRefundService = {
+      refundDeposit: jest.fn().mockResolvedValue({ success: true }),
+    } as any;
 
     const service = new OrderSystemJobsService(
       hasuraSystemService,
@@ -69,7 +83,9 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
       orderQueueService,
       waitAndExecuteScheduleService,
       notificationsService,
-      configService
+      configService,
+      orderCleanupService,
+      depositRefundService
     );
 
     return {
@@ -79,6 +95,7 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
       stripeRefundService,
       orderQueueService,
       notificationsService,
+      depositRefundService,
     };
   }
 
@@ -140,6 +157,29 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
       )
     ).toBe(true);
     expect(orderQueueService.sendOrderCancelledMessage).not.toHaveBeenCalled();
+  });
+
+  it('refunds a paid MoMo deposit when the merchant never accepts', async () => {
+    const { service, depositRefundService, stripeCaptureService } = buildService({
+      order: momoDepositOrder,
+    });
+
+    const declined = await service.autoDeclineUnacceptedOrderAsSystem(orderId);
+
+    expect(declined).toBe(true);
+    expect(stripeCaptureService.cancelOrderPaymentIntent).not.toHaveBeenCalled();
+    expect(depositRefundService.refundDeposit).toHaveBeenCalledWith(orderId, {
+      allowAfterLock: true,
+    });
+  });
+
+  it('does not refund when the pending order has no captured deposit', async () => {
+    const { service, depositRefundService } = buildService();
+
+    const declined = await service.autoDeclineUnacceptedOrderAsSystem(orderId);
+
+    expect(declined).toBe(true);
+    expect(depositRefundService.refundDeposit).not.toHaveBeenCalled();
   });
 
   it('skips when order is no longer pending', async () => {

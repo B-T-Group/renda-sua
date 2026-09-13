@@ -78,11 +78,13 @@ describe('InventoryItemsService wishlist listings', () => {
       is_active: true,
       include_unavailable: true,
       searchItemIds: ['item-1'],
+      includeExportListings: true,
     });
     const built = await buildWhere.mock.results[0].value;
     const whereJson = JSON.stringify(built.where);
     expect(whereJson).not.toContain('"computed_available_quantity":{"_gt":0}');
     expect(whereJson).not.toContain('"country":{"_eq":"CA"}');
+    expect(whereJson).not.toContain('"export_available":{"_eq":false}');
     expect(whereJson).toContain('"id":{"_in":["item-1"]}');
   });
 

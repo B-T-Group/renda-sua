@@ -65,6 +65,9 @@ describe('OrderSystemJobsService stale authorized cancel', () => {
     } as any;
     const configService = { get: jest.fn() } as any;
     const orderCleanupService = {} as any;
+    const depositRefundService = {
+      refundDeposit: jest.fn().mockResolvedValue({ success: true }),
+    } as any;
 
     const service = new OrderSystemJobsService(
       hasuraSystemService,
@@ -74,7 +77,8 @@ describe('OrderSystemJobsService stale authorized cancel', () => {
       waitAndExecuteScheduleService,
       notificationsService,
       configService,
-      orderCleanupService
+      orderCleanupService,
+      depositRefundService
     );
 
     return {

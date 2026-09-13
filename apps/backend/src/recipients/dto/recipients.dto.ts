@@ -5,6 +5,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateRecipientDto {
@@ -35,6 +37,17 @@ export class CreateRecipientDto {
   @IsOptional()
   @IsBoolean()
   notify_whatsapp?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Default delivery address for this recipient (must be owned by the user and match country)',
+    format: 'uuid',
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsUUID()
+  address_id?: string | null;
 }
 
 export class UpdateRecipientDto {
@@ -58,6 +71,17 @@ export class UpdateRecipientDto {
   @IsOptional()
   @IsBoolean()
   notify_whatsapp?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Default delivery address for this recipient (null clears the link)',
+    format: 'uuid',
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsUUID()
+  address_id?: string | null;
 }
 
 export class RecipientResponseDto {
@@ -78,6 +102,9 @@ export class RecipientResponseDto {
 
   @ApiProperty()
   notify_whatsapp!: boolean;
+
+  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  address_id!: string | null;
 
   @ApiProperty()
   created_at!: string;

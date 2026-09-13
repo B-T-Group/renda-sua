@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { CountryCode } from 'libphonenumber-js';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRecipients } from '../../hooks/useRecipients';
+import { useAddresses } from '../../hooks/useAddresses';
 import { agentApi } from '../../services/agentApi';
 import { AppModal } from '../../components/common/AppModal';
 import { RecipientDetailsBlock } from '../../components/checkout/RecipientDetailsBlock';
@@ -30,6 +31,7 @@ export default function ManageRecipientsScreen() {
   const { recipients, loading, error, refetch } = useRecipients({
     country: countryFilter || undefined,
   });
+  const { addresses } = useAddresses();
 
   const [editingRecipient, setEditingRecipient] = useState<SavedRecipient | null>(null);
   const [formCountry, setFormCountry] = useState<RecipientCountryCode>('GA');
@@ -125,6 +127,44 @@ export default function ManageRecipientsScreen() {
     [refetch]
   );
 
+  const handleClearAddress = useCallback(
+    async (id: string) => {
+      setDeleting(id);
+      setSaveError(null);
+      try {
+        const res = await agentApi.recipients.update(id, { address_id: null });
+        if (!res.success) {
+          setSaveError(
+            res.error || t('diaspora.clearAddressFailed', 'Could not clear the linked address.')
+          );
+          return;
+        }
+        await refetch();
+      } catch (e: unknown) {
+        setSaveError(
+          e instanceof Error
+            ? e.message
+            : t('diaspora.clearAddressFailed', 'Could not clear the linked address.')
+        );
+      } finally {
+        setDeleting(null);
+      }
+    },
+    [refetch, t]
+  );
+
+  const addressLabel = useCallback(
+    (addressId: string | null) => {
+      if (!addressId) return null;
+      const addr = addresses.find((a) => a.id === addressId);
+      if (!addr) {
+        return t('diaspora.linkedAddressMissing', 'Linked address unavailable');
+      }
+      return [addr.address_line_1, addr.city, addr.country].filter(Boolean).join(', ');
+    },
+    [addresses, t]
+  );
+
   const renderRecipient = useCallback(
     ({ item }: { item: SavedRecipient }) => (
       <View
@@ -152,8 +192,25 @@ export default function ManageRecipientsScreen() {
               ? ` • ${t('diaspora.whatsAppEnabled', 'WhatsApp enabled')}`
               : ''}
           </Text>
+          {item.address_id ? (
+            <Text
+              variant="bodySmall"
+              style={{ color: colors.text.secondary, marginTop: spacing.xs }}
+            >
+              {t('diaspora.linkedAddress', 'Default address')}: {addressLabel(item.address_id)}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.actions}>
+          {item.address_id ? (
+            <IconButton
+              icon="map-marker-off"
+              size={20}
+              onPress={() => void handleClearAddress(item.id)}
+              disabled={!!deleting}
+              accessibilityLabel={t('diaspora.clearLinkedAddress', 'Clear linked address')}
+            />
+          ) : null}
           <IconButton
             icon="pencil"
             size={20}
@@ -170,7 +227,18 @@ export default function ManageRecipientsScreen() {
         </View>
       </View>
     ),
-    [colors, borderRadius, spacing, shadows, deleting, handleEdit, handleDelete, t]
+    [
+      colors,
+      borderRadius,
+      spacing,
+      shadows,
+      deleting,
+      handleEdit,
+      handleDelete,
+      handleClearAddress,
+      addressLabel,
+      t,
+    ]
   );
 
   return (
@@ -188,6 +256,12 @@ export default function ManageRecipientsScreen() {
             { value: 'CM', label: t('diaspora.countryCM', 'Cameroon') },
           ]}
         />
+
+        {saveError && !modalVisible ? (
+          <Text variant="bodySmall" style={{ color: colors.error.main }}>
+            {saveError}
+          </Text>
+        ) : null}
 
         {loading && !recipients.length ? (
           <View style={styles.centered}>

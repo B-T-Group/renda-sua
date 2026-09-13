@@ -73,6 +73,7 @@ import { useCompleteAddressPrompt } from '../../hooks/useCompleteAddressPrompt';
 import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
 import type { CartLine } from '../../types/cart';
 import type { RecipientContact } from '../../types/clientOrder';
+import type { SavedRecipient } from '../../types/recipient';
 import {
   addressesInCountry,
   buildRecipientPayload,
@@ -156,35 +157,23 @@ export default observer(function CartCheckoutScreen() {
   const [addAddressForm, setAddAddressForm] = useState<DeliveryAddressFormValue>(BLANK_ADDRESS_FORM);
   const [addAddressSaving, setAddAddressSaving] = useState(false);
   
-  // Diaspora checkout state
-  const [someoneElseReceiving, setSomeoneElseReceiving] = useState(false);
+  // Diaspora: recipient is always required once preflight confirms diaspora.
   const [recipient, setRecipient] = useState<Partial<RecipientContact>>({
     name: '',
     phone: '',
     notify_whatsapp: false,
   });
-  const onSomeoneElseChange = useCallback((value: boolean) => {
-    setSomeoneElseReceiving(value);
-    if (!value) {
-      setRecipient({ name: '', phone: '', notify_whatsapp: false });
-    }
-  }, []);
+  const [savedRecipientId, setSavedRecipientId] = useState<string | null>(null);
+  /** When true, do not auto-pick a delivery address (recipient just changed). */
+  const [suppressAddressAutoSelect, setSuppressAddressAutoSelect] = useState(false);
 
   const fulfillmentCountryIso = (provisionalCountry ?? '').trim().toUpperCase();
-  const captureRecipientAddress = needsRecipientDeliveryAddress(
-    someoneElseReceiving,
-    fulfillmentNeedsAddress(fulfillment)
-  );
   const payerCountryIso = normalizeCountryIso(
     addresses.find((a) => a.is_primary)?.country ?? addresses[0]?.country
   );
   const sendingOrderHome = Boolean(
     fulfillmentCountryIso && payerCountryIso && payerCountryIso !== fulfillmentCountryIso
   );
-  const hideShopperAddressBook =
-    sendingOrderHome &&
-    !someoneElseReceiving &&
-    fulfillmentNeedsAddress(fulfillment);
   const addressesForDelivery = useMemo(
     () =>
       dropOffAddressesForFulfillment(
@@ -245,9 +234,59 @@ export default observer(function CartCheckoutScreen() {
   const fulfillmentConfirmed =
     !(pickupEligible || shippingEligible) || hasChosenFulfillment;
 
-  // Diaspora orders require Stripe pay-now only
+  // Diaspora orders require Stripe pay-now only; someone else always receives.
   const diasporaContext = preflightConfig?.diaspora;
   const isDiaspora = requiresStripePayNow(diasporaContext);
+  const someoneElseReceiving = isDiaspora;
+  const captureRecipientAddress = needsRecipientDeliveryAddress(
+    someoneElseReceiving,
+    fulfillmentNeedsAddress(fulfillment)
+  );
+  const hideShopperAddressBook =
+    sendingOrderHome &&
+    !someoneElseReceiving &&
+    fulfillmentNeedsAddress(fulfillment);
+
+  const selectDeliveryAddress = useCallback(
+    (id: string) => {
+      setSuppressAddressAutoSelect(false);
+      setAddressId(id);
+      if (!savedRecipientId) return;
+      void agentApi.recipients
+        .update(savedRecipientId, { address_id: id })
+        .catch(() => {
+          setSnack(
+            t('diaspora.linkAddressFailed', 'Could not save this address for the recipient.')
+          );
+        });
+    },
+    [savedRecipientId, t]
+  );
+
+  const onSavedRecipientSelection = useCallback(
+    (saved: SavedRecipient | null) => {
+      setSavedRecipientId(saved?.id ?? null);
+      const linkedId = saved?.address_id ?? null;
+      if (linkedId && addressesForDelivery.some((a) => a.id === linkedId)) {
+        setSuppressAddressAutoSelect(false);
+        setAddressId(linkedId);
+        return;
+      }
+      setSuppressAddressAutoSelect(true);
+      setAddressId('');
+    },
+    [addressesForDelivery]
+  );
+
+  const recipientAddressTitle = useMemo(() => {
+    const name = recipient.name?.trim();
+    if (name) {
+      return t('diaspora.recipientAddressTitleFor', 'Delivery address for {{name}}', {
+        name,
+      });
+    }
+    return t('diaspora.recipientAddressTitle', 'Recipient delivery address');
+  }, [recipient.name, t]);
 
   // Sticky latch: preflight only returns delivery_availability for delivery
   // fulfillment. Keep Delivery grayed out after auto-switching to pickup.
@@ -341,13 +380,20 @@ export default observer(function CartCheckoutScreen() {
   // Clear recipient when fulfillment country changes (not on initial mount)
   const prevProvisionalCountryRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (someoneElseReceiving && provisionalCountry && prevProvisionalCountryRef.current !== undefined && prevProvisionalCountryRef.current !== provisionalCountry) {
-      // Country actually changed (not initial mount) — reset recipient form
+    if (
+      someoneElseReceiving &&
+      provisionalCountry &&
+      prevProvisionalCountryRef.current !== undefined &&
+      prevProvisionalCountryRef.current !== provisionalCountry
+    ) {
       setRecipient({
         name: '',
         phone: '',
         notify_whatsapp: false,
       });
+      setSavedRecipientId(null);
+      setSuppressAddressAutoSelect(true);
+      setAddressId('');
     }
     prevProvisionalCountryRef.current = provisionalCountry;
   }, [provisionalCountry, someoneElseReceiving]);
@@ -401,11 +447,12 @@ export default observer(function CartCheckoutScreen() {
       setAddressId((id) => (id ? '' : id));
       return;
     }
+    if (suppressAddressAutoSelect) return;
     setAddressId((id) => {
       if (id && addressesForDelivery.some((a) => a.id === id)) return id;
       return addressesForDelivery.find((a) => a.is_primary)?.id ?? addressesForDelivery[0].id;
     });
-  }, [addressesForDelivery, hideShopperAddressBook]);
+  }, [addressesForDelivery, hideShopperAddressBook, suppressAddressAutoSelect]);
 
   useEffect(() => {
     const sel = addresses.find((a) => a.id === deliveryAddressId);
@@ -608,13 +655,25 @@ export default observer(function CartCheckoutScreen() {
       );
       const inCountry = iso ? addressesInCountry(list, iso) : list;
       const pick = created ?? inCountry.find((a) => a.is_primary) ?? inCountry[0] ?? list[0];
-      if (pick?.id) setAddressId(pick.id);
+      if (pick?.id) {
+        setSuppressAddressAutoSelect(false);
+        setAddressId(pick.id);
+        if (savedRecipientId) {
+          void agentApi.recipients
+            .update(savedRecipientId, { address_id: pick.id })
+            .catch(() => {
+              setSnack(
+                t('diaspora.linkAddressFailed', 'Could not save this address for the recipient.')
+              );
+            });
+        }
+      }
     } catch (e: unknown) {
       setSnack(e instanceof Error ? e.message : t('client.placeOrder.error', 'Could not place order.'));
     } finally {
       setAddAddressSaving(false);
     }
-  }, [addAddressForm, addresses.length, refetchAddresses, t]);
+  }, [addAddressForm, addresses.length, refetchAddresses, savedRecipientId, t]);
 
   const onSaveProfilePhone = useCallback(
     async (phoneE164: string) => {
@@ -926,32 +985,27 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        {/* Diaspora checkout banner + toggle + recipient (only when diaspora) */}
+        {/* Diaspora checkout banner + recipient (always someone-else when diaspora) */}
         {fulfillmentConfirmed && isDiaspora ? (
           <>
             <DiasporaCheckoutBanner
               diaspora={diasporaContext}
-              someoneElseReceiving={someoneElseReceiving}
-              onSomeoneElseChange={onSomeoneElseChange}
-              disabled={submitting}
               style={{ marginBottom: spacing.sm }}
             />
 
-            {/* Recipient picker (when someone-else is checked) */}
-            {someoneElseReceiving ? (
-              <RecipientPicker
-                recipient={recipient}
-                onChange={setRecipient}
-                country={provisionalCountry}
-                defaultCountryCode={
-                  provisionalCountry && (provisionalCountry === 'CM' || provisionalCountry === 'GA')
-                    ? (provisionalCountry as CountryCode)
-                    : undefined
-                }
-                disabled={submitting}
-                style={{ marginBottom: spacing.sm }}
-              />
-            ) : null}
+            <RecipientPicker
+              recipient={recipient}
+              onChange={setRecipient}
+              onSavedSelectionChange={onSavedRecipientSelection}
+              country={provisionalCountry}
+              defaultCountryCode={
+                provisionalCountry && (provisionalCountry === 'CM' || provisionalCountry === 'GA')
+                  ? (provisionalCountry as CountryCode)
+                  : undefined
+              }
+              disabled={submitting}
+              style={{ marginBottom: spacing.sm }}
+            />
           </>
         ) : null}
 
@@ -962,13 +1016,13 @@ export default observer(function CartCheckoutScreen() {
           <PlaceOrderDeliveryAddressBlock
             addresses={addressesForDelivery}
             selectedId={deliveryAddressId}
-            onSelect={setAddressId}
+            onSelect={selectDeliveryAddress}
             loading={addrLoading}
             error={addrError}
             onRetry={() => void refetchAddresses()}
             onAddAddress={openAddAddressModal}
             warnIncomplete={resolvedIsStripeRail}
-            title={t('diaspora.recipientAddressTitle', 'Recipient delivery address')}
+            title={recipientAddressTitle}
             helperText={t(
               'diaspora.recipientAddressHelp',
               'Enter the address where the recipient will receive this order. We share it with the delivery agent.'
@@ -1119,17 +1173,13 @@ export default observer(function CartCheckoutScreen() {
           <PlaceOrderDeliveryAddressBlock
             addresses={addressesForDelivery}
             selectedId={deliveryAddressId}
-            onSelect={setAddressId}
+            onSelect={selectDeliveryAddress}
             loading={addrLoading}
             error={addrError}
             onRetry={() => void refetchAddresses()}
             onAddAddress={openAddAddressModal}
             warnIncomplete={resolvedIsStripeRail}
-            title={
-              captureRecipientAddress
-                ? t('diaspora.recipientAddressTitle', 'Recipient delivery address')
-                : undefined
-            }
+            title={captureRecipientAddress ? recipientAddressTitle : undefined}
             helperText={
               captureRecipientAddress
                 ? t(
