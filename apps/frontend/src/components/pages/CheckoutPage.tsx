@@ -36,6 +36,7 @@ import { useCheckout } from '../../hooks/useCheckout';
 import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
+import { useUpdateRecipient } from '../../hooks/useRecipients';
 import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
 import {
   SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
@@ -586,6 +587,7 @@ const CheckoutPage: React.FC = () => {
   const [recipient, setRecipient] = useState<RecipientDraft>(
     EMPTY_RECIPIENT_DRAFT
   );
+  const updateRecipientMutation = useUpdateRecipient();
   const [requiresFastDelivery, setRequiresFastDelivery] = useState(false);
   const [deliveryWindow, setDeliveryWindow] =
     useState<DeliveryWindowData | null>(null);
@@ -906,15 +908,58 @@ const CheckoutPage: React.FC = () => {
     error: checkoutError,
   } = useCheckout();
 
-  // Set default address when addresses load
+  // Set default address when addresses load (skip when a saved recipient needs an explicit pick)
   useEffect(() => {
-    if (addresses.length > 0 && !selectedAddressId) {
-      const primaryAddress = addresses.find((addr) => addr.address.is_primary);
-      setSelectedAddressId(
-        primaryAddress?.address.id || addresses[0].address.id
-      );
+    if (addresses.length === 0 || selectedAddressId) return;
+    if (sendingToSomeoneElse && recipient.recipient_id && !recipient.address_id) {
+      return;
     }
-  }, [addresses, selectedAddressId]);
+    const primaryAddress = addresses.find((addr) => addr.address.is_primary);
+    setSelectedAddressId(
+      primaryAddress?.address.id || addresses[0].address.id
+    );
+  }, [
+    addresses,
+    selectedAddressId,
+    sendingToSomeoneElse,
+    recipient.recipient_id,
+    recipient.address_id,
+  ]);
+
+  const handleRecipientChange = useCallback(
+    (next: RecipientDraft & { recipient_id?: string }) => {
+      setRecipient(next);
+      const linkedId = next.address_id ?? null;
+      if (
+        linkedId &&
+        addresses.some((addr) => addr.address.id === linkedId)
+      ) {
+        setSelectedAddressId(linkedId);
+        return;
+      }
+      if (next.recipient_id) {
+        // Switching recipients without a usable linked address — clear so user picks.
+        setSelectedAddressId('');
+      }
+    },
+    [addresses]
+  );
+
+  const handleDeliveryAddressChange = useCallback(
+    (addressId: string) => {
+      setSelectedAddressId(addressId);
+      if (!recipient.recipient_id || !addressId) return;
+      void updateRecipientMutation
+        .mutateAsync({
+          id: recipient.recipient_id,
+          data: { address_id: addressId },
+        })
+        .catch((error) => {
+          console.error('Failed to link address to recipient:', error);
+        });
+    },
+    [recipient.recipient_id, updateRecipientMutation]
+  );
 
   // Redirect if cart is empty
   useEffect(() => {
@@ -1166,7 +1211,7 @@ const CheckoutPage: React.FC = () => {
           {sendingToSomeoneElse && (
             <RecipientDetailsSection
               recipient={recipient}
-              onChange={setRecipient}
+              onChange={handleRecipientChange}
               fulfillmentCountry={
                 diaspora?.fulfillment_country ||
                 selectedAddress?.country ||
@@ -1271,7 +1316,9 @@ const CheckoutPage: React.FC = () => {
                         </InputLabel>
                         <Select
                           value={selectedAddressId}
-                          onChange={(e) => setSelectedAddressId(e.target.value)}
+                          onChange={(e) =>
+                            handleDeliveryAddressChange(String(e.target.value))
+                          }
                           label={t('checkout.selectAddress', 'Select Address')}
                         >
                           {addresses.map((addr) => (

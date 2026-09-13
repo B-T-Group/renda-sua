@@ -22,6 +22,8 @@ export interface RecipientDraft {
   phone: string;
   notifyWhatsapp: boolean;
   recipient_id?: string;
+  /** Linked default delivery address from the saved recipient, when known. */
+  address_id?: string | null;
 }
 
 export const EMPTY_RECIPIENT_DRAFT: RecipientDraft = {

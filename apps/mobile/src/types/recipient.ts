@@ -14,6 +14,8 @@ export interface SavedRecipient {
   country: string;
   /** True to send WhatsApp updates to the recipient. */
   notify_whatsapp: boolean;
+  /** Default delivery address in the fulfillment country (payer-owned). */
+  address_id: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -23,12 +25,14 @@ export interface CreateRecipientPayload {
   phone: string;
   country: string;
   notify_whatsapp: boolean;
+  address_id?: string | null;
 }
 
 export interface UpdateRecipientPayload {
   name?: string;
   phone?: string;
   notify_whatsapp?: boolean;
+  address_id?: string | null;
 }
 
 export interface GetRecipientsParams {

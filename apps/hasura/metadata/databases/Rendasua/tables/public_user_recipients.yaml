@@ -5,6 +5,9 @@ object_relationships:
   - name: user
     using:
       foreign_key_constraint_on: user_id
+  - name: address
+    using:
+      foreign_key_constraint_on: address_id
 # user_id must be insertable: CreateRecipient sets it and Hasura hides
 # columns that are not listed from user_recipients_insert_input.
 insert_permissions:
@@ -19,6 +22,7 @@ insert_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
         - user_id
   - role: business
     permission:
@@ -31,6 +35,7 @@ insert_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
         - user_id
   - role: client
     permission:
@@ -43,6 +48,7 @@ insert_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
         - user_id
   - role: user
     permission:
@@ -55,6 +61,7 @@ insert_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
         - user_id
 select_permissions:
   - role: agent
@@ -66,6 +73,7 @@ select_permissions:
         - name
         - phone
         - notify_whatsapp
+        - address_id
         - created_at
         - updated_at
       filter:
@@ -80,6 +88,7 @@ select_permissions:
         - name
         - phone
         - notify_whatsapp
+        - address_id
         - created_at
         - updated_at
       filter:
@@ -94,6 +103,7 @@ select_permissions:
         - name
         - phone
         - notify_whatsapp
+        - address_id
         - created_at
         - updated_at
       filter:
@@ -108,6 +118,7 @@ select_permissions:
         - name
         - phone
         - notify_whatsapp
+        - address_id
         - created_at
         - updated_at
       filter:
@@ -121,6 +132,7 @@ update_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
       filter:
         user_id:
           _eq: X-Hasura-User-Id
@@ -132,6 +144,7 @@ update_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
       filter:
         user_id:
           _eq: X-Hasura-User-Id
@@ -143,6 +156,7 @@ update_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
       filter:
         user_id:
           _eq: X-Hasura-User-Id
@@ -154,6 +168,7 @@ update_permissions:
         - name
         - notify_whatsapp
         - phone
+        - address_id
       filter:
         user_id:
           _eq: X-Hasura-User-Id

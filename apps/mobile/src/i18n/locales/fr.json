@@ -6308,6 +6308,7 @@
   "diaspora": {
     "someoneElseReceiving": "Quelqu'un d'autre recevra cette commande",
     "someoneElseHelp": "Activez cette option pour choisir qui recevra la commande. Nous lui enverrons les mises à jour de livraison.",
+    "checkoutHeader": "Checkout diaspora",
     "selectRecipientTitle": "Qui reçoit cette commande ?",
     "selectRecipientPrompt": "Touchez un destinataire pour continuer",
     "selectRecipientToPay": "Sélectionnez un destinataire avant de payer",
@@ -6343,10 +6344,16 @@
     "editRecipient": "Modifier le destinataire",
     "whatsAppEnabled": "WhatsApp activé",
     "recipientAddressTitle": "Adresse de livraison du destinataire",
+    "recipientAddressTitleFor": "Adresse de livraison pour {{name}}",
     "recipientAddressHelp": "Saisissez l’adresse où le destinataire recevra cette commande. Nous la transmettons au livreur.",
     "recipientAddressEmpty": "Ajoutez l’adresse de livraison du destinataire dans le pays de destination.",
     "addRecipientAddress": "Ajouter l’adresse du destinataire",
-    "selectRecipientAddressToPay": "Ajoutez l’adresse de livraison du destinataire avant de payer"
+    "selectRecipientAddressToPay": "Ajoutez l’adresse de livraison du destinataire avant de payer",
+    "linkAddressFailed": "Impossible d’enregistrer cette adresse pour le destinataire.",
+    "linkedAddress": "Adresse par défaut",
+    "linkedAddressMissing": "Adresse liée indisponible",
+    "clearLinkedAddress": "Effacer l’adresse liée",
+    "clearAddressFailed": "Impossible d’effacer l’adresse liée."
   },
   "dashboardComposing": {
     "client": {

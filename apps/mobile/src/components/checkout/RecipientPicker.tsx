@@ -8,12 +8,15 @@ import { RecipientDetailsBlock } from './RecipientDetailsBlock';
 import { useRecipients } from '../../hooks/useRecipients';
 import { agentApi } from '../../services/agentApi';
 import type { RecipientContact } from '../../types/clientOrder';
+import type { SavedRecipient } from '../../types/recipient';
 
 export interface RecipientPickerProps {
   /** Current recipient data (name, phone, notify_whatsapp). */
   recipient: Partial<RecipientContact>;
   /** Callback when recipient data changes. */
   onChange: (value: Partial<RecipientContact>) => void;
+  /** Fired when a saved recipient is selected, created, or cleared. */
+  onSavedSelectionChange?: (saved: SavedRecipient | null) => void;
   /** ISO country code for filtering saved recipients and phone input. */
   country?: string;
   /** Default country code for phone input (derived from fulfillment country). */
@@ -30,6 +33,7 @@ export interface RecipientPickerProps {
 export function RecipientPicker({
   recipient,
   onChange,
+  onSavedSelectionChange,
   country,
   defaultCountryCode,
   disabled,
@@ -47,18 +51,22 @@ export function RecipientPicker({
   const [savingNew, setSavingNew] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const clearSavedSelection = useCallback(() => {
+    setSelectedId(null);
+    onSavedSelectionChange?.(null);
+  }, [onSavedSelectionChange]);
+
   const prevCountryRef = React.useRef<string | undefined>(undefined);
   React.useEffect(() => {
     if (prevCountryRef.current !== undefined && prevCountryRef.current !== country) {
-      setSelectedId(null);
+      clearSavedSelection();
       setMode('select');
       setSaveError(null);
       onChange({ name: '', phone: '', notify_whatsapp: false });
     }
     prevCountryRef.current = country;
-  }, [country, onChange]);
+  }, [country, onChange, clearSavedSelection]);
 
-  // Sync onChange when selecting a saved recipient
   const handleSelectRecipient = useCallback(
     (id: string) => {
       setSelectedId(id);
@@ -69,9 +77,10 @@ export function RecipientPicker({
           phone: found.phone,
           notify_whatsapp: found.notify_whatsapp,
         });
+        onSavedSelectionChange?.(found);
       }
     },
-    [recipients, onChange]
+    [recipients, onChange, onSavedSelectionChange]
   );
 
   const handleSaveNew = useCallback(async () => {
@@ -97,6 +106,7 @@ export function RecipientPicker({
         await refetch();
         setMode('select');
         setSelectedId(res.recipient.id);
+        onSavedSelectionChange?.(res.recipient);
       } else {
         setSaveError(res.error || t('diaspora.saveRecipientFailed', 'Failed to save recipient'));
       }
@@ -105,16 +115,16 @@ export function RecipientPicker({
     } finally {
       setSavingNew(false);
     }
-  }, [recipient, country, refetch, t, onChange]);
+  }, [recipient, country, refetch, t, onChange, onSavedSelectionChange]);
 
   const handleModeChange = useCallback(
     (newMode: 'select' | 'new') => {
       setMode(newMode);
       setSaveError(null);
-      setSelectedId(null);
+      clearSavedSelection();
       onChange({ name: '', phone: '', notify_whatsapp: false });
     },
-    [onChange]
+    [onChange, clearSavedSelection]
   );
 
   if (loading && !recipients.length) {

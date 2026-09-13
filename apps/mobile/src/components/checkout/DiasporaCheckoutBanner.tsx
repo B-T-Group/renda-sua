@@ -1,7 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Switch, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
 import { isCrossBorder } from '../../utils/diasporaCheckout';
@@ -10,20 +10,16 @@ import type { CheckoutDiaspora } from '../../types/checkout';
 
 export interface DiasporaCheckoutBannerProps {
   diaspora: CheckoutDiaspora | null | undefined;
-  someoneElseReceiving: boolean;
-  onSomeoneElseChange: (value: boolean) => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 /**
- * Diaspora checkout banner with a switch to send the order to someone else.
+ * Header for diaspora checkout: labels the mode and shows paying-from / delivering-to.
+ * Someone else always receives diaspora orders — no opt-in switch.
  */
 export function DiasporaCheckoutBanner({
   diaspora,
-  someoneElseReceiving,
-  onSomeoneElseChange,
-  disabled,
   style,
 }: DiasporaCheckoutBannerProps) {
   const { t, i18n } = useTranslation();
@@ -44,12 +40,14 @@ export function DiasporaCheckoutBanner({
         {
           backgroundColor: colors.surface,
           borderRadius: borderRadius.md,
-          borderColor: someoneElseReceiving ? colors.primary.main : colors.divider,
+          borderColor: colors.primary.main,
           padding: spacing.md,
-          gap: spacing.md,
+          gap: spacing.sm,
         },
         style,
       ]}
+      accessibilityRole="header"
+      accessibilityLabel={t('diaspora.checkoutHeader', 'Diaspora checkout')}
     >
       <View style={styles.row}>
         <View style={[styles.iconWrap, { backgroundColor: colors.primaryTint }]}>
@@ -61,6 +59,9 @@ export function DiasporaCheckoutBanner({
         </View>
         <View style={styles.textCol}>
           <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '700' }}>
+            {t('diaspora.checkoutHeader', 'Diaspora checkout')}
+          </Text>
+          <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
             {t('diaspora.bannerTitle', 'Sending an order home')}
           </Text>
           {crossBorder && payerCountry && fulfillmentCountry ? (
@@ -75,37 +76,6 @@ export function DiasporaCheckoutBanner({
             </Text>
           ) : null}
         </View>
-      </View>
-
-      <View style={styles.switchRow}>
-        <Pressable
-          style={styles.switchLabel}
-          onPress={() => {
-            if (!disabled) onSomeoneElseChange(!someoneElseReceiving);
-          }}
-          disabled={disabled}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: someoneElseReceiving, disabled: !!disabled }}
-          accessibilityLabel={t(
-            'diaspora.someoneElseReceiving',
-            'Someone else is receiving this order'
-          )}
-        >
-          <Text variant="bodyMedium" style={{ color: colors.text.primary, fontWeight: '600' }}>
-            {t('diaspora.someoneElseReceiving', 'Someone else is receiving this order')}
-          </Text>
-          <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-            {t(
-              'diaspora.someoneElseHelp',
-              'Turn this on to choose who will receive the order. We will send them delivery updates.'
-            )}
-          </Text>
-        </Pressable>
-        <Switch
-          value={someoneElseReceiving}
-          onValueChange={onSomeoneElseChange}
-          disabled={disabled}
-        />
       </View>
     </View>
   );
@@ -124,14 +94,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textCol: { flex: 1, minWidth: 0, justifyContent: 'center', gap: 4 },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  switchLabel: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
 });

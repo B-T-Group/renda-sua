@@ -3,6 +3,7 @@ import {
   Delete,
   Edit,
   FilterList,
+  MapOutlined,
   Person,
 } from '@mui/icons-material';
 import {
@@ -100,6 +101,17 @@ const SavedRecipientsPage: React.FC = () => {
     }
   };
 
+  const handleClearAddress = async (recipient: SavedRecipient) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: recipient.id,
+        data: { address_id: null },
+      });
+    } catch (error) {
+      console.error('Failed to clear recipient address:', error);
+    }
+  };
+
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
@@ -178,6 +190,19 @@ const SavedRecipientsPage: React.FC = () => {
               <ListItem
                 secondaryAction={
                   <Stack direction="row" spacing={1}>
+                    {recipient.address_id ? (
+                      <IconButton
+                        edge="end"
+                        onClick={() => void handleClearAddress(recipient)}
+                        aria-label={t(
+                          'recipients.clearAddress',
+                          'Clear linked address'
+                        )}
+                        disabled={updateMutation.isPending}
+                      >
+                        <MapOutlined />
+                      </IconButton>
+                    ) : null}
                     <IconButton
                       edge="end"
                       onClick={() => handleEdit(recipient)}
@@ -211,6 +236,14 @@ const SavedRecipientsPage: React.FC = () => {
                           label={t('recipients.whatsappChip', 'WhatsApp')}
                           size="small"
                           color="primary"
+                        />
+                      )}
+                      {recipient.address_id && (
+                        <Chip
+                          label={t('recipients.linkedAddressChip', 'Address linked')}
+                          size="small"
+                          color="success"
+                          variant="outlined"
                         />
                       )}
                     </Stack>
