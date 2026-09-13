@@ -421,6 +421,24 @@ describe('PendingWithdrawalResolveService', () => {
     });
   });
 
+  it('returns conflict when the user resolves an unindexed provider status', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({ transaction_id: 'prov-1' })
+    );
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'prov-1',
+      status: 'ambiguous',
+      amount: 1000,
+      currency: 'XAF',
+      reference: 'P123',
+    });
+
+    await expect(service.resolveForUser('tx-1', 'user-1')).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(callbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
+  });
+
   it('cancels null-id withdrawals after the system grace window', async () => {
     databaseService.getTransactionById.mockResolvedValue(
       baseTx({

@@ -1,7 +1,9 @@
 import {
+  MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
   isNotFoundHttpError,
   resolveMypvitOperator,
+  unindexedMypvitStatusBody,
 } from './mypvit-status.util';
 
 describe('resolveMypvitOperator', () => {
@@ -41,5 +43,16 @@ describe('isNotFoundHttpError', () => {
     expect(isNotFoundHttpError({ response: { status: 404 } })).toBe(true);
     expect(isNotFoundHttpError({ response: { status: 500 } })).toBe(false);
     expect(isNotFoundHttpError({})).toBe(false);
+  });
+});
+
+describe('unindexedMypvitStatusBody', () => {
+  it('maps a provider miss to AMBIGUOUS so callers recheck later', () => {
+    expect(MYP_VIT_STATUS_OPERATIONS).toEqual(['PAYMENT', 'GIVE_CHANGE']);
+    expect(unindexedMypvitStatusBody('PAYTEST001')).toEqual({
+      status: 'AMBIGUOUS',
+      transaction_id: 'PAYTEST001',
+      message: 'Provider has not indexed this transaction yet',
+    });
   });
 });

@@ -7,9 +7,12 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
 import {
+  MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
   isNotFoundHttpError,
   resolveMypvitOperator,
+  unindexedMypvitStatusBody,
+  type MypvitStatusOperation,
 } from './mypvit-status.util';
 
 export interface MyPVitPaymentRequest {
@@ -338,7 +341,7 @@ export class MyPVitService {
         this.logger.error('Failed to check transaction status:', error);
         throw error;
       }
-      return this.fetchStatusApiByQuery(
+      return this.fetchStatusAfterPathMiss(
         transactionId,
         accountOperationCode,
         secretKey
@@ -346,23 +349,46 @@ export class MyPVitService {
     }
   }
 
-  private async fetchStatusApiByQuery(
+  private async fetchStatusAfterPathMiss(
     transactionId: string,
     accountOperationCode: string,
     secretKey: string
   ): Promise<MyPVitStatusApiBody> {
-    const response = await this.httpClient.get(
-      `/${this.config.statusEndpointCode}/status`,
-      {
-        params: {
-          transactionId,
-          accountOperationCode,
-          transactionOperation: 'PAYMENT',
-        },
-        headers: { 'X-Secret': secretKey },
+    for (const operation of MYP_VIT_STATUS_OPERATIONS) {
+      const body = await this.tryStatusQuery(
+        transactionId,
+        accountOperationCode,
+        secretKey,
+        operation
+      );
+      if (body) {
+        return body;
       }
-    );
-    return response.data;
+    }
+    return unindexedMypvitStatusBody(transactionId);
+  }
+
+  private async tryStatusQuery(
+    transactionId: string,
+    accountOperationCode: string,
+    secretKey: string,
+    transactionOperation: MypvitStatusOperation
+  ): Promise<MyPVitStatusApiBody | null> {
+    try {
+      const response = await this.httpClient.get(
+        `/${this.config.statusEndpointCode}/status`,
+        {
+          params: { transactionId, accountOperationCode, transactionOperation },
+          headers: { 'X-Secret': secretKey },
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      if (isNotFoundHttpError(error)) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   private mapStatusApiResponse(
