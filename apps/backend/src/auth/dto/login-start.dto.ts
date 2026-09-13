@@ -1,5 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 
 export class LoginStartDto {
   @ApiProperty({
@@ -22,4 +29,13 @@ export class LoginStartDto {
   @IsString()
   @MinLength(10, { message: 'Phone number must be at least 10 characters' })
   phone_number?: string;
+
+  @ApiPropertyOptional({
+    enum: ['email', 'sms'],
+    description:
+      'Optional OTP delivery channel. When omitted, OTP is sent to the provided identifier.',
+  })
+  @IsOptional()
+  @IsIn(['email', 'sms'])
+  channel?: 'email' | 'sms';
 }

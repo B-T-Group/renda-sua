@@ -29,8 +29,15 @@ import {
   keyboardAwareScrollProps,
   useKeyboardVerticalOffset,
 } from '../../hooks/useKeyboardVerticalOffset';
+import {
+  fetchLoginOtpOptions,
+  type LoginOtpChannel,
+  type LoginOtpOptions,
+} from '../../services/rendasuaLoginOtpService';
+import { MobileOtpChannelPicker } from '../../components/auth/MobileOtpChannelPicker';
 
 type EmailSignInMode = 'password' | 'otp';
+type LoginStep = 'identifier' | 'channel';
 
 function LoginScreen({ navigation }: LoginScreenProps) {
   const { t } = useTranslation();
@@ -50,6 +57,13 @@ function LoginScreen({ navigation }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [loginStep, setLoginStep] = useState<LoginStep>('identifier');
+  const [pendingContact, setPendingContact] = useState<{
+    email?: string;
+    phoneE164?: string;
+  } | null>(null);
+  const [channelOptions, setChannelOptions] = useState<LoginOtpOptions | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<LoginOtpChannel>('email');
 
   const clearErrors = useCallback(() => {
     setValidationError(null);
@@ -76,12 +90,18 @@ function LoginScreen({ navigation }: LoginScreenProps) {
     setLoginMethod('email');
     setEmailSignInMode('otp');
     setValidationError(null);
+    setLoginStep('identifier');
+    setPendingContact(null);
+    setChannelOptions(null);
     auth.clearError();
   }, [auth]);
 
   const switchToPhone = useCallback(() => {
     setLoginMethod('phone');
     setValidationError(null);
+    setLoginStep('identifier');
+    setPendingContact(null);
+    setChannelOptions(null);
     auth.clearError();
   }, [auth]);
 
@@ -110,9 +130,51 @@ function LoginScreen({ navigation }: LoginScreenProps) {
     [clearErrors]
   );
 
+  const navigateToOtp = useCallback(
+    (input: {
+      contact: { email?: string; phoneE164?: string };
+      channel: LoginOtpChannel;
+      options?: LoginOtpOptions;
+    }) => {
+      navigation.navigate('OtpVerification', {
+        channel: input.channel === 'sms' ? 'phone' : 'email',
+        email: input.contact.email,
+        phoneE164: input.contact.phoneE164,
+        flow: 'login',
+        availableChannels: input.options?.availableChannels,
+        maskedEmail: input.options?.maskedEmail,
+        maskedPhone: input.options?.maskedPhone,
+      });
+    },
+    [navigation]
+  );
+
+  const startOtpForContact = useCallback(
+    async (
+      contact: { email?: string; phoneE164?: string },
+      channel: LoginOtpChannel,
+      options?: LoginOtpOptions
+    ) => {
+      const ok = contact.email
+        ? await auth.requestPasswordlessEmailOtp(contact.email, channel)
+        : contact.phoneE164
+          ? await auth.requestPasswordlessSms(contact.phoneE164, channel)
+          : false;
+      if (!ok) return;
+      navigateToOtp({ contact, channel, options });
+    },
+    [auth, navigateToOtp]
+  );
+
   const handleLogin = async () => {
     setValidationError(null);
     auth.clearError();
+
+    if (loginStep === 'channel' && pendingContact && channelOptions) {
+      await startOtpForContact(pendingContact, selectedChannel, channelOptions);
+      return;
+    }
+
     if (loginMethod === 'email') {
       if (!email.trim()) {
         setValidationError(t('auth.errors.requiredEmail'));
@@ -126,10 +188,24 @@ function LoginScreen({ navigation }: LoginScreenProps) {
         await auth.loginWithCredentials(email.trim(), password);
         return;
       }
-      const ok = await auth.requestPasswordlessEmailOtp(email.trim());
-      if (ok) {
-        navigation.navigate('OtpVerification', { channel: 'email', email: email.trim() });
+      const contact = { email: email.trim() };
+      const optionsResult = await fetchLoginOtpOptions({ email: contact.email });
+      if (!optionsResult.ok) {
+        setValidationError(optionsResult.error);
+        return;
       }
+      if (optionsResult.options.availableChannels.length <= 1) {
+        await startOtpForContact(
+          contact,
+          optionsResult.options.defaultChannel,
+          optionsResult.options
+        );
+        return;
+      }
+      setPendingContact(contact);
+      setChannelOptions(optionsResult.options);
+      setSelectedChannel(optionsResult.options.defaultChannel);
+      setLoginStep('channel');
       return;
     }
     if (!phoneNationalDigits.trim()) {
@@ -141,10 +217,24 @@ function LoginScreen({ navigation }: LoginScreenProps) {
       setValidationError(t('auth.errors.invalidPhone'));
       return;
     }
-    const ok = await auth.requestPasswordlessSms(e164);
-    if (ok) {
-      navigation.navigate('OtpVerification', { channel: 'phone', phoneE164: e164 });
+    const contact = { phoneE164: e164 };
+    const optionsResult = await fetchLoginOtpOptions({ phone_number: e164 });
+    if (!optionsResult.ok) {
+      setValidationError(optionsResult.error);
+      return;
     }
+    if (optionsResult.options.availableChannels.length <= 1) {
+      await startOtpForContact(
+        contact,
+        optionsResult.options.defaultChannel,
+        optionsResult.options
+      );
+      return;
+    }
+    setPendingContact(contact);
+    setChannelOptions(optionsResult.options);
+    setSelectedChannel(optionsResult.options.defaultChannel);
+    setLoginStep('channel');
   };
 
   const displayError =
@@ -179,7 +269,12 @@ function LoginScreen({ navigation }: LoginScreenProps) {
             {t('auth.login')}
           </Text>
           <Text variant="bodyMedium" style={[styles.subtitle, { color: colors.text.secondary }]}>
-            {t('auth.loginSubtitle')}
+            {loginStep === 'channel'
+              ? t(
+                  'auth.otp.chooseChannelSubtitle',
+                  'Choose where we should send your login code.'
+                )
+              : t('auth.loginSubtitle')}
           </Text>
 
           {/* Error banner — always visible at top of form */}
@@ -191,8 +286,32 @@ function LoginScreen({ navigation }: LoginScreenProps) {
             />
           ) : null}
 
-          {/* Phone input */}
-          {loginMethod === 'phone' ? (
+          {loginStep === 'channel' && channelOptions ? (
+            <>
+              <MobileOtpChannelPicker
+                value={selectedChannel}
+                onChange={setSelectedChannel}
+                availableChannels={channelOptions.availableChannels}
+                maskedEmail={channelOptions.maskedEmail}
+                maskedPhone={channelOptions.maskedPhone}
+                disabled={auth.isLoading}
+              />
+              <Pressable
+                onPress={() => {
+                  setLoginStep('identifier');
+                  setPendingContact(null);
+                  setChannelOptions(null);
+                }}
+                disabled={auth.isLoading}
+                style={styles.switchMethodLink}
+                accessibilityRole="button"
+              >
+                <Text variant="bodyMedium" style={{ color: colors.primary.main }}>
+                  {t('auth.otp.backToIdentifier', 'Use a different email or phone')}
+                </Text>
+              </Pressable>
+            </>
+          ) : loginMethod === 'phone' ? (
             <>
               <Text style={[styles.label, { color: colors.text.primary }, typography.subtitle2]}>
                 {t('auth.phone')}

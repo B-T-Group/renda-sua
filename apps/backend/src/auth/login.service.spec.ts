@@ -107,6 +107,38 @@ describe('LoginService start, lockout, and session gates', () => {
     );
   });
 
+  const userWithBoth = {
+    id: 'user-1',
+    email: 'shop@example.com',
+    phone_number: '+237670000000',
+    email_verified: true,
+    phone_number_verified: true,
+  };
+
+  describe('getLoginOtpOptions', () => {
+    it('returns both channels when the user has email and phone', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [userWithBoth],
+      });
+      const result = await service.getLoginOtpOptions({
+        phone_number: '+237670000000',
+      });
+      expect(result).toMatchObject({
+        defaultChannel: 'sms',
+        availableChannels: ['email', 'sms'],
+        maskedEmail: 'sh***@example.com',
+        maskedPhone: '••••••0000',
+      });
+    });
+
+    it('returns 404 when the user is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      await expect(
+        service.getLoginOtpOptions({ email: 'missing@example.com' })
+      ).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
+    });
+  });
+
   describe('startLoginOtp', () => {
     it('rejects both email and phone, or neither', async () => {
       await expect(
@@ -130,7 +162,7 @@ describe('LoginService start, lockout, and session gates', () => {
 
     it('skips Auth0 for enabled test users', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
-        users: [{ id: 'user-1', email: 'qa@example.com' }],
+        users: [{ ...userWithBoth, email: 'qa@example.com', phone_number: null }],
       });
       auth0Service.isTestUsersEnabled.mockReturnValue(true);
       auth0Service.isTestEmail.mockReturnValue(true);
@@ -141,12 +173,32 @@ describe('LoginService start, lockout, and session gates', () => {
 
     it('normalizes email and starts Auth0 OTP for a real user', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
-        users: [{ id: 'user-1', email: 'shop@example.com' }],
+        users: [{ ...userWithBoth, phone_number: null }],
       });
-      await service.startLoginOtp({ email: ' Shop@Example.COM ' });
+      const result = await service.startLoginOtp({
+        email: ' Shop@Example.COM ',
+      });
       expect(auth0Service.startEmailOtp).toHaveBeenCalledWith(
         'shop@example.com'
       );
+      expect(result.channel).toBe('email');
+      expect(result.availableChannels).toEqual(['email']);
+    });
+
+    it('sends OTP to the alternate channel when requested', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [userWithBoth],
+      });
+      const result = await service.startLoginOtp({
+        phone_number: '+237670000000',
+        channel: 'email',
+      });
+      expect(auth0Service.startEmailOtp).toHaveBeenCalledWith(
+        'shop@example.com'
+      );
+      expect(auth0Service.startSmsOtp).not.toHaveBeenCalled();
+      expect(result.channel).toBe('email');
+      expect(result.availableChannels).toEqual(['email', 'sms']);
     });
   });
 
@@ -167,6 +219,17 @@ describe('LoginService start, lockout, and session gates', () => {
     });
 
     it('returns 429 without verifying when the identifier is locked out', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [
+          {
+            id: 'user-1',
+            email: 'shop@example.com',
+            phone_number: null,
+            email_verified: true,
+            phone_number_verified: null,
+          },
+        ],
+      });
       lockout.isLockedOut.mockResolvedValue(true);
       lockout.getRemainingLockoutMs.mockResolvedValue(90_000);
 
@@ -180,6 +243,17 @@ describe('LoginService start, lockout, and session gates', () => {
     });
 
     it('records a failure when Auth0 rejects the OTP', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [
+          {
+            id: 'user-1',
+            email: 'shop@example.com',
+            phone_number: null,
+            email_verified: true,
+            phone_number_verified: null,
+          },
+        ],
+      });
       auth0Service.verifyEmailOtp.mockRejectedValue(
         Object.assign(new Error('bad otp'), { status: HttpStatus.BAD_REQUEST })
       );
@@ -189,6 +263,7 @@ describe('LoginService start, lockout, and session gates', () => {
           'mobile'
         )
       ).rejects.toBeTruthy();
+      expect(lockout.recordFailure).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordFailure).toHaveBeenCalledWith('shop@example.com');
       expect(lockout.recordSuccess).not.toHaveBeenCalled();
     });
@@ -199,7 +274,9 @@ describe('LoginService start, lockout, and session gates', () => {
           {
             id: 'user-1',
             email: 'shop@example.com',
+            phone_number: null,
             email_verified: true,
+            phone_number_verified: null,
           },
         ],
       });
@@ -225,6 +302,7 @@ describe('LoginService start, lockout, and session gates', () => {
           ipAddress: '1.1.1.1',
         })
       );
+      expect(lockout.recordSuccess).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordSuccess).toHaveBeenCalledWith('shop@example.com');
     });
 
@@ -234,7 +312,9 @@ describe('LoginService start, lockout, and session gates', () => {
           {
             id: 'user-1',
             email: 'shop@example.com',
+            phone_number: null,
             email_verified: true,
+            phone_number_verified: null,
           },
         ],
       });
@@ -247,6 +327,30 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(result.sessionId).toBeUndefined();
       expect(result.response.refresh_token).toBe('refresh');
       expect(sessionStore.createSession).not.toHaveBeenCalled();
+    });
+
+    it('verifies OTP on the alternate channel when channel is provided', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [userWithBoth],
+      });
+
+      await service.verifyLoginOtp(
+        {
+          phone_number: '+237670000000',
+          otp: '1234',
+          channel: 'email',
+        },
+        'mobile'
+      );
+
+      expect(auth0Service.verifyEmailOtp).toHaveBeenCalledWith(
+        'shop@example.com',
+        '1234'
+      );
+      expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
+      expect(lockout.recordSuccess).toHaveBeenCalledWith('user:user-1');
+      expect(lockout.recordSuccess).toHaveBeenCalledWith('shop@example.com');
+      expect(lockout.recordSuccess).toHaveBeenCalledWith('+237670000000');
     });
   });
 

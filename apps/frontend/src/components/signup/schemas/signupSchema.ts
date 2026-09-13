@@ -64,6 +64,7 @@ export function buildSignupSchema(opts: {
       }),
       agentFocus: z.enum(['delivery', 'commercial', 'both', '']).optional(),
       country: z.string(),
+      otpChannel: z.enum(['email', 'sms']).optional().default('email'),
       storeLocation: z.object({
         street: z.string(),
         city: z.string(),

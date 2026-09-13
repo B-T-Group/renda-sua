@@ -27,6 +27,25 @@ export class LoginController {
   constructor(private readonly loginService: LoginService) {}
 
   @Public()
+  @Post('login/otp-options')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary:
+      'Return available OTP channels for an existing user without sending a code',
+  })
+  @ApiBody({ type: LoginStartDto })
+  @ApiResponse({ status: 200, description: 'OTP channel options returned' })
+  @ApiResponse({ status: 400, description: 'Invalid identifier' })
+  @ApiResponse({ status: 404, description: 'User not found for email or phone' })
+  @ApiResponse({ status: 429, description: 'Too many OTP option lookups' })
+  async otpOptions(@Body() body: LoginStartDto) {
+    const result = await this.loginService.getLoginOtpOptions(body);
+    return { success: true, ...result };
+  }
+
+  @Public()
   @Post('login/start-otp')
   @HttpCode(HttpStatus.OK)
   @Throttle({ short: { limit: 5, ttl: 60000 } })
@@ -42,9 +61,9 @@ export class LoginController {
   })
   @ApiResponse({ status: 404, description: 'User not found for email or phone' })
   @ApiResponse({ status: 429, description: 'Too many OTP start attempts' })
-  async startOtp(@Body() body: LoginStartDto): Promise<{ success: boolean }> {
-    await this.loginService.startLoginOtp(body);
-    return { success: true };
+  async startOtp(@Body() body: LoginStartDto) {
+    const result = await this.loginService.startLoginOtp(body);
+    return { success: true, ...result };
   }
 
   @Public()

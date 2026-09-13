@@ -399,14 +399,17 @@ export class AuthStore {
     }
   }
 
-  async requestPasswordlessSms(e164: string): Promise<boolean> {
+  async requestPasswordlessSms(
+    e164: string,
+    channel?: 'email' | 'sms'
+  ): Promise<boolean> {
     runInAction(() => {
       this.isLoading = true;
       this.error = null;
     });
 
     try {
-      const result = await startLoginOtpSms(e164);
+      const result = await startLoginOtpSms(e164, channel);
       if (result.ok) {
         runInAction(() => {
           this.isLoading = false;
@@ -427,14 +430,17 @@ export class AuthStore {
     }
   }
 
-  async requestPasswordlessEmailOtp(email: string): Promise<boolean> {
+  async requestPasswordlessEmailOtp(
+    email: string,
+    channel?: 'email' | 'sms'
+  ): Promise<boolean> {
     runInAction(() => {
       this.isLoading = true;
       this.error = null;
     });
 
     try {
-      const result = await startLoginOtpEmail(email);
+      const result = await startLoginOtpEmail(email, channel);
       if (result.ok) {
         runInAction(() => {
           this.isLoading = false;
@@ -455,14 +461,18 @@ export class AuthStore {
     }
   }
 
-  async loginWithPasswordlessOtp(e164: string, otp: string): Promise<boolean> {
+  async loginWithPasswordlessOtp(
+    e164: string,
+    otp: string,
+    channel?: 'email' | 'sms'
+  ): Promise<boolean> {
     runInAction(() => {
       this.isLoading = true;
       this.error = null;
     });
 
     try {
-      const result = await verifyLoginOtpSms(e164, otp);
+      const result = await verifyLoginOtpSms(e164, otp, channel);
 
       if (result.type === 'success' && result.user && result.tokens) {
         const user = this.mapAuth0UserToUser(result.user);
@@ -489,14 +499,18 @@ export class AuthStore {
     }
   }
 
-  async loginWithPasswordlessEmailOtp(email: string, otp: string): Promise<boolean> {
+  async loginWithPasswordlessEmailOtp(
+    email: string,
+    otp: string,
+    channel?: 'email' | 'sms'
+  ): Promise<boolean> {
     runInAction(() => {
       this.isLoading = true;
       this.error = null;
     });
 
     try {
-      const result = await verifyLoginOtpEmail(email, otp);
+      const result = await verifyLoginOtpEmail(email, otp, channel);
 
       if (result.type === 'success' && result.user && result.tokens) {
         const user = this.mapAuth0UserToUser(result.user);

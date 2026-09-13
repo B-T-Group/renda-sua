@@ -112,7 +112,10 @@ export class SignupController {
   async signupResendOtp(
     @Body() body: SignupResendOtpDto
   ): Promise<{ success: boolean } & SignupAttemptStartResult> {
-    const result = await this.signupService.resendSignupOtp(body.attemptId);
+    const result = await this.signupService.resendSignupOtp(
+      body.attemptId,
+      body.channel
+    );
     return { success: true, ...result };
   }
 

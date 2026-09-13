@@ -3833,7 +3833,17 @@
       "resend": "Renvoyer le code",
       "resendIn": "Renvoyer dans {{time}}",
       "changeNumber": "Utiliser un autre numéro",
-      "changeEmail": "Utiliser une autre adresse e-mail"
+      "changeEmail": "Utiliser une autre adresse e-mail",
+      "changeContact": "Utiliser un autre e-mail ou téléphone",
+      "sendCodeVia": "Envoyer le code par",
+      "channelEmail": "E-mail",
+      "channelSms": "SMS",
+      "channelEmailHint": "Adresse e-mail",
+      "channelSmsHint": "Numéro de téléphone",
+      "chooseChannelSubtitle": "Choisissez où recevoir votre code de connexion.",
+      "backToIdentifier": "Utiliser un autre e-mail ou téléphone",
+      "sendToEmailInstead": "Envoyer le code par e-mail à la place",
+      "sendToPhoneInstead": "Envoyer le code par SMS à la place"
     },
     "emailVerification": {
       "pageTitle": "Vérifiez Votre Adresse E-mail",

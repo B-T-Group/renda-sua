@@ -20,12 +20,30 @@ export function resolveMypvitOperator(phoneNumber?: string): MypvitOperator {
   return 'airtel';
 }
 
+/** Query-form `transactionOperation` values to try after a path-style 404. */
+export const MYP_VIT_STATUS_OPERATIONS = ['PAYMENT', 'GIVE_CHANGE'] as const;
+
+export type MypvitStatusOperation = (typeof MYP_VIT_STATUS_OPERATIONS)[number];
+
 /** Original Status API: GET `/{code}/status/{transactionId}`. */
 export function buildMypvitStatusPath(
   statusEndpointCode: string,
   transactionId: string
 ): string {
   return `/${statusEndpointCode}/status/${encodeURIComponent(transactionId)}`;
+}
+
+/** Provider miss — do not treat as a hard failure; recheck later. */
+export function unindexedMypvitStatusBody(transactionId: string): {
+  status: 'AMBIGUOUS';
+  transaction_id: string;
+  message: string;
+} {
+  return {
+    status: 'AMBIGUOUS',
+    transaction_id: transactionId,
+    message: 'Provider has not indexed this transaction yet',
+  };
 }
 
 export function isNotFoundHttpError(error: { response?: { status?: number } }): boolean {

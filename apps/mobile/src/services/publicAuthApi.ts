@@ -87,6 +87,9 @@ export interface SignupAttemptStartResponse {
   channel: SignupOtpChannel;
   expiresAt: string;
   resendAvailableAt: string;
+  availableChannels?: SignupOtpChannel[];
+  maskedEmail?: string;
+  maskedPhone?: string;
 }
 
 export interface SignupVerifyOtpResponse {
@@ -128,10 +131,12 @@ export async function postSignupStart(
 }
 
 export async function postSignupResendOtp(
-  attemptId: string
+  attemptId: string,
+  channel?: SignupOtpChannel
 ): Promise<SignupAttemptStartResponse> {
   return publicApiPost<SignupAttemptStartResponse>('/auth/signup/resend-otp', {
     attemptId,
+    ...(channel ? { channel } : {}),
   });
 }
 

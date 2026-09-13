@@ -27,6 +27,10 @@ import {
 import { nationalDigitsToE164 } from '../../utils/phoneUtils';
 import { validateReturnTo } from '../../utils/returnToValidator';
 import Logo from '../common/Logo';
+import {
+  OtpChannelPicker,
+  type OtpChannelChoice,
+} from './OtpChannelPicker';
 
 export interface LoginMethodDialogProps {
   open: boolean;
@@ -35,11 +39,71 @@ export interface LoginMethodDialogProps {
   returnTo?: string;
 }
 
+type LoginOtpOptionsResponse = {
+  success: boolean;
+  defaultChannel: OtpChannelChoice;
+  availableChannels: OtpChannelChoice[];
+  maskedEmail?: string;
+  maskedPhone?: string;
+};
+
+type LoginStartResponse = LoginOtpOptionsResponse & {
+  channel: OtpChannelChoice;
+};
+
+type PendingContact = { email?: string; phone_number?: string };
+
 function resolveReturnTo(returnTo?: string): string {
   if (returnTo) return validateReturnTo(returnTo);
   if (typeof window === 'undefined') return '/app';
   const path = `${window.location.pathname}${window.location.search}`;
   return validateReturnTo(path) || '/app';
+}
+
+function persistLoginOtpSession(input: {
+  contact: PendingContact;
+  channel: OtpChannelChoice;
+  availableChannels: OtpChannelChoice[];
+  maskedEmail?: string;
+  maskedPhone?: string;
+  returnTo: string;
+}): void {
+  sessionStorage.removeItem('pendingLoginEmail');
+  sessionStorage.removeItem('pendingLoginPhone');
+  if (input.contact.email) {
+    sessionStorage.setItem('pendingLoginEmail', input.contact.email);
+  }
+  if (input.contact.phone_number) {
+    sessionStorage.setItem('pendingLoginPhone', input.contact.phone_number);
+  }
+  sessionStorage.setItem('pendingLoginOtpChannel', input.channel);
+  sessionStorage.setItem(
+    'pendingLoginAvailableChannels',
+    JSON.stringify(input.availableChannels)
+  );
+  if (input.maskedEmail) {
+    sessionStorage.setItem('pendingLoginMaskedEmail', input.maskedEmail);
+  } else {
+    sessionStorage.removeItem('pendingLoginMaskedEmail');
+  }
+  if (input.maskedPhone) {
+    sessionStorage.setItem('pendingLoginMaskedPhone', input.maskedPhone);
+  } else {
+    sessionStorage.removeItem('pendingLoginMaskedPhone');
+  }
+  const destination =
+    input.channel === 'sms'
+      ? input.maskedPhone || input.contact.phone_number || ''
+      : input.maskedEmail || input.contact.email || '';
+  sessionStorage.setItem('pendingLoginDestination', destination);
+  sessionStorage.setItem(
+    'pendingLoginOtpExpiresAtMs',
+    String(Date.now() + 15 * 60 * 1000)
+  );
+  sessionStorage.setItem(
+    'pendingLoginReturnTo',
+    validateReturnTo(input.returnTo)
+  );
 }
 
 const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
@@ -62,34 +126,77 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
   const [phoneValue, setPhoneValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<'identifier' | 'channel'>('identifier');
+  const [pendingContact, setPendingContact] = useState<PendingContact | null>(
+    null
+  );
+  const [channelOptions, setChannelOptions] =
+    useState<LoginOtpOptionsResponse | null>(null);
+  const [selectedChannel, setSelectedChannel] =
+    useState<OtpChannelChoice>('email');
+
+  const resetChannelStep = useCallback(() => {
+    setStep('identifier');
+    setPendingContact(null);
+    setChannelOptions(null);
+  }, []);
 
   const startLogin = useCallback(
-    async (contactInfo: { email?: string; phone_number?: string }) => {
+    async (contactInfo: PendingContact, channel?: OtpChannelChoice) => {
       setSubmitting(true);
       setError(null);
       try {
-        await apiClient.post('/auth/login/start-otp', contactInfo, {
-          headers: { 'X-Client-Platform': 'web' },
-        });
-
-        const destination = contactInfo.email || contactInfo.phone_number || '';
-        if (contactInfo.email) {
-          sessionStorage.setItem('pendingLoginEmail', contactInfo.email);
-        }
-        if (contactInfo.phone_number) {
-          sessionStorage.setItem('pendingLoginPhone', contactInfo.phone_number);
-        }
-        sessionStorage.setItem(
-          'pendingLoginOtpExpiresAtMs',
-          String(Date.now() + 15 * 60 * 1000)
+        const { data } = await apiClient.post<LoginStartResponse>(
+          '/auth/login/start-otp',
+          { ...contactInfo, ...(channel ? { channel } : {}) },
+          { headers: { 'X-Client-Platform': 'web' } }
         );
-        sessionStorage.setItem('pendingLoginDestination', destination);
-        // Validate returnTo before storing
-        const validatedReturnTo = validateReturnTo(resolvedReturnTo);
-        sessionStorage.setItem('pendingLoginReturnTo', validatedReturnTo);
-
+        persistLoginOtpSession({
+          contact: contactInfo,
+          channel: data.channel || channel || (contactInfo.email ? 'email' : 'sms'),
+          availableChannels: data.availableChannels || [
+            contactInfo.email ? 'email' : 'sms',
+          ],
+          maskedEmail: data.maskedEmail,
+          maskedPhone: data.maskedPhone,
+          returnTo: resolvedReturnTo,
+        });
         navigate(`/auth/otp?flow=login`);
         onClose();
+        resetChannelStep();
+      } catch (err: any) {
+        setError(
+          err?.response?.data?.error ||
+            err?.message ||
+            t('auth.loginError', 'Failed to send login code. Please try again.')
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [apiClient, navigate, onClose, resetChannelStep, resolvedReturnTo, t]
+  );
+
+  const lookupOptionsThenContinue = useCallback(
+    async (contactInfo: PendingContact) => {
+      setSubmitting(true);
+      setError(null);
+      try {
+        const { data } = await apiClient.post<LoginOtpOptionsResponse>(
+          '/auth/login/otp-options',
+          contactInfo,
+          { headers: { 'X-Client-Platform': 'web' } }
+        );
+        const channels = data.availableChannels || [];
+        if (channels.length <= 1) {
+          await startLogin(contactInfo, data.defaultChannel);
+          return;
+        }
+        setPendingContact(contactInfo);
+        setChannelOptions(data);
+        setSelectedChannel(data.defaultChannel);
+        setStep('channel');
+        setSubmitting(false);
       } catch (err: any) {
         setSubmitting(false);
         setError(
@@ -99,10 +206,14 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
         );
       }
     },
-    [apiClient, navigate, onClose, resolvedReturnTo, t]
+    [apiClient, startLogin, t]
   );
 
   const handlePrimaryContinue = useCallback(() => {
+    if (step === 'channel' && pendingContact) {
+      void startLogin(pendingContact, selectedChannel);
+      return;
+    }
     if (identifierMode === 'phone') {
       const trimmed = phoneValue.trim();
       if (!trimmed) {
@@ -111,33 +222,46 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
       }
       try {
         const e164Phone = nationalDigitsToE164(trimmed, browserCountry);
-        void startLogin({ phone_number: e164Phone });
+        void lookupOptionsThenContinue({ phone_number: e164Phone });
       } catch (err: any) {
         setError(err.message || t('auth.phoneInvalid', 'Invalid phone number'));
       }
-    } else {
-      const trimmed = emailValue.trim().toLowerCase();
-      if (!trimmed) {
-        setError(t('auth.emailRequired', 'Please enter your email address'));
-        return;
-      }
-      if (!trimmed.includes('@')) {
-        setError(t('auth.emailInvalid', 'Please enter a valid email address'));
-        return;
-      }
-      void startLogin({ email: trimmed });
+      return;
     }
-  }, [identifierMode, phoneValue, emailValue, browserCountry, startLogin, t]);
+    const trimmed = emailValue.trim().toLowerCase();
+    if (!trimmed) {
+      setError(t('auth.emailRequired', 'Please enter your email address'));
+      return;
+    }
+    if (!trimmed.includes('@')) {
+      setError(t('auth.emailInvalid', 'Please enter a valid email address'));
+      return;
+    }
+    void lookupOptionsThenContinue({ email: trimmed });
+  }, [
+    browserCountry,
+    emailValue,
+    identifierMode,
+    lookupOptionsThenContinue,
+    pendingContact,
+    phoneValue,
+    selectedChannel,
+    startLogin,
+    step,
+    t,
+  ]);
 
   const switchToEmail = useCallback(() => {
     setIdentifierMode('email');
     setError(null);
-  }, []);
+    resetChannelStep();
+  }, [resetChannelStep]);
 
   const switchToPhone = useCallback(() => {
     setIdentifierMode('phone');
     setError(null);
-  }, []);
+    resetChannelStep();
+  }, [resetChannelStep]);
 
   const handleSignup = useCallback(() => {
     onClose();
@@ -233,10 +357,15 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
           color="text.secondary"
           sx={{ lineHeight: 1.5, px: 1 }}
         >
-          {t(
-            'auth.loginSubtitle',
-            'Sign in with a one-time code sent to your email or phone.'
-          )}
+          {step === 'channel'
+            ? t(
+                'auth.otp.chooseChannelSubtitle',
+                'Choose where we should send your login code.'
+              )
+            : t(
+                'auth.loginSubtitle',
+                'Sign in with a one-time code sent to your email or phone.'
+              )}
         </Typography>
       </Box>
 
@@ -248,88 +377,104 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
             </Alert>
           )}
 
-          <Box
-            sx={{
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 2.5,
-              p: 2,
-              bgcolor: alpha(theme.palette.primary.main, 0.03),
-            }}
-          >
-            <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ mb: 2 }}>
-              <Box
-                sx={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                  bgcolor: alpha(theme.palette.primary.main, 0.12),
-                  color: 'primary.main',
-                }}
+          {step === 'channel' && channelOptions ? (
+            <OtpChannelPicker
+              value={selectedChannel}
+              onChange={setSelectedChannel}
+              availableChannels={channelOptions.availableChannels}
+              maskedEmail={channelOptions.maskedEmail}
+              maskedPhone={channelOptions.maskedPhone}
+              disabled={submitting}
+            />
+          ) : (
+            <Box
+              sx={{
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 2.5,
+                p: 2,
+                bgcolor: alpha(theme.palette.primary.main, 0.03),
+              }}
+            >
+              <Stack
+                direction="row"
+                spacing={1.5}
+                alignItems="flex-start"
+                sx={{ mb: 2 }}
               >
-                <PrimaryIcon fontSize="small" />
-              </Box>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.25 }}>
-                  {identifierMode === 'phone'
-                    ? t('auth.phoneLoginTitle', 'Continue with phone')
-                    : t('auth.emailOtpLoginTitle', 'Continue with email code')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.45 }}>
-                  {primaryHint}
-                </Typography>
-              </Box>
-            </Stack>
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    bgcolor: alpha(theme.palette.primary.main, 0.12),
+                    color: 'primary.main',
+                  }}
+                >
+                  <PrimaryIcon fontSize="small" />
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography
+                    variant="subtitle1"
+                    fontWeight={700}
+                    sx={{ mb: 0.25 }}
+                  >
+                    {identifierMode === 'phone'
+                      ? t('auth.phoneLoginTitle', 'Continue with phone')
+                      : t('auth.emailOtpLoginTitle', 'Continue with email code')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ lineHeight: 1.45 }}
+                  >
+                    {primaryHint}
+                  </Typography>
+                </Box>
+              </Stack>
 
-            {identifierMode === 'phone' ? (
-              <TextField
-                fullWidth
-                placeholder={
-                  browserCountry === 'GA'
-                    ? '+241 X XX XX XX'
-                    : browserCountry === 'CM'
-                      ? '+237 6 XX XX XX XX'
-                      : t('auth.phonePlaceholder', 'Phone number')
-                }
-                value={phoneValue}
-                onChange={(e) => setPhoneValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                disabled={submitting}
-                autoFocus
-                inputProps={{
-                  inputMode: 'tel',
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                  },
-                }}
-              />
-            ) : (
-              <TextField
-                fullWidth
-                type="email"
-                placeholder={t('auth.emailPlaceholder', 'you@example.com')}
-                value={emailValue}
-                onChange={(e) => setEmailValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                disabled={submitting}
-                autoFocus
-                inputProps={{
-                  inputMode: 'email',
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                  },
-                }}
-              />
-            )}
-          </Box>
+              {identifierMode === 'phone' ? (
+                <TextField
+                  fullWidth
+                  placeholder={
+                    browserCountry === 'GA'
+                      ? '+241 X XX XX XX'
+                      : browserCountry === 'CM'
+                        ? '+237 6 XX XX XX XX'
+                        : t('auth.phonePlaceholder', 'Phone number')
+                  }
+                  value={phoneValue}
+                  onChange={(e) => setPhoneValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={submitting}
+                  autoFocus
+                  inputProps={{ inputMode: 'tel' }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': { borderRadius: 2 },
+                  }}
+                />
+              ) : (
+                <TextField
+                  fullWidth
+                  type="email"
+                  placeholder={t('auth.emailPlaceholder', 'you@example.com')}
+                  value={emailValue}
+                  onChange={(e) => setEmailValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={submitting}
+                  autoFocus
+                  inputProps={{ inputMode: 'email' }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': { borderRadius: 2 },
+                  }}
+                />
+              )}
+            </Box>
+          )}
 
           <Button
             variant="contained"
@@ -349,21 +494,29 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
             {submitting ? t('common.loading', 'Loading…') : primaryLabel}
           </Button>
 
-          <Button
-            variant="text"
-            color="primary"
-            disabled={submitting}
-            onClick={identifierMode === 'phone' ? switchToEmail : switchToPhone}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              alignSelf: 'center',
-            }}
-          >
-            {identifierMode === 'phone'
-              ? t('auth.useEmailInstead', 'Use email instead')
-              : t('auth.usePhoneInstead', 'Use phone instead')}
-          </Button>
+          {step === 'channel' ? (
+            <Button
+              variant="text"
+              color="primary"
+              disabled={submitting}
+              onClick={resetChannelStep}
+              sx={{ textTransform: 'none', fontWeight: 600, alignSelf: 'center' }}
+            >
+              {t('auth.otp.backToIdentifier', 'Use a different email or phone')}
+            </Button>
+          ) : (
+            <Button
+              variant="text"
+              color="primary"
+              disabled={submitting}
+              onClick={identifierMode === 'phone' ? switchToEmail : switchToPhone}
+              sx={{ textTransform: 'none', fontWeight: 600, alignSelf: 'center' }}
+            >
+              {identifierMode === 'phone'
+                ? t('auth.useEmailInstead', 'Use email instead')
+                : t('auth.usePhoneInstead', 'Use phone instead')}
+            </Button>
+          )}
 
           <Box
             sx={{

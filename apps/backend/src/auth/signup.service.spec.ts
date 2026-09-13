@@ -24,6 +24,7 @@ import { Auth0Service } from './auth0.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
+import { SessionStoreService } from './session-store.service';
 import { SignupService } from './signup.service';
 
 describe('SignupService', () => {
@@ -91,6 +92,14 @@ describe('SignupService', () => {
             isTestUsersEnabled: jest.fn().mockReturnValue(false),
             isTestEmail: jest.fn().mockReturnValue(false),
             isTestPhone: jest.fn().mockReturnValue(false),
+          },
+        },
+        {
+          provide: SessionStoreService,
+          useValue: {
+            generateSessionId: jest.fn().mockReturnValue('sid-1'),
+            createSession: jest.fn().mockResolvedValue(undefined),
+            getSession: jest.fn(),
           },
         },
         {
@@ -241,6 +250,9 @@ describe('SignupService', () => {
 
       expect(result.attemptId).toBe('attempt-123');
       expect(result.channel).toBe('sms');
+      expect(result.availableChannels).toEqual(['email', 'sms']);
+      expect(result.maskedEmail).toBe('ne***@example.com');
+      expect(result.maskedPhone).toBe('••••••0001');
       expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
       expect(auth0Service.startSmsOtp).toHaveBeenCalledWith('+237600000001');
       expect(
@@ -331,6 +343,63 @@ describe('SignupService', () => {
     });
   });
 
+  describe('resendSignupOtp', () => {
+    it('enforces cooldown for same-channel resend', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          last_otp_sent_at: new Date().toISOString(),
+        },
+      });
+
+      await expect(service.resendSignupOtp('attempt-123')).rejects.toMatchObject(
+        { status: HttpStatus.TOO_MANY_REQUESTS }
+      );
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
+    });
+
+    it('switches channel without cooldown and updates the attempt', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          channel: 'sms',
+          last_otp_sent_at: new Date().toISOString(),
+        },
+      });
+      hasuraSystemService.executeMutation.mockImplementation(
+        async (mutation: string, variables?: Record<string, unknown>) => {
+          if (mutation.includes('UpdateSignupAttemptChannel')) {
+            return {
+              update_signup_attempts_by_pk: {
+                ...pendingAttempt,
+                channel: variables?.channel || 'email',
+                last_otp_sent_at: pendingAttempt.last_otp_sent_at,
+              },
+            };
+          }
+          if (mutation.includes('TouchSignupOtp')) {
+            return {
+              update_signup_attempts_by_pk: {
+                ...pendingAttempt,
+                channel: 'email',
+                last_otp_sent_at: new Date().toISOString(),
+              },
+            };
+          }
+          return {};
+        }
+      );
+
+      const result = await service.resendSignupOtp('attempt-123', 'email');
+      expect(auth0Service.startEmailOtp).toHaveBeenCalledWith(
+        'new@example.com'
+      );
+      expect(auth0Service.startSmsOtp).not.toHaveBeenCalled();
+      expect(result.channel).toBe('email');
+      expect(result.availableChannels).toEqual(['email', 'sms']);
+    });
+  });
+
   describe('verifySignupOtp', () => {
     const auth0Token = {
       access_token: 'token',
@@ -399,8 +468,8 @@ describe('SignupService', () => {
       expect(
         metaConversionsService.trackCompleteRegistrationSafe
       ).toHaveBeenCalled();
-      expect(result.user.id).toBe('user-123');
-      expect(result.tokens.access_token).toBe('token');
+      expect(result.response.user.id).toBe('user-123');
+      expect(result.response.access_token).toBe('token');
     });
 
     it('rejects expired attempts without creating a user', async () => {
@@ -439,7 +508,7 @@ describe('SignupService', () => {
         otp: '000000',
       });
 
-      expect(result.user.id).toBe('user-123');
+      expect(result.response.user.id).toBe('user-123');
       expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
       expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
     });
@@ -480,7 +549,7 @@ describe('SignupService', () => {
 
       expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
       expect(userProvisioning.createPendingUser).toHaveBeenCalled();
-      expect(result.user.id).toBe('user-123');
+      expect(result.response.user.id).toBe('user-123');
     });
 
     it('resumes completion when the durable user already exists', async () => {
@@ -523,8 +592,8 @@ describe('SignupService', () => {
       expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
       expect(businessProvisioning.runPostCommitEffects).toHaveBeenCalled();
       expect(referralProvisioning.runPostCommitEffects).toHaveBeenCalled();
-      expect(result.user.id).toBe('user-123');
-      expect(result.tokens.access_token).toBe('token');
+      expect(result.response.user.id).toBe('user-123');
+      expect(result.response.access_token).toBe('token');
     });
   });
 

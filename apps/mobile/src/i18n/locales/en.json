@@ -3927,7 +3927,17 @@
       "resend": "Resend code",
       "resendIn": "Resend in {{time}}",
       "changeNumber": "Use a different number",
-      "changeEmail": "Use a different email address"
+      "changeEmail": "Use a different email address",
+      "changeContact": "Use a different email or phone",
+      "sendCodeVia": "Send code via",
+      "channelEmail": "Email",
+      "channelSms": "SMS",
+      "channelEmailHint": "Email address",
+      "channelSmsHint": "Phone number",
+      "chooseChannelSubtitle": "Choose where we should send your login code.",
+      "backToIdentifier": "Use a different email or phone",
+      "sendToEmailInstead": "Send code to email instead",
+      "sendToPhoneInstead": "Send code to phone instead"
     },
     "emailVerification": {
       "pageTitle": "Verify Your Email Address",

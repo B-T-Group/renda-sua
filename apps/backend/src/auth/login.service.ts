@@ -8,6 +8,12 @@ import { LockoutService } from './lockout.service';
 import { LoginStartDto } from './dto/login-start.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
 import type { ClientPlatform } from './platform.decorator';
+import {
+  buildAvailableOtpChannels,
+  maskEmailForOtp,
+  maskPhoneForOtp,
+  type OtpChannel,
+} from './otp-channel.util';
 
 interface Auth0IdTokenClaims {
   sub?: string;
@@ -50,6 +56,25 @@ interface MobileLoginResult {
 
 type LoginResult = WebLoginResult | MobileLoginResult;
 
+interface LoginUserRow {
+  id: string;
+  email: string | null;
+  phone_number: string | null;
+  email_verified: boolean | null;
+  phone_number_verified: boolean | null;
+}
+
+export interface LoginOtpOptionsResult {
+  defaultChannel: OtpChannel;
+  availableChannels: OtpChannel[];
+  maskedEmail?: string;
+  maskedPhone?: string;
+}
+
+export interface LoginOtpStartResult extends LoginOtpOptionsResult {
+  channel: OtpChannel;
+}
+
 @Injectable()
 export class LoginService {
   constructor(
@@ -79,24 +104,47 @@ export class LoginService {
     return decoded;
   }
 
-  private async getUserByEmail(email: string): Promise<{
-    id: string;
-    email: string;
-    email_verified: boolean | null;
-  } | null> {
+  private parseIdentifier(body: {
+    email?: string;
+    phone_number?: string;
+  }): { email: string; phone: string } {
+    const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
+    const phone = body.phone_number?.trim()
+      ? this.normalizePhone(body.phone_number)
+      : '';
+    if (email && phone) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Provide either email or phone_number, not both',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (!email && !phone) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Email or phone_number is required',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return { email, phone };
+  }
+
+  private async getUserByEmail(email: string): Promise<LoginUserRow | null> {
     const result = await this.hasuraSystemService.executeQuery<{
-      users: Array<{
-        id: string;
-        email: string;
-        email_verified: boolean | null;
-      }>;
+      users: LoginUserRow[];
     }>(
       `
       query UserByEmail($email: String!) {
         users(where: { email: { _eq: $email } }, limit: 1) {
           id
           email
+          phone_number
           email_verified
+          phone_number_verified
         }
       }
     `,
@@ -105,21 +153,11 @@ export class LoginService {
     return result.users?.[0] || null;
   }
 
-  private async getUserByPhoneNumber(phoneNumber: string): Promise<{
-    id: string;
-    email: string;
-    phone_number: string | null;
-    email_verified: boolean | null;
-    phone_number_verified: boolean | null;
-  } | null> {
+  private async getUserByPhoneNumber(
+    phoneNumber: string
+  ): Promise<LoginUserRow | null> {
     const result = await this.hasuraSystemService.executeQuery<{
-      users: Array<{
-        id: string;
-        email: string;
-        phone_number: string | null;
-        email_verified: boolean | null;
-        phone_number_verified: boolean | null;
-      }>;
+      users: LoginUserRow[];
     }>(
       `
       query UserByPhone($phone: String!) {
@@ -137,35 +175,98 @@ export class LoginService {
     return result.users?.[0] || null;
   }
 
-  async startLoginOtp(body: LoginStartDto): Promise<void> {
-    const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
-    const phone = body.phone_number?.trim()
-      ? this.normalizePhone(body.phone_number)
-      : '';
-    if (email && phone) {
+  private async findUserByIdentifier(
+    email: string,
+    phone: string
+  ): Promise<LoginUserRow> {
+    const user = email
+      ? await this.getUserByEmail(email)
+      : await this.getUserByPhoneNumber(phone);
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return user;
+  }
+
+  private buildOptionsFromUser(
+    user: LoginUserRow,
+    defaultChannel: OtpChannel
+  ): LoginOtpOptionsResult {
+    const availableChannels = buildAvailableOtpChannels({
+      email: user.email,
+      phoneNumber: user.phone_number,
+    });
+    return {
+      defaultChannel,
+      availableChannels,
+      maskedEmail: maskEmailForOtp(user.email),
+      maskedPhone: maskPhoneForOtp(user.phone_number),
+    };
+  }
+
+  async getLoginOtpOptions(body: LoginStartDto): Promise<LoginOtpOptionsResult> {
+    const { email, phone } = this.parseIdentifier(body);
+    const user = await this.findUserByIdentifier(email, phone);
+    return this.buildOptionsFromUser(user, email ? 'email' : 'sms');
+  }
+
+  private resolveDeliveryChannel(
+    user: LoginUserRow,
+    preferred: OtpChannel | undefined,
+    defaultChannel: OtpChannel
+  ): OtpChannel {
+    const available = buildAvailableOtpChannels({
+      email: user.email,
+      phoneNumber: user.phone_number,
+    });
+    const channel = preferred || defaultChannel;
+    if (!available.includes(channel)) {
       throw new HttpException(
         {
           success: false,
-          error: 'Provide either email or phone_number, not both',
+          error:
+            channel === 'sms'
+              ? 'No phone number on file for SMS OTP'
+              : 'No email on file for email OTP',
         },
         HttpStatus.BAD_REQUEST
       );
     }
-    if (email) {
-      await this.startLoginOtpWithEmail(email);
+    return channel;
+  }
+
+  private async sendOtpToChannel(
+    user: LoginUserRow,
+    channel: OtpChannel
+  ): Promise<void> {
+    if (channel === 'email') {
+      const email = this.normalizeEmail(user.email || '');
+      if (this.isTestUser(email, false)) return;
+      await this.auth0Service.startEmailOtp(email);
       return;
     }
-    if (phone) {
-      await this.startLoginOtpWithPhone(phone);
-      return;
-    }
-    throw new HttpException(
-      {
-        success: false,
-        error: 'Email or phone_number is required',
-      },
-      HttpStatus.BAD_REQUEST
+    const phone = this.normalizePhone(user.phone_number || '');
+    if (this.isTestUser(phone, true)) return;
+    await this.auth0Service.startSmsOtp(phone);
+  }
+
+  async startLoginOtp(body: LoginStartDto): Promise<LoginOtpStartResult> {
+    const { email, phone } = this.parseIdentifier(body);
+    const user = await this.findUserByIdentifier(email, phone);
+    const defaultChannel: OtpChannel = email ? 'email' : 'sms';
+    const channel = this.resolveDeliveryChannel(
+      user,
+      body.channel,
+      defaultChannel
     );
+    await this.sendOtpToChannel(user, channel);
+    return {
+      channel,
+      ...this.buildOptionsFromUser(user, defaultChannel),
+    };
   }
 
   private isTestUser(identifier: string, isPhone: boolean): boolean {
@@ -173,30 +274,6 @@ export class LoginService {
     return isPhone
       ? this.auth0Service.isTestPhone(identifier)
       : this.auth0Service.isTestEmail(identifier);
-  }
-
-  private async startLoginOtpWithEmail(email: string): Promise<void> {
-    const user = await this.getUserByEmail(email);
-    if (!user) {
-      throw new HttpException(
-        { success: false, error: 'User not found' },
-        HttpStatus.NOT_FOUND
-      );
-    }
-    if (this.isTestUser(email, false)) return;
-    await this.auth0Service.startEmailOtp(email);
-  }
-
-  private async startLoginOtpWithPhone(phoneNumber: string): Promise<void> {
-    const user = await this.getUserByPhoneNumber(phoneNumber);
-    if (!user) {
-      throw new HttpException(
-        { success: false, error: 'User not found' },
-        HttpStatus.NOT_FOUND
-      );
-    }
-    if (this.isTestUser(phoneNumber, true)) return;
-    await this.auth0Service.startSmsOtp(phoneNumber);
   }
 
   private async markEmailVerifiedIfNeeded(
@@ -239,36 +316,78 @@ export class LoginService {
     );
   }
 
+  private async ensureNotLockedOut(keys: string[]): Promise<void> {
+    for (const key of keys) {
+      if (!key) continue;
+      if (await this.lockout.isLockedOut(key)) {
+        await this.throwLockout(key);
+      }
+    }
+  }
+
+  private async recordLockoutFailure(keys: string[]): Promise<void> {
+    for (const key of keys) {
+      if (!key) continue;
+      await this.lockout.recordFailure(key);
+    }
+  }
+
+  private async recordLockoutSuccess(keys: string[]): Promise<void> {
+    for (const key of keys) {
+      if (!key) continue;
+      await this.lockout.recordSuccess(key);
+    }
+  }
+
+  private lockoutKeysForUser(
+    user: LoginUserRow,
+    destination: string
+  ): string[] {
+    const keys = [`user:${user.id}`, destination];
+    const email = this.normalizeEmail(user.email || '');
+    const phone = this.normalizePhone(user.phone_number || '');
+    if (email) keys.push(email);
+    if (phone) keys.push(phone);
+    return [...new Set(keys.filter(Boolean))];
+  }
+
   async verifyLoginOtp(
     body: LoginVerifyDto,
     platform: ClientPlatform,
     ipAddress?: string,
     userAgent?: string
   ): Promise<LoginResult> {
-    const email = body.email?.trim() ? this.normalizeEmail(body.email) : '';
-    const phone = body.phone_number?.trim()
-      ? this.normalizePhone(body.phone_number)
-      : '';
+    const { email, phone } = this.parseIdentifier(body);
     const otp = body.otp?.trim() || '';
-    if ((email && phone) || (!email && !phone)) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'Provide exactly one of email or phone_number with otp',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
     if (!otp) {
       throw new HttpException(
         { success: false, error: 'OTP is required' },
         HttpStatus.BAD_REQUEST
       );
     }
-    if (email) {
-      return this.verifyLoginOtpWithEmail(email, otp, platform, ipAddress, userAgent);
+    const user = await this.findUserByIdentifier(email, phone);
+    const defaultChannel: OtpChannel = email ? 'email' : 'sms';
+    const channel = body.channel
+      ? this.resolveDeliveryChannel(user, body.channel, defaultChannel)
+      : defaultChannel;
+    if (channel === 'email') {
+      return this.verifyLoginOtpWithEmail(
+        this.normalizeEmail(user.email || ''),
+        otp,
+        platform,
+        ipAddress,
+        userAgent,
+        user
+      );
     }
-    return this.verifyLoginOtpWithPhone(phone, otp, platform, ipAddress, userAgent);
+    return this.verifyLoginOtpWithPhone(
+      this.normalizePhone(user.phone_number || ''),
+      otp,
+      platform,
+      ipAddress,
+      userAgent,
+      user
+    );
   }
 
   private async verifyLoginOtpWithEmail(
@@ -276,20 +395,18 @@ export class LoginService {
     otp: string,
     platform: ClientPlatform,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    knownUser?: LoginUserRow
   ): Promise<LoginResult> {
-    // Check lockout status
-    if (await this.lockout.isLockedOut(email)) {
-      const remainingMs = await this.lockout.getRemainingLockoutMs(email);
-      const remainingMin = Math.ceil(remainingMs / 60000);
+    const user = knownUser || (await this.getUserByEmail(email));
+    if (!user) {
       throw new HttpException(
-        { 
-          success: false, 
-          error: `Too many failed attempts. Try again in ${remainingMin} minute(s).` 
-        },
-        HttpStatus.TOO_MANY_REQUESTS
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
       );
     }
+    const lockoutKeys = this.lockoutKeysForUser(user, email);
+    await this.ensureNotLockedOut(lockoutKeys);
 
     let tokenData: TokenData;
     try {
@@ -297,67 +414,15 @@ export class LoginService {
         ? this.auth0Service.verifyTestUserEmail(email)
         : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
     } catch (error: any) {
-      await this.lockout.recordFailure(email);
+      await this.recordLockoutFailure(lockoutKeys);
       throw error;
     }
 
-    await this.lockout.recordSuccess(email);
+    await this.recordLockoutSuccess(lockoutKeys);
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
-    const user = await this.getUserByEmail(email);
-    if (!user) {
-      throw new HttpException(
-        { success: false, error: 'User not found' },
-        HttpStatus.NOT_FOUND
-      );
-    }
-    const needsEmailVerify = user.email_verified !== true;
-    if (needsEmailVerify) {
-      try {
-        await this.businessProvisioning.ensureContractForUser(user.id);
-      } catch {
-        // Continue even if contract provisioning fails
-      }
-      await this.markEmailVerifiedIfNeeded(user.id, true);
-    }
-
-    if (platform === 'web') {
-      const sessionId = this.sessionStore.generateSessionId();
-      await this.sessionStore.createSession(sessionId, {
-        userId: user.id,
-        auth0RefreshToken: tokenData.refresh_token!,
-        auth0AccessToken: tokenData.access_token,
-        auth0IdToken: tokenData.id_token,
-        createdAt: Date.now(),
-        lastRefreshedAt: Date.now(),
-        userAgent,
-        ipAddress,
-      });
-
-      return {
-        sessionId,
-        response: {
-          success: true,
-          verified: true,
-          access_token: tokenData.access_token,
-          id_token: tokenData.id_token,
-          token_type: tokenData.token_type,
-          expires_in: tokenData.expires_in,
-        },
-      };
-    }
-
-    return {
-      response: {
-        success: true,
-        verified: true,
-        access_token: tokenData.access_token,
-        id_token: tokenData.id_token,
-        refresh_token: tokenData.refresh_token,
-        token_type: tokenData.token_type,
-        expires_in: tokenData.expires_in,
-      },
-    };
+    await this.afterSuccessfulVerify(user, 'email');
+    return this.buildLoginResult(user, tokenData, platform, ipAddress, userAgent);
   }
 
   private async verifyLoginOtpWithPhone(
@@ -365,20 +430,18 @@ export class LoginService {
     otp: string,
     platform: ClientPlatform,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    knownUser?: LoginUserRow
   ): Promise<LoginResult> {
-    // Check lockout status
-    if (await this.lockout.isLockedOut(phoneNumber)) {
-      const remainingMs = await this.lockout.getRemainingLockoutMs(phoneNumber);
-      const remainingMin = Math.ceil(remainingMs / 60000);
+    const user = knownUser || (await this.getUserByPhoneNumber(phoneNumber));
+    if (!user) {
       throw new HttpException(
-        { 
-          success: false, 
-          error: `Too many failed attempts. Try again in ${remainingMin} minute(s).` 
-        },
-        HttpStatus.TOO_MANY_REQUESTS
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
       );
     }
+    const lockoutKeys = this.lockoutKeysForUser(user, phoneNumber);
+    await this.ensureNotLockedOut(lockoutKeys);
 
     let tokenData: TokenData;
     try {
@@ -386,30 +449,57 @@ export class LoginService {
         ? this.auth0Service.verifyTestUserPhone(phoneNumber)
         : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
     } catch (error: any) {
-      await this.lockout.recordFailure(phoneNumber);
+      await this.recordLockoutFailure(lockoutKeys);
       throw error;
     }
 
-    await this.lockout.recordSuccess(phoneNumber);
+    await this.recordLockoutSuccess(lockoutKeys);
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
-    const user = await this.getUserByPhoneNumber(phoneNumber);
-    if (!user) {
-      throw new HttpException(
-        { success: false, error: 'User not found' },
-        HttpStatus.NOT_FOUND
-      );
-    }
-    const needsPhoneVerify = user.phone_number_verified !== true;
-    if (needsPhoneVerify) {
-      try {
-        await this.businessProvisioning.ensureContractForUser(user.id);
-      } catch {
-        // Continue even if contract provisioning fails
-      }
-      await this.markPhoneVerifiedIfNeeded(user.id, true);
-    }
+    await this.afterSuccessfulVerify(user, 'sms');
+    return this.buildLoginResult(user, tokenData, platform, ipAddress, userAgent);
+  }
 
+  private async throwLockout(identifier: string): Promise<never> {
+    const remainingMs = await this.lockout.getRemainingLockoutMs(identifier);
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    throw new HttpException(
+      {
+        success: false,
+        error: `Too many failed attempts. Try again in ${remainingMin} minute(s).`,
+      },
+      HttpStatus.TOO_MANY_REQUESTS
+    );
+  }
+
+  private async afterSuccessfulVerify(
+    user: LoginUserRow,
+    channel: OtpChannel
+  ): Promise<void> {
+    const needsVerify =
+      channel === 'email'
+        ? user.email_verified !== true
+        : user.phone_number_verified !== true;
+    if (!needsVerify) return;
+    try {
+      await this.businessProvisioning.ensureContractForUser(user.id);
+    } catch {
+      // Continue even if contract provisioning fails
+    }
+    if (channel === 'email') {
+      await this.markEmailVerifiedIfNeeded(user.id, true);
+      return;
+    }
+    await this.markPhoneVerifiedIfNeeded(user.id, true);
+  }
+
+  private async buildLoginResult(
+    user: LoginUserRow,
+    tokenData: TokenData,
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<LoginResult> {
     if (platform === 'web') {
       const sessionId = this.sessionStore.generateSessionId();
       await this.sessionStore.createSession(sessionId, {
@@ -422,7 +512,6 @@ export class LoginService {
         userAgent,
         ipAddress,
       });
-
       return {
         sessionId,
         response: {
@@ -435,7 +524,6 @@ export class LoginService {
         },
       };
     }
-
     return {
       response: {
         success: true,
@@ -530,4 +618,3 @@ export class LoginService {
     await this.sessionStore.deleteSession(sessionId);
   }
 }
-

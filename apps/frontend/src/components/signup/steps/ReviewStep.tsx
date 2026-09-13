@@ -1,8 +1,14 @@
 import { Box, Divider, Paper, Stack, Typography } from '@mui/material';
-import React, { useMemo } from 'react';
+import { isValidPhoneNumber } from 'libphonenumber-js';
+import React, { useEffect, useMemo } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { isAfricanMarketCountry } from '../../../constants/marketCountries';
 import { useAgentReferralLookup } from '../../../hooks/useAgentReferralLookup';
+import {
+  OtpChannelPicker,
+  type OtpChannelChoice,
+} from '../../auth/OtpChannelPicker';
 import { useSignupWizardUi } from '../wizard/SignupWizardUiContext';
 import type { SignupFormValues } from '../wizard/types';
 
@@ -15,7 +21,7 @@ const PERSONA_LABELS: Record<string, { key: string; def: string }> = {
 export const ReviewStep: React.FC = () => {
   const { t } = useTranslation();
   const { countries } = useSignupWizardUi();
-  const { control } = useFormContext<SignupFormValues>();
+  const { control, setValue, formState } = useFormContext<SignupFormValues>();
   const values = useWatch({ control }) as SignupFormValues;
   const referralCode = values.business?.referralAgentCode ?? '';
   const { result: referralLookup } = useAgentReferralLookup(referralCode);
@@ -27,6 +33,26 @@ export const ReviewStep: React.FC = () => {
       found?.name || (code ? t(`completeProfile.countries.${code}`, code) : '')
     );
   }, [countries, t, values.country]);
+
+  const email = (values.contact?.email || '').trim();
+  const phone = (values.contact?.phone || '').trim();
+  const hasBothContacts =
+    Boolean(email) && Boolean(phone) && isValidPhoneNumber(phone);
+  const defaultChannel: OtpChannelChoice =
+    hasBothContacts && isAfricanMarketCountry(values.country) ? 'sms' : 'email';
+
+  useEffect(() => {
+    if (!hasBothContacts) return;
+    if (formState.dirtyFields.otpChannel) return;
+    if (values.otpChannel === defaultChannel) return;
+    setValue('otpChannel', defaultChannel, { shouldDirty: false });
+  }, [
+    defaultChannel,
+    formState.dirtyFields.otpChannel,
+    hasBothContacts,
+    setValue,
+    values.otpChannel,
+  ]);
 
   const reviewRow = (label: string, value: string) => (
     <Box sx={{ py: { xs: 1.25, sm: 1 } }}>
@@ -141,6 +167,17 @@ export const ReviewStep: React.FC = () => {
           )}
         </Box>
       </Paper>
+      {hasBothContacts ? (
+        <OtpChannelPicker
+          value={values.otpChannel || defaultChannel}
+          onChange={(channel) =>
+            setValue('otpChannel', channel, { shouldDirty: true })
+          }
+          availableChannels={['email', 'sms']}
+          maskedEmail={email}
+          maskedPhone={phone}
+        />
+      ) : null}
     </Stack>
   );
 };

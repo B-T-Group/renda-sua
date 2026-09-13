@@ -18,7 +18,11 @@ import { useStore } from '../../stores/RootStore';
 import { GhostButton } from '../../components/common/AppButton';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
 import { getEnv } from '../../config/auth0';
-import { startLoginOtpEmail, startLoginOtpSms } from '../../services/rendasuaLoginOtpService';
+import {
+  startLoginOtpEmail,
+  startLoginOtpSms,
+  type LoginOtpChannel,
+} from '../../services/rendasuaLoginOtpService';
 import { resendSignupOtp } from '../../services/rendasuaSignupOtpService';
 import { maskEmail, maskPhoneE164 } from '../../utils/agentProfileDisplay';
 import { getAuthFlowErrorKey } from '../../utils/authErrorI18nKey';
@@ -51,9 +55,27 @@ function OtpVerificationScreen() {
   const navigation = useNavigation<OtpVerificationScreenProps['navigation']>();
   const route = useRoute<OtpVerificationScreenProps['route']>();
   const params = route.params;
-  const isPhone = params.channel === 'phone';
   const isSignup = params.flow === 'signup';
   const otpLength = getEnv().auth0Config.otpLength;
+
+  const [deliveryChannel, setDeliveryChannel] = useState<LoginOtpChannel>(
+    params.channel === 'phone' ? 'sms' : 'email'
+  );
+  const [availableChannels, setAvailableChannels] = useState<LoginOtpChannel[]>(
+    () => {
+      if (params.availableChannels?.length) return params.availableChannels;
+      const channels: LoginOtpChannel[] = [];
+      if (params.email) channels.push('email');
+      if (params.phoneE164) channels.push('sms');
+      return channels.length ? channels : [params.channel === 'phone' ? 'sms' : 'email'];
+    }
+  );
+  const [maskedEmail, setMaskedEmail] = useState(
+    params.maskedEmail || (params.email ? maskEmail(params.email) : '')
+  );
+  const [maskedPhone, setMaskedPhone] = useState(
+    params.maskedPhone || (params.phoneE164 ? maskPhoneE164(params.phoneE164) : '')
+  );
 
   const [otp, setOtp] = useState('');
   const [resendSeconds, setResendSeconds] = useState(RESEND_COOLDOWN_SEC);
@@ -98,15 +120,25 @@ function OtpVerificationScreen() {
         return;
       }
 
-      const ok = isPhone
-        ? await auth.loginWithPasswordlessOtp(params.phoneE164, code)
-        : await auth.loginWithPasswordlessEmailOtp(params.email, code);
+      const ok = params.phoneE164
+        ? await auth.loginWithPasswordlessOtp(
+            params.phoneE164,
+            code,
+            deliveryChannel
+          )
+        : params.email
+          ? await auth.loginWithPasswordlessEmailOtp(
+              params.email,
+              code,
+              deliveryChannel
+            )
+          : false;
       if (!ok) {
         setOtp('');
         verifyingRef.current = false;
       }
     },
-    [auth, isPhone, isSignup, params, t]
+    [auth, deliveryChannel, isSignup, params]
   );
 
   useEffect(() => {
@@ -114,8 +146,9 @@ function OtpVerificationScreen() {
     void runVerify(otp);
   }, [otp, otpLength, runVerify]);
 
-  const handleResend = async () => {
-    if (resendSeconds > 0 || resendBusy) return;
+  const handleResend = async (nextChannel?: LoginOtpChannel) => {
+    const switching = !!nextChannel && nextChannel !== deliveryChannel;
+    if ((!switching && resendSeconds > 0) || resendBusy) return;
     setResendBusy(true);
     setResendError(null);
     auth.clearError();
@@ -127,9 +160,13 @@ function OtpVerificationScreen() {
         setResendError('auth.signupFlow.attemptMissing');
         return;
       }
-      const r = await resendSignupOtp(attemptId);
+      const r = await resendSignupOtp(attemptId, nextChannel);
       setResendBusy(false);
       if (r.ok) {
+        if (r.channel) setDeliveryChannel(r.channel);
+        if (r.availableChannels?.length) setAvailableChannels(r.availableChannels);
+        if (r.maskedEmail) setMaskedEmail(r.maskedEmail);
+        if (r.maskedPhone) setMaskedPhone(r.maskedPhone);
         setResendSeconds(RESEND_COOLDOWN_SEC);
         setOtp('');
       } else {
@@ -138,11 +175,21 @@ function OtpVerificationScreen() {
       return;
     }
 
-    const r = isPhone
-      ? await startLoginOtpSms(params.phoneE164)
-      : await startLoginOtpEmail(params.email);
+    const channel = nextChannel || deliveryChannel;
+    const r = params.phoneE164
+      ? await startLoginOtpSms(params.phoneE164, channel)
+      : params.email
+        ? await startLoginOtpEmail(params.email, channel)
+        : { ok: false as const, error: 'Missing contact' };
     setResendBusy(false);
     if (r.ok) {
+      if (r.result?.channel) setDeliveryChannel(r.result.channel);
+      else setDeliveryChannel(channel);
+      if (r.result?.availableChannels?.length) {
+        setAvailableChannels(r.result.availableChannels);
+      }
+      if (r.result?.maskedEmail) setMaskedEmail(r.result.maskedEmail);
+      if (r.result?.maskedPhone) setMaskedPhone(r.result.maskedPhone);
       setResendSeconds(RESEND_COOLDOWN_SEC);
       setOtp('');
     } else {
@@ -161,10 +208,11 @@ function OtpVerificationScreen() {
         : t(getAuthFlowErrorKey(resendError))
       : null;
 
-  const masked = isPhone ? maskPhoneE164(params.phoneE164) : maskEmail(params.email);
+  const isPhone = deliveryChannel === 'sms';
+  const masked = isPhone ? maskedPhone : maskedEmail;
   const subtitleKey = isPhone ? 'auth.otp.subtitle' : 'auth.otp.subtitleEmail';
   const subtitleParams = isPhone ? { phone: masked } : { email: masked };
-
+  const alternateChannel = availableChannels.find((c) => c !== deliveryChannel);
   const isVerifying = auth.isLoading && otp.length === otpLength;
 
   return (
@@ -231,8 +279,22 @@ function OtpVerificationScreen() {
               style={styles.resendButton}
             />
 
+            {alternateChannel ? (
+              <GhostButton
+                label={
+                  alternateChannel === 'email'
+                    ? t('auth.otp.sendToEmailInstead', 'Send code to email instead')
+                    : t('auth.otp.sendToPhoneInstead', 'Send code to phone instead')
+                }
+                onPress={() => void handleResend(alternateChannel)}
+                disabled={resendBusy || auth.isLoading}
+                fullWidth
+                style={styles.resendButton}
+              />
+            ) : null}
+
             <GhostButton
-              label={isPhone ? t('auth.otp.changeNumber') : t('auth.otp.changeEmail')}
+              label={t('auth.otp.changeContact', 'Use a different email or phone')}
               onPress={() => navigation.goBack()}
               disabled={auth.isLoading}
               fullWidth
