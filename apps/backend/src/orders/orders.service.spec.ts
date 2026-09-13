@@ -2512,6 +2512,11 @@ describe('OrdersService', () => {
       (service as any).depositLedgerService.creditAndHoldDeposit = jest
         .fn()
         .mockResolvedValue(undefined);
+      (service as any).depositLedgerService.ensureDepositHeld.mockClear();
+      (service as any).depositRefundService.refundDeposit.mockClear();
+      (service as any).depositRefundService.refundDeposit.mockResolvedValue({
+        success: true,
+      });
       hasuraSystemService.executeMutation.mockResolvedValue({
         update_orders: { affected_rows: 1 },
       });
@@ -2534,6 +2539,14 @@ describe('OrdersService', () => {
         orderNumber: '49520979',
         depositTransactionId: depositTxnId,
       });
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('CasActivatePaidDeposit'),
+        expect.objectContaining({
+          orderId: 'order-uuid-123',
+          liveStatuses: ['pending_payment', 'pending'],
+          pendingDeposit: ['pending', 'failed'],
+        })
+      );
       expect(
         (service as any).depositRefundService.refundDeposit
       ).not.toHaveBeenCalled();
@@ -2647,6 +2660,142 @@ describe('OrdersService', () => {
         expect.stringContaining('MarkDepositCapturedOnly'),
         expect.anything()
       );
+    });
+
+    it.each(['failed', 'refunded'] as const)(
+      'refunds a late deposit on a %s order without resurrecting',
+      async (status) => {
+        jest
+          .spyOn(service as any, 'requireOrderDetailsByNumber')
+          .mockResolvedValue({
+            ...depositOrder,
+            current_status: status,
+          });
+
+        await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+        expect(
+          (service as any).depositRefundService.refundDeposit
+        ).toHaveBeenCalledWith('order-uuid-123', { allowAfterLock: true });
+        expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+          expect.stringContaining('MarkDepositCapturedOnly'),
+          expect.objectContaining({ orderId: 'order-uuid-123' })
+        );
+        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+          expect.stringContaining('CasActivatePaidDeposit'),
+          expect.anything()
+        );
+      }
+    );
+
+    it('refunds an already-paid deposit on a cancelled order without resurrecting', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          deposit_status: 'paid',
+          current_status: 'cancelled',
+        });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).not.toHaveBeenCalled();
+      expect(
+        (service as any).depositLedgerService.ensureDepositHeld
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-uuid-123', { allowAfterLock: true });
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('CasActivatePaidDeposit'),
+        expect.anything()
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('MarkDepositCapturedOnly'),
+        expect.anything()
+      );
+    });
+
+    it('repairs a missing hold on an already-paid live order without refunding', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          deposit_status: 'paid',
+          current_status: 'pending',
+        });
+
+      await service.finalizeDepositAfterCallback('49520979', depositTxnId);
+
+      expect(
+        (service as any).depositLedgerService.ensureDepositHeld
+      ).toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects a deposit callback whose transaction id does not match the order', async () => {
+      await expect(
+        service.finalizeDepositAfterCallback(
+          '49520979',
+          'aa000000-0000-4000-8000-000000000001'
+        )
+      ).rejects.toThrow(/mismatch/i);
+      expect(
+        (service as any).depositLedgerService.creditAndHoldDeposit
+      ).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when late-deposit refund is not idempotent', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          current_status: 'cancelled',
+        });
+      (service as any).depositRefundService.refundDeposit.mockResolvedValue({
+        success: false,
+        errorCode: 'REFUND_ERROR',
+        message: 'wallet down',
+      });
+
+      await expect(
+        service.finalizeDepositAfterCallback('49520979', depositTxnId)
+      ).rejects.toThrow('wallet down');
+    });
+
+    it('treats already-refunded late deposits as success', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          current_status: 'cancelled',
+        });
+      (service as any).depositRefundService.refundDeposit.mockResolvedValue({
+        success: false,
+        errorCode: 'ALREADY_REFUNDED',
+      });
+
+      await expect(
+        service.finalizeDepositAfterCallback('49520979', depositTxnId)
+      ).resolves.toBeUndefined();
+    });
+
+    it('fails closed when the client wallet account is missing', async () => {
+      hasuraSystemService.getAccount.mockResolvedValue(null);
+
+      await expect(
+        service.finalizeDepositAfterCallback('49520979', depositTxnId)
+      ).rejects.toThrow(/No account found/);
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
     });
   });
 
