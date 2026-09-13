@@ -438,6 +438,34 @@ describe('PendingWithdrawalResolveService', () => {
     expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
   });
 
+  it('cancels ghost null-id withdrawals after grace without releasing', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({
+        transaction_id: undefined,
+        created_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+      })
+    );
+    accountsService.hasTransactionForReference.mockResolvedValue(false);
+
+    const result = await service.resolveAsSystem('tx-1', {
+      allowImmediateCancel: false,
+      minAgeHours: 24,
+    });
+
+    expect(result.outcome).toBe('cancelled');
+    expect(accountsService.hasTransactionForReference).toHaveBeenCalledWith({
+      accountId: 'acct-1',
+      transactionType: 'hold',
+      referenceId: 'tx-1',
+    });
+    expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
+      status: 'cancelled',
+      error_message: 'Cancelled before provider accepted withdrawal',
+      error_code: 'USER_CANCELLED',
+    });
+  });
+
   it('releases and marks failed when MTN reports provider failure', async () => {
     databaseService.getTransactionById.mockResolvedValue(
       baseTx({ transaction_id: 'prov-1', provider: 'mtn' })
