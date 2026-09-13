@@ -908,10 +908,16 @@ const CheckoutPage: React.FC = () => {
     error: checkoutError,
   } = useCheckout();
 
-  // Set default address when addresses load (skip when a saved recipient needs an explicit pick)
+  // Set default address when addresses load (prefer linked recipient address when diaspora)
   useEffect(() => {
     if (addresses.length === 0 || selectedAddressId) return;
-    if (sendingToSomeoneElse && recipient.recipient_id && !recipient.address_id) {
+    if (sendingToSomeoneElse && recipient.recipient_id) {
+      const linkedId = recipient.address_id ?? null;
+      if (linkedId && addresses.some((addr) => addr.address.id === linkedId)) {
+        setSelectedAddressId(linkedId);
+        return;
+      }
+      // Saved recipient without a usable linked address — wait for an explicit pick.
       return;
     }
     const primaryAddress = addresses.find((addr) => addr.address.is_primary);
@@ -948,7 +954,7 @@ const CheckoutPage: React.FC = () => {
   const handleDeliveryAddressChange = useCallback(
     (addressId: string) => {
       setSelectedAddressId(addressId);
-      if (!recipient.recipient_id || !addressId) return;
+      if (!sendingToSomeoneElse || !recipient.recipient_id || !addressId) return;
       void updateRecipientMutation
         .mutateAsync({
           id: recipient.recipient_id,
@@ -958,7 +964,7 @@ const CheckoutPage: React.FC = () => {
           console.error('Failed to link address to recipient:', error);
         });
     },
-    [recipient.recipient_id, updateRecipientMutation]
+    [sendingToSomeoneElse, recipient.recipient_id, updateRecipientMutation]
   );
 
   // Redirect if cart is empty
