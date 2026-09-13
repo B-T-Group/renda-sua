@@ -21,6 +21,11 @@ import {
   resolveSignupOtpChannel,
   type SignupOtpChannel,
 } from './signup-channel.util';
+import {
+  buildAvailableOtpChannels,
+  maskEmailForOtp,
+  maskPhoneForOtp,
+} from './otp-channel.util';
 
 const ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 120 * 1000;
@@ -102,6 +107,9 @@ export interface SignupAttemptStartResult {
   channel: SignupOtpChannel;
   expiresAt: string;
   resendAvailableAt: string;
+  availableChannels: SignupOtpChannel[];
+  maskedEmail?: string;
+  maskedPhone?: string;
 }
 
 interface SignupAttemptRow {
@@ -220,9 +228,33 @@ export class SignupService {
     return this.toStartResult(attempt);
   }
 
-  async resendSignupOtp(attemptId: string): Promise<SignupAttemptStartResult> {
-    const attempt = await this.loadAttempt(attemptId);
+  async resendSignupOtp(
+    attemptId: string,
+    preferredChannel?: SignupOtpChannel
+  ): Promise<SignupAttemptStartResult> {
+    let attempt = await this.loadAttempt(attemptId);
     this.assertAttemptResendable(attempt);
+    const switching =
+      !!preferredChannel && preferredChannel !== attempt.channel;
+    if (switching) {
+      this.assertChannelAvailable(attempt, preferredChannel);
+      const previousChannel = attempt.channel;
+      attempt = await this.updateAttemptChannel(attempt.id, preferredChannel);
+      try {
+        await this.sendOtpForAttempt(attempt);
+      } catch (error: any) {
+        await this.updateAttemptChannel(attempt.id, previousChannel);
+        throw error;
+      }
+    } else {
+      this.assertResendCooldown(attempt);
+      await this.sendOtpForAttempt(attempt);
+    }
+    const updated = await this.touchOtpSent(attempt.id);
+    return this.toStartResult(updated);
+  }
+
+  private assertResendCooldown(attempt: SignupAttemptRow): void {
     const cooldownEnds = this.resendAvailableAt(attempt.last_otp_sent_at);
     if (Date.now() < cooldownEnds.getTime()) {
       throw new HttpException(
@@ -234,9 +266,28 @@ export class SignupService {
         HttpStatus.TOO_MANY_REQUESTS
       );
     }
-    await this.sendOtpForAttempt(attempt);
-    const updated = await this.touchOtpSent(attempt.id);
-    return this.toStartResult(updated);
+  }
+
+  private assertChannelAvailable(
+    attempt: SignupAttemptRow,
+    channel: SignupOtpChannel
+  ): void {
+    const available = buildAvailableOtpChannels({
+      email: attempt.email,
+      phoneNumber: attempt.phone_number,
+    });
+    if (!available.includes(channel)) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            channel === 'sms'
+              ? 'No phone number on this signup attempt for SMS OTP'
+              : 'No email on this signup attempt for email OTP',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   async verifySignupOtp(
@@ -534,6 +585,12 @@ export class SignupService {
       resendAvailableAt: this.resendAvailableAt(
         attempt.last_otp_sent_at
       ).toISOString(),
+      availableChannels: buildAvailableOtpChannels({
+        email: attempt.email,
+        phoneNumber: attempt.phone_number,
+      }),
+      maskedEmail: maskEmailForOtp(attempt.email),
+      maskedPhone: maskPhoneForOtp(attempt.phone_number),
     };
   }
 
@@ -747,6 +804,46 @@ export class SignupService {
       }
     `,
       { id: attemptId, sentAt: new Date().toISOString() }
+    );
+    return result.update_signup_attempts_by_pk;
+  }
+
+  private async updateAttemptChannel(
+    attemptId: string,
+    channel: SignupOtpChannel
+  ): Promise<SignupAttemptRow> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_signup_attempts_by_pk: SignupAttemptRow;
+    }>(
+      `
+      mutation UpdateSignupAttemptChannel(
+        $id: uuid!
+        $channel: String!
+        $updatedAt: timestamptz!
+      ) {
+        update_signup_attempts_by_pk(
+          pk_columns: { id: $id }
+          _set: { channel: $channel, updated_at: $updatedAt }
+        ) {
+          id
+          channel
+          email
+          phone_number
+          payload
+          status
+          verify_attempts
+          last_otp_sent_at
+          expires_at
+          completed_user_id
+          completion_result
+        }
+      }
+    `,
+      {
+        id: attemptId,
+        channel,
+        updatedAt: new Date().toISOString(),
+      }
     );
     return result.update_signup_attempts_by_pk;
   }

@@ -10,6 +10,7 @@ function mockRes() {
 
 describe('LoginController session cookie and CSRF gates', () => {
   let loginService: {
+    getLoginOtpOptions: jest.Mock;
     startLoginOtp: jest.Mock;
     verifyLoginOtp: jest.Mock;
     refreshSession: jest.Mock;
@@ -19,12 +20,46 @@ describe('LoginController session cookie and CSRF gates', () => {
 
   beforeEach(() => {
     loginService = {
-      startLoginOtp: jest.fn().mockResolvedValue(undefined),
+      getLoginOtpOptions: jest.fn().mockResolvedValue({
+        defaultChannel: 'email',
+        availableChannels: ['email'],
+        maskedEmail: 'a***@b.com',
+      }),
+      startLoginOtp: jest.fn().mockResolvedValue({
+        channel: 'email',
+        defaultChannel: 'email',
+        availableChannels: ['email'],
+        maskedEmail: 'a***@b.com',
+      }),
       verifyLoginOtp: jest.fn(),
       refreshSession: jest.fn(),
       destroySession: jest.fn().mockResolvedValue(undefined),
     };
     controller = new LoginController(loginService as never);
+  });
+
+  it('returns OTP channel options without starting OTP', async () => {
+    const body = await controller.otpOptions({ email: 'a@b.com' });
+    expect(body).toEqual({
+      success: true,
+      defaultChannel: 'email',
+      availableChannels: ['email'],
+      maskedEmail: 'a***@b.com',
+    });
+    expect(loginService.getLoginOtpOptions).toHaveBeenCalledWith({
+      email: 'a@b.com',
+    });
+  });
+
+  it('returns channel metadata from start-otp', async () => {
+    const body = await controller.startOtp({ email: 'a@b.com' });
+    expect(body).toEqual({
+      success: true,
+      channel: 'email',
+      defaultChannel: 'email',
+      availableChannels: ['email'],
+      maskedEmail: 'a***@b.com',
+    });
   });
 
   it('sets an HttpOnly session cookie for web OTP verify', async () => {

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -124,6 +124,8 @@ function SignupScreen({ navigation, route }: SignupScreenProps) {
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [otpChannel, setOtpChannel] = useState<'email' | 'sms'>('email');
+  const otpChannelTouchedRef = useRef(false);
 
   const { emailTaken, checkingEmail } = useSignupEmailAvailability(values.contact.email);
   const existingAccountLogin = useSignupExistingAccountLogin(
@@ -269,6 +271,25 @@ function SignupScreen({ navigation, route }: SignupScreenProps) {
       ),
     [values.country, values.contact.phoneNationalDigits]
   );
+
+  useEffect(() => {
+    otpChannelTouchedRef.current = false;
+  }, [values.country]);
+
+  useEffect(() => {
+    if (otpChannelTouchedRef.current) return;
+    if (!phoneE164) {
+      setOtpChannel('email');
+      return;
+    }
+    setOtpChannel(isAfricanMarketCountry(values.country) ? 'sms' : 'email');
+  }, [phoneE164, values.country]);
+
+  const handleOtpChannelChange = useCallback((channel: 'email' | 'sms') => {
+    otpChannelTouchedRef.current = true;
+    setOtpChannel(channel);
+  }, []);
+
   const phoneValid = Boolean(phoneE164 && isValidPhoneNumber(phoneE164));
   const phoneEntered = values.contact.phoneNationalDigits.trim().length > 0;
   const phoneOkOnContact = supportsStripe ? !phoneEntered || phoneValid : phoneValid;
@@ -446,7 +467,14 @@ function SignupScreen({ navigation, route }: SignupScreenProps) {
     const primaryPersona = legacyUserTypeFromPersonas(values.personas);
     const trimmedEmail = values.contact.email.trim().toLowerCase();
     const hasPhone = Boolean(phoneE164);
-    const useSms = hasPhone && isAfricanMarketCountry(values.country);
+    const defaultSms = hasPhone && isAfricanMarketCountry(values.country);
+    const preferredChannel =
+      otpChannel === 'sms' || otpChannel === 'email'
+        ? otpChannel
+        : defaultSms
+          ? 'sms'
+          : 'email';
+    const useSms = preferredChannel === 'sms' && hasPhone;
 
     try {
       trackSignupStarted({
@@ -463,23 +491,17 @@ function SignupScreen({ navigation, route }: SignupScreenProps) {
       );
       auth.setSignupWelcomePersona(primaryPersona);
       setSubmitting(false);
-      if (useSms && phoneE164) {
-        navigation.navigate('OtpVerification', {
-          channel: 'phone',
-          phoneE164,
-          flow: 'signup',
-          signupSource,
-          attemptId: res.attemptId,
-        });
-      } else {
-        navigation.navigate('OtpVerification', {
-          channel: 'email',
-          email: trimmedEmail,
-          flow: 'signup',
-          signupSource,
-          attemptId: res.attemptId,
-        });
-      }
+      navigation.navigate('OtpVerification', {
+        channel: res.channel === 'sms' ? 'phone' : 'email',
+        email: trimmedEmail || undefined,
+        phoneE164: phoneE164 || undefined,
+        flow: 'signup',
+        signupSource,
+        attemptId: res.attemptId,
+        availableChannels: res.availableChannels,
+        maskedEmail: res.maskedEmail,
+        maskedPhone: res.maskedPhone,
+      });
     } catch (e: unknown) {
       setSubmitting(false);
       const msg = e instanceof Error ? e.message : '';
@@ -498,6 +520,7 @@ function SignupScreen({ navigation, route }: SignupScreenProps) {
     canAdvanceFromStore,
     values,
     phoneE164,
+    otpChannel,
     supportsStripe,
     signupSource,
     auth,
@@ -720,6 +743,8 @@ function SignupScreen({ navigation, route }: SignupScreenProps) {
                   countryCode={values.country}
                   storeLocation={values.storeLocation}
                   onEditStep={goToStepId}
+                  otpChannel={otpChannel}
+                  onOtpChannelChange={handleOtpChannelChange}
                 />
               ) : null}
 

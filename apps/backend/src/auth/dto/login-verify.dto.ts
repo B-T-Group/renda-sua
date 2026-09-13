@@ -1,5 +1,14 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, Length, Matches, MinLength, ValidateIf } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 
 export class LoginVerifyDto {
   @ApiProperty({
@@ -34,4 +43,13 @@ export class LoginVerifyDto {
   @Length(4, 4, { message: 'OTP must be exactly 4 digits' })
   @Matches(/^\d{4}$/, { message: 'OTP must contain only digits' })
   otp!: string;
+
+  @ApiPropertyOptional({
+    enum: ['email', 'sms'],
+    description:
+      'Channel where the OTP was delivered. When set, Auth0 is verified against that contact on the user.',
+  })
+  @IsOptional()
+  @IsIn(['email', 'sms'])
+  channel?: 'email' | 'sms';
 }

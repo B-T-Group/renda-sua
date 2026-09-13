@@ -13,6 +13,7 @@ import { isoToFlagEmoji } from '../../../utils/countryFlagEmoji';
 import { ReviewDetailRow, ReviewSummaryCard } from '../ReviewSummaryCard';
 import type { WizardStepId } from '../wizard/types';
 import type { AgentFocus } from '../../../types/agentFocus';
+import { MobileOtpChannelPicker } from '../../auth/MobileOtpChannelPicker';
 
 type PersonaIcon = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 type Translate = (key: string, fallback: string) => string;
@@ -38,6 +39,8 @@ export interface ReviewStepProps {
   countryCode: string;
   storeLocation: DeliveryAddressFormValue;
   onEditStep: (id: WizardStepId) => void;
+  otpChannel?: 'email' | 'sms';
+  onOtpChannelChange?: (channel: 'email' | 'sms') => void;
 }
 
 function personaLabel(p: SignupStartPersona, t: Translate, agentFocus?: AgentFocus | ''): string {
@@ -260,6 +263,8 @@ export function ReviewStep({
   countryCode,
   storeLocation,
   onEditStep,
+  otpChannel,
+  onOtpChannelChange,
 }: ReviewStepProps) {
   const { t } = useTranslation();
   const referredBy = referralName(personas, referralAgentCode, referralLookup);
@@ -268,6 +273,7 @@ export function ReviewStep({
     : null;
 
   const { spacing } = useTheme();
+  const hasBothContacts = Boolean(email?.trim()) && Boolean(phoneE164);
   return (
     <View style={{ gap: spacing.sm }}>
       <ReviewHero />
@@ -293,6 +299,15 @@ export function ReviewStep({
       />
       {personas.includes('business') ? (
         <StoreCard storeLocation={storeLocation} onEdit={() => onEditStep('storeLocation')} />
+      ) : null}
+      {hasBothContacts && otpChannel && onOtpChannelChange ? (
+        <MobileOtpChannelPicker
+          value={otpChannel}
+          onChange={onOtpChannelChange}
+          availableChannels={['email', 'sms']}
+          maskedEmail={email}
+          maskedPhone={phoneE164 || undefined}
+        />
       ) : null}
     </View>
   );

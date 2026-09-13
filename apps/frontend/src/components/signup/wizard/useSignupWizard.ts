@@ -54,7 +54,28 @@ export function useSignupWizard({
   const draft = useMemo(() => loadSignupDraft(), []);
 
   const defaultValues = useMemo((): SignupFormValues => {
-    if (draft?.values) return draft.values;
+    if (draft?.values) {
+      return {
+        ...DEFAULT_SIGNUP_VALUES,
+        ...draft.values,
+        contact: {
+          ...DEFAULT_SIGNUP_VALUES.contact,
+          ...draft.values.contact,
+        },
+        business: {
+          ...DEFAULT_SIGNUP_VALUES.business,
+          ...draft.values.business,
+        },
+        storeLocation: {
+          ...DEFAULT_SIGNUP_VALUES.storeLocation,
+          ...draft.values.storeLocation,
+        },
+        otpChannel:
+          draft.values.otpChannel === 'sms' || draft.values.otpChannel === 'email'
+            ? draft.values.otpChannel
+            : DEFAULT_SIGNUP_VALUES.otpChannel,
+      };
+    }
     return {
       ...DEFAULT_SIGNUP_VALUES,
       personas: personasFromIntent(signupIntent),

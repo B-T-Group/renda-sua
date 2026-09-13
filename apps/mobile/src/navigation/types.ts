@@ -17,23 +17,21 @@ export type SignupParams = {
   source?: 'onboarding' | 'hero' | 'nudge' | 'organic';
 };
 
-export type OtpVerificationParams =
-  | {
-      channel: 'phone';
-      phoneE164: string;
-      flow?: 'login' | 'signup';
-      signupSource?: SignupParams['source'];
-      /** Required when flow is signup (deferred account creation). */
-      attemptId?: string;
-    }
-  | {
-      channel: 'email';
-      email: string;
-      flow?: 'login' | 'signup';
-      signupSource?: SignupParams['source'];
-      /** Required when flow is signup (deferred account creation). */
-      attemptId?: string;
-    };
+export type OtpVerificationParams = {
+  /** Delivery channel for the current OTP. */
+  channel: 'phone' | 'email';
+  /** Original login/signup identifier email when known. */
+  email?: string;
+  /** Original login/signup identifier phone when known. */
+  phoneE164?: string;
+  flow?: 'login' | 'signup';
+  signupSource?: SignupParams['source'];
+  /** Required when flow is signup (deferred account creation). */
+  attemptId?: string;
+  availableChannels?: Array<'email' | 'sms'>;
+  maskedEmail?: string;
+  maskedPhone?: string;
+};
 
 export type AuthStackParamList = {
   SavedAccounts: { mode?: 'continue' | 'switch' } | undefined;

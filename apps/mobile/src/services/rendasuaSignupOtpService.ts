@@ -24,11 +24,27 @@ export type SignupVerifyResult =
   | { type: 'error'; error: string };
 
 export async function resendSignupOtp(
-  attemptId: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+  attemptId: string,
+  channel?: 'email' | 'sms'
+): Promise<
+  | {
+      ok: true;
+      channel?: 'email' | 'sms';
+      availableChannels?: Array<'email' | 'sms'>;
+      maskedEmail?: string;
+      maskedPhone?: string;
+    }
+  | { ok: false; error: string }
+> {
   try {
-    await postSignupResendOtp(attemptId);
-    return { ok: true };
+    const data = await postSignupResendOtp(attemptId, channel);
+    return {
+      ok: true,
+      channel: data.channel,
+      availableChannels: data.availableChannels,
+      maskedEmail: data.maskedEmail,
+      maskedPhone: data.maskedPhone,
+    };
   } catch (e) {
     return {
       ok: false,

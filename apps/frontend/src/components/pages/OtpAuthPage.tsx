@@ -20,8 +20,47 @@ import LaunchPromoCongrats, {
 } from '../business/LaunchPromoCongrats';
 import { clearSignupDraft } from '../signup/wizard/useSignupDraft';
 import Logo from '../common/Logo';
+import type { OtpChannelChoice } from '../auth/OtpChannelPicker';
 
 const OTP_LENGTH = 4;
+
+function readChannels(key: string): OtpChannelChoice[] {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (c): c is OtpChannelChoice => c === 'email' || c === 'sms'
+    );
+  } catch {
+    return [];
+  }
+}
+
+function clearLoginSession(): void {
+  sessionStorage.removeItem('pendingLoginEmail');
+  sessionStorage.removeItem('pendingLoginPhone');
+  sessionStorage.removeItem('pendingLoginDestination');
+  sessionStorage.removeItem('pendingLoginReturnTo');
+  sessionStorage.removeItem('pendingLoginOtpExpiresAtMs');
+  sessionStorage.removeItem('pendingLoginOtpChannel');
+  sessionStorage.removeItem('pendingLoginAvailableChannels');
+  sessionStorage.removeItem('pendingLoginMaskedEmail');
+  sessionStorage.removeItem('pendingLoginMaskedPhone');
+}
+
+function clearSignupSessionKeys(): void {
+  sessionStorage.removeItem('pendingSignupAttemptId');
+  sessionStorage.removeItem('pendingSignupEmail');
+  sessionStorage.removeItem('pendingSignupPhone');
+  sessionStorage.removeItem('pendingSignupOtpChannel');
+  sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
+  sessionStorage.removeItem('pendingSignupUserId');
+  sessionStorage.removeItem('pendingSignupAvailableChannels');
+  sessionStorage.removeItem('pendingSignupMaskedEmail');
+  sessionStorage.removeItem('pendingSignupMaskedPhone');
+}
 
 const OtpAuthPage: React.FC = () => {
   const apiClient = useApiClient();
@@ -35,41 +74,59 @@ const OtpAuthPage: React.FC = () => {
     () => sessionStorage.getItem('pendingSignupAttemptId') || '',
     []
   );
-  const channel = useMemo(
-    () => {
-      if (isSignup) {
-        return (sessionStorage.getItem('pendingSignupOtpChannel') as 'email' | 'sms' | null) ||
-          (sessionStorage.getItem('pendingSignupPhone') ? 'sms' : 'email');
-      }
-      // Login flow: check for pendingLoginPhone
-      return sessionStorage.getItem('pendingLoginPhone') ? 'sms' : 'email';
-    },
-    [isSignup]
-  );
-  const initialEmail = useMemo(() => {
-    const key = isSignup ? 'pendingSignupEmail' : 'pendingLoginEmail';
-    return sessionStorage.getItem(key) || '';
-  }, [isSignup]);
-  const initialPhone = useMemo(() => {
-    const key = isSignup ? 'pendingSignupPhone' : 'pendingLoginPhone';
-    return sessionStorage.getItem(key) || '';
-  }, [isSignup]);
-  const maskedDestination = useMemo(() => {
-    const dest = sessionStorage.getItem('pendingLoginDestination') || initialEmail;
-    if (dest.includes('@')) {
-      const [local, domain] = dest.split('@');
-      return `${local.slice(0, 2)}***@${domain}`;
-    }
-    if (dest.length > 6) {
-      return `***${dest.slice(-4)}`;
-    }
-    return dest;
-  }, [initialEmail]);
-  const returnTo = useMemo(
-    () => validateReturnTo(sessionStorage.getItem('pendingLoginReturnTo') || '/app'),
+  const loginEmail = useMemo(
+    () => sessionStorage.getItem('pendingLoginEmail') || '',
     []
   );
-  const [email] = useState(initialEmail);
+  const loginPhone = useMemo(
+    () => sessionStorage.getItem('pendingLoginPhone') || '',
+    []
+  );
+  const signupEmail = useMemo(
+    () => sessionStorage.getItem('pendingSignupEmail') || '',
+    []
+  );
+  const signupPhone = useMemo(
+    () => sessionStorage.getItem('pendingSignupPhone') || '',
+    []
+  );
+  const [channel, setChannel] = useState<OtpChannelChoice>(() => {
+    if (isSignup) {
+      return (
+        (sessionStorage.getItem('pendingSignupOtpChannel') as OtpChannelChoice) ||
+        (signupPhone ? 'sms' : 'email')
+      );
+    }
+    return (
+      (sessionStorage.getItem('pendingLoginOtpChannel') as OtpChannelChoice) ||
+      (loginPhone ? 'sms' : 'email')
+    );
+  });
+  const [availableChannels, setAvailableChannels] = useState<OtpChannelChoice[]>(
+    () =>
+      readChannels(
+        isSignup
+          ? 'pendingSignupAvailableChannels'
+          : 'pendingLoginAvailableChannels'
+      )
+  );
+  const [maskedEmail, setMaskedEmail] = useState(
+    () =>
+      sessionStorage.getItem(
+        isSignup ? 'pendingSignupMaskedEmail' : 'pendingLoginMaskedEmail'
+      ) || ''
+  );
+  const [maskedPhone, setMaskedPhone] = useState(
+    () =>
+      sessionStorage.getItem(
+        isSignup ? 'pendingSignupMaskedPhone' : 'pendingLoginMaskedPhone'
+      ) || ''
+  );
+  const returnTo = useMemo(
+    () =>
+      validateReturnTo(sessionStorage.getItem('pendingLoginReturnTo') || '/app'),
+    []
+  );
   const [resendCooldownMs, setResendCooldownMs] = useState(0);
   const [digits, setDigits] = useState<string[]>(
     Array.from({ length: OTP_LENGTH }, () => '')
@@ -103,7 +160,6 @@ const OtpAuthPage: React.FC = () => {
   const minutes = Math.floor(remainingMs / 1000 / 60);
   const seconds = Math.floor((remainingMs / 1000) % 60);
   const timerLabel = `${minutes}:${String(seconds).padStart(2, '0')}`;
-
   const isOtpComplete = useMemo(
     () => otp.length === OTP_LENGTH && /^\d{4}$/.test(otp),
     [otp]
@@ -157,13 +213,51 @@ const OtpAuthPage: React.FC = () => {
     inputRefs.current[nextIndex]?.focus();
   };
 
-  const clearSignupSession = () => {
-    sessionStorage.removeItem('pendingSignupAttemptId');
-    sessionStorage.removeItem('pendingSignupEmail');
-    sessionStorage.removeItem('pendingSignupPhone');
-    sessionStorage.removeItem('pendingSignupOtpChannel');
-    sessionStorage.removeItem('pendingSignupOtpExpiresAtMs');
-    sessionStorage.removeItem('pendingSignupUserId');
+  const applyDeliveryMeta = (data: {
+    channel?: OtpChannelChoice;
+    availableChannels?: OtpChannelChoice[];
+    maskedEmail?: string;
+    maskedPhone?: string;
+    expiresAt?: string;
+  }) => {
+    if (data.channel) {
+      setChannel(data.channel);
+      sessionStorage.setItem(
+        isSignup ? 'pendingSignupOtpChannel' : 'pendingLoginOtpChannel',
+        data.channel
+      );
+    }
+    if (data.availableChannels?.length) {
+      setAvailableChannels(data.availableChannels);
+      sessionStorage.setItem(
+        isSignup
+          ? 'pendingSignupAvailableChannels'
+          : 'pendingLoginAvailableChannels',
+        JSON.stringify(data.availableChannels)
+      );
+    }
+    if (data.maskedEmail) {
+      setMaskedEmail(data.maskedEmail);
+      sessionStorage.setItem(
+        isSignup ? 'pendingSignupMaskedEmail' : 'pendingLoginMaskedEmail',
+        data.maskedEmail
+      );
+    }
+    if (data.maskedPhone) {
+      setMaskedPhone(data.maskedPhone);
+      sessionStorage.setItem(
+        isSignup ? 'pendingSignupMaskedPhone' : 'pendingLoginMaskedPhone',
+        data.maskedPhone
+      );
+    }
+    if (data.expiresAt) {
+      const ms = Date.parse(data.expiresAt) || Date.now() + 15 * 60 * 1000;
+      sessionStorage.setItem(
+        isSignup ? 'pendingSignupOtpExpiresAtMs' : 'pendingLoginOtpExpiresAtMs',
+        String(ms)
+      );
+      setRemainingMs(Math.max(0, ms - Date.now()));
+    }
   };
 
   const goToApp = () => {
@@ -191,7 +285,7 @@ const OtpAuthPage: React.FC = () => {
         });
         setPasswordlessSession(res.data);
         clearSignupDraft();
-        clearSignupSession();
+        clearSignupSessionKeys();
         await apiClient.get('/users/me');
         const promo = res.data?.launchPromo as LaunchPromoCongratsData | null;
         if (promo) {
@@ -210,22 +304,23 @@ const OtpAuthPage: React.FC = () => {
         return;
       }
 
-      const payload = initialEmail
-        ? { email: initialEmail, otp }
-        : initialPhone
-          ? { phone_number: initialPhone, otp }
-          : { email, otp };
+      if (!loginEmail && !loginPhone) {
+        setError(
+          t(
+            'auth.otpLogin.sessionMissing',
+            'Login session expired. Please start again.'
+          )
+        );
+        return;
+      }
+      const payload = loginEmail
+        ? { email: loginEmail, otp, channel }
+        : { phone_number: loginPhone, otp, channel };
       const res = await apiClient.post('/auth/login/verify-otp', payload);
       setPasswordlessSession(res.data);
       await apiClient.get('/users/me');
-      sessionStorage.removeItem('pendingLoginEmail');
-      sessionStorage.removeItem('pendingLoginPhone');
-      sessionStorage.removeItem('pendingLoginDestination');
-      sessionStorage.removeItem('pendingLoginReturnTo');
-      sessionStorage.removeItem('pendingLoginOtpExpiresAtMs');
-      // Validate returnTo before navigation
-      const validatedReturnTo = validateReturnTo(returnTo);
-      navigate(validatedReturnTo);
+      clearLoginSession();
+      navigate(validateReturnTo(returnTo));
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
@@ -237,8 +332,19 @@ const OtpAuthPage: React.FC = () => {
     }
   };
 
-  const handleResend = async () => {
-    if (resendBusy || isExpired || resendCooldownMs > 0) return;
+  const loginIdentifierPayload = ():
+    | { email: string }
+    | { phone_number: string }
+    | null => {
+    if (loginEmail) return { email: loginEmail };
+    if (loginPhone) return { phone_number: loginPhone };
+    return null;
+  };
+
+  const handleResend = async (nextChannel?: OtpChannelChoice) => {
+    const switching = !!nextChannel && nextChannel !== channel;
+    if (resendBusy || isExpired) return;
+    if (!switching && resendCooldownMs > 0) return;
     setResendBusy(true);
     setError(null);
     try {
@@ -254,24 +360,33 @@ const OtpAuthPage: React.FC = () => {
         }
         const res = await apiClient.post('/auth/signup/resend-otp', {
           attemptId,
+          ...(nextChannel ? { channel: nextChannel } : {}),
         });
-        if (res.data?.expiresAt) {
-          sessionStorage.setItem(
-            'pendingSignupOtpExpiresAtMs',
-            String(
-              Date.parse(res.data.expiresAt) || Date.now() + 15 * 60 * 1000
-            )
-          );
-          setRemainingMs(
-            Math.max(0, Date.parse(res.data.expiresAt) - Date.now())
-          );
-        }
+        applyDeliveryMeta(res.data || {});
         setDigits(Array.from({ length: OTP_LENGTH }, () => ''));
         setResendCooldownMs(120 * 1000);
         return;
       }
-      const payload = initialEmail ? { email: initialEmail } : initialPhone ? { phone_number: initialPhone } : { email };
-      await apiClient.post('/auth/login/start-otp', payload);
+      const identifier = loginIdentifierPayload();
+      if (!identifier) {
+        setError(
+          t(
+            'auth.otpLogin.sessionMissing',
+            'Login session expired. Please start again.'
+          )
+        );
+        return;
+      }
+      const res = await apiClient.post('/auth/login/start-otp', {
+        ...identifier,
+        channel: nextChannel || channel,
+      });
+      applyDeliveryMeta({
+        channel: res.data?.channel || nextChannel || channel,
+        availableChannels: res.data?.availableChannels,
+        maskedEmail: res.data?.maskedEmail,
+        maskedPhone: res.data?.maskedPhone,
+      });
       setDigits(Array.from({ length: OTP_LENGTH }, () => ''));
       setResendCooldownMs(120 * 1000);
     } catch (err: any) {
@@ -285,10 +400,11 @@ const OtpAuthPage: React.FC = () => {
     }
   };
 
-  const contactLabel =
-    channel === 'sms' && initialPhone
-      ? initialPhone
-      : email || t('auth.emailAddressLabel', 'Email address');
+  const alternateChannel = availableChannels.find((c) => c !== channel);
+  const displayDestination =
+    channel === 'sms'
+      ? maskedPhone || signupPhone || loginPhone
+      : maskedEmail || signupEmail || loginEmail;
 
   if (launchPromo) {
     return (
@@ -320,19 +436,26 @@ const OtpAuthPage: React.FC = () => {
             {t('auth.otp.verificationTitle', 'Enter verification code')}
           </Typography>
           <Typography color="text.secondary">
-            {isSignup && channel === 'sms'
-              ? t('auth.otp.enterCodeSms', 'Enter the code sent to {{phone}}.', {
-                  phone: contactLabel,
+            {channel === 'sms'
+              ? t('auth.otp.loginCodeSms', 'We sent a 4-digit code to {{phone}}.', {
+                  phone: displayDestination,
                 })
-              : isSignup
-                ? t('auth.otp.enterCode', 'Enter the code sent to your email.')
-                : channel === 'sms' && initialPhone
-                  ? t('auth.otp.loginCodeSms', 'We sent a 4-digit code to {{phone}}.', { phone: maskedDestination })
-                  : t('auth.otp.loginCodeEmail', 'We sent a 4-digit code to {{email}}.', { email: maskedDestination })}
+              : t(
+                  'auth.otp.loginCodeEmail',
+                  'We sent a 4-digit code to {{email}}.',
+                  { email: displayDestination }
+                )}
           </Typography>
-          {!isSignup && channel === 'sms' && (
-            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-              {t('auth.otp.smsMayTake', 'SMS delivery may take 30-60 seconds.')}
+          {channel === 'sms' && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontStyle: 'italic' }}
+            >
+              {t(
+                'auth.otp.smsMayTake',
+                'SMS delivery may take 30-60 seconds.'
+              )}
             </Typography>
           )}
           <Box
@@ -399,15 +522,35 @@ const OtpAuthPage: React.FC = () => {
             {resendBusy
               ? t('common.loading', 'Loading…')
               : resendCooldownMs > 0
-                ? t('auth.otp.resendIn', 'Resend in {{seconds}}s', { seconds: resendCooldownSec })
+                ? t('auth.otp.resendIn', 'Resend in {{seconds}}s', {
+                    seconds: resendCooldownSec,
+                  })
                 : t('auth.otp.resend', 'Resend code')}
           </Button>
-          <Button color="inherit" onClick={() => navigate(isSignup ? '/signup' : '/')}>
-            {isSignup && channel === 'sms'
-              ? t('auth.otp.changeNumber', 'Change phone number')
-              : isSignup
-                ? t('auth.otp.changeEmail', 'Change email')
-                : t('auth.otp.changeContact', 'Use a different email or phone')}
+          {alternateChannel ? (
+            <Button
+              color="primary"
+              disabled={resendBusy || isExpired}
+              onClick={() => void handleResend(alternateChannel)}
+            >
+              {alternateChannel === 'email'
+                ? t(
+                    'auth.otp.sendToEmailInstead',
+                    'Send code to email instead'
+                  )
+                : t(
+                    'auth.otp.sendToPhoneInstead',
+                    'Send code to phone instead'
+                  )}
+            </Button>
+          ) : null}
+          <Button
+            color="inherit"
+            onClick={() => navigate(isSignup ? '/signup' : '/')}
+          >
+            {isSignup
+              ? t('auth.otp.changeContact', 'Use a different email or phone')
+              : t('auth.otp.changeContact', 'Use a different email or phone')}
           </Button>
         </Stack>
       </Paper>

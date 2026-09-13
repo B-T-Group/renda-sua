@@ -40,6 +40,8 @@ export interface SignupFormValues {
   business: SignupBusinessValues;
   country: string;
   storeLocation: SignupStoreLocationValues;
+  /** OTP delivery preference when both email and phone are present. */
+  otpChannel: 'email' | 'sms';
 }
 
 export interface CountryOnboardingUi {
@@ -74,6 +76,7 @@ export const DEFAULT_SIGNUP_VALUES: SignupFormValues = {
     referralAgentCode: '',
   },
   country: '',
+  otpChannel: 'email',
   storeLocation: {
     street: '',
     city: '',

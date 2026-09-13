@@ -37,6 +37,9 @@ interface SignupAttemptStartResponse {
   channel: 'email' | 'sms';
   expiresAt: string;
   resendAvailableAt: string;
+  availableChannels?: Array<'email' | 'sms'>;
+  maskedEmail?: string;
+  maskedPhone?: string;
 }
 
 function persistSignupAttemptSession(input: {
@@ -45,15 +48,38 @@ function persistSignupAttemptSession(input: {
   email: string;
   phone: string | null;
   expiresAt: string;
+  availableChannels?: Array<'email' | 'sms'>;
+  maskedEmail?: string;
+  maskedPhone?: string;
 }): void {
   sessionStorage.setItem('pendingSignupAttemptId', input.attemptId);
   sessionStorage.setItem('pendingSignupEmail', input.email);
   sessionStorage.setItem('pendingSignupOtpChannel', input.channel);
-  sessionStorage.setItem('pendingSignupOtpExpiresAtMs', String(Date.parse(input.expiresAt) || Date.now() + 15 * 60 * 1000));
-  if (input.channel === 'sms' && input.phone) {
+  sessionStorage.setItem(
+    'pendingSignupOtpExpiresAtMs',
+    String(Date.parse(input.expiresAt) || Date.now() + 15 * 60 * 1000)
+  );
+  if (input.phone) {
     sessionStorage.setItem('pendingSignupPhone', input.phone);
   } else {
     sessionStorage.removeItem('pendingSignupPhone');
+  }
+  const channels: Array<'email' | 'sms'> =
+    input.availableChannels && input.availableChannels.length > 0
+      ? input.availableChannels
+      : [
+          ...(input.email ? (['email'] as const) : []),
+          ...(input.phone ? (['sms'] as const) : []),
+        ];
+  sessionStorage.setItem(
+    'pendingSignupAvailableChannels',
+    JSON.stringify(channels)
+  );
+  if (input.maskedEmail) {
+    sessionStorage.setItem('pendingSignupMaskedEmail', input.maskedEmail);
+  }
+  if (input.maskedPhone) {
+    sessionStorage.setItem('pendingSignupMaskedPhone', input.maskedPhone);
   }
   sessionStorage.removeItem('pendingSignupUserId');
   sessionStorage.removeItem('pendingSignupLaunchPromo');
@@ -185,10 +211,17 @@ export const SignupWizard: React.FC = () => {
       const payload = buildSignupPayload(values);
       const emailNormalized = (payload.email || '').trim().toLowerCase();
       const phoneNormalized = (payload.phone_number || '').trim();
-      const useSms =
-        Boolean(phoneNormalized) &&
-        isValidPhoneNumber(phoneNormalized) &&
-        isAfricanMarketCountry(values.country);
+      const hasPhone =
+        Boolean(phoneNormalized) && isValidPhoneNumber(phoneNormalized);
+      const defaultSms =
+        hasPhone && isAfricanMarketCountry(values.country);
+      const preferredChannel =
+        values.otpChannel === 'sms' || values.otpChannel === 'email'
+          ? values.otpChannel
+          : defaultSms
+            ? 'sms'
+            : 'email';
+      const useSms = preferredChannel === 'sms' && hasPhone;
 
       const { data } = await apiClient.post<SignupAttemptStartResponse>(
         '/auth/signup/start',
@@ -205,8 +238,11 @@ export const SignupWizard: React.FC = () => {
         attemptId: data.attemptId,
         channel: data.channel,
         email: emailNormalized,
-        phone: useSms ? phoneNormalized : null,
+        phone: phoneNormalized || null,
         expiresAt: data.expiresAt,
+        availableChannels: data.availableChannels,
+        maskedEmail: data.maskedEmail,
+        maskedPhone: data.maskedPhone,
       });
       navigate('/auth/otp?flow=signup');
     } catch (err: any) {
