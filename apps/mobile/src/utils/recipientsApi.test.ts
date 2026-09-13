@@ -12,6 +12,7 @@ const recipient: SavedRecipient = {
   phone: '+241077123456',
   country: 'GA',
   notify_whatsapp: true,
+  address_id: null,
 };
 
 describe('normalizeRecipientsList', () => {
@@ -24,6 +25,14 @@ describe('normalizeRecipientsList', () => {
 
   it('accepts a raw array of recipients', () => {
     expect(normalizeRecipientsList([recipient])).toEqual({
+      success: true,
+      recipients: [recipient],
+    });
+  });
+
+  it('defaults missing address_id to null', () => {
+    const { address_id: _ignored, ...withoutAddress } = recipient;
+    expect(normalizeRecipientsList([withoutAddress as SavedRecipient])).toEqual({
       success: true,
       recipients: [recipient],
     });
