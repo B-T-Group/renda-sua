@@ -8,6 +8,7 @@ import { StripeCaptureService } from '../stripe-payments/stripe-capture.service'
 import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
 import { OrderCleanupService } from './order-cleanup.service';
 import { CANCEL_REASON_NOT_PICKED_UP_IN_TIME } from './order-cleanup.constants';
+import { DepositRefundService } from './deposit-refund.service';
 import { OrderQueueService } from './order-queue.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { releaseReservedInventory } from './release-reserved-inventory.util';
@@ -28,7 +29,8 @@ export class OrderSystemJobsService {
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
-    private readonly orderCleanupService: OrderCleanupService
+    private readonly orderCleanupService: OrderCleanupService,
+    private readonly depositRefundService: DepositRefundService
   ) {}
 
   /** Daily cleanup: unpaid pending_payment past grace. */
@@ -109,6 +111,7 @@ export class OrderSystemJobsService {
       paymentStatus = await this.releaseOrRefundStripeIfNeeded(order);
       paymentFinalized = true;
       await this.patchAutoDeclinePaymentStatus(orderId, paymentStatus);
+      await this.refundHeldDepositIfNeeded(order);
       await this.decrementReservedQuantities(order.order_items || []);
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
@@ -159,6 +162,11 @@ export class OrderSystemJobsService {
           )
       );
     }
+    await this.refundHeldDepositIfNeeded(order).catch((error: any) =>
+      this.logger.error(
+        `Auto-decline deposit refund retry failed for ${orderId}: ${error?.message}`
+      )
+    );
     await this.decrementReservedQuantities(order.order_items || []).catch(
       (error: any) =>
         this.logger.error(
@@ -248,6 +256,27 @@ export class OrderSystemJobsService {
     `,
       { orderId, paymentStatus }
     );
+  }
+
+  private hasPaidDeposit(order: Orders): boolean {
+    const deposit = order as { deposit_amount?: number; deposit_status?: string };
+    const amount = Number(deposit.deposit_amount ?? 0);
+    return deposit.deposit_status === 'paid' && amount > 0;
+  }
+
+  /** System cancel always refunds a captured MoMo hold to available wallet. */
+  private async refundHeldDepositIfNeeded(order: Orders): Promise<void> {
+    if (!this.hasPaidDeposit(order)) {
+      return;
+    }
+    const result = await this.depositRefundService.refundDeposit(order.id, {
+      allowAfterLock: true,
+    });
+    if (!result.success) {
+      this.logger.error(
+        `Auto-decline deposit refund failed for ${order.id}: ${result.message}`
+      );
+    }
   }
 
   /** Release auth, or full-refund captured card charges. */
