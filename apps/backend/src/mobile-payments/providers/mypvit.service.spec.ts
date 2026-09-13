@@ -103,6 +103,54 @@ describe('MyPVitService.checkTransactionStatus', () => {
       })
     );
   });
+
+  it('retries GIVE_CHANGE when the PAYMENT query form also 404s', async () => {
+    const { service, httpGet } = buildService();
+    httpGet
+      .mockRejectedValueOnce({ response: { status: 404 } })
+      .mockRejectedValueOnce({ response: { status: 404 } })
+      .mockResolvedValueOnce({ data: successBody });
+
+    const result = await service.checkTransactionStatus(
+      'PAYTEST001',
+      '+24174123456'
+    );
+
+    expect(httpGet).toHaveBeenNthCalledWith(3, '/STATUSCODE1/status', {
+      params: {
+        transactionId: 'PAYTEST001',
+        accountOperationCode: AIRTEL_ACCOUNT,
+        transactionOperation: 'GIVE_CHANGE',
+      },
+      headers: { 'X-Secret': 'test-secret' },
+    });
+    expect(result.status).toBe('SUCCESS');
+  });
+
+  it('returns AMBIGUOUS when every status URL 404s', async () => {
+    const { service, httpGet } = buildService();
+    httpGet.mockRejectedValue({ response: { status: 404 } });
+
+    const result = await service.checkTransactionStatus(
+      'PAYTEST001',
+      '+24174123456'
+    );
+
+    expect(result.status).toBe('AMBIGUOUS');
+    expect(result.transactionId).toBe('PAYTEST001');
+    expect(httpGet).toHaveBeenCalledTimes(3);
+  });
+
+  it('rethrows non-404 provider errors after a path miss', async () => {
+    const { service, httpGet } = buildService();
+    httpGet
+      .mockRejectedValueOnce({ response: { status: 404 } })
+      .mockRejectedValueOnce({ response: { status: 503 } });
+
+    await expect(
+      service.checkTransactionStatus('PAYTEST001', '+24174123456')
+    ).rejects.toMatchObject({ response: { status: 503 } });
+  });
 });
 
 describe('MyPVitService.getMerchantOperationAccountCode', () => {
