@@ -390,6 +390,50 @@ describe('RecipientsService', () => {
 
       expect(result.address_id).toBe(addressId);
     });
+
+    it('rejects address_id that is not owned by the user', async () => {
+      executeQuery
+        .mockResolvedValueOnce({ user_recipients: [mockRecipient] })
+        .mockResolvedValueOnce({ client_addresses: [] });
+
+      try {
+        await service.updateRecipient(mockCtx, recipientId, {
+          address_id: 'addr-missing',
+        });
+        fail('expected HttpException');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+        expect(error.getResponse()).toEqual(
+          expect.objectContaining({ error: 'INVALID_ADDRESS' })
+        );
+      }
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects address_id when country does not match recipient', async () => {
+      executeQuery
+        .mockResolvedValueOnce({ user_recipients: [mockRecipient] })
+        .mockResolvedValueOnce({
+          client_addresses: [
+            { id: 'link-1', address: { id: 'addr-789', country: 'CM' } },
+          ],
+        });
+
+      try {
+        await service.updateRecipient(mockCtx, recipientId, {
+          address_id: 'addr-789',
+        });
+        fail('expected HttpException');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+        expect(error.getResponse()).toEqual(
+          expect.objectContaining({ error: 'ADDRESS_COUNTRY_MISMATCH' })
+        );
+      }
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteRecipient', () => {

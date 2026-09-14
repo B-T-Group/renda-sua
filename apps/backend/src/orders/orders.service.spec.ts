@@ -2786,6 +2786,23 @@ describe('OrdersService', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('treats uncaptured late deposits as success', async () => {
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          ...depositOrder,
+          current_status: 'cancelled',
+        });
+      (service as any).depositRefundService.refundDeposit.mockResolvedValue({
+        success: false,
+        errorCode: 'DEPOSIT_NOT_CAPTURED',
+      });
+
+      await expect(
+        service.finalizeDepositAfterCallback('49520979', depositTxnId)
+      ).resolves.toBeUndefined();
+    });
+
     it('fails closed when the client wallet account is missing', async () => {
       hasuraSystemService.getAccount.mockResolvedValue(null);
 

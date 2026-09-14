@@ -182,6 +182,35 @@ describe('OrderSystemJobsService auto-decline claim race', () => {
     expect(depositRefundService.refundDeposit).not.toHaveBeenCalled();
   });
 
+  it('does not refund a MoMo deposit that is still pending capture', async () => {
+    const { service, depositRefundService } = buildService({
+      order: { ...momoDepositOrder, deposit_status: 'pending' },
+    });
+
+    const declined = await service.autoDeclineUnacceptedOrderAsSystem(orderId);
+
+    expect(declined).toBe(true);
+    expect(depositRefundService.refundDeposit).not.toHaveBeenCalled();
+  });
+
+  it('still completes auto-decline when deposit refund fails', async () => {
+    const { service, depositRefundService, orderQueueService } = buildService({
+      order: momoDepositOrder,
+    });
+    depositRefundService.refundDeposit.mockResolvedValue({
+      success: false,
+      message: 'hold missing',
+    });
+
+    const declined = await service.autoDeclineUnacceptedOrderAsSystem(orderId);
+
+    expect(declined).toBe(true);
+    expect(depositRefundService.refundDeposit).toHaveBeenCalledWith(orderId, {
+      allowAfterLock: true,
+    });
+    expect(orderQueueService.sendOrderCancelledMessage).toHaveBeenCalled();
+  });
+
   it('skips when order is no longer pending', async () => {
     const { service, stripeCaptureService, executeMutation } = buildService({
       order: { ...pendingOrder, current_status: 'confirmed' },
