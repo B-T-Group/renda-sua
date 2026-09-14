@@ -14,11 +14,10 @@ import { CollectionPreviewMosaic } from './CollectionPreviewMosaic';
 
 export const COLLECTION_BROWSE_CARD_WIDTH = 252;
 
-const CARD_PADDING = 12;
-
-const TITLE_MIN_HEIGHT = 48;
-
-export const COLLECTION_CARD_GRID_SIZE = COLLECTION_BROWSE_CARD_WIDTH - CARD_PADDING * 2;
+const CARD_PADDING = 8;
+const MOSAIC_GAP = 6;
+const TILE_RADIUS = 10;
+const TITLE_MIN_HEIGHT = 40;
 
 export interface CollectionBrowseCardProps {
   collection: CollectionSummary;
@@ -60,14 +59,18 @@ export function CollectionBrowseCard({
         sx={{ display: 'block' }}
       >
         <Box sx={{ p: `${CARD_PADDING}px` }}>
-          <CollectionPreviewMosaic imageUrls={previewUrls} gap={12} tileBorderRadius={12} />
+          <CollectionPreviewMosaic
+            imageUrls={previewUrls}
+            gap={MOSAIC_GAP}
+            tileBorderRadius={TILE_RADIUS}
+          />
           <Typography
             variant="subtitle2"
             fontWeight={800}
             textAlign="center"
             sx={{
-              mt: 1.5,
-              minHeight: TITLE_MIN_HEIGHT - 8,
+              mt: 1,
+              minHeight: TITLE_MIN_HEIGHT,
               lineHeight: 1.3,
               display: '-webkit-box',
               WebkitLineClamp: 2,

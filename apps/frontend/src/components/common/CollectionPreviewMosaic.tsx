@@ -20,8 +20,9 @@ function MosaicTile({
     <Box
       sx={{
         aspectRatio: '1 / 1',
-        borderRadius: tileBorderRadius,
-        border: 1,
+        width: '100%',
+        borderRadius: `${tileBorderRadius}px`,
+        border: '1px solid',
         borderColor: 'divider',
         bgcolor: 'background.default',
         overflow: 'hidden',
@@ -47,28 +48,25 @@ function MosaicTile({
 
 export function CollectionPreviewMosaic({
   imageUrls,
-  gap = 12,
-  tileBorderRadius = 12,
+  gap = 6,
+  tileBorderRadius = 10,
 }: CollectionPreviewMosaicProps) {
   const slots = Array.from({ length: SLOT_COUNT }, (_, index) =>
     imageUrls[index]?.trim() || null
   );
 
-  const row = (left: number, right: number) => (
-    <Box sx={{ display: 'flex', gap, width: '100%' }}>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <MosaicTile uri={slots[left]} tileBorderRadius={tileBorderRadius} />
-      </Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <MosaicTile uri={slots[right]} tileBorderRadius={tileBorderRadius} />
-      </Box>
-    </Box>
-  );
-
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap, width: '100%' }}>
-      {row(0, 1)}
-      {row(2, 3)}
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: `${gap}px`,
+        width: '100%',
+      }}
+    >
+      {slots.map((uri, index) => (
+        <MosaicTile key={index} uri={uri} tileBorderRadius={tileBorderRadius} />
+      ))}
     </Box>
   );
 }
