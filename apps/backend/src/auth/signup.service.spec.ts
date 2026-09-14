@@ -35,6 +35,7 @@ describe('SignupService', () => {
   let userProvisioning: jest.Mocked<UserProvisioningService>;
   let businessProvisioning: jest.Mocked<BusinessProvisioningService>;
   let referralProvisioning: jest.Mocked<ReferralProvisioningService>;
+  let sessionStore: jest.Mocked<SessionStoreService>;
   let metaConversionsService: { trackCompleteRegistrationSafe: jest.Mock };
 
   const insertedUser = {
@@ -154,6 +155,7 @@ describe('SignupService', () => {
     userProvisioning = module.get(UserProvisioningService);
     businessProvisioning = module.get(BusinessProvisioningService);
     referralProvisioning = module.get(ReferralProvisioningService);
+    sessionStore = module.get(SessionStoreService);
     metaConversionsService = module.get(MetaConversionsService);
   });
 
@@ -398,6 +400,64 @@ describe('SignupService', () => {
       expect(result.channel).toBe('email');
       expect(result.availableChannels).toEqual(['email', 'sms']);
     });
+
+    it('reverts attempt channel when switch send fails', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          channel: 'sms',
+          last_otp_sent_at: new Date().toISOString(),
+        },
+      });
+      hasuraSystemService.executeMutation.mockImplementation(
+        async (mutation: string, variables?: Record<string, unknown>) => {
+          if (mutation.includes('UpdateSignupAttemptChannel')) {
+            return {
+              update_signup_attempts_by_pk: {
+                ...pendingAttempt,
+                channel: variables?.channel || 'email',
+              },
+            };
+          }
+          return {};
+        }
+      );
+      auth0Service.startEmailOtp.mockRejectedValue(new Error('Auth0 down'));
+
+      await expect(
+        service.resendSignupOtp('attempt-123', 'email')
+      ).rejects.toThrow('Auth0 down');
+
+      const channelUpdates = hasuraSystemService.executeMutation.mock.calls
+        .filter(([mutation]) =>
+          String(mutation).includes('UpdateSignupAttemptChannel')
+        )
+        .map(([, variables]) => variables);
+      expect(channelUpdates).toEqual([
+        expect.objectContaining({ channel: 'email' }),
+        expect.objectContaining({ channel: 'sms' }),
+      ]);
+    });
+
+    it('rejects channel switch when the attempt has no phone for SMS', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          phone_number: null,
+          channel: 'email',
+        },
+      });
+
+      await expect(
+        service.resendSignupOtp('attempt-123', 'sms')
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: {
+          error: 'No phone number on this signup attempt for SMS OTP',
+        },
+      });
+      expect(auth0Service.startSmsOtp).not.toHaveBeenCalled();
+    });
   });
 
   describe('verifySignupOtp', () => {
@@ -594,6 +654,86 @@ describe('SignupService', () => {
       expect(referralProvisioning.runPostCommitEffects).toHaveBeenCalled();
       expect(result.response.user.id).toBe('user-123');
       expect(result.response.access_token).toBe('token');
+    });
+
+    it('rejects verify when Auth0 id_token email does not match the attempt', async () => {
+      const mismatchedToken = {
+        ...auth0Token,
+        id_token:
+          'eyJhbGciOiJub25lIn0.' +
+          Buffer.from(
+            JSON.stringify({
+              sub: 'email|abc',
+              email: 'other@example.com',
+            })
+          ).toString('base64url') +
+          '.',
+      };
+      auth0Service.verifyEmailOtp.mockResolvedValue(mismatchedToken);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: pendingAttempt,
+      });
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-123', otp: '123456' })
+      ).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { error: 'Verified identity does not match signup' },
+      });
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
+
+    it('blocks verify after max attempts and marks the attempt failed', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          verify_attempts: 5,
+        },
+      });
+
+      await expect(
+        service.verifySignupOtp({ attemptId: 'attempt-123', otp: '1234' })
+      ).rejects.toMatchObject({
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        response: {
+          error: 'Too many invalid codes. Please start signup again.',
+        },
+      });
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('FailSignupAttempt'),
+        expect.objectContaining({ id: 'attempt-123' })
+      );
+    });
+
+    it('returns GONE on web replay when stored sessionId is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          status: 'completed',
+          completed_user_id: 'user-123',
+          completion_result: {
+            user: insertedUser,
+            launchPromo: null,
+            tokens: auth0Token,
+            completedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+      await expect(
+        service.verifySignupOtp(
+          { attemptId: 'attempt-123', otp: '000000' },
+          'web'
+        )
+      ).rejects.toMatchObject({
+        status: HttpStatus.GONE,
+        response: {
+          error: 'Signup session expired. Please log in to continue.',
+        },
+      });
+      expect(sessionStore.createSession).not.toHaveBeenCalled();
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
     });
   });
 
