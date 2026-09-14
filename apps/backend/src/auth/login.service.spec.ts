@@ -200,6 +200,41 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(result.channel).toBe('email');
       expect(result.availableChannels).toEqual(['email', 'sms']);
     });
+
+    it('rejects SMS when the user has no phone on file', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number: null }],
+      });
+
+      await expect(
+        service.startLoginOtp({
+          email: 'shop@example.com',
+          channel: 'sms',
+        })
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: { error: 'No phone number on file for SMS OTP' },
+      });
+      expect(auth0Service.startSmsOtp).not.toHaveBeenCalled();
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
+    });
+
+    it('rejects email when the user has no email on file', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, email: null }],
+      });
+
+      await expect(
+        service.startLoginOtp({
+          phone_number: '+237670000000',
+          channel: 'email',
+        })
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: { error: 'No email on file for email OTP' },
+      });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
+    });
   });
 
   describe('verifyLoginOtp', () => {
@@ -351,6 +386,24 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(lockout.recordSuccess).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordSuccess).toHaveBeenCalledWith('shop@example.com');
       expect(lockout.recordSuccess).toHaveBeenCalledWith('+237670000000');
+    });
+
+    it('rejects verify on a channel the user does not have', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number: null }],
+      });
+
+      await expect(
+        service.verifyLoginOtp(
+          { email: 'shop@example.com', otp: '1234', channel: 'sms' },
+          'mobile'
+        )
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: { error: 'No phone number on file for SMS OTP' },
+      });
+      expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
     });
   });
 

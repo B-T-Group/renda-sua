@@ -125,6 +125,16 @@ describe('DepositRefundService', () => {
     expect(depositLedgerService.releaseDepositToAvailable).not.toHaveBeenCalled();
   });
 
+  it('rejects refund when the deposit is not yet captured', async () => {
+    mockPaidOrder({ deposit_status: 'pending' });
+
+    const result = await service.refundDeposit(orderId);
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('DEPOSIT_NOT_CAPTURED');
+    expect(depositLedgerService.releaseDepositToAvailable).not.toHaveBeenCalled();
+  });
+
   it('rejects refund when the deposit transaction or account is missing', async () => {
     mockPaidOrder({ deposit_mobile_payment_transaction_id: null });
     const noTx = await service.refundDeposit(orderId);
