@@ -24,10 +24,16 @@ import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
 import {
+  createFloatingTabBarStyle,
   TabBarIconContent,
   useFloatingTabBarSafeAreaInsets,
+  useTabBarGeometry,
   useTabBarScreenOptions,
 } from './tabBarGeometry';
+import {
+  FloatingTabBarVisibilityProvider,
+  renderFloatingAnimatedTabBar,
+} from './floatingTabBarVisibility';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const GuestTab = createBottomTabNavigator<GuestTabParamList>();
@@ -108,18 +114,32 @@ function GuestTabsNavigator({
   preferBrowse?: boolean;
 }) {
   const { t } = useTranslation();
-  const tabBarScreenOptions = useTabBarScreenOptions();
-  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
+  const theme = useTheme();
   const { flags } = useClientFlags();
-  const visibleTabBarStyle = tabBarScreenOptions.tabBarStyle;
+  const tabBarScreenOptions = useTabBarScreenOptions({
+    floatingHosted: flags.floating_nav_enabled,
+  });
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
+  const geometry = useTabBarGeometry();
+  const visibleTabBarStyle = flags.floating_nav_enabled
+    ? createFloatingTabBarStyle({
+        theme,
+        geometry,
+        showShadow: true,
+        floatingHosted: true,
+        variant: 'light',
+      })
+    : tabBarScreenOptions({ route: { name: 'GuestAuth' } }).tabBarStyle;
 
   const initialTab =
     preferBrowse || !initialAuthRoute ? 'GuestBrowse' : 'GuestAuth';
 
   return (
+    <FloatingTabBarVisibilityProvider>
     <GuestTab.Navigator
       initialRouteName={initialTab}
       safeAreaInsets={floatingSafeAreaInsets}
+      tabBar={flags.floating_nav_enabled ? renderFloatingAnimatedTabBar : undefined}
       screenOptions={tabBarScreenOptions}
     >
       <GuestTab.Screen
@@ -225,6 +245,7 @@ function GuestTabsNavigator({
         )}
       </GuestTab.Screen>
     </GuestTab.Navigator>
+    </FloatingTabBarVisibilityProvider>
   );
 }
 

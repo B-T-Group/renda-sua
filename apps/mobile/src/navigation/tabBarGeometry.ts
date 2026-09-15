@@ -1,29 +1,68 @@
-import React, { type ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  type ReactNode,
+} from 'react';
 import type {
   BottomTabBarButtonProps,
   BottomTabNavigationOptions,
 } from '@react-navigation/bottom-tabs';
 import { PlatformPressable } from '@react-navigation/elements';
-import { Platform, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 import { useTheme } from '../contexts/ThemeContext';
 
 /** Horizontal inset of the floating pill from screen edges. */
-const TAB_BAR_HORIZONTAL_MARGIN = 14;
+export const TAB_BAR_HORIZONTAL_MARGIN = 14;
 /** Inner left/right padding so end icons clear the capsule curve. */
 const FLOATING_INNER_HORIZONTAL_PADDING = 18;
 /** Capsule corner radius (Facebook-style floating bar). */
-const TAB_BAR_RADIUS = 28;
+export const TAB_BAR_RADIUS = 28;
 /** Content height of the floating pill (icons only). */
-const FLOATING_PILL_HEIGHT = 56;
+export const FLOATING_PILL_HEIGHT = 56;
 /** Gap between home-indicator / screen bottom and the pill. */
-const FLOATING_BOTTOM_GAP = 8;
+const FLOATING_BOTTOM_GAP = 4;
 const FLOATING_ICON_HIT = 40;
+
+const REELS_TAB_NAMES = new Set([
+  'ClientReels',
+  'GuestReels',
+  'BusinessReels',
+]);
+
+export type FloatingTabBarVariant = 'light' | 'reels';
+
+const FloatingTabBarVariantContext = createContext<FloatingTabBarVariant>('light');
+
+export function FloatingTabBarVariantProvider({
+  variant,
+  children,
+}: {
+  variant: FloatingTabBarVariant;
+  children: ReactNode;
+}) {
+  return React.createElement(
+    FloatingTabBarVariantContext.Provider,
+    { value: variant },
+    children
+  );
+}
+
+export function useFloatingTabBarVariant(): FloatingTabBarVariant {
+  return useContext(FloatingTabBarVariantContext);
+}
+
+export function isReelsTabRoute(routeName: string): boolean {
+  return REELS_TAB_NAMES.has(routeName);
+}
 
 type TabBarOptions = {
   showShadow?: boolean;
   simpleLegacyLabels?: boolean;
+  /** When true, tab bar is positioned by FloatingAnimatedTabBar (no absolute self-position). */
+  floatingHosted?: boolean;
 };
 
 type AppTheme = ReturnType<typeof useTheme>;
@@ -81,17 +120,17 @@ export function useFloatingTabBarSafeAreaInsets():
   return { top: 0, right: 0, bottom: 0, left: 0 };
 }
 
-function tabBarShadowStyle(showShadow: boolean, floating: boolean) {
+function tabBarShadowStyle(showShadow: boolean, floating: boolean, reels: boolean) {
   if (!showShadow) {
     return { elevation: 0 };
   }
   if (floating) {
     return {
-      elevation: 16,
+      elevation: reels ? 10 : 16,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.14,
-      shadowRadius: 12,
+      shadowOpacity: reels ? 0.35 : 0.14,
+      shadowRadius: reels ? 10 : 12,
     };
   }
   return {
@@ -103,28 +142,47 @@ function tabBarShadowStyle(showShadow: boolean, floating: boolean) {
   };
 }
 
-function createTabBarStyle(
-  theme: AppTheme,
-  geometry: TabBarGeometry,
-  showShadow: boolean
-) {
-  if (geometry.floatingNavEnabled) {
+export function createFloatingTabBarStyle(args: {
+  theme: AppTheme;
+  geometry: TabBarGeometry;
+  showShadow: boolean;
+  floatingHosted: boolean;
+  variant: FloatingTabBarVariant;
+}) {
+  const { theme, geometry, showShadow, floatingHosted, variant } = args;
+  const reels = variant === 'reels';
+  const base = {
+    height: FLOATING_PILL_HEIGHT,
+    backgroundColor: reels ? 'rgba(28, 28, 30, 0.92)' : theme.colors.pageBackground,
+    borderTopWidth: 0,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: reels ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.1)',
+    borderRadius: TAB_BAR_RADIUS,
+    paddingBottom: 0,
+    paddingTop: 0,
+    paddingHorizontal: FLOATING_INNER_HORIZONTAL_PADDING,
+    overflow: 'hidden' as const,
+    ...tabBarShadowStyle(showShadow, true, reels),
+  };
+  if (floatingHosted) {
     return {
-      position: 'absolute' as const,
-      left: TAB_BAR_HORIZONTAL_MARGIN,
-      right: TAB_BAR_HORIZONTAL_MARGIN,
-      bottom: geometry.tabBarBottomOffset,
-      height: FLOATING_PILL_HEIGHT,
-      backgroundColor: theme.colors.pageBackground,
-      borderTopWidth: 0,
-      borderRadius: TAB_BAR_RADIUS,
-      paddingBottom: 0,
-      paddingTop: 0,
-      paddingHorizontal: FLOATING_INNER_HORIZONTAL_PADDING,
-      ...tabBarShadowStyle(showShadow, true),
+      ...base,
+      position: 'relative' as const,
+      left: undefined,
+      right: undefined,
+      bottom: undefined,
     };
   }
+  return {
+    ...base,
+    position: 'absolute' as const,
+    left: TAB_BAR_HORIZONTAL_MARGIN,
+    right: TAB_BAR_HORIZONTAL_MARGIN,
+    bottom: geometry.tabBarBottomOffset,
+  };
+}
 
+function createLegacyTabBarStyle(theme: AppTheme, geometry: TabBarGeometry, showShadow: boolean) {
   const verticalPadding = Platform.OS === 'ios' ? 20 : 10;
   return {
     position: 'absolute' as const,
@@ -138,7 +196,7 @@ function createTabBarStyle(
     borderRadius: 0,
     paddingBottom: geometry.bottomInset + verticalPadding,
     paddingTop: 8,
-    ...tabBarShadowStyle(showShadow, false),
+    ...tabBarShadowStyle(showShadow, false, false),
   };
 }
 
@@ -149,9 +207,14 @@ function FloatingTabBarButton(props: BottomTabBarButtonProps) {
       props.style,
       {
         flex: 1,
+        height: FLOATING_PILL_HEIGHT,
+        maxHeight: FLOATING_PILL_HEIGHT,
         justifyContent: 'center',
         alignItems: 'center',
+        paddingTop: 0,
+        paddingBottom: 0,
         paddingVertical: 0,
+        overflow: 'hidden',
       },
     ],
   });
@@ -159,34 +222,67 @@ function FloatingTabBarButton(props: BottomTabBarButtonProps) {
 
 export function useTabBarScreenOptions(
   options: TabBarOptions = {}
-): BottomTabNavigationOptions {
+): (props: { route: { name: string } }) => BottomTabNavigationOptions {
   const theme = useTheme();
   const geometry = useTabBarGeometry();
-  return {
-    headerShown: false,
-    tabBarActiveTintColor: theme.colors.primary.main,
-    tabBarInactiveTintColor: theme.colors.text.secondary,
-    tabBarShowLabel: !geometry.floatingNavEnabled,
-    tabBarStyle: createTabBarStyle(theme, geometry, options.showShadow !== false),
-    tabBarLabelStyle: options.simpleLegacyLabels
-      ? theme.typography.caption
-      : {
-          ...theme.typography.caption,
-          fontSize: 11,
-          fontWeight: '600',
-        },
-    tabBarItemStyle: geometry.floatingNavEnabled
-      ? {
+  const floatingHosted = Boolean(options.floatingHosted && geometry.floatingNavEnabled);
+  const showShadow = options.showShadow !== false;
+
+  return useCallback(
+    ({ route }) => {
+      const reelsMode =
+        geometry.floatingNavEnabled && isReelsTabRoute(route.name);
+      const variant: FloatingTabBarVariant = reelsMode ? 'reels' : 'light';
+
+      if (!geometry.floatingNavEnabled) {
+        return {
+          headerShown: false,
+          tabBarActiveTintColor: theme.colors.primary.main,
+          tabBarInactiveTintColor: theme.colors.text.secondary,
+          tabBarShowLabel: true,
+          tabBarStyle: createLegacyTabBarStyle(theme, geometry, showShadow),
+          tabBarLabelStyle: options.simpleLegacyLabels
+            ? theme.typography.caption
+            : {
+                ...theme.typography.caption,
+                fontSize: 11,
+                fontWeight: '600',
+              },
+          tabBarItemStyle: options.simpleLegacyLabels ? undefined : { paddingTop: 4 },
+        };
+      }
+
+      return {
+        headerShown: false,
+        tabBarActiveTintColor: reelsMode ? '#FFFFFF' : theme.colors.primary.main,
+        tabBarInactiveTintColor: reelsMode
+          ? 'rgba(255, 255, 255, 0.72)'
+          : theme.colors.text.secondary,
+        tabBarShowLabel: false,
+        tabBarStyle: createFloatingTabBarStyle({
+          theme,
+          geometry,
+          showShadow,
+          floatingHosted,
+          variant,
+        }),
+        tabBarItemStyle: {
           height: FLOATING_PILL_HEIGHT,
           paddingTop: 0,
           paddingBottom: 0,
           justifyContent: 'center',
-        }
-      : options.simpleLegacyLabels
-        ? undefined
-        : { paddingTop: 4 },
-    tabBarButton: geometry.floatingNavEnabled ? FloatingTabBarButton : undefined,
-  };
+        },
+        tabBarButton: FloatingTabBarButton,
+      };
+    },
+    [
+      floatingHosted,
+      geometry,
+      options.simpleLegacyLabels,
+      showShadow,
+      theme,
+    ]
+  );
 }
 
 export function TabBarIconContent({
@@ -200,6 +296,7 @@ export function TabBarIconContent({
 }) {
   const { flags } = useClientFlags();
   const theme = useTheme();
+  const variant = useFloatingTabBarVariant();
   const floating = flags.floating_nav_enabled;
 
   if (!floating) {
@@ -210,6 +307,11 @@ export function TabBarIconContent({
     );
   }
 
+  const focusBg =
+    variant === 'reels'
+      ? 'rgba(255, 255, 255, 0.18)'
+      : `${theme.colors.primary.main}1A`;
+
   return React.createElement(
     View,
     {
@@ -219,7 +321,7 @@ export function TabBarIconContent({
         width: FLOATING_ICON_HIT,
         height: FLOATING_ICON_HIT,
         borderRadius: FLOATING_ICON_HIT / 2,
-        backgroundColor: focused ? `${theme.colors.primary.main}1A` : 'transparent',
+        backgroundColor: focused ? focusBg : 'transparent',
       },
       accessibilityElementsHidden: true,
       importantForAccessibility: 'no-hide-descendants' as const,

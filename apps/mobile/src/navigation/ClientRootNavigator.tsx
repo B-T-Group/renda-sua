@@ -61,6 +61,10 @@ import {
   useFloatingTabBarSafeAreaInsets,
   useTabBarScreenOptions,
 } from './tabBarGeometry';
+import {
+  FloatingTabBarVisibilityProvider,
+  renderFloatingAnimatedTabBar,
+} from './floatingTabBarVisibility';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const ClientTab = createBottomTabNavigator<ClientMainTabParamList>();
@@ -84,9 +88,11 @@ function deferWithCancel(run: () => void): { cancel: () => void } {
 const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const tabBarScreenOptions = useTabBarScreenOptions();
-  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { flags } = useClientFlags();
+  const tabBarScreenOptions = useTabBarScreenOptions({
+    floatingHosted: flags.floating_nav_enabled,
+  });
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const navigation = useNavigation();
   const { auth, persona } = useStore();
   void auth.postAuthResumeInventoryItemId;
@@ -151,11 +157,13 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   ]);
 
   return (
-    <ClientTab.Navigator
-      initialRouteName="ClientBrowse"
-      safeAreaInsets={floatingSafeAreaInsets}
-      screenOptions={tabBarScreenOptions}
-    >
+    <FloatingTabBarVisibilityProvider>
+      <ClientTab.Navigator
+        initialRouteName="ClientBrowse"
+        safeAreaInsets={floatingSafeAreaInsets}
+        tabBar={flags.floating_nav_enabled ? renderFloatingAnimatedTabBar : undefined}
+        screenOptions={tabBarScreenOptions}
+      >
       <ClientTab.Screen
         name="ClientBrowse"
         component={ClientBrowseHomeScreen}
@@ -251,6 +259,7 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
         }}
       />
     </ClientTab.Navigator>
+    </FloatingTabBarVisibilityProvider>
   );
 });
 

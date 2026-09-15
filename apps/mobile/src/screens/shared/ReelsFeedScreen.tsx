@@ -16,6 +16,7 @@ import { ReelOverlay } from '../../components/reels/ReelOverlay';
 import { recordReelView, type FeedReel } from '../../services/reelsApi';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
+import { useReportTabBarScroll } from '../../navigation/floatingTabBarVisibility';
 
 export default function ReelsFeedScreen() {
   const { height } = useWindowDimensions();
@@ -23,6 +24,7 @@ export default function ReelsFeedScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation();
   const bottomPad = useMainTabContentBottomPadding(8);
+  const { onScroll: reportTabBarScroll } = useReportTabBarScroll();
   const { items, loading, error, loadMore, refresh, sessionId } = useReelsFeed();
   const [activeIndex, setActiveIndex] = useState(0);
   const viewStartRef = useRef<number>(Date.now());
@@ -98,7 +100,6 @@ export default function ReelsFeedScreen() {
   return (
     <FlatList
       style={styles.black}
-      contentContainerStyle={items.length ? undefined : { flexGrow: 1 }}
       data={items}
       keyExtractor={(item) => item.id}
       renderItem={renderItem}
@@ -106,6 +107,8 @@ export default function ReelsFeedScreen() {
       snapToInterval={height}
       decelerationRate="fast"
       showsVerticalScrollIndicator={false}
+      onScroll={reportTabBarScroll}
+      scrollEventThrottle={16}
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
       onEndReached={loadMore}

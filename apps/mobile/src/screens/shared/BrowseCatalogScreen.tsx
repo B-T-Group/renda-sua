@@ -50,6 +50,7 @@ import { useCatalogOrigin } from '../../hooks/useCatalogOrigin';
 import { useHeroCarouselActions } from '../../hooks/useHeroCarouselActions';
 import { BrowseFtueNudge } from '../../hooks/useBrowseFtueNudge';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { useReportTabBarScroll } from '../../navigation/floatingTabBarVisibility';
 
 const CatalogCardRow = memo(function CatalogCardRow({
   item,
@@ -209,6 +210,7 @@ function BrowseCatalogScreenInner({
   const theme = useTheme();
   const { colors, typography, spacing } = theme;
   const { flags } = useClientFlags();
+  const { onScroll: reportTabBarScroll } = useReportTabBarScroll();
   const [catalogSegment, setCatalogSegment] = useState<'all' | 'food'>(
     legacyFoodOnly ? 'food' : initialSegment
   );
@@ -873,6 +875,7 @@ function BrowseCatalogScreenInner({
         }
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
           useNativeDriver: false,
+          listener: reportTabBarScroll,
         })}
         scrollEventThrottle={16}
         onEndReached={() => {

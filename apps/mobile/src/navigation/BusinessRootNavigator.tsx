@@ -98,6 +98,7 @@ import {
   useFloatingTabBarSafeAreaInsets,
   useTabBarScreenOptions,
 } from './tabBarGeometry';
+import { renderFloatingAnimatedTabBar } from './floatingTabBarVisibility';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const Tab = createBottomTabNavigator<BusinessMainTabParamList>();
@@ -108,6 +109,7 @@ export type { BusinessAppNavScreen, BusinessMainTabParamList, BusinessRootStackP
 function BusinessMainTabsScreen() {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
+  const { flags } = useClientFlags();
   const tabBarScreenOptions = useTabBarScreenOptions({ showShadow: false });
   const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { totalCount: attentionBadgeCount, appIconBadgeCount } =
@@ -117,13 +119,13 @@ function BusinessMainTabsScreen() {
   });
   const { me } = useProfileMe();
   const isRentalFocused = me?.business?.main_interest === 'rent_items';
-  const { flags } = useClientFlags();
   useAppIconBadge(appIconBadgeCount);
   useCheckNotificationPermissionOnStart();
 
   return (
     <Tab.Navigator
       safeAreaInsets={floatingSafeAreaInsets}
+      tabBar={flags.floating_nav_enabled ? renderFloatingAnimatedTabBar : undefined}
       screenOptions={tabBarScreenOptions}
     >
       <Tab.Screen
