@@ -151,6 +151,24 @@ describe('MyPVitService.checkTransactionStatus', () => {
       service.checkTransactionStatus('PAYTEST001', '+24174123456')
     ).rejects.toMatchObject({ response: { status: 503 } });
   });
+
+  it('rejects a status body without a string status', async () => {
+    const { service, httpGet } = buildService();
+    httpGet.mockResolvedValue({ data: { message: 'Malformed provider body' } });
+
+    await expect(
+      service.checkTransactionStatus('PAYTEST001', '+24174123456')
+    ).rejects.toThrow('Malformed provider body');
+  });
+
+  it('rejects a status body with neither status nor message', async () => {
+    const { service, httpGet } = buildService();
+    httpGet.mockResolvedValue({ data: { amount: 150 } });
+
+    await expect(
+      service.checkTransactionStatus('PAYTEST001', '+24174123456')
+    ).rejects.toThrow('Invalid status response');
+  });
 });
 
 describe('MyPVitService.getMerchantOperationAccountCode', () => {
