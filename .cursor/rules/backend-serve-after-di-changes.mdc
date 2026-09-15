@@ -1,0 +1,42 @@
+---
+description: After NestJS module/service/DI changes, verify backend starts with nx serve
+globs: apps/backend/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Backend serve verification (modules / services / DI)
+
+Whenever a backend change **adds or wires** Nest providers — new module, service, controller, guard, interceptor, or other DI registration — do not treat the task as done until the app can start locally.
+
+## Required check
+
+Run (and leave running long enough to confirm boot):
+
+```bash
+nx serve backend --configuration=development
+```
+
+Success means TypeScript build completes **and** Nest boots without DI / module errors (look for the usual listen / Nest application successfully started log). Fix any failure before finishing.
+
+Prefer this over `nx build backend` alone when DI or module graphs changed — compile success does not prove providers resolve at runtime.
+
+## Also catch declaration emit breaks
+
+`backend:build` / serve use `@nx/js:tsc` with declaration emit. Public controller methods whose inferred return type references a **non-exported** service type fail with **TS4053** (“cannot be named”).
+
+```typescript
+// ❌ BAD — ReelRow used on public service methods but not exported
+interface ReelRow { id: string }
+
+// ✅ GOOD
+export interface ReelRow { id: string }
+```
+
+Export types returned (or inferred) from public Nest methods, or give controllers explicit exported return types.
+
+## Scope reminders
+
+- Register new services in the correct Nest module `providers` / `exports`.
+- Import feature modules into `AppModule` (or a parent module) when adding a new domain module.
+- Prefer existing global modules for shared infra; see `backend-nestjs-global-modules.mdc`.
+- Request-scoped Hasura access: see `backend-nestjs-request-scope.mdc`.

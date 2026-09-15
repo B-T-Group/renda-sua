@@ -16,7 +16,7 @@ interface MerchantBusiness {
   reels_enabled_allowlist: boolean;
 }
 
-interface ReelRow {
+export interface ReelRow {
   id: string;
   business_id: string;
   source_s3_key?: string | null;
