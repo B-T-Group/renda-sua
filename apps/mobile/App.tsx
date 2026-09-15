@@ -10,6 +10,7 @@ import { PaperProvider } from 'react-native-paper';
 import { observer } from 'mobx-react-lite';
 import { StripeAppProvider } from './src/components/payments/StripeAppProvider';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { ClientFlagsProvider } from './src/contexts/ClientFlagsContext';
 import { RootStore, RootStoreProvider } from './src/stores/RootStore';
 import { client } from './src/services/apolloClient';
 import { useExpoUpdatesOnStartup } from './src/hooks/useExpoUpdatesOnStartup';
@@ -169,9 +170,11 @@ export default function App() {
       <RootStoreProvider store={rootStore}>
         <ThemeProvider>
           <ApolloProvider client={client}>
-            <ThemedProviders>
-              <AppContent />
-            </ThemedProviders>
+            <ClientFlagsProvider>
+              <ThemedProviders>
+                <AppContent />
+              </ThemedProviders>
+            </ClientFlagsProvider>
           </ApolloProvider>
         </ThemeProvider>
       </RootStoreProvider>

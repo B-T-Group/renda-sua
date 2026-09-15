@@ -1450,6 +1450,10 @@
     }
   },
   "business": {
+    "follows": {
+      "follow": "Suivre la boutique",
+      "unfollow": "Ne plus suivre la boutique"
+    },
     "quietHome": {
       "reach": {
         "title": "Portée de la boutique",
@@ -1497,7 +1501,8 @@
         "hours": "Personnaliser les horaires",
         "catalog10": "Atteindre 10 produits approuvés",
         "catalog10Progress": "Atteindre 10 produits approuvés ({{current}}/{{target}})",
-        "mmPhone": "Confirmer le numéro Mobile Money"
+        "mmPhone": "Confirmer le numéro Mobile Money",
+        "firstReel": "Publiez votre premier reel"
       }
     },
     "engagement": {
@@ -1710,7 +1715,8 @@
       "orders": "Commandes",
       "items": "Articles",
       "rentals": "Locations",
-      "menu": "Menu"
+      "menu": "Menu",
+      "reels": "Reels"
     },
     "accounts": {
       "navTitle": "Portefeuille"
@@ -5127,6 +5133,14 @@
     "returnOvertimePending": "Retour enregistré. Une demande de paiement pour les heures supplémentaires a été envoyée au client — la réservation sera terminée une fois le paiement effectué."
   },
   "admin": {
+    "reels": {
+      "moderation": {
+        "title": "Modération des reels",
+        "empty": "Aucun reel en attente",
+        "approve": "Approuver",
+        "reject": "Refuser"
+      }
+    },
     "accountRecharge": {
       "screenTitle": "Recharge du compte HQ",
       "subtitle": "Collecter depuis un numéro mobile pour recharger le compte HQ Rendasua",
@@ -6388,6 +6402,24 @@
       "headline": "Ouverture de cet emplacement",
       "line1": "Chargement des commandes et du stock",
       "line2": "Presque prêt"
+    }
+  },
+  "reels": {
+    "empty": "Pas encore de reels. Revenez bientôt !",
+    "buy": "Acheter",
+    "notAvailableInMarket": "Indisponible dans votre région",
+    "comments": {
+      "title": "Commentaires",
+      "empty": "Aucun commentaire",
+      "placeholder": "Ajouter un commentaire…",
+      "post": "Publier"
+    },
+    "report": {
+      "title": "Signaler",
+      "subtitle": "Pourquoi signalez-vous ce contenu ?",
+      "details": "Détails supplémentaires (optionnel)",
+      "submit": "Envoyer le signalement",
+      "blockMerchant": "Bloquer cette boutique"
     }
   }
 }

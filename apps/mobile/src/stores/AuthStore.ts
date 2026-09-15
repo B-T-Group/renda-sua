@@ -35,6 +35,7 @@ const STORAGE_KEYS = {
   postAuthResumeInventoryDetailId: `${STORAGE_PREFIX}postAuthResumeInventoryDetailId`,
   postAuthResumeCartCheckout: `${STORAGE_PREFIX}postAuthResumeCartCheckout`,
   postAuthResumeLikeItemId: `${STORAGE_PREFIX}postAuthResumeLikeItemId`,
+  postAuthResumeFollowBusinessId: `${STORAGE_PREFIX}postAuthResumeFollowBusinessId`,
 };
 
 export interface User {
@@ -73,6 +74,8 @@ export class AuthStore {
   postAuthResumeCartCheckout = false;
   /** After guest taps like then signs in, persist this catalog item like once. */
   postAuthResumeLikeItemId: string | null = null;
+  /** After guest taps follow then signs in, persist this business follow once. */
+  postAuthResumeFollowBusinessId: string | null = null;
   /** Shown once after signup OTP; not persisted. */
   signupWelcomePending = false;
   signupWelcomePersona: 'client' | 'agent' | 'business' | null = null;
@@ -239,18 +242,38 @@ export class AuthStore {
     return id;
   }
 
+  async setPostAuthResumeForFollowBusiness(businessId: string): Promise<void> {
+    const id = businessId.trim();
+    if (!id) return;
+    runInAction(() => {
+      this.postAuthResumeFollowBusinessId = id;
+    });
+    await AsyncStorage.setItem(STORAGE_KEYS.postAuthResumeFollowBusinessId, id);
+  }
+
+  consumePostAuthResumeForFollowBusiness(): string | null {
+    const id = this.postAuthResumeFollowBusinessId?.trim() || null;
+    runInAction(() => {
+      this.postAuthResumeFollowBusinessId = null;
+    });
+    void AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeFollowBusinessId);
+    return id;
+  }
+
   private async loadPostAuthResumeFromStorage(): Promise<void> {
     try {
-      const [rawItem, rawDetail, rawCart, rawLike] = await Promise.all([
+      const [rawItem, rawDetail, rawCart, rawLike, rawFollow] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeInventoryItemId),
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeInventoryDetailId),
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeCartCheckout),
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeLikeItemId),
+        AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeFollowBusinessId),
       ]);
       const cart = rawCart === '1';
       const id = rawItem?.trim() || null;
       const detailId = rawDetail?.trim() || null;
       const likeId = rawLike?.trim() || null;
+      const followId = rawFollow?.trim() || null;
       runInAction(() => {
         if (cart) {
           this.postAuthResumeCartCheckout = true;
@@ -266,6 +289,7 @@ export class AuthStore {
           this.postAuthResumeCartCheckout = false;
         }
         this.postAuthResumeLikeItemId = likeId;
+        this.postAuthResumeFollowBusinessId = followId;
       });
     } catch {
       /* ignore */
@@ -304,6 +328,7 @@ export class AuthStore {
     await SessionService.completeLogin({ user, tokens });
     this.schedulePushTokenRegistration();
     this.flushPendingLike();
+    this.flushPendingFollow();
   }
 
   private flushPendingLike(): void {
@@ -313,6 +338,20 @@ export class AuthStore {
       void setItemLike(likeItemId, true)
         .then(() => {
           this.consumePostAuthResumeForLikeItem();
+        })
+        .catch(() => {
+          // Keep pending id for a later successful session resume.
+        });
+    });
+  }
+
+  private flushPendingFollow(): void {
+    const businessId = this.postAuthResumeFollowBusinessId?.trim();
+    if (!businessId) return;
+    void import('../services/businessFollowsApi').then(({ setBusinessFollow }) => {
+      void setBusinessFollow(businessId, true)
+        .then(() => {
+          this.consumePostAuthResumeForFollowBusiness();
         })
         .catch(() => {
           // Keep pending id for a later successful session resume.
@@ -342,6 +381,7 @@ export class AuthStore {
     });
     await this.persistAuth();
     this.flushPendingLike();
+    this.flushPendingFollow();
   }
 
   async clearSessionOnly(): Promise<void> {
@@ -356,6 +396,7 @@ export class AuthStore {
       this.postAuthResumeInventoryDetailId = null;
       this.postAuthResumeCartCheckout = false;
       this.postAuthResumeLikeItemId = null;
+      this.postAuthResumeFollowBusinessId = null;
       this.signupWelcomePending = false;
       this.signupWelcomePersona = null;
       this.signupLaunchPromo = null;
@@ -708,6 +749,7 @@ export class AuthStore {
       AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeInventoryDetailId),
       AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeCartCheckout),
       AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeLikeItemId),
+      AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeFollowBusinessId),
     ]);
   }
 
@@ -786,6 +828,7 @@ export class AuthStore {
         await SessionService.migrateExistingSessionOnHydrate();
         this.schedulePushTokenRegistration();
         this.flushPendingLike();
+        this.flushPendingFollow();
         return;
       }
 
@@ -825,6 +868,7 @@ export class AuthStore {
       }
       this.schedulePushTokenRegistration();
       this.flushPendingLike();
+      this.flushPendingFollow();
     } catch {
       await this.clearPersistedAuth();
       runInAction(() => {
@@ -847,6 +891,7 @@ export class AuthStore {
     this.postAuthResumeInventoryDetailId = null;
     this.postAuthResumeCartCheckout = false;
     this.postAuthResumeLikeItemId = null;
+    this.postAuthResumeFollowBusinessId = null;
     this.signupWelcomePending = false;
     this.signupWelcomePersona = null;
     this.signupLaunchPromo = null;

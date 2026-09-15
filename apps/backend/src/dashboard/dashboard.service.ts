@@ -56,6 +56,8 @@ export interface DashboardAggregatesDto {
   topViewedOutOfStockCount: number;
   /** Merchant preference: engagement tips / push / digest (default true). */
   tipsRemindersEnabled: boolean;
+  /** Approved reels ready for the public feed. */
+  approvedReelCount: number;
   clientCount?: number;
   agentsVerified?: number;
   agentsUnverified?: number;
@@ -936,13 +938,15 @@ export class DashboardService {
     pendingItemCount: number;
     rejectedItemCount: number;
     tipsRemindersEnabled: boolean;
+    approvedReelCount: number;
   }> {
-    const [catalog, locations, cleanupCount, tipsRemindersEnabled] =
+    const [catalog, locations, cleanupCount, tipsRemindersEnabled, approvedReelCount] =
       await Promise.all([
         this.getCatalogModerationCounts(businessId),
         this.getActiveLocationProfileSignals(businessId),
         this.countItemsNeedingAiCleanup(businessId),
         this.getTipsRemindersEnabled(businessId),
+        this.getApprovedReelCount(businessId),
       ]);
     return {
       ...catalog,
@@ -951,7 +955,28 @@ export class DashboardService {
       lastCatalogItemAt: catalog.lastCatalogItemAt,
       itemsNeedingAiCleanupCount: cleanupCount,
       tipsRemindersEnabled,
+      approvedReelCount,
     };
+  }
+
+  private async getApprovedReelCount(businessId: string): Promise<number> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        reels_aggregate: { aggregate: { count: number } };
+      }>(
+        `query($businessId:uuid!){
+          reels_aggregate(where:{
+            business_id:{_eq:$businessId}
+            moderation_status:{_eq:approved}
+            processing_status:{_eq:ready}
+          }){aggregate{count}}
+        }`,
+        { businessId }
+      );
+      return Number(res?.reels_aggregate?.aggregate?.count ?? 0);
+    } catch (error: any) {
+      return 0;
+    }
   }
 
   private async getTipsRemindersEnabled(businessId: string): Promise<boolean> {

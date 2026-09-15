@@ -1,0 +1,66 @@
+table:
+  name: reels
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: moderated_by_user
+    using:
+      foreign_key_constraint_on: moderated_by_user_id
+array_relationships:
+  - name: likes
+    using:
+      foreign_key_constraint_on:
+        column: reel_id
+        table:
+          name: reel_likes
+          schema: public
+  - name: view_events
+    using:
+      foreign_key_constraint_on:
+        column: reel_id
+        table:
+          name: reel_view_events
+          schema: public
+  - name: ai_reviews
+    using:
+      foreign_key_constraint_on:
+        column: reel_id
+        table:
+          name: reel_ai_reviews
+          schema: public
+select_permissions:
+  - role: business
+    permission:
+      columns: "*"
+      filter:
+        business:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - business_id
+        - subject_type
+        - subject_id
+        - caption
+        - market_country
+        - currency
+        - price_at_approval
+        - like_count
+        - view_count
+        - share_count
+        - video_url
+        - thumbnail_url
+        - duration_ms
+        - width
+        - height
+        - published_at
+      filter:
+        _and:
+          - moderation_status:
+              _eq: approved
+          - processing_status:
+              _eq: ready

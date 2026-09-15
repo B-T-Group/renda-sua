@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import { Snackbar } from 'react-native-paper';
@@ -23,6 +23,7 @@ export default observer(function GuestBrowseScreen({
 }) {
   const { t } = useTranslation();
   const navigation = useNavigation<BottomTabNavigationProp<GuestTabParamList>>();
+  const route = useRoute<RouteProp<GuestTabParamList, 'GuestBrowse'>>();
   const [checkoutCatalogItem, setCheckoutCatalogItem] = useState<CatalogInventoryItem | null>(null);
   const [checkoutVariantId, setCheckoutVariantId] = useState<string | null>(null);
   const [snack, setSnack] = useState<string | null>(null);
@@ -123,6 +124,7 @@ export default observer(function GuestBrowseScreen({
     <View style={{ flex: 1 }}>
       <BrowseCatalogScreen
         foodOnly={foodOnly}
+        initialSegment={route.params?.segment}
         onGuestBuyNow={variantFlow.requestBuy}
         onAddToCart={variantFlow.requestAddToCart}
         onItemPress={onItemPress}

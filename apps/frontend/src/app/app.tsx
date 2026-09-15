@@ -533,6 +533,22 @@ function App() {
               }
             />
             <Route
+              path="/admin/content-reports"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminContentReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/reels/moderation"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminReelsModerationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/items/ai-reviews"
               element={
                 <ProtectedRoute>

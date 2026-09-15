@@ -1,0 +1,36 @@
+table:
+  name: business_follows
+  schema: public
+object_relationships:
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+insert_permissions:
+  - role: client
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - user_id
+        - business_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
+        - business_id
+        - created_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+delete_permissions:
+  - role: client
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id

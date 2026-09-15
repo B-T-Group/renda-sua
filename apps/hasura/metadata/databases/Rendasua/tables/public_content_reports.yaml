@@ -1,0 +1,52 @@
+table:
+  name: content_reports
+  schema: public
+object_relationships:
+  - name: reporter
+    using:
+      foreign_key_constraint_on: reporter_user_id
+  - name: resolver
+    using:
+      foreign_key_constraint_on: resolved_by_user_id
+insert_permissions:
+  - role: client
+    permission:
+      check:
+        reporter_user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - subject_type
+        - subject_id
+        - reporter_user_id
+        - reason
+        - details
+        - status
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - subject_type
+        - subject_id
+        - reporter_user_id
+        - reason
+        - details
+        - status
+        - created_at
+      filter:
+        reporter_user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - subject_type
+        - subject_id
+        - reporter_user_id
+        - reason
+        - details
+        - status
+        - created_at
+      filter:
+        reporter_user_id:
+          _eq: X-Hasura-User-Id

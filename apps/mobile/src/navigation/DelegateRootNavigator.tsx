@@ -6,7 +6,6 @@ import { Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OrderMessageHeaderButton } from '@/components/orders/OrderMessageHeaderButton';
@@ -28,6 +27,7 @@ import type {
   DelegateMainTabParamList,
   DelegateRootStackParamList,
 } from './types';
+import { TabBarIconContent, useTabBarScreenOptions } from './tabBarGeometry';
 
 const Tab = createBottomTabNavigator<DelegateMainTabParamList>();
 const RootStack = createNativeStackNavigator<DelegateRootStackParamList>();
@@ -112,6 +112,7 @@ const DelegateMenuTabScreen = observer(function DelegateMenuTabScreen() {
   const { colors, spacing, typography } = useTheme();
   const { persona } = useStore();
   const insets = useSafeAreaInsets();
+  const tabBottomPadding = useMainTabContentBottomPadding(spacing.lg);
   const logoutSheet = useLogoutAccountSheet();
   const grant = persona.activeDelegation;
 
@@ -122,7 +123,7 @@ const DelegateMenuTabScreen = observer(function DelegateMenuTabScreen() {
         {
           backgroundColor: colors.pageBackground,
           paddingTop: insets.top + spacing.md,
-          paddingBottom: insets.bottom + spacing.lg,
+          paddingBottom: tabBottomPadding,
           paddingHorizontal: spacing.md,
         },
       ]}
@@ -167,42 +168,26 @@ const DelegateMenuTabScreen = observer(function DelegateMenuTabScreen() {
 
 function DelegateMainTabsScreen() {
   const { t } = useTranslation();
-  const { colors, typography } = useTheme();
-  const insets = useSafeAreaInsets();
-  const bottomInset = insets.bottom || 0;
-  const tabBarVerticalPadding = Platform.OS === 'ios' ? 20 : 10;
-  const tabBarHeightBase = Platform.OS === 'ios' ? 56 : 52;
-  const tabBarHeight = tabBarHeightBase + bottomInset + tabBarVerticalPadding / 2;
+  const tabBarScreenOptions = useTabBarScreenOptions({
+    showShadow: false,
+    simpleLegacyLabels: true,
+  });
   useCheckNotificationPermissionOnStart();
 
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary.main,
-        tabBarInactiveTintColor: colors.text.secondary,
-        tabBarStyle: {
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: tabBarHeight,
-          backgroundColor: colors.pageBackground,
-          borderTopWidth: 1,
-          borderTopColor: colors.divider,
-          paddingBottom: bottomInset + tabBarVerticalPadding,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: typography.caption,
-      }}
+      screenOptions={tabBarScreenOptions}
     >
       <Tab.Screen
         name="DelegateOrders"
         component={DelegateOrdersTabScreen}
         options={{
           title: t('business.orders.title', 'Orders'),
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="clipboard-list-outline" size={size} color={color} />
+          tabBarAccessibilityLabel: t('business.orders.title', 'Orders'),
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabBarIconContent focused={focused} label={t('business.orders.title', 'Orders')}>
+              <MaterialCommunityIcons name="clipboard-list-outline" size={size} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />
@@ -211,8 +196,11 @@ function DelegateMainTabsScreen() {
         component={DelegateMenuTabScreen}
         options={{
           title: t('business.tabs.menu', 'Menu'),
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="menu" size={size} color={color} />
+          tabBarAccessibilityLabel: t('business.tabs.menu', 'Menu'),
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabBarIconContent focused={focused} label={t('business.tabs.menu', 'Menu')}>
+              <MaterialCommunityIcons name="menu" size={size} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />

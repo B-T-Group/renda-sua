@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { CommonActions, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Platform, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../contexts/ThemeContext';
 import type { AuthStackParamList, GuestRootStackParamList, GuestTabParamList } from './types';
@@ -23,6 +22,9 @@ import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
+import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
+import { TabBarIconContent, useTabBarScreenOptions } from './tabBarGeometry';
+import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const GuestTab = createBottomTabNavigator<GuestTabParamList>();
 const GuestAuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -102,31 +104,9 @@ function GuestTabsNavigator({
   preferBrowse?: boolean;
 }) {
   const { t } = useTranslation();
-  const { colors, typography } = useTheme();
-  const insets = useSafeAreaInsets();
-
-  const bottomInset = insets.bottom || 0;
-  const tabBarVerticalPadding = Platform.OS === 'ios' ? 20 : 10;
-  const tabBarHeightBase = Platform.OS === 'ios' ? 56 : 52;
-  const tabBarHeight = tabBarHeightBase + bottomInset + tabBarVerticalPadding / 2;
-
-  const visibleTabBarStyle = {
-    position: 'absolute' as const,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: tabBarHeight,
-    backgroundColor: colors.pageBackground,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-    paddingBottom: bottomInset + tabBarVerticalPadding,
-    paddingTop: 8,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-  };
+  const tabBarScreenOptions = useTabBarScreenOptions();
+  const { flags } = useClientFlags();
+  const visibleTabBarStyle = tabBarScreenOptions.tabBarStyle;
 
   const initialTab =
     preferBrowse || !initialAuthRoute ? 'GuestBrowse' : 'GuestAuth';
@@ -134,26 +114,21 @@ function GuestTabsNavigator({
   return (
     <GuestTab.Navigator
       initialRouteName={initialTab}
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary.main,
-        tabBarInactiveTintColor: colors.text.secondary,
-        tabBarStyle: visibleTabBarStyle,
-        tabBarLabelStyle: {
-          ...typography.caption,
-          fontSize: 11,
-          fontWeight: '600',
-        },
-        tabBarItemStyle: { paddingTop: 4 },
-      }}
+      screenOptions={tabBarScreenOptions}
     >
       <GuestTab.Screen
         name="GuestBrowse"
         component={GuestBrowseScreen}
+        listeners={({ navigation }) => ({
+          tabPress: () => navigation.setParams({ segment: 'all' }),
+        })}
         options={{
           tabBarLabel: t('nav.guestTabs.browse', 'Items'),
+          tabBarAccessibilityLabel: t('nav.guestTabs.browse', 'Items'),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.guestTabs.browse', 'Items')}>
+              <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />
@@ -162,22 +137,52 @@ function GuestTabsNavigator({
         component={GuestRentalsScreen}
         options={{
           tabBarLabel: t('nav.guestTabs.rentals', 'Rentals'),
+          tabBarAccessibilityLabel: t('nav.guestTabs.rentals', 'Rentals'),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'calendar-clock' : 'calendar-clock-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.guestTabs.rentals', 'Rentals')}>
+              <MaterialCommunityIcons name={focused ? 'calendar-clock' : 'calendar-clock-outline'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />
       <GuestTab.Screen
         name="GuestFoods"
+        listeners={({ navigation }) => ({
+          focus: () => {
+            if (flags.floating_nav_enabled) {
+              navigation.navigate('GuestBrowse', { segment: 'food' });
+            }
+          },
+        })}
         options={{
           tabBarLabel: t('nav.guestTabs.foods', 'Food'),
+          tabBarAccessibilityLabel: t('nav.guestTabs.foods', 'Food'),
+          tabBarButton: flags.floating_nav_enabled ? () => null : undefined,
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.guestTabs.foods', 'Food')}>
+              <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       >
         {() => <GuestBrowseScreen foodOnly />}
       </GuestTab.Screen>
+      {flags.reels_enabled ? (
+        <GuestTab.Screen
+          name="GuestReels"
+          component={ReelsFeedScreen}
+          options={{
+            tabBarLabel: t('nav.guestTabs.reels', 'Reels'),
+            tabBarAccessibilityLabel: t('nav.guestTabs.reels', 'Reels'),
+            tabBarStyle: { display: 'none' },
+            tabBarIcon: ({ color, focused }) => (
+              <TabBarIconContent focused={focused} label={t('nav.guestTabs.reels', 'Reels')}>
+                <MaterialCommunityIcons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />
+              </TabBarIconContent>
+            ),
+          }}
+        />
+      ) : null}
       <GuestTab.Screen
         name="GuestAuth"
         listeners={({ navigation }) => ({
@@ -193,12 +198,15 @@ function GuestTabsNavigator({
           const hideTabBar = AUTH_ROUTES_HIDE_TAB_BAR.includes(focused);
           return {
             tabBarLabel: t('nav.guestTabs.login', 'Sign in'),
+            tabBarAccessibilityLabel: t('nav.guestTabs.login', 'Sign in'),
             tabBarIcon: ({ color, focused: iconFocused }) => (
-              <MaterialCommunityIcons
-                name={iconFocused ? 'account-circle' : 'account-circle-outline'}
-                size={24}
-                color={color}
-              />
+              <TabBarIconContent focused={iconFocused} label={t('nav.guestTabs.login', 'Sign in')}>
+                <MaterialCommunityIcons
+                  name={iconFocused ? 'account-circle' : 'account-circle-outline'}
+                  size={24}
+                  color={color}
+                />
+              </TabBarIconContent>
             ),
             tabBarStyle: hideTabBar ? { display: 'none' } : visibleTabBarStyle,
           };

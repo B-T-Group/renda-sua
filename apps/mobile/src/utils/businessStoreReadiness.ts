@@ -21,7 +21,12 @@ export type MerchantTipId =
   | 'ai_photos'
   | 'insights';
 
-export type ReadinessStepId = 'logo' | 'hours' | 'catalog_10' | 'mm_phone';
+export type ReadinessStepId =
+  | 'logo'
+  | 'hours'
+  | 'catalog_10'
+  | 'mm_phone'
+  | 'first_reel';
 
 export type ReadinessStep = {
   id: ReadinessStepId;
@@ -40,6 +45,7 @@ export type StoreReadinessInput = {
   /** True when Actions Needed already surfaces pending moderation as top focus. */
   actionsNeededPendingFocus?: boolean;
   isNudgeEligible: (id: string) => boolean;
+  reelsAllowlisted?: boolean;
 };
 
 export function approvedForInterest(
@@ -78,6 +84,10 @@ export function buildReadinessSteps(input: StoreReadinessInput): ReadinessStep[]
       id: 'mm_phone',
       done: verification.steps.mobilePaymentPhone?.complete === true,
     });
+  }
+  if (input.reelsAllowlisted && approved >= CATALOG_TARGET) {
+    const reelCount = aggregates?.approvedReelCount ?? 0;
+    steps.push({ id: 'first_reel', done: reelCount >= 1, current: reelCount, target: 1 });
   }
   return steps;
 }

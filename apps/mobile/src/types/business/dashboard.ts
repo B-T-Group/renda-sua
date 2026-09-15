@@ -30,6 +30,7 @@ export interface DashboardAggregates {
   rejectedItemCount?: number;
   topViewedOutOfStockCount?: number;
   tipsRemindersEnabled?: boolean;
+  approvedReelCount?: number;
 }
 
 export interface DashboardAggregatesResponse {

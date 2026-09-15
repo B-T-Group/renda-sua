@@ -37,6 +37,7 @@ import { MobilePaymentPhoneChooserSheet } from '../../components/dialogs/MobileP
 import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePaymentPhoneVerifyModal';
 import type { useBusinessDashboardScreen } from '../../hooks/business/useBusinessDashboardScreen';
 import type { BusinessRootStackParamList } from '../../navigation/types';
+import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 
 type Props = ReturnType<typeof useBusinessDashboardScreen> & {
   onOpenNotifications?: () => void;
@@ -118,6 +119,7 @@ export function BusinessDashboardView({
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
+  const tabBottomPadding = useMainTabContentBottomPadding(16);
   const navigation =
     useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const { auth } = useStore();
@@ -187,7 +189,7 @@ export function BusinessDashboardView({
           styles.scrollContent,
           {
             paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 100,
+            paddingBottom: tabBottomPadding,
             paddingHorizontal: 16,
           },
         ]}

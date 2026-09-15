@@ -31,10 +31,13 @@ interface GeneratedThumb {
 const STUCK_PROCESSING_MINUTES = 30;
 const PENDING_PICKUP_MINUTES = 10;
 const SWEEP_BATCH_SIZE = 50;
+const HOURLY_BACKFILL_PAGE_SIZE = 200;
+const HOURLY_BACKFILL_MAX_PER_SOURCE = 2000;
 
 @Injectable()
 export class ImageThumbnailsService implements OnModuleInit {
   private readonly logger = new Logger(ImageThumbnailsService.name);
+  private hourlyBackfillRunning = false;
 
   constructor(
     private readonly hasura: HasuraSystemService,
@@ -137,6 +140,7 @@ export class ImageThumbnailsService implements OnModuleInit {
     >(Q.claimMutation(sourceType), {
       id: imageId,
       now: new Date().toISOString(),
+      maxAttempts: THUMBNAIL_MAX_ATTEMPTS,
     });
     const result = data[`update_${table}`];
     if (!result || result.affected_rows === 0) return null;
@@ -340,6 +344,52 @@ export class ImageThumbnailsService implements OnModuleInit {
         : null;
     }
     return { queued, cursors: nextCursors };
+  }
+
+  /** Hourly safety net: enqueue all rows still missing thumbnails and eligible to retry. */
+  async runHourlyBackfill(): Promise<{ queued: number }> {
+    if (!this.isEnabled()) return { queued: 0 };
+    if (this.hourlyBackfillRunning) return { queued: 0 };
+    this.hourlyBackfillRunning = true;
+    try {
+      return await this.backfillAllMissingThumbnails();
+    } finally {
+      this.hourlyBackfillRunning = false;
+    }
+  }
+
+  private async backfillAllMissingThumbnails(): Promise<{ queued: number }> {
+    const sourceTypes = Object.keys(
+      THUMBNAIL_TABLES
+    ) as ThumbnailSourceType[];
+    let totalQueued = 0;
+    for (const sourceType of sourceTypes) {
+      totalQueued += await this.backfillSourceType(sourceType);
+    }
+    return { queued: totalQueued };
+  }
+
+  private async backfillSourceType(
+    sourceType: ThumbnailSourceType
+  ): Promise<number> {
+    let queued = 0;
+    let cursor: string | undefined;
+    while (queued < HOURLY_BACKFILL_MAX_PER_SOURCE) {
+      const limit = Math.min(
+        HOURLY_BACKFILL_PAGE_SIZE,
+        HOURLY_BACKFILL_MAX_PER_SOURCE - queued
+      );
+      const page = await this.backfill(
+        [sourceType],
+        limit,
+        cursor ? { [sourceType]: cursor } : undefined
+      );
+      queued += page.queued;
+      const nextCursor = page.cursors[sourceType];
+      if (!page.queued || nextCursor == null) break;
+      cursor = nextCursor;
+    }
+    return queued;
   }
 
   private async loadBackfillPage(

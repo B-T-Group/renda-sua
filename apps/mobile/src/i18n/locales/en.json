@@ -1518,6 +1518,10 @@
     }
   },
   "business": {
+    "follows": {
+      "follow": "Follow store",
+      "unfollow": "Unfollow store"
+    },
     "quietHome": {
       "reach": {
         "title": "Store reach",
@@ -1565,7 +1569,8 @@
         "hours": "Customize business hours",
         "catalog10": "Reach 10 approved products",
         "catalog10Progress": "Reach 10 approved products ({{current}}/{{target}})",
-        "mmPhone": "Confirm mobile money number"
+        "mmPhone": "Confirm mobile money number",
+        "firstReel": "Post your first reel"
       }
     },
     "engagement": {
@@ -1778,7 +1783,8 @@
       "orders": "Orders",
       "items": "Items",
       "rentals": "Rentals",
-      "menu": "Menu"
+      "menu": "Menu",
+      "reels": "Reels"
     },
     "accounts": {
       "navTitle": "Wallet"
@@ -5206,6 +5212,14 @@
     "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid."
   },
   "admin": {
+    "reels": {
+      "moderation": {
+        "title": "Reel moderation",
+        "empty": "No reels awaiting review",
+        "approve": "Approve",
+        "reject": "Reject"
+      }
+    },
     "accountRecharge": {
       "screenTitle": "HQ Account Recharge",
       "subtitle": "Collect from a mobile number to top up the Rendasua HQ account",
@@ -6467,6 +6481,24 @@
       "headline": "Opening this location",
       "line1": "Loading orders and inventory",
       "line2": "Almost ready"
+    }
+  },
+  "reels": {
+    "empty": "No reels yet. Check back soon!",
+    "buy": "Buy",
+    "notAvailableInMarket": "Not available in your area",
+    "comments": {
+      "title": "Comments",
+      "empty": "No comments yet",
+      "placeholder": "Add a comment…",
+      "post": "Post"
+    },
+    "report": {
+      "title": "Report",
+      "subtitle": "Why are you reporting this?",
+      "details": "Additional details (optional)",
+      "submit": "Submit report",
+      "blockMerchant": "Block this store"
     }
   }
 }

@@ -68,6 +68,8 @@
     "expo-secure-store": "~55.0.8",
     "expo-task-manager": "~55.0.16",
     "expo-updates": "~55.0.24",
+    "expo-video": "~55.0.21",
+    "expo-file-system": "~55.0.22",
     "expo-web-browser": "~55.0.16",
     "graphql": "^16.9.0",
     "graphql-ws": "^6.0.8",

@@ -11,6 +11,7 @@ export type MerchantEngagementPushId =
   | 'push_restock_top_viewed'
   | 'push_share_store'
   | 'push_payment_setup_nudge'
+  | 'push_first_reel'
   | 'email_weekly_digest';
 
 export type MerchantEngagementChannel = 'push' | 'email';
@@ -48,6 +49,8 @@ export interface MerchantEngagementCandidate {
   totalProductViews: number;
   ordersTotal: number;
   liveSince: string | null;
+  approvedReelCount: number;
+  reelsEnabledAllowlist: boolean;
 }
 
 export interface EngagementMessage {

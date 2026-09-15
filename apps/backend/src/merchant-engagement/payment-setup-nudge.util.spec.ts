@@ -105,6 +105,8 @@ describe('isPaymentSetupNudgeDue', () => {
     totalProductViews: 3,
     ordersTotal: 0,
     liveSince: null,
+    approvedReelCount: 0,
+    reelsEnabledAllowlist: false,
     needsPaymentSetupNudge: true,
     paymentSetupViewCount: 3,
     ...overrides,

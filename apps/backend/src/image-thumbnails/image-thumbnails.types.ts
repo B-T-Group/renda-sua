@@ -50,7 +50,7 @@ export const THUMBNAIL_TABLES_WITH_BUSINESS_ID: ThumbnailSourceType[] = [
   'rental_item_image',
 ];
 
-export const THUMBNAIL_MAX_ATTEMPTS = 5;
+export const THUMBNAIL_MAX_ATTEMPTS = 2;
 export const THUMBNAIL_MAX_EDGE_PX = 400;
 export const THUMBNAIL_WEBP_QUALITY = 80;
 export const THUMBNAIL_JPEG_QUALITY = 82;

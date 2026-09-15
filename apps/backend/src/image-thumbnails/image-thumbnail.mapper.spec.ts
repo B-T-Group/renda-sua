@@ -1,9 +1,11 @@
 import { toImageUrlBundle } from './image-thumbnail.mapper';
 import {
+  backfillQuery,
   claimMutation,
   markFailedMutation,
   markReadyMutation,
 } from './image-thumbnails.queries';
+import { THUMBNAIL_MAX_ATTEMPTS } from './image-thumbnails.types';
 
 describe('toImageUrlBundle', () => {
   const base = {
@@ -63,9 +65,18 @@ describe('thumbnail queries', () => {
     expect(itemClaim).toContain('update_item_images(');
     expect(itemClaim).toContain('_in: ["pending", "failed"]');
     expect(itemClaim).toContain('_inc: { thumbnail_attempts: 1 }');
+    expect(itemClaim).toContain('$maxAttempts: Int!');
+    expect(itemClaim).toContain('thumbnail_attempts: { _lt: $maxAttempts }');
     expect(claimMutation('rental_item_image')).toContain(
       'update_rental_item_images('
     );
+  });
+
+  it('backfill excludes rows at or above max attempts', () => {
+    const query = backfillQuery('item_image');
+    expect(query).toContain('$maxAttempts: Int!');
+    expect(query).toContain('thumbnail_attempts: { _lt: $maxAttempts }');
+    expect(THUMBNAIL_MAX_ATTEMPTS).toBe(2);
   });
 
   it('marks ready with all lifecycle fields', () => {

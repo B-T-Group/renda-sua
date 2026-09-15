@@ -23,11 +23,12 @@ function sourceFields(sourceType: ThumbnailSourceType): string {
 export function claimMutation(sourceType: ThumbnailSourceType): string {
   const table = THUMBNAIL_TABLES[sourceType];
   return `
-    mutation ClaimThumbnail($id: uuid!, $now: timestamptz!) {
+    mutation ClaimThumbnail($id: uuid!, $now: timestamptz!, $maxAttempts: Int!) {
       update_${table}(
         where: {
           id: { _eq: $id },
-          thumbnail_status: { _in: ["pending", "failed"] }
+          thumbnail_status: { _in: ["pending", "failed"] },
+          thumbnail_attempts: { _lt: $maxAttempts }
         },
         _set: { thumbnail_status: "processing", thumbnail_last_attempt_at: $now },
         _inc: { thumbnail_attempts: 1 }

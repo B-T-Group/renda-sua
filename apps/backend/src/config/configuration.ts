@@ -442,6 +442,19 @@ export interface ItemAiReviewConfig {
   model: string;
 }
 
+export interface ReelsConfig {
+  bucketName: string;
+  cloudFrontDomain: string;
+  mediaQueueUrl: string;
+  dailyQuota: number;
+}
+
+export interface ReelAiReviewConfig {
+  enabled: boolean;
+  model: string;
+  queueUrl: string;
+}
+
 export interface IdDocumentAiReviewConfig {
   /** Master switch for AI auto-approval of identity document uploads. */
   enabled: boolean;
@@ -561,6 +574,8 @@ export interface Configuration {
   boldsign: BoldSignConfig;
   rentalAiReview: RentalAiReviewConfig;
   itemAiReview: ItemAiReviewConfig;
+  reels: ReelsConfig;
+  reelAiReview: ReelAiReviewConfig;
   idDocumentAiReview: IdDocumentAiReviewConfig;
   commerceIntegrations: CommerceIntegrationsConfig;
   metaConversions: MetaConversionsConfig;
@@ -1116,6 +1131,20 @@ export default (): Configuration => {
         process.env.ITEM_AI_REVIEW_MODEL?.trim() ||
         process.env.BEDROCK_CHAT_MODEL?.trim() ||
         'amazon.nova-lite-v1:0',
+    },
+    reels: {
+      bucketName: process.env.REELS_BUCKET_NAME || '',
+      cloudFrontDomain: process.env.REELS_CLOUDFRONT_DOMAIN || '',
+      mediaQueueUrl: process.env.REEL_MEDIA_QUEUE_URL || '',
+      dailyQuota: parseInt(process.env.REELS_DAILY_QUOTA || '10', 10),
+    },
+    reelAiReview: {
+      enabled: process.env.REEL_AI_AUTO_REVIEW_ENABLED === 'true',
+      model:
+        process.env.REEL_AI_REVIEW_MODEL?.trim() ||
+        process.env.BEDROCK_CHAT_MODEL?.trim() ||
+        'amazon.nova-lite-v1:0',
+      queueUrl: process.env.REEL_AI_REVIEW_QUEUE_URL || '',
     },
     idDocumentAiReview: {
       enabled: process.env.ID_AI_REVIEW_ENABLED === 'true',

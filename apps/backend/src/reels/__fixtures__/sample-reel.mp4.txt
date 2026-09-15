@@ -1,0 +1,2 @@
+Fixture placeholder: commit a minimal H.264 MP4 here for integration tests.
+Tests reference this path symbolically; replace with a real short MP4 in CI if needed.

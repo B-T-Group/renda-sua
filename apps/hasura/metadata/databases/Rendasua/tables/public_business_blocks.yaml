@@ -1,0 +1,36 @@
+table:
+  name: business_blocks
+  schema: public
+object_relationships:
+  - name: blocker
+    using:
+      foreign_key_constraint_on: blocker_user_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+insert_permissions:
+  - role: client
+    permission:
+      check:
+        blocker_user_id:
+          _eq: X-Hasura-User-Id
+      columns:
+        - blocker_user_id
+        - business_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - blocker_user_id
+        - business_id
+        - created_at
+      filter:
+        blocker_user_id:
+          _eq: X-Hasura-User-Id
+delete_permissions:
+  - role: client
+    permission:
+      filter:
+        blocker_user_id:
+          _eq: X-Hasura-User-Id
