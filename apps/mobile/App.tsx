@@ -103,37 +103,39 @@ function AppContentBase() {
 
   if (!hydrated) return <LoadingScreen />;
 
-  // StripeAppProvider must mount *after* env hydrate so DEVELOPMENT does not
+  // ClientFlags + Stripe must mount *after* env hydrate so DEVELOPMENT does not
   // briefly call prod.api (getEnv() defaults to prod until AsyncStorage loads).
   return (
-    <StripeAppProvider>
-      <AgentActiveDeliveryProvider>
-        <AgentLocationProvider>
-          <AgentLocationDialogs />
-          <SafeAreaProvider>
-            <NavigationContainer
-              ref={rootNavigationRef}
-              theme={navigationTheme}
-              onReady={() => setNavReady(true)}
-            >
-              <AppNavigator />
-            </NavigationContainer>
-            <OrderOfferOverlay />
-            <IncomingOrderOverlay />
-            <StockAvailabilityOverlay />
-            <AdminBroadcastOverlay />
-            <StoreUpdateModal
-              visible={storeUpdate.visible}
-              mode={storeUpdate.mode}
-              onDismiss={() => void storeUpdate.dismiss()}
-            />
-            <ReferralRejectionOverlay />
-            <PickupReminderOverlay />
-            <StorePickupReminderOverlay />
-          </SafeAreaProvider>
-        </AgentLocationProvider>
-      </AgentActiveDeliveryProvider>
-    </StripeAppProvider>
+    <ClientFlagsProvider>
+      <StripeAppProvider>
+        <AgentActiveDeliveryProvider>
+          <AgentLocationProvider>
+            <AgentLocationDialogs />
+            <SafeAreaProvider>
+              <NavigationContainer
+                ref={rootNavigationRef}
+                theme={navigationTheme}
+                onReady={() => setNavReady(true)}
+              >
+                <AppNavigator />
+              </NavigationContainer>
+              <OrderOfferOverlay />
+              <IncomingOrderOverlay />
+              <StockAvailabilityOverlay />
+              <AdminBroadcastOverlay />
+              <StoreUpdateModal
+                visible={storeUpdate.visible}
+                mode={storeUpdate.mode}
+                onDismiss={() => void storeUpdate.dismiss()}
+              />
+              <ReferralRejectionOverlay />
+              <PickupReminderOverlay />
+              <StorePickupReminderOverlay />
+            </SafeAreaProvider>
+          </AgentLocationProvider>
+        </AgentActiveDeliveryProvider>
+      </StripeAppProvider>
+    </ClientFlagsProvider>
   );
 }
 
@@ -170,11 +172,9 @@ export default function App() {
       <RootStoreProvider store={rootStore}>
         <ThemeProvider>
           <ApolloProvider client={client}>
-            <ClientFlagsProvider>
-              <ThemedProviders>
-                <AppContent />
-              </ThemedProviders>
-            </ClientFlagsProvider>
+            <ThemedProviders>
+              <AppContent />
+            </ThemedProviders>
           </ApolloProvider>
         </ThemeProvider>
       </RootStoreProvider>

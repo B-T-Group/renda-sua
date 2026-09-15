@@ -56,7 +56,11 @@ import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
 import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotificationPermissionOnStart';
 import type { ClientMainTabParamList, ClientRootStackParamList, PlaceOrderParams } from './types';
-import { TabBarIconContent, useTabBarScreenOptions } from './tabBarGeometry';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const ClientTab = createBottomTabNavigator<ClientMainTabParamList>();
@@ -81,6 +85,7 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const tabBarScreenOptions = useTabBarScreenOptions();
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { flags } = useClientFlags();
   const navigation = useNavigation();
   const { auth, persona } = useStore();
@@ -148,6 +153,7 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   return (
     <ClientTab.Navigator
       initialRouteName="ClientBrowse"
+      safeAreaInsets={floatingSafeAreaInsets}
       screenOptions={tabBarScreenOptions}
     >
       <ClientTab.Screen
@@ -210,7 +216,6 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
           options={{
             tabBarLabel: t('nav.clientTabs.reels', { defaultValue: 'Reels' }),
             tabBarAccessibilityLabel: t('nav.clientTabs.reels', { defaultValue: 'Reels' }),
-            tabBarStyle: { display: 'none' },
             tabBarIcon: ({ color, focused }) => (
               <TabBarIconContent focused={focused} label={t('nav.clientTabs.reels', { defaultValue: 'Reels' })}>
                 <MaterialCommunityIcons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />

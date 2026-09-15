@@ -93,7 +93,11 @@ import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotification
 import { useBusinessActiveOrders } from '../hooks/business/useBusinessActiveOrders';
 import { useProfileMe } from '../hooks/useProfileMe';
 import { OwnerOrdersApiProvider } from '../contexts/OrdersApiContext';
-import { TabBarIconContent, useTabBarScreenOptions } from './tabBarGeometry';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const Tab = createBottomTabNavigator<BusinessMainTabParamList>();
@@ -105,6 +109,7 @@ function BusinessMainTabsScreen() {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
   const tabBarScreenOptions = useTabBarScreenOptions({ showShadow: false });
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { totalCount: attentionBadgeCount, appIconBadgeCount } =
     usePersonaAttentionBadge('business');
   const { activeCount: activeOrdersCount } = useBusinessActiveOrders({
@@ -118,6 +123,7 @@ function BusinessMainTabsScreen() {
 
   return (
     <Tab.Navigator
+      safeAreaInsets={floatingSafeAreaInsets}
       screenOptions={tabBarScreenOptions}
     >
       <Tab.Screen
@@ -213,7 +219,6 @@ function BusinessMainTabsScreen() {
             title: t('business.tabs.reels', 'Reels'),
             tabBarLabel: t('business.tabs.reels', 'Reels'),
             tabBarAccessibilityLabel: t('business.tabs.reels', 'Reels'),
-            tabBarStyle: { display: 'none' },
             tabBarIcon: ({ color, focused }) => (
               <TabBarIconContent focused={focused} label={t('business.tabs.reels', 'Reels')}>
                 <MaterialCommunityIcons

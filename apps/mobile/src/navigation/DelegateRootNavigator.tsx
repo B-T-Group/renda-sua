@@ -27,7 +27,11 @@ import type {
   DelegateMainTabParamList,
   DelegateRootStackParamList,
 } from './types';
-import { TabBarIconContent, useTabBarScreenOptions } from './tabBarGeometry';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
 
 const Tab = createBottomTabNavigator<DelegateMainTabParamList>();
 const RootStack = createNativeStackNavigator<DelegateRootStackParamList>();
@@ -172,10 +176,12 @@ function DelegateMainTabsScreen() {
     showShadow: false,
     simpleLegacyLabels: true,
   });
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   useCheckNotificationPermissionOnStart();
 
   return (
     <Tab.Navigator
+      safeAreaInsets={floatingSafeAreaInsets}
       screenOptions={tabBarScreenOptions}
     >
       <Tab.Screen

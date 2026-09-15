@@ -6,6 +6,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { registerEnvChangeListener } from '../config/envSwitch';
 import {
   DEFAULT_CLIENT_FLAGS,
   fetchClientFlags,
@@ -38,6 +39,10 @@ export function ClientFlagsProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => registerEnvChangeListener(() => {
+    void refresh();
+  }), [refresh]);
 
   const value = useMemo(
     () => ({ flags, loading, refresh }),

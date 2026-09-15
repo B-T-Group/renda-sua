@@ -23,7 +23,11 @@ import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
-import { TabBarIconContent, useTabBarScreenOptions } from './tabBarGeometry';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const GuestTab = createBottomTabNavigator<GuestTabParamList>();
@@ -105,6 +109,7 @@ function GuestTabsNavigator({
 }) {
   const { t } = useTranslation();
   const tabBarScreenOptions = useTabBarScreenOptions();
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { flags } = useClientFlags();
   const visibleTabBarStyle = tabBarScreenOptions.tabBarStyle;
 
@@ -114,6 +119,7 @@ function GuestTabsNavigator({
   return (
     <GuestTab.Navigator
       initialRouteName={initialTab}
+      safeAreaInsets={floatingSafeAreaInsets}
       screenOptions={tabBarScreenOptions}
     >
       <GuestTab.Screen
@@ -174,7 +180,6 @@ function GuestTabsNavigator({
           options={{
             tabBarLabel: t('nav.guestTabs.reels', 'Reels'),
             tabBarAccessibilityLabel: t('nav.guestTabs.reels', 'Reels'),
-            tabBarStyle: { display: 'none' },
             tabBarIcon: ({ color, focused }) => (
               <TabBarIconContent focused={focused} label={t('nav.guestTabs.reels', 'Reels')}>
                 <MaterialCommunityIcons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />

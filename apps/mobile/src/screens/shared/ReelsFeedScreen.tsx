@@ -15,12 +15,14 @@ import { ReelPlayer } from '../../components/reels/ReelPlayer';
 import { ReelOverlay } from '../../components/reels/ReelOverlay';
 import { recordReelView, type FeedReel } from '../../services/reelsApi';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 
 export default function ReelsFeedScreen() {
   const { height } = useWindowDimensions();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const navigation = useNavigation();
+  const bottomPad = useMainTabContentBottomPadding(8);
   const { items, loading, error, loadMore, refresh, sessionId } = useReelsFeed();
   const [activeIndex, setActiveIndex] = useState(0);
   const viewStartRef = useRef<number>(Date.now());
@@ -65,22 +67,38 @@ export default function ReelsFeedScreen() {
 
   if (loading && !items.length) {
     return (
-      <View style={[styles.center, { backgroundColor: '#000' }]}>
-        <ActivityIndicator color="#fff" />
+      <View style={[styles.center, { backgroundColor: colors.pageBackground, paddingBottom: bottomPad }]}>
+        <ActivityIndicator color={colors.primary.main} />
       </View>
     );
   }
 
   if (error && !items.length) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.pageBackground }]}>
-        <Text>{error}</Text>
+      <View style={[styles.center, { backgroundColor: colors.pageBackground, paddingBottom: bottomPad }]}>
+        <Text variant="titleMedium">{t('reels.errorTitle', 'Couldn’t load reels')}</Text>
+        <Text style={[styles.muted, { color: colors.text.secondary }]}>{error}</Text>
+      </View>
+    );
+  }
+
+  if (!items.length) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.pageBackground, paddingBottom: bottomPad }]}>
+        <Text variant="titleMedium" style={{ color: colors.text.primary, marginBottom: 8, textAlign: 'center' }}>
+          {t('reels.emptyTitle', 'No reels yet')}
+        </Text>
+        <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
+          {t('reels.empty', 'Check back soon — merchants will post short videos here.')}
+        </Text>
       </View>
     );
   }
 
   return (
     <FlatList
+      style={styles.black}
+      contentContainerStyle={items.length ? undefined : { flexGrow: 1 }}
       data={items}
       keyExtractor={(item) => item.id}
       renderItem={renderItem}
@@ -94,13 +112,6 @@ export default function ReelsFeedScreen() {
       onEndReachedThreshold={0.4}
       refreshing={loading}
       onRefresh={refresh}
-      ListEmptyComponent={
-        <View style={[styles.center, { height }]}>
-          <Text style={{ color: '#fff' }}>
-            {t('reels.empty', 'No reels yet. Check back soon!')}
-          </Text>
-        </View>
-      }
       windowSize={3}
       initialNumToRender={2}
       maxToRenderPerBatch={2}
@@ -110,5 +121,7 @@ export default function ReelsFeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  black: { flex: 1, backgroundColor: '#000' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  muted: { marginTop: 8, textAlign: 'center' },
 });

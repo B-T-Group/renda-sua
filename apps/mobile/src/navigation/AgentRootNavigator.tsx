@@ -39,7 +39,11 @@ import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersona
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { AgentStatusBar } from '../components/agent/AgentStatusBar';
 import { PersistentActiveDeliveryHeader } from '../components/agent/PersistentActiveDeliveryHeader';
-import { TabBarIconContent, useTabBarScreenOptions } from './tabBarGeometry';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
 
 import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
@@ -113,6 +117,7 @@ function MainTabsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const tabBarScreenOptions = useTabBarScreenOptions();
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { totalCount: attentionBadgeCount, appIconBadgeCount } = usePersonaAttentionBadge('agent');
   useAppIconBadge(appIconBadgeCount);
   useCheckNotificationPermissionOnStart();
@@ -120,6 +125,7 @@ function MainTabsScreen() {
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
+      safeAreaInsets={floatingSafeAreaInsets}
       screenOptions={tabBarScreenOptions}
     >
       <Tab.Screen
