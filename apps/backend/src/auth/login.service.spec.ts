@@ -137,6 +137,17 @@ describe('LoginService start, lockout, and session gates', () => {
         service.getLoginOtpOptions({ email: 'missing@example.com' })
       ).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
     });
+
+    it('defaults to email when the identifier is an email', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [userWithBoth],
+      });
+      const result = await service.getLoginOtpOptions({
+        email: 'shop@example.com',
+      });
+      expect(result.defaultChannel).toBe('email');
+      expect(result.availableChannels).toEqual(['email', 'sms']);
+    });
   });
 
   describe('startLoginOtp', () => {
@@ -404,6 +415,41 @@ describe('LoginService start, lockout, and session gates', () => {
       });
       expect(auth0Service.verifySmsOtp).not.toHaveBeenCalled();
       expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
+    });
+
+    it('verifies SMS OTP when identified by phone without a channel', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [userWithBoth],
+      });
+
+      await service.verifyLoginOtp(
+        { phone_number: '+237670000000', otp: '1234' },
+        'mobile'
+      );
+
+      expect(auth0Service.verifySmsOtp).toHaveBeenCalledWith(
+        '+237670000000',
+        '1234'
+      );
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
+      expect(lockout.recordSuccess).toHaveBeenCalledWith('user:user-1');
+      expect(lockout.recordSuccess).toHaveBeenCalledWith('+237670000000');
+    });
+
+    it('marks the phone verified after a successful SMS login', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number_verified: false }],
+      });
+
+      await service.verifyLoginOtp(
+        { phone_number: '+237670000000', otp: '1234' },
+        'mobile'
+      );
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('VerifyLoginPhone'),
+        { id: 'user-1' }
+      );
     });
   });
 
