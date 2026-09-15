@@ -236,4 +236,70 @@ describe('WhatsAppService', () => {
       NotFoundException
     );
   });
+
+  it('maps Graph unsupported-get (code 100 / subcode 33) to NotFoundException', async () => {
+    get.mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 400,
+        data: {
+          error: {
+            message:
+              "Unsupported get request. Object with ID '4299614456970549' does not exist, cannot be loaded due to missing permissions, or does not support this operation. Please read the Graph API documentation at https://developers.facebook.com/docs/graph-api",
+            type: 'GraphMethodException',
+            code: 100,
+            error_subcode: 33,
+          },
+        },
+      },
+      message: 'Request failed with status code 400',
+    });
+    await expect(service.downloadMedia('4299614456970549')).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+  });
+
+  it('maps Graph unsupported-get message without subcode to NotFoundException', async () => {
+    get.mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 400,
+        data: {
+          error: {
+            message:
+              "Unsupported get request. Object with ID '1' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            type: 'GraphMethodException',
+            code: 100,
+          },
+        },
+      },
+      message: 'Request failed with status code 400',
+    });
+    await expect(service.downloadMedia('1')).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+  });
+
+  it('does not treat unrelated Graph 400s as missing media', async () => {
+    get.mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 400,
+        data: {
+          error: {
+            message: 'Invalid parameter',
+            type: 'OAuthException',
+            code: 100,
+          },
+        },
+      },
+      message: 'Request failed with status code 400',
+    });
+    await expect(service.downloadMedia('bad-param')).rejects.toEqual(
+      expect.objectContaining({
+        message: 'Invalid parameter',
+        name: 'Error',
+      })
+    );
+  });
 });
