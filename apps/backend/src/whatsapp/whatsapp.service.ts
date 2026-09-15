@@ -10,10 +10,14 @@ import type { Configuration, WhatsAppConfig } from '../config/configuration';
 import type {
   SendWhatsAppTemplateParams,
   WhatsAppDownloadedMedia,
+  WhatsAppGraphError,
   WhatsAppGraphMediaMeta,
   WhatsAppGraphMessagesResponse,
   WhatsAppSendMessageResult,
 } from './whatsapp.types';
+
+/** GraphMethodException: object missing, expired, or not visible to the token. */
+const GRAPH_OBJECT_MISSING_SUBCODE = 33;
 
 @Injectable()
 export class WhatsAppService {
@@ -198,19 +202,32 @@ export class WhatsAppService {
 
   private toMediaError(error: unknown): Error {
     if (error instanceof NotFoundException) return error;
-    if (isAxiosError(error) && error.response?.status === 404) {
+    if (this.isUnavailableGraphMedia(error)) {
       return new NotFoundException('WhatsApp media is no longer available');
     }
     return this.toSendError(error);
+  }
+
+  private isUnavailableGraphMedia(error: unknown): boolean {
+    if (!isAxiosError(error)) return false;
+    if (error.response?.status === 404) return true;
+    const graph = this.graphErrorFrom(error);
+    if (graph?.error_subcode === GRAPH_OBJECT_MISSING_SUBCODE) return true;
+    const message = graph?.message ?? '';
+    return /unsupported get request/i.test(message) && /does not exist/i.test(message);
+  }
+
+  private graphErrorFrom(error: unknown): WhatsAppGraphError | undefined {
+    if (!isAxiosError(error)) return undefined;
+    return (error.response?.data as { error?: WhatsAppGraphError } | undefined)
+      ?.error;
   }
 
   private toSendError(error: unknown): Error {
     if (!isAxiosError(error)) {
       return error instanceof Error ? error : new Error(String(error));
     }
-    const graphMessage =
-      (error.response?.data as WhatsAppGraphMessagesResponse | undefined)?.error
-        ?.message || error.message;
+    const graphMessage = this.graphErrorFrom(error)?.message || error.message;
     this.logger.error(`WhatsApp send failed: ${graphMessage}`);
     return new Error(graphMessage || 'WhatsApp send failed');
   }
