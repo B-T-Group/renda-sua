@@ -2,11 +2,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsIn,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   Length,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateReelDto {
@@ -70,8 +72,12 @@ export class ModerateReelDto {
   @IsIn(['approved', 'rejected'])
   status!: 'approved' | 'rejected';
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiPropertyOptional({
+    description: 'Required when rejecting a reel',
+  })
+  @ValidateIf((o: ModerateReelDto) => o.status === 'rejected')
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
   reason?: string;
 }

@@ -30,10 +30,23 @@ describe('ReelAiReviewService', () => {
     return {
       caption: 'Soap',
       subject_type: 'item',
+      subject_id: 'item-1',
       market_country: 'CM',
       thumbnail_url: 'https://cdn/t.jpg',
+      processing_status: 'ready',
       moderation_status: 'ai_reviewing',
     };
+  }
+
+  function mockLoadReel(reel = reviewingReel()) {
+    hasura.executeQuery
+      .mockResolvedValueOnce({ reels_by_pk: reel })
+      .mockResolvedValueOnce({
+        items_by_pk: {
+          name: 'Soap',
+          item_images: [{ image_url: 'https://cdn/p.jpg' }],
+        },
+      });
   }
 
   describe('requestReview', () => {
@@ -86,9 +99,7 @@ describe('ReelAiReviewService', () => {
     });
 
     it('auto-approves when the model returns approve', async () => {
-      hasura.executeQuery.mockResolvedValueOnce({
-        reels_by_pk: reviewingReel(),
-      });
+      mockLoadReel();
       hasura.executeMutation
         .mockResolvedValueOnce({
           insert_reel_ai_reviews_one: { id: 'review-1' },
@@ -99,6 +110,9 @@ describe('ReelAiReviewService', () => {
         reason: 'On-topic product ad',
         raw: { decision: 'approve' },
         model: 'luna',
+        showsProduct: true,
+        policyClean: true,
+        issues: [],
       });
 
       await expect(service.runReview('reel-1')).resolves.toEqual({
@@ -114,10 +128,24 @@ describe('ReelAiReviewService', () => {
       );
     });
 
-    it('defers to admin and resets pending when the model withholds approval', async () => {
-      hasura.executeQuery.mockResolvedValueOnce({
-        reels_by_pk: reviewingReel(),
+    it('defers when thumbnail is missing without calling the model', async () => {
+      mockLoadReel({ ...reviewingReel(), thumbnail_url: null });
+      hasura.executeMutation
+        .mockResolvedValueOnce({
+          insert_reel_ai_reviews_one: { id: 'review-1' },
+        })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+
+      await expect(service.runReview('reel-1')).resolves.toEqual({
+        success: true,
+        skipped: true,
       });
+      expect(model.review).not.toHaveBeenCalled();
+    });
+
+    it('defers to admin and resets pending when the model withholds approval', async () => {
+      mockLoadReel();
       hasura.executeMutation
         .mockResolvedValueOnce({
           insert_reel_ai_reviews_one: { id: 'review-1' },
@@ -129,6 +157,9 @@ describe('ReelAiReviewService', () => {
         reason: 'Needs human review',
         raw: { decision: 'manual_review' },
         model: 'luna',
+        showsProduct: false,
+        policyClean: true,
+        issues: [],
       });
 
       await expect(service.runReview('reel-1')).resolves.toEqual({
@@ -149,13 +180,12 @@ describe('ReelAiReviewService', () => {
     });
 
     it('resets pending when the model throws', async () => {
-      hasura.executeQuery.mockResolvedValueOnce({
-        reels_by_pk: reviewingReel(),
-      });
+      mockLoadReel();
       hasura.executeMutation
         .mockResolvedValueOnce({
           insert_reel_ai_reviews_one: { id: 'review-1' },
         })
+        .mockResolvedValueOnce({})
         .mockResolvedValueOnce({});
       model.review.mockRejectedValueOnce(new Error('bedrock timeout'));
 
@@ -163,6 +193,13 @@ describe('ReelAiReviewService', () => {
         success: false,
         error: 'bedrock timeout',
       });
+      expect(hasura.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('status:failed'),
+        expect.objectContaining({
+          id: 'review-1',
+          reason: 'bedrock timeout',
+        })
+      );
       expect(hasura.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('moderation_status:pending'),
         { id: 'reel-1' }

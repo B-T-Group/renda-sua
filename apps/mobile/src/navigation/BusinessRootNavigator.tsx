@@ -41,6 +41,7 @@ import BusinessRentalAiProposalScreen from '../screens/business/BusinessRentalAi
 import AdminItemModerationScreen from '../screens/business/AdminItemModerationScreen';
 import AdminContentReportsScreen from '../screens/business/AdminContentReportsScreen';
 import AdminReelModerationScreen from '../screens/business/AdminReelModerationScreen';
+import AdminReelAiReviewsScreen from '../screens/business/AdminReelAiReviewsScreen';
 import AdminItemAiReviewsScreen from '../screens/business/AdminItemAiReviewsScreen';
 import AdminItemsBrowserScreen from '../screens/business/AdminItemsBrowserScreen';
 import AdminItemDetailScreen from '../screens/business/AdminItemDetailScreen';
@@ -529,6 +530,13 @@ export function BusinessRootNavigator() {
           component={AdminReelModerationScreen}
           options={{
             title: t('admin.reels.moderation.title', 'Reel moderation'),
+          }}
+        />
+        <RootStack.Screen
+          name="AdminReelAiReviews"
+          component={AdminReelAiReviewsScreen}
+          options={{
+            title: t('admin.reels.aiReviews.title', 'Reel AI review audit'),
           }}
         />
         <RootStack.Screen

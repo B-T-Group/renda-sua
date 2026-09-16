@@ -474,6 +474,36 @@ export function useBusinessDashboardModules({
         path: '/admin/items/ai-reviews',
       },
       {
+        title: t(
+          'business.dashboard.manageReelModeration',
+          'Reel moderation'
+        ),
+        description: t(
+          'business.dashboard.manageReelModerationDescription',
+          'Watch uploaded reels and approve or reject them for the public feed.'
+        ),
+        icon: <ItemsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#3e2723',
+        requiredPermission: PlatformPermissions.MODERATE_ITEMS,
+        path: '/admin/reels/moderation',
+      },
+      {
+        title: t(
+          'business.dashboard.manageReelAiReviews',
+          'Reel AI review audit'
+        ),
+        description: t(
+          'business.dashboard.manageReelAiReviewsDescription',
+          'Review AI auto-approval decisions for reels and apply overrides.'
+        ),
+        icon: <ItemsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#4e342e',
+        requiredPermission: PlatformPermissions.MODERATE_ITEMS,
+        path: '/admin/reels/ai-reviews',
+      },
+      {
         title: t('business.dashboard.manageConfigurations'),
         description: t('business.dashboard.manageConfigurationsDescription'),
         icon: <SettingsIcon sx={{ fontSize: 40 }} />,

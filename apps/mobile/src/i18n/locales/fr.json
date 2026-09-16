@@ -5317,9 +5317,44 @@
     "reels": {
       "moderation": {
         "title": "Modération des reels",
+        "dashboardTitle": "Modération des reels",
+        "dashboardDescription": "Regarder et approuver ou refuser les reels",
         "empty": "Aucun reel en attente",
         "approve": "Approuver",
-        "reject": "Refuser"
+        "reject": "Refuser",
+        "rejectTitle": "Refuser le reel",
+        "rejectBody": "Choisissez un motif. Le marchand le verra si le reel est refusé.",
+        "rejectPlaceholder": "Décrivez le problème",
+        "notesOptional": "Notes supplémentaires (facultatif)",
+        "submitReject": "Refuser",
+        "openAiAudit": "Audit IA",
+        "noVideo": "Vidéo non prête",
+        "reasons": {
+          "inappropriate": "Contenu inapproprié / adulte",
+          "misleading": "Produit trompeur",
+          "lowQuality": "Qualité insuffisante",
+          "wrongProduct": "Mauvais produit / hors sujet",
+          "spam": "Spam / pub abusive",
+          "copyright": "Droit d'auteur / marque",
+          "other": "Autre"
+        }
+      },
+      "aiReviews": {
+        "title": "Audit IA des reels",
+        "dashboardTitle": "Audit IA des reels",
+        "dashboardDescription": "Examiner les décisions IA sur les reels",
+        "empty": "Aucun avis IA pour le moment",
+        "open": "Ouvrir",
+        "detailTitle": "Avis IA",
+        "notes": "Notes",
+        "agree": "D'accord",
+        "disagree": "Pas d'accord",
+        "forceApprove": "Forcer l'approbation",
+        "forceReject": "Forcer le refus",
+        "requeue": "Relancer l'IA",
+        "feedbackSaved": "Retour enregistré",
+        "overrideSaved": "Décision appliquée",
+        "defaultOverrideReject": "Un admin a annulé la décision IA"
       }
     },
     "accountRecharge": {
