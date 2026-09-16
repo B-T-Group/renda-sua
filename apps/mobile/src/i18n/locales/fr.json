@@ -1719,13 +1719,26 @@
         "pickStyle": "Sélectionnez d'abord un style de pub",
         "needPhoto": "Ajoutez au moins une photo produit avant de générer",
         "customPrompt": "Saisissez une invite personnalisée",
-        "generating": "Génération de votre pub de 8 s… cela peut prendre une minute.",
         "generateError": "Échec de la génération",
         "libraryPermission": "L'accès à la photothèque est requis",
         "durationError": "Les vidéos de la bibliothèque doivent durer 15–30 secondes",
         "uploaded": "Reel importé et soumis",
         "uploadError": "Échec de l'import",
         "loadError": "Impossible de charger les produits"
+      },
+      "submitted": {
+        "navTitle": "Reel lancé",
+        "illustrationLabel": "Reel soumis, en attente de mise en ligne",
+        "headline": "Votre reel IA est en cours",
+        "intro": "Voici ce qui se passe avant que les clients puissent le voir.",
+        "generateTitle": "Nous créons la vidéo",
+        "generateBody": "Votre pub produit de 8 secondes est en cours de génération. Cela peut prendre environ une minute.",
+        "processTitle": "Nous la préparons pour le fil",
+        "processBody": "Une fois le clip prêt, nous le traitons pour qu’il se lise bien dans Reels.",
+        "liveTitle": "Il est mis en ligne",
+        "liveBody": "Les reels IA sont publiés automatiquement après le traitement. Les clients peuvent le voir dans le fil Reels.",
+        "returnToDashboard": "Retour au tableau de bord",
+        "viewReels": "Voir les reels"
       },
       "tokens": {
         "navTitle": "Jetons reel IA",

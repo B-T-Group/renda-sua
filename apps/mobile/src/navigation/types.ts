@@ -285,6 +285,7 @@ export type BusinessRootStackParamList = {
   BusinessAccounts: undefined;
   BusinessAiTokens: undefined;
   BusinessAddReel: undefined;
+  BusinessReelAiSubmitted: undefined;
   BusinessReelAiTokens: undefined;
   BusinessAccountTypeScreen: undefined;
   BusinessClientCities: undefined;
