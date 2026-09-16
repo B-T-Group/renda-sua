@@ -11,6 +11,9 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import {
+  Provider,
+} from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
 export interface RendasuaInfrastructureStackProps extends cdk.StackProps {
@@ -220,6 +223,13 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, `ReelAiReviewQueueUrl-${environment}`, {
       value: reelAiReviewQueue.queueUrl,
+    });
+
+    this.syncReelsSecretsToBackend(environment, {
+      bucketName: reelsBucket.bucketName,
+      cloudFrontDomain: reelsDistribution.distributionDomainName,
+      mediaQueueUrl: reelMediaQueue.queueUrl,
+      aiReviewQueueUrl: reelAiReviewQueue.queueUrl,
     });
 
     // Create Lambda function for order status handler
@@ -975,5 +985,62 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       schedule: events.Schedule.cron({ weekDay: 'SAT', hour: '19', minute: '0' }),
       targets: [new targets.LambdaFunction(businessReferralPayoutsFunction)],
     });
+  }
+
+  /** Keep Nest Lightsail env in sync: backend loads these from Secrets Manager. */
+  private syncReelsSecretsToBackend(
+    environment: string,
+    values: {
+      bucketName: string;
+      cloudFrontDomain: string;
+      mediaQueueUrl: string;
+      aiReviewQueueUrl: string;
+    }
+  ): void {
+    const secretName = `${environment}-rendasua-backend-secrets`;
+    const fn = this.createReelsSecretsSyncFunction(environment);
+    this.grantReelsSecretsWrite(fn, secretName);
+    const provider = new Provider(
+      this,
+      `SyncBackendReelsSecretsProvider-${environment}`,
+      { onEventHandler: fn }
+    );
+    new cdk.CustomResource(this, `SyncBackendReelsSecretsResource-${environment}`, {
+      serviceToken: provider.serviceToken,
+      properties: {
+        SecretName: secretName,
+        REELS_BUCKET_NAME: values.bucketName,
+        REELS_CLOUDFRONT_DOMAIN: values.cloudFrontDomain,
+        REEL_MEDIA_QUEUE_URL: values.mediaQueueUrl,
+        REEL_AI_REVIEW_QUEUE_URL: values.aiReviewQueueUrl,
+      },
+    });
+  }
+
+  private createReelsSecretsSyncFunction(environment: string): lambda.Function {
+    return new lambda.Function(this, `SyncBackendReelsSecrets-${environment}`, {
+      functionName: `sync-backend-reels-secrets-${environment}`,
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'handler.handler',
+      code: lambda.Code.fromAsset('src/lambda/sync-backend-reels-secrets'),
+      timeout: cdk.Duration.minutes(1),
+      memorySize: 256,
+    });
+  }
+
+  private grantReelsSecretsWrite(fn: lambda.Function, secretName: string): void {
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'secretsmanager:GetSecretValue',
+          'secretsmanager:PutSecretValue',
+          'secretsmanager:DescribeSecret',
+        ],
+        resources: [
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${secretName}*`,
+        ],
+      })
+    );
   }
 }
