@@ -1,4 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ReelsService } from './reels.service';
 
 describe('ReelsService.retryProcessing', () => {
@@ -51,6 +55,28 @@ describe('ReelsService.retryProcessing', () => {
     expect(result.processing_status).toBe('queued');
   });
 
+  it('rejects retry when source media is missing', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          source_s3_key: null,
+          moderation_status: 'pending',
+          processing_status: 'failed',
+          generation_source: 'ai',
+        },
+      });
+
+    await expect(service.retryProcessing('user-1', 'reel-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(mediaQueue.enqueue).not.toHaveBeenCalled();
+  });
+
   it('rejects retry when not failed', async () => {
     hasura.executeQuery
       .mockResolvedValueOnce({
@@ -73,3 +99,118 @@ describe('ReelsService.retryProcessing', () => {
     expect(mediaQueue.enqueue).not.toHaveBeenCalled();
   });
 });
+
+describe('ReelsService merchant gates', () => {
+  const hasura = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+  const mediaQueue = { enqueue: jest.fn() };
+  const config = { get: jest.fn(() => ({ dailyQuota: 10 })) };
+  const aws = {};
+  let service: ReelsService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new ReelsService(
+      hasura as never,
+      aws as never,
+      config as never,
+      mediaQueue as never
+    );
+  });
+
+  it('rejects create when the merchant is not allowlisted', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      businesses: [{ id: 'biz-1', reels_enabled_allowlist: false }],
+    });
+
+    await expect(
+      service.create('user-1', {
+        subjectType: 'item',
+        subjectId: 'item-1',
+        marketCountry: 'CM',
+      })
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects create when the item belongs to another business', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_aggregate: { aggregate: { count: 0 } },
+      })
+      .mockResolvedValueOnce({
+        subject: { id: 'item-1', business_id: 'other-biz' },
+      });
+
+    await expect(
+      service.create('user-1', {
+        subjectType: 'item',
+        subjectId: 'item-1',
+        marketCountry: 'cm',
+      })
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects editing an approved reel', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'approved',
+        },
+      });
+
+    await expect(
+      service.update('user-1', 'reel-1', { caption: 'New' })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects deleting a pending reel', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'pending',
+        },
+      });
+
+    await expect(service.delete('user-1', 'reel-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('hides another merchant reel as not found', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'other-biz',
+          moderation_status: 'draft',
+        },
+      });
+
+    await expect(service.delete('user-1', 'reel-1')).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+  });
+});
+
