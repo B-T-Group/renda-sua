@@ -8,6 +8,7 @@ import {
 } from '../embeddings/item-embedding.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { isUuid } from '../common/uuid.util';
 import { RbacService } from '../rbac/rbac.service';
 import {
   fetchStripeEnabledCountries,
@@ -1285,7 +1286,8 @@ export class InventoryItemsService {
       }
     >
   > {
-    if (ids.length === 0) return new Map();
+    const validIds = ids.filter((id) => isUuid(id));
+    if (validIds.length === 0) return new Map();
     const query = `
       query StoreLocationDetails($ids: [uuid!]!) {
         business_locations(where: { id: { _in: $ids } }) {
@@ -1309,7 +1311,9 @@ export class InventoryItemsService {
         }
       }
     `;
-    const res = await this.hasuraSystemService.executeQuery(query, { ids });
+    const res = await this.hasuraSystemService.executeQuery(query, {
+      ids: validIds,
+    });
     const rows: Array<{
       id: string;
       business_id: string;
@@ -1355,6 +1359,7 @@ export class InventoryItemsService {
     businessId: string,
     ownerPreview = false
   ): Promise<string | null> {
+    if (!isUuid(businessId)) return null;
     const where = ownerPreview
       ? `{ business_id: { _eq: $businessId } }`
       : `{ business_id: { _eq: $businessId }, is_active: { _eq: true } }`;
@@ -1503,7 +1508,7 @@ export class InventoryItemsService {
     > = {}
   ): Promise<TopInventoryStoreRow | null> {
     const id = idParam.trim();
-    if (!id) return null;
+    if (!isUuid(id)) return null;
 
     const ownerPreviewRequested = query.owner_preview === true;
 

@@ -11,6 +11,7 @@ describe('isUuid', () => {
     expect(isUuid('   ')).toBe(false);
     expect(isUuid(undefined)).toBe(false);
     expect(isUuid('not-a-uuid')).toBe(false);
+    expect(isUuid('abcd')).toBe(false);
     expect(isUuid('f855d3b1c92f431aa6711ce1dcd0e868')).toBe(false);
     expect(isUuid('email|6a95505255ad3b18af9e159f')).toBe(false);
     expect(isUuid('auth0|abc123')).toBe(false);

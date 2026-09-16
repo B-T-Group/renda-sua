@@ -528,3 +528,67 @@ describe('InventoryItemsService.getInventoryItemById', () => {
     });
   });
 });
+
+describe('InventoryItemsService.getInventoryStoreById', () => {
+  const locationId = '11111111-1111-4111-8111-111111111111';
+
+  function createService() {
+    const hasuraSystemService = {
+      executeQuery: jest.fn(),
+    };
+    const service = new InventoryItemsService(
+      hasuraSystemService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+    return { service, hasuraSystemService };
+  }
+
+  it('returns null without querying Hasura for a truncated or non-UUID id', async () => {
+    const { service, hasuraSystemService } = createService();
+
+    await expect(service.getInventoryStoreById('abcd')).resolves.toBeNull();
+    await expect(service.getInventoryStoreById('  ')).resolves.toBeNull();
+    await expect(
+      service.getInventoryStoreById('not-a-store-id')
+    ).resolves.toBeNull();
+
+    expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('queries store details only with validated UUIDs', async () => {
+    const { service, hasuraSystemService } = createService();
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      business_locations: [],
+    });
+
+    await expect(service.getInventoryStoreById(locationId)).resolves.toBeNull();
+
+    expect(hasuraSystemService.executeQuery).toHaveBeenCalled();
+    const firstCall = hasuraSystemService.executeQuery.mock.calls[0];
+    expect(firstCall[0]).toContain('query StoreLocationDetails');
+    expect(firstCall[1]).toEqual({ ids: [locationId] });
+  });
+
+  it('drops non-UUID ids from StoreLocationDetails variables', async () => {
+    const { service, hasuraSystemService } = createService();
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      business_locations: [],
+    });
+
+    await (service as any).fetchStoreLocationDetailsByIds([
+      'abcd',
+      locationId,
+      '',
+    ]);
+
+    expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('query StoreLocationDetails'),
+      { ids: [locationId] }
+    );
+  });
+});
