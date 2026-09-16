@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useReelsFeed } from '../../hooks/useReelsFeed';
 import { ReelPlayer } from '../../components/reels/ReelPlayer';
 import { ReelOverlay } from '../../components/reels/ReelOverlay';
@@ -17,12 +17,15 @@ import { recordReelView, type FeedReel } from '../../services/reelsApi';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 import { useReportTabBarScroll } from '../../navigation/floatingTabBarVisibility';
+import { useStore } from '../../stores/RootStore';
 
 export default function ReelsFeedScreen() {
   const { height } = useWindowDimensions();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
+  const { persona } = useStore();
   const bottomPad = useMainTabContentBottomPadding(8);
   const { onScroll: reportTabBarScroll } = useReportTabBarScroll();
   const { items, loading, error, loadMore, refresh, sessionId } = useReelsFeed();
@@ -45,26 +48,35 @@ export default function ReelsFeedScreen() {
     [activeIndex, items, sessionId]
   );
 
+  const onBuy = useCallback(
+    (item: FeedReel) => {
+      if (item.subject_type !== 'item') return;
+      const inventoryItemId = item.inventoryItemId;
+      if (!inventoryItemId) return;
+      const nav = navigation as { navigate: (n: string, p: object) => void };
+      if (persona.activePersona === 'client') {
+        nav.navigate('PlaceOrder', { inventoryItemId });
+        return;
+      }
+      nav.navigate('InventoryItemDetail', { inventoryItemId });
+    },
+    [navigation, persona.activePersona]
+  );
+
   const renderItem = useCallback(
     ({ item, index }: { item: FeedReel; index: number }) => (
       <View style={{ height, backgroundColor: '#000' }}>
         {item.video_url ? (
-          <ReelPlayer uri={item.video_url} active={index === activeIndex} posterUri={item.thumbnail_url} />
+          <ReelPlayer
+            uri={item.video_url}
+            active={isFocused && index === activeIndex}
+            posterUri={item.thumbnail_url}
+          />
         ) : null}
-        <ReelOverlay
-          reel={item}
-          onBuy={() => {
-            if (item.subject_type === 'item') {
-              (navigation as { navigate: (n: string, p: object) => void }).navigate(
-                'InventoryItemDetail',
-                { inventoryItemId: item.subject_id }
-              );
-            }
-          }}
-        />
+        <ReelOverlay reel={item} onBuy={() => onBuy(item)} />
       </View>
     ),
-    [activeIndex, height, navigation]
+    [activeIndex, height, isFocused, onBuy]
   );
 
   if (loading && !items.length) {
