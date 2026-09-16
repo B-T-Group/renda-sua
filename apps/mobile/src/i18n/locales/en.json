@@ -1784,9 +1784,10 @@
         "buyTokens": "Buy reel tokens",
         "upload": "Upload from library (15–30s)",
         "pickProduct": "Select a product first",
+        "pickStyle": "Select an ad style first",
         "needPhoto": "Add at least one product photo before generating",
         "customPrompt": "Enter a custom prompt",
-        "generating": "AI ad generation started. We'll process it shortly.",
+        "generating": "Generating your 8s ad… this can take a minute.",
         "generateError": "Generation failed",
         "libraryPermission": "Photo library permission is required",
         "durationError": "Library videos must be 15–30 seconds",
@@ -6537,6 +6538,7 @@
   "reels": {
     "empty": "No reels yet. Check back soon!",
     "buy": "Buy",
+    "updateRequired": "Update the app to play reels on this device.",
     "notAvailableInMarket": "Not available in your area",
     "comments": {
       "title": "Comments",
