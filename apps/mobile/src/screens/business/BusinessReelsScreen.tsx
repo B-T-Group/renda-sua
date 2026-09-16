@@ -31,13 +31,13 @@ export default function BusinessReelsScreen() {
       />
       <FAB
         icon="plus"
-        label={t('business.reels.addFab', 'Add reel')}
         style={[
           styles.fab,
           { bottom: fabBottom, backgroundColor: colors.primary.main },
         ]}
         color="#fff"
         onPress={() => navigation.navigate('BusinessAddReel')}
+        accessibilityLabel={t('business.reels.addFab', 'Add reel')}
       />
     </View>
   );
