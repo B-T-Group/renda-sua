@@ -14,9 +14,14 @@ def handler(event, _context):
             body = json.loads(record.get("body", "{}"))
             reel_id = body.get("reelId")
             source_key = body.get("sourceS3Key")
+            source_kind = body.get("sourceKind") or "merchant"
             if not reel_id or not source_key:
                 raise RuntimeError("Missing reelId or sourceS3Key")
-            result = _process_reel(reel_id, source_key)
+            try:
+                result = _process_reel(reel_id, source_key, source_kind)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[ERROR] reel media process err={exc}")
+                result = {"status": "failed", "error": str(exc)[:500]}
             _post_callback(reel_id, result)
         except Exception as exc:  # noqa: BLE001
             print(f"[ERROR] reel media failed err={exc}")
@@ -26,7 +31,7 @@ def handler(event, _context):
     return {"batchItemFailures": failures}
 
 
-def _process_reel(reel_id: str, source_key: str) -> dict:
+def _process_reel(reel_id: str, source_key: str, source_kind: str) -> dict:
     bucket = os.environ.get("REELS_BUCKET_NAME") or ""
     if not bucket:
         raise RuntimeError("REELS_BUCKET_NAME missing")
@@ -35,6 +40,8 @@ def _process_reel(reel_id: str, source_key: str) -> dict:
         out = os.path.join(tmp, "output.mp4")
         thumb = os.path.join(tmp, "poster.jpg")
         _download_s3_object(bucket, source_key, src)
+        duration_ms = _probe_duration_ms(src)
+        _assert_duration(duration_ms, source_kind)
         _run_ffmpeg_faststart(src, out)
         _run_ffmpeg_poster(out, thumb)
         processed_key = f"processed/{reel_id}.mp4"
@@ -45,7 +52,42 @@ def _process_reel(reel_id: str, source_key: str) -> dict:
             "status": "ready",
             "processedS3Key": processed_key,
             "thumbnailS3Key": thumb_key,
+            "durationMs": duration_ms,
         }
+
+
+def _assert_duration(duration_ms: int, source_kind: str) -> None:
+    seconds = duration_ms / 1000.0
+    if source_kind == "ai":
+        if seconds < 4 or seconds > 10:
+            raise RuntimeError(
+                f"AI reel duration {seconds:.1f}s outside allowed 4–10s"
+            )
+        return
+    if seconds < 15 or seconds > 30:
+        raise RuntimeError(
+            f"Upload duration {seconds:.1f}s outside allowed 15–30s"
+        )
+
+
+def _probe_duration_ms(src: str) -> int:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            src,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    seconds = float((result.stdout or "0").strip() or "0")
+    return max(1, int(round(seconds * 1000)))
 
 
 def _run_ffmpeg_faststart(src: str, out: str) -> None:
@@ -61,9 +103,12 @@ def _run_ffmpeg_faststart(src: str, out: str) -> None:
             "libx264",
             "-preset",
             "veryfast",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
             "-movflags",
             "+faststart",
-            "-an",
             out,
         ],
         check=True,

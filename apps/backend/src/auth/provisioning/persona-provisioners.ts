@@ -104,16 +104,19 @@ function buildBusinessFragment(
     '$business_name: String!',
     '$main_interest: business_main_interest_enum!',
     '$ai_tokens: Int!',
+    '$ai_reel_tokens: Int!',
   ];
   const vars: Record<string, unknown> = {
     business_name: ctx.business_name ?? '',
     main_interest: ctx.main_interest ?? 'sell_items',
     ai_tokens: 20,
+    ai_reel_tokens: 1,
   };
   const businessDataFields = [
     'name: $business_name',
     'main_interest: $main_interest',
     'ai_tokens: $ai_tokens',
+    'ai_reel_tokens: $ai_reel_tokens',
   ];
 
   if (ctx.business_referral_agent_id && ctx.business_referral_code_used) {
@@ -136,7 +139,7 @@ function buildBusinessFragment(
   }
 
   let returnSel =
-    'business { id user_id name main_interest is_verified ai_tokens created_at updated_at';
+    'business { id user_id name main_interest is_verified ai_tokens ai_reel_tokens created_at updated_at';
 
   const store = ctx.storeAddress;
   if (store && !store.countryOnly) {

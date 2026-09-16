@@ -22,6 +22,7 @@ import { AuthModule } from '../auth/auth.module';
 import { setupRequestContextCls } from '../auth/request-context-cls.setup';
 import { AwsModule } from '../aws/aws.module';
 import { BusinessTokensModule } from '../business-tokens/business-tokens.module';
+import { ReelAiTokensModule } from '../reel-ai-tokens/reel-ai-tokens.module';
 import { BrandsModule } from '../brands/brands.module';
 import { BusinessAgentsModule } from '../business-agents/business-agents.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
@@ -101,6 +102,7 @@ import { ReelMediaModule } from '../reel-media/reel-media.module';
 import { ReelsModule } from '../reels/reels.module';
 import { ReelCommentsModule } from '../reel-comments/reel-comments.module';
 import { ReelBoostsModule } from '../reel-boosts/reel-boosts.module';
+import { ReelAiGenerateModule } from '../reel-ai-generate/reel-ai-generate.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -158,6 +160,7 @@ import { AppService } from './app.service';
     ReelsModule,
     ReelCommentsModule,
     ReelBoostsModule,
+    ReelAiGenerateModule,
     ReelMediaModule,
     ReelAiReviewModule,
     AccountsModule,
@@ -211,6 +214,7 @@ import { AppService } from './app.service';
     BusinessItemsModule,
     BusinessImagesModule,
     BusinessTokensModule,
+    ReelAiTokensModule,
     CommerceIntegrationsModule,
     ImageValidationModule,
     BusinessVerificationModule,

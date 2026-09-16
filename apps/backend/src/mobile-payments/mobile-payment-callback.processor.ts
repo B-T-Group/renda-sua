@@ -211,7 +211,10 @@ export class MobilePaymentCallbackProcessor {
       await this.settleCashReconciliation(tx, callbackData.transactionId);
       return;
     }
-    if (callbackData.status === 'SUCCESS' && tx.payment_entity === 'token') {
+    if (
+      callbackData.status === 'SUCCESS' &&
+      (tx.payment_entity === 'token' || tx.payment_entity === 'reel_ai_token')
+    ) {
       await this.finalizeTokenPaymentSuccess(tx, callbackData.transactionId);
       return;
     }
@@ -236,7 +239,10 @@ export class MobilePaymentCallbackProcessor {
       await this.settleCashReconciliation(tx, callbackData.reference);
       return;
     }
-    if (callbackData.status === 'SUCCESS' && tx.payment_entity === 'token') {
+    if (
+      callbackData.status === 'SUCCESS' &&
+      (tx.payment_entity === 'token' || tx.payment_entity === 'reel_ai_token')
+    ) {
       await this.finalizeTokenPaymentSuccess(tx, callbackData.reference);
       return;
     }
@@ -509,6 +515,7 @@ export class MobilePaymentCallbackProcessor {
     if (
       !transaction.account_id ||
       transaction.payment_entity === 'token' ||
+      transaction.payment_entity === 'reel_ai_token' ||
       transaction.payment_entity === 'order_deposit' ||
       transaction.transaction_type !== 'PAYMENT'
     ) {

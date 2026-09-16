@@ -12,14 +12,18 @@ export class ReelMediaQueueService {
     this.client = new SQSClient({ region });
   }
 
-  async enqueue(reelId: string, sourceS3Key: string): Promise<void> {
+  async enqueue(
+    reelId: string,
+    sourceS3Key: string,
+    sourceKind: 'merchant' | 'ai' = 'merchant'
+  ): Promise<void> {
     const queueUrl = this.config.get('reels')?.mediaQueueUrl;
     if (!queueUrl) throw new ServiceUnavailableException('Reel media queue is not configured');
     try {
       await this.client.send(
         new SendMessageCommand({
           QueueUrl: queueUrl,
-          MessageBody: JSON.stringify({ reelId, sourceS3Key }),
+          MessageBody: JSON.stringify({ reelId, sourceS3Key, sourceKind }),
           MessageGroupId: reelId,
         })
       );

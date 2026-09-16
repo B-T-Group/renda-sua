@@ -6,6 +6,7 @@ import { ReelMediaQueueService } from '../reels/reel-media-queue.service';
 interface StuckReel {
   id: string;
   source_s3_key: string;
+  generation_source: string | null;
 }
 
 @Injectable()
@@ -21,7 +22,7 @@ export class ReelProcessingSweeperService {
   async sweep(): Promise<void> {
     const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const result = await this.hasura.executeQuery<{ reels: StuckReel[] }>(
-      `query($cutoff:timestamptz!){reels(where:{processing_status:{_in:[queued,processing]},updated_at:{_lt:$cutoff}},limit:50){id source_s3_key}}`,
+      `query($cutoff:timestamptz!){reels(where:{processing_status:{_in:[queued,processing]},updated_at:{_lt:$cutoff}},limit:50){id source_s3_key generation_source}}`,
       { cutoff }
     );
     for (const reel of result.reels) await this.requeue(reel);
@@ -33,7 +34,8 @@ export class ReelProcessingSweeperService {
         `mutation($id:uuid!){update_reels_by_pk(pk_columns:{id:$id},_set:{processing_status:queued,updated_at:"now()"}){id}}`,
         { id: reel.id }
       );
-      await this.queue.enqueue(reel.id, reel.source_s3_key);
+      const sourceKind = reel.generation_source === 'ai' ? 'ai' : 'merchant';
+      await this.queue.enqueue(reel.id, reel.source_s3_key, sourceKind);
     } catch (error: any) {
       this.logger.error(`Failed to requeue reel ${reel.id}: ${error?.message}`);
     }

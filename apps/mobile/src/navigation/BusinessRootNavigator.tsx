@@ -41,7 +41,6 @@ import BusinessRentalAiProposalScreen from '../screens/business/BusinessRentalAi
 import AdminItemModerationScreen from '../screens/business/AdminItemModerationScreen';
 import AdminContentReportsScreen from '../screens/business/AdminContentReportsScreen';
 import AdminReelModerationScreen from '../screens/business/AdminReelModerationScreen';
-import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
 import AdminItemAiReviewsScreen from '../screens/business/AdminItemAiReviewsScreen';
 import AdminItemsBrowserScreen from '../screens/business/AdminItemsBrowserScreen';
 import AdminItemDetailScreen from '../screens/business/AdminItemDetailScreen';
@@ -64,6 +63,9 @@ import BusinessStockAvailabilityConfirmScreen from '../screens/business/Business
 import BusinessClientCitiesScreen from '../screens/business/BusinessClientCitiesScreen';
 import BusinessInsightsScreen from '../screens/business/BusinessInsightsScreen';
 import BusinessAiTokensScreen from '../screens/business/BusinessAiTokensScreen';
+import BusinessReelAiTokensScreen from '../screens/business/BusinessReelAiTokensScreen';
+import BusinessAddReelScreen from '../screens/business/BusinessAddReelScreen';
+import BusinessReelsScreen from '../screens/business/BusinessReelsScreen';
 import BusinessAccountTypeScreen from '../screens/business/BusinessAccountTypeScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
@@ -110,7 +112,10 @@ function BusinessMainTabsScreen() {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
   const { flags } = useClientFlags();
-  const tabBarScreenOptions = useTabBarScreenOptions({ showShadow: false });
+  const tabBarScreenOptions = useTabBarScreenOptions({
+    showShadow: false,
+    floatingHosted: flags.floating_nav_enabled,
+  });
   const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { totalCount: attentionBadgeCount, appIconBadgeCount } =
     usePersonaAttentionBadge('business');
@@ -216,7 +221,7 @@ function BusinessMainTabsScreen() {
       {flags.reels_enabled ? (
         <Tab.Screen
           name="BusinessReels"
-          component={ReelsFeedScreen}
+          component={BusinessReelsScreen}
           options={{
             title: t('business.tabs.reels', 'Reels'),
             tabBarLabel: t('business.tabs.reels', 'Reels'),
@@ -752,6 +757,22 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.tokens.navTitle', 'AI tokens'),
             headerBackTitle: t('business.tabs.dashboard', 'Dashboard'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessReelAiTokens"
+          component={BusinessReelAiTokensScreen}
+          options={{
+            title: t('business.reels.tokens.navTitle', 'AI reel tokens'),
+            headerBackTitle: t('business.tabs.reels', 'Reels'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessAddReel"
+          component={BusinessAddReelScreen}
+          options={{
+            title: t('business.reels.add.title', 'Add reel'),
+            headerBackTitle: t('business.tabs.reels', 'Reels'),
           }}
         />
         <RootStack.Screen

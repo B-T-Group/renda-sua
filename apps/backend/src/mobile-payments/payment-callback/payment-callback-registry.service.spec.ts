@@ -12,6 +12,9 @@ jest.mock('../../rentals/rental-payment-callback.handler', () => ({
 jest.mock('../../business-tokens/token-payment-callback.handler', () => ({
   TokenPaymentCallbackHandler: class TokenPaymentCallbackHandler {},
 }));
+jest.mock('../../reel-ai-tokens/reel-ai-token-payment-callback.handler', () => ({
+  ReelAiTokenPaymentCallbackHandler: class ReelAiTokenPaymentCallbackHandler {},
+}));
 jest.mock('../../mobile-payment-phones/phone-verification-callback.handler', () => ({
   PhoneVerificationCallbackHandler: class PhoneVerificationCallbackHandler {},
 }));
@@ -32,7 +35,7 @@ describe('PaymentCallbackRegistryService', () => {
     const handlers = service.getHandlers();
 
     expect(handlers).toEqual([orderHandler, tokenHandler]);
-    expect(moduleRef.get).toHaveBeenCalledTimes(4);
+    expect(moduleRef.get).toHaveBeenCalledTimes(5);
     expect(moduleRef.get).toHaveBeenCalledWith(expect.any(Function), {
       strict: false,
     });

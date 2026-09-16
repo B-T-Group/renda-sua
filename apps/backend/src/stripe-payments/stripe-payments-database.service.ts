@@ -7,7 +7,8 @@ export type StripePaymentEntity =
   | 'claim_order'
   | 'rental_booking'
   | 'order_cash_reconciliation'
-  | 'token';
+  | 'token'
+  | 'reel_ai_token';
 
 export type StripeTransactionStatus =
   | 'pending'

@@ -1756,6 +1756,57 @@
       "mobilePending": "Payment request sent. Tokens will be added when payment succeeds.",
       "unsupportedCurrency": "Token packs are only available in CAD or XAF for your business country."
     },
+    "reels": {
+      "addFab": "Add reel",
+      "presets": {
+        "productCentered": "Product centered",
+        "explosive": "Explosive",
+        "exciting": "Exciting",
+        "luxury": "Luxury",
+        "fresh": "Fresh and bright",
+        "unboxing": "Reveal",
+        "ugc": "Handheld UGC",
+        "cozy": "Cozy",
+        "outdoor": "Outdoor",
+        "custom": "Custom"
+      },
+      "add": {
+        "title": "Add reel",
+        "subtitle": "Generate an 8s AI product ad, or upload a 15–30s video from your library.",
+        "tokenBalance": "{{count}} AI reel tokens",
+        "unlimitedTokens": "Unlimited AI tokens",
+        "product": "Product",
+        "noPhoto": "No photo",
+        "style": "Ad style",
+        "prompt": "Optional direction",
+        "caption": "Caption (optional)",
+        "generate": "Generate AI ad (8s)",
+        "buyTokens": "Buy reel tokens",
+        "upload": "Upload from library (15–30s)",
+        "pickProduct": "Select a product first",
+        "needPhoto": "Add at least one product photo before generating",
+        "customPrompt": "Enter a custom prompt",
+        "generating": "AI ad generation started. We'll process it shortly.",
+        "generateError": "Generation failed",
+        "libraryPermission": "Photo library permission is required",
+        "durationError": "Library videos must be 15–30 seconds",
+        "uploaded": "Reel uploaded and submitted",
+        "uploadError": "Upload failed",
+        "loadError": "Could not load products"
+      },
+      "tokens": {
+        "navTitle": "AI reel tokens",
+        "title": "AI reel tokens",
+        "subtitle": "Each AI product-ad reel uses 1 token. Upload from your library is always free.",
+        "balanceLabel": "You have {{count}} reel tokens",
+        "phoneNumber": "Mobile money phone number",
+        "packTokens": "{{count}} tokens",
+        "buy": "Buy",
+        "purchaseError": "Failed to start purchase",
+        "mobilePending": "Payment request sent. Reel tokens will be added when payment succeeds.",
+        "unsupportedCurrency": "Reel token packs are only available in CAD or XAF for your business country."
+      }
+    },
     "referrals": {
       "referralCodeLabel": "Agent referral code (optional)",
       "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",

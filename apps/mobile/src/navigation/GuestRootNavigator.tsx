@@ -127,7 +127,6 @@ function GuestTabsNavigator({
         geometry,
         showShadow: true,
         floatingHosted: true,
-        variant: 'light',
       })
     : tabBarScreenOptions({ route: { name: 'GuestAuth' } }).tabBarStyle;
 

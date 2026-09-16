@@ -207,6 +207,8 @@ export type BusinessMainTabParamList = {
       }
     | undefined;
   BusinessReels: undefined;
+  BusinessAddReel: undefined;
+  BusinessReelAiTokens: undefined;
   BusinessMenu: undefined;
 };
 
@@ -282,6 +284,8 @@ export type BusinessRootStackParamList = {
   AccountRecharge: undefined;
   BusinessAccounts: undefined;
   BusinessAiTokens: undefined;
+  BusinessAddReel: undefined;
+  BusinessReelAiTokens: undefined;
   BusinessAccountTypeScreen: undefined;
   BusinessClientCities: undefined;
   BusinessInsights: undefined;

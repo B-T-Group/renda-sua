@@ -10,19 +10,19 @@ import React, {
 } from 'react';
 import {
   Animated,
+  View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
 import { BottomTabBar, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useIsFocused } from '@react-navigation/native';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   FLOATING_PILL_HEIGHT,
-  FloatingTabBarVariantProvider,
-  isReelsTabRoute,
+  floatingTabBarChrome,
   TAB_BAR_HORIZONTAL_MARGIN,
-  TAB_BAR_RADIUS,
   useTabBarGeometry,
-  type FloatingTabBarVariant,
 } from './tabBarGeometry';
 
 const SCROLL_DIR_THRESHOLD = 10;
@@ -45,6 +45,7 @@ export function FloatingTabBarVisibilityProvider({
   const hiddenProgress = useRef(new Animated.Value(0)).current;
   const lastYRef = useRef(0);
   const hiddenRef = useRef(false);
+  const ignoreScrollUntilRef = useRef(0);
 
   const animateTo = useCallback(
     (hidden: boolean) => {
@@ -60,13 +61,19 @@ export function FloatingTabBarVisibilityProvider({
   );
 
   const showTabBar = useCallback(() => {
-    lastYRef.current = 0;
+    // Ignore stale scroll events from the previous tab after a focus change.
+    ignoreScrollUntilRef.current = Date.now() + 350;
     animateTo(false);
   }, [animateTo]);
 
   const reportScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = event.nativeEvent.contentOffset.y;
+      if (Date.now() < ignoreScrollUntilRef.current) {
+        lastYRef.current = y;
+        return;
+      }
+
       const delta = y - lastYRef.current;
       lastYRef.current = y;
 
@@ -106,13 +113,14 @@ export function useReportTabBarScroll(): {
 } {
   const { flags } = useClientFlags();
   const ctx = useFloatingTabBarVisibility();
+  const isFocused = useIsFocused();
 
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (!flags.floating_nav_enabled || !ctx) return;
+      if (!flags.floating_nav_enabled || !ctx || !isFocused) return;
       ctx.reportScroll(event);
     },
-    [ctx, flags.floating_nav_enabled]
+    [ctx, flags.floating_nav_enabled, isFocused]
   );
 
   const onTabFocusShow = useCallback(() => {
@@ -124,13 +132,12 @@ export function useReportTabBarScroll(): {
 }
 
 export function FloatingAnimatedTabBar(props: BottomTabBarProps) {
+  const theme = useTheme();
   const geometry = useTabBarGeometry();
   const ctx = useFloatingTabBarVisibility();
   const [pointerEvents, setPointerEvents] = useState<'auto' | 'none'>('auto');
-  const focusedRoute = props.state.routes[props.state.index];
-  const focusedKey = focusedRoute?.key;
-  const variant: FloatingTabBarVariant =
-    focusedRoute && isReelsTabRoute(focusedRoute.name) ? 'reels' : 'light';
+  const focusedKey = props.state.routes[props.state.index]?.key;
+  const chrome = floatingTabBarChrome(theme, true);
 
   const hideDistance =
     FLOATING_PILL_HEIGHT + geometry.tabBarBottomOffset + 24;
@@ -162,29 +169,31 @@ export function FloatingAnimatedTabBar(props: BottomTabBarProps) {
 
   const bar = <BottomTabBar {...props} />;
 
+  const hostStyle = {
+    position: 'absolute' as const,
+    left: TAB_BAR_HORIZONTAL_MARGIN,
+    right: TAB_BAR_HORIZONTAL_MARGIN,
+    bottom: geometry.tabBarBottomOffset,
+    height: FLOATING_PILL_HEIGHT,
+    overflow: 'hidden' as const,
+    ...chrome,
+  };
+
+  if (!ctx) {
+    return <View style={hostStyle}>{bar}</View>;
+  }
+
   return (
-    <FloatingTabBarVariantProvider variant={variant}>
-      {ctx ? (
-        <Animated.View
-          pointerEvents={pointerEvents}
-          style={{
-            position: 'absolute',
-            left: TAB_BAR_HORIZONTAL_MARGIN,
-            right: TAB_BAR_HORIZONTAL_MARGIN,
-            bottom: geometry.tabBarBottomOffset,
-            height: FLOATING_PILL_HEIGHT,
-            borderRadius: TAB_BAR_RADIUS,
-            overflow: 'hidden',
-            transform: [{ translateY: translateY! }],
-            opacity: fade,
-          }}
-        >
-          {bar}
-        </Animated.View>
-      ) : (
-        bar
-      )}
-    </FloatingTabBarVariantProvider>
+    <Animated.View
+      pointerEvents={pointerEvents}
+      style={{
+        ...hostStyle,
+        transform: [{ translateY }],
+        opacity: fade,
+      }}
+    >
+      {bar}
+    </Animated.View>
   );
 }
 

@@ -1,0 +1,29 @@
+table:
+  name: business_ai_reel_token_usage
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: created_by_user
+    using:
+      foreign_key_constraint_on: created_by_user_id
+  - name: reel
+    using:
+      foreign_key_constraint_on: reel_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_id
+        - tokens_consumed
+        - operation_type
+        - reel_id
+        - payment_reference
+        - created_by_user_id
+        - created_at
+      filter:
+        business:
+          user_id:
+            _eq: X-Hasura-User-Id

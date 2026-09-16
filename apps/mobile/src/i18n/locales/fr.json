@@ -1688,6 +1688,57 @@
       "mobilePending": "Demande de paiement envoyée. Les jetons seront ajoutés après le succès du paiement.",
       "unsupportedCurrency": "Les packs de jetons ne sont disponibles qu'en CAD ou XAF pour le pays de votre entreprise."
     },
+    "reels": {
+      "addFab": "Ajouter un reel",
+      "presets": {
+        "productCentered": "Produit centré",
+        "explosive": "Explosif",
+        "exciting": "Dynamique",
+        "luxury": "Luxe",
+        "fresh": "Frais et lumineux",
+        "unboxing": "Révélation",
+        "ugc": "UGC téléphone",
+        "cozy": "Cosy",
+        "outdoor": "Extérieur",
+        "custom": "Personnalisé"
+      },
+      "add": {
+        "title": "Ajouter un reel",
+        "subtitle": "Générez une pub produit IA de 8 s, ou importez une vidéo de 15–30 s depuis votre bibliothèque.",
+        "tokenBalance": "{{count}} jetons reel IA",
+        "unlimitedTokens": "Jetons IA illimités",
+        "product": "Produit",
+        "noPhoto": "Sans photo",
+        "style": "Style de pub",
+        "prompt": "Direction optionnelle",
+        "caption": "Légende (optionnelle)",
+        "generate": "Générer une pub IA (8 s)",
+        "buyTokens": "Acheter des jetons reel",
+        "upload": "Importer depuis la bibliothèque (15–30 s)",
+        "pickProduct": "Sélectionnez d'abord un produit",
+        "needPhoto": "Ajoutez au moins une photo produit avant de générer",
+        "customPrompt": "Saisissez une invite personnalisée",
+        "generating": "Génération de la pub IA démarrée. Traitement en cours.",
+        "generateError": "Échec de la génération",
+        "libraryPermission": "L'accès à la photothèque est requis",
+        "durationError": "Les vidéos de la bibliothèque doivent durer 15–30 secondes",
+        "uploaded": "Reel importé et soumis",
+        "uploadError": "Échec de l'import",
+        "loadError": "Impossible de charger les produits"
+      },
+      "tokens": {
+        "navTitle": "Jetons reel IA",
+        "title": "Jetons reel IA",
+        "subtitle": "Chaque pub produit IA utilise 1 jeton. L'import depuis la bibliothèque est toujours gratuit.",
+        "balanceLabel": "Vous avez {{count}} jetons reel",
+        "phoneNumber": "Numéro de téléphone mobile money",
+        "packTokens": "{{count}} jetons",
+        "buy": "Acheter",
+        "purchaseError": "Échec du démarrage de l'achat",
+        "mobilePending": "Demande de paiement envoyée. Les jetons reel seront ajoutés après le succès du paiement.",
+        "unsupportedCurrency": "Les packs de jetons reel ne sont disponibles qu'en CAD ou XAF pour le pays de votre entreprise."
+      }
+    },
     "referrals": {
       "referralCodeLabel": "Code de l'agent (optionnel)",
       "referralCodeHelp": "Entrez le code à 6 caractères de l'agent Rendasua qui vous a recommandé.",

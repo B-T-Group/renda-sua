@@ -1,7 +1,5 @@
 import React, {
-  createContext,
   useCallback,
-  useContext,
   type ReactNode,
 } from 'react';
 import type {
@@ -25,38 +23,6 @@ export const FLOATING_PILL_HEIGHT = 56;
 /** Gap between home-indicator / screen bottom and the pill. */
 const FLOATING_BOTTOM_GAP = 4;
 const FLOATING_ICON_HIT = 40;
-
-const REELS_TAB_NAMES = new Set([
-  'ClientReels',
-  'GuestReels',
-  'BusinessReels',
-]);
-
-export type FloatingTabBarVariant = 'light' | 'reels';
-
-const FloatingTabBarVariantContext = createContext<FloatingTabBarVariant>('light');
-
-export function FloatingTabBarVariantProvider({
-  variant,
-  children,
-}: {
-  variant: FloatingTabBarVariant;
-  children: ReactNode;
-}) {
-  return React.createElement(
-    FloatingTabBarVariantContext.Provider,
-    { value: variant },
-    children
-  );
-}
-
-export function useFloatingTabBarVariant(): FloatingTabBarVariant {
-  return useContext(FloatingTabBarVariantContext);
-}
-
-export function isReelsTabRoute(routeName: string): boolean {
-  return REELS_TAB_NAMES.has(routeName);
-}
 
 type TabBarOptions = {
   showShadow?: boolean;
@@ -147,38 +113,50 @@ export function createFloatingTabBarStyle(args: {
   geometry: TabBarGeometry;
   showShadow: boolean;
   floatingHosted: boolean;
-  variant: FloatingTabBarVariant;
 }) {
-  const { theme, geometry, showShadow, floatingHosted, variant } = args;
-  const reels = variant === 'reels';
-  const base = {
+  const { theme, geometry, showShadow, floatingHosted } = args;
+  const chrome = floatingTabBarChrome(theme, showShadow);
+
+  if (floatingHosted) {
+    // Chrome lives on FloatingAnimatedTabBar host — keep RN tab bar invisible.
+    return {
+      height: FLOATING_PILL_HEIGHT,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      borderTopWidth: 0,
+      borderRadius: 0,
+      paddingBottom: 0,
+      paddingTop: 0,
+      paddingHorizontal: FLOATING_INNER_HORIZONTAL_PADDING,
+      elevation: 0,
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      position: 'relative' as const,
+    };
+  }
+
+  return {
     height: FLOATING_PILL_HEIGHT,
-    backgroundColor: reels ? 'rgba(28, 28, 30, 0.92)' : theme.colors.pageBackground,
-    borderTopWidth: 0,
-    borderWidth: StyleSheet.hairlineWidth * 2,
-    borderColor: reels ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.1)',
-    borderRadius: TAB_BAR_RADIUS,
+    ...chrome,
     paddingBottom: 0,
     paddingTop: 0,
     paddingHorizontal: FLOATING_INNER_HORIZONTAL_PADDING,
     overflow: 'hidden' as const,
-    ...tabBarShadowStyle(showShadow, true, reels),
-  };
-  if (floatingHosted) {
-    return {
-      ...base,
-      position: 'relative' as const,
-      left: undefined,
-      right: undefined,
-      bottom: undefined,
-    };
-  }
-  return {
-    ...base,
     position: 'absolute' as const,
     left: TAB_BAR_HORIZONTAL_MARGIN,
     right: TAB_BAR_HORIZONTAL_MARGIN,
     bottom: geometry.tabBarBottomOffset,
+  };
+}
+
+export function floatingTabBarChrome(theme: AppTheme, showShadow = true) {
+  return {
+    backgroundColor: theme.colors.pageBackground,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: TAB_BAR_RADIUS,
+    ...tabBarShadowStyle(showShadow, true, false),
   };
 }
 
@@ -230,9 +208,7 @@ export function useTabBarScreenOptions(
 
   return useCallback(
     ({ route }) => {
-      const reelsMode =
-        geometry.floatingNavEnabled && isReelsTabRoute(route.name);
-      const variant: FloatingTabBarVariant = reelsMode ? 'reels' : 'light';
+      void route;
 
       if (!geometry.floatingNavEnabled) {
         return {
@@ -254,17 +230,18 @@ export function useTabBarScreenOptions(
 
       return {
         headerShown: false,
-        tabBarActiveTintColor: reelsMode ? '#FFFFFF' : theme.colors.primary.main,
-        tabBarInactiveTintColor: reelsMode
-          ? 'rgba(255, 255, 255, 0.72)'
-          : theme.colors.text.secondary,
+        tabBarActiveTintColor: theme.colors.primary.main,
+        tabBarInactiveTintColor: theme.colors.text.secondary,
         tabBarShowLabel: false,
+        // Force BottomTabBar's default `colors.card` fill off — chrome is on the host.
+        tabBarBackground: floatingHosted
+          ? () => React.createElement(View, { pointerEvents: 'none' })
+          : undefined,
         tabBarStyle: createFloatingTabBarStyle({
           theme,
           geometry,
           showShadow,
           floatingHosted,
-          variant,
         }),
         tabBarItemStyle: {
           height: FLOATING_PILL_HEIGHT,
@@ -296,7 +273,6 @@ export function TabBarIconContent({
 }) {
   const { flags } = useClientFlags();
   const theme = useTheme();
-  const variant = useFloatingTabBarVariant();
   const floating = flags.floating_nav_enabled;
 
   if (!floating) {
@@ -307,10 +283,7 @@ export function TabBarIconContent({
     );
   }
 
-  const focusBg =
-    variant === 'reels'
-      ? 'rgba(255, 255, 255, 0.18)'
-      : `${theme.colors.primary.main}1A`;
+  const focusBg = `${theme.colors.primary.main}1A`;
 
   return React.createElement(
     View,

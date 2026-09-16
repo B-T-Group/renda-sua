@@ -449,10 +449,24 @@ export interface ReelsConfig {
   dailyQuota: number;
 }
 
+export interface VeoConfig {
+  /** Env default tier: lite | fast */
+  tier: string;
+  /** Optional full model id override (wins over tier). */
+  modelOverride: string;
+  resolution: string;
+  durationSeconds: number;
+  aspectRatio: string;
+}
+
 export interface ReelAiReviewConfig {
   enabled: boolean;
   model: string;
   queueUrl: string;
+}
+
+export interface GeminiConfig {
+  apiKey: string;
 }
 
 export interface IdDocumentAiReviewConfig {
@@ -553,6 +567,7 @@ export interface Configuration {
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
+  gemini: GeminiConfig;
   bedrock: BedrockConfig;
   assistant: AssistantConfig;
   inventorySearch: InventorySearchConfig;
@@ -575,6 +590,7 @@ export interface Configuration {
   rentalAiReview: RentalAiReviewConfig;
   itemAiReview: ItemAiReviewConfig;
   reels: ReelsConfig;
+  veo: VeoConfig;
   reelAiReview: ReelAiReviewConfig;
   idDocumentAiReview: IdDocumentAiReviewConfig;
   commerceIntegrations: CommerceIntegrationsConfig;
@@ -950,6 +966,9 @@ export default (): Configuration => {
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
     },
+    gemini: {
+      apiKey: process.env.GEMINI_API_KEY || '',
+    },
     bedrock: {
       // Never fall back to AWS_REGION (ca-central-1) — Luna is us-east-1 only.
       region: process.env.BEDROCK_REGION?.trim() || 'us-east-1',
@@ -1137,6 +1156,16 @@ export default (): Configuration => {
       cloudFrontDomain: process.env.REELS_CLOUDFRONT_DOMAIN || '',
       mediaQueueUrl: process.env.REEL_MEDIA_QUEUE_URL || '',
       dailyQuota: parseInt(process.env.REELS_DAILY_QUOTA || '10', 10),
+    },
+    veo: {
+      tier: process.env.VEO_REEL_TIER?.trim() || 'lite',
+      modelOverride: process.env.VEO_REEL_MODEL?.trim() || '',
+      resolution: process.env.VEO_REEL_RESOLUTION?.trim() || '720p',
+      durationSeconds: parseInt(
+        process.env.VEO_REEL_DURATION_SECONDS || '8',
+        10
+      ),
+      aspectRatio: process.env.VEO_REEL_ASPECT_RATIO?.trim() || '9:16',
     },
     reelAiReview: {
       enabled: process.env.REEL_AI_AUTO_REVIEW_ENABLED === 'true',

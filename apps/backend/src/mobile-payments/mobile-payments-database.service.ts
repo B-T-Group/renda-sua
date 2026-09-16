@@ -27,6 +27,7 @@ export interface MobilePaymentTransaction {
     | 'order_cash_reconciliation'
     | 'order_deposit'
     | 'token'
+    | 'reel_ai_token'
     | 'phone_verification';
   entity_id?: string;
   created_at: string;
@@ -54,6 +55,7 @@ export interface CreateTransactionData {
     | 'order_cash_reconciliation'
     | 'order_deposit'
     | 'token'
+    | 'reel_ai_token'
     | 'phone_verification';
   entity_id?: string;
 }
