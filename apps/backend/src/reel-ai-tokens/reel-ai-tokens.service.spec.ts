@@ -22,6 +22,7 @@ describe('ReelAiTokensService', () => {
   };
   const mobilePaymentsDatabaseService = {
     createTransaction: jest.fn(),
+    updateTransaction: jest.fn(),
   };
 
   let service: ReelAiTokensService;
@@ -148,5 +149,54 @@ describe('ReelAiTokensService', () => {
       })
     ).rejects.toThrow('No reel AI token pack for 999 CAD');
     expect(grantPackTokens).not.toHaveBeenCalled();
+  });
+
+  it('does not grant a pack from description when the paid amount does not match', async () => {
+    const grantPackTokens = jest.spyOn(service, 'grantPackTokens');
+
+    await expect(
+      service.processPaymentSuccess({
+        entity_id: 'business-1',
+        reference: 'cheap-pay',
+        amount: 1,
+        currency: 'CAD',
+        description: 'AI reel tokens pack 15',
+      })
+    ).rejects.toThrow('No reel AI token pack for 1 CAD');
+    expect(grantPackTokens).not.toHaveBeenCalled();
+  });
+
+  it('stores the provider transaction id so MoMo callbacks can credit tokens', async () => {
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.com',
+      phone_number: '+237600000000',
+      business: { id: 'business-1' },
+    });
+    paymentRoutingService.getBusinessCountryCode.mockResolvedValue('CM');
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      supported_country_states: [{ currency_code: 'XAF' }],
+    });
+    paymentRoutingService.resolveRailForBusiness.mockResolvedValue(
+      'mobile_money'
+    );
+    mobilePaymentsService.getProvider.mockReturnValue('mypvit');
+    mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+      id: 'mp-tx-1',
+    });
+    mobilePaymentsService.initiatePayment.mockResolvedValue({
+      success: true,
+      transactionId: 'provider-tx-9',
+    });
+
+    await service.initiatePackPurchase({
+      packId: 'reel_ai_pack_1',
+      phoneNumber: '+237600000000',
+    });
+
+    expect(mobilePaymentsDatabaseService.updateTransaction).toHaveBeenCalledWith(
+      'mp-tx-1',
+      { transaction_id: 'provider-tx-9' }
+    );
   });
 });
