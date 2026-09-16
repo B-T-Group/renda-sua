@@ -4,6 +4,7 @@ import {
 } from './reel-ai-presets';
 import {
   parseVeoReelTier,
+  resolveVeoPersonGeneration,
   resolveVeoReelModel,
   VEO_REEL_MODEL_BY_TIER,
 } from './veo-reel-model.util';
@@ -29,6 +30,18 @@ describe('veo-reel-model.util', () => {
     expect(
       resolveVeoReelModel({ envTier: 'lite', tierOverride: 'fast' })
     ).toBe(VEO_REEL_MODEL_BY_TIER.fast);
+  });
+
+  it('uses allow_adult for Veo 3.1 image-to-video', () => {
+    expect(
+      resolveVeoPersonGeneration(VEO_REEL_MODEL_BY_TIER.lite)
+    ).toBe('allow_adult');
+    expect(
+      resolveVeoPersonGeneration(VEO_REEL_MODEL_BY_TIER.fast)
+    ).toBe('allow_adult');
+    expect(resolveVeoPersonGeneration('veo-2.0-generate-001')).toBe(
+      'dont_allow'
+    );
   });
 });
 
