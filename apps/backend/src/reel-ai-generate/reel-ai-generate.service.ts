@@ -180,8 +180,6 @@ export class ReelAiGenerateService {
       resolution: veoCfg.resolution,
       durationSeconds: veoCfg.durationSeconds,
       personGeneration: resolveVeoPersonGeneration(model),
-      negativePrompt:
-        'extra products, fake logos, on-screen text, watermarks, distorted labels',
     });
     await this.insertGenerationRow({
       reelId: params.reelId,
