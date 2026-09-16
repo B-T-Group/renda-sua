@@ -10,9 +10,12 @@ import React, {
 } from 'react';
 import {
   Animated,
+  StyleSheet,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { BottomTabBar, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useIsFocused } from '@react-navigation/native';
@@ -27,6 +30,11 @@ import {
 
 const SCROLL_DIR_THRESHOLD = 10;
 const SHOW_NEAR_TOP_Y = 16;
+
+function isTabBarDisplayNone(style: StyleProp<ViewStyle> | undefined): boolean {
+  const flat = StyleSheet.flatten(style);
+  return flat?.display === 'none';
+}
 
 type FloatingTabBarVisibilityValue = {
   hiddenProgress: Animated.Value;
@@ -136,15 +144,18 @@ export function FloatingAnimatedTabBar(props: BottomTabBarProps) {
   const geometry = useTabBarGeometry();
   const ctx = useFloatingTabBarVisibility();
   const [pointerEvents, setPointerEvents] = useState<'auto' | 'none'>('auto');
-  const focusedKey = props.state.routes[props.state.index]?.key;
+  const focusedRoute = props.state.routes[props.state.index];
+  const focusedKey = focusedRoute?.key;
+  const focusedOptions = focusedKey ? props.descriptors[focusedKey]?.options : undefined;
   const chrome = floatingTabBarChrome(theme, true);
+  const tabBarHidden = isTabBarDisplayNone(focusedOptions?.tabBarStyle);
 
   const hideDistance =
     FLOATING_PILL_HEIGHT + geometry.tabBarBottomOffset + 24;
 
   useEffect(() => {
-    ctx?.showTabBar();
-  }, [focusedKey, ctx]);
+    if (!tabBarHidden) ctx?.showTabBar();
+  }, [focusedKey, ctx, tabBarHidden]);
 
   useEffect(() => {
     if (!ctx) return;
@@ -156,6 +167,12 @@ export function FloatingAnimatedTabBar(props: BottomTabBarProps) {
 
   if (!geometry.floatingNavEnabled) {
     return <BottomTabBar {...props} />;
+  }
+
+  // Guest auth (Signup/OTP/etc.) sets display:none — hide the floating host too,
+  // otherwise an empty pill covers the sticky footer buttons.
+  if (tabBarHidden) {
+    return null;
   }
 
   const translateY = ctx?.hiddenProgress.interpolate({
