@@ -31,6 +31,8 @@ function base(
     totalProductViews: 0,
     ordersTotal: 0,
     liveSince: new Date(Date.now() - 20 * 86400000).toISOString(),
+    approvedReelCount: 0,
+    reelsEnabledAllowlist: false,
     ...overrides,
   };
 }

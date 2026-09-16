@@ -928,6 +928,10 @@ export function useBusinessDashboardScreen() {
       }
       if (id === 'mm_phone') {
         onOpenMobilePaymentPhoneVerify();
+        return;
+      }
+      if (id === 'first_reel') {
+        navigation.navigate('BusinessAddReel');
       }
     },
     [navigation, onOpenMobilePaymentPhoneVerify, onSetupAddProduct]

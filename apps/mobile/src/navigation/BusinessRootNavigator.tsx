@@ -2,8 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Platform, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -40,6 +39,8 @@ import AdminRentalListingsModerationScreen from '../screens/business/AdminRental
 import AdminRentalAiReviewsScreen from '../screens/business/AdminRentalAiReviewsScreen';
 import BusinessRentalAiProposalScreen from '../screens/business/BusinessRentalAiProposalScreen';
 import AdminItemModerationScreen from '../screens/business/AdminItemModerationScreen';
+import AdminContentReportsScreen from '../screens/business/AdminContentReportsScreen';
+import AdminReelModerationScreen from '../screens/business/AdminReelModerationScreen';
 import AdminItemAiReviewsScreen from '../screens/business/AdminItemAiReviewsScreen';
 import AdminItemsBrowserScreen from '../screens/business/AdminItemsBrowserScreen';
 import AdminItemDetailScreen from '../screens/business/AdminItemDetailScreen';
@@ -62,6 +63,9 @@ import BusinessStockAvailabilityConfirmScreen from '../screens/business/Business
 import BusinessClientCitiesScreen from '../screens/business/BusinessClientCitiesScreen';
 import BusinessInsightsScreen from '../screens/business/BusinessInsightsScreen';
 import BusinessAiTokensScreen from '../screens/business/BusinessAiTokensScreen';
+import BusinessReelAiTokensScreen from '../screens/business/BusinessReelAiTokensScreen';
+import BusinessAddReelScreen from '../screens/business/BusinessAddReelScreen';
+import BusinessReelsScreen from '../screens/business/BusinessReelsScreen';
 import BusinessAccountTypeScreen from '../screens/business/BusinessAccountTypeScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
@@ -91,6 +95,13 @@ import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotification
 import { useBusinessActiveOrders } from '../hooks/business/useBusinessActiveOrders';
 import { useProfileMe } from '../hooks/useProfileMe';
 import { OwnerOrdersApiProvider } from '../contexts/OrdersApiContext';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
+import { renderFloatingAnimatedTabBar } from './floatingTabBarVisibility';
+import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const Tab = createBottomTabNavigator<BusinessMainTabParamList>();
 const RootStack = createNativeStackNavigator<BusinessRootStackParamList>();
@@ -100,11 +111,12 @@ export type { BusinessAppNavScreen, BusinessMainTabParamList, BusinessRootStackP
 function BusinessMainTabsScreen() {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
-  const insets = useSafeAreaInsets();
-  const bottomInset = insets.bottom || 0;
-  const tabBarVerticalPadding = Platform.OS === 'ios' ? 20 : 10;
-  const tabBarHeightBase = Platform.OS === 'ios' ? 56 : 52;
-  const tabBarHeight = tabBarHeightBase + bottomInset + tabBarVerticalPadding / 2;
+  const { flags } = useClientFlags();
+  const tabBarScreenOptions = useTabBarScreenOptions({
+    showShadow: false,
+    floatingHosted: flags.floating_nav_enabled,
+  });
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { totalCount: attentionBadgeCount, appIconBadgeCount } =
     usePersonaAttentionBadge('business');
   const { activeCount: activeOrdersCount } = useBusinessActiveOrders({
@@ -117,29 +129,9 @@ function BusinessMainTabsScreen() {
 
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary.main,
-        tabBarInactiveTintColor: colors.text.secondary,
-        tabBarStyle: {
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: tabBarHeight,
-          backgroundColor: colors.pageBackground,
-          borderTopWidth: 1,
-          borderTopColor: colors.divider,
-          paddingBottom: bottomInset + tabBarVerticalPadding,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          ...typography.caption,
-          fontSize: 11,
-          fontWeight: '600',
-        },
-        tabBarItemStyle: { paddingTop: 4 },
-      }}
+      safeAreaInsets={floatingSafeAreaInsets}
+      tabBar={flags.floating_nav_enabled ? renderFloatingAnimatedTabBar : undefined}
+      screenOptions={tabBarScreenOptions}
     >
       <Tab.Screen
         name="BusinessDashboard"
@@ -147,12 +139,15 @@ function BusinessMainTabsScreen() {
         options={{
           title: t('business.tabs.dashboard', 'Home'),
           tabBarLabel: t('business.tabs.dashboard', 'Home'),
+          tabBarAccessibilityLabel: t('business.tabs.dashboard', 'Home'),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? 'view-dashboard' : 'view-dashboard-outline'}
-              size={24}
-              color={color}
-            />
+            <TabBarIconContent focused={focused} label={t('business.tabs.dashboard', 'Home')}>
+              <MaterialCommunityIcons
+                name={focused ? 'view-dashboard' : 'view-dashboard-outline'}
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
           ),
           tabBarBadge: attentionBadgeCount > 0 ? attentionBadgeCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.error.main, fontSize: 10 },
@@ -165,16 +160,19 @@ function BusinessMainTabsScreen() {
           headerShown: true,
           title: t('business.orders.title', 'Orders'),
           tabBarLabel: t('business.tabs.orders', 'Orders'),
+          tabBarAccessibilityLabel: t('business.tabs.orders', 'Orders'),
           headerStyle: { backgroundColor: colors.pageBackground },
           headerTintColor: colors.text.primary,
           headerTitleStyle: typography.h6,
           headerShadowVisible: false,
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? 'clipboard-text' : 'clipboard-text-outline'}
-              size={24}
-              color={color}
-            />
+            <TabBarIconContent focused={focused} label={t('business.tabs.orders', 'Orders')}>
+              <MaterialCommunityIcons
+                name={focused ? 'clipboard-text' : 'clipboard-text-outline'}
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
           ),
           tabBarBadge: activeOrdersCount > 0 ? activeOrdersCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.error.main, fontSize: 10 },
@@ -191,39 +189,70 @@ function BusinessMainTabsScreen() {
           tabBarLabel: isRentalFocused
             ? t('business.tabs.rentals', 'Rentals')
             : t('business.tabs.items', 'Items'),
+          tabBarAccessibilityLabel: isRentalFocused
+            ? t('business.tabs.rentals', 'Rentals')
+            : t('business.tabs.items', 'Items'),
           headerStyle: { backgroundColor: colors.pageBackground },
           headerTintColor: colors.text.primary,
           headerTitleStyle: typography.h6,
           headerShadowVisible: false,
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={
-                isRentalFocused
-                  ? focused
-                    ? 'calendar-clock'
-                    : 'calendar-clock-outline'
-                  : focused
-                    ? 'package-variant'
-                    : 'package-variant-closed'
-              }
-              size={24}
-              color={color}
-            />
+            <TabBarIconContent
+              focused={focused}
+              label={isRentalFocused ? t('business.tabs.rentals', 'Rentals') : t('business.tabs.items', 'Items')}
+            >
+              <MaterialCommunityIcons
+                name={
+                  isRentalFocused
+                    ? focused
+                      ? 'calendar-clock'
+                      : 'calendar-clock-outline'
+                    : focused
+                      ? 'package-variant'
+                      : 'package-variant-closed'
+                }
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
           ),
         }}
       />
+      {flags.reels_enabled ? (
+        <Tab.Screen
+          name="BusinessReels"
+          component={BusinessReelsScreen}
+          options={{
+            title: t('business.tabs.reels', 'Reels'),
+            tabBarLabel: t('business.tabs.reels', 'Reels'),
+            tabBarAccessibilityLabel: t('business.tabs.reels', 'Reels'),
+            tabBarIcon: ({ color, focused }) => (
+              <TabBarIconContent focused={focused} label={t('business.tabs.reels', 'Reels')}>
+                <MaterialCommunityIcons
+                  name={focused ? 'play-circle' : 'play-circle-outline'}
+                  size={24}
+                  color={color}
+                />
+              </TabBarIconContent>
+            ),
+          }}
+        />
+      ) : null}
       <Tab.Screen
         name="BusinessMenu"
         component={BusinessMenuTabScreen}
         options={{
           title: t('business.tabs.menu', 'Menu'),
           tabBarLabel: t('business.tabs.menu', 'Menu'),
+          tabBarAccessibilityLabel: t('business.tabs.menu', 'Menu'),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? 'menu' : 'menu-open'}
-              size={24}
-              color={color}
-            />
+            <TabBarIconContent focused={focused} label={t('business.tabs.menu', 'Menu')}>
+              <MaterialCommunityIcons
+                name={focused ? 'menu' : 'menu-open'}
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
           ),
         }}
       />
@@ -489,6 +518,20 @@ export function BusinessRootNavigator() {
           }}
         />
         <RootStack.Screen
+          name="AdminContentReports"
+          component={AdminContentReportsScreen}
+          options={{
+            title: t('admin.contentReports.title', 'Content reports'),
+          }}
+        />
+        <RootStack.Screen
+          name="AdminReelModeration"
+          component={AdminReelModerationScreen}
+          options={{
+            title: t('admin.reels.moderation.title', 'Reel moderation'),
+          }}
+        />
+        <RootStack.Screen
           name="AdminItemAiReviews"
           component={AdminItemAiReviewsScreen}
           options={{
@@ -714,6 +757,22 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.tokens.navTitle', 'AI tokens'),
             headerBackTitle: t('business.tabs.dashboard', 'Dashboard'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessReelAiTokens"
+          component={BusinessReelAiTokensScreen}
+          options={{
+            title: t('business.reels.tokens.navTitle', 'AI reel tokens'),
+            headerBackTitle: t('business.tabs.reels', 'Reels'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessAddReel"
+          component={BusinessAddReelScreen}
+          options={{
+            title: t('business.reels.add.title', 'Add reel'),
+            headerBackTitle: t('business.tabs.reels', 'Reels'),
           }}
         />
         <RootStack.Screen

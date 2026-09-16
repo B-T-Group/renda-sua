@@ -436,6 +436,8 @@ export class MerchantEngagementService {
       topViewedOutOfStockCount: 0,
       totalProductViews: locations.reduce((s, l) => s + l.viewCount, 0),
       ordersTotal: 0,
+      approvedReelCount: 0,
+      reelsEnabledAllowlist: b.reels_enabled_allowlist === true,
       needsPaymentSetupNudge: nudge.needsPaymentSetupNudge,
       paymentSetupViewCount: nudge.paymentSetupViewCount,
       mmPhoneComplete: isStripeRail
@@ -550,6 +552,7 @@ export class MerchantEngagementService {
           can_accept_orders
           lifecycle_status
           created_at
+          reels_enabled_allowlist
           user_id
           user {
             email
@@ -604,6 +607,8 @@ export class MerchantEngagementService {
       topViewedOutOfStockCount: signals.topViewedOutOfStockCount,
       totalProductViews: signals.totalProductViews,
       ordersTotal: signals.ordersTotal,
+      approvedReelCount: signals.approvedReelCount,
+      reelsEnabledAllowlist: b.reels_enabled_allowlist === true,
     };
   }
 
@@ -618,6 +623,7 @@ export class MerchantEngagementService {
     totalProductViews: number;
     ordersTotal: number;
     activatedAt: string | null;
+    approvedReelCount: number;
   }> {
     const query = `
       query EngagementCatalogSignals($businessId: uuid!) {
@@ -698,6 +704,13 @@ export class MerchantEngagementService {
         orders: orders_aggregate(where: { business_id: { _eq: $businessId } }) {
           aggregate { count }
         }
+        approved_reels: reels_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            moderation_status: { _eq: approved }
+            processing_status: { _eq: ready }
+          }
+        ) { aggregate { count } }
         top_inventory: business_inventory(
           where: {
             is_active: { _eq: true }
@@ -733,6 +746,7 @@ export class MerchantEngagementService {
     totalProductViews: number;
     ordersTotal: number;
     activatedAt: string | null;
+    approvedReelCount: number;
   } {
     const itemAt = res?.latest_item?.[0]?.created_at as string | undefined;
     const rentalAt = res?.latest_rental?.[0]?.created_at as string | undefined;
@@ -757,6 +771,7 @@ export class MerchantEngagementService {
       totalProductViews: Number(res?.views?.aggregate?.count ?? 0),
       ordersTotal: Number(res?.orders?.aggregate?.count ?? 0),
       activatedAt: (res?.activated?.[0]?.created_at as string | undefined) ?? null,
+      approvedReelCount: Number(res?.approved_reels?.aggregate?.count ?? 0),
     };
   }
 

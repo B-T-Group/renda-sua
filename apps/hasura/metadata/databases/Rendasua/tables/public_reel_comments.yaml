@@ -1,0 +1,39 @@
+table:
+  name: reel_comments
+  schema: public
+object_relationships:
+  - name: reel
+    using:
+      foreign_key_constraint_on: reel_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+select_permissions:
+  - role: anonymous
+    permission:
+      columns:
+        - id
+        - reel_id
+        - parent_comment_id
+        - body
+        - is_pinned
+        - created_at
+      filter:
+        is_hidden:
+          _eq: false
+        moderation_status:
+          _eq: visible
+  - role: client
+    permission:
+      columns:
+        - id
+        - reel_id
+        - parent_comment_id
+        - body
+        - is_pinned
+        - created_at
+      filter:
+        is_hidden:
+          _eq: false
+        moderation_status:
+          _eq: visible

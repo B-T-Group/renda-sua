@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { CommonActions } from '@react-navigation/native';
@@ -39,6 +39,11 @@ import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersona
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { AgentStatusBar } from '../components/agent/AgentStatusBar';
 import { PersistentActiveDeliveryHeader } from '../components/agent/PersistentActiveDeliveryHeader';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
 
 import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
@@ -110,62 +115,35 @@ function OrdersStackScreen() {
 
 function MainTabsScreen() {
   const { t } = useTranslation();
-  const { colors, typography } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const tabBarScreenOptions = useTabBarScreenOptions();
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { totalCount: attentionBadgeCount, appIconBadgeCount } = usePersonaAttentionBadge('agent');
   useAppIconBadge(appIconBadgeCount);
   useCheckNotificationPermissionOnStart();
 
-  const bottomInset = insets.bottom || 0;
-  const tabBarVerticalPadding = Platform.OS === 'ios' ? 20 : 10;
-  const tabBarHeightBase = Platform.OS === 'ios' ? 56 : 52;
-  const tabBarHeight = tabBarHeightBase + bottomInset + tabBarVerticalPadding / 2;
-
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary.main,
-        tabBarInactiveTintColor: colors.text.secondary,
-        tabBarStyle: {
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: tabBarHeight,
-          backgroundColor: colors.pageBackground,
-          borderTopWidth: 1,
-          borderTopColor: colors.divider,
-          paddingBottom: bottomInset + tabBarVerticalPadding,
-          paddingTop: 8,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-        },
-        tabBarLabelStyle: {
-          ...typography.caption,
-          fontSize: 11,
-          fontWeight: '600',
-        },
-        tabBarItemStyle: { paddingTop: 4 },
-      }}
+      safeAreaInsets={floatingSafeAreaInsets}
+      screenOptions={tabBarScreenOptions}
     >
       <Tab.Screen
         name="Dashboard"
         component={HomeScreen}
         options={{
           tabBarLabel: t('nav.tabs.dashboard', 'Accueil'),
+          tabBarAccessibilityLabel: t('nav.tabs.dashboard', 'Accueil'),
           tabBarBadge: attentionBadgeCount > 0 ? attentionBadgeCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.error.main, fontSize: 10 },
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? 'view-dashboard' : 'view-dashboard-outline'}
-              size={24}
-              color={color}
-            />
+            <TabBarIconContent focused={focused} label={t('nav.tabs.dashboard', 'Accueil')}>
+              <MaterialCommunityIcons
+                name={focused ? 'view-dashboard' : 'view-dashboard-outline'}
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
           ),
         }}
       />
@@ -174,7 +152,12 @@ function MainTabsScreen() {
         component={OpenOrdersScreen}
         options={{
           tabBarLabel: t('nav.tabs.openOrders', 'Disponibles'),
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="package-variant" size={24} color={color} />,
+          tabBarAccessibilityLabel: t('nav.tabs.openOrders', 'Disponibles'),
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={t('nav.tabs.openOrders', 'Disponibles')}>
+              <MaterialCommunityIcons name="package-variant" size={24} color={color} />
+            </TabBarIconContent>
+          ),
         }}
       />
       <Tab.Screen
@@ -197,12 +180,15 @@ function MainTabsScreen() {
         })}
         options={{
           tabBarLabel: t('nav.tabs.orders', 'Actives'),
+          tabBarAccessibilityLabel: t('nav.tabs.orders', 'Actives'),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? 'truck-delivery' : 'truck-delivery-outline'}
-              size={24}
-              color={color}
-            />
+            <TabBarIconContent focused={focused} label={t('nav.tabs.orders', 'Actives')}>
+              <MaterialCommunityIcons
+                name={focused ? 'truck-delivery' : 'truck-delivery-outline'}
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
           ),
         }}
       />
@@ -211,8 +197,11 @@ function MainTabsScreen() {
         component={MenuTabScreen}
         options={{
           tabBarLabel: t('nav.tabs.menu', 'Menu'),
+          tabBarAccessibilityLabel: t('nav.tabs.menu', 'Menu'),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'menu' : 'menu-open'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.tabs.menu', 'Menu')}>
+              <MaterialCommunityIcons name={focused ? 'menu' : 'menu-open'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />

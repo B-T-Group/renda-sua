@@ -22,6 +22,7 @@ import { AuthModule } from '../auth/auth.module';
 import { setupRequestContextCls } from '../auth/request-context-cls.setup';
 import { AwsModule } from '../aws/aws.module';
 import { BusinessTokensModule } from '../business-tokens/business-tokens.module';
+import { ReelAiTokensModule } from '../reel-ai-tokens/reel-ai-tokens.module';
 import { BrandsModule } from '../brands/brands.module';
 import { BusinessAgentsModule } from '../business-agents/business-agents.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
@@ -70,6 +71,7 @@ import { RentalsModule } from '../rentals/rentals.module';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
 import { ItemLikesModule } from '../item-likes/item-likes.module';
+import { BusinessFollowsModule } from '../business-follows/business-follows.module';
 import { ProductInterestModule } from '../product-interest/product-interest.module';
 import { MarketplacePublicModule } from '../marketplace-public/marketplace-public.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
@@ -93,6 +95,14 @@ import { BusinessesModule } from '../businesses/businesses.module';
 import { DelegationsModule } from '../delegations/delegations.module';
 import { CatalogStopsModule } from '../catalog-stops/catalog-stops.module';
 import { CatalogCacheModule } from '../catalog-cache/catalog-cache.module';
+import { AppConfigModule } from '../app-config/app-config.module';
+import { ContentReportsModule } from '../content-reports/content-reports.module';
+import { ReelAiReviewModule } from '../reel-ai-review/reel-ai-review.module';
+import { ReelMediaModule } from '../reel-media/reel-media.module';
+import { ReelsModule } from '../reels/reels.module';
+import { ReelCommentsModule } from '../reel-comments/reel-comments.module';
+import { ReelBoostsModule } from '../reel-boosts/reel-boosts.module';
+import { ReelAiGenerateModule } from '../reel-ai-generate/reel-ai-generate.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -145,6 +155,14 @@ import { AppService } from './app.service';
     DeliveryPinModule,
     HasuraModule,
     CatalogCacheModule,
+    AppConfigModule,
+    ContentReportsModule,
+    ReelsModule,
+    ReelCommentsModule,
+    ReelBoostsModule,
+    ReelAiGenerateModule,
+    ReelMediaModule,
+    ReelAiReviewModule,
     AccountsModule,
     AddressesModule,
     GoogleModule,
@@ -173,6 +191,7 @@ import { AppService } from './app.service';
     ItemVariantsModule,
     ItemViewsModule,
     ItemLikesModule,
+    BusinessFollowsModule,
     ProductInterestModule,
     MetaConversionsModule,
     MarketplacePublicModule,
@@ -195,6 +214,7 @@ import { AppService } from './app.service';
     BusinessItemsModule,
     BusinessImagesModule,
     BusinessTokensModule,
+    ReelAiTokensModule,
     CommerceIntegrationsModule,
     ImageValidationModule,
     BusinessVerificationModule,

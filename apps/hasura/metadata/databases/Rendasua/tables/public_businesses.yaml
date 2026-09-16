@@ -221,6 +221,7 @@ select_permissions:
         - accepting_orders
         - reliability_tier
         - ai_tokens
+        - ai_reel_tokens
         - account_type
         - account_type_locked_until
       filter: {}
@@ -258,6 +259,7 @@ select_permissions:
         - can_accept_orders
         - is_storefront_visible
         - ai_tokens
+        - ai_reel_tokens
         - auto_enhance_enabled
         - tips_reminders_enabled
         - merchant_agreement_version

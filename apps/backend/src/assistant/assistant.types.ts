@@ -46,4 +46,5 @@ export type KnowledgeTopic =
   | 'payments'
   | 'delivery'
   | 'pickup'
-  | 'support_contact';
+  | 'support_contact'
+  | 'reels';

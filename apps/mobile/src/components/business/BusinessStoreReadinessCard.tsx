@@ -30,6 +30,10 @@ const STEP_LABELS: Record<ReadinessStep['id'], { key: string; fallback: string }
     key: 'business.readiness.steps.mmPhone',
     fallback: 'Confirm mobile money number',
   },
+  first_reel: {
+    key: 'business.readiness.steps.firstReel',
+    fallback: 'Publish your first reel',
+  },
 };
 
 function StepRow({

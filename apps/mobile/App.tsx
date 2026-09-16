@@ -10,6 +10,7 @@ import { PaperProvider } from 'react-native-paper';
 import { observer } from 'mobx-react-lite';
 import { StripeAppProvider } from './src/components/payments/StripeAppProvider';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { ClientFlagsProvider } from './src/contexts/ClientFlagsContext';
 import { RootStore, RootStoreProvider } from './src/stores/RootStore';
 import { client } from './src/services/apolloClient';
 import { useExpoUpdatesOnStartup } from './src/hooks/useExpoUpdatesOnStartup';
@@ -102,37 +103,39 @@ function AppContentBase() {
 
   if (!hydrated) return <LoadingScreen />;
 
-  // StripeAppProvider must mount *after* env hydrate so DEVELOPMENT does not
+  // ClientFlags + Stripe must mount *after* env hydrate so DEVELOPMENT does not
   // briefly call prod.api (getEnv() defaults to prod until AsyncStorage loads).
   return (
-    <StripeAppProvider>
-      <AgentActiveDeliveryProvider>
-        <AgentLocationProvider>
-          <AgentLocationDialogs />
-          <SafeAreaProvider>
-            <NavigationContainer
-              ref={rootNavigationRef}
-              theme={navigationTheme}
-              onReady={() => setNavReady(true)}
-            >
-              <AppNavigator />
-            </NavigationContainer>
-            <OrderOfferOverlay />
-            <IncomingOrderOverlay />
-            <StockAvailabilityOverlay />
-            <AdminBroadcastOverlay />
-            <StoreUpdateModal
-              visible={storeUpdate.visible}
-              mode={storeUpdate.mode}
-              onDismiss={() => void storeUpdate.dismiss()}
-            />
-            <ReferralRejectionOverlay />
-            <PickupReminderOverlay />
-            <StorePickupReminderOverlay />
-          </SafeAreaProvider>
-        </AgentLocationProvider>
-      </AgentActiveDeliveryProvider>
-    </StripeAppProvider>
+    <ClientFlagsProvider>
+      <StripeAppProvider>
+        <AgentActiveDeliveryProvider>
+          <AgentLocationProvider>
+            <AgentLocationDialogs />
+            <SafeAreaProvider>
+              <NavigationContainer
+                ref={rootNavigationRef}
+                theme={navigationTheme}
+                onReady={() => setNavReady(true)}
+              >
+                <AppNavigator />
+              </NavigationContainer>
+              <OrderOfferOverlay />
+              <IncomingOrderOverlay />
+              <StockAvailabilityOverlay />
+              <AdminBroadcastOverlay />
+              <StoreUpdateModal
+                visible={storeUpdate.visible}
+                mode={storeUpdate.mode}
+                onDismiss={() => void storeUpdate.dismiss()}
+              />
+              <ReferralRejectionOverlay />
+              <PickupReminderOverlay />
+              <StorePickupReminderOverlay />
+            </SafeAreaProvider>
+          </AgentLocationProvider>
+        </AgentActiveDeliveryProvider>
+      </StripeAppProvider>
+    </ClientFlagsProvider>
   );
 }
 

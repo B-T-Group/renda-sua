@@ -125,16 +125,18 @@ export type GuestRootStackParamList = {
 
 /** Guest shell: browse catalog + rentals + food + auth stack in bottom tabs. */
 export type GuestTabParamList = {
-  GuestBrowse: undefined;
+  GuestBrowse: { segment?: 'all' | 'food' } | undefined;
   GuestRentals: undefined;
   GuestFoods: undefined;
+  GuestReels: undefined;
   GuestAuth: NavigatorScreenParams<AuthStackParamList>;
 };
 
 export type ClientMainTabParamList = {
-  ClientBrowse: undefined;
+  ClientBrowse: { segment?: 'all' | 'food' } | undefined;
   ClientRentals: undefined;
   ClientFoods: undefined;
+  ClientReels: undefined;
   ClientOrders: undefined;
   ClientMenu: undefined;
 };
@@ -204,6 +206,9 @@ export type BusinessMainTabParamList = {
         tab?: 'catalog' | 'requests' | 'schedule';
       }
     | undefined;
+  BusinessReels: undefined;
+  BusinessAddReel: undefined;
+  BusinessReelAiTokens: undefined;
   BusinessMenu: undefined;
 };
 
@@ -259,6 +264,8 @@ export type BusinessRootStackParamList = {
   AdminRentalListingsModeration: undefined;
   AdminRentalAiReviews: undefined;
   AdminItemModeration: undefined;
+  AdminContentReports: undefined;
+  AdminReelModeration: undefined;
   AdminItemAiReviews: { reviewId?: string; openedAt?: number } | undefined;
   AdminItemsBrowser: undefined;
   AdminItemDetail: { itemId: string };
@@ -277,6 +284,8 @@ export type BusinessRootStackParamList = {
   AccountRecharge: undefined;
   BusinessAccounts: undefined;
   BusinessAiTokens: undefined;
+  BusinessAddReel: undefined;
+  BusinessReelAiTokens: undefined;
   BusinessAccountTypeScreen: undefined;
   BusinessClientCities: undefined;
   BusinessInsights: undefined;

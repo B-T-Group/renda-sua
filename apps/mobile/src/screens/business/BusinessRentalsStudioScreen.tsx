@@ -28,8 +28,8 @@ import { rentalsApi } from '../../services/rentalsApi';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import {
   useMainTabContentBottomPadding,
-  useTabBarOverlayHeight,
 } from '../../hooks/useMainTabContentBottomPadding';
+import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 import type {
   BusinessRentalItemRow,
   BusinessRentalRequestRow,
@@ -74,12 +74,15 @@ export default function BusinessRentalsStudioScreen() {
   const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const listBottomPadding = useMainTabContentBottomPadding(88);
-  const tabBarHeight = useTabBarOverlayHeight();
+  const tabBarGeometry = useTabBarGeometry();
   const navigation = useNavigation<Nav>();
   const route = useRoute();
   const routeParams = (route.params ?? {}) as RentalsRouteParams;
   const isCatalogTab = route.name === 'BusinessCatalog';
-  const fabBottom = (isCatalogTab ? tabBarHeight : insets.bottom) + 16;
+  const fabBottom =
+    (isCatalogTab
+      ? tabBarGeometry.tabBarOverlayHeight
+      : tabBarGeometry.bottomInset) + 16;
   const moderationStatus = routeParams?.moderationStatus;
   const [tab, setTab] = useState<Tab>(routeParams?.tab ?? 'catalog');
   const [searchDraft, setSearchDraft] = useState('');

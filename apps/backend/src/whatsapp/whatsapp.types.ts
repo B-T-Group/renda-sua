@@ -35,11 +35,19 @@ export interface WhatsAppSendMessageResult {
   messages: Array<{ id: string; messageStatus?: string }>;
 }
 
+/** Meta Graph API error payload (media and messages share this shape). */
+export interface WhatsAppGraphError {
+  message?: string;
+  type?: string;
+  code?: number;
+  error_subcode?: number;
+}
+
 export interface WhatsAppGraphMessagesResponse {
   messaging_product?: string;
   contacts?: Array<{ input?: string; wa_id?: string }>;
   messages?: Array<{ id?: string; message_status?: string }>;
-  error?: { message?: string; type?: string; code?: number };
+  error?: WhatsAppGraphError;
 }
 
 export interface WhatsAppGraphMediaMeta {

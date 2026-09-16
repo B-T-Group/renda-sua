@@ -57,7 +57,12 @@ export type NotificationType =
   | 'merchant.digest'
   | 'merchant.tip'
   | 'admin.broadcast'
-  | 'admin.order_risk';
+  | 'admin.order_risk'
+  | 'reel.moderation.approved'
+  | 'reel.moderation.rejected'
+  | 'reel.engagement'
+  | 'reel.followed_store'
+  | 'reel.comment.reply';
 
 export type NotificationPreferenceCategory =
   | 'order_updates'

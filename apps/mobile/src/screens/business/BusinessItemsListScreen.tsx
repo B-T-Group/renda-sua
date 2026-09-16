@@ -15,8 +15,8 @@ import { useBusinessVerificationStatus } from '../../hooks/useBusinessVerificati
 import { useProfileMe } from '../../hooks/useProfileMe';
 import {
   useMainTabContentBottomPadding,
-  useTabBarOverlayHeight,
 } from '../../hooks/useMainTabContentBottomPadding';
+import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { businessApi } from '../../services/businessApi';
 import type { BusinessCatalogItem } from '../../types/business/items';
@@ -49,11 +49,14 @@ export default function BusinessItemsListScreen() {
   const route = useRoute();
   const routeParams = (route.params ?? {}) as ItemsRouteParams;
   const listBottomPadding = useMainTabContentBottomPadding(88);
-  const tabBarHeight = useTabBarOverlayHeight();
+  const tabBarGeometry = useTabBarGeometry();
   const { me } = useProfileMe();
   const verification = useBusinessVerificationStatus();
   const isCatalogTab = route.name === 'BusinessCatalog';
-  const fabBottom = (isCatalogTab ? tabBarHeight : 0) + 16;
+  const fabBottom =
+    (isCatalogTab
+      ? tabBarGeometry.tabBarOverlayHeight
+      : tabBarGeometry.bottomInset) + 16;
   const mainInterest = me?.business?.main_interest ?? 'sell_items';
   const showIdReviewCard =
     verification.status?.paymentRail === 'mobile_money' &&

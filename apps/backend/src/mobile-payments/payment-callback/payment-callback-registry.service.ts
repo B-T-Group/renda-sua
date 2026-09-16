@@ -23,11 +23,13 @@ export class PaymentCallbackRegistryService {
     const { OrderPaymentCallbackHandler } = require('../../orders/order-payment-callback.handler');
     const { RentalPaymentCallbackHandler } = require('../../rentals/rental-payment-callback.handler');
     const { TokenPaymentCallbackHandler } = require('../../business-tokens/token-payment-callback.handler');
+    const { ReelAiTokenPaymentCallbackHandler } = require('../../reel-ai-tokens/reel-ai-token-payment-callback.handler');
     const { PhoneVerificationCallbackHandler } = require('../../mobile-payment-phones/phone-verification-callback.handler');
     return [
       OrderPaymentCallbackHandler,
       RentalPaymentCallbackHandler,
       TokenPaymentCallbackHandler,
+      ReelAiTokenPaymentCallbackHandler,
       PhoneVerificationCallbackHandler,
     ];
   }

@@ -1,0 +1,23 @@
+table:
+  name: reel_ai_reviews
+  schema: public
+object_relationships:
+  - name: reel
+    using:
+      foreign_key_constraint_on: reel_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - reel_id
+        - status
+        - decision_reason
+        - prompt_version
+        - created_at
+        - completed_at
+      filter:
+        reel:
+          business:
+            user_id:
+              _eq: X-Hasura-User-Id

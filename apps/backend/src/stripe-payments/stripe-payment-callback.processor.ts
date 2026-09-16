@@ -260,7 +260,10 @@ export class StripePaymentCallbackProcessor {
       return;
     }
 
-    if (tx.payment_entity === 'token') {
+    if (
+      tx.payment_entity === 'token' ||
+      tx.payment_entity === 'reel_ai_token'
+    ) {
       await this.finalizeTokenPaymentSuccess(tx, paymentIntentId);
       return;
     }
@@ -357,7 +360,8 @@ export class StripePaymentCallbackProcessor {
     if (
       !tx.account_id ||
       tx.transaction_type !== 'PAYMENT' ||
-      tx.payment_entity === 'token'
+      tx.payment_entity === 'token' ||
+      tx.payment_entity === 'reel_ai_token'
     ) {
       return;
     }

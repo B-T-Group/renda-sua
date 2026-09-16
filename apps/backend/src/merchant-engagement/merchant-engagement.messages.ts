@@ -145,6 +145,18 @@ const COPY: Record<
       type: 'business_share_store',
     },
   },
+  push_first_reel: {
+    en: {
+      title: 'Post your first reel',
+      body: 'Short product videos help shoppers discover your store. Record one in under a minute.',
+      type: 'business_reels',
+    },
+    fr: {
+      title: 'Publiez votre premier reel',
+      body: 'Les courtes vidéos produits attirent plus de clients. Enregistrez-en une en moins d’une minute.',
+      type: 'business_reels',
+    },
+  },
   push_payment_setup_nudge: {
     en: {
       title: 'Shoppers are viewing your store',

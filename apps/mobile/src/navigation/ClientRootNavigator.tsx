@@ -4,8 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Platform, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -13,6 +12,7 @@ import ClientBrowseHomeScreen from '../screens/client/ClientBrowseHomeScreen';
 import ClientRentalsHomeScreen from '../screens/client/ClientRentalsHomeScreen';
 import ClientOrdersScreen from '../screens/client/ClientOrdersScreen';
 import ClientMenuTabScreen from '../screens/client/ClientMenuTabScreen';
+import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
 import ManageRecipientsScreen from '../screens/client/ManageRecipientsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import UserLikesScreen from '../screens/shared/UserLikesScreen';
@@ -56,6 +56,16 @@ import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
 import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotificationPermissionOnStart';
 import type { ClientMainTabParamList, ClientRootStackParamList, PlaceOrderParams } from './types';
+import {
+  TabBarIconContent,
+  useFloatingTabBarSafeAreaInsets,
+  useTabBarScreenOptions,
+} from './tabBarGeometry';
+import {
+  FloatingTabBarVisibilityProvider,
+  renderFloatingAnimatedTabBar,
+} from './floatingTabBarVisibility';
+import { useClientFlags } from '../contexts/ClientFlagsContext';
 
 const ClientTab = createBottomTabNavigator<ClientMainTabParamList>();
 const ClientRootStack = createNativeStackNavigator<ClientRootStackParamList>();
@@ -77,8 +87,12 @@ function deferWithCancel(run: () => void): { cancel: () => void } {
 
 const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   const { t } = useTranslation();
-  const { colors, typography } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const { flags } = useClientFlags();
+  const tabBarScreenOptions = useTabBarScreenOptions({
+    floatingHosted: flags.floating_nav_enabled,
+  });
+  const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const navigation = useNavigation();
   const { auth, persona } = useStore();
   void auth.postAuthResumeInventoryItemId;
@@ -142,52 +156,29 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
     auth.postAuthResumeInventoryItemId,
   ]);
 
-  const bottomInset = insets.bottom || 0;
-  const tabBarVerticalPadding = Platform.OS === 'ios' ? 20 : 10;
-  const tabBarHeightBase = Platform.OS === 'ios' ? 56 : 52;
-  const tabBarHeight = tabBarHeightBase + bottomInset + tabBarVerticalPadding / 2;
-
   return (
-    <ClientTab.Navigator
-      initialRouteName="ClientBrowse"
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary.main,
-        tabBarInactiveTintColor: colors.text.secondary,
-        tabBarStyle: {
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: tabBarHeight,
-          backgroundColor: colors.pageBackground,
-          borderTopWidth: 1,
-          borderTopColor: colors.divider,
-          paddingBottom: bottomInset + tabBarVerticalPadding,
-          paddingTop: 8,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-        },
-        tabBarLabelStyle: {
-          ...typography.caption,
-          fontSize: 11,
-          fontWeight: '600',
-        },
-        tabBarItemStyle: { paddingTop: 4 },
-      }}
-    >
+    <FloatingTabBarVisibilityProvider>
+      <ClientTab.Navigator
+        initialRouteName="ClientBrowse"
+        safeAreaInsets={floatingSafeAreaInsets}
+        tabBar={flags.floating_nav_enabled ? renderFloatingAnimatedTabBar : undefined}
+        screenOptions={tabBarScreenOptions}
+      >
       <ClientTab.Screen
         name="ClientBrowse"
         component={ClientBrowseHomeScreen}
+        listeners={({ navigation }) => ({
+          tabPress: () => navigation.setParams({ segment: 'all' }),
+        })}
         options={{
           tabBarLabel: t('nav.clientTabs.browseItems', { defaultValue: 'Browse Items' }),
+          tabBarAccessibilityLabel: t('nav.clientTabs.browseItems', { defaultValue: 'Browse Items' }),
           tabBarBadge: attentionBadgeCount > 0 ? attentionBadgeCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.error.main, fontSize: 10 },
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.clientTabs.browseItems', { defaultValue: 'Browse Items' })}>
+              <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />
@@ -196,29 +187,61 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
         component={ClientRentalsHomeScreen}
         options={{
           tabBarLabel: t('nav.clientTabs.rentals', { defaultValue: 'Rentals' }),
+          tabBarAccessibilityLabel: t('nav.clientTabs.rentals', { defaultValue: 'Rentals' }),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'calendar-clock' : 'calendar-clock-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.clientTabs.rentals', { defaultValue: 'Rentals' })}>
+              <MaterialCommunityIcons name={focused ? 'calendar-clock' : 'calendar-clock-outline'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />
       <ClientTab.Screen
         name="ClientFoods"
+        listeners={({ navigation }) => ({
+          focus: () => {
+            if (flags.floating_nav_enabled) {
+              navigation.navigate('ClientBrowse', { segment: 'food' });
+            }
+          },
+        })}
         options={{
           tabBarLabel: t('nav.clientTabs.foods', { defaultValue: 'Food' }),
+          tabBarAccessibilityLabel: t('nav.clientTabs.foods', { defaultValue: 'Food' }),
+          tabBarButton: flags.floating_nav_enabled ? () => null : undefined,
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.clientTabs.foods', { defaultValue: 'Food' })}>
+              <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       >
         {() => <ClientBrowseHomeScreen foodOnly />}
       </ClientTab.Screen>
+      {flags.reels_enabled ? (
+        <ClientTab.Screen
+          name="ClientReels"
+          component={ReelsFeedScreen}
+          options={{
+            tabBarLabel: t('nav.clientTabs.reels', { defaultValue: 'Reels' }),
+            tabBarAccessibilityLabel: t('nav.clientTabs.reels', { defaultValue: 'Reels' }),
+            tabBarIcon: ({ color, focused }) => (
+              <TabBarIconContent focused={focused} label={t('nav.clientTabs.reels', { defaultValue: 'Reels' })}>
+                <MaterialCommunityIcons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />
+              </TabBarIconContent>
+            ),
+          }}
+        />
+      ) : null}
       <ClientTab.Screen
         name="ClientOrders"
         component={ClientOrdersScreen}
         options={{
           tabBarLabel: t('nav.clientTabs.orders', { defaultValue: 'Orders' }),
+          tabBarAccessibilityLabel: t('nav.clientTabs.orders', { defaultValue: 'Orders' }),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'clipboard-text' : 'clipboard-text-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.clientTabs.orders', { defaultValue: 'Orders' })}>
+              <MaterialCommunityIcons name={focused ? 'clipboard-text' : 'clipboard-text-outline'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />
@@ -227,12 +250,16 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
         component={ClientMenuTabScreen}
         options={{
           tabBarLabel: t('nav.tabs.menu', 'Menu'),
+          tabBarAccessibilityLabel: t('nav.tabs.menu', 'Menu'),
           tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons name={focused ? 'menu' : 'menu-open'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.tabs.menu', 'Menu')}>
+              <MaterialCommunityIcons name={focused ? 'menu' : 'menu-open'} size={24} color={color} />
+            </TabBarIconContent>
           ),
         }}
       />
     </ClientTab.Navigator>
+    </FloatingTabBarVisibilityProvider>
   );
 });
 

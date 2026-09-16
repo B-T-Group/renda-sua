@@ -1,5 +1,5 @@
 import type { SnackbarProps } from 'react-native-paper';
-import { useTabBarOverlayHeight } from '../../hooks/useMainTabContentBottomPadding';
+import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 import { BottomOverlaySnackbar } from './BottomOverlaySnackbar';
 
 type TabAwareSnackbarProps = Omit<SnackbarProps, 'wrapperStyle'> & {
@@ -12,7 +12,12 @@ export function TabAwareSnackbar({
   tabBarGap = 12,
   ...rest
 }: TabAwareSnackbarProps) {
-  const tabBarOffset = useTabBarOverlayHeight();
+  const { tabBarOverlayHeight } = useTabBarGeometry();
 
-  return <BottomOverlaySnackbar {...rest} bottomGap={tabBarOffset + tabBarGap} />;
+  return (
+    <BottomOverlaySnackbar
+      {...rest}
+      bottomGap={tabBarOverlayHeight + tabBarGap}
+    />
+  );
 }

@@ -61,6 +61,12 @@ export const AdminRentalAiReviewsPage = lazy(() =>
 export const AdminItemsModerationPage = lazy(() =>
   import('../components/pages/AdminItemsModerationPage')
 );
+export const AdminContentReportsPage = lazy(() =>
+  import('../components/pages/AdminContentReportsPage')
+);
+export const AdminReelsModerationPage = lazy(() =>
+  import('../components/pages/AdminReelsModerationPage')
+);
 export const AdminItemAiReviewsPage = lazy(() =>
   import('../components/pages/AdminItemAiReviewsPage')
 );

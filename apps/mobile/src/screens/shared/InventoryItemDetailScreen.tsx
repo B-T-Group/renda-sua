@@ -310,10 +310,16 @@ function InventoryItemDetailScreen() {
     const nav = navigation as { navigate: (name: string, params?: object) => void };
     const foodTab = Boolean(item?.food_availability);
     if (isGuest) {
-      nav.navigate('GuestTabs', { screen: foodTab ? 'GuestFoods' : 'GuestBrowse' });
+      nav.navigate('GuestTabs', {
+        screen: 'GuestBrowse',
+        params: foodTab ? { segment: 'food' } : { segment: 'all' },
+      });
       return;
     }
-    nav.navigate('ClientMainTabs', { screen: foodTab ? 'ClientFoods' : 'ClientBrowse' });
+    nav.navigate('ClientMainTabs', {
+      screen: 'ClientBrowse',
+      params: foodTab ? { segment: 'food' } : { segment: 'all' },
+    });
   }, [isGuest, item?.food_availability, navigation]);
 
   const inCartQuantity = cartVariantKey

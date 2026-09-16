@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Chip, Text } from 'react-native-paper';
+import { Chip, SegmentedButtons, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { TabAwareSnackbar } from '../../components/feedback/TabAwareSnackbar';
@@ -49,6 +49,8 @@ import { FOOD_CATEGORY_NAME } from '../../utils/foodAvailability';
 import { useCatalogOrigin } from '../../hooks/useCatalogOrigin';
 import { useHeroCarouselActions } from '../../hooks/useHeroCarouselActions';
 import { BrowseFtueNudge } from '../../hooks/useBrowseFtueNudge';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { useReportTabBarScroll } from '../../navigation/floatingTabBarVisibility';
 
 const CatalogCardRow = memo(function CatalogCardRow({
   item,
@@ -177,6 +179,8 @@ export interface BrowseCatalogScreenProps {
   applyTopSafeArea?: boolean;
   /** Restrict the list to cooked food and use Food-tab copy and filters. */
   foodOnly?: boolean;
+  /** Initial merged-catalog segment, including alias-route navigation. */
+  initialSegment?: 'all' | 'food';
 }
 
 function BrowseCatalogScreenInner({
@@ -197,13 +201,23 @@ function BrowseCatalogScreenInner({
   headerTrailing,
   headerMarketTrailing,
   applyTopSafeArea = true,
-  foodOnly = false,
+  foodOnly: legacyFoodOnly = false,
+  initialSegment = 'all',
 }: BrowseCatalogScreenProps) {
   const { t } = useTranslation();
   const { cart, auth, persona } = useStore();
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const { colors, typography, spacing } = theme;
+  const { flags } = useClientFlags();
+  const { onScroll: reportTabBarScroll } = useReportTabBarScroll();
+  const [catalogSegment, setCatalogSegment] = useState<'all' | 'food'>(
+    legacyFoodOnly ? 'food' : initialSegment
+  );
+  useEffect(() => {
+    setCatalogSegment(legacyFoodOnly ? 'food' : initialSegment);
+  }, [initialSegment, legacyFoodOnly]);
+  const foodOnly = legacyFoodOnly || catalogSegment === 'food';
   const tabBarHeight = useBottomTabBarHeight();
   const bottomPad = tabBarHeight + spacing.lg;
   const isWideHero = width >= 640;
@@ -801,6 +815,25 @@ function BrowseCatalogScreenInner({
           },
         ]}
       >
+        {flags.floating_nav_enabled && !legacyFoodOnly ? (
+          <SegmentedButtons
+            value={catalogSegment}
+            onValueChange={(value) => setCatalogSegment(value as 'all' | 'food')}
+            buttons={[
+              {
+                value: 'all',
+                label: t('public.items.segmentAll', 'All'),
+                accessibilityLabel: t('public.items.segmentAllA11y', 'Browse all items'),
+              },
+              {
+                value: 'food',
+                label: t('nav.guestTabs.foods', 'Food'),
+                accessibilityLabel: t('foods.segmentA11y', 'Browse food'),
+              },
+            ]}
+            style={{ marginBottom: spacing.sm }}
+          />
+        ) : null}
         <View style={styles.searchRow}>
           <View style={styles.searchFlex}>
             <CatalogBrowseSearchBar
@@ -842,6 +875,7 @@ function BrowseCatalogScreenInner({
         }
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
           useNativeDriver: false,
+          listener: reportTabBarScroll,
         })}
         scrollEventThrottle={16}
         onEndReached={() => {

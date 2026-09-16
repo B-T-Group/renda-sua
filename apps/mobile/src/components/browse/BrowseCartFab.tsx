@@ -5,16 +5,16 @@ import { observer } from 'mobx-react-lite';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import { Badge, FAB } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useStore } from '../../stores/RootStore';
+import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 
 export const BrowseCartFab = observer(function BrowseCartFab() {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
-  const insets = useSafeAreaInsets();
+  const geometry = useTabBarGeometry();
   /** 0 on stack screens (e.g. StoreDetail) that are outside the tab navigator. */
-  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const tabBarHeight = useContext(BottomTabBarHeightContext);
   const navigation = useNavigation();
   const { cart } = useStore();
 
@@ -25,7 +25,9 @@ export const BrowseCartFab = observer(function BrowseCartFab() {
 
   if (cart.distinctLineCount === 0) return null;
 
-  const bottom = tabBarHeight + insets.bottom + spacing.md;
+  const bottom =
+    (tabBarHeight == null ? geometry.bottomInset : geometry.tabBarOverlayHeight) +
+    spacing.md;
 
   return (
     <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">

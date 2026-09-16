@@ -73,6 +73,14 @@ export function resolveEngagementPushId(
     ['push_hours_logo', () => hoursLogo(c, now, lastSentByPushId)],
     ['push_share_store', () => shareStore(c, now, lastSentByPushId)],
     ['push_catalog_stalled_post10', () => catalogStalledPost10(c, now, lastSentByPushId)],
+    [
+      'push_first_reel',
+      () =>
+        c.reelsEnabledAllowlist &&
+        approvedForInterest(c) >= CATALOG_TARGET &&
+        c.approvedReelCount === 0 &&
+        cooldown(true, 'push_first_reel', 30, lastSentByPushId, now),
+    ],
   ];
 
   for (const [id, ok] of checks) {

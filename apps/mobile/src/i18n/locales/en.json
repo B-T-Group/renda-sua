@@ -1518,6 +1518,10 @@
     }
   },
   "business": {
+    "follows": {
+      "follow": "Follow store",
+      "unfollow": "Unfollow store"
+    },
     "quietHome": {
       "reach": {
         "title": "Store reach",
@@ -1565,7 +1569,8 @@
         "hours": "Customize business hours",
         "catalog10": "Reach 10 approved products",
         "catalog10Progress": "Reach 10 approved products ({{current}}/{{target}})",
-        "mmPhone": "Confirm mobile money number"
+        "mmPhone": "Confirm mobile money number",
+        "firstReel": "Post your first reel"
       }
     },
     "engagement": {
@@ -1751,6 +1756,57 @@
       "mobilePending": "Payment request sent. Tokens will be added when payment succeeds.",
       "unsupportedCurrency": "Token packs are only available in CAD or XAF for your business country."
     },
+    "reels": {
+      "addFab": "Add reel",
+      "presets": {
+        "productCentered": "Product centered",
+        "explosive": "Explosive",
+        "exciting": "Exciting",
+        "luxury": "Luxury",
+        "fresh": "Fresh and bright",
+        "unboxing": "Reveal",
+        "ugc": "Handheld UGC",
+        "cozy": "Cozy",
+        "outdoor": "Outdoor",
+        "custom": "Custom"
+      },
+      "add": {
+        "title": "Add reel",
+        "subtitle": "Generate an 8s AI product ad, or upload a 15–30s video from your library.",
+        "tokenBalance": "{{count}} AI reel tokens",
+        "unlimitedTokens": "Unlimited AI tokens",
+        "product": "Product",
+        "noPhoto": "No photo",
+        "style": "Ad style",
+        "prompt": "Optional direction",
+        "caption": "Caption (optional)",
+        "generate": "Generate AI ad (8s)",
+        "buyTokens": "Buy reel tokens",
+        "upload": "Upload from library (15–30s)",
+        "pickProduct": "Select a product first",
+        "needPhoto": "Add at least one product photo before generating",
+        "customPrompt": "Enter a custom prompt",
+        "generating": "AI ad generation started. We'll process it shortly.",
+        "generateError": "Generation failed",
+        "libraryPermission": "Photo library permission is required",
+        "durationError": "Library videos must be 15–30 seconds",
+        "uploaded": "Reel uploaded and submitted",
+        "uploadError": "Upload failed",
+        "loadError": "Could not load products"
+      },
+      "tokens": {
+        "navTitle": "AI reel tokens",
+        "title": "AI reel tokens",
+        "subtitle": "Each AI product-ad reel uses 1 token. Upload from your library is always free.",
+        "balanceLabel": "You have {{count}} reel tokens",
+        "phoneNumber": "Mobile money phone number",
+        "packTokens": "{{count}} tokens",
+        "buy": "Buy",
+        "purchaseError": "Failed to start purchase",
+        "mobilePending": "Payment request sent. Reel tokens will be added when payment succeeds.",
+        "unsupportedCurrency": "Reel token packs are only available in CAD or XAF for your business country."
+      }
+    },
     "referrals": {
       "referralCodeLabel": "Agent referral code (optional)",
       "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
@@ -1778,7 +1834,8 @@
       "orders": "Orders",
       "items": "Items",
       "rentals": "Rentals",
-      "menu": "Menu"
+      "menu": "Menu",
+      "reels": "Reels"
     },
     "accounts": {
       "navTitle": "Wallet"
@@ -5206,6 +5263,14 @@
     "returnOvertimePending": "Return recorded. A payment request for the extra hours was sent to the client — the booking completes once it is paid."
   },
   "admin": {
+    "reels": {
+      "moderation": {
+        "title": "Reel moderation",
+        "empty": "No reels awaiting review",
+        "approve": "Approve",
+        "reject": "Reject"
+      }
+    },
     "accountRecharge": {
       "screenTitle": "HQ Account Recharge",
       "subtitle": "Collect from a mobile number to top up the Rendasua HQ account",
@@ -6467,6 +6532,24 @@
       "headline": "Opening this location",
       "line1": "Loading orders and inventory",
       "line2": "Almost ready"
+    }
+  },
+  "reels": {
+    "empty": "No reels yet. Check back soon!",
+    "buy": "Buy",
+    "notAvailableInMarket": "Not available in your area",
+    "comments": {
+      "title": "Comments",
+      "empty": "No comments yet",
+      "placeholder": "Add a comment…",
+      "post": "Post"
+    },
+    "report": {
+      "title": "Report",
+      "subtitle": "Why are you reporting this?",
+      "details": "Additional details (optional)",
+      "submit": "Submit report",
+      "blockMerchant": "Block this store"
     }
   }
 }

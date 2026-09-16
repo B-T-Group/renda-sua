@@ -1,10 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -93,6 +96,131 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       environment === 'production'
         ? 'https://prod.api.rendasua.com'
         : 'https://dev.api.rendasua.com';
+
+    const reelsBucket = new s3.Bucket(this, `ReelsBucket-${environment}`, {
+      bucketName: `rendasua-reels-${environment}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      lifecycleRules: [
+        {
+          id: 'expire-incomplete-and-source-media',
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
+          prefix: 'source/',
+          expiration: cdk.Duration.days(30),
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    const reelsDistribution = new cloudfront.Distribution(
+      this,
+      `ReelsDistribution-${environment}`,
+      {
+        defaultBehavior: {
+          origin: origins.S3BucketOrigin.withOriginAccessControl(reelsBucket),
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
+      }
+    );
+
+    const reelMediaQueue = new sqs.Queue(
+      this,
+      `ReelMediaQueue-${environment}`,
+      {
+        queueName: `reel-media-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        retentionPeriod: cdk.Duration.days(14),
+        visibilityTimeout: cdk.Duration.minutes(6),
+      }
+    );
+
+    const reelMediaHandler = new lambda.Function(
+      this,
+      `ReelMediaHandler-${environment}`,
+      {
+        functionName: `reel-media-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/reel-media-handler'),
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        environment: {
+          ENVIRONMENT: environment,
+          REELS_BUCKET_NAME: reelsBucket.bucketName,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+    reelsBucket.grantReadWrite(reelMediaHandler);
+    reelMediaHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(reelMediaQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      })
+    );
+
+    const reelAiReviewQueue = new sqs.Queue(
+      this,
+      `ReelAiReviewQueue-${environment}`,
+      {
+        queueName: `reel-ai-review-${environment}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        retentionPeriod: cdk.Duration.days(14),
+        visibilityTimeout: cdk.Duration.minutes(6),
+      }
+    );
+    const reelAiReviewHandler = new lambda.Function(
+      this,
+      `ReelAiReviewHandler-${environment}`,
+      {
+        functionName: `reel-ai-review-handler-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/reel-ai-review-handler'),
+        timeout: cdk.Duration.minutes(5),
+        layers: [requestsLayer],
+        environment: {
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+    reelAiReviewHandler.addEventSource(
+      new lambdaEventSources.SqsEventSource(reelAiReviewQueue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+      })
+    );
+    const reelsBackendUser = iam.User.fromUserName(
+      this,
+      `ReelsBackendUser-${environment}`,
+      this.node.tryGetContext('backendAwsIamUser') || 's3User'
+    );
+    reelsBucket.grantReadWrite(reelsBackendUser);
+    reelMediaQueue.grantSendMessages(reelsBackendUser);
+    reelAiReviewQueue.grantSendMessages(reelsBackendUser);
+
+    new cdk.CfnOutput(this, `ReelsBucketName-${environment}`, {
+      value: reelsBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, `ReelsCloudFrontDomain-${environment}`, {
+      value: reelsDistribution.distributionDomainName,
+    });
+    new cdk.CfnOutput(this, `ReelMediaQueueUrl-${environment}`, {
+      value: reelMediaQueue.queueUrl,
+    });
+    new cdk.CfnOutput(this, `ReelAiReviewQueueUrl-${environment}`, {
+      value: reelAiReviewQueue.queueUrl,
+    });
 
     // Create Lambda function for order status handler
     const orderStatusHandlerFunction = new lambda.Function(

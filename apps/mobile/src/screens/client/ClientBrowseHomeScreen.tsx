@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -39,6 +39,7 @@ function ClientBrowseHomeScreenBase({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<ClientMainTabParamList, 'ClientBrowse'>>();
   const { auth, persona } = useStore();
   const [snack, setSnack] = useState<string | null>(null);
   const clientBrowseOrders = auth.isAuthenticated && persona.activePersona === 'client';
@@ -149,6 +150,7 @@ function ClientBrowseHomeScreenBase({
       ) : null}
       <BrowseCatalogScreen
         foodOnly={foodOnly}
+        initialSegment={route.params?.segment}
         applyTopSafeArea={false}
         onItemPress={onItemPress}
         onClientPlaceOrder={variantFlow.requestBuy}

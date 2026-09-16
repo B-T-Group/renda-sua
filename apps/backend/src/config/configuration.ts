@@ -442,6 +442,33 @@ export interface ItemAiReviewConfig {
   model: string;
 }
 
+export interface ReelsConfig {
+  bucketName: string;
+  cloudFrontDomain: string;
+  mediaQueueUrl: string;
+  dailyQuota: number;
+}
+
+export interface VeoConfig {
+  /** Env default tier: lite | fast */
+  tier: string;
+  /** Optional full model id override (wins over tier). */
+  modelOverride: string;
+  resolution: string;
+  durationSeconds: number;
+  aspectRatio: string;
+}
+
+export interface ReelAiReviewConfig {
+  enabled: boolean;
+  model: string;
+  queueUrl: string;
+}
+
+export interface GeminiConfig {
+  apiKey: string;
+}
+
 export interface IdDocumentAiReviewConfig {
   /** Master switch for AI auto-approval of identity document uploads. */
   enabled: boolean;
@@ -540,6 +567,7 @@ export interface Configuration {
   auth0: Auth0Config;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
+  gemini: GeminiConfig;
   bedrock: BedrockConfig;
   assistant: AssistantConfig;
   inventorySearch: InventorySearchConfig;
@@ -561,6 +589,9 @@ export interface Configuration {
   boldsign: BoldSignConfig;
   rentalAiReview: RentalAiReviewConfig;
   itemAiReview: ItemAiReviewConfig;
+  reels: ReelsConfig;
+  veo: VeoConfig;
+  reelAiReview: ReelAiReviewConfig;
   idDocumentAiReview: IdDocumentAiReviewConfig;
   commerceIntegrations: CommerceIntegrationsConfig;
   metaConversions: MetaConversionsConfig;
@@ -935,6 +966,9 @@ export default (): Configuration => {
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
     },
+    gemini: {
+      apiKey: process.env.GEMINI_API_KEY || '',
+    },
     bedrock: {
       // Never fall back to AWS_REGION (ca-central-1) — Luna is us-east-1 only.
       region: process.env.BEDROCK_REGION?.trim() || 'us-east-1',
@@ -1116,6 +1150,30 @@ export default (): Configuration => {
         process.env.ITEM_AI_REVIEW_MODEL?.trim() ||
         process.env.BEDROCK_CHAT_MODEL?.trim() ||
         'amazon.nova-lite-v1:0',
+    },
+    reels: {
+      bucketName: process.env.REELS_BUCKET_NAME || '',
+      cloudFrontDomain: process.env.REELS_CLOUDFRONT_DOMAIN || '',
+      mediaQueueUrl: process.env.REEL_MEDIA_QUEUE_URL || '',
+      dailyQuota: parseInt(process.env.REELS_DAILY_QUOTA || '10', 10),
+    },
+    veo: {
+      tier: process.env.VEO_REEL_TIER?.trim() || 'lite',
+      modelOverride: process.env.VEO_REEL_MODEL?.trim() || '',
+      resolution: process.env.VEO_REEL_RESOLUTION?.trim() || '720p',
+      durationSeconds: parseInt(
+        process.env.VEO_REEL_DURATION_SECONDS || '8',
+        10
+      ),
+      aspectRatio: process.env.VEO_REEL_ASPECT_RATIO?.trim() || '9:16',
+    },
+    reelAiReview: {
+      enabled: process.env.REEL_AI_AUTO_REVIEW_ENABLED === 'true',
+      model:
+        process.env.REEL_AI_REVIEW_MODEL?.trim() ||
+        process.env.BEDROCK_CHAT_MODEL?.trim() ||
+        'amazon.nova-lite-v1:0',
+      queueUrl: process.env.REEL_AI_REVIEW_QUEUE_URL || '',
     },
     idDocumentAiReview: {
       enabled: process.env.ID_AI_REVIEW_ENABLED === 'true',

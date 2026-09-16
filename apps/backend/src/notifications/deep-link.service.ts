@@ -77,6 +77,11 @@ export class DeepLinkService {
     return this.build('verification', '/documents');
   }
 
+  reel(reelId: string, removed = false): DeepLinkPair {
+    const suffix = removed ? `${reelId}?removed=1` : reelId;
+    return this.build(`reels/${suffix}`, `/reels/${reelId}`);
+  }
+
   /** Build links for an arbitrary app-relative path (no leading slash). */
   custom(appRelativePath: string, webPath: string): DeepLinkPair {
     return this.build(appRelativePath.replace(/^\//, ''), webPath);

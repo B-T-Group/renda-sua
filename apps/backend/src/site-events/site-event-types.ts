@@ -70,6 +70,18 @@ export const SITE_EVENT_TYPES_V1 = [
   'ftue.signup.completed',
   'ftue.browse.session_started',
   'ftue.browse.product_viewed',
+  // Reels funnel (mobile)
+  'reels.feed.opened',
+  'reels.reel.viewed',
+  'reels.reel.liked',
+  'reels.reel.shared',
+  'reels.reel.buy_click',
+  'reels.reel.purchased',
+  'reels.reel.reported',
+  'reels.reel.follow_store',
+  'reels.feed.exhausted',
+  'reels.composer.opened',
+  'reels.composer.submitted',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];
