@@ -124,6 +124,23 @@ describe('ReelsFeedService', () => {
   });
 
   describe('getFeed paging and session', () => {
+    it('filters the ranked feed to active approved ready reels', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({ reels: [] });
+
+      await service.getFeed({ country: 'CM' });
+
+      expect(hasura.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('RankedReelIds'),
+        expect.objectContaining({
+          where: expect.objectContaining({
+            is_active: { _eq: true },
+            moderation_status: { _eq: 'approved' },
+            processing_status: { _eq: 'ready' },
+          }),
+        })
+      );
+    });
+
     it('clamps limit and treats garbage cursors as offset 0', async () => {
       hasura.executeQuery.mockResolvedValueOnce({ reels: [] });
 

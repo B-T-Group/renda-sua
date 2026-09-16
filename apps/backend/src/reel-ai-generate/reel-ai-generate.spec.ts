@@ -10,13 +10,18 @@ import {
 } from './veo-reel-model.util';
 
 describe('veo-reel-model.util', () => {
-  it('maps lite and fast tiers', () => {
+  it('maps lite, fast, and standard tiers', () => {
     expect(parseVeoReelTier('FAST')).toBe('fast');
+    expect(parseVeoReelTier('standard')).toBe('standard');
+    expect(parseVeoReelTier(undefined)).toBe('fast');
     expect(resolveVeoReelModel({ envTier: 'lite' })).toBe(
       VEO_REEL_MODEL_BY_TIER.lite
     );
     expect(resolveVeoReelModel({ tierOverride: 'fast' })).toBe(
       VEO_REEL_MODEL_BY_TIER.fast
+    );
+    expect(resolveVeoReelModel({ tierOverride: 'standard' })).toBe(
+      VEO_REEL_MODEL_BY_TIER.standard
     );
     expect(
       resolveVeoReelModel({
@@ -38,6 +43,9 @@ describe('veo-reel-model.util', () => {
     ).toBe('allow_adult');
     expect(
       resolveVeoPersonGeneration(VEO_REEL_MODEL_BY_TIER.fast)
+    ).toBe('allow_adult');
+    expect(
+      resolveVeoPersonGeneration(VEO_REEL_MODEL_BY_TIER.standard)
     ).toBe('allow_adult');
     expect(resolveVeoPersonGeneration('veo-2.0-generate-001')).toBe(
       'dont_allow'

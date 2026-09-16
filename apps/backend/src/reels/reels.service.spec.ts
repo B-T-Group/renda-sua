@@ -236,3 +236,92 @@ describe('ReelsService merchant gates', () => {
   });
 });
 
+describe('ReelsService.setActive', () => {
+  const hasura = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+  const mediaQueue = { enqueue: jest.fn() };
+  const config = { get: jest.fn() };
+  const aws = {};
+  let service: ReelsService;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    service = new ReelsService(
+      hasura as never,
+      aws as never,
+      config as never,
+      mediaQueue as never
+    );
+  });
+
+  function mockOwnedLiveReel() {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'approved',
+          processing_status: 'ready',
+          is_active: true,
+          subject_type: 'item',
+          subject_id: 'item-1',
+        },
+      });
+  }
+
+  it('hides an approved ready reel without changing moderation', async () => {
+    mockOwnedLiveReel();
+    hasura.executeQuery
+      .mockResolvedValueOnce({ rows: [{ id: 'item-1', name: 'Soap' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    hasura.executeMutation.mockResolvedValue({
+      update_reels_by_pk: {
+        id: 'reel-1',
+        business_id: 'biz-1',
+        subject_type: 'item',
+        subject_id: 'item-1',
+        moderation_status: 'approved',
+        processing_status: 'ready',
+        is_active: false,
+      },
+    });
+
+    const result = await service.setActive('user-1', 'reel-1', {
+      isActive: false,
+    });
+
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('is_active'),
+      expect.objectContaining({ isActive: false })
+    );
+    expect(result.is_active).toBe(false);
+    expect(result.subject_title).toBe('Soap');
+  });
+
+  it('rejects toggling a non-live reel', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'pending',
+          processing_status: 'processing',
+          is_active: true,
+        },
+      });
+
+    await expect(
+      service.setActive('user-1', 'reel-1', { isActive: false })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+});
+

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -34,6 +35,24 @@ export class UpdateReelDto {
   @IsString()
   @MaxLength(2200)
   caption?: string;
+}
+
+export class SetReelActiveDto {
+  @ApiProperty({ description: 'When false, the reel is hidden from the public feed' })
+  @IsBoolean()
+  isActive!: boolean;
+}
+
+export class ListMerchantReelsQueryDto {
+  @ApiPropertyOptional({ enum: ['item', 'rental', 'business'] })
+  @IsOptional()
+  @IsIn(['item', 'rental', 'business'])
+  subjectType?: 'item' | 'rental' | 'business';
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  subjectId?: string;
 }
 
 export class ReelUploadDto {

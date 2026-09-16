@@ -16,7 +16,11 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { RbacService } from '../rbac/rbac.service';
 import { ReelMediaQueueService } from '../reels/reel-media-queue.service';
 import type { ReelRow } from '../reels/reels.service';
-import { REEL_AI_TOKEN_COST } from '../reel-ai-tokens/reel-ai-tokens.packs';
+import {
+  isReelAiTierAudioAllowed,
+  reelAiTokenCost,
+  type ReelAiVeoTier,
+} from '../reel-ai-tokens/reel-ai-tokens.packs';
 import { ReelAiTokensService } from '../reel-ai-tokens/reel-ai-tokens.service';
 import type { GenerateAiReelDto } from './dto/generate-ai-reel.dto';
 import {
@@ -26,9 +30,9 @@ import {
 } from './reel-ai-presets';
 import { VeoReelClient } from './veo-reel-client';
 import {
+  parseVeoReelTier,
   resolveVeoPersonGeneration,
   resolveVeoReelModel,
-  VEO_REEL_TIER_CONFIG_KEY,
 } from './veo-reel-model.util';
 import {
   detectImageMime,
@@ -80,7 +84,12 @@ export class ReelAiGenerateService {
     await this.assertDailyQuota(business.id);
     const product = await this.loadProduct(business.id, dto);
     const isSuperuser = (await this.rbac.getEffectiveAccess(userId)).isSuperuser;
-    const reserved = await this.reserveTokenIfNeeded(business.id, isSuperuser);
+    const options = this.resolveGenerateOptions(dto, isSuperuser);
+    const reserved = await this.reserveTokenIfNeeded(
+      business.id,
+      isSuperuser,
+      options.tokenCost
+    );
     let reel: ReelRow;
     try {
       reel = await this.insertGeneratingReel(business.id, dto);
@@ -96,6 +105,8 @@ export class ReelAiGenerateService {
         dto,
         product,
         tokensReserved: reserved,
+        tier: options.tier,
+        generateAudio: options.generateAudio,
       });
     } catch (error: any) {
       await this.failAndRefund({
@@ -131,14 +142,36 @@ export class ReelAiGenerateService {
     }
   }
 
+  private resolveGenerateOptions(
+    dto: GenerateAiReelDto,
+    isSuperuser: boolean
+  ): { tier: ReelAiVeoTier; generateAudio: boolean; tokenCost: number } {
+    const tier = parseVeoReelTier(dto.tier) as ReelAiVeoTier;
+    const generateAudio = dto.generateAudio !== false;
+    if (!isSuperuser && !isReelAiTierAudioAllowed(tier, generateAudio)) {
+      throw new BadRequestException(
+        'Lite requires audio. Choose Fast or Standard without audio.'
+      );
+    }
+    if (isSuperuser) {
+      return { tier, generateAudio, tokenCost: 0 };
+    }
+    return {
+      tier,
+      generateAudio,
+      tokenCost: reelAiTokenCost({ tier, generateAudio }),
+    };
+  }
+
   private async reserveTokenIfNeeded(
     businessId: string,
-    isSuperuser: boolean
+    isSuperuser: boolean,
+    tokenCost: number
   ): Promise<number> {
-    if (isSuperuser) return 0;
+    if (isSuperuser || tokenCost <= 0) return 0;
     const balanceAfter = await this.tokens.tryReserveTokens(
       businessId,
-      REEL_AI_TOKEN_COST
+      tokenCost
     );
     if (balanceAfter === null) {
       throw new HttpException(
@@ -150,7 +183,7 @@ export class ReelAiGenerateService {
         HttpStatus.PAYMENT_REQUIRED
       );
     }
-    return REEL_AI_TOKEN_COST;
+    return tokenCost;
   }
 
   private async startVeoJob(params: {
@@ -160,8 +193,10 @@ export class ReelAiGenerateService {
     dto: GenerateAiReelDto;
     product: ProductSubject;
     tokensReserved: number;
+    tier: ReelAiVeoTier;
+    generateAudio: boolean;
   }): Promise<void> {
-    const model = await this.resolveModel();
+    const model = this.resolveModelForTier(params.tier);
     const veoCfg = this.config.get('veo')!;
     const prompt = buildVeoReelPrompt({
       presetId: params.dto.presetId,
@@ -180,6 +215,7 @@ export class ReelAiGenerateService {
       resolution: veoCfg.resolution,
       durationSeconds: veoCfg.durationSeconds,
       personGeneration: resolveVeoPersonGeneration(model),
+      generateAudio: params.generateAudio,
     });
     await this.insertGenerationRow({
       reelId: params.reelId,
@@ -339,28 +375,12 @@ export class ReelAiGenerateService {
     });
   }
 
-  private async resolveModel(): Promise<string> {
+  private resolveModelForTier(tier: ReelAiVeoTier): string {
     const veo = this.config.get('veo');
-    const dbTier = await this.readDbTier();
     return resolveVeoReelModel({
       modelOverride: veo?.modelOverride,
-      tierOverride: dbTier,
-      envTier: veo?.tier,
+      tierOverride: tier,
     });
-  }
-
-  private async readDbTier(): Promise<string | null> {
-    const result = await this.hasura.executeQuery<{
-      application_configurations: Array<{ string_value: string | null }>;
-    }>(
-      `query($key:String!){
-        application_configurations(
-          where:{config_key:{_eq:$key},status:{_eq:"active"}},limit:1
-        ){string_value}
-      }`,
-      { key: VEO_REEL_TIER_CONFIG_KEY }
-    );
-    return result.application_configurations[0]?.string_value ?? null;
   }
 
   private async loadProduct(

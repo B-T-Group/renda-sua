@@ -17,12 +17,14 @@ import { ItemDetailAttentionStrip } from '../../components/business/item-detail/
 import { ItemIdentitySection } from '../../components/business/item-detail/ItemIdentitySection';
 import { ItemImageManagementSection } from '../../components/business/item-detail/ItemImageManagementSection';
 import { ItemTaxCategorySection } from '../../components/business/item-detail/ItemTaxCategorySection';
+import { ItemDetailReelsSection } from '../../components/business/item-detail/ItemDetailReelsSection';
 import { ManageItemCollectionsDialog } from '../../components/business/item-detail/ManageItemCollectionsDialog';
 import { RefineItemWithAiDialog } from '../../components/business/item-detail/RefineItemWithAiDialog';
 import { ItemInventoryLocationCard } from '../../components/business/ItemInventoryLocationCard';
 import { ItemVariantsSection } from '../../components/business/variants/ItemVariantsSection';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useProfileMe } from '../../hooks/useProfileMe';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { businessApi } from '../../services/businessApi';
@@ -38,6 +40,7 @@ function BusinessItemDetailContent({ route, navigation }: Props) {
   const { itemId } = route.params;
   const { t } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
+  const { flags } = useClientFlags();
   const stackNav = useNavigation<Nav>();
   const { me } = useProfileMe();
   const businessId = me?.business?.id ?? '';
@@ -233,6 +236,10 @@ function BusinessItemDetailContent({ route, navigation }: Props) {
             onChanged={() => void load({ soft: true })}
             onMessage={setSnackbar}
           />
+        ) : null}
+
+        {flags.reels_enabled ? (
+          <ItemDetailReelsSection itemId={item.id} onMessage={setSnackbar} />
         ) : null}
 
         <View style={styles.sectionHeader}>

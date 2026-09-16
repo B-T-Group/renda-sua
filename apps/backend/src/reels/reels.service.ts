@@ -8,7 +8,13 @@ import { ConfigService } from '@nestjs/config';
 import { AwsService } from '../aws/aws.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { CreateReelDto, ModerateReelDto, UpdateReelDto } from './dto/reels.dto';
+import {
+  CreateReelDto,
+  ListMerchantReelsQueryDto,
+  ModerateReelDto,
+  SetReelActiveDto,
+  UpdateReelDto,
+} from './dto/reels.dto';
 import { ReelMediaQueueService } from './reel-media-queue.service';
 
 interface MerchantBusiness {
@@ -29,6 +35,8 @@ export interface ReelRow {
   caption?: string | null;
   subject_type?: string;
   subject_id?: string;
+  is_active?: boolean;
+  subject_title?: string | null;
   published_at?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -43,19 +51,51 @@ export class ReelsService {
     private readonly mediaQueue: ReelMediaQueueService
   ) {}
 
-  async listForMerchant(userId: string): Promise<ReelRow[]> {
+  async listForMerchant(
+    userId: string,
+    filters: ListMerchantReelsQueryDto = {}
+  ): Promise<ReelRow[]> {
     const business = await this.requireBusiness(userId);
+    const where = this.buildMerchantListWhere(business.id, filters);
     const result = await this.hasura.executeQuery<{ reels: ReelRow[] }>(
-      `query($businessId:uuid!){
-        reels(where:{business_id:{_eq:$businessId}},order_by:{created_at:desc}){
+      `query($where:reels_bool_exp!){
+        reels(where:$where,order_by:{created_at:desc}){
           id business_id subject_type subject_id caption generation_source
-          moderation_status processing_status processing_error
+          moderation_status processing_status processing_error is_active
           video_url thumbnail_url published_at created_at updated_at
         }
       }`,
-      { businessId: business.id }
+      { where }
     );
-    return result.reels;
+    return this.attachSubjectTitles(result.reels ?? []);
+  }
+
+  async setActive(
+    userId: string,
+    reelId: string,
+    dto: SetReelActiveDto
+  ): Promise<ReelRow> {
+    const reel = await this.requireOwnedReel(userId, reelId);
+    this.assertCanToggleActive(reel);
+    const result = await this.hasura.executeMutation<{
+      update_reels_by_pk: ReelRow | null;
+    }>(
+      `mutation($id:uuid!,$isActive:Boolean!,$now:timestamptz!){
+        update_reels_by_pk(pk_columns:{id:$id},_set:{is_active:$isActive,updated_at:$now}){
+          id business_id subject_type subject_id caption generation_source
+          moderation_status processing_status processing_error is_active
+          video_url thumbnail_url published_at created_at updated_at
+        }
+      }`,
+      {
+        id: reelId,
+        isActive: dto.isActive,
+        now: new Date().toISOString(),
+      }
+    );
+    if (!result.update_reels_by_pk) throw new NotFoundException('Reel not found');
+    const titles = await this.attachSubjectTitles([result.update_reels_by_pk]);
+    return titles[0];
   }
 
   async create(userId: string, dto: CreateReelDto): Promise<ReelRow> {
@@ -207,7 +247,7 @@ export class ReelsService {
       `query($id:uuid!){
         reels_by_pk(id:$id){
           id business_id source_s3_key moderation_status processing_status
-          generation_source processing_error
+          generation_source processing_error is_active subject_type subject_id
         }
       }`,
       { id: reelId }
@@ -216,6 +256,78 @@ export class ReelsService {
       throw new NotFoundException('Reel not found');
     }
     return result.reels_by_pk;
+  }
+
+  private buildMerchantListWhere(
+    businessId: string,
+    filters: ListMerchantReelsQueryDto
+  ): Record<string, unknown> {
+    const where: Record<string, unknown> = {
+      business_id: { _eq: businessId },
+    };
+    if (filters.subjectType) where.subject_type = { _eq: filters.subjectType };
+    if (filters.subjectId) where.subject_id = { _eq: filters.subjectId };
+    return where;
+  }
+
+  private assertCanToggleActive(reel: ReelRow): void {
+    if (
+      reel.processing_status !== 'ready' ||
+      reel.moderation_status !== 'approved'
+    ) {
+      throw new BadRequestException(
+        'Only approved ready reels can be shown or hidden from the feed'
+      );
+    }
+  }
+
+  private async attachSubjectTitles(reels: ReelRow[]): Promise<ReelRow[]> {
+    if (!reels.length) return reels;
+    const titleByKey = await this.loadSubjectTitles(reels);
+    return reels.map((reel) => ({
+      ...reel,
+      is_active: reel.is_active !== false,
+      subject_title:
+        titleByKey.get(`${reel.subject_type}:${reel.subject_id}`) ?? null,
+    }));
+  }
+
+  private async loadSubjectTitles(
+    reels: ReelRow[]
+  ): Promise<Map<string, string>> {
+    const itemIds = this.subjectIdsForType(reels, 'item');
+    const rentalIds = this.subjectIdsForType(reels, 'rental');
+    const [items, rentals] = await Promise.all([
+      this.fetchNamedSubjects('items', itemIds),
+      this.fetchNamedSubjects('rental_items', rentalIds),
+    ]);
+    const map = new Map<string, string>();
+    for (const row of items) map.set(`item:${row.id}`, row.name);
+    for (const row of rentals) map.set(`rental:${row.id}`, row.name);
+    return map;
+  }
+
+  private subjectIdsForType(reels: ReelRow[], type: string): string[] {
+    return [
+      ...new Set(
+        reels
+          .filter((r) => r.subject_type === type && r.subject_id)
+          .map((r) => r.subject_id as string)
+      ),
+    ];
+  }
+
+  private async fetchNamedSubjects(
+    table: 'items' | 'rental_items',
+    ids: string[]
+  ): Promise<Array<{ id: string; name: string }>> {
+    if (!ids.length) return [];
+    const result = await this.hasura.executeQuery<
+      Record<string, Array<{ id: string; name: string }>>
+    >(`query($ids:[uuid!]!){rows:${table}(where:{id:{_in:$ids}}){id name}}`, {
+      ids,
+    });
+    return result.rows ?? [];
   }
 
   private async assertDailyQuota(businessId: string): Promise<void> {

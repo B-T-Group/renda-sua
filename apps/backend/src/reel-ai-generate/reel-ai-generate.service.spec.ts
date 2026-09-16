@@ -110,14 +110,70 @@ describe('ReelAiGenerateService.generate', () => {
       })
     ).rejects.toThrow('insert failed');
 
-    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 2);
     expect(tokens.recordUsage).toHaveBeenCalledWith(
       expect.objectContaining({
         businessId: 'business-1',
         operationType: 'refund',
-        tokensConsumed: 1,
+        tokensConsumed: 2,
       })
     );
+  });
+
+  it('debits two tokens for default fast with audio', async () => {
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
+    jest
+      .spyOn(service as never, 'loadProduct' as never)
+      .mockResolvedValue({
+        name: 'Soap',
+        description: null,
+        brand: null,
+        imageUrl: 'https://cdn/x.jpg',
+      } as never);
+    tokens.tryReserveTokens.mockResolvedValue(3);
+    jest
+      .spyOn(service as never, 'insertGeneratingReel' as never)
+      .mockResolvedValue({
+        id: 'reel-1',
+        business_id: 'business-1',
+        processing_status: 'generating',
+      } as never);
+    jest
+      .spyOn(service as never, 'startVeoJob' as never)
+      .mockResolvedValue(undefined as never);
+
+    await service.generate('user-1', {
+      subjectType: 'item',
+      subjectId: 'item-1',
+      presetId: 'product_centered',
+      marketCountry: 'CM',
+    });
+
+    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 2);
+  });
+
+  it('rejects lite without audio for non-superusers', async () => {
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
+    jest
+      .spyOn(service as never, 'loadProduct' as never)
+      .mockResolvedValue({
+        name: 'Soap',
+        description: null,
+        brand: null,
+        imageUrl: 'https://cdn/x.jpg',
+      } as never);
+
+    await expect(
+      service.generate('user-1', {
+        subjectType: 'item',
+        subjectId: 'item-1',
+        presetId: 'product_centered',
+        marketCountry: 'CM',
+        tier: 'lite',
+        generateAudio: false,
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tokens.tryReserveTokens).not.toHaveBeenCalled();
   });
 
   it('uses the original catalog photo instead of the display thumbnail', async () => {
@@ -190,9 +246,6 @@ describe('ReelAiGenerateService.generate', () => {
     jest
       .spyOn(service as never, 'insertGenerationRow' as never)
       .mockResolvedValue(undefined as never);
-    jest
-      .spyOn(service as never, 'resolveModel' as never)
-      .mockResolvedValue('veo-3.1-lite-generate-preview' as never);
     veo.startImageToVideo.mockResolvedValue('operations/1');
 
     await service.generate('user-1', {
@@ -200,10 +253,16 @@ describe('ReelAiGenerateService.generate', () => {
       subjectId: 'item-1',
       presetId: 'product_centered',
       marketCountry: 'CM',
+      tier: 'lite',
+      generateAudio: true,
     });
 
     expect(veo.startImageToVideo).toHaveBeenCalledWith(
-      expect.objectContaining({ personGeneration: 'allow_adult' })
+      expect.objectContaining({
+        personGeneration: 'allow_adult',
+        generateAudio: true,
+        model: 'veo-3.1-lite-generate-preview',
+      })
     );
   });
 

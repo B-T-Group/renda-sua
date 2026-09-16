@@ -110,7 +110,7 @@ function buildBusinessFragment(
     business_name: ctx.business_name ?? '',
     main_interest: ctx.main_interest ?? 'sell_items',
     ai_tokens: 20,
-    ai_reel_tokens: 1,
+    ai_reel_tokens: 2,
   };
   const businessDataFields = [
     'name: $business_name',

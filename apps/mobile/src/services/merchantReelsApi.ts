@@ -5,11 +5,13 @@ export type MerchantReel = {
   business_id: string;
   subject_type: string;
   subject_id: string;
+  subject_title?: string | null;
   caption: string | null;
   generation_source?: string | null;
   moderation_status: string;
   processing_status: string;
   processing_error?: string | null;
+  is_active?: boolean;
   video_url: string | null;
   thumbnail_url: string | null;
   published_at?: string | null;
@@ -28,12 +30,29 @@ export type ReelAiTokenPackId =
   | 'reel_ai_pack_5'
   | 'reel_ai_pack_15';
 
-export async function listMerchantReels(): Promise<MerchantReel[]> {
+export async function listMerchantReels(filters?: {
+  subjectType?: 'item' | 'rental' | 'business';
+  subjectId?: string;
+}): Promise<MerchantReel[]> {
+  const params = new URLSearchParams();
+  if (filters?.subjectType) params.set('subjectType', filters.subjectType);
+  if (filters?.subjectId) params.set('subjectId', filters.subjectId);
+  const qs = params.toString();
   const res = await apiRequest<{ success?: boolean } & MerchantReel[]>(
-    '/reels/merchant',
+    `/reels/merchant${qs ? `?${qs}` : ''}`,
     { method: 'GET' }
   );
   return Array.isArray(res) ? res : ((res as { data?: MerchantReel[] }).data ?? []);
+}
+
+export async function setMerchantReelActive(
+  reelId: string,
+  isActive: boolean
+): Promise<MerchantReel> {
+  return apiRequest<MerchantReel>(
+    `/reels/${encodeURIComponent(reelId)}/active`,
+    { method: 'PATCH', body: JSON.stringify({ isActive }) }
+  );
 }
 
 export async function retryMerchantReel(reelId: string): Promise<MerchantReel> {
@@ -87,6 +106,8 @@ export async function generateAiReel(body: {
   prompt?: string;
   caption?: string;
   marketCountry: string;
+  tier?: 'lite' | 'fast' | 'standard';
+  generateAudio?: boolean;
 }): Promise<MerchantReel> {
   return apiRequest<MerchantReel>('/reels/ai-generate', {
     method: 'POST',

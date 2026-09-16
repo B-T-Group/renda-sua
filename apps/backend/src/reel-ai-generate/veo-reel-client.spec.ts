@@ -26,6 +26,7 @@ describe('VeoReelClient', () => {
     resolution: '720p',
     durationSeconds: 8,
     personGeneration: 'allow_adult' as const,
+    generateAudio: true,
   };
 
   beforeEach(() => {

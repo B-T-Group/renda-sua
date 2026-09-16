@@ -1,5 +1,7 @@
 import {
   getReelAiTokenPack,
+  isReelAiTierAudioAllowed,
+  reelAiTokenCost,
   resolvePurchasedReelAiPack,
   REEL_AI_TOKEN_PACKS,
 } from './reel-ai-tokens.packs';
@@ -25,5 +27,15 @@ describe('reel-ai-tokens.packs', () => {
         currency: 'CAD',
       })
     ).toBeUndefined();
+  });
+
+  it('prices generate by tier and audio', () => {
+    expect(reelAiTokenCost({ tier: 'lite', generateAudio: true })).toBe(1);
+    expect(reelAiTokenCost({ tier: 'fast', generateAudio: true })).toBe(2);
+    expect(reelAiTokenCost({ tier: 'standard', generateAudio: true })).toBe(8);
+    expect(reelAiTokenCost({ tier: 'fast', generateAudio: false })).toBe(1);
+    expect(reelAiTokenCost({ tier: 'standard', generateAudio: false })).toBe(4);
+    expect(isReelAiTierAudioAllowed('lite', false)).toBe(false);
+    expect(isReelAiTierAudioAllowed('fast', false)).toBe(true);
   });
 });

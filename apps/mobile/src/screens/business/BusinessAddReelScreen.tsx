@@ -6,8 +6,8 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -15,6 +15,7 @@ import {
   Button,
   Chip,
   Snackbar,
+  Switch,
   Text,
   TextInput,
 } from 'react-native-paper';
@@ -38,6 +39,11 @@ import {
 } from '@/services/merchantReelsApi';
 import type { BusinessCatalogItem } from '@/types/business/items';
 import type { BusinessRentalItemRow } from '@/types/rentals';
+import {
+  reelAiTokenCost,
+  tiersForAudio,
+  type ReelAiVeoTier,
+} from '@/utils/reelAiTokenCost';
 
 type PickerProduct = {
   subjectType: 'item' | 'rental';
@@ -46,6 +52,11 @@ type PickerProduct = {
   imageUrl: string | null;
 };
 
+type Route = NativeStackScreenProps<
+  BusinessRootStackParamList,
+  'BusinessAddReel'
+>['route'];
+
 const MIN_UPLOAD_MS = 15_000;
 const MAX_UPLOAD_MS = 30_000;
 
@@ -53,6 +64,9 @@ export default function BusinessAddReelScreen() {
   const { t } = useTranslation();
   const navigation =
     useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
+  const route = useRoute<Route>();
+  const preselectType = route.params?.subjectType;
+  const preselectId = route.params?.subjectId;
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const { me } = useProfileMe();
@@ -64,20 +78,36 @@ export default function BusinessAddReelScreen() {
   const [presetId, setPresetId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [caption, setCaption] = useState('');
+  const [generateAudio, setGenerateAudio] = useState(true);
+  const [tier, setTier] = useState<ReelAiVeoTier>('fast');
   const [busy, setBusy] = useState(false);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [snack, setSnack] = useState<string | null>(null);
 
   const marketCountry = (me?.country || 'CM').toUpperCase().slice(0, 2);
   const tokenBalance = balance ?? 0;
-  const hasTokens = isSuperuser || tokenBalance > 0;
+  const availableTiers = useMemo(
+    () => tiersForAudio(generateAudio, Boolean(isSuperuser)),
+    [generateAudio, isSuperuser]
+  );
+  const tokenCost = useMemo(
+    () => reelAiTokenCost({ tier, generateAudio }),
+    [tier, generateAudio]
+  );
+  const canAfford = isSuperuser || tokenBalance >= tokenCost;
   const selectedHasPhoto = Boolean(selected?.imageUrl);
   const canGenerate =
-    hasTokens &&
+    canAfford &&
     Boolean(selected) &&
     selectedHasPhoto &&
     Boolean(presetId) &&
     (presetId !== 'custom' || Boolean(prompt.trim()));
+
+  useEffect(() => {
+    if (!availableTiers.includes(tier)) {
+      setTier(availableTiers[0] ?? 'fast');
+    }
+  }, [availableTiers, tier]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +142,14 @@ export default function BusinessAddReelScreen() {
     };
   }, [t]);
 
+  useEffect(() => {
+    if (!preselectId || !preselectType || selected) return;
+    const match = products.find(
+      (p) => p.subjectId === preselectId && p.subjectType === preselectType
+    );
+    if (match) setSelected(match);
+  }, [preselectId, preselectType, products, selected]);
+
   const onGenerate = useCallback(async () => {
     if (!selected) {
       setSnack(t('business.reels.add.pickProduct', 'Select a product first'));
@@ -143,6 +181,8 @@ export default function BusinessAddReelScreen() {
         prompt: prompt.trim() || undefined,
         caption: caption.trim() || undefined,
         marketCountry,
+        tier,
+        generateAudio,
       });
       await refreshBalance();
       navigation.replace('BusinessReelAiSubmitted');
@@ -162,6 +202,8 @@ export default function BusinessAddReelScreen() {
     prompt,
     caption,
     marketCountry,
+    tier,
+    generateAudio,
     refreshBalance,
     navigation,
     t,
@@ -334,23 +376,59 @@ export default function BusinessAddReelScreen() {
           maxLength={2200}
         />
 
-        <Button
-          mode="contained"
-          loading={busy}
-          disabled={busy || !canGenerate}
-          onPress={() => void onGenerate()}
-        >
-          {t('business.reels.add.generate', 'Generate AI ad (8s)')}
-        </Button>
+        <View style={styles.audioRow}>
+          <View style={{ flex: 1 }}>
+            <Text variant="titleMedium" style={{ color: colors.text.primary }}>
+              {t('business.reels.add.audio', 'Include audio')}
+            </Text>
+            <Text style={{ color: colors.text.secondary, fontSize: 13 }}>
+              {t(
+                'business.reels.add.audioHint',
+                'Turn off for quieter, cheaper clips. Lite needs audio on.'
+              )}
+            </Text>
+          </View>
+          <Switch value={generateAudio} onValueChange={setGenerateAudio} />
+        </View>
 
-        {!hasTokens ? (
+        <Text variant="titleMedium" style={{ color: colors.text.primary }}>
+          {t('business.reels.add.model', 'Model quality')}
+        </Text>
+        <View style={styles.chips}>
+          {availableTiers.map((option) => (
+            <Chip
+              key={option}
+              selected={tier === option}
+              onPress={() => setTier(option)}
+              style={{ marginBottom: 8 }}
+            >
+              {t(`business.reels.add.tier.${option}`, option)}
+            </Chip>
+          ))}
+        </View>
+        <Text style={{ color: colors.text.secondary }}>
+          {t('business.reels.add.tokenCost', 'Uses {{count}} tokens', {
+            count: tokenCost,
+          })}
+        </Text>
+
+        {canAfford ? (
           <Button
-            mode="outlined"
+            mode="contained"
+            loading={busy}
+            disabled={busy || !canGenerate}
+            onPress={() => void onGenerate()}
+          >
+            {t('business.reels.add.generate', 'Generate AI ad (8s)')}
+          </Button>
+        ) : (
+          <Button
+            mode="contained"
             onPress={() => navigation.navigate('BusinessReelAiTokens')}
           >
             {t('business.reels.add.buyTokens', 'Buy reel tokens')}
           </Button>
-        ) : null}
+        )}
 
         <Button
           mode="outlined"
@@ -392,6 +470,11 @@ function mapRentalProducts(items: BusinessRentalItemRow[]): PickerProduct[] {
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: 8, marginBottom: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  audioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   productCard: {
     width: 112,
     borderWidth: 1,
