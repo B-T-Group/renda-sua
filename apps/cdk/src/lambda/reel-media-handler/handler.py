@@ -73,7 +73,7 @@ def _assert_duration(duration_ms: int, source_kind: str) -> None:
 def _probe_duration_ms(src: str) -> int:
     result = subprocess.run(
         [
-            "ffprobe",
+            _ffmpeg_bin("ffprobe"),
             "-v",
             "error",
             "-show_entries",
@@ -93,7 +93,7 @@ def _probe_duration_ms(src: str) -> int:
 def _run_ffmpeg_faststart(src: str, out: str) -> None:
     subprocess.run(
         [
-            "ffmpeg",
+            _ffmpeg_bin("ffmpeg"),
             "-y",
             "-i",
             src,
@@ -118,10 +118,17 @@ def _run_ffmpeg_faststart(src: str, out: str) -> None:
 
 def _run_ffmpeg_poster(src: str, dest: str) -> None:
     subprocess.run(
-        ["ffmpeg", "-y", "-i", src, "-frames:v", "1", dest],
+        [_ffmpeg_bin("ffmpeg"), "-y", "-i", src, "-frames:v", "1", dest],
         check=True,
         capture_output=True,
     )
+
+
+def _ffmpeg_bin(name: str) -> str:
+    for path in (f"/usr/local/bin/{name}", name):
+        if path == name or os.path.isfile(path):
+            return path
+    return name
 
 
 def _download_s3_object(bucket: str, key: str, dest: str) -> None:

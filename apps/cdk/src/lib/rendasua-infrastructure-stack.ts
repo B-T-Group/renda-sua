@@ -142,22 +142,31 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       }
     );
 
-    const reelMediaHandler = new lambda.Function(
+    // Container image: zip packaging had no ffmpeg/ffprobe.
+    // New function name avoids CFN name clash while replacing the zip Lambda.
+    const reelMediaHandler = new lambda.DockerImageFunction(
       this,
-      `ReelMediaHandler-${environment}`,
+      `ReelMediaHandlerImage-${environment}`,
       {
-        functionName: `reel-media-handler-${environment}`,
-        runtime: lambda.Runtime.PYTHON_3_11,
-        handler: 'handler.handler',
-        code: lambda.Code.fromAsset('src/lambda/reel-media-handler'),
+        functionName: `reel-media-ffmpeg-${environment}`,
+        code: lambda.DockerImageCode.fromImageAsset(
+          'src/lambda/reel-media-handler',
+          {
+            file: 'Dockerfile',
+            cmd: ['handler.handler'],
+            platform: ecr_assets.Platform.LINUX_AMD64,
+          }
+        ),
         timeout: cdk.Duration.minutes(5),
-        memorySize: 512,
+        memorySize: 2048,
+        ephemeralStorageSize: cdk.Size.mebibytes(2048),
         environment: {
           ENVIRONMENT: environment,
           REELS_BUCKET_NAME: reelsBucket.bucketName,
           BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
           NOTIFICATIONS_INTERNAL_API_KEY:
             process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+          PATH: '/usr/local/bin:/var/lang/bin:/usr/bin:/bin',
         },
       }
     );
