@@ -1758,6 +1758,7 @@
     },
     "reels": {
       "addFab": "Add reel",
+      "myReels": "My reels",
       "presets": {
         "productCentered": "Product centered",
         "explosive": "Explosive",
@@ -1793,6 +1794,24 @@
         "uploaded": "Reel uploaded and submitted",
         "uploadError": "Upload failed",
         "loadError": "Could not load products"
+      },
+      "mine": {
+        "navTitle": "My reels",
+        "filterAll": "All",
+        "filterPending": "In progress",
+        "filterFailed": "Failed",
+        "filterLive": "Live",
+        "empty": "No reels in this filter yet.",
+        "loadError": "Could not load your reels",
+        "retry": "Retry",
+        "retryQueued": "Retry queued",
+        "retryError": "Could not retry reel",
+        "statusFailed": "Failed",
+        "statusLive": "Live",
+        "statusProcessing": "Processing",
+        "statusPendingReview": "Pending review",
+        "sourceAi": "AI ad",
+        "sourceUpload": "Upload"
       },
       "submitted": {
         "navTitle": "Reel started",

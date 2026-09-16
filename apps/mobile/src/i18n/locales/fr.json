@@ -1690,6 +1690,7 @@
     },
     "reels": {
       "addFab": "Ajouter un reel",
+      "myReels": "Mes reels",
       "presets": {
         "productCentered": "Produit centré",
         "explosive": "Explosif",
@@ -1725,6 +1726,24 @@
         "uploaded": "Reel importé et soumis",
         "uploadError": "Échec de l'import",
         "loadError": "Impossible de charger les produits"
+      },
+      "mine": {
+        "navTitle": "Mes reels",
+        "filterAll": "Tous",
+        "filterPending": "En cours",
+        "filterFailed": "Échoués",
+        "filterLive": "En ligne",
+        "empty": "Aucun reel dans ce filtre pour le moment.",
+        "loadError": "Impossible de charger vos reels",
+        "retry": "Réessayer",
+        "retryQueued": "Nouvel essai en file d'attente",
+        "retryError": "Impossible de relancer le reel",
+        "statusFailed": "Échoué",
+        "statusLive": "En ligne",
+        "statusProcessing": "Traitement",
+        "statusPendingReview": "En attente de revue",
+        "sourceAi": "Pub IA",
+        "sourceUpload": "Import"
       },
       "submitted": {
         "navTitle": "Reel lancé",
