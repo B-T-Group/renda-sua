@@ -116,17 +116,17 @@ describe('ReelAiGenerateService.generate', () => {
       })
     ).rejects.toThrow('insert failed');
 
-    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 2);
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
     expect(tokens.recordUsage).toHaveBeenCalledWith(
       expect.objectContaining({
         businessId: 'business-1',
         operationType: 'refund',
-        tokensConsumed: 2,
+        tokensConsumed: 1,
       })
     );
   });
 
-  it('debits two tokens for default fast with audio', async () => {
+  it('debits one token for default fast tier', async () => {
     rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
     jest
       .spyOn(service as never, 'loadProduct' as never)
@@ -155,7 +155,7 @@ describe('ReelAiGenerateService.generate', () => {
       marketCountry: 'CM',
     });
 
-    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 2);
+    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 1);
   });
 
   it('charges fast tier tokens for non-superusers when lite is requested', async () => {
@@ -195,7 +195,7 @@ describe('ReelAiGenerateService.generate', () => {
       tier: 'lite' as never,
     });
 
-    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 2);
+    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 1);
   });
 
   it('uses the original catalog photo instead of the display thumbnail', async () => {

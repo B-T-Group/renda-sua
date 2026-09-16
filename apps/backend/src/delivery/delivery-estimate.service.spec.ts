@@ -8,6 +8,9 @@ describe('DeliveryEstimateService', () => {
   let hasuraService: jest.Mocked<HasuraSystemService>;
   let configService: jest.Mocked<DeliveryConfigService>;
 
+  const marketRow = { country_code: 'CM', country_name: 'Cameroon' };
+  const areaRow = { state_name: 'Littoral' };
+
   beforeEach(async () => {
     const mockHasuraService = {
       executeQuery: jest.fn(),
@@ -39,13 +42,9 @@ describe('DeliveryEstimateService', () => {
 
   describe('getEstimate', () => {
     it('should return estimate for country-wide area with needsFinerArea true', async () => {
-      hasuraService.executeQuery
-        .mockResolvedValueOnce({
-          markets: [
-            { country_code: 'CM', country_name: 'Cameroon' },
-          ],
-          areas: [],
-        });
+      hasuraService.executeQuery.mockResolvedValueOnce({
+        markets: [marketRow],
+      });
 
       configService.getCurrency.mockResolvedValue('XAF');
       configService.getNormalDeliveryBaseFee.mockResolvedValue(1000);
@@ -68,14 +67,8 @@ describe('DeliveryEstimateService', () => {
 
     it('should return estimate for specific area with needsFinerArea false', async () => {
       hasuraService.executeQuery
-        .mockResolvedValueOnce({
-          markets: [
-            { country_code: 'CM', country_name: 'Cameroon' },
-          ],
-          areas: [
-            { state_code: 'Littoral', state_name: 'Littoral' },
-          ],
-        });
+        .mockResolvedValueOnce({ markets: [marketRow] })
+        .mockResolvedValueOnce({ areas: [areaRow] });
 
       configService.getCurrency.mockResolvedValue('XAF');
       configService.getNormalDeliveryBaseFee.mockResolvedValue(1000);
@@ -91,16 +84,28 @@ describe('DeliveryEstimateService', () => {
       expect(result.fee.confidence).toBe('range');
     });
 
+    it('should keep selected area when catalog label is not in supported_country_states', async () => {
+      hasuraService.executeQuery
+        .mockResolvedValueOnce({ markets: [marketRow] })
+        .mockResolvedValueOnce({ areas: [] });
+
+      configService.getCurrency.mockResolvedValue('XAF');
+      configService.getNormalDeliveryBaseFee.mockResolvedValue(1000);
+      configService.getMaxPerKmDeliveryFee.mockResolvedValue(1500);
+
+      const result = await service.getEstimate({
+        marketId: 'CM',
+        areaId: 'Littoral',
+      });
+
+      expect(result.areaLabel).toBe('Cameroon · Littoral');
+      expect(result.needsFinerArea).toBe(false);
+    });
+
     it('should return 45-75 minutes window for food category', async () => {
       hasuraService.executeQuery
-        .mockResolvedValueOnce({
-          markets: [
-            { country_code: 'CM', country_name: 'Cameroon' },
-          ],
-          areas: [
-            { state_code: 'Littoral', state_name: 'Littoral' },
-          ],
-        });
+        .mockResolvedValueOnce({ markets: [marketRow] })
+        .mockResolvedValueOnce({ areas: [areaRow] });
 
       configService.getCurrency.mockResolvedValue('XAF');
       configService.getNormalDeliveryBaseFee.mockResolvedValue(1000);
@@ -117,14 +122,8 @@ describe('DeliveryEstimateService', () => {
 
     it('should include serving status for food items with sellerId', async () => {
       hasuraService.executeQuery
-        .mockResolvedValueOnce({
-          markets: [
-            { country_code: 'CM', country_name: 'Cameroon' },
-          ],
-          areas: [
-            { state_code: 'Littoral', state_name: 'Littoral' },
-          ],
-        })
+        .mockResolvedValueOnce({ markets: [marketRow] })
+        .mockResolvedValueOnce({ areas: [areaRow] })
         .mockResolvedValueOnce({
           business_locations: [
             {
@@ -158,14 +157,8 @@ describe('DeliveryEstimateService', () => {
 
     it('should resolve item category from skuId when category not provided', async () => {
       hasuraService.executeQuery
-        .mockResolvedValueOnce({
-          markets: [
-            { country_code: 'CM', country_name: 'Cameroon' },
-          ],
-          areas: [
-            { state_code: 'Littoral', state_name: 'Littoral' },
-          ],
-        })
+        .mockResolvedValueOnce({ markets: [marketRow] })
+        .mockResolvedValueOnce({ areas: [areaRow] })
         .mockResolvedValueOnce({
           items_by_pk: {
             item_sub_category: {
@@ -192,7 +185,6 @@ describe('DeliveryEstimateService', () => {
     it('should throw error when market not found', async () => {
       hasuraService.executeQuery.mockResolvedValueOnce({
         markets: [],
-        areas: [],
       });
 
       await expect(
@@ -204,10 +196,7 @@ describe('DeliveryEstimateService', () => {
 
     it('should handle CFA countries correctly', async () => {
       hasuraService.executeQuery.mockResolvedValueOnce({
-        markets: [
-          { country_code: 'GA', country_name: 'Gabon' },
-        ],
-        areas: [],
+        markets: [{ country_code: 'GA', country_name: 'Gabon' }],
       });
 
       configService.getCurrency.mockResolvedValue('XAF');
@@ -223,14 +212,9 @@ describe('DeliveryEstimateService', () => {
     });
 
     it('should return coverage and trustVariant', async () => {
-      hasuraService.executeQuery.mockResolvedValueOnce({
-        markets: [
-          { country_code: 'CM', country_name: 'Cameroon' },
-        ],
-        areas: [
-          { state_code: 'Littoral', state_name: 'Littoral' },
-        ],
-      });
+      hasuraService.executeQuery
+        .mockResolvedValueOnce({ markets: [marketRow] })
+        .mockResolvedValueOnce({ areas: [areaRow] });
 
       configService.getCurrency.mockResolvedValue('XAF');
       configService.getNormalDeliveryBaseFee.mockResolvedValue(1000);

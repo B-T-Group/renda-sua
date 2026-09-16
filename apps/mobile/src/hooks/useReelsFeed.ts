@@ -1,29 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchReelsFeed, type FeedReel } from '../services/reelsApi';
 
-const SESSION_KEY = 'reels-feed-session';
-
-function sessionId(): string {
+function newSessionId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function useReelsFeed(country?: string) {
   const [items, setItems] = useState<FeedReel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState(newSessionId);
   const cursorRef = useRef<string | null>(null);
-  const sessionRef = useRef(sessionId());
+  const sessionRef = useRef(sessionId);
   const exhaustedRef = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   const load = useCallback(
     async (reset = false) => {
       if (!reset && exhaustedRef.current) return;
+      const isPullRefresh = reset && hasLoadedRef.current;
       if (reset) {
-        setLoading(true);
+        if (isPullRefresh) setRefreshing(true);
+        else setLoading(true);
         cursorRef.current = null;
         exhaustedRef.current = false;
-        sessionRef.current = sessionId();
+        const nextSession = newSessionId();
+        sessionRef.current = nextSession;
+        setSessionId(nextSession);
       } else {
         setLoadingMore(true);
       }
@@ -38,10 +43,12 @@ export function useReelsFeed(country?: string) {
         cursorRef.current = data.nextCursor;
         if (!data.nextCursor) exhaustedRef.current = true;
         setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
+        hasLoadedRef.current = true;
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load reels');
       } finally {
         setLoading(false);
+        setRefreshing(false);
         setLoadingMore(false);
       }
     },
@@ -53,11 +60,20 @@ export function useReelsFeed(country?: string) {
   }, [load]);
 
   const loadMore = useCallback(() => {
-    if (loadingMore || loading || exhaustedRef.current) return;
+    if (loadingMore || loading || refreshing || exhaustedRef.current) return;
     void load(false);
-  }, [load, loading, loadingMore]);
+  }, [load, loading, loadingMore, refreshing]);
 
   const refresh = useCallback(() => load(true), [load]);
 
-  return { items, loading, loadingMore, error, loadMore, refresh, sessionId: sessionRef.current };
+  return {
+    items,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    loadMore,
+    refresh,
+    sessionId,
+  };
 }
