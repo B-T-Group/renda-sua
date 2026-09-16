@@ -17,6 +17,7 @@ export type FeedReel = {
   business: { id: string; name: string };
   liked?: boolean;
   purchasable?: boolean;
+  inventoryItemId?: string | null;
 };
 
 type FeedResponse = {

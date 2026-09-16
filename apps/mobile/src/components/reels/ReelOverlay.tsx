@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Text, Button } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 import type { FeedReel } from '../../services/reelsApi';
 import { BusinessFollowButton } from '../browse/BusinessFollowButton';
 import { usePageShare } from '../../hooks/usePageShare';
@@ -21,7 +21,7 @@ interface Props {
 export function ReelOverlay({ reel, onBuy }: Props) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
-  const insets = useSafeAreaInsets();
+  const bottomClearance = useMainTabContentBottomPadding(12);
   const { shareNative } = usePageShare();
   const [liked, setLiked] = useState(reel.liked ?? false);
   const [likeCount, setLikeCount] = useState(reel.like_count);
@@ -51,8 +51,8 @@ export function ReelOverlay({ reel, onBuy }: Props) {
 
   return (
     <>
-      <View style={[styles.overlay, { paddingBottom: insets.bottom + spacing.md }]}>
-        <View style={styles.rail}>
+      <View style={[styles.overlay, { paddingBottom: bottomClearance }]}>
+        <View style={[styles.rail, { bottom: bottomClearance + 72 }]}>
           <Pressable onPress={() => void toggleLike()} style={styles.railBtn}>
             <MaterialCommunityIcons
               name={liked ? 'heart' : 'heart-outline'}
@@ -74,18 +74,26 @@ export function ReelOverlay({ reel, onBuy }: Props) {
           </Pressable>
         </View>
         <View style={styles.bottom}>
-          <View style={styles.merchantRow}>
-            <Text style={styles.merchantName}>{reel.business.name}</Text>
-            <BusinessFollowButton businessId={reel.business_id} size={20} />
+          <View style={styles.bottomText}>
+            <View style={styles.merchantRow}>
+              <Text style={styles.merchantName}>{reel.business.name}</Text>
+              <BusinessFollowButton businessId={reel.business_id} size={20} />
+            </View>
+            {reel.caption ? (
+              <Text style={styles.caption} numberOfLines={2}>
+                {reel.caption}
+              </Text>
+            ) : null}
           </View>
-          {reel.caption ? (
-            <Text style={styles.caption} numberOfLines={2}>{reel.caption}</Text>
-          ) : null}
           <Button
             mode="contained"
             onPress={onBuy}
-            disabled={reel.purchasable === false}
-            style={{ marginTop: spacing.sm }}
+            disabled={
+              reel.purchasable === false ||
+              (reel.subject_type === 'item' && !reel.inventoryItemId)
+            }
+            style={{ marginTop: spacing.sm, alignSelf: 'center', minWidth: 200 }}
+            contentStyle={{ paddingHorizontal: 24 }}
           >
             {reel.purchasable === false
               ? t('reels.notAvailableInMarket', 'Not available in your area')
@@ -120,14 +128,14 @@ const styles = StyleSheet.create({
   rail: {
     position: 'absolute',
     right: 12,
-    bottom: 140,
     alignItems: 'center',
     gap: 20,
   },
   railBtn: { alignItems: 'center' },
   railLabel: { color: '#fff', fontSize: 12, marginTop: 4 },
-  bottom: { paddingRight: 56 },
+  bottom: { width: '100%' },
+  bottomText: { paddingRight: 56, alignItems: 'flex-start' },
   merchantRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   merchantName: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  caption: { color: '#fff', marginTop: 4 },
+  caption: { color: '#fff', marginTop: 4, alignSelf: 'stretch' },
 });

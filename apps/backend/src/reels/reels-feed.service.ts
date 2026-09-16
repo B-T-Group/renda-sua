@@ -23,6 +23,8 @@ export type FeedReel = {
   business: { id: string; name: string };
   liked?: boolean;
   purchasable?: boolean;
+  /** Resolved `business_inventory.id` for checkout when subject is a catalog item. */
+  inventoryItemId?: string | null;
 };
 
 @Injectable()
@@ -213,10 +215,12 @@ export class ReelsFeedService {
     );
     const byId = new Map((result.reels ?? []).map((r) => [r.id, r]));
     let items = ids.map((id) => byId.get(id)).filter(Boolean) as FeedReel[];
+    items = await this.attachInventoryIds(items);
     if (country) {
       items = items.map((r) => ({
         ...r,
-        purchasable: r.market_country === country,
+        purchasable:
+          r.market_country === country && Boolean(r.inventoryItemId),
       }));
     }
     if (userId) {
@@ -224,6 +228,56 @@ export class ReelsFeedService {
       items = items.map((r) => ({ ...r, liked: liked.has(r.id) }));
     }
     return items;
+  }
+
+  private async attachInventoryIds(reels: FeedReel[]): Promise<FeedReel[]> {
+    const inventoryByKey = await this.loadInventoryIdsForItemSubjects(reels);
+    return reels.map((r) => ({
+      ...r,
+      inventoryItemId:
+        r.subject_type === 'item'
+          ? inventoryByKey.get(`${r.business_id}:${r.subject_id}`) ?? null
+          : null,
+    }));
+  }
+
+  private async loadInventoryIdsForItemSubjects(
+    reels: FeedReel[]
+  ): Promise<Map<string, string>> {
+    const itemIds = [
+      ...new Set(
+        reels
+          .filter((r) => r.subject_type === 'item')
+          .map((r) => r.subject_id)
+          .filter(Boolean)
+      ),
+    ];
+    if (!itemIds.length) return new Map();
+    const result = await this.hasura.executeQuery<{
+      business_inventory: Array<{
+        id: string;
+        item_id: string;
+        business_location: { business_id: string };
+      }>;
+    }>(
+      `query($itemIds:[uuid!]!){
+        business_inventory(
+          where:{
+            item_id:{_in:$itemIds}
+            is_active:{_eq:true}
+            business_location:{is_active:{_eq:true}}
+          }
+          order_by:[{quantity:desc},{updated_at:desc}]
+        ){id item_id business_location{business_id}}
+      }`,
+      { itemIds }
+    );
+    const map = new Map<string, string>();
+    for (const row of result.business_inventory ?? []) {
+      const key = `${row.business_location.business_id}:${row.item_id}`;
+      if (!map.has(key)) map.set(key, row.id);
+    }
+    return map;
   }
 
   private async insertLikeIfNew(userId: string, reelId: string): Promise<void> {
