@@ -2,7 +2,7 @@
   "expo": {
     "name": "Rendasua",
     "slug": "agent-mobile",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "owner": "rendasua-org",
     "scheme": "rendasua",
     "orientation": "portrait",
@@ -68,7 +68,10 @@
               "pathPrefix": "/app"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "permissions": [
