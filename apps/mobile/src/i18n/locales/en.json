@@ -195,6 +195,7 @@
     "inCartA11y": "In cart, quantity {{count}}. Add more",
     "itemAdded": "Added to cart",
     "itemUpdated": "Cart updated",
+    "addFailed": "Couldn’t add to cart",
     "empty": "Your cart is empty",
     "emptyDescription": "Browse stores and add items — your cart will show up here.",
     "continueShopping": "Continue shopping",
@@ -6594,7 +6595,10 @@
     }
   },
   "reels": {
+    "back": "Back",
     "empty": "No reels yet. Check back soon!",
+    "emptyTitle": "No reels yet",
+    "errorTitle": "Couldn’t load reels",
     "buy": "Buy",
     "updateRequired": "Update the app to play reels on this device.",
     "notAvailableInMarket": "Not available in your area",

@@ -189,6 +189,7 @@
     "inCartA11y": "Dans le panier, quantité {{count}}. Ajouter encore",
     "itemAdded": "Ajouté au panier",
     "itemUpdated": "Panier mis à jour",
+    "addFailed": "Impossible d’ajouter au panier",
     "empty": "Votre panier est vide",
     "emptyDescription": "Parcourez les boutiques et ajoutez des articles — votre panier apparaîtra ici.",
     "continueShopping": "Continuer les achats",
@@ -6515,7 +6516,10 @@
     }
   },
   "reels": {
+    "back": "Retour",
     "empty": "Pas encore de reels. Revenez bientôt !",
+    "emptyTitle": "Pas encore de reels",
+    "errorTitle": "Impossible de charger les reels",
     "buy": "Acheter",
     "updateRequired": "Mettez à jour l'application pour lire les reels sur cet appareil.",
     "notAvailableInMarket": "Indisponible dans votre région",

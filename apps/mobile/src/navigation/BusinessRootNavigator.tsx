@@ -68,6 +68,7 @@ import BusinessAddReelScreen from '../screens/business/BusinessAddReelScreen';
 import BusinessMyReelsScreen from '../screens/business/BusinessMyReelsScreen';
 import BusinessReelAiSubmittedScreen from '../screens/business/BusinessReelAiSubmittedScreen';
 import BusinessReelsScreen from '../screens/business/BusinessReelsScreen';
+import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import BusinessAccountTypeScreen from '../screens/business/BusinessAccountTypeScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
@@ -230,11 +231,7 @@ function BusinessMainTabsScreen() {
             tabBarAccessibilityLabel: t('business.tabs.reels', 'Reels'),
             tabBarIcon: ({ color, focused }) => (
               <TabBarIconContent focused={focused} label={t('business.tabs.reels', 'Reels')}>
-                <MaterialCommunityIcons
-                  name={focused ? 'play-circle' : 'play-circle-outline'}
-                  size={24}
-                  color={color}
-                />
+                <ReelsTabIcon color={color} size={30} />
               </TabBarIconContent>
             ),
           }}

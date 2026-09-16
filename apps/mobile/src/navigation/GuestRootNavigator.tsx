@@ -23,6 +23,7 @@ import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
+import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import {
   createFloatingTabBarStyle,
   TabBarIconContent,
@@ -201,7 +202,7 @@ function GuestTabsNavigator({
             tabBarAccessibilityLabel: t('nav.guestTabs.reels', 'Reels'),
             tabBarIcon: ({ color, focused }) => (
               <TabBarIconContent focused={focused} label={t('nav.guestTabs.reels', 'Reels')}>
-                <MaterialCommunityIcons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />
+                <ReelsTabIcon color={color} size={30} />
               </TabBarIconContent>
             ),
           }}

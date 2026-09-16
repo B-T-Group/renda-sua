@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Text, Button } from 'react-native-paper';
+import { Button, IconButton, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 import type { FeedReel } from '../../services/reelsApi';
-import { BusinessFollowButton } from '../browse/BusinessFollowButton';
 import { usePageShare } from '../../hooks/usePageShare';
 import { ReportContentSheet } from './ReportContentSheet';
 import { ReelCommentsSheet } from './ReelCommentsSheet';
@@ -16,11 +16,14 @@ import { useClientFlags } from '../../contexts/ClientFlagsContext';
 interface Props {
   reel: FeedReel;
   onBuy?: () => void;
+  onAddToCart?: () => void;
+  inCart?: boolean;
 }
 
-export function ReelOverlay({ reel, onBuy }: Props) {
+export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props) {
   const { t } = useTranslation();
-  const { colors, spacing } = useTheme();
+  const { colors } = useTheme();
+  const navigation = useNavigation();
   const bottomClearance = useMainTabContentBottomPadding(12);
   const { shareNative } = usePageShare();
   const [liked, setLiked] = useState(reel.liked ?? false);
@@ -49,6 +52,15 @@ export function ReelOverlay({ reel, onBuy }: Props) {
     });
   };
 
+  const onOpenStore = useCallback(() => {
+    const nav = navigation as { navigate: (name: string, params: object) => void };
+    nav.navigate('StoreDetail', { businessId: reel.business_id });
+  }, [navigation, reel.business_id]);
+
+  const buyDisabled =
+    reel.purchasable === false ||
+    (reel.subject_type === 'item' && !reel.inventoryItemId);
+
   return (
     <>
       <View style={[styles.overlay, { paddingBottom: bottomClearance }]}>
@@ -74,32 +86,43 @@ export function ReelOverlay({ reel, onBuy }: Props) {
           </Pressable>
         </View>
         <View style={styles.bottom}>
-          <View style={styles.bottomText}>
-            <View style={styles.merchantRow}>
-              <Text style={styles.merchantName}>{reel.business.name}</Text>
-              <BusinessFollowButton businessId={reel.business_id} size={20} />
-            </View>
-            {reel.caption ? (
-              <Text style={styles.caption} numberOfLines={2}>
-                {reel.caption}
-              </Text>
-            ) : null}
-          </View>
           {onBuy ? (
-            <Button
-              mode="contained"
-              onPress={onBuy}
-              disabled={
-                reel.purchasable === false ||
-                (reel.subject_type === 'item' && !reel.inventoryItemId)
-              }
-              style={{ marginTop: spacing.sm, alignSelf: 'center', minWidth: 200 }}
-              contentStyle={{ paddingHorizontal: 24 }}
-            >
-              {reel.purchasable === false
-                ? t('reels.notAvailableInMarket', 'Not available in your area')
-                : t('reels.buy', 'Buy')}
-            </Button>
+            <View style={styles.ctaRow}>
+              <IconButton
+                icon="storefront-outline"
+                iconColor="#fff"
+                containerColor="rgba(0,0,0,0.45)"
+                size={24}
+                onPress={onOpenStore}
+                accessibilityLabel={t('stores.openStoreA11y', 'Open store {{name}}', {
+                  name: reel.business.name,
+                })}
+                style={styles.sideBtn}
+              />
+              <Button
+                mode="contained"
+                onPress={onBuy}
+                disabled={buyDisabled}
+                style={styles.buyBtn}
+                contentStyle={{ paddingHorizontal: 24 }}
+              >
+                {reel.purchasable === false
+                  ? t('reels.notAvailableInMarket', 'Not available in your area')
+                  : t('reels.buy', 'Buy')}
+              </Button>
+              {onAddToCart ? (
+                <IconButton
+                  icon={inCart ? 'cart-check' : 'cart-plus'}
+                  iconColor="#fff"
+                  containerColor={inCart ? colors.primary.main : 'rgba(0,0,0,0.45)'}
+                  size={24}
+                  onPress={onAddToCart}
+                  disabled={buyDisabled}
+                  accessibilityLabel={t('cart.addToCart', 'Add to cart')}
+                  style={styles.sideBtn}
+                />
+              ) : null}
+            </View>
           ) : null}
         </View>
       </View>
@@ -136,8 +159,13 @@ const styles = StyleSheet.create({
   railBtn: { alignItems: 'center' },
   railLabel: { color: '#fff', fontSize: 12, marginTop: 4 },
   bottom: { width: '100%' },
-  bottomText: { paddingRight: 56, alignItems: 'flex-start' },
-  merchantRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  merchantName: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  caption: { color: '#fff', marginTop: 4, alignSelf: 'stretch' },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'center',
+  },
+  sideBtn: { margin: 0 },
+  buyBtn: { minWidth: 160 },
 });
