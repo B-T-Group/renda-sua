@@ -1,19 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 
+const MAX_PLAY_THROUGH_COUNT = 2;
+
 export interface ReelPlayerNativeProps {
   uri: string;
   active: boolean;
   posterUri?: string | null;
+  /** Fired after the reel has played through this many times (default 2). */
+  onMaxLoopsReached?: () => void;
 }
 
 /** Only import this file when `isExpoVideoAvailable()` is true. */
-export function ReelPlayerNative({ uri, active }: ReelPlayerNativeProps) {
+export function ReelPlayerNative({
+  uri,
+  active,
+  onMaxLoopsReached,
+}: ReelPlayerNativeProps) {
   const { t } = useTranslation();
   const [userPaused, setUserPaused] = useState(false);
+  const playThroughCountRef = useRef(0);
+  const onMaxLoopsRef = useRef(onMaxLoopsReached);
+  onMaxLoopsRef.current = onMaxLoopsReached;
+
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
     p.muted = false;
@@ -22,6 +34,7 @@ export function ReelPlayerNative({ uri, active }: ReelPlayerNativeProps) {
   useEffect(() => {
     if (!active) {
       setUserPaused(false);
+      playThroughCountRef.current = 0;
     }
   }, [active]);
 
@@ -32,6 +45,16 @@ export function ReelPlayerNative({ uri, active }: ReelPlayerNativeProps) {
       player.pause();
     }
   }, [active, userPaused, player]);
+
+  useEffect(() => {
+    const sub = player.addListener('playToEnd', () => {
+      if (!active) return;
+      playThroughCountRef.current += 1;
+      if (playThroughCountRef.current !== MAX_PLAY_THROUGH_COUNT) return;
+      onMaxLoopsRef.current?.();
+    });
+    return () => sub.remove();
+  }, [active, player]);
 
   const paused = active && userPaused;
 
