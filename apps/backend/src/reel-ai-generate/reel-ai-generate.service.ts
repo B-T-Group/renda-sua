@@ -271,20 +271,9 @@ export class ReelAiGenerateService {
   }): Promise<void> {
     const now = new Date().toISOString();
     const err = params.message.slice(0, 500);
-    await this.hasura.executeMutation(
-      `mutation($id:uuid!,$err:String!,$now:timestamptz!){
-        update_reels_by_pk(pk_columns:{id:$id},_set:{
-          processing_status:failed,processing_error:$err,updated_at:$now
-        }){id}
-      }`,
-      { id: params.reelId, err, now }
-    );
-    await this.markGenerationFailed({
-      reelId: params.reelId,
-      generationId: params.generationId,
-      err,
-      now,
-    });
+    await this.markReelFailed(params.reelId, err, now);
+    const claimed = await this.claimFailedGeneration(params, err, now);
+    if (params.generationId && !claimed) return;
     await this.refundReservedToken(
       params.businessId,
       params.userId,
@@ -293,32 +282,44 @@ export class ReelAiGenerateService {
     );
   }
 
-  private async markGenerationFailed(params: {
-    reelId: string;
-    generationId?: string;
-    err: string;
-    now: string;
-  }): Promise<void> {
-    if (params.generationId) {
-      await this.hasura.executeMutation(
-        `mutation($id:uuid!,$err:String!,$now:timestamptz!){
-          update_reel_ai_generations_by_pk(pk_columns:{id:$id},_set:{
-            status:failed,error:$err,tokens_reserved:0,updated_at:$now
-          }){id}
-        }`,
-        { id: params.generationId, err: params.err, now: params.now }
-      );
-      return;
-    }
+  private async markReelFailed(
+    reelId: string,
+    err: string,
+    now: string
+  ): Promise<void> {
     await this.hasura.executeMutation(
-      `mutation($reelId:uuid!,$err:String!,$now:timestamptz!){
+      `mutation($id:uuid!,$err:String!,$now:timestamptz!){
+        update_reels_by_pk(pk_columns:{id:$id},_set:{
+          processing_status:failed,processing_error:$err,updated_at:$now
+        }){id}
+      }`,
+      { id: reelId, err, now }
+    );
+  }
+
+  private async claimFailedGeneration(
+    params: { reelId: string; generationId?: string },
+    err: string,
+    now: string
+  ): Promise<boolean> {
+    const where = params.generationId
+      ? { id: { _eq: params.generationId }, status: { _in: ['pending', 'running'] } }
+      : {
+          reel_id: { _eq: params.reelId },
+          status: { _in: ['pending', 'running'] },
+        };
+    const result = await this.hasura.executeMutation<{
+      update_reel_ai_generations: { affected_rows: number };
+    }>(
+      `mutation($where:reel_ai_generations_bool_exp!,$err:String!,$now:timestamptz!){
         update_reel_ai_generations(
-          where:{reel_id:{_eq:$reelId},status:{_in:[pending,running]}}
+          where:$where
           _set:{status:failed,error:$err,tokens_reserved:0,updated_at:$now}
         ){affected_rows}
       }`,
-      { reelId: params.reelId, err: params.err, now: params.now }
+      { where, err, now }
     );
+    return (result.update_reel_ai_generations?.affected_rows ?? 0) > 0;
   }
 
   private async refundReservedToken(

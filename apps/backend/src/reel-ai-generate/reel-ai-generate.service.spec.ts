@@ -231,6 +231,40 @@ describe('ReelAiGenerateService.generate', () => {
     expect(tokens.tryReserveTokens).not.toHaveBeenCalled();
   });
 
+  it('refunds reserved tokens only once when two polls see the same failed job', async () => {
+    const failedJob = {
+      id: 'gen-1',
+      reel_id: 'reel-1',
+      business_id: 'business-1',
+      gemini_operation_name: 'operations/1',
+      model: 'veo',
+      status: 'running',
+      tokens_reserved: 1,
+    };
+    hasura.executeQuery.mockResolvedValue({
+      reel_ai_generations: [failedJob],
+    });
+    veo.getOperation.mockResolvedValue({
+      done: true,
+      error: { message: 'safety filter' },
+    });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      })
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 0 },
+      });
+
+    await service.pollPendingGenerations();
+    await service.pollPendingGenerations();
+
+    expect(tokens.refundTokens).toHaveBeenCalledTimes(1);
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
+  });
+
   it('throws payment required when no tokens remain', async () => {
     rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
     jest
