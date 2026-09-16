@@ -207,11 +207,6 @@ export type BusinessMainTabParamList = {
       }
     | undefined;
   BusinessReels: undefined;
-  BusinessAddReel: {
-    subjectType?: 'item' | 'rental';
-    subjectId?: string;
-  };
-  BusinessReelAiTokens: undefined;
   BusinessMenu: undefined;
 };
 
@@ -287,10 +282,12 @@ export type BusinessRootStackParamList = {
   AccountRecharge: undefined;
   BusinessAccounts: undefined;
   BusinessAiTokens: undefined;
-  BusinessAddReel: {
-    subjectType?: 'item' | 'rental';
-    subjectId?: string;
-  };
+  BusinessAddReel:
+    | {
+        subjectType?: 'item' | 'rental';
+        subjectId?: string;
+      }
+    | undefined;
   BusinessMyReels: undefined;
   BusinessReelAiSubmitted: undefined;
   BusinessReelAiTokens: undefined;

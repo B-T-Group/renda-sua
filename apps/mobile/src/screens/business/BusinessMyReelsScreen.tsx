@@ -188,7 +188,7 @@ export default function BusinessMyReelsScreen() {
               mode="contained"
               icon="plus"
               style={{ marginTop: spacing.md }}
-              onPress={() => navigation.navigate('BusinessAddReel', {})}
+              onPress={() => navigation.navigate('BusinessAddReel')}
             >
               {t('business.reels.addFab', 'Add reel')}
             </Button>
