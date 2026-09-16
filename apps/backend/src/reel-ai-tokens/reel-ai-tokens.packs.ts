@@ -36,25 +36,11 @@ export function findReelAiPackByAmount(
   });
 }
 
-export function findReelAiPackByDescription(
-  description: string | null | undefined
-): ReelAiTokenPack | undefined {
-  if (!description) return undefined;
-  const match = description.match(/AI reel tokens(?: pack)?\s+(\d+)/i);
-  if (!match) return undefined;
-  const tokens = Number.parseInt(match[1], 10);
-  return REEL_AI_TOKEN_PACKS.find((pack) => pack.tokens === tokens);
-}
-
 export function resolvePurchasedReelAiPack(params: {
   amount: number;
   currency: string;
-  description?: string | null;
 }): ReelAiTokenPack | undefined {
-  return (
-    findReelAiPackByAmount(params.amount, params.currency) ||
-    findReelAiPackByDescription(params.description)
-  );
+  return findReelAiPackByAmount(params.amount, params.currency);
 }
 
 export function reelAiPackPriceForCurrency(

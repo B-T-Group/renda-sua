@@ -15,16 +15,15 @@ describe('reel-ai-tokens.packs', () => {
     expect(getReelAiTokenPack('reel_ai_pack_15')?.prices.CAD).toBe(56.25);
   });
 
-  it('resolves packs by amount and description', () => {
+  it('resolves packs only by paid amount, never by description', () => {
     expect(
       resolvePurchasedReelAiPack({ amount: 1500, currency: 'XAF' })?.id
     ).toBe('reel_ai_pack_1');
     expect(
       resolvePurchasedReelAiPack({
-        amount: 0,
+        amount: 1,
         currency: 'CAD',
-        description: 'AI reel tokens pack 15',
-      })?.id
-    ).toBe('reel_ai_pack_15');
+      })
+    ).toBeUndefined();
   });
 });
