@@ -9,7 +9,6 @@ import {
 import { isUuid } from '../common/uuid.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { isUuid } from '../common/uuid.util';
 import { RbacService } from '../rbac/rbac.service';
 import {
   fetchStripeEnabledCountries,

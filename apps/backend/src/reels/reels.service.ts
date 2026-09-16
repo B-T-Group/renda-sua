@@ -18,6 +18,11 @@ import {
   UpdateReelDto,
 } from './dto/reels.dto';
 import { ReelMediaQueueService } from './reel-media-queue.service';
+import {
+  DEFAULT_REEL_STUCK_AFTER_MINUTES,
+  isReelStuckInProgress,
+  REEL_RETRYABLE_STUCK_STATUSES,
+} from './reel-stuck.util';
 
 interface MerchantBusiness {
   id: string;
@@ -156,12 +161,41 @@ export class ReelsService {
 
   private assertCanSoftDelete(reel: ReelRow): void {
     const failed = reel.processing_status === 'failed';
-    const draftOrRejected = ['draft', 'rejected'].includes(reel.moderation_status);
-    if (!failed && !draftOrRejected) {
+    const draftOrRejected = ['draft', 'rejected'].includes(
+      reel.moderation_status
+    );
+    if (failed || draftOrRejected || this.isStuck(reel)) return;
+    throw new BadRequestException(
+      'Only failed, stuck, draft, or rejected reels can be deleted'
+    );
+  }
+
+  private assertRetryable(reel: ReelRow): void {
+    if (reel.moderation_status === 'rejected') {
+      throw new BadRequestException('Rejected reels cannot be retried');
+    }
+    if (!reel.source_s3_key) {
+      throw new BadRequestException('Missing source media for retry');
+    }
+    const failed = reel.processing_status === 'failed';
+    const stuckRetryable =
+      this.isStuck(reel) &&
+      REEL_RETRYABLE_STUCK_STATUSES.has(reel.processing_status || '');
+    if (!failed && !stuckRetryable) {
       throw new BadRequestException(
-        'Only failed, draft, or rejected reels can be deleted'
+        'Only failed or stuck media-processing reels can be retried'
       );
     }
+  }
+
+  private isStuck(reel: ReelRow): boolean {
+    return isReelStuckInProgress({
+      processingStatus: reel.processing_status,
+      updatedAt: reel.updated_at,
+      stuckAfterMinutes:
+        this.config.get('reels')?.stuckAfterMinutes ??
+        DEFAULT_REEL_STUCK_AFTER_MINUTES,
+    });
   }
 
   async createUpload(userId: string, reelId: string, fileName: string, contentType: string) {
@@ -205,18 +239,6 @@ export class ReelsService {
     );
     await this.mediaQueue.enqueue(reelId, reel.source_s3_key!, sourceKind);
     return { ...reel, processing_status: 'queued', processing_error: null };
-  }
-
-  private assertRetryable(reel: ReelRow): void {
-    if (reel.processing_status !== 'failed') {
-      throw new BadRequestException('Only failed reels can be retried');
-    }
-    if (reel.moderation_status === 'rejected') {
-      throw new BadRequestException('Rejected reels cannot be retried');
-    }
-    if (!reel.source_s3_key) {
-      throw new BadRequestException('Missing source media for retry');
-    }
   }
 
   async moderationQueue(limit = 50): Promise<ReelRow[]> {
@@ -270,7 +292,7 @@ export class ReelsService {
         reels_by_pk(id:$id){
           id business_id source_s3_key moderation_status processing_status
           generation_source processing_error is_active subject_type subject_id
-          deleted_at
+          deleted_at updated_at
         }
       }`,
       { id: reelId }

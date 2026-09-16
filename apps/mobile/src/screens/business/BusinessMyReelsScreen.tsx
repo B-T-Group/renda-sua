@@ -28,6 +28,11 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useMerchantReels } from '@/hooks/business/useMerchantReels';
 import type { BusinessRootStackParamList } from '@/navigation/types';
 import type { MerchantReel } from '@/services/merchantReelsApi';
+import {
+  canCancelMerchantReel,
+  canForceRetryMerchantReel,
+  isMerchantReelStuck,
+} from '@/utils/merchantReelStuck';
 
 type FilterId = 'all' | 'pending' | 'failed' | 'live' | 'inactive';
 
@@ -60,10 +65,14 @@ export default function BusinessMyReelsScreen() {
   const [hideTarget, setHideTarget] = useState<MerchantReel | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MerchantReel | null>(null);
   const [playTarget, setPlayTarget] = useState<MerchantReel | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useFocusEffect(
     useCallback(() => {
       void load('initial');
+      setNowMs(Date.now());
+      const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+      return () => clearInterval(timer);
     }, [load])
   );
 
@@ -267,6 +276,7 @@ export default function BusinessMyReelsScreen() {
         renderItem={({ item }) => (
           <ReelRowCard
             reel={item}
+            nowMs={nowMs}
             mutating={mutatingId === item.id}
             onRetry={() => void onRetry(item.id)}
             onDelete={() => setDeleteTarget(item)}
@@ -299,13 +309,40 @@ export default function BusinessMyReelsScreen() {
 
       <ConfirmActionDialog
         visible={!!deleteTarget}
-        title={t('business.reels.mine.deleteTitle', 'Delete this reel?')}
-        message={t(
-          'business.reels.mine.deleteBody',
-          'This removes the failed reel from your list. You can create a new one anytime.'
-        )}
-        cancelLabel={t('common.cancel', 'Cancel')}
-        confirmLabel={t('business.reels.mine.deleteConfirm', 'Delete')}
+        title={
+          deleteTarget && isMerchantReelStuck({
+            processingStatus: deleteTarget.processing_status,
+            updatedAt: deleteTarget.updated_at,
+            nowMs,
+          })
+            ? t('business.reels.mine.cancelTitle', 'Cancel this reel?')
+            : t('business.reels.mine.deleteTitle', 'Delete this reel?')
+        }
+        message={
+          deleteTarget && isMerchantReelStuck({
+            processingStatus: deleteTarget.processing_status,
+            updatedAt: deleteTarget.updated_at,
+            nowMs,
+          })
+            ? t(
+                'business.reels.mine.cancelBody',
+                'This stops the stuck reel and removes it from your list. You can create a new one anytime.'
+              )
+            : t(
+                'business.reels.mine.deleteBody',
+                'This removes the failed reel from your list. You can create a new one anytime.'
+              )
+        }
+        cancelLabel={t('common.dismiss', 'Keep')}
+        confirmLabel={
+          deleteTarget && isMerchantReelStuck({
+            processingStatus: deleteTarget.processing_status,
+            updatedAt: deleteTarget.updated_at,
+            nowMs,
+          })
+            ? t('business.reels.mine.cancelConfirm', 'Cancel reel')
+            : t('business.reels.mine.deleteConfirm', 'Delete')
+        }
         destructive
         loading={mutatingId === deleteTarget?.id}
         onDismiss={() => setDeleteTarget(null)}
@@ -355,8 +392,21 @@ function isLiveVisible(reel: MerchantReel): boolean {
   return isLiveCapable(reel) && reel.is_active !== false;
 }
 
-function canRetry(reel: MerchantReel): boolean {
-  return reel.processing_status === 'failed' && !!reel.source_s3_key;
+function canRetry(reel: MerchantReel, nowMs: number): boolean {
+  return canForceRetryMerchantReel({
+    processingStatus: reel.processing_status,
+    updatedAt: reel.updated_at,
+    sourceS3Key: reel.source_s3_key,
+    nowMs,
+  });
+}
+
+function canCancel(reel: MerchantReel, nowMs: number): boolean {
+  return canCancelMerchantReel({
+    processingStatus: reel.processing_status,
+    updatedAt: reel.updated_at,
+    nowMs,
+  });
 }
 
 function matchesFilter(reel: MerchantReel, filter: FilterId): boolean {
@@ -375,7 +425,8 @@ function matchesFilter(reel: MerchantReel, filter: FilterId): boolean {
 
 function statusLabel(
   reel: MerchantReel,
-  t: (key: string, fallback: string) => string
+  t: (key: string, fallback: string) => string,
+  nowMs: number
 ): string {
   if (reel.processing_status === 'failed') {
     return t('business.reels.mine.statusFailed', 'Failed');
@@ -384,6 +435,15 @@ function statusLabel(
     return reel.is_active === false
       ? t('business.reels.mine.statusHidden', 'Hidden')
       : t('business.reels.mine.statusLive', 'Live');
+  }
+  if (
+    isMerchantReelStuck({
+      processingStatus: reel.processing_status,
+      updatedAt: reel.updated_at,
+      nowMs,
+    })
+  ) {
+    return t('business.reels.mine.statusStuck', 'Stuck');
   }
   if (PENDING_PROCESSING.has(reel.processing_status)) {
     return t('business.reels.mine.statusProcessing', 'Processing');
@@ -399,10 +459,20 @@ function statusLabel(
 
 function statusColors(
   reel: MerchantReel,
-  colors: ReturnType<typeof useTheme>['colors']
+  colors: ReturnType<typeof useTheme>['colors'],
+  nowMs: number
 ): { bg: string; fg: string } {
   if (reel.processing_status === 'failed') {
     return { bg: '#fdecea', fg: '#b00020' };
+  }
+  if (
+    isMerchantReelStuck({
+      processingStatus: reel.processing_status,
+      updatedAt: reel.updated_at,
+      nowMs,
+    })
+  ) {
+    return { bg: '#fff4e5', fg: '#b26a00' };
   }
   if (isLiveCapable(reel) && reel.is_active !== false) {
     return { bg: `${colors.primary.main}22`, fg: colors.primary.main };
@@ -412,6 +482,7 @@ function statusColors(
 
 function ReelRowCard(props: {
   reel: MerchantReel;
+  nowMs: number;
   mutating: boolean;
   onRetry: () => void;
   onDelete: () => void;
@@ -426,6 +497,7 @@ function ReelRowCard(props: {
 }) {
   const {
     reel,
+    nowMs,
     mutating,
     onRetry,
     onDelete,
@@ -439,13 +511,20 @@ function ReelRowCard(props: {
     t,
   } = props;
   const failed = reel.processing_status === 'failed';
+  const stuck = isMerchantReelStuck({
+    processingStatus: reel.processing_status,
+    updatedAt: reel.updated_at,
+    nowMs,
+  });
+  const showActions = canCancel(reel, nowMs);
+  const retryable = canRetry(reel, nowMs);
   const liveCapable = isLiveCapable(reel);
   const active = reel.is_active !== false;
   const showProduct =
     (reel.subject_type === 'item' || reel.subject_type === 'rental') &&
     !!reel.subject_id;
   const playable = liveCapable && !!reel.video_url;
-  const pill = statusColors(reel, colors);
+  const pill = statusColors(reel, colors, nowMs);
 
   return (
     <View
@@ -493,7 +572,7 @@ function ReelRowCard(props: {
           <View style={styles.badgeRow}>
             <StatusPill
               compact
-              label={statusLabel(reel, t)}
+              label={statusLabel(reel, t, nowMs)}
               backgroundColor={pill.bg}
               textColor={pill.fg}
             />
@@ -523,6 +602,19 @@ function ReelRowCard(props: {
           {reel.processing_error}
         </Text>
       ) : null}
+      {stuck ? (
+        <Text
+          style={[
+            typography.caption,
+            { color: '#b26a00', marginTop: spacing.xs },
+          ]}
+        >
+          {t(
+            'business.reels.mine.stuckHint',
+            'This is taking longer than usual. You can cancel or retry.'
+          )}
+        </Text>
+      ) : null}
       {showProduct ? (
         <Button
           mode="text"
@@ -533,9 +625,9 @@ function ReelRowCard(props: {
           {t('business.reels.mine.viewProduct', 'View product')}
         </Button>
       ) : null}
-      {failed ? (
+      {showActions ? (
         <View style={[styles.actionsRow, { marginTop: spacing.sm, gap: spacing.sm }]}>
-          {canRetry(reel) ? (
+          {retryable ? (
             <Button
               mode="contained"
               loading={mutating}
@@ -543,18 +635,22 @@ function ReelRowCard(props: {
               onPress={onRetry}
               style={{ flex: 1 }}
             >
-              {t('business.reels.mine.retry', 'Retry')}
+              {stuck
+                ? t('business.reels.mine.forceRetry', 'Force retry')
+                : t('business.reels.mine.retry', 'Retry')}
             </Button>
           ) : null}
           <Button
-            mode={canRetry(reel) ? 'outlined' : 'contained'}
+            mode={retryable ? 'outlined' : 'contained'}
             loading={mutating}
             disabled={mutating}
             onPress={onDelete}
             style={{ flex: 1 }}
-            textColor={canRetry(reel) ? '#b00020' : undefined}
+            textColor={retryable ? '#b00020' : undefined}
           >
-            {t('business.reels.mine.delete', 'Delete')}
+            {stuck
+              ? t('business.reels.mine.cancel', 'Cancel')
+              : t('business.reels.mine.delete', 'Delete')}
           </Button>
         </View>
       ) : null}

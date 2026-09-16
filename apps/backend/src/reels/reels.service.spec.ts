@@ -408,6 +408,68 @@ describe('ReelsService.setActive', () => {
     );
   });
 
+  it('soft-deletes a stuck in-progress reel', async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString();
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'pending',
+          processing_status: 'processing',
+          deleted_at: null,
+          updated_at: stale,
+          source_s3_key: 'source/x.mp4',
+        },
+      });
+    hasura.executeMutation.mockResolvedValueOnce({
+      update_reels_by_pk: { id: 'reel-1' },
+    });
+    config.get.mockReturnValue({ dailyQuota: 10, stuckAfterMinutes: 15 });
+
+    await service.delete('user-1', 'reel-1');
+
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('deleted_at'),
+      expect.objectContaining({ id: 'reel-1' })
+    );
+  });
+
+  it('force-retries a stuck queued reel with source media', async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString();
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'pending',
+          processing_status: 'queued',
+          deleted_at: null,
+          updated_at: stale,
+          source_s3_key: 'source/biz-1/reel-1/x.mp4',
+          generation_source: 'merchant',
+        },
+      });
+    hasura.executeMutation.mockResolvedValueOnce({});
+    mediaQueue.enqueue.mockResolvedValueOnce(undefined);
+    config.get.mockReturnValue({ dailyQuota: 10, stuckAfterMinutes: 15 });
+
+    const result = await service.retryProcessing('user-1', 'reel-1');
+
+    expect(mediaQueue.enqueue).toHaveBeenCalledWith(
+      'reel-1',
+      'source/biz-1/reel-1/x.mp4',
+      'merchant'
+    );
+    expect(result.processing_status).toBe('queued');
+  });
+
   it('rejects deleting a live reel', async () => {
     hasura.executeQuery
       .mockResolvedValueOnce({
