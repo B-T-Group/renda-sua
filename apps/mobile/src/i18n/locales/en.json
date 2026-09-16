@@ -5396,9 +5396,44 @@
     "reels": {
       "moderation": {
         "title": "Reel moderation",
+        "dashboardTitle": "Reel moderation",
+        "dashboardDescription": "Watch and approve or reject reels",
         "empty": "No reels awaiting review",
         "approve": "Approve",
-        "reject": "Reject"
+        "reject": "Reject",
+        "rejectTitle": "Reject reel",
+        "rejectBody": "Choose a reason. Merchants see this when their reel is rejected.",
+        "rejectPlaceholder": "Describe the issue",
+        "notesOptional": "Extra notes (optional)",
+        "submitReject": "Reject",
+        "openAiAudit": "AI review audit",
+        "noVideo": "Video not ready",
+        "reasons": {
+          "inappropriate": "Inappropriate / adult content",
+          "misleading": "Misleading product",
+          "lowQuality": "Low quality / unusable",
+          "wrongProduct": "Wrong or unrelated product",
+          "spam": "Spam / promo spam",
+          "copyright": "Copyright / trademark",
+          "other": "Other"
+        }
+      },
+      "aiReviews": {
+        "title": "Reel AI review audit",
+        "dashboardTitle": "Reel AI audit",
+        "dashboardDescription": "Review AI decisions on reels",
+        "empty": "No AI reviews yet",
+        "open": "Open",
+        "detailTitle": "AI review",
+        "notes": "Notes",
+        "agree": "Agree",
+        "disagree": "Disagree",
+        "forceApprove": "Force approve",
+        "forceReject": "Force reject",
+        "requeue": "Requeue AI",
+        "feedbackSaved": "Feedback saved",
+        "overrideSaved": "Override applied",
+        "defaultOverrideReject": "Admin reversed the AI decision"
       }
     },
     "accountRecharge": {

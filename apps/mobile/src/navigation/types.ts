@@ -264,6 +264,7 @@ export type BusinessRootStackParamList = {
   AdminItemModeration: undefined;
   AdminContentReports: undefined;
   AdminReelModeration: undefined;
+  AdminReelAiReviews: undefined;
   AdminItemAiReviews: { reviewId?: string; openedAt?: number } | undefined;
   AdminItemsBrowser: undefined;
   AdminItemDetail: { itemId: string };

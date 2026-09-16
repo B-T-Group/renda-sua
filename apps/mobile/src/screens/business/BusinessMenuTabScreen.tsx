@@ -374,6 +374,28 @@ function BusinessMenuTabScreenBase() {
                 onPress={() => goTo('AdminItemModeration')}
               />
             ) : null}
+            {canSeeModeration ? (
+              <UserMenuRow
+                icon="movie-open-outline"
+                label={t('admin.reels.moderation.dashboardTitle', 'Reel moderation')}
+                subtitle={t(
+                  'admin.reels.moderation.dashboardDescription',
+                  'Watch and approve or reject reels'
+                )}
+                onPress={() => goTo('AdminReelModeration')}
+              />
+            ) : null}
+            {canSeeModeration ? (
+              <UserMenuRow
+                icon="robot-outline"
+                label={t('admin.reels.aiReviews.dashboardTitle', 'Reel AI audit')}
+                subtitle={t(
+                  'admin.reels.aiReviews.dashboardDescription',
+                  'Review AI decisions on reels'
+                )}
+                onPress={() => goTo('AdminReelAiReviews')}
+              />
+            ) : null}
             {canBrowseCatalog ? (
               <UserMenuRow
                 icon="package-variant-closed"

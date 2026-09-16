@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminAuthModule } from '../admin/admin-auth.module';
 import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { CatalogCacheModule } from '../catalog-cache/catalog-cache.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ReelAiReviewModule } from '../reel-ai-review/reel-ai-review.module';
 import { ReelMediaQueueService } from './reel-media-queue.service';
 import { ReelsAdminController } from './reels-admin.controller';
 import { ReelsController } from './reels.controller';
@@ -20,6 +21,7 @@ import { ReelsService } from './reels.service';
     CatalogCacheModule,
     HasuraModule,
     NotificationsModule,
+    forwardRef(() => ReelAiReviewModule),
   ],
   controllers: [ReelsController, ReelsFeedController, ReelsAdminController],
   providers: [ReelsService, ReelsFeedService, ReelMediaQueueService],

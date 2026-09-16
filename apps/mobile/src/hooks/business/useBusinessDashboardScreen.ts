@@ -305,6 +305,38 @@ export function useBusinessDashboardScreen() {
     [t, navigation, colors.info]
   );
 
+  const reelModerationModule: BusinessModuleCardModel = useMemo(
+    () => ({
+      id: 'reel-moderation',
+      title: t('admin.reels.moderation.dashboardTitle', 'Reel moderation'),
+      description: t(
+        'admin.reels.moderation.dashboardDescription',
+        'Watch uploaded reels and approve or reject them for the public feed.'
+      ),
+      icon: 'movie-open-outline',
+      count: null,
+      accentColor: colors.warning.dark,
+      onPress: () => navigation.navigate('AdminReelModeration'),
+    }),
+    [t, navigation, colors.warning.dark]
+  );
+
+  const reelAiReviewsModule: BusinessModuleCardModel = useMemo(
+    () => ({
+      id: 'reel-ai-reviews',
+      title: t('admin.reels.aiReviews.dashboardTitle', 'Reel AI audit'),
+      description: t(
+        'admin.reels.aiReviews.dashboardDescription',
+        'Review AI auto-approval decisions for reels and apply overrides.'
+      ),
+      icon: 'robot-outline',
+      count: null,
+      accentColor: colors.info.dark ?? colors.info.main,
+      onPress: () => navigation.navigate('AdminReelAiReviews'),
+    }),
+    [t, navigation, colors.info]
+  );
+
   const itemsBrowserModule: BusinessModuleCardModel = useMemo(
     () => ({
       id: 'items-browser',
@@ -426,7 +458,14 @@ export function useBusinessDashboardScreen() {
       ...(canModerateRentals
         ? [rentalModerationModule, rentalAiReviewsModule]
         : []),
-      ...(canModerateItems ? [itemModerationModule, itemAiReviewsModule] : []),
+      ...(canModerateItems
+        ? [
+            itemModerationModule,
+            itemAiReviewsModule,
+            reelModerationModule,
+            reelAiReviewsModule,
+          ]
+        : []),
       ...(canBrowseCatalog ? [itemsBrowserModule] : []),
     ],
     [
@@ -445,6 +484,8 @@ export function useBusinessDashboardScreen() {
       rentalAiReviewsModule,
       itemModerationModule,
       itemAiReviewsModule,
+      reelModerationModule,
+      reelAiReviewsModule,
       itemsBrowserModule,
     ]
   );
