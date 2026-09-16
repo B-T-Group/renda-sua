@@ -4,10 +4,18 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Query,
   Res,
 } from '@nestjs/common';
-import { ApiOperation, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiParam,
+  ApiProduces,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import {
@@ -294,6 +302,7 @@ export class InventoryItemsController {
     summary:
       'Get a single store header by business location id (or business id → primary location); public or owner preview',
   })
+  @ApiParam({ name: 'businessId', format: 'uuid' })
   @ApiQuery({ name: 'country_code', required: false, type: String })
   @ApiQuery({ name: 'state', required: false, type: String })
   @ApiQuery({ name: 'origin_lat', required: false, type: Number })
@@ -307,9 +316,10 @@ export class InventoryItemsController {
       'When true and caller is the verified business owner, show hidden/unavailable catalog',
   })
   @ApiResponse({ status: 200, description: 'Store location header' })
+  @ApiResponse({ status: 400, description: 'Invalid store id (must be a UUID)' })
   @ApiResponse({ status: 404, description: 'Store not found or not visible' })
   async getInventoryStoreById(
-    @Param('businessId') businessId: string,
+    @Param('businessId', ParseUUIDPipe) businessId: string,
     @Query('country_code') country_code?: string,
     @Query('state') state?: string,
     @Query('is_active') is_active?: string,
