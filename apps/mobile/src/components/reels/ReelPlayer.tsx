@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import React from 'react';
+import { Image, StyleSheet, View } from 'react-native';
+import { Text } from 'react-native-paper';
+import { useTranslation } from 'react-i18next';
+import { isExpoVideoAvailable } from '@/utils/expoVideoAvailability';
 
 interface Props {
   uri: string;
@@ -8,38 +10,55 @@ interface Props {
   posterUri?: string | null;
 }
 
+/**
+ * Plays a reel when the native binary includes expo-video.
+ * Older installs (pre-reels native build) get a thumbnail + upgrade message instead of crashing.
+ */
 export function ReelPlayer({ uri, active, posterUri }: Props) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.muted = false;
-  });
+  if (!isExpoVideoAvailable()) {
+    return <ReelPlayerUnavailable posterUri={posterUri} />;
+  }
 
-  useEffect(() => {
-    if (active) {
-      player.play();
-    } else {
-      player.pause();
-    }
-  }, [active, player]);
+  // Lazy require so expo-video is never evaluated on binaries without ExpoVideo.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ReelPlayerNative } = require('./ReelPlayerNative') as typeof import('./ReelPlayerNative');
+  return <ReelPlayerNative uri={uri} active={active} posterUri={posterUri} />;
+}
 
+function ReelPlayerUnavailable({ posterUri }: { posterUri?: string | null }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.wrap}>
-      <VideoView
-        player={player}
-        style={styles.video}
-        contentFit="cover"
-        nativeControls={false}
-        allowsPictureInPicture={false}
-      />
-      {posterUri && !active ? (
-        <View style={styles.poster} pointerEvents="none" />
-      ) : null}
+      {posterUri ? (
+        <Image source={{ uri: posterUri }} style={styles.poster} resizeMode="cover" />
+      ) : (
+        <View style={styles.posterPlaceholder} />
+      )}
+      <View style={styles.banner}>
+        <Text style={styles.bannerText}>
+          {t(
+            'reels.updateRequired',
+            'Update the app to play reels on this device.'
+          )}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#000' },
-  video: { flex: 1, width: '100%', height: '100%' },
-  poster: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
+  poster: { ...StyleSheet.absoluteFillObject },
+  posterPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: '#111' },
+  banner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 120,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+  },
+  bannerText: { color: '#fff', textAlign: 'center', fontSize: 14 },
 });

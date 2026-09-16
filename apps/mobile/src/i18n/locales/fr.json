@@ -1716,9 +1716,10 @@
         "buyTokens": "Acheter des jetons reel",
         "upload": "Importer depuis la bibliothèque (15–30 s)",
         "pickProduct": "Sélectionnez d'abord un produit",
+        "pickStyle": "Sélectionnez d'abord un style de pub",
         "needPhoto": "Ajoutez au moins une photo produit avant de générer",
         "customPrompt": "Saisissez une invite personnalisée",
-        "generating": "Génération de la pub IA démarrée. Traitement en cours.",
+        "generating": "Génération de votre pub de 8 s… cela peut prendre une minute.",
         "generateError": "Échec de la génération",
         "libraryPermission": "L'accès à la photothèque est requis",
         "durationError": "Les vidéos de la bibliothèque doivent durer 15–30 secondes",
@@ -6458,6 +6459,7 @@
   "reels": {
     "empty": "Pas encore de reels. Revenez bientôt !",
     "buy": "Acheter",
+    "updateRequired": "Mettez à jour l'application pour lire les reels sur cet appareil.",
     "notAvailableInMarket": "Indisponible dans votre région",
     "comments": {
       "title": "Commentaires",

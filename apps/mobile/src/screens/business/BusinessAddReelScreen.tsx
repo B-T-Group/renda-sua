@@ -58,7 +58,7 @@ export default function BusinessAddReelScreen() {
   const [presets, setPresets] = useState<ReelAiPreset[]>([]);
   const [products, setProducts] = useState<PickerProduct[]>([]);
   const [selected, setSelected] = useState<PickerProduct | null>(null);
-  const [presetId, setPresetId] = useState('product_centered');
+  const [presetId, setPresetId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [caption, setCaption] = useState('');
   const [busy, setBusy] = useState(false);
@@ -67,7 +67,14 @@ export default function BusinessAddReelScreen() {
 
   const marketCountry = (me?.country || 'CM').toUpperCase().slice(0, 2);
   const tokenBalance = balance ?? 0;
-  const canGenerate = isSuperuser || tokenBalance > 0;
+  const hasTokens = isSuperuser || tokenBalance > 0;
+  const selectedHasPhoto = Boolean(selected?.imageUrl);
+  const canGenerate =
+    hasTokens &&
+    Boolean(selected) &&
+    selectedHasPhoto &&
+    Boolean(presetId) &&
+    (presetId !== 'custom' || Boolean(prompt.trim()));
 
   useEffect(() => {
     let cancelled = false;
@@ -102,11 +109,13 @@ export default function BusinessAddReelScreen() {
     };
   }, [t]);
 
-  const selectedHasPhoto = Boolean(selected?.imageUrl);
-
   const onGenerate = useCallback(async () => {
     if (!selected) {
       setSnack(t('business.reels.add.pickProduct', 'Select a product first'));
+      return;
+    }
+    if (!presetId) {
+      setSnack(t('business.reels.add.pickStyle', 'Select an ad style first'));
       return;
     }
     if (!selectedHasPhoto) {
@@ -337,7 +346,7 @@ export default function BusinessAddReelScreen() {
           {t('business.reels.add.generate', 'Generate AI ad (8s)')}
         </Button>
 
-        {!canGenerate ? (
+        {!hasTokens ? (
           <Button
             mode="outlined"
             onPress={() =>

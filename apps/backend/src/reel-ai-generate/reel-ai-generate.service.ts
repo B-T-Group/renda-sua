@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import axios from 'axios';
+import sharp from 'sharp';
 import { AwsService } from '../aws/aws.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -25,16 +26,20 @@ import {
 } from './reel-ai-presets';
 import { VeoReelClient } from './veo-reel-client';
 import {
+  resolveVeoPersonGeneration,
   resolveVeoReelModel,
   VEO_REEL_TIER_CONFIG_KEY,
 } from './veo-reel-model.util';
+import {
+  detectImageMime,
+  pickOriginalProductImageUrl,
+} from './veo-source-image.util';
 
 interface ProductSubject {
   name: string;
   description: string | null;
   brand: string | null;
   imageUrl: string;
-  mimeType: string;
 }
 
 interface GenerationRow {
@@ -158,7 +163,6 @@ export class ReelAiGenerateService {
   }): Promise<void> {
     const model = await this.resolveModel();
     const veoCfg = this.config.get('veo')!;
-    const preset = getReelAiPreset(params.dto.presetId)!;
     const prompt = buildVeoReelPrompt({
       presetId: params.dto.presetId,
       userPrompt: params.dto.prompt,
@@ -166,16 +170,16 @@ export class ReelAiGenerateService {
       productDescription: params.product.description,
       brand: params.product.brand,
     });
-    const imageBase64 = await this.fetchImageBase64(params.product.imageUrl);
+    const image = await this.fetchImageForVeo(params.product.imageUrl);
     const operationName = await this.veo.startImageToVideo({
       model,
       prompt,
-      imageBase64,
-      mimeType: params.product.mimeType,
+      imageBase64: image.imageBase64,
+      mimeType: image.mimeType,
       aspectRatio: veoCfg.aspectRatio,
       resolution: veoCfg.resolution,
       durationSeconds: veoCfg.durationSeconds,
-      personGeneration: preset.allowAdult ? 'allow_adult' : 'dont_allow',
+      personGeneration: resolveVeoPersonGeneration(model),
       negativePrompt:
         'extra products, fake logos, on-screen text, watermarks, distorted labels',
     });
@@ -382,7 +386,6 @@ export class ReelAiGenerateService {
         description: string | null;
         brand: { name: string } | null;
         item_images: Array<{
-          display_url: string | null;
           image_url: string;
         }>;
       } | null;
@@ -392,7 +395,7 @@ export class ReelAiGenerateService {
           id business_id name description
           brand { name }
           item_images(order_by:{display_order:asc},limit:1){
-            display_url image_url
+            image_url
           }
         }
       }`,
@@ -402,8 +405,7 @@ export class ReelAiGenerateService {
     if (!item || item.business_id !== businessId) {
       throw new ForbiddenException('Subject does not belong to this business');
     }
-    const imageUrl =
-      item.item_images[0]?.display_url || item.item_images[0]?.image_url;
+    const imageUrl = pickOriginalProductImageUrl(item.item_images[0]);
     if (!imageUrl) {
       throw new BadRequestException(
         'Add at least one product photo before generating an AI reel'
@@ -414,7 +416,6 @@ export class ReelAiGenerateService {
       description: item.description,
       brand: item.brand?.name ?? null,
       imageUrl,
-      mimeType: this.guessMime(imageUrl),
     };
   }
 
@@ -443,7 +444,7 @@ export class ReelAiGenerateService {
     if (!item || item.business_id !== businessId) {
       throw new ForbiddenException('Subject does not belong to this business');
     }
-    const imageUrl = item.rental_item_images[0]?.image_url;
+    const imageUrl = pickOriginalProductImageUrl(item.rental_item_images[0]);
     if (!imageUrl) {
       throw new BadRequestException(
         'Add at least one product photo before generating an AI reel'
@@ -454,23 +455,23 @@ export class ReelAiGenerateService {
       description: item.description,
       brand: null,
       imageUrl,
-      mimeType: this.guessMime(imageUrl),
     };
   }
 
-  private async fetchImageBase64(url: string): Promise<string> {
+  private async fetchImageForVeo(
+    url: string
+  ): Promise<{ imageBase64: string; mimeType: string }> {
     const response = await axios.get<ArrayBuffer>(url, {
       responseType: 'arraybuffer',
       timeout: 30_000,
     });
-    return Buffer.from(response.data).toString('base64');
-  }
-
-  private guessMime(url: string): string {
-    const lower = url.toLowerCase();
-    if (lower.includes('.png')) return 'image/png';
-    if (lower.includes('.webp')) return 'image/webp';
-    return 'image/jpeg';
+    const buffer = Buffer.from(response.data);
+    const mime = detectImageMime(buffer, response.headers['content-type']);
+    if (mime !== 'image/webp') {
+      return { imageBase64: buffer.toString('base64'), mimeType: mime };
+    }
+    const jpeg = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+    return { imageBase64: jpeg.toString('base64'), mimeType: 'image/jpeg' };
   }
 
   private async insertGeneratingReel(
