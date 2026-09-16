@@ -1,33 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Snackbar } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import type {
+  NativeStackNavigationProp,
+  NativeStackScreenProps,
+} from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
+import { BusinessListingWizardShell } from '@/components/business/BusinessListingWizardShell';
+import { AddReelAiSettingsStep } from '@/components/reels/add-reel/AddReelAiSettingsStep';
+import { AddReelModeStep } from '@/components/reels/add-reel/AddReelModeStep';
+import { AddReelProductStep } from '@/components/reels/add-reel/AddReelProductStep';
+import { AddReelTipsStep } from '@/components/reels/add-reel/AddReelTipsStep';
+import { AddReelUploadStep } from '@/components/reels/add-reel/AddReelUploadStep';
 import {
-  ActivityIndicator,
-  Button,
-  Chip,
-  Snackbar,
-  Switch,
-  Text,
-  TextInput,
-} from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { BusinessRootStackParamList } from '@/navigation/types';
-import { ReelComposerIllustration } from '@/components/reels/ReelComposerIllustration';
-import { useTheme } from '@/contexts/ThemeContext';
+  mapRentalProducts,
+  mapSaleProducts,
+} from '@/components/reels/add-reel/addReelProductMappers';
+import {
+  ADD_REEL_STEP_COUNT,
+  ADD_REEL_STEP_ORDER,
+  type AddReelMode,
+  type AddReelWizardStep,
+  type PickerProduct,
+} from '@/components/reels/add-reel/addReelTypes';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useProfileMe } from '@/hooks/useProfileMe';
 import { useReelAiTokens } from '@/hooks/business/useReelAiTokens';
+import type { BusinessRootStackParamList } from '@/navigation/types';
 import { businessApi } from '@/services/businessApi';
-import { getBusinessItems } from '@/services/rentalsApi';
 import {
   createMerchantReel,
   createReelUploadUrl,
@@ -37,20 +38,8 @@ import {
   submitMerchantReel,
   type ReelAiPreset,
 } from '@/services/merchantReelsApi';
-import type { BusinessCatalogItem } from '@/types/business/items';
-import type { BusinessRentalItemRow } from '@/types/rentals';
-import {
-  reelAiTokenCost,
-  tiersForAudio,
-  type ReelAiVeoTier,
-} from '@/utils/reelAiTokenCost';
-
-type PickerProduct = {
-  subjectType: 'item' | 'rental';
-  subjectId: string;
-  name: string;
-  imageUrl: string | null;
-};
+import { getBusinessItems } from '@/services/rentalsApi';
+import { reelAiTokenCost, type ReelAiVeoTier } from '@/utils/reelAiTokenCost';
 
 type Route = NativeStackScreenProps<
   BusinessRootStackParamList,
@@ -67,18 +56,18 @@ export default function BusinessAddReelScreen() {
   const route = useRoute<Route>();
   const preselectType = route.params?.subjectType;
   const preselectId = route.params?.subjectId;
-  const { colors, spacing } = useTheme();
-  const insets = useSafeAreaInsets();
   const { me } = useProfileMe();
   const { isSuperuser } = usePermissions();
   const { balance, refreshBalance } = useReelAiTokens();
+
+  const [step, setStep] = useState<AddReelWizardStep>('mode');
+  const [mode, setMode] = useState<AddReelMode | null>(null);
   const [presets, setPresets] = useState<ReelAiPreset[]>([]);
   const [products, setProducts] = useState<PickerProduct[]>([]);
   const [selected, setSelected] = useState<PickerProduct | null>(null);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [caption, setCaption] = useState('');
-  const [generateAudio, setGenerateAudio] = useState(true);
   const [tier, setTier] = useState<ReelAiVeoTier>('fast');
   const [busy, setBusy] = useState(false);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
@@ -86,14 +75,7 @@ export default function BusinessAddReelScreen() {
 
   const marketCountry = (me?.country || 'CM').toUpperCase().slice(0, 2);
   const tokenBalance = balance ?? 0;
-  const availableTiers = useMemo(
-    () => tiersForAudio(generateAudio, Boolean(isSuperuser)),
-    [generateAudio, isSuperuser]
-  );
-  const tokenCost = useMemo(
-    () => reelAiTokenCost({ tier, generateAudio }),
-    [tier, generateAudio]
-  );
+  const tokenCost = useMemo(() => reelAiTokenCost(tier), [tier]);
   const canAfford = isSuperuser || tokenBalance >= tokenCost;
   const selectedHasPhoto = Boolean(selected?.imageUrl);
   const canGenerate =
@@ -103,11 +85,7 @@ export default function BusinessAddReelScreen() {
     Boolean(presetId) &&
     (presetId !== 'custom' || Boolean(prompt.trim()));
 
-  useEffect(() => {
-    if (!availableTiers.includes(tier)) {
-      setTier(availableTiers[0] ?? 'fast');
-    }
-  }, [availableTiers, tier]);
+  const stepIndex = ADD_REEL_STEP_ORDER.indexOf(step);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,15 +128,43 @@ export default function BusinessAddReelScreen() {
     if (match) setSelected(match);
   }, [preselectId, preselectType, products, selected]);
 
+  const applyPreselect = useCallback(() => {
+    if (!preselectId || !preselectType) return null;
+    return (
+      products.find(
+        (p) => p.subjectId === preselectId && p.subjectType === preselectType
+      ) ?? null
+    );
+  }, [preselectId, preselectType, products]);
+
+  const onRestart = useCallback(() => {
+    setStep('mode');
+    setMode(null);
+    setPresetId(null);
+    setPrompt('');
+    setCaption('');
+    setTier('fast');
+    setSelected(applyPreselect());
+  }, [applyPreselect]);
+
+  const onWizardBack = useCallback(() => {
+    if (step === 'mode') {
+      navigation.goBack();
+      return;
+    }
+    const idx = ADD_REEL_STEP_ORDER.indexOf(step);
+    setStep(ADD_REEL_STEP_ORDER[Math.max(0, idx - 1)]);
+  }, [navigation, step]);
+
+  const goNext = useCallback(() => {
+    const idx = ADD_REEL_STEP_ORDER.indexOf(step);
+    if (idx < ADD_REEL_STEP_ORDER.length - 1) {
+      setStep(ADD_REEL_STEP_ORDER[idx + 1]);
+    }
+  }, [step]);
+
   const onGenerate = useCallback(async () => {
-    if (!selected) {
-      setSnack(t('business.reels.add.pickProduct', 'Select a product first'));
-      return;
-    }
-    if (!presetId) {
-      setSnack(t('business.reels.add.pickStyle', 'Select an ad style first'));
-      return;
-    }
+    if (!selected || !presetId) return;
     if (!selectedHasPhoto) {
       setSnack(
         t(
@@ -182,7 +188,6 @@ export default function BusinessAddReelScreen() {
         caption: caption.trim() || undefined,
         marketCountry,
         tier,
-        generateAudio,
       });
       await refreshBalance();
       navigation.replace('BusinessReelAiSubmitted');
@@ -203,7 +208,6 @@ export default function BusinessAddReelScreen() {
     caption,
     marketCountry,
     tier,
-    generateAudio,
     refreshBalance,
     navigation,
     t,
@@ -217,7 +221,10 @@ export default function BusinessAddReelScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       setSnack(
-        t('business.reels.add.libraryPermission', 'Photo library permission is required')
+        t(
+          'business.reels.add.libraryPermission',
+          'Photo library permission is required'
+        )
       );
       return;
     }
@@ -251,11 +258,13 @@ export default function BusinessAddReelScreen() {
       });
       const contentType = asset.mimeType || 'video/mp4';
       const fileName = asset.fileName || `reel-${Date.now()}.mp4`;
-      const upload = await createReelUploadUrl(reel.id, { fileName, contentType });
+      const upload = await createReelUploadUrl(reel.id, {
+        fileName,
+        contentType,
+      });
       await putReelVideoToPresignedUrl(upload.url, asset.uri, contentType);
       await submitMerchantReel(reel.id);
-      setSnack(t('business.reels.add.uploaded', 'Reel uploaded and submitted'));
-      navigation.goBack();
+      navigation.replace('BusinessReelUploadSubmitted');
     } catch (err: unknown) {
       setSnack(
         err instanceof Error
@@ -276,211 +285,103 @@ export default function BusinessAddReelScreen() {
     });
   }, [isSuperuser, tokenBalance, t]);
 
+  const stepLabel = useMemo(() => {
+    switch (step) {
+      case 'mode':
+        return t('business.reels.add.stepMode', 'Method');
+      case 'tips':
+        return t('business.reels.add.stepTips', 'Tips');
+      case 'product':
+        return t('business.reels.add.stepProduct', 'Product');
+      case 'compose':
+        return mode === 'upload'
+          ? t('business.reels.add.stepUpload', 'Upload')
+          : t('business.reels.add.stepSettings', 'Generate');
+      default:
+        return '';
+    }
+  }, [mode, step, t]);
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
-      <ScrollView
-        contentContainerStyle={{
-          padding: spacing.md,
-          paddingBottom: Math.max(insets.bottom, spacing.lg) + 24,
-          gap: spacing.md,
-        }}
-      >
-        <View style={styles.hero}>
-          <ReelComposerIllustration size={96} />
-          <Text variant="titleLarge" style={{ color: colors.text.primary, fontWeight: '600' }}>
-            {t('business.reels.add.title', 'Add reel')}
-          </Text>
-          <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
-            {t(
-              'business.reels.add.subtitle',
-              'Generate an 8s AI product ad, or upload a 15–30s video from your library.'
-            )}
-          </Text>
-          <Text style={{ color: colors.primary.main, fontWeight: '600' }}>
-            {tokenLabel}
-          </Text>
-        </View>
-
-        {loadingCatalog ? <ActivityIndicator /> : null}
-
-        <Text variant="titleMedium" style={{ color: colors.text.primary }}>
-          {t('business.reels.add.product', 'Product')}
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {products.map((product) => {
-              const active = selected?.subjectId === product.subjectId;
-              return (
-                <Pressable
-                  key={`${product.subjectType}-${product.subjectId}`}
-                  onPress={() => setSelected(product)}
-                  style={[
-                    styles.productCard,
-                    {
-                      borderColor: active ? colors.primary.main : colors.divider,
-                      backgroundColor: colors.background.paper,
-                    },
-                  ]}
-                >
-                  {product.imageUrl ? (
-                    <Image source={{ uri: product.imageUrl }} style={styles.thumb} />
-                  ) : (
-                    <View
-                      style={[
-                        styles.thumb,
-                        { backgroundColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
-                      ]}
-                    >
-                      <Text variant="labelSmall">
-                        {t('business.reels.add.noPhoto', 'No photo')}
-                      </Text>
-                    </View>
-                  )}
-                  <Text numberOfLines={2} style={{ color: colors.text.primary, fontSize: 12 }}>
-                    {product.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-
-        <Text variant="titleMedium" style={{ color: colors.text.primary }}>
-          {t('business.reels.add.style', 'Ad style')}
-        </Text>
-        <View style={styles.chips}>
-          {presets.map((preset) => (
-            <Chip
-              key={preset.id}
-              selected={presetId === preset.id}
-              onPress={() => setPresetId(preset.id)}
-              style={{ marginBottom: 8 }}
-            >
-              {t(preset.labelKey, preset.defaultLabel)}
-            </Chip>
-          ))}
-        </View>
-
-        <TextInput
-          mode="outlined"
-          label={t('business.reels.add.prompt', 'Optional direction')}
-          value={prompt}
-          onChangeText={setPrompt}
-          maxLength={200}
+    <BusinessListingWizardShell
+      title={t('business.reels.add.title', 'Add reel')}
+      stepIndex={Math.max(0, stepIndex)}
+      stepCount={ADD_REEL_STEP_COUNT}
+      stepLabel={stepLabel}
+      progressLabel={t(
+        'business.reels.add.stepProgress',
+        'Step {{current}} of {{total}}',
+        {
+          current: stepIndex + 1,
+          total: ADD_REEL_STEP_COUNT,
+        }
+      )}
+      onBack={busy ? () => undefined : onWizardBack}
+      onRestart={busy || step === 'mode' ? undefined : onRestart}
+    >
+      {step === 'mode' ? (
+        <AddReelModeStep
+          mode={mode}
+          tokenLabel={tokenLabel}
+          showBuyTokens={!isSuperuser && tokenBalance < 2}
+          onSelectMode={setMode}
+          onBuyTokens={() => navigation.navigate('BusinessReelAiTokens')}
+          onContinue={() => {
+            if (!mode) return;
+            goNext();
+          }}
         />
-        <TextInput
-          mode="outlined"
-          label={t('business.reels.add.caption', 'Caption (optional)')}
-          value={caption}
-          onChangeText={setCaption}
-          maxLength={2200}
+      ) : null}
+
+      {step === 'tips' && mode ? (
+        <AddReelTipsStep mode={mode} onContinue={goNext} />
+      ) : null}
+
+      {step === 'product' && mode ? (
+        <AddReelProductStep
+          mode={mode}
+          products={products}
+          selected={selected}
+          loading={loadingCatalog}
+          onSelect={setSelected}
+          onContinue={goNext}
+          onAddProduct={() => navigation.navigate('BusinessAddItemFromImage')}
         />
+      ) : null}
 
-        <View style={styles.audioRow}>
-          <View style={{ flex: 1 }}>
-            <Text variant="titleMedium" style={{ color: colors.text.primary }}>
-              {t('business.reels.add.audio', 'Include audio')}
-            </Text>
-            <Text style={{ color: colors.text.secondary, fontSize: 13 }}>
-              {t(
-                'business.reels.add.audioHint',
-                'Turn off for quieter, cheaper clips. Lite needs audio on.'
-              )}
-            </Text>
-          </View>
-          <Switch value={generateAudio} onValueChange={setGenerateAudio} />
-        </View>
+      {step === 'compose' && mode === 'ai' ? (
+        <AddReelAiSettingsStep
+          presets={presets}
+          presetId={presetId}
+          prompt={prompt}
+          caption={caption}
+          tier={tier}
+          tokenCost={tokenCost}
+          canAfford={canAfford}
+          canGenerate={canGenerate}
+          busy={busy}
+          onPresetId={setPresetId}
+          onPrompt={setPrompt}
+          onCaption={setCaption}
+          onTier={setTier}
+          onGenerate={() => void onGenerate()}
+          onBuyTokens={() => navigation.navigate('BusinessReelAiTokens')}
+        />
+      ) : null}
 
-        <Text variant="titleMedium" style={{ color: colors.text.primary }}>
-          {t('business.reels.add.model', 'Model quality')}
-        </Text>
-        <View style={styles.chips}>
-          {availableTiers.map((option) => (
-            <Chip
-              key={option}
-              selected={tier === option}
-              onPress={() => setTier(option)}
-              style={{ marginBottom: 8 }}
-            >
-              {t(`business.reels.add.tier.${option}`, option)}
-            </Chip>
-          ))}
-        </View>
-        <Text style={{ color: colors.text.secondary }}>
-          {t('business.reels.add.tokenCost', 'Uses {{count}} tokens', {
-            count: tokenCost,
-          })}
-        </Text>
-
-        {canAfford ? (
-          <Button
-            mode="contained"
-            loading={busy}
-            disabled={busy || !canGenerate}
-            onPress={() => void onGenerate()}
-          >
-            {t('business.reels.add.generate', 'Generate AI ad (8s)')}
-          </Button>
-        ) : (
-          <Button
-            mode="contained"
-            onPress={() => navigation.navigate('BusinessReelAiTokens')}
-          >
-            {t('business.reels.add.buyTokens', 'Buy reel tokens')}
-          </Button>
-        )}
-
-        <Button
-          mode="outlined"
-          disabled={busy}
-          onPress={() => void onUpload()}
-        >
-          {t('business.reels.add.upload', 'Upload from library (15–30s)')}
-        </Button>
-      </ScrollView>
+      {step === 'compose' && mode === 'upload' ? (
+        <AddReelUploadStep
+          product={selected}
+          caption={caption}
+          busy={busy}
+          onCaption={setCaption}
+          onUpload={() => void onUpload()}
+        />
+      ) : null}
 
       <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
         {snack}
       </Snackbar>
-    </View>
+    </BusinessListingWizardShell>
   );
 }
-
-function mapSaleProducts(items: BusinessCatalogItem[]): PickerProduct[] {
-  return items.map((item) => ({
-    subjectType: 'item' as const,
-    subjectId: item.id,
-    name: item.name,
-    imageUrl:
-      item.item_images?.[0]?.display_url ||
-      item.item_images?.[0]?.image_url ||
-      null,
-  }));
-}
-
-function mapRentalProducts(items: BusinessRentalItemRow[]): PickerProduct[] {
-  return items.map((item) => ({
-    subjectType: 'rental' as const,
-    subjectId: item.id,
-    name: item.name,
-    imageUrl: item.rental_item_images?.[0]?.image_url || null,
-  }));
-}
-
-const styles = StyleSheet.create({
-  hero: { alignItems: 'center', gap: 8, marginBottom: 8 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  audioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  productCard: {
-    width: 112,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 8,
-    gap: 6,
-  },
-  thumb: { width: '100%', height: 72, borderRadius: 8 },
-});

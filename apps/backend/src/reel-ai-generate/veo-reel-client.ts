@@ -20,7 +20,6 @@ export interface StartVeoVideoParams {
   resolution: string;
   durationSeconds: number;
   personGeneration: 'dont_allow' | 'allow_adult';
-  generateAudio: boolean;
 }
 
 export interface VeoOperationStatus {
@@ -103,6 +102,7 @@ export class VeoReelClient {
   }
 
   private buildStartBody(params: StartVeoVideoParams) {
+    // Gemini API Veo 3.1 rejects `generateAudio` — native audio is always on.
     return {
       instances: [
         {
@@ -118,7 +118,6 @@ export class VeoReelClient {
         resolution: params.resolution,
         durationSeconds: params.durationSeconds,
         personGeneration: params.personGeneration,
-        generateAudio: params.generateAudio,
         sampleCount: 1,
       },
     };

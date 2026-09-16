@@ -1,6 +1,5 @@
 import {
   getReelAiTokenPack,
-  isReelAiTierAudioAllowed,
   reelAiTokenCost,
   resolvePurchasedReelAiPack,
   REEL_AI_TOKEN_PACKS,
@@ -29,13 +28,9 @@ describe('reel-ai-tokens.packs', () => {
     ).toBeUndefined();
   });
 
-  it('prices generate by tier and audio', () => {
-    expect(reelAiTokenCost({ tier: 'lite', generateAudio: true })).toBe(1);
-    expect(reelAiTokenCost({ tier: 'fast', generateAudio: true })).toBe(2);
-    expect(reelAiTokenCost({ tier: 'standard', generateAudio: true })).toBe(8);
-    expect(reelAiTokenCost({ tier: 'fast', generateAudio: false })).toBe(1);
-    expect(reelAiTokenCost({ tier: 'standard', generateAudio: false })).toBe(4);
-    expect(isReelAiTierAudioAllowed('lite', false)).toBe(false);
-    expect(isReelAiTierAudioAllowed('fast', false)).toBe(true);
+  it('prices generate by tier', () => {
+    expect(reelAiTokenCost('lite')).toBe(1);
+    expect(reelAiTokenCost('fast')).toBe(2);
+    expect(reelAiTokenCost('standard')).toBe(8);
   });
 });

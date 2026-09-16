@@ -67,6 +67,7 @@ import BusinessReelAiTokensScreen from '../screens/business/BusinessReelAiTokens
 import BusinessAddReelScreen from '../screens/business/BusinessAddReelScreen';
 import BusinessMyReelsScreen from '../screens/business/BusinessMyReelsScreen';
 import BusinessReelAiSubmittedScreen from '../screens/business/BusinessReelAiSubmittedScreen';
+import BusinessReelUploadSubmittedScreen from '../screens/business/BusinessReelUploadSubmittedScreen';
 import BusinessReelsScreen from '../screens/business/BusinessReelsScreen';
 import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import BusinessAccountTypeScreen from '../screens/business/BusinessAccountTypeScreen';
@@ -771,7 +772,7 @@ export function BusinessRootNavigator() {
           component={BusinessAddReelScreen}
           options={{
             title: t('business.reels.add.title', 'Add reel'),
-            headerBackTitle: t('business.tabs.reels', 'Reels'),
+            headerShown: false,
           }}
         />
         <RootStack.Screen
@@ -787,6 +788,16 @@ export function BusinessRootNavigator() {
           component={BusinessReelAiSubmittedScreen}
           options={{
             title: t('business.reels.submitted.navTitle', 'Reel started'),
+            headerBackVisible: false,
+            headerLeft: () => null,
+            gestureEnabled: false,
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessReelUploadSubmitted"
+          component={BusinessReelUploadSubmittedScreen}
+          options={{
+            title: t('business.reels.uploadSubmitted.navTitle', 'Reel submitted'),
             headerBackVisible: false,
             headerLeft: () => null,
             gestureEnabled: false,

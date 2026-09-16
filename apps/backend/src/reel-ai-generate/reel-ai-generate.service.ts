@@ -17,7 +17,6 @@ import { RbacService } from '../rbac/rbac.service';
 import { ReelMediaQueueService } from '../reels/reel-media-queue.service';
 import type { ReelRow } from '../reels/reels.service';
 import {
-  isReelAiTierAudioAllowed,
   reelAiTokenCost,
   type ReelAiVeoTier,
 } from '../reel-ai-tokens/reel-ai-tokens.packs';
@@ -106,7 +105,6 @@ export class ReelAiGenerateService {
         product,
         tokensReserved: reserved,
         tier: options.tier,
-        generateAudio: options.generateAudio,
       });
     } catch (error: any) {
       await this.failAndRefund({
@@ -145,22 +143,12 @@ export class ReelAiGenerateService {
   private resolveGenerateOptions(
     dto: GenerateAiReelDto,
     isSuperuser: boolean
-  ): { tier: ReelAiVeoTier; generateAudio: boolean; tokenCost: number } {
+  ): { tier: ReelAiVeoTier; tokenCost: number } {
     const tier = parseVeoReelTier(dto.tier) as ReelAiVeoTier;
-    const generateAudio = dto.generateAudio !== false;
-    if (!isSuperuser && !isReelAiTierAudioAllowed(tier, generateAudio)) {
-      throw new BadRequestException(
-        'Lite requires audio. Choose Fast or Standard without audio.'
-      );
-    }
     if (isSuperuser) {
-      return { tier, generateAudio, tokenCost: 0 };
+      return { tier, tokenCost: 0 };
     }
-    return {
-      tier,
-      generateAudio,
-      tokenCost: reelAiTokenCost({ tier, generateAudio }),
-    };
+    return { tier, tokenCost: reelAiTokenCost(tier) };
   }
 
   private async reserveTokenIfNeeded(
@@ -194,7 +182,6 @@ export class ReelAiGenerateService {
     product: ProductSubject;
     tokensReserved: number;
     tier: ReelAiVeoTier;
-    generateAudio: boolean;
   }): Promise<void> {
     const model = this.resolveModelForTier(params.tier);
     const veoCfg = this.config.get('veo')!;
@@ -215,7 +202,6 @@ export class ReelAiGenerateService {
       resolution: veoCfg.resolution,
       durationSeconds: veoCfg.durationSeconds,
       personGeneration: resolveVeoPersonGeneration(model),
-      generateAudio: params.generateAudio,
     });
     await this.insertGenerationRow({
       reelId: params.reelId,
