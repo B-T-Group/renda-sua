@@ -32,3 +32,14 @@ export function resolveVeoReelModel(params: {
   const tier = parseVeoReelTier(params.tierOverride ?? params.envTier);
   return VEO_REEL_MODEL_BY_TIER[tier];
 }
+
+/**
+ * Veo 3 / 3.1 image-to-video only accepts `allow_adult`.
+ * `dont_allow` is Veo 2-only and Google returns HTTP 400 on 3.1.
+ */
+export function resolveVeoPersonGeneration(
+  model: string
+): 'allow_adult' | 'dont_allow' {
+  if (/veo-3/i.test(model)) return 'allow_adult';
+  return 'dont_allow';
+}

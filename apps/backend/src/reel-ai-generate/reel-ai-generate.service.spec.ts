@@ -64,7 +64,6 @@ describe('ReelAiGenerateService.generate', () => {
         description: null,
         brand: null,
         imageUrl: 'https://cdn/x.jpg',
-        mimeType: 'image/jpeg',
       } as never);
     jest
       .spyOn(service as never, 'insertGeneratingReel' as never)
@@ -96,7 +95,6 @@ describe('ReelAiGenerateService.generate', () => {
         description: null,
         brand: null,
         imageUrl: 'https://cdn/x.jpg',
-        mimeType: 'image/jpeg',
       } as never);
     tokens.tryReserveTokens.mockResolvedValue(0);
     jest
@@ -119,6 +117,93 @@ describe('ReelAiGenerateService.generate', () => {
         operationType: 'refund',
         tokensConsumed: 1,
       })
+    );
+  });
+
+  it('uses the original catalog photo instead of the display thumbnail', async () => {
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: true });
+    hasura.executeQuery.mockResolvedValue({
+      items_by_pk: {
+        id: 'item-1',
+        business_id: 'business-1',
+        name: 'Soap',
+        description: null,
+        brand: null,
+        item_images: [
+          {
+            image_url: 'https://cdn/original.jpg',
+            display_url: 'https://cdn/thumbs/item_image/x.webp',
+          },
+        ],
+      },
+    });
+    jest
+      .spyOn(service as never, 'insertGeneratingReel' as never)
+      .mockResolvedValue({
+        id: 'reel-1',
+        business_id: 'business-1',
+        processing_status: 'generating',
+      } as never);
+    const startVeoJob = jest
+      .spyOn(service as never, 'startVeoJob' as never)
+      .mockResolvedValue(undefined as never);
+
+    await service.generate('user-1', {
+      subjectType: 'item',
+      subjectId: 'item-1',
+      presetId: 'product_centered',
+      marketCountry: 'CM',
+    });
+
+    expect(startVeoJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        product: expect.objectContaining({
+          imageUrl: 'https://cdn/original.jpg',
+        }),
+      })
+    );
+  });
+
+  it('sends allow_adult to Veo 3.1 even for no-people presets', async () => {
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: true });
+    jest
+      .spyOn(service as never, 'loadProduct' as never)
+      .mockResolvedValue({
+        name: 'Soap',
+        description: null,
+        brand: null,
+        imageUrl: 'https://cdn/x.jpg',
+      } as never);
+    jest
+      .spyOn(service as never, 'insertGeneratingReel' as never)
+      .mockResolvedValue({
+        id: 'reel-1',
+        business_id: 'business-1',
+        processing_status: 'generating',
+      } as never);
+    jest
+      .spyOn(service as never, 'fetchImageForVeo' as never)
+      .mockResolvedValue({
+        imageBase64: 'abc',
+        mimeType: 'image/jpeg',
+      } as never);
+    jest
+      .spyOn(service as never, 'insertGenerationRow' as never)
+      .mockResolvedValue(undefined as never);
+    jest
+      .spyOn(service as never, 'resolveModel' as never)
+      .mockResolvedValue('veo-3.1-lite-generate-preview' as never);
+    veo.startImageToVideo.mockResolvedValue('operations/1');
+
+    await service.generate('user-1', {
+      subjectType: 'item',
+      subjectId: 'item-1',
+      presetId: 'product_centered',
+      marketCountry: 'CM',
+    });
+
+    expect(veo.startImageToVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ personGeneration: 'allow_adult' })
     );
   });
 
@@ -155,7 +240,6 @@ describe('ReelAiGenerateService.generate', () => {
         description: null,
         brand: null,
         imageUrl: 'https://cdn/x.jpg',
-        mimeType: 'image/jpeg',
       } as never);
     tokens.tryReserveTokens.mockResolvedValue(null);
 
