@@ -153,6 +153,9 @@ export class ReelsService {
     if (reel.processing_status !== 'failed') {
       throw new BadRequestException('Only failed reels can be retried');
     }
+    if (reel.moderation_status === 'rejected') {
+      throw new BadRequestException('Rejected reels cannot be retried');
+    }
     if (!reel.source_s3_key) {
       throw new BadRequestException('Missing source media for retry');
     }

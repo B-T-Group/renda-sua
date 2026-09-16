@@ -8,6 +8,8 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { ModerateReelDto } from './dto/reels.dto';
 import { ReelsService } from './reels.service';
 
@@ -18,6 +20,7 @@ interface AdminRequest extends Request {
 @ApiTags('admin-reels')
 @ApiBearerAuth()
 @UseGuards(AdminAuthGuard)
+@RequirePermissions(PlatformPermissions.MODERATE_ITEMS)
 @Controller('admin/reels')
 export class ReelsAdminController {
   constructor(private readonly reels: ReelsService) {}

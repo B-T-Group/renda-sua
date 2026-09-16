@@ -77,6 +77,28 @@ describe('ReelsService.retryProcessing', () => {
     expect(mediaQueue.enqueue).not.toHaveBeenCalled();
   });
 
+  it('rejects retry when the reel was rejected', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          source_s3_key: 'source/biz-1/reel-1/veo.mp4',
+          moderation_status: 'rejected',
+          processing_status: 'failed',
+          generation_source: 'ai',
+        },
+      });
+
+    await expect(service.retryProcessing('user-1', 'reel-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(mediaQueue.enqueue).not.toHaveBeenCalled();
+  });
+
   it('rejects retry when not failed', async () => {
     hasura.executeQuery
       .mockResolvedValueOnce({
