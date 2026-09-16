@@ -65,6 +65,7 @@ import BusinessInsightsScreen from '../screens/business/BusinessInsightsScreen';
 import BusinessAiTokensScreen from '../screens/business/BusinessAiTokensScreen';
 import BusinessReelAiTokensScreen from '../screens/business/BusinessReelAiTokensScreen';
 import BusinessAddReelScreen from '../screens/business/BusinessAddReelScreen';
+import BusinessReelAiSubmittedScreen from '../screens/business/BusinessReelAiSubmittedScreen';
 import BusinessReelsScreen from '../screens/business/BusinessReelsScreen';
 import BusinessAccountTypeScreen from '../screens/business/BusinessAccountTypeScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
@@ -773,6 +774,16 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.reels.add.title', 'Add reel'),
             headerBackTitle: t('business.tabs.reels', 'Reels'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessReelAiSubmitted"
+          component={BusinessReelAiSubmittedScreen}
+          options={{
+            title: t('business.reels.submitted.navTitle', 'Reel started'),
+            headerBackVisible: false,
+            headerLeft: () => null,
+            gestureEnabled: false,
           }}
         />
         <RootStack.Screen

@@ -1787,13 +1787,26 @@
         "pickStyle": "Select an ad style first",
         "needPhoto": "Add at least one product photo before generating",
         "customPrompt": "Enter a custom prompt",
-        "generating": "Generating your 8s ad… this can take a minute.",
         "generateError": "Generation failed",
         "libraryPermission": "Photo library permission is required",
         "durationError": "Library videos must be 15–30 seconds",
         "uploaded": "Reel uploaded and submitted",
         "uploadError": "Upload failed",
         "loadError": "Could not load products"
+      },
+      "submitted": {
+        "navTitle": "Reel started",
+        "illustrationLabel": "Reel submitted and waiting to go live",
+        "headline": "Your AI reel is on its way",
+        "intro": "Here is what happens before shoppers can see it.",
+        "generateTitle": "We are making the video",
+        "generateBody": "Your 8-second product ad is generating now. This can take about a minute.",
+        "processTitle": "We prepare it for the feed",
+        "processBody": "Once the clip is ready, we process it so it plays smoothly in Reels.",
+        "liveTitle": "It goes live",
+        "liveBody": "AI reels publish automatically after processing. Shoppers can see it in the Reels feed.",
+        "returnToDashboard": "Return to dashboard",
+        "viewReels": "View reels"
       },
       "tokens": {
         "navTitle": "AI reel tokens",

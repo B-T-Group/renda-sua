@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -18,6 +19,7 @@ import {
   TextInput,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { BusinessRootStackParamList } from '@/navigation/types';
 import { ReelComposerIllustration } from '@/components/reels/ReelComposerIllustration';
 import { useTheme } from '@/contexts/ThemeContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -49,7 +51,8 @@ const MAX_UPLOAD_MS = 30_000;
 
 export default function BusinessAddReelScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const { me } = useProfileMe();
@@ -142,13 +145,7 @@ export default function BusinessAddReelScreen() {
         marketCountry,
       });
       await refreshBalance();
-      setSnack(
-        t(
-          'business.reels.add.generating',
-          'Generating your 8s ad… this can take a minute.'
-        )
-      );
-      navigation.goBack();
+      navigation.replace('BusinessReelAiSubmitted');
     } catch (err: unknown) {
       setSnack(
         err instanceof Error
@@ -349,11 +346,7 @@ export default function BusinessAddReelScreen() {
         {!hasTokens ? (
           <Button
             mode="outlined"
-            onPress={() =>
-              (navigation as { navigate: (n: string) => void }).navigate(
-                'BusinessReelAiTokens'
-              )
-            }
+            onPress={() => navigation.navigate('BusinessReelAiTokens')}
           >
             {t('business.reels.add.buyTokens', 'Buy reel tokens')}
           </Button>
