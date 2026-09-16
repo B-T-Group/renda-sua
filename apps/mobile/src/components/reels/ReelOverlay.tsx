@@ -4,6 +4,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Chip, IconButton, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 import type { FeedReel } from '../../services/reelsApi';
@@ -25,6 +26,7 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
   const { t } = useTranslation();
   const { colors } = useTheme();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const bottomClearance = useMainTabContentBottomPadding(12);
   const { shareNative } = usePageShare();
   const [liked, setLiked] = useState(reel.liked ?? false);
@@ -70,7 +72,10 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
         pointerEvents="box-none"
       >
         {presetLabel ? (
-          <View style={styles.presetChipWrap} pointerEvents="none">
+          <View
+            style={[styles.presetChipWrap, { top: insets.top + 12 }]}
+            pointerEvents="none"
+          >
             <Chip
               compact
               style={styles.presetChip}
@@ -168,8 +173,9 @@ const styles = StyleSheet.create({
   },
   presetChipWrap: {
     position: 'absolute',
-    top: 56,
-    left: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   presetChip: {
     backgroundColor: 'rgba(0,0,0,0.55)',

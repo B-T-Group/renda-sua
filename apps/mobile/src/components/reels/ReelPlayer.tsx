@@ -8,13 +8,14 @@ interface Props {
   uri: string;
   active: boolean;
   posterUri?: string | null;
+  onMaxLoopsReached?: () => void;
 }
 
 /**
  * Plays a reel when the native binary includes expo-video.
  * Older installs (pre-reels native build) get a thumbnail + upgrade message instead of crashing.
  */
-export function ReelPlayer({ uri, active, posterUri }: Props) {
+export function ReelPlayer({ uri, active, posterUri, onMaxLoopsReached }: Props) {
   if (!isExpoVideoAvailable()) {
     return <ReelPlayerUnavailable posterUri={posterUri} />;
   }
@@ -22,7 +23,14 @@ export function ReelPlayer({ uri, active, posterUri }: Props) {
   // Lazy require so expo-video is never evaluated on binaries without ExpoVideo.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { ReelPlayerNative } = require('./ReelPlayerNative') as typeof import('./ReelPlayerNative');
-  return <ReelPlayerNative uri={uri} active={active} posterUri={posterUri} />;
+  return (
+    <ReelPlayerNative
+      uri={uri}
+      active={active}
+      posterUri={posterUri}
+      onMaxLoopsReached={onMaxLoopsReached}
+    />
+  );
 }
 
 function ReelPlayerUnavailable({ posterUri }: { posterUri?: string | null }) {

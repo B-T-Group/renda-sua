@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -48,6 +48,38 @@ function ReelsFeedScreen() {
   const [snack, setSnack] = useState<string | null>(null);
   const viewStartRef = useRef<number>(Date.now());
   const addingRef = useRef(false);
+  const listRef = useRef<FlatList<FeedReel>>(null);
+  const activeIndexRef = useRef(0);
+  /** Target index after loadMore; null when idle. */
+  const pendingAdvanceIndexRef = useRef<number | null>(null);
+  activeIndexRef.current = activeIndex;
+
+  const scrollToReel = useCallback((index: number) => {
+    listRef.current?.scrollToIndex({ index, animated: true });
+  }, []);
+
+  const advanceToNextReel = useCallback(() => {
+    const next = activeIndexRef.current + 1;
+    if (next < items.length) {
+      pendingAdvanceIndexRef.current = null;
+      scrollToReel(next);
+      return;
+    }
+    pendingAdvanceIndexRef.current = next;
+    loadMore();
+  }, [items.length, loadMore, scrollToReel]);
+
+  useEffect(() => {
+    const target = pendingAdvanceIndexRef.current;
+    if (target == null) return;
+    if (activeIndexRef.current !== target - 1) {
+      pendingAdvanceIndexRef.current = null;
+      return;
+    }
+    if (target >= items.length) return;
+    pendingAdvanceIndexRef.current = null;
+    scrollToReel(target);
+  }, [items.length, scrollToReel]);
 
   const onBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -66,6 +98,12 @@ function ReelsFeedScreen() {
       if (prev !== top.index && items[prev]) {
         const elapsed = Date.now() - viewStartRef.current;
         void recordReelView(items[prev].id, elapsed, sessionId);
+      }
+      if (
+        pendingAdvanceIndexRef.current != null &&
+        top.index !== pendingAdvanceIndexRef.current - 1
+      ) {
+        pendingAdvanceIndexRef.current = null;
       }
       setActiveIndex(top.index);
       viewStartRef.current = Date.now();
@@ -141,6 +179,9 @@ function ReelsFeedScreen() {
             uri={item.video_url}
             active={isFocused && index === activeIndex}
             posterUri={item.thumbnail_url}
+            onMaxLoopsReached={
+              index === activeIndex ? advanceToNextReel : undefined
+            }
           />
         ) : null}
         <ReelOverlay
@@ -153,7 +194,16 @@ function ReelsFeedScreen() {
         />
       </View>
     ),
-    [activeIndex, cart, height, isFocused, onAddToCart, onBuy, showCtas]
+    [
+      activeIndex,
+      advanceToNextReel,
+      cart,
+      height,
+      isFocused,
+      onAddToCart,
+      onBuy,
+      showCtas,
+    ]
   );
 
   const backButton = (
@@ -203,12 +253,18 @@ function ReelsFeedScreen() {
   return (
     <View style={styles.root}>
       <FlatList
+        ref={listRef}
         style={styles.black}
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         pagingEnabled
         snapToInterval={height}
+        getItemLayout={(_, index) => ({
+          length: height,
+          offset: height * index,
+          index,
+        })}
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
         onScroll={reportTabBarScroll}
@@ -223,6 +279,11 @@ function ReelsFeedScreen() {
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         removeClippedSubviews
+        onScrollToIndexFailed={({ index }) => {
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({ index, animated: true });
+          }, 250);
+        }}
       />
       {backButton}
       <CatalogVariantPickerDialog
