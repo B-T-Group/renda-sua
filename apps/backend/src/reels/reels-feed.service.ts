@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { RequestContext } from '../auth/request-context';
+import { isUuid } from '../common/uuid.util';
 import {
   mergeWatchSignals,
   rankReelsByRelevance,
   type RankableReel,
   type ReelWatchSignal,
 } from './reel-feed-rank.util';
+import { isMissingReelViewReference } from './reel-view-error.util';
 
 const FEED_SESSION_TTL_SECONDS = 3600;
 const SESSION_FEED_CAP = 200;
@@ -34,6 +36,13 @@ export type FeedReel = {
   purchasable?: boolean;
   /** Resolved `business_inventory.id` for checkout when subject is a catalog item. */
   inventoryItemId?: string | null;
+};
+
+type RecordViewParams = {
+  reelId: string;
+  userId?: string | null;
+  sessionId?: string;
+  watchTimeMs: number;
 };
 
 @Injectable()
@@ -65,34 +74,11 @@ export class ReelsFeedService {
     return { items, nextCursor: page.nextCursor };
   }
 
-  async recordView(params: {
-    reelId: string;
-    userId?: string | null;
-    sessionId?: string;
-    watchTimeMs: number;
-  }): Promise<void> {
+  async recordView(params: RecordViewParams): Promise<void> {
     if (params.watchTimeMs < VIEW_THRESHOLD_MS) return;
-    await this.hasura.executeMutation(
-      `mutation TrackReelView($object: reel_view_events_insert_input!) {
-        insert_reel_view_events_one(object: $object) { id }
-      }`,
-      {
-        object: {
-          reel_id: params.reelId,
-          user_id: params.userId || null,
-          session_id: params.sessionId || null,
-          watch_time_ms: params.watchTimeMs,
-          completed: params.watchTimeMs >= 15000,
-          last_served_at: new Date().toISOString(),
-        },
-      }
-    );
-    await this.hasura.executeMutation(
-      `mutation IncReelViews($id: uuid!) {
-        update_reels_by_pk(pk_columns: { id: $id }, _inc: { view_count: 1 }) { id }
-      }`,
-      { id: params.reelId }
-    );
+    if (!isUuid(params.reelId)) return;
+    if (!(await this.reelExists(params.reelId))) return;
+    await this.persistQualifiedView(params);
   }
 
   async setLike(userId: string, reelId: string, liked: boolean): Promise<void> {
@@ -101,6 +87,52 @@ export class ReelsFeedService {
       return;
     }
     await this.deleteLikeIfPresent(userId, reelId);
+  }
+
+  private async persistQualifiedView(params: RecordViewParams): Promise<void> {
+    try {
+      await this.insertViewEvent(params);
+      await this.incrementViewCount(params.reelId);
+    } catch (error: any) {
+      if (isMissingReelViewReference(error)) return;
+      throw error;
+    }
+  }
+
+  private async reelExists(reelId: string): Promise<boolean> {
+    const result = await this.hasura.executeQuery<{
+      reels_by_pk: { id: string } | null;
+    }>(`query($id:uuid!){reels_by_pk(id:$id){id}}`, { id: reelId });
+    return Boolean(result.reels_by_pk?.id);
+  }
+
+  private async insertViewEvent(params: RecordViewParams): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation TrackReelView($object: reel_view_events_insert_input!) {
+        insert_reel_view_events_one(object: $object) { id }
+      }`,
+      { object: this.viewEventObject(params) }
+    );
+  }
+
+  private viewEventObject(params: RecordViewParams) {
+    return {
+      reel_id: params.reelId,
+      user_id: params.userId && isUuid(params.userId) ? params.userId : null,
+      session_id: params.sessionId || null,
+      watch_time_ms: params.watchTimeMs,
+      completed: params.watchTimeMs >= 15000,
+      last_served_at: new Date().toISOString(),
+    };
+  }
+
+  private async incrementViewCount(reelId: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation IncReelViews($id: uuid!) {
+        update_reels_by_pk(pk_columns: { id: $id }, _inc: { view_count: 1 }) { id }
+      }`,
+      { id: reelId }
+    );
   }
 
   private resolveUserId(ctx?: RequestContext): string | null {
