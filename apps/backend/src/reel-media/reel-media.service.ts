@@ -24,46 +24,67 @@ export class ReelMediaService {
 
   async complete(reelId: string, result: ReelMediaResult): Promise<void> {
     const ready = result.status === 'ready';
-    const domain = this.config
-      .get('reels')
-      ?.cloudFrontDomain?.replace(/^https?:\/\//, '');
     const now = new Date().toISOString();
-    const autoApprove = ready && (await this.isAiGenerated(reelId));
-    await this.hasura.executeMutation(
-      `mutation($id:uuid!,$changes:reels_set_input!){
-        update_reels_by_pk(pk_columns:{id:$id},_set:$changes){id}
-      }`,
-      {
-        id: reelId,
-        changes: this.buildCompleteChanges({
-          result,
-          domain,
-          now,
-          autoApprove,
-        }),
-      }
-    );
-    if (ready && !autoApprove) await this.aiReview.requestReview(reelId);
+    const isAi = await this.isAiGenerated(reelId);
+    await this.writeProcessingResult(reelId, result, now);
+    if (ready && isAi) {
+      await this.tryAutoApprove(reelId, now);
+      return;
+    }
+    if (ready) await this.aiReview.requestReview(reelId);
   }
 
   private async isAiGenerated(reelId: string): Promise<boolean> {
     const result = await this.hasura.executeQuery<{
       reels_by_pk: { generation_source: string | null } | null;
-    }>(
-      `query($id:uuid!){reels_by_pk(id:$id){generation_source}}`,
-      { id: reelId }
-    );
+    }>(`query($id:uuid!){reels_by_pk(id:$id){generation_source}}`, { id: reelId });
     return result.reels_by_pk?.generation_source === 'ai';
   }
 
-  private buildCompleteChanges(params: {
-    result: ReelMediaResult;
-    domain?: string;
-    now: string;
-    autoApprove: boolean;
-  }): Record<string, unknown> {
-    const { result, domain, now, autoApprove } = params;
-    const changes: Record<string, unknown> = {
+  private async writeProcessingResult(
+    reelId: string,
+    result: ReelMediaResult,
+    now: string
+  ): Promise<void> {
+    const domain = this.config
+      .get('reels')
+      ?.cloudFrontDomain?.replace(/^https?:\/\//, '');
+    await this.hasura.executeMutation(
+      `mutation($id:uuid!,$changes:reels_set_input!){
+        update_reels_by_pk(pk_columns:{id:$id},_set:$changes){id}
+      }`,
+      { id: reelId, changes: this.processingFields(result, domain, now) }
+    );
+  }
+
+  private async tryAutoApprove(reelId: string, now: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation($id:uuid!,$now:timestamptz!,$reason:String!){
+        update_reels(
+          where:{
+            id:{_eq:$id}
+            generation_source:{_eq:ai}
+            moderation_status:{_in:[pending,draft]}
+          }
+          _set:{
+            moderation_status:approved
+            moderated_at:$now
+            published_at:$now
+            moderation_reason:$reason
+            updated_at:$now
+          }
+        ){affected_rows}
+      }`,
+      { id: reelId, now, reason: 'Auto-approved AI-generated reel' }
+    );
+  }
+
+  private processingFields(
+    result: ReelMediaResult,
+    domain: string | undefined,
+    now: string
+  ): Record<string, unknown> {
+    return {
       processing_status: result.status,
       processed_s3_key: result.processedS3Key || null,
       thumbnail_s3_key: result.thumbnailS3Key || null,
@@ -74,17 +95,6 @@ export class ReelMediaService {
       height: result.height || null,
       processing_error: result.error || null,
       updated_at: now,
-    };
-    if (autoApprove) Object.assign(changes, this.autoApproveFields(now));
-    return changes;
-  }
-
-  private autoApproveFields(now: string): Record<string, string> {
-    return {
-      moderation_status: 'approved',
-      moderated_at: now,
-      published_at: now,
-      moderation_reason: 'Auto-approved AI-generated reel',
     };
   }
 
