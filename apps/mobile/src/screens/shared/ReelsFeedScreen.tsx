@@ -73,10 +73,17 @@ export default function ReelsFeedScreen() {
             posterUri={item.thumbnail_url}
           />
         ) : null}
-        <ReelOverlay reel={item} onBuy={() => onBuy(item)} />
+        <ReelOverlay
+          reel={item}
+          onBuy={
+            persona.activePersona === 'business'
+              ? undefined
+              : () => onBuy(item)
+          }
+        />
       </View>
     ),
-    [activeIndex, height, isFocused, onBuy]
+    [activeIndex, height, isFocused, onBuy, persona.activePersona]
   );
 
   if (loading && !items.length) {

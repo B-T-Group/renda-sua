@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -20,6 +21,8 @@ const PRESET_IDS = [
   'outdoor',
   'custom',
 ] as const;
+
+const VEO_TIERS = ['lite', 'fast', 'standard'] as const;
 
 export class GenerateAiReelDto {
   @ApiProperty({ enum: ['item', 'rental'] })
@@ -49,4 +52,21 @@ export class GenerateAiReelDto {
   @ApiProperty({ minLength: 2, maxLength: 2 })
   @Length(2, 2)
   marketCountry!: string;
+
+  @ApiPropertyOptional({
+    enum: VEO_TIERS,
+    default: 'fast',
+    description: 'Veo model tier. Default fast.',
+  })
+  @IsOptional()
+  @IsIn(VEO_TIERS as unknown as string[])
+  tier?: (typeof VEO_TIERS)[number];
+
+  @ApiPropertyOptional({
+    default: true,
+    description: 'Include native audio. Lite requires audio=true.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  generateAudio?: boolean;
 }

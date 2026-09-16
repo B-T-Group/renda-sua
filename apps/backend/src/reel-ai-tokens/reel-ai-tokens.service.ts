@@ -150,7 +150,6 @@ export class ReelAiTokensService {
     reference?: string | null;
     amount: number;
     currency: string;
-    description?: string | null;
   }): Promise<void> {
     const businessId = transaction.entity_id;
     if (!businessId) {
@@ -159,7 +158,6 @@ export class ReelAiTokensService {
     const pack = resolvePurchasedReelAiPack({
       amount: Number(transaction.amount),
       currency: transaction.currency,
-      description: transaction.description,
     });
     if (!pack) {
       throw new Error(
@@ -356,7 +354,7 @@ export class ReelAiTokensService {
       ? providerReference
       : `AI reel tokens ${params.pack.tokens}`;
 
-    await this.mobilePaymentsDatabaseService.createTransaction({
+    const transaction = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: providerReference,
       amount: params.amount,
       currency: params.currency,
@@ -383,6 +381,7 @@ export class ReelAiTokensService {
       providerReference,
       params.userId
     );
+    await this.persistMobileProviderResponse(transaction.id, paymentResponse);
 
     if (!paymentResponse.success) {
       throw new HttpException(
@@ -400,6 +399,29 @@ export class ReelAiTokensService {
       amount: params.amount,
       currency: params.currency,
     };
+  }
+
+  private async persistMobileProviderResponse(
+    transactionId: string,
+    paymentResponse: {
+      success: boolean;
+      transactionId?: string;
+      message?: string;
+      errorCode?: string;
+    }
+  ): Promise<void> {
+    if (paymentResponse.success && paymentResponse.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
+        transaction_id: paymentResponse.transactionId,
+      });
+      return;
+    }
+    if (paymentResponse.success) return;
+    await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
+      status: 'failed',
+      error_message: paymentResponse.message,
+      error_code: paymentResponse.errorCode,
+    });
   }
 
   private buildPaymentReference(businessId: string): string {

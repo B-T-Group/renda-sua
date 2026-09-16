@@ -3,6 +3,7 @@
   "version": "1.0.11",
   "main": "index.js",
   "scripts": {
+    "eas-build-pre-install": "node ./scripts/eas-pre-install-mobile-workspace.js",
     "start": "expo start",
     "dev": "cross-env EXPO_PUBLIC_ENV=dev expo start",
     "prod": "cross-env EXPO_PUBLIC_ENV=prod expo start",

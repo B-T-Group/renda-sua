@@ -58,9 +58,12 @@ select_permissions:
         - width
         - height
         - published_at
+        - is_active
       filter:
         _and:
           - moderation_status:
               _eq: approved
           - processing_status:
               _eq: ready
+          - is_active:
+              _eq: true

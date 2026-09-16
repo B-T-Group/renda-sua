@@ -85,20 +85,22 @@ export function ReelOverlay({ reel, onBuy }: Props) {
               </Text>
             ) : null}
           </View>
-          <Button
-            mode="contained"
-            onPress={onBuy}
-            disabled={
-              reel.purchasable === false ||
-              (reel.subject_type === 'item' && !reel.inventoryItemId)
-            }
-            style={{ marginTop: spacing.sm, alignSelf: 'center', minWidth: 200 }}
-            contentStyle={{ paddingHorizontal: 24 }}
-          >
-            {reel.purchasable === false
-              ? t('reels.notAvailableInMarket', 'Not available in your area')
-              : t('reels.buy', 'Buy')}
-          </Button>
+          {onBuy ? (
+            <Button
+              mode="contained"
+              onPress={onBuy}
+              disabled={
+                reel.purchasable === false ||
+                (reel.subject_type === 'item' && !reel.inventoryItemId)
+              }
+              style={{ marginTop: spacing.sm, alignSelf: 'center', minWidth: 200 }}
+              contentStyle={{ paddingHorizontal: 24 }}
+            >
+              {reel.purchasable === false
+                ? t('reels.notAvailableInMarket', 'Not available in your area')
+                : t('reels.buy', 'Buy')}
+            </Button>
+          ) : null}
         </View>
       </View>
       <ReportContentSheet

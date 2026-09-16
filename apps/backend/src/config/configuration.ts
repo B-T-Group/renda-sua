@@ -1158,7 +1158,7 @@ export default (): Configuration => {
       dailyQuota: parseInt(process.env.REELS_DAILY_QUOTA || '10', 10),
     },
     veo: {
-      tier: process.env.VEO_REEL_TIER?.trim() || 'lite',
+      tier: process.env.VEO_REEL_TIER?.trim() || 'fast',
       modelOverride: process.env.VEO_REEL_MODEL?.trim() || '',
       resolution: process.env.VEO_REEL_RESOLUTION?.trim() || '720p',
       durationSeconds: parseInt(

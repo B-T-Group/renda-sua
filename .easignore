@@ -1,0 +1,75 @@
+# EAS uses .easignore instead of .gitignore when present — keep both in sync.
+# See https://docs.expo.dev/build-reference/easignore/
+
+# --- copied from .gitignore ---
+dist
+tmp
+out-tsc
+cdk.out
+build
+.env
+apps/hasura/.env.hasura-cdk-parity
+.vscode/settings.json
+
+tools/embed-product-taxonomy/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+node_modules
+
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+.DS_Store
+Thumbs.db
+
+.nx/cache
+.nx/workspace-data
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+test-output
+
+apps/frontend/src/assets/pwa/android-chrome-192x192.png
+apps/frontend/src/assets/pwa/android-chrome-512x512.png
+apps/frontend/src/assets/pwa/apple-touch-icon.png
+apps/frontend/src/assets/pwa/favicon-16x16.png
+apps/frontend/src/assets/pwa/favicon-32x32.png
+
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# --- EAS-only: do not upload non-mobile workspaces ---
+# Root yarn install otherwise pulls backend `sharp`, which fails on EAS Mac
+# builders (no node-gyp / no usable darwin prebuild).
+/apps/backend
+/apps/backend-e2e.bak
+/apps/frontend
+/apps/cdk
+/apps/hasura
+/tools

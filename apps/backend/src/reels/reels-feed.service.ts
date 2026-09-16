@@ -165,6 +165,7 @@ export class ReelsFeedService {
     const where: Record<string, unknown> = {
       moderation_status: { _eq: 'approved' },
       processing_status: { _eq: 'ready' },
+      is_active: { _eq: true },
       video_url: { _is_null: false },
     };
     if (blockedIds.length) {

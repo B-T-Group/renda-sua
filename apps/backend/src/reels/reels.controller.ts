@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -20,7 +21,13 @@ import { AuthGuard } from '../auth/auth.guard';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { CreateReelDto, ReelUploadDto, UpdateReelDto } from './dto/reels.dto';
+import {
+  CreateReelDto,
+  ListMerchantReelsQueryDto,
+  ReelUploadDto,
+  SetReelActiveDto,
+  UpdateReelDto,
+} from './dto/reels.dto';
 import { ReelsService } from './reels.service';
 
 @ApiTags('reels')
@@ -36,8 +43,11 @@ export class ReelsController {
   @Get('merchant')
   @ApiOperation({ summary: 'List reels owned by the current merchant' })
   @ApiResponse({ status: 200, description: 'Merchant reels returned' })
-  list(@ReqContext() ctx: RequestContext) {
-    return this.reels.listForMerchant(this.hasuraUser.getUserId(ctx));
+  list(
+    @ReqContext() ctx: RequestContext,
+    @Query() query: ListMerchantReelsQueryDto
+  ) {
+    return this.reels.listForMerchant(this.hasuraUser.getUserId(ctx), query);
   }
 
   @Post()
@@ -56,6 +66,18 @@ export class ReelsController {
     @Body() dto: UpdateReelDto
   ) {
     return this.reels.update(this.hasuraUser.getUserId(ctx), reelId, dto);
+  }
+
+  @Patch(':reelId/active')
+  @ApiOperation({ summary: 'Show or hide an approved reel on the public feed' })
+  @ApiResponse({ status: 200, description: 'Reel visibility updated' })
+  @ApiResponse({ status: 400, description: 'Reel is not live-capable' })
+  setActive(
+    @ReqContext() ctx: RequestContext,
+    @Param('reelId') reelId: string,
+    @Body() dto: SetReelActiveDto
+  ) {
+    return this.reels.setActive(this.hasuraUser.getUserId(ctx), reelId, dto);
   }
 
   @Delete(':reelId')

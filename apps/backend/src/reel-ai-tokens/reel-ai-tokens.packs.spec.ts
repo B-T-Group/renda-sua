@@ -1,5 +1,7 @@
 import {
   getReelAiTokenPack,
+  isReelAiTierAudioAllowed,
+  reelAiTokenCost,
   resolvePurchasedReelAiPack,
   REEL_AI_TOKEN_PACKS,
 } from './reel-ai-tokens.packs';
@@ -15,16 +17,25 @@ describe('reel-ai-tokens.packs', () => {
     expect(getReelAiTokenPack('reel_ai_pack_15')?.prices.CAD).toBe(56.25);
   });
 
-  it('resolves packs by amount and description', () => {
+  it('resolves packs only by paid amount, never by description', () => {
     expect(
       resolvePurchasedReelAiPack({ amount: 1500, currency: 'XAF' })?.id
     ).toBe('reel_ai_pack_1');
     expect(
       resolvePurchasedReelAiPack({
-        amount: 0,
+        amount: 1,
         currency: 'CAD',
-        description: 'AI reel tokens pack 15',
-      })?.id
-    ).toBe('reel_ai_pack_15');
+      })
+    ).toBeUndefined();
+  });
+
+  it('prices generate by tier and audio', () => {
+    expect(reelAiTokenCost({ tier: 'lite', generateAudio: true })).toBe(1);
+    expect(reelAiTokenCost({ tier: 'fast', generateAudio: true })).toBe(2);
+    expect(reelAiTokenCost({ tier: 'standard', generateAudio: true })).toBe(8);
+    expect(reelAiTokenCost({ tier: 'fast', generateAudio: false })).toBe(1);
+    expect(reelAiTokenCost({ tier: 'standard', generateAudio: false })).toBe(4);
+    expect(isReelAiTierAudioAllowed('lite', false)).toBe(false);
+    expect(isReelAiTierAudioAllowed('fast', false)).toBe(true);
   });
 });
