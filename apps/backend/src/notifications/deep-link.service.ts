@@ -82,6 +82,10 @@ export class DeepLinkService {
     return this.build(`reels/${suffix}`, `/reels/${reelId}`);
   }
 
+  myReels(): DeepLinkPair {
+    return this.build('business/my-reels', '/business/reels/mine');
+  }
+
   /** Build links for an arbitrary app-relative path (no leading slash). */
   custom(appRelativePath: string, webPath: string): DeepLinkPair {
     return this.build(appRelativePath.replace(/^\//, ''), webPath);

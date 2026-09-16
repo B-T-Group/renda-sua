@@ -136,6 +136,7 @@ describe('ReelsFeedService', () => {
             is_active: { _eq: true },
             moderation_status: { _eq: 'approved' },
             processing_status: { _eq: 'ready' },
+            deleted_at: { _is_null: true },
           }),
         })
       );

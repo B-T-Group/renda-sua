@@ -11,6 +11,7 @@ export type MerchantReel = {
   moderation_status: string;
   processing_status: string;
   processing_error?: string | null;
+  source_s3_key?: string | null;
   is_active?: boolean;
   video_url: string | null;
   thumbnail_url: string | null;
@@ -60,6 +61,12 @@ export async function retryMerchantReel(reelId: string): Promise<MerchantReel> {
     `/reels/${encodeURIComponent(reelId)}/retry`,
     { method: 'POST', body: JSON.stringify({}) }
   );
+}
+
+export async function deleteMerchantReel(reelId: string): Promise<void> {
+  await apiRequest(`/reels/${encodeURIComponent(reelId)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function createMerchantReel(body: {

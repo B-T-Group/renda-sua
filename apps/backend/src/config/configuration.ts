@@ -447,6 +447,8 @@ export interface ReelsConfig {
   cloudFrontDomain: string;
   mediaQueueUrl: string;
   dailyQuota: number;
+  /** Minutes before in-progress reels can be cancelled / force-retried. */
+  stuckAfterMinutes: number;
 }
 
 export interface VeoConfig {
@@ -1156,6 +1158,10 @@ export default (): Configuration => {
       cloudFrontDomain: process.env.REELS_CLOUDFRONT_DOMAIN || '',
       mediaQueueUrl: process.env.REEL_MEDIA_QUEUE_URL || '',
       dailyQuota: parseInt(process.env.REELS_DAILY_QUOTA || '10', 10),
+      stuckAfterMinutes: parseInt(
+        process.env.REELS_STUCK_AFTER_MINUTES || '15',
+        10
+      ),
     },
     veo: {
       tier: process.env.VEO_REEL_TIER?.trim() || 'fast',

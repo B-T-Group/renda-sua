@@ -5,6 +5,7 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { ReelAiTokensModule } from '../reel-ai-tokens/reel-ai-tokens.module';
 import { ReelsModule } from '../reels/reels.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ReelAiGenerateController } from './reel-ai-generate.controller';
 import { ReelAiGenerateSweeperService } from './reel-ai-generate-sweeper.service';
 import { ReelAiGenerateService } from './reel-ai-generate.service';
@@ -18,6 +19,7 @@ import { VeoReelClient } from './veo-reel-client';
     RbacModule,
     ReelAiTokensModule,
     ReelsModule,
+    NotificationsModule,
   ],
   controllers: [ReelAiGenerateController],
   providers: [

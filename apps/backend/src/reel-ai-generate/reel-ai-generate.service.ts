@@ -21,6 +21,7 @@ import {
   type ReelAiVeoTier,
 } from '../reel-ai-tokens/reel-ai-tokens.packs';
 import { ReelAiTokensService } from '../reel-ai-tokens/reel-ai-tokens.service';
+import { ReelMerchantNotifyService } from '../notifications/reel-merchant-notify.service';
 import type { GenerateAiReelDto } from './dto/generate-ai-reel.dto';
 import {
   buildVeoReelPrompt,
@@ -66,7 +67,8 @@ export class ReelAiGenerateService {
     private readonly rbac: RbacService,
     private readonly tokens: ReelAiTokensService,
     private readonly veo: VeoReelClient,
-    private readonly mediaQueue: ReelMediaQueueService
+    private readonly mediaQueue: ReelMediaQueueService,
+    private readonly merchantNotify: ReelMerchantNotifyService
   ) {}
 
   listPresets() {
@@ -80,9 +82,9 @@ export class ReelAiGenerateService {
   async generate(userId: string, dto: GenerateAiReelDto): Promise<ReelRow> {
     this.assertPreset(dto);
     const business = await this.requireAllowedBusiness(userId);
-    await this.assertDailyQuota(business.id);
-    const product = await this.loadProduct(business.id, dto);
     const isSuperuser = (await this.rbac.getEffectiveAccess(userId)).isSuperuser;
+    await this.assertDailyQuota(business.id, isSuperuser);
+    const product = await this.loadProduct(business.id, dto);
     const options = this.resolveGenerateOptions(dto, isSuperuser);
     const reserved = await this.reserveTokenIfNeeded(
       business.id,
@@ -302,6 +304,7 @@ export class ReelAiGenerateService {
       params.tokensReserved,
       params.reelId
     );
+    void this.merchantNotify.notifyFailed(params.reelId);
   }
 
   private async markReelFailed(
@@ -578,14 +581,18 @@ export class ReelAiGenerateService {
     return business;
   }
 
-  private async assertDailyQuota(businessId: string): Promise<void> {
+  private async assertDailyQuota(
+    businessId: string,
+    isSuperuser: boolean
+  ): Promise<void> {
+    if (isSuperuser) return;
     const since = new Date();
     since.setUTCHours(0, 0, 0, 0);
     const result = await this.hasura.executeQuery<{
       reels_aggregate: { aggregate: { count: number } };
     }>(
       `query($businessId:uuid!,$since:timestamptz!){
-        reels_aggregate(where:{business_id:{_eq:$businessId},created_at:{_gte:$since}}){
+        reels_aggregate(where:{business_id:{_eq:$businessId},created_at:{_gte:$since},deleted_at:{_is_null:true}}){
           aggregate{count}
         }
       }`,

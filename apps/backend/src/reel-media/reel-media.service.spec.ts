@@ -14,6 +14,11 @@ describe('ReelMediaService', () => {
     get: jest.fn(() => ({ cloudFrontDomain: 'cdn.example.com' })),
   };
   const aiReview = { requestReview: jest.fn() };
+  const merchantNotify = {
+    notifyLive: jest.fn(),
+    notifyPendingReview: jest.fn(),
+    notifyFailed: jest.fn(),
+  };
 
   let service: ReelMediaService;
 
@@ -22,7 +27,8 @@ describe('ReelMediaService', () => {
     service = new ReelMediaService(
       hasura as unknown as HasuraSystemService,
       config as unknown as ConfigService<Configuration>,
-      aiReview as unknown as ReelAiReviewService
+      aiReview as unknown as ReelAiReviewService,
+      merchantNotify as never
     );
   });
 
@@ -66,6 +72,7 @@ describe('ReelMediaService', () => {
       })
     );
     expect(aiReview.requestReview).not.toHaveBeenCalled();
+    expect(merchantNotify.notifyLive).toHaveBeenCalledWith('reel-1');
   });
 
   it('does not auto-approve a rejected AI reel after media completes', async () => {
@@ -107,5 +114,6 @@ describe('ReelMediaService', () => {
       })
     );
     expect(aiReview.requestReview).toHaveBeenCalledWith('reel-2');
+    expect(merchantNotify.notifyPendingReview).toHaveBeenCalledWith('reel-2');
   });
 });

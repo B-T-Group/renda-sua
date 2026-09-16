@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
+  deleteMerchantReel,
   listMerchantReels,
   retryMerchantReel,
   setMerchantReelActive,
@@ -61,6 +62,16 @@ export function useMerchantReels(opts?: {
     }
   }, []);
 
+  const remove = useCallback(async (reelId: string) => {
+    setMutatingId(reelId);
+    try {
+      await deleteMerchantReel(reelId);
+      setReels((prev) => prev.filter((reel) => reel.id !== reelId));
+    } finally {
+      setMutatingId(null);
+    }
+  }, []);
+
   return {
     reels,
     loading,
@@ -70,5 +81,6 @@ export function useMerchantReels(opts?: {
     load,
     setActive,
     retry,
+    remove,
   };
 }

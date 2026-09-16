@@ -16,6 +16,30 @@ export function buildReelModerationApprovedPush(params: {
   };
 }
 
+export function buildReelPendingReviewPush(params: {
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = locale(params.preferredLanguage) === 'fr';
+  return {
+    title: fr ? 'Reel prêt pour revue' : 'Reel ready for review',
+    body: fr
+      ? 'Votre vidéo est prête et attend une validation avant d’être publiée.'
+      : 'Your video is ready and waiting for approval before it goes live.',
+  };
+}
+
+export function buildReelGenerationFailedPush(params: {
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = locale(params.preferredLanguage) === 'fr';
+  return {
+    title: fr ? 'Échec de génération du reel' : 'Reel generation failed',
+    body: fr
+      ? 'Nous n’avons pas pu terminer votre reel. Ouvrez Mes reels pour réessayer ou le supprimer.'
+      : 'We could not finish your reel. Open My reels to retry or delete it.',
+  };
+}
+
 export function buildReelModerationRejectedPush(params: {
   preferredLanguage?: string | null;
 }): { title: string; body: string } {

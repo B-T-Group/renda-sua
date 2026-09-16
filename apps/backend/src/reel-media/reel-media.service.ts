@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { ReelMerchantNotifyService } from '../notifications/reel-merchant-notify.service';
 import { ReelAiReviewService } from '../reel-ai-review/reel-ai-review.service';
 
 export interface ReelMediaResult {
@@ -19,7 +20,8 @@ export class ReelMediaService {
   constructor(
     private readonly hasura: HasuraSystemService,
     private readonly config: ConfigService<Configuration>,
-    private readonly aiReview: ReelAiReviewService
+    private readonly aiReview: ReelAiReviewService,
+    private readonly merchantNotify: ReelMerchantNotifyService
   ) {}
 
   async complete(reelId: string, result: ReelMediaResult): Promise<void> {
@@ -27,11 +29,17 @@ export class ReelMediaService {
     const now = new Date().toISOString();
     const isAi = await this.isAiGenerated(reelId);
     await this.writeProcessingResult(reelId, result, now);
-    if (ready && isAi) {
-      await this.tryAutoApprove(reelId, now);
+    if (!ready) {
+      void this.merchantNotify.notifyFailed(reelId);
       return;
     }
-    if (ready) await this.aiReview.requestReview(reelId);
+    if (isAi) {
+      await this.tryAutoApprove(reelId, now);
+      void this.merchantNotify.notifyLive(reelId);
+      return;
+    }
+    await this.aiReview.requestReview(reelId);
+    void this.merchantNotify.notifyPendingReview(reelId);
   }
 
   private async isAiGenerated(reelId: string): Promise<boolean> {

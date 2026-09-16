@@ -862,6 +862,33 @@ export class NotificationsService {
     }
   }
 
+  async sendReelMerchantPush(params: {
+    userId: string;
+    title: string;
+    body: string;
+    reelId: string;
+    event: string;
+    url?: string;
+    appUrl?: string;
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        url: params.url || '/business/reels/mine',
+        appUrl: params.appUrl,
+        reelId: params.reelId,
+        event: params.event,
+        persona: 'business',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendReelMerchantPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   /** One digest push after daily pending_payment cleanup (client or business). */
   async sendPendingPaymentCleanupDigestPush(params: {
     userId?: string | null;
