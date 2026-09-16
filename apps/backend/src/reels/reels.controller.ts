@@ -93,4 +93,13 @@ export class ReelsController {
     await this.reels.submit(this.hasuraUser.getUserId(ctx), reelId);
     return { success: true };
   }
+
+  @Post(':reelId/retry')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Retry processing for a failed merchant reel' })
+  @ApiResponse({ status: 200, description: 'Reel requeued for processing' })
+  @ApiResponse({ status: 400, description: 'Reel is not retryable' })
+  retry(@ReqContext() ctx: RequestContext, @Param('reelId') reelId: string) {
+    return this.reels.retryProcessing(this.hasuraUser.getUserId(ctx), reelId);
+  }
 }

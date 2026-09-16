@@ -6,10 +6,13 @@ export type MerchantReel = {
   subject_type: string;
   subject_id: string;
   caption: string | null;
+  generation_source?: string | null;
   moderation_status: string;
   processing_status: string;
+  processing_error?: string | null;
   video_url: string | null;
   thumbnail_url: string | null;
+  published_at?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -31,6 +34,13 @@ export async function listMerchantReels(): Promise<MerchantReel[]> {
     { method: 'GET' }
   );
   return Array.isArray(res) ? res : ((res as { data?: MerchantReel[] }).data ?? []);
+}
+
+export async function retryMerchantReel(reelId: string): Promise<MerchantReel> {
+  return apiRequest<MerchantReel>(
+    `/reels/${encodeURIComponent(reelId)}/retry`,
+    { method: 'POST', body: JSON.stringify({}) }
+  );
 }
 
 export async function createMerchantReel(body: {

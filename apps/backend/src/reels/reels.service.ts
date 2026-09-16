@@ -21,6 +21,17 @@ export interface ReelRow {
   business_id: string;
   source_s3_key?: string | null;
   moderation_status: string;
+  processing_status?: string;
+  processing_error?: string | null;
+  generation_source?: string | null;
+  video_url?: string | null;
+  thumbnail_url?: string | null;
+  caption?: string | null;
+  subject_type?: string;
+  subject_id?: string;
+  published_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 @Injectable()
@@ -35,7 +46,13 @@ export class ReelsService {
   async listForMerchant(userId: string): Promise<ReelRow[]> {
     const business = await this.requireBusiness(userId);
     const result = await this.hasura.executeQuery<{ reels: ReelRow[] }>(
-      `query($businessId:uuid!){reels(where:{business_id:{_eq:$businessId}},order_by:{created_at:desc}){id business_id subject_type subject_id caption moderation_status processing_status video_url thumbnail_url created_at updated_at}}`,
+      `query($businessId:uuid!){
+        reels(where:{business_id:{_eq:$businessId}},order_by:{created_at:desc}){
+          id business_id subject_type subject_id caption generation_source
+          moderation_status processing_status processing_error
+          video_url thumbnail_url published_at created_at updated_at
+        }
+      }`,
       { businessId: business.id }
     );
     return result.reels;
@@ -115,6 +132,32 @@ export class ReelsService {
     await this.mediaQueue.enqueue(reelId, reel.source_s3_key);
   }
 
+  async retryProcessing(userId: string, reelId: string): Promise<ReelRow> {
+    const reel = await this.requireOwnedReel(userId, reelId);
+    this.assertRetryable(reel);
+    const sourceKind = reel.generation_source === 'ai' ? 'ai' : 'merchant';
+    const now = new Date().toISOString();
+    await this.hasura.executeMutation(
+      `mutation($id:uuid!,$now:timestamptz!){
+        update_reels_by_pk(pk_columns:{id:$id},_set:{
+          processing_status:queued,processing_error:null,updated_at:$now
+        }){id}
+      }`,
+      { id: reelId, now }
+    );
+    await this.mediaQueue.enqueue(reelId, reel.source_s3_key!, sourceKind);
+    return { ...reel, processing_status: 'queued', processing_error: null };
+  }
+
+  private assertRetryable(reel: ReelRow): void {
+    if (reel.processing_status !== 'failed') {
+      throw new BadRequestException('Only failed reels can be retried');
+    }
+    if (!reel.source_s3_key) {
+      throw new BadRequestException('Missing source media for retry');
+    }
+  }
+
   async moderationQueue(limit = 50): Promise<ReelRow[]> {
     const result = await this.hasura.executeQuery<{ reels: ReelRow[] }>(
       `query($limit:Int!){reels(where:{moderation_status:{_in:[pending,ai_reviewing]}},order_by:{submitted_at:asc},limit:$limit){id business_id subject_type subject_id caption moderation_status processing_status video_url thumbnail_url submitted_at}}`,
@@ -158,7 +201,12 @@ export class ReelsService {
   private async requireOwnedReel(userId: string, reelId: string): Promise<ReelRow> {
     const business = await this.requireBusiness(userId);
     const result = await this.hasura.executeQuery<{ reels_by_pk: ReelRow | null }>(
-      `query($id:uuid!){reels_by_pk(id:$id){id business_id source_s3_key moderation_status}}`,
+      `query($id:uuid!){
+        reels_by_pk(id:$id){
+          id business_id source_s3_key moderation_status processing_status
+          generation_source processing_error
+        }
+      }`,
       { id: reelId }
     );
     if (!result.reels_by_pk || result.reels_by_pk.business_id !== business.id) {
