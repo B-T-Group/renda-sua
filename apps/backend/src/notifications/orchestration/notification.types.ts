@@ -60,6 +60,8 @@ export type NotificationType =
   | 'admin.order_risk'
   | 'reel.moderation.approved'
   | 'reel.moderation.rejected'
+  | 'reel.processing.ready'
+  | 'reel.processing.failed'
   | 'reel.engagement'
   | 'reel.followed_store'
   | 'reel.comment.reply';

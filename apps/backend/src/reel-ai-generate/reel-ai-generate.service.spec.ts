@@ -45,7 +45,8 @@ describe('ReelAiGenerateService.generate', () => {
       rbac as never,
       tokens as never,
       veo as never,
-      mediaQueue as never
+      mediaQueue as never,
+      { notifyFailed: jest.fn() } as never
     );
     jest
       .spyOn(service as never, 'requireAllowedBusiness' as never)
@@ -84,6 +85,10 @@ describe('ReelAiGenerateService.generate', () => {
     });
 
     expect(tokens.tryReserveTokens).not.toHaveBeenCalled();
+    expect(service['assertDailyQuota']).toHaveBeenCalledWith(
+      'business-1',
+      true
+    );
   });
 
   it('refunds reserved tokens when reel insert fails', async () => {

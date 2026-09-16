@@ -167,6 +167,7 @@ export class ReelsFeedService {
       processing_status: { _eq: 'ready' },
       is_active: { _eq: true },
       video_url: { _is_null: false },
+      deleted_at: { _is_null: true },
     };
     if (blockedIds.length) {
       where.business_id = { _nin: blockedIds };

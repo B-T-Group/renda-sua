@@ -49,6 +49,15 @@ describe('DeepLinkService', () => {
     expect(links.path).toBe('/admin/whatsapp/conv-1');
   });
 
+  it('builds My reels merchant links', () => {
+    const links = service.myReels();
+    expect(links.app).toBe('rendasua://business/my-reels');
+    expect(links.universal).toBe(
+      'https://rendasua.com/app/business/my-reels'
+    );
+    expect(links.path).toBe('/business/reels/mine');
+  });
+
   it('strips trailing slash from public web origin', () => {
     const configService = {
       get: jest.fn().mockReturnValue('https://dev.rendasua.com/'),

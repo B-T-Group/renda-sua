@@ -22,6 +22,7 @@ import { WhatsAppTemplateService } from './orchestration/whatsapp-template.servi
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { OrderRecipientNotificationsService } from './order-recipient-notifications.service';
+import { ReelMerchantNotifyService } from './reel-merchant-notify.service';
 
 @Module({
   imports: [
@@ -51,11 +52,13 @@ import { OrderRecipientNotificationsService } from './order-recipient-notificati
     WhatsAppInboxPersistenceService,
     WhatsAppInboundService,
     OrderRecipientNotificationsService,
+    ReelMerchantNotifyService,
   ],
   controllers: [NotificationsController],
   exports: [
     NotificationsService,
     OrderRecipientNotificationsService,
+    ReelMerchantNotifyService,
     DeepLinkService,
     NotificationOrchestrator,
     NotificationPreferenceService,

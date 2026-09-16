@@ -12,17 +12,21 @@ describe('ReelsService.retryProcessing', () => {
   };
   const mediaQueue = { enqueue: jest.fn() };
   const config = { get: jest.fn() };
+  const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
 
   let service: ReelsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
     service = new ReelsService(
       hasura as never,
       aws as never,
       config as never,
-      mediaQueue as never
+      rbac as never,
+      mediaQueue as never,
+      { notifyModeration: jest.fn() } as never
     );
   });
 
@@ -129,17 +133,67 @@ describe('ReelsService merchant gates', () => {
   };
   const mediaQueue = { enqueue: jest.fn() };
   const config = { get: jest.fn(() => ({ dailyQuota: 10 })) };
+  const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
   let service: ReelsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
     service = new ReelsService(
       hasura as never,
       aws as never,
       config as never,
-      mediaQueue as never
+      rbac as never,
+      mediaQueue as never,
+      { notifyModeration: jest.fn() } as never
     );
+  });
+
+  it('skips daily quota for superusers', async () => {
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: true });
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        subject: { id: 'item-1', business_id: 'biz-1' },
+      });
+    hasura.executeMutation.mockResolvedValueOnce({
+      insert_reels_one: {
+        id: 'reel-1',
+        business_id: 'biz-1',
+        moderation_status: 'draft',
+      },
+    });
+
+    await service.create('user-1', {
+      subjectType: 'item',
+      subjectId: 'item-1',
+      marketCountry: 'CM',
+    });
+
+    expect(hasura.executeQuery).toHaveBeenCalledTimes(2);
+    expect(hasura.executeMutation).toHaveBeenCalled();
+  });
+
+  it('rejects create when daily quota is reached', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_aggregate: { aggregate: { count: 10 } },
+      });
+
+    await expect(
+      service.create('user-1', {
+        subjectType: 'item',
+        subjectId: 'item-1',
+        marketCountry: 'CM',
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
   it('rejects create when the merchant is not allowlisted', async () => {
@@ -243,16 +297,20 @@ describe('ReelsService.setActive', () => {
   };
   const mediaQueue = { enqueue: jest.fn() };
   const config = { get: jest.fn() };
+  const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
   let service: ReelsService;
 
   beforeEach(() => {
     jest.resetAllMocks();
+    rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
     service = new ReelsService(
       hasura as never,
       aws as never,
       config as never,
-      mediaQueue as never
+      rbac as never,
+      mediaQueue as never,
+      { notifyModeration: jest.fn() } as never
     );
   });
 
@@ -321,6 +379,53 @@ describe('ReelsService.setActive', () => {
     await expect(
       service.setActive('user-1', 'reel-1', { isActive: false })
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('soft-deletes a failed reel', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'draft',
+          processing_status: 'failed',
+          deleted_at: null,
+        },
+      });
+    hasura.executeMutation.mockResolvedValueOnce({
+      update_reels_by_pk: { id: 'reel-1' },
+    });
+
+    await service.delete('user-1', 'reel-1');
+
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('deleted_at'),
+      expect.objectContaining({ id: 'reel-1' })
+    );
+  });
+
+  it('rejects deleting a live reel', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'approved',
+          processing_status: 'ready',
+          deleted_at: null,
+        },
+      });
+
+    await expect(service.delete('user-1', 'reel-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
     expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 });

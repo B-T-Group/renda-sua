@@ -2,7 +2,10 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  Modal,
+  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -12,13 +15,15 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Button,
-  Chip,
+  IconButton,
   Snackbar,
   Switch,
   Text,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmActionDialog } from '@/components/dialogs/ConfirmActionDialog';
+import { StatusPill } from '@/components/common/StatusPill';
+import { ReelPlayer } from '@/components/reels/ReelPlayer';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useMerchantReels } from '@/hooks/business/useMerchantReels';
 import type { BusinessRootStackParamList } from '@/navigation/types';
@@ -39,11 +44,22 @@ export default function BusinessMyReelsScreen() {
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
-  const { reels, loading, refreshing, mutatingId, error, load, setActive, retry } =
-    useMerchantReels();
+  const {
+    reels,
+    loading,
+    refreshing,
+    mutatingId,
+    error,
+    load,
+    setActive,
+    retry,
+    remove,
+  } = useMerchantReels();
   const [filter, setFilter] = useState<FilterId>('all');
   const [snack, setSnack] = useState<string | null>(null);
   const [hideTarget, setHideTarget] = useState<MerchantReel | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MerchantReel | null>(null);
+  const [playTarget, setPlayTarget] = useState<MerchantReel | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -77,6 +93,22 @@ export default function BusinessMyReelsScreen() {
     },
     [retry, t]
   );
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    try {
+      await remove(id);
+      setSnack(t('business.reels.mine.deleted', 'Reel deleted'));
+    } catch (err: unknown) {
+      setSnack(
+        err instanceof Error
+          ? err.message
+          : t('business.reels.mine.deleteError', 'Could not delete reel')
+      );
+    }
+  }, [deleteTarget, remove, t]);
 
   const onToggleActive = useCallback(
     async (reel: MerchantReel, next: boolean) => {
@@ -114,6 +146,33 @@ export default function BusinessMyReelsScreen() {
     }
   }, [hideTarget, setActive, t]);
 
+  const onViewProduct = useCallback(
+    (reel: MerchantReel) => {
+      if (reel.subject_type === 'item' && reel.subject_id) {
+        navigation.navigate('BusinessItemDetail', { itemId: reel.subject_id });
+        return;
+      }
+      if (reel.subject_type === 'rental' && reel.subject_id) {
+        navigation.navigate('BusinessRentalItemDetail', {
+          itemId: reel.subject_id,
+        });
+      }
+    },
+    [navigation]
+  );
+
+  const filters = useMemo(
+    () =>
+      [
+        ['all', t('business.reels.mine.filterAll', 'All')],
+        ['pending', t('business.reels.mine.filterPending', 'In progress')],
+        ['failed', t('business.reels.mine.filterFailed', 'Failed')],
+        ['live', t('business.reels.mine.filterLive', 'Live')],
+        ['inactive', t('business.reels.mine.filterInactive', 'Inactive')],
+      ] as const,
+    [t]
+  );
+
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.pageBackground }]}>
@@ -124,26 +183,37 @@ export default function BusinessMyReelsScreen() {
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
-      <View style={[styles.filters, { paddingHorizontal: spacing.md }]}>
-        {(
-          [
-            ['all', t('business.reels.mine.filterAll', 'All')],
-            ['pending', t('business.reels.mine.filterPending', 'In progress')],
-            ['failed', t('business.reels.mine.filterFailed', 'Failed')],
-            ['live', t('business.reels.mine.filterLive', 'Live')],
-            ['inactive', t('business.reels.mine.filterInactive', 'Inactive')],
-          ] as const
-        ).map(([id, label]) => (
-          <Chip
-            key={id}
-            selected={filter === id}
-            onPress={() => setFilter(id)}
-            style={{ marginRight: spacing.xs, marginBottom: spacing.xs }}
-          >
-            {label}
-          </Chip>
-        ))}
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.filters,
+          { paddingHorizontal: spacing.md, gap: spacing.xs },
+        ]}
+        accessibilityLabel={t('business.reels.mine.filtersA11y', 'Reel filters')}
+      >
+        {filters.map(([id, label]) => {
+          const selected = filter === id;
+          return (
+            <Pressable
+              key={id}
+              onPress={() => setFilter(id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <StatusPill
+                compact
+                label={label}
+                backgroundColor={
+                  selected ? `${colors.primary.main}22` : colors.surface
+                }
+                textColor={selected ? colors.primary.main : colors.text.secondary}
+                borderColor={selected ? colors.primary.main : colors.divider}
+              />
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       <FlatList
         data={filtered}
@@ -199,6 +269,9 @@ export default function BusinessMyReelsScreen() {
             reel={item}
             mutating={mutatingId === item.id}
             onRetry={() => void onRetry(item.id)}
+            onDelete={() => setDeleteTarget(item)}
+            onPlay={() => setPlayTarget(item)}
+            onViewProduct={() => onViewProduct(item)}
             onToggleActive={(next) => void onToggleActive(item, next)}
             colors={colors}
             spacing={spacing}
@@ -224,6 +297,47 @@ export default function BusinessMyReelsScreen() {
         onConfirm={() => void confirmHide()}
       />
 
+      <ConfirmActionDialog
+        visible={!!deleteTarget}
+        title={t('business.reels.mine.deleteTitle', 'Delete this reel?')}
+        message={t(
+          'business.reels.mine.deleteBody',
+          'This removes the failed reel from your list. You can create a new one anytime.'
+        )}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        confirmLabel={t('business.reels.mine.deleteConfirm', 'Delete')}
+        destructive
+        loading={mutatingId === deleteTarget?.id}
+        onDismiss={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmDelete()}
+      />
+
+      <Modal
+        visible={!!playTarget?.video_url}
+        animationType="fade"
+        onRequestClose={() => setPlayTarget(null)}
+      >
+        <View style={[styles.playerRoot, { backgroundColor: '#000' }]}>
+          <View style={{ paddingTop: insets.top, alignItems: 'flex-end' }}>
+            <IconButton
+              icon="close"
+              iconColor="#fff"
+              onPress={() => setPlayTarget(null)}
+              accessibilityLabel={t('common.close', 'Close')}
+            />
+          </View>
+          {playTarget?.video_url ? (
+            <View style={styles.playerBody}>
+              <ReelPlayer
+                uri={playTarget.video_url}
+                active
+                posterUri={playTarget.thumbnail_url}
+              />
+            </View>
+          ) : null}
+        </View>
+      </Modal>
+
       <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={3500}>
         {snack}
       </Snackbar>
@@ -239,6 +353,10 @@ function isLiveCapable(reel: MerchantReel): boolean {
 
 function isLiveVisible(reel: MerchantReel): boolean {
   return isLiveCapable(reel) && reel.is_active !== false;
+}
+
+function canRetry(reel: MerchantReel): boolean {
+  return reel.processing_status === 'failed' && !!reel.source_s3_key;
 }
 
 function matchesFilter(reel: MerchantReel, filter: FilterId): boolean {
@@ -279,10 +397,26 @@ function statusLabel(
   return reel.processing_status || reel.moderation_status;
 }
 
+function statusColors(
+  reel: MerchantReel,
+  colors: ReturnType<typeof useTheme>['colors']
+): { bg: string; fg: string } {
+  if (reel.processing_status === 'failed') {
+    return { bg: '#fdecea', fg: '#b00020' };
+  }
+  if (isLiveCapable(reel) && reel.is_active !== false) {
+    return { bg: `${colors.primary.main}22`, fg: colors.primary.main };
+  }
+  return { bg: colors.surface, fg: colors.text.secondary };
+}
+
 function ReelRowCard(props: {
   reel: MerchantReel;
   mutating: boolean;
   onRetry: () => void;
+  onDelete: () => void;
+  onPlay: () => void;
+  onViewProduct: () => void;
   onToggleActive: (next: boolean) => void;
   colors: ReturnType<typeof useTheme>['colors'];
   spacing: ReturnType<typeof useTheme>['spacing'];
@@ -294,6 +428,9 @@ function ReelRowCard(props: {
     reel,
     mutating,
     onRetry,
+    onDelete,
+    onPlay,
+    onViewProduct,
     onToggleActive,
     colors,
     spacing,
@@ -304,6 +441,11 @@ function ReelRowCard(props: {
   const failed = reel.processing_status === 'failed';
   const liveCapable = isLiveCapable(reel);
   const active = reel.is_active !== false;
+  const showProduct =
+    (reel.subject_type === 'item' || reel.subject_type === 'rental') &&
+    !!reel.subject_id;
+  const playable = liveCapable && !!reel.video_url;
+  const pill = statusColors(reel, colors);
 
   return (
     <View
@@ -319,11 +461,25 @@ function ReelRowCard(props: {
       ]}
     >
       <View style={styles.row}>
-        {reel.thumbnail_url ? (
-          <Image source={{ uri: reel.thumbnail_url }} style={styles.thumb} />
-        ) : (
-          <View style={[styles.thumb, { backgroundColor: colors.divider }]} />
-        )}
+        <Pressable
+          onPress={playable ? onPlay : undefined}
+          disabled={!playable}
+          accessibilityRole={playable ? 'button' : undefined}
+          accessibilityLabel={
+            playable ? t('business.reels.mine.play', 'Play reel') : undefined
+          }
+        >
+          {reel.thumbnail_url ? (
+            <Image source={{ uri: reel.thumbnail_url }} style={styles.thumb} />
+          ) : (
+            <View style={[styles.thumb, { backgroundColor: colors.divider }]} />
+          )}
+          {playable ? (
+            <View style={styles.playBadge}>
+              <Text style={styles.playIcon}>▶</Text>
+            </View>
+          ) : null}
+        </Pressable>
         <View style={styles.meta}>
           <Text
             numberOfLines={1}
@@ -335,9 +491,12 @@ function ReelRowCard(props: {
                 : t('business.reels.mine.sourceUpload', 'Upload'))}
           </Text>
           <View style={styles.badgeRow}>
-            <Chip compact style={styles.badge}>
-              {statusLabel(reel, t)}
-            </Chip>
+            <StatusPill
+              compact
+              label={statusLabel(reel, t)}
+              backgroundColor={pill.bg}
+              textColor={pill.fg}
+            />
             <Text style={[typography.caption, { color: colors.text.secondary }]}>
               {reel.generation_source === 'ai'
                 ? t('business.reels.mine.sourceAi', 'AI ad')
@@ -364,16 +523,40 @@ function ReelRowCard(props: {
           {reel.processing_error}
         </Text>
       ) : null}
-      {failed ? (
+      {showProduct ? (
         <Button
-          mode="contained"
-          loading={mutating}
-          disabled={mutating}
-          onPress={onRetry}
-          style={{ marginTop: spacing.sm }}
+          mode="text"
+          compact
+          onPress={onViewProduct}
+          style={{ alignSelf: 'flex-start', marginTop: spacing.xs }}
         >
-          {t('business.reels.mine.retry', 'Retry')}
+          {t('business.reels.mine.viewProduct', 'View product')}
         </Button>
+      ) : null}
+      {failed ? (
+        <View style={[styles.actionsRow, { marginTop: spacing.sm, gap: spacing.sm }]}>
+          {canRetry(reel) ? (
+            <Button
+              mode="contained"
+              loading={mutating}
+              disabled={mutating}
+              onPress={onRetry}
+              style={{ flex: 1 }}
+            >
+              {t('business.reels.mine.retry', 'Retry')}
+            </Button>
+          ) : null}
+          <Button
+            mode={canRetry(reel) ? 'outlined' : 'contained'}
+            loading={mutating}
+            disabled={mutating}
+            onPress={onDelete}
+            style={{ flex: 1 }}
+            textColor={canRetry(reel) ? '#b00020' : undefined}
+          >
+            {t('business.reels.mine.delete', 'Delete')}
+          </Button>
+        </View>
       ) : null}
       {liveCapable ? (
         <View style={[styles.toggleRow, { marginTop: spacing.sm }]}>
@@ -396,13 +579,28 @@ function ReelRowCard(props: {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', paddingTop: 8 },
+  filters: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
   empty: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 24 },
   card: { borderWidth: 1 },
   row: { flexDirection: 'row' },
   thumb: { width: 72, height: 108, borderRadius: 10 },
+  playBadge: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 10,
+  },
+  playIcon: { color: '#fff', fontSize: 22 },
   meta: { flex: 1, marginLeft: 12, justifyContent: 'center', gap: 4 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  badge: { height: 28 },
   toggleRow: { flexDirection: 'row', alignItems: 'center' },
+  actionsRow: { flexDirection: 'row', alignItems: 'center' },
+  playerRoot: { flex: 1 },
+  playerBody: { flex: 1 },
 });

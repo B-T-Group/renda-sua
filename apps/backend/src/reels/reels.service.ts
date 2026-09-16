@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import { AwsService } from '../aws/aws.service';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { ReelMerchantNotifyService } from '../notifications/reel-merchant-notify.service';
+import { RbacService } from '../rbac/rbac.service';
 import {
   CreateReelDto,
   ListMerchantReelsQueryDto,
@@ -38,6 +40,7 @@ export interface ReelRow {
   is_active?: boolean;
   subject_title?: string | null;
   published_at?: string | null;
+  deleted_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -48,7 +51,9 @@ export class ReelsService {
     private readonly hasura: HasuraSystemService,
     private readonly aws: AwsService,
     private readonly config: ConfigService<Configuration>,
-    private readonly mediaQueue: ReelMediaQueueService
+    private readonly rbac: RbacService,
+    private readonly mediaQueue: ReelMediaQueueService,
+    private readonly merchantNotify: ReelMerchantNotifyService
   ) {}
 
   async listForMerchant(
@@ -62,7 +67,7 @@ export class ReelsService {
         reels(where:$where,order_by:{created_at:desc}){
           id business_id subject_type subject_id caption generation_source
           moderation_status processing_status processing_error is_active
-          video_url thumbnail_url published_at created_at updated_at
+          source_s3_key video_url thumbnail_url published_at created_at updated_at
         }
       }`,
       { where }
@@ -100,7 +105,7 @@ export class ReelsService {
 
   async create(userId: string, dto: CreateReelDto): Promise<ReelRow> {
     const business = await this.requireAllowedBusiness(userId);
-    await this.assertDailyQuota(business.id);
+    await this.assertDailyQuota(userId, business.id);
     await this.assertSubjectOwnership(business.id, dto.subjectType, dto.subjectId);
     const result = await this.hasura.executeMutation<{
       insert_reels_one: ReelRow | null;
@@ -137,13 +142,26 @@ export class ReelsService {
 
   async delete(userId: string, reelId: string): Promise<void> {
     const reel = await this.requireOwnedReel(userId, reelId);
-    if (!['draft', 'rejected'].includes(reel.moderation_status)) {
-      throw new BadRequestException('Only draft or rejected reels can be deleted');
-    }
+    this.assertCanSoftDelete(reel);
+    const now = new Date().toISOString();
     await this.hasura.executeMutation(
-      `mutation($id:uuid!){delete_reels_by_pk(id:$id){id}}`,
-      { id: reelId }
+      `mutation($id:uuid!,$now:timestamptz!){
+        update_reels_by_pk(pk_columns:{id:$id},_set:{
+          deleted_at:$now,is_active:false,updated_at:$now
+        }){id}
+      }`,
+      { id: reelId, now }
     );
+  }
+
+  private assertCanSoftDelete(reel: ReelRow): void {
+    const failed = reel.processing_status === 'failed';
+    const draftOrRejected = ['draft', 'rejected'].includes(reel.moderation_status);
+    if (!failed && !draftOrRejected) {
+      throw new BadRequestException(
+        'Only failed, draft, or rejected reels can be deleted'
+      );
+    }
   }
 
   async createUpload(userId: string, reelId: string, fileName: string, contentType: string) {
@@ -203,7 +221,7 @@ export class ReelsService {
 
   async moderationQueue(limit = 50): Promise<ReelRow[]> {
     const result = await this.hasura.executeQuery<{ reels: ReelRow[] }>(
-      `query($limit:Int!){reels(where:{moderation_status:{_in:[pending,ai_reviewing]}},order_by:{submitted_at:asc},limit:$limit){id business_id subject_type subject_id caption moderation_status processing_status video_url thumbnail_url submitted_at}}`,
+      `query($limit:Int!){reels(where:{moderation_status:{_in:[pending,ai_reviewing]},deleted_at:{_is_null:true}},order_by:{submitted_at:asc},limit:$limit){id business_id subject_type subject_id caption moderation_status processing_status video_url thumbnail_url submitted_at}}`,
       { limit: Math.min(Math.max(limit, 1), 100) }
     );
     return result.reels;
@@ -220,6 +238,10 @@ export class ReelsService {
         reason: dto.reason?.trim() || null,
         now: new Date().toISOString(),
       }
+    );
+    void this.merchantNotify.notifyModeration(
+      reelId,
+      approved ? 'approved' : 'rejected'
     );
   }
 
@@ -248,14 +270,16 @@ export class ReelsService {
         reels_by_pk(id:$id){
           id business_id source_s3_key moderation_status processing_status
           generation_source processing_error is_active subject_type subject_id
+          deleted_at
         }
       }`,
       { id: reelId }
     );
-    if (!result.reels_by_pk || result.reels_by_pk.business_id !== business.id) {
+    const reel = result.reels_by_pk;
+    if (!reel || reel.business_id !== business.id || reel.deleted_at) {
       throw new NotFoundException('Reel not found');
     }
-    return result.reels_by_pk;
+    return reel;
   }
 
   private buildMerchantListWhere(
@@ -264,6 +288,7 @@ export class ReelsService {
   ): Record<string, unknown> {
     const where: Record<string, unknown> = {
       business_id: { _eq: businessId },
+      deleted_at: { _is_null: true },
     };
     if (filters.subjectType) where.subject_type = { _eq: filters.subjectType };
     if (filters.subjectId) where.subject_id = { _eq: filters.subjectId };
@@ -330,13 +355,17 @@ export class ReelsService {
     return result.rows ?? [];
   }
 
-  private async assertDailyQuota(businessId: string): Promise<void> {
+  private async assertDailyQuota(
+    userId: string,
+    businessId: string
+  ): Promise<void> {
+    if ((await this.rbac.getEffectiveAccess(userId)).isSuperuser) return;
     const since = new Date();
     since.setUTCHours(0, 0, 0, 0);
     const result = await this.hasura.executeQuery<{
       reels_aggregate: { aggregate: { count: number } };
     }>(
-      `query($businessId:uuid!,$since:timestamptz!){reels_aggregate(where:{business_id:{_eq:$businessId},created_at:{_gte:$since}}){aggregate{count}}}`,
+      `query($businessId:uuid!,$since:timestamptz!){reels_aggregate(where:{business_id:{_eq:$businessId},created_at:{_gte:$since},deleted_at:{_is_null:true}}){aggregate{count}}}`,
       { businessId, since: since.toISOString() }
     );
     const quota = this.config.get('reels')?.dailyQuota || 10;
