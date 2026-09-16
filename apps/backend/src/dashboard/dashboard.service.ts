@@ -56,8 +56,10 @@ export interface DashboardAggregatesDto {
   topViewedOutOfStockCount: number;
   /** Merchant preference: engagement tips / push / digest (default true). */
   tipsRemindersEnabled: boolean;
-  /** Approved reels ready for the public feed. */
+  /** Approved reels ready for the public feed (excludes soft-deleted). */
   approvedReelCount: number;
+  /** Any non-deleted reel for this business (any status). */
+  reelCount: number;
   clientCount?: number;
   agentsVerified?: number;
   agentsUnverified?: number;
@@ -939,14 +941,15 @@ export class DashboardService {
     rejectedItemCount: number;
     tipsRemindersEnabled: boolean;
     approvedReelCount: number;
+    reelCount: number;
   }> {
-    const [catalog, locations, cleanupCount, tipsRemindersEnabled, approvedReelCount] =
+    const [catalog, locations, cleanupCount, tipsRemindersEnabled, reelCounts] =
       await Promise.all([
         this.getCatalogModerationCounts(businessId),
         this.getActiveLocationProfileSignals(businessId),
         this.countItemsNeedingAiCleanup(businessId),
         this.getTipsRemindersEnabled(businessId),
-        this.getApprovedReelCount(businessId),
+        this.getReelCounts(businessId),
       ]);
     return {
       ...catalog,
@@ -955,27 +958,40 @@ export class DashboardService {
       lastCatalogItemAt: catalog.lastCatalogItemAt,
       itemsNeedingAiCleanupCount: cleanupCount,
       tipsRemindersEnabled,
-      approvedReelCount,
+      approvedReelCount: reelCounts.approvedReelCount,
+      reelCount: reelCounts.reelCount,
     };
   }
 
-  private async getApprovedReelCount(businessId: string): Promise<number> {
+  private async getReelCounts(businessId: string): Promise<{
+    approvedReelCount: number;
+    reelCount: number;
+  }> {
     try {
       const res = await this.hasuraSystemService.executeQuery<{
-        reels_aggregate: { aggregate: { count: number } };
+        all_reels: { aggregate: { count: number } };
+        approved_reels: { aggregate: { count: number } };
       }>(
         `query($businessId:uuid!){
-          reels_aggregate(where:{
+          all_reels: reels_aggregate(where:{
             business_id:{_eq:$businessId}
+            deleted_at:{_is_null:true}
+          }){aggregate{count}}
+          approved_reels: reels_aggregate(where:{
+            business_id:{_eq:$businessId}
+            deleted_at:{_is_null:true}
             moderation_status:{_eq:approved}
             processing_status:{_eq:ready}
           }){aggregate{count}}
         }`,
         { businessId }
       );
-      return Number(res?.reels_aggregate?.aggregate?.count ?? 0);
+      return {
+        reelCount: Number(res?.all_reels?.aggregate?.count ?? 0),
+        approvedReelCount: Number(res?.approved_reels?.aggregate?.count ?? 0),
+      };
     } catch (error: any) {
-      return 0;
+      return { reelCount: 0, approvedReelCount: 0 };
     }
   }
 

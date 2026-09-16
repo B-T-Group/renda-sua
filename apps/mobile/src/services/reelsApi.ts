@@ -1,5 +1,4 @@
-import { apiRequest } from './apiClient';
-import { publicApiGet, publicApiPost } from './publicApiClient';
+import { api, apiRequest } from './apiClient';
 
 export type FeedReel = {
   id: string;
@@ -14,6 +13,7 @@ export type FeedReel = {
   view_count: number;
   duration_ms: number | null;
   published_at: string | null;
+  prompt_preset?: string | null;
   business: { id: string; name: string };
   liked?: boolean;
   purchasable?: boolean;
@@ -25,6 +25,11 @@ type FeedResponse = {
   data: { items: FeedReel[]; nextCursor: string | null };
 };
 
+/**
+ * Uses apiRequest so logged-in shoppers send Bearer auth and get
+ * personalized ranking (follows, watch history). Guests still work
+ * because the feed endpoint is @Public().
+ */
 export async function fetchReelsFeed(params: {
   country?: string;
   cursor?: string;
@@ -37,7 +42,7 @@ export async function fetchReelsFeed(params: {
   if (params.limit) q.set('limit', String(params.limit));
   if (params.sessionId) q.set('sessionId', params.sessionId);
   const path = `/reels/feed${q.toString() ? `?${q}` : ''}`;
-  const res = await publicApiGet<FeedResponse>(path);
+  const res = await apiRequest<FeedResponse>(path);
   return res.data;
 }
 
@@ -47,7 +52,7 @@ export async function recordReelView(
   sessionId?: string
 ): Promise<void> {
   try {
-    await publicApiPost(`/reels/${reelId}/view`, { watchTimeMs, sessionId });
+    await api.post(`/reels/${reelId}/view`, { watchTimeMs, sessionId });
   } catch {
     /* non-blocking */
   }

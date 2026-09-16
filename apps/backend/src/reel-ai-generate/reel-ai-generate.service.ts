@@ -26,9 +26,10 @@ import type { GenerateAiReelDto } from './dto/generate-ai-reel.dto';
 import {
   buildVeoReelPrompt,
   getReelAiPreset,
+  normalizeReelAiPresetId,
   REEL_AI_PRESETS,
 } from './reel-ai-presets';
-import { VeoReelClient } from './veo-reel-client';
+import { VeoReelClient, VEO_MAX_REFERENCE_IMAGES } from './veo-reel-client';
 import {
   parseVeoReelTier,
   resolveVeoPersonGeneration,
@@ -43,7 +44,7 @@ interface ProductSubject {
   name: string;
   description: string | null;
   brand: string | null;
-  imageUrl: string;
+  imageUrls: string[];
 }
 
 interface GenerationRow {
@@ -135,10 +136,8 @@ export class ReelAiGenerateService {
   }
 
   private assertPreset(dto: GenerateAiReelDto): void {
-    const preset = getReelAiPreset(dto.presetId);
-    if (!preset) throw new BadRequestException('Unknown prompt preset');
-    if (dto.presetId === 'custom' && !dto.prompt?.trim()) {
-      throw new BadRequestException('Custom preset requires a prompt');
+    if (!getReelAiPreset(dto.presetId)) {
+      throw new BadRequestException('Unknown prompt preset');
     }
   }
 
@@ -187,19 +186,20 @@ export class ReelAiGenerateService {
   }): Promise<void> {
     const model = this.resolveModelForTier(params.tier);
     const veoCfg = this.config.get('veo')!;
+    const presetId = normalizeReelAiPresetId(params.dto.presetId);
     const prompt = buildVeoReelPrompt({
-      presetId: params.dto.presetId,
+      presetId,
       userPrompt: params.dto.prompt,
       productName: params.product.name,
       productDescription: params.product.description,
       brand: params.product.brand,
+      marketCountry: params.dto.marketCountry,
     });
-    const image = await this.fetchImageForVeo(params.product.imageUrl);
+    const images = await this.fetchImagesForVeo(params.product.imageUrls);
     const operationName = await this.veo.startImageToVideo({
       model,
       prompt,
-      imageBase64: image.imageBase64,
-      mimeType: image.mimeType,
+      images,
       aspectRatio: veoCfg.aspectRatio,
       resolution: veoCfg.resolution,
       durationSeconds: veoCfg.durationSeconds,
@@ -210,7 +210,7 @@ export class ReelAiGenerateService {
       businessId: params.businessId,
       operationName,
       model,
-      presetId: params.dto.presetId,
+      presetId,
       userPrompt: params.dto.prompt?.trim() || null,
       tokensReserved: params.tokensReserved,
     });
@@ -402,7 +402,7 @@ export class ReelAiGenerateService {
         items_by_pk(id:$id){
           id business_id name description
           brand { name }
-          item_images(order_by:{display_order:asc},limit:1){
+          item_images(order_by:{display_order:asc},limit:3){
             image_url
           }
         }
@@ -413,8 +413,11 @@ export class ReelAiGenerateService {
     if (!item || item.business_id !== businessId) {
       throw new ForbiddenException('Subject does not belong to this business');
     }
-    const imageUrl = pickOriginalProductImageUrl(item.item_images[0]);
-    if (!imageUrl) {
+    const imageUrls = item.item_images
+      .map((row) => pickOriginalProductImageUrl(row))
+      .filter((url): url is string => Boolean(url))
+      .slice(0, VEO_MAX_REFERENCE_IMAGES);
+    if (!imageUrls.length) {
       throw new BadRequestException(
         'Add at least one product photo before generating an AI reel'
       );
@@ -423,7 +426,7 @@ export class ReelAiGenerateService {
       name: item.name,
       description: item.description,
       brand: item.brand?.name ?? null,
-      imageUrl,
+      imageUrls,
     };
   }
 
@@ -443,7 +446,7 @@ export class ReelAiGenerateService {
       `query($id:uuid!){
         rental_items_by_pk(id:$id){
           id business_id name description
-          rental_item_images(order_by:{created_at:asc},limit:1){image_url}
+          rental_item_images(order_by:{created_at:asc},limit:3){image_url}
         }
       }`,
       { id: rentalItemId }
@@ -452,8 +455,11 @@ export class ReelAiGenerateService {
     if (!item || item.business_id !== businessId) {
       throw new ForbiddenException('Subject does not belong to this business');
     }
-    const imageUrl = pickOriginalProductImageUrl(item.rental_item_images[0]);
-    if (!imageUrl) {
+    const imageUrls = item.rental_item_images
+      .map((row) => pickOriginalProductImageUrl(row))
+      .filter((url): url is string => Boolean(url))
+      .slice(0, VEO_MAX_REFERENCE_IMAGES);
+    if (!imageUrls.length) {
       throw new BadRequestException(
         'Add at least one product photo before generating an AI reel'
       );
@@ -462,8 +468,29 @@ export class ReelAiGenerateService {
       name: item.name,
       description: item.description,
       brand: null,
-      imageUrl,
+      imageUrls,
     };
+  }
+
+  private async fetchImagesForVeo(
+    urls: string[]
+  ): Promise<Array<{ imageBase64: string; mimeType: string }>> {
+    const images: Array<{ imageBase64: string; mimeType: string }> = [];
+    for (const url of urls.slice(0, VEO_MAX_REFERENCE_IMAGES)) {
+      try {
+        images.push(await this.fetchImageForVeo(url));
+      } catch (error: any) {
+        this.logger.warn(
+          `Skipping Veo reference image ${url}: ${error?.message || error}`
+        );
+      }
+    }
+    if (!images.length) {
+      throw new BadRequestException(
+        'Could not load product photos for AI reel generation'
+      );
+    }
+    return images;
   }
 
   private async fetchImageForVeo(
@@ -504,7 +531,7 @@ export class ReelAiGenerateService {
           generation_source: 'ai',
           processing_status: 'generating',
           moderation_status: 'draft',
-          prompt_preset: dto.presetId,
+          prompt_preset: normalizeReelAiPresetId(dto.presetId),
           generation_prompt: dto.prompt?.trim() || null,
         },
       }

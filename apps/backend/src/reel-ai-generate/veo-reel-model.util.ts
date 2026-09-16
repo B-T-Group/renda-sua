@@ -1,21 +1,22 @@
 export const VEO_REEL_TIER_CONFIG_KEY = 'veo_reel_tier';
 
-export type VeoReelTier = 'lite' | 'fast' | 'standard';
+export type VeoReelTier = 'fast' | 'standard';
 
 export const VEO_REEL_MODEL_BY_TIER: Record<VeoReelTier, string> = {
-  lite: 'veo-3.1-lite-generate-preview',
   fast: 'veo-3.1-fast-generate-preview',
   standard: 'veo-3.1-generate-preview',
 };
 
 export const DEFAULT_VEO_REEL_TIER: VeoReelTier = 'fast';
 
+/**
+ * Accepts only fast/standard. Unknown values (including legacy "lite") map to fast.
+ */
 export function parseVeoReelTier(
   value: string | null | undefined
 ): VeoReelTier {
   const trimmed = value?.trim().toLowerCase();
   if (trimmed === 'fast') return 'fast';
-  if (trimmed === 'lite') return 'lite';
   if (trimmed === 'standard') return 'standard';
   return DEFAULT_VEO_REEL_TIER;
 }

@@ -13,6 +13,7 @@ import { useMobilePaymentPhones } from '../useMobilePaymentPhones';
 import { businessApi } from '../../services/businessApi';
 import { businessVerificationApi } from '../../services/businessVerificationApi';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { usePermissions } from '../usePermissions';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useActionsNeeded } from '../useActionsNeeded';
@@ -72,6 +73,7 @@ function locationNeedsVerifiedPhone(loc: BusinessLocation): boolean {
 export function useBusinessDashboardScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { flags } = useClientFlags();
   const navigation = useNavigation<Nav>();
   const { ftue, incomingOrder } = useStore();
   const { data, loading, error, refresh } = useDashboardAggregates();
@@ -637,6 +639,26 @@ export function useBusinessDashboardScreen() {
     mainInterest === 'rent_items' &&
     rentalItemCount === 0;
 
+  const firstReelNudgeKey = 'dashboard:first-reel-cta';
+  const hasAnyCatalogItem =
+    (data?.itemCount ?? 0) > 0 || (data?.rentalItemCount ?? 0) > 0;
+  const hasCreatedReel =
+    (data?.reelCount ?? data?.approvedReelCount ?? 0) > 0;
+  const showFirstReelCta =
+    !setupMode &&
+    aggregatesReady &&
+    !profileLoading &&
+    flags.reels_enabled &&
+    hasAnyCatalogItem &&
+    !hasCreatedReel &&
+    tipEpoch >= 0 &&
+    ftue.isNudgeEligible(firstReelNudgeKey);
+
+  useEffect(() => {
+    if (!showFirstReelCta) return;
+    void ftue.markNudgeShown(firstReelNudgeKey);
+  }, [ftue, showFirstReelCta]);
+
   const onStartFirstItem = useCallback(() => {
     navigation.navigate('BusinessAddItemFromImage');
   }, [navigation]);
@@ -644,6 +666,16 @@ export function useBusinessDashboardScreen() {
   const onStartFirstRental = useCallback(() => {
     navigation.navigate('BusinessAddRentalFromImage');
   }, [navigation]);
+
+  const onCreateFirstReel = useCallback(() => {
+    void ftue.convertNudge(firstReelNudgeKey);
+    navigation.navigate('BusinessAddReel');
+  }, [ftue, navigation]);
+
+  const onDismissFirstReelCta = useCallback(() => {
+    void ftue.dismissNudge(firstReelNudgeKey);
+    setTipEpoch((n) => n + 1);
+  }, [ftue]);
 
   const onSetupSignAgreement = useCallback(() => {
     navigation.navigate('BusinessMerchantAgreement');
@@ -1310,6 +1342,7 @@ export function useBusinessDashboardScreen() {
     showSetupPreviewStore,
     showFirstSaleCta,
     showFirstRentalCta,
+    showFirstReelCta,
     showPreviewStoreCta: !setupMode && showPreviewStoreCta,
     uniqueClientCount: error ? null : (data?.uniqueClientCount ?? null),
     totalProductViews: error ? null : (data?.totalProductViews ?? null),
@@ -1321,6 +1354,8 @@ export function useBusinessDashboardScreen() {
     onShareStorefront,
     onStartFirstItem,
     onStartFirstRental,
+    onCreateFirstReel,
+    onDismissFirstReelCta,
     onSetupSignAgreement,
     onSetupPayouts,
     onSetupUploadId,

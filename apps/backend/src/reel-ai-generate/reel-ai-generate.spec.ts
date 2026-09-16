@@ -1,6 +1,9 @@
 import {
   buildVeoReelPrompt,
   getReelAiPreset,
+  normalizeReelAiPresetId,
+  resolveMarketCountryName,
+  REEL_AI_PRESETS,
 } from './reel-ai-presets';
 import {
   parseVeoReelTier,
@@ -10,12 +13,13 @@ import {
 } from './veo-reel-model.util';
 
 describe('veo-reel-model.util', () => {
-  it('maps lite, fast, and standard tiers', () => {
+  it('maps fast and standard tiers; lite maps to fast', () => {
     expect(parseVeoReelTier('FAST')).toBe('fast');
     expect(parseVeoReelTier('standard')).toBe('standard');
     expect(parseVeoReelTier(undefined)).toBe('fast');
+    expect(parseVeoReelTier('lite')).toBe('fast');
     expect(resolveVeoReelModel({ envTier: 'lite' })).toBe(
-      VEO_REEL_MODEL_BY_TIER.lite
+      VEO_REEL_MODEL_BY_TIER.fast
     );
     expect(resolveVeoReelModel({ tierOverride: 'fast' })).toBe(
       VEO_REEL_MODEL_BY_TIER.fast
@@ -33,14 +37,11 @@ describe('veo-reel-model.util', () => {
 
   it('prefers DB tier override over env tier', () => {
     expect(
-      resolveVeoReelModel({ envTier: 'lite', tierOverride: 'fast' })
+      resolveVeoReelModel({ envTier: 'standard', tierOverride: 'fast' })
     ).toBe(VEO_REEL_MODEL_BY_TIER.fast);
   });
 
   it('uses allow_adult for Veo 3.1 image-to-video', () => {
-    expect(
-      resolveVeoPersonGeneration(VEO_REEL_MODEL_BY_TIER.lite)
-    ).toBe('allow_adult');
     expect(
       resolveVeoPersonGeneration(VEO_REEL_MODEL_BY_TIER.fast)
     ).toBe('allow_adult');
@@ -54,38 +55,60 @@ describe('veo-reel-model.util', () => {
 });
 
 describe('reel-ai-presets', () => {
-  it('sets personGeneration allowAdult per preset', () => {
-    expect(getReelAiPreset('product_centered')?.allowAdult).toBe(false);
-    expect(getReelAiPreset('luxury')?.allowAdult).toBe(false);
-    expect(getReelAiPreset('unboxing')?.allowAdult).toBe(false);
-    expect(getReelAiPreset('explosive')?.allowAdult).toBe(false);
-    expect(getReelAiPreset('ugc')?.allowAdult).toBe(true);
-    expect(getReelAiPreset('exciting')?.allowAdult).toBe(true);
-    expect(getReelAiPreset('outdoor')?.allowAdult).toBe(true);
-    expect(getReelAiPreset('cozy')?.allowAdult).toBe(true);
+  it('exposes four selectable presets', () => {
+    expect(REEL_AI_PRESETS.map((p) => p.id)).toEqual([
+      'dynamic',
+      'premium',
+      'lifestyle',
+      'social',
+    ]);
   });
 
-  it('builds a Veo prompt with product facts and constraints', () => {
+  it('maps legacy preset ids', () => {
+    expect(normalizeReelAiPresetId('luxury')).toBe('premium');
+    expect(normalizeReelAiPresetId('explosive')).toBe('dynamic');
+    expect(normalizeReelAiPresetId('ugc')).toBe('social');
+    expect(normalizeReelAiPresetId('cozy')).toBe('lifestyle');
+    expect(normalizeReelAiPresetId('custom')).toBe('dynamic');
+    expect(getReelAiPreset('luxury')?.id).toBe('premium');
+  });
+
+  it('sets personGeneration allowAdult per preset', () => {
+    expect(getReelAiPreset('dynamic')?.allowAdult).toBe(false);
+    expect(getReelAiPreset('premium')?.allowAdult).toBe(false);
+    expect(getReelAiPreset('lifestyle')?.allowAdult).toBe(true);
+    expect(getReelAiPreset('social')?.allowAdult).toBe(true);
+  });
+
+  it('builds a structured Veo prompt with market fit', () => {
     const prompt = buildVeoReelPrompt({
-      presetId: 'product_centered',
+      presetId: 'premium',
       userPrompt: 'slow orbit',
       productName: 'Soap',
       productDescription: 'Handmade',
       brand: 'Acme',
+      marketCountry: 'CM',
     });
-    expect(prompt).toContain('Soap');
-    expect(prompt).toContain('Acme');
+    expect(prompt).toContain('PRODUCT');
+    expect(prompt).toContain('Name: Soap');
+    expect(prompt).toContain('Brand: Acme');
+    expect(prompt).toContain('CREATIVE CONCEPT');
     expect(prompt).toContain('slow orbit');
-    expect(prompt).toContain('identical to the reference photo');
+    expect(prompt).toContain('MARKET FIT');
+    expect(prompt).toContain(resolveMarketCountryName('CM'));
+    expect(prompt).toContain('PRODUCT ACCURACY');
+    expect(prompt).toContain('OUTPUT');
+    expect(prompt).toContain('authoritative representation of the product');
   });
 
-  it('uses only merchant text for custom preset', () => {
+  it('uses merchant direction with dynamic when legacy custom is mapped', () => {
     const prompt = buildVeoReelPrompt({
       presetId: 'custom',
       userPrompt: 'soft steam rising',
       productName: 'Tea',
+      marketCountry: 'CA',
     });
     expect(prompt).toContain('soft steam rising');
-    expect(prompt).not.toContain('Clean studio product ad');
+    expect(prompt).toContain(resolveMarketCountryName('CA'));
   });
 });

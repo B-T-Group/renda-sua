@@ -18,10 +18,12 @@ describe('VeoReelClient', () => {
   const client = new VeoReelClient(config as never);
 
   const startParams = {
-    model: 'veo-3.1-lite-generate-preview',
+    model: 'veo-3.1-fast-generate-preview',
     prompt: 'Product ad',
-    imageBase64: 'abc',
-    mimeType: 'image/jpeg',
+    images: [
+      { imageBase64: 'abc', mimeType: 'image/jpeg' },
+      { imageBase64: 'def', mimeType: 'image/jpeg' },
+    ],
     aspectRatio: '9:16',
     resolution: '720p',
     durationSeconds: 8,
@@ -33,7 +35,38 @@ describe('VeoReelClient', () => {
     config.get.mockReturnValue({ apiKey: 'test-key' });
   });
 
-  it('maps Google 400 to BadRequestException', async () => {
+  it('sends referenceImages for multiple photos', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({
+      data: { name: 'operations/veo-1' },
+    });
+
+    await client.startImageToVideo(startParams);
+
+    const body = (axios.post as jest.Mock).mock.calls[0][1];
+    expect(body.instances[0].referenceImages).toHaveLength(2);
+    expect(body.instances[0].image).toBeUndefined();
+  });
+
+  it('falls back to single image when referenceImages is rejected', async () => {
+    (axios.post as jest.Mock)
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: {
+          status: 400,
+          data: { error: { message: 'Your use case is currently not supported' } },
+        },
+      })
+      .mockResolvedValueOnce({ data: { name: 'operations/veo-2' } });
+
+    const name = await client.startImageToVideo(startParams);
+    expect(name).toBe('operations/veo-2');
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    const retryBody = (axios.post as jest.Mock).mock.calls[1][1];
+    expect(retryBody.instances[0].image.bytesBase64Encoded).toBe('abc');
+    expect(retryBody.instances[0].referenceImages).toBeUndefined();
+  });
+
+  it('maps Google 400 to BadRequestException after failed fallback', async () => {
     (axios.post as jest.Mock).mockRejectedValue({
       isAxiosError: true,
       response: {
@@ -85,7 +118,7 @@ describe('VeoReelClient', () => {
     await client.startImageToVideo(startParams);
 
     expect(axios.post).toHaveBeenCalledWith(
-      expect.stringContaining('veo-3.1-lite-generate-preview:predictLongRunning'),
+      expect.stringContaining('veo-3.1-fast-generate-preview:predictLongRunning'),
       expect.objectContaining({
         parameters: expect.not.objectContaining({
           generateAudio: expect.anything(),

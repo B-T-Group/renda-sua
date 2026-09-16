@@ -21,14 +21,13 @@ export const SIGNUP_AI_REEL_TOKENS = 2;
 /** @deprecated Prefer reelAiTokenCost — kept for pack/signup docs. */
 export const REEL_AI_TOKEN_COST = 1;
 
-export type ReelAiVeoTier = 'lite' | 'fast' | 'standard';
+export type ReelAiVeoTier = 'fast' | 'standard';
 
 /**
  * Token cost for one AI reel (Gemini Veo native audio is always on).
- * lite=1, fast=2, standard=8.
+ * fast=2, standard=8.
  */
 export function reelAiTokenCost(tier: ReelAiVeoTier): number {
-  if (tier === 'lite') return 1;
   if (tier === 'fast') return 2;
   return 8;
 }

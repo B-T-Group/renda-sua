@@ -73,7 +73,7 @@ export function AddReelModeStep({
         title={t('business.reels.add.modeAiTitle', 'AI generated')}
         body={t(
           'business.reels.add.modeAiBody',
-          'Create an 8-second vertical ad from a product photo. Uses reel tokens (Lite 1 · Fast 2 · Standard 8).'
+          'Create an 8-second vertical ad from a product photo. Uses reel tokens (Fast 2 · Standard 8).'
         )}
         onPress={() => onSelectMode('ai')}
       />
