@@ -108,7 +108,7 @@ export default function BusinessReelAiTokensScreen() {
       >
         {t(
           'business.reels.tokens.subtitle',
-          'Each AI product ad uses 1 reel token (1500 XAF). Uploading your own video is free.'
+          'Token cost depends on model (Fast 1, Standard 4). Upload from your library is always free.'
         )}
       </Text>
 

@@ -129,7 +129,7 @@ function aiTips(t: (key: string, fallback: string) => string): Tip[] {
       title: t('business.reels.add.aiTipTokensTitle', 'Token costs'),
       body: t(
         'business.reels.add.aiTipTokensBody',
-        'Fast uses 2 tokens, Standard 8. Generation runs in the background.'
+        'Fast uses 1 token, Standard 4. Generation runs in the background.'
       ),
     },
   ];

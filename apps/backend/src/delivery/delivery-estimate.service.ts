@@ -78,43 +78,75 @@ export class DeliveryEstimateService {
     marketId: string,
     areaId?: string
   ): Promise<AreaInfo> {
+    const market = await this.fetchMarket(marketId);
+    if (!market) {
+      throw new Error(`Market not found: ${marketId}`);
+    }
+    const trimmedArea = areaId?.trim();
+    const area = trimmedArea
+      ? await this.fetchArea(marketId, trimmedArea)
+      : null;
+    return {
+      countryCode: market.country_code,
+      countryName: market.country_name,
+      stateName: area?.state_name || trimmedArea || 'All',
+      // Keep the selected region even when catalog labels differ from DB names.
+      isCountryWide: !trimmedArea,
+    };
+  }
+
+  private async fetchMarket(
+    marketId: string
+  ): Promise<{ country_code: string; country_name: string } | null> {
     const query = `
-      query ResolveArea($marketId: bpchar!, $areaId: bpchar) {
-        markets: countries(where: { country_code: { _eq: $marketId } }) {
+      query ResolveMarket($marketId: bpchar!) {
+        markets: supported_country_states(
+          where: { country_code: { _eq: $marketId } }
+          limit: 1
+        ) {
           country_code
           country_name
         }
-        areas: country_states(
+      }
+    `;
+    const response = await this.hasuraService.executeQuery<{
+      markets: Array<{ country_code: string; country_name: string }>;
+    }>(query, { marketId });
+    return response.markets?.[0] ?? null;
+  }
+
+  private async fetchArea(
+    marketId: string,
+    areaId: string
+  ): Promise<{ state_name: string } | null> {
+    const query = `
+      query ResolveAreaState(
+        $marketId: bpchar!
+        $areaExact: String!
+        $areaPrefix: String!
+      ) {
+        areas: supported_country_states(
           where: {
             country_code: { _eq: $marketId }
-            state_code: { _eq: $areaId }
+            _or: [
+              { state_name: { _ilike: $areaExact } }
+              { state_name: { _ilike: $areaPrefix } }
+            ]
           }
+          limit: 1
         ) {
-          state_code
           state_name
         }
       }
     `;
-
-    const response = await this.hasuraService.executeQuery(query, {
+    const response = await this.hasuraService.executeQuery<{
+      areas: Array<{ state_name: string }>;
+    }>(query, {
       marketId,
-      areaId: areaId || null,
+      areaExact: areaId,
+      areaPrefix: `${areaId}%`,
     });
-
-    const market = response.markets?.[0];
-    if (!market) {
-      throw new Error(`Market not found: ${marketId}`);
-    }
-
-    const area = response.areas?.[0];
-    const isCountryWide = !areaId || !area;
-
-    return {
-      countryCode: market.country_code,
-      countryName: market.country_name,
-      stateName: area?.state_name || 'All',
-      isCountryWide,
-    };
+    return response.areas?.[0] ?? null;
   }
 
   private async resolveItemInfo(

@@ -16,7 +16,7 @@ export const REEL_AI_TOKEN_PACKS: ReelAiTokenPack[] = [
   { id: 'reel_ai_pack_15', tokens: 15, prices: { CAD: 56.25, XAF: 22500 } },
 ];
 
-export const SIGNUP_AI_REEL_TOKENS = 2;
+export const SIGNUP_AI_REEL_TOKENS = 1;
 
 /** @deprecated Prefer reelAiTokenCost — kept for pack/signup docs. */
 export const REEL_AI_TOKEN_COST = 1;
@@ -25,11 +25,11 @@ export type ReelAiVeoTier = 'fast' | 'standard';
 
 /**
  * Token cost for one AI reel (Gemini Veo native audio is always on).
- * fast=2, standard=8.
+ * fast=1, standard=4.
  */
 export function reelAiTokenCost(tier: ReelAiVeoTier): number {
-  if (tier === 'fast') return 2;
-  return 8;
+  if (tier === 'fast') return 1;
+  return 4;
 }
 
 export function getReelAiTokenPack(

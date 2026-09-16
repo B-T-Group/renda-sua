@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
@@ -43,7 +45,8 @@ function ReelsFeedScreen() {
   const { persona, auth, cart } = useStore();
   const bottomPad = useMainTabContentBottomPadding(8);
   const { onScroll: reportTabBarScroll } = useReportTabBarScroll();
-  const { items, loading, error, loadMore, refresh, sessionId } = useReelsFeed();
+  const { items, loading, refreshing, error, loadMore, refresh, sessionId } =
+    useReelsFeed();
   const [activeIndex, setActiveIndex] = useState(0);
   const [snack, setSnack] = useState<string | null>(null);
   const viewStartRef = useRef<number>(Date.now());
@@ -57,6 +60,27 @@ function ReelsFeedScreen() {
   const scrollToReel = useCallback((index: number) => {
     listRef.current?.scrollToIndex({ index, animated: true });
   }, []);
+
+  const onPullRefresh = useCallback(async () => {
+    pendingAdvanceIndexRef.current = null;
+    await refresh();
+    setActiveIndex(0);
+    viewStartRef.current = Date.now();
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+  }, [refresh]);
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => void onPullRefresh()}
+      tintColor="#ffffff"
+      colors={['#ffffff']}
+      progressBackgroundColor="#222222"
+      enabled={activeIndex === 0}
+    />
+  );
 
   const advanceToNextReel = useCallback(() => {
     const next = activeIndexRef.current + 1;
@@ -228,24 +252,63 @@ function ReelsFeedScreen() {
 
   if (error && !items.length) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.pageBackground, paddingBottom: bottomPad }]}>
+      <View style={[styles.root, { backgroundColor: colors.pageBackground }]}>
         {backButton}
-        <Text variant="titleMedium">{t('reels.errorTitle', 'Couldn’t load reels')}</Text>
-        <Text style={[styles.muted, { color: colors.text.secondary }]}>{error}</Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.center,
+            { flexGrow: 1, paddingBottom: bottomPad },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void onPullRefresh()}
+              tintColor={colors.primary.main}
+              colors={[colors.primary.main]}
+            />
+          }
+        >
+          <Text variant="titleMedium">{t('reels.errorTitle', 'Couldn’t load reels')}</Text>
+          <Text style={[styles.muted, { color: colors.text.secondary }]}>{error}</Text>
+          <Text style={[styles.muted, { color: colors.text.secondary }]}>
+            {t('reels.pullToRefresh', 'Pull down to refresh')}
+          </Text>
+        </ScrollView>
       </View>
     );
   }
 
   if (!items.length) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.pageBackground, paddingBottom: bottomPad }]}>
+      <View style={[styles.root, { backgroundColor: colors.pageBackground }]}>
         {backButton}
-        <Text variant="titleMedium" style={{ color: colors.text.primary, marginBottom: 8, textAlign: 'center' }}>
-          {t('reels.emptyTitle', 'No reels yet')}
-        </Text>
-        <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
-          {t('reels.empty', 'Check back soon — merchants will post short videos here.')}
-        </Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.center,
+            { flexGrow: 1, paddingBottom: bottomPad },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void onPullRefresh()}
+              tintColor={colors.primary.main}
+              colors={[colors.primary.main]}
+            />
+          }
+        >
+          <Text
+            variant="titleMedium"
+            style={{ color: colors.text.primary, marginBottom: 8, textAlign: 'center' }}
+          >
+            {t('reels.emptyTitle', 'No reels yet')}
+          </Text>
+          <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
+            {t('reels.empty', 'Check back soon — merchants will post short videos here.')}
+          </Text>
+          <Text style={[styles.muted, { color: colors.text.secondary }]}>
+            {t('reels.pullToRefresh', 'Pull down to refresh')}
+          </Text>
+        </ScrollView>
       </View>
     );
   }
@@ -273,8 +336,9 @@ function ReelsFeedScreen() {
         viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
-        refreshing={loading}
-        onRefresh={refresh}
+        refreshControl={refreshControl}
+        bounces={activeIndex === 0}
+        alwaysBounceVertical={activeIndex === 0}
         windowSize={3}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
