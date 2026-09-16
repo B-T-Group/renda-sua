@@ -128,7 +128,7 @@ export function buildVeoReelPrompt(params: {
     .join('. ');
 
   const constraint =
-    'Keep the product identical to the reference photo. No extra products, no invented logos, no on-screen prices, URLs, or phone numbers. Vertical 9:16 product ad, 8 seconds.';
+    'Keep the product identical to the reference photo. No extra products, fake logos, watermarks, distorted labels, or on-screen text, prices, URLs, or phone numbers. Vertical 9:16 product ad, 8 seconds.';
 
   return [`Product: ${productBits}`, direction, constraint]
     .filter(Boolean)

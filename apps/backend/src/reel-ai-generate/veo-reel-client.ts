@@ -20,7 +20,6 @@ export interface StartVeoVideoParams {
   resolution: string;
   durationSeconds: number;
   personGeneration: 'dont_allow' | 'allow_adult';
-  negativePrompt: string;
 }
 
 export interface VeoOperationStatus {
@@ -118,7 +117,6 @@ export class VeoReelClient {
         resolution: params.resolution,
         durationSeconds: params.durationSeconds,
         personGeneration: params.personGeneration,
-        negativePrompt: params.negativePrompt,
         sampleCount: 1,
       },
     };
