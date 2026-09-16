@@ -107,7 +107,6 @@ export async function generateAiReel(body: {
   caption?: string;
   marketCountry: string;
   tier?: 'lite' | 'fast' | 'standard';
-  generateAudio?: boolean;
 }): Promise<MerchantReel> {
   return apiRequest<MerchantReel>('/reels/ai-generate', {
     method: 'POST',

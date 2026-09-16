@@ -12,31 +12,32 @@ import type { BusinessRootStackParamList } from '@/navigation/types';
 
 const STEPS = [
   {
-    icon: 'movie-open-outline' as const,
-    titleKey: 'business.reels.submitted.generateTitle',
-    titleDefault: 'We are making the video',
-    bodyKey: 'business.reels.submitted.generateBody',
+    icon: 'cloud-upload-outline' as const,
+    titleKey: 'business.reels.uploadSubmitted.processTitle',
+    titleDefault: 'Processing in the background',
+    bodyKey: 'business.reels.uploadSubmitted.processBody',
     bodyDefault:
-      'Your 8-second product ad is generating now. This can take about a minute.',
+      'We’re preparing your video so it plays smoothly in Reels. You can leave this screen.',
   },
   {
-    icon: 'cog-outline' as const,
-    titleKey: 'business.reels.submitted.processTitle',
-    titleDefault: 'We prepare it for the feed',
-    bodyKey: 'business.reels.submitted.processBody',
-    bodyDefault: 'Once the clip is ready, we process it so it plays smoothly in Reels.',
+    icon: 'shield-check-outline' as const,
+    titleKey: 'business.reels.uploadSubmitted.reviewTitle',
+    titleDefault: 'Pending approval',
+    bodyKey: 'business.reels.uploadSubmitted.reviewBody',
+    bodyDefault:
+      'Uploaded reels are reviewed before they appear in the public feed.',
   },
   {
     icon: 'bell-outline' as const,
-    titleKey: 'business.reels.submitted.notifyTitle',
+    titleKey: 'business.reels.uploadSubmitted.notifyTitle',
     titleDefault: 'We’ll notify you',
-    bodyKey: 'business.reels.submitted.notifyBody',
+    bodyKey: 'business.reels.uploadSubmitted.notifyBody',
     bodyDefault:
-      'Processing runs in the background. You’ll get a notification when your reel is ready for the feed.',
+      'You’ll get a notification when your reel is approved—or if it needs changes.',
   },
 ];
 
-export default function BusinessReelAiSubmittedScreen() {
+export default function BusinessReelUploadSubmittedScreen() {
   const { t } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
@@ -68,8 +69,8 @@ export default function BusinessReelAiSubmittedScreen() {
         <View style={{ alignItems: 'center', marginBottom: spacing.lg }}>
           <ReelAiSubmittedIllustration
             accessibilityLabel={t(
-              'business.reels.submitted.illustrationLabel',
-              'Reel submitted and waiting to go live'
+              'business.reels.uploadSubmitted.illustrationLabel',
+              'Reel uploaded and waiting for approval'
             )}
           />
           <Text
@@ -83,8 +84,8 @@ export default function BusinessReelAiSubmittedScreen() {
             ]}
           >
             {t(
-              'business.reels.submitted.headline',
-              'Your AI reel is on its way'
+              'business.reels.uploadSubmitted.headline',
+              'Your reel was submitted'
             )}
           </Text>
           <Text
@@ -98,8 +99,8 @@ export default function BusinessReelAiSubmittedScreen() {
             ]}
           >
             {t(
-              'business.reels.submitted.intro',
-              'Here is what happens before shoppers can see it.'
+              'business.reels.uploadSubmitted.intro',
+              'Here’s what happens next.'
             )}
           </Text>
         </View>

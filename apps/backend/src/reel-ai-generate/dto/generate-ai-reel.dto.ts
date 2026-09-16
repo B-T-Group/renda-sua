@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -61,12 +60,4 @@ export class GenerateAiReelDto {
   @IsOptional()
   @IsIn(VEO_TIERS as unknown as string[])
   tier?: (typeof VEO_TIERS)[number];
-
-  @ApiPropertyOptional({
-    default: true,
-    description: 'Include native audio. Lite requires audio=true.',
-  })
-  @IsOptional()
-  @IsBoolean()
-  generateAudio?: boolean;
 }

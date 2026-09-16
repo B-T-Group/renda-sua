@@ -26,7 +26,6 @@ describe('VeoReelClient', () => {
     resolution: '720p',
     durationSeconds: 8,
     personGeneration: 'allow_adult' as const,
-    generateAudio: true,
   };
 
   beforeEach(() => {
@@ -76,5 +75,31 @@ describe('VeoReelClient', () => {
       expect(error).toBeInstanceOf(HttpException);
       expect(error.getStatus()).toBe(HttpStatus.BAD_GATEWAY);
     }
+  });
+
+  it('omits generateAudio from Gemini predictLongRunning parameters', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({
+      data: { name: 'operations/veo-1' },
+    });
+
+    await client.startImageToVideo(startParams);
+
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining('veo-3.1-lite-generate-preview:predictLongRunning'),
+      expect.objectContaining({
+        parameters: expect.not.objectContaining({
+          generateAudio: expect.anything(),
+        }),
+      }),
+      expect.any(Object)
+    );
+    const body = (axios.post as jest.Mock).mock.calls[0][1];
+    expect(body.parameters).toEqual({
+      aspectRatio: '9:16',
+      resolution: '720p',
+      durationSeconds: 8,
+      personGeneration: 'allow_adult',
+      sampleCount: 1,
+    });
   });
 });

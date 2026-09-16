@@ -152,8 +152,9 @@ describe('ReelAiGenerateService.generate', () => {
     expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 2);
   });
 
-  it('rejects lite without audio for non-superusers', async () => {
+  it('charges lite tier tokens for non-superusers', async () => {
     rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
+    tokens.tryReserveTokens.mockResolvedValue(0);
     jest
       .spyOn(service as never, 'loadProduct' as never)
       .mockResolvedValue({
@@ -162,18 +163,33 @@ describe('ReelAiGenerateService.generate', () => {
         brand: null,
         imageUrl: 'https://cdn/x.jpg',
       } as never);
+    jest
+      .spyOn(service as never, 'insertGeneratingReel' as never)
+      .mockResolvedValue({
+        id: 'reel-1',
+        business_id: 'business-1',
+        processing_status: 'generating',
+      } as never);
+    jest
+      .spyOn(service as never, 'fetchImageForVeo' as never)
+      .mockResolvedValue({
+        imageBase64: 'abc',
+        mimeType: 'image/jpeg',
+      } as never);
+    jest
+      .spyOn(service as never, 'insertGenerationRow' as never)
+      .mockResolvedValue(undefined as never);
+    veo.startImageToVideo.mockResolvedValue('operations/1');
 
-    await expect(
-      service.generate('user-1', {
-        subjectType: 'item',
-        subjectId: 'item-1',
-        presetId: 'product_centered',
-        marketCountry: 'CM',
-        tier: 'lite',
-        generateAudio: false,
-      })
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(tokens.tryReserveTokens).not.toHaveBeenCalled();
+    await service.generate('user-1', {
+      subjectType: 'item',
+      subjectId: 'item-1',
+      presetId: 'product_centered',
+      marketCountry: 'CM',
+      tier: 'lite',
+    });
+
+    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 1);
   });
 
   it('uses the original catalog photo instead of the display thumbnail', async () => {
@@ -254,13 +270,11 @@ describe('ReelAiGenerateService.generate', () => {
       presetId: 'product_centered',
       marketCountry: 'CM',
       tier: 'lite',
-      generateAudio: true,
     });
 
     expect(veo.startImageToVideo).toHaveBeenCalledWith(
       expect.objectContaining({
         personGeneration: 'allow_adult',
-        generateAudio: true,
         model: 'veo-3.1-lite-generate-preview',
       })
     );

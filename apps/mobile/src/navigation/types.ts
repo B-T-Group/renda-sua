@@ -290,6 +290,7 @@ export type BusinessRootStackParamList = {
     | undefined;
   BusinessMyReels: undefined;
   BusinessReelAiSubmitted: undefined;
+  BusinessReelUploadSubmitted: undefined;
   BusinessReelAiTokens: undefined;
   BusinessAccountTypeScreen: undefined;
   BusinessClientCities: undefined;

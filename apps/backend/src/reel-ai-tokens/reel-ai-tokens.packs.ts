@@ -24,32 +24,13 @@ export const REEL_AI_TOKEN_COST = 1;
 export type ReelAiVeoTier = 'lite' | 'fast' | 'standard';
 
 /**
- * Token cost for one AI reel generate.
- * With audio: lite=1, fast=2, standard=8.
- * Without audio: fast=1, standard=4 (lite not allowed).
+ * Token cost for one AI reel (Gemini Veo native audio is always on).
+ * lite=1, fast=2, standard=8.
  */
-export function reelAiTokenCost(params: {
-  tier: ReelAiVeoTier;
-  generateAudio: boolean;
-}): number {
-  if (params.generateAudio) {
-    if (params.tier === 'lite') return 1;
-    if (params.tier === 'fast') return 2;
-    return 8;
-  }
-  if (params.tier === 'lite') {
-    throw new Error('Lite tier requires audio');
-  }
-  if (params.tier === 'fast') return 1;
-  return 4;
-}
-
-export function isReelAiTierAudioAllowed(
-  tier: ReelAiVeoTier,
-  generateAudio: boolean
-): boolean {
-  if (generateAudio) return true;
-  return tier === 'fast' || tier === 'standard';
+export function reelAiTokenCost(tier: ReelAiVeoTier): number {
+  if (tier === 'lite') return 1;
+  if (tier === 'fast') return 2;
+  return 8;
 }
 
 export function getReelAiTokenPack(
