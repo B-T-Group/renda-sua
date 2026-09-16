@@ -452,7 +452,7 @@ export interface ReelsConfig {
 }
 
 export interface VeoConfig {
-  /** Env default tier: lite | fast */
+  /** Env default tier: fast | standard */
   tier: string;
   /** Optional full model id override (wins over tier). */
   modelOverride: string;

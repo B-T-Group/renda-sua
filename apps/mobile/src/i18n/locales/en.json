@@ -1760,18 +1760,12 @@
     "reels": {
       "addFab": "Add reel",
       "myReels": "My reels",
-      "presets": {
-        "productCentered": "Product centered",
-        "explosive": "Explosive",
-        "exciting": "Exciting",
-        "luxury": "Luxury",
-        "fresh": "Fresh and bright",
-        "unboxing": "Reveal",
-        "ugc": "Handheld UGC",
-        "cozy": "Cozy",
-        "outdoor": "Outdoor",
-        "custom": "Custom"
-      },
+        "presets": {
+          "dynamic": "🔥 Dynamic",
+          "premium": "✨ Premium",
+          "lifestyle": "🏠 Lifestyle",
+          "social": "💥 Social / Viral"
+        },
       "add": {
         "title": "Add reel",
         "subtitle": "Generate an 8s AI product ad, or upload a 15–30s video from your library.",
@@ -1785,13 +1779,13 @@
         "modeTitle": "How do you want to create this reel?",
         "modeSubtitle": "Generate an 8s AI product ad, or upload a 15–30s video from your library.",
         "modeAiTitle": "AI generated",
-        "modeAiBody": "Create an 8-second vertical ad from a product photo. Uses reel tokens (Lite 1 · Fast 2 · Standard 8).",
+        "modeAiBody": "Create an 8-second vertical ad from a product photo. Uses reel tokens (Fast 2 · Standard 8).",
         "modeUploadTitle": "Upload existing video",
         "modeUploadBody": "Upload a 15–30s video featuring your product. Free, then reviewed before it appears in Reels.",
         "aiTipsTitle": "Tips for a great AI reel",
         "aiTipsIntro": "A few minutes of prep makes a much better 8-second ad.",
-        "aiTipPhotosTitle": "2–3 photos from different angles",
-        "aiTipPhotosBody": "Add sharp catalog photos. The first photo is the AI reference frame—put your best shot first.",
+        "aiTipPhotosTitle": "Up to 3 photos from different angles",
+        "aiTipPhotosBody": "Add sharp catalog photos. Up to 3 are sent as AI product references—put your best shot first.",
         "aiTipCopyTitle": "Clear name and description",
         "aiTipCopyBody": "A good product name and description help the AI describe your item accurately.",
         "aiTipFormatTitle": "Vertical 9:16, about 8 seconds",
@@ -1799,7 +1793,7 @@
         "aiTipFaithfulTitle": "Keep packaging faithful",
         "aiTipFaithfulBody": "AI matches your photo—no fake logos, prices, URLs, or phone numbers in the generated ad.",
         "aiTipTokensTitle": "Token costs",
-        "aiTipTokensBody": "Lite uses 1 token, Fast 2, Standard 8. Generation runs in the background.",
+        "aiTipTokensBody": "Fast uses 2 tokens, Standard 8. Generation runs in the background.",
         "uploadTipsTitle": "Tips for uploading a reel",
         "uploadTipsIntro": "Follow these guidelines so your clip clears review and looks great in Reels.",
         "uploadTipDurationTitle": "15–30 second vertical clip",
@@ -1831,7 +1825,6 @@
         "model": "Model quality",
         "tokenCost": "Uses {{count}} tokens",
         "tier": {
-          "lite": "Lite",
           "fast": "Fast",
           "standard": "Standard"
         },
@@ -1929,7 +1922,7 @@
       "tokens": {
         "navTitle": "AI reel tokens",
         "title": "AI reel tokens",
-        "subtitle": "Token cost depends on model (Lite 1, Fast 2, Standard 8). Upload from your library is always free.",
+        "subtitle": "Token cost depends on model (Fast 2, Standard 8). Upload from your library is always free.",
         "balanceLabel": "You have {{count}} reel tokens",
         "phoneNumber": "Mobile money phone number",
         "packTokens": "{{count}} tokens",
@@ -2261,6 +2254,11 @@
         "rentalTitle": "List your first rental",
         "rentalBody": "Add photos, set operated or take-home mode, then publish rates at a location.",
         "rentalCta": "Start rental setup"
+      },
+      "firstReel": {
+        "title": "Become a content creator for your products",
+        "body": "Post your first reel — generate an 8s AI product ad, or upload a video from your library.",
+        "cta": "Create your first reel"
       },
       "rentalsTitle": "Rentals",
       "rentalsDescription": "Manage rental catalog, booking requests, and schedule.",
@@ -6672,6 +6670,8 @@
     "emptyTitle": "No reels yet",
     "errorTitle": "Couldn’t load reels",
     "buy": "Buy",
+    "play": "Play",
+    "pause": "Pause",
     "updateRequired": "Update the app to play reels on this device.",
     "notAvailableInMarket": "Not available in your area",
     "comments": {

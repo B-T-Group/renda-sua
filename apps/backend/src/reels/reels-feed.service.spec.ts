@@ -43,10 +43,25 @@ describe('ReelsFeedService', () => {
   }
 
   function mockAnonymousCountryFeed(reels: FeedReel[], inventory: unknown[]) {
-    hasura.executeQuery
-      .mockResolvedValueOnce({ reels: reels.map((r) => ({ id: r.id })) })
-      .mockResolvedValueOnce({ reels })
-      .mockResolvedValueOnce({ business_inventory: inventory });
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('RankedReelCandidates')) {
+        return {
+          reels: reels.map((r) => ({
+            id: r.id,
+            business_id: r.business_id,
+            like_count: r.like_count,
+            published_at: r.published_at,
+          })),
+        };
+      }
+      if (query.includes('business_inventory')) {
+        return { business_inventory: inventory };
+      }
+      if (query.includes('reels(where:{id:{_in:$ids}})')) {
+        return { reels };
+      }
+      return {};
+    });
   }
 
   describe('getFeed inventory ids', () => {
@@ -111,15 +126,34 @@ describe('ReelsFeedService', () => {
         subject_type: 'rental',
         subject_id: 'rental-1',
       });
-      hasura.executeQuery
-        .mockResolvedValueOnce({ reels: [{ id: rental.id }] })
-        .mockResolvedValueOnce({ reels: [rental] });
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('RankedReelCandidates')) {
+          return {
+            reels: [
+              {
+                id: rental.id,
+                business_id: rental.business_id,
+                like_count: 0,
+                published_at: rental.published_at,
+              },
+            ],
+          };
+        }
+        if (query.includes('reels(where:{id:{_in:$ids}})')) {
+          return { reels: [rental] };
+        }
+        return {};
+      });
 
       const page = await service.getFeed({ country: 'CM' });
 
       expect(page.items[0].inventoryItemId).toBeNull();
       expect(page.items[0].purchasable).toBe(false);
-      expect(hasura.executeQuery).toHaveBeenCalledTimes(2);
+      expect(
+        hasura.executeQuery.mock.calls.some((c) =>
+          String(c[0]).includes('business_inventory')
+        )
+      ).toBe(false);
     });
   });
 
@@ -130,7 +164,7 @@ describe('ReelsFeedService', () => {
       await service.getFeed({ country: 'CM' });
 
       expect(hasura.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('RankedReelIds'),
+        expect.stringContaining('RankedReelCandidates'),
         expect.objectContaining({
           where: expect.objectContaining({
             is_active: { _eq: true },
@@ -142,21 +176,33 @@ describe('ReelsFeedService', () => {
       );
     });
 
-    it('clamps limit and treats garbage cursors as offset 0', async () => {
+    it('loads a candidate pool then pages by relevance offset', async () => {
       hasura.executeQuery.mockResolvedValueOnce({ reels: [] });
 
       await service.getFeed({ limit: 99, cursor: 'nope' });
 
       expect(hasura.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('RankedReelIds'),
-        expect.objectContaining({ limit: 25, offset: 0 })
+        expect.stringContaining('RankedReelCandidates'),
+        expect.objectContaining({ limit: 500 })
       );
     });
 
     it('excludes blocked businesses for authenticated shoppers', async () => {
-      hasura.executeQuery
-        .mockResolvedValueOnce({ business_blocks: [{ business_id: 'blocked' }] })
-        .mockResolvedValueOnce({ reels: [] });
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('business_blocks')) {
+          return { business_blocks: [{ business_id: 'blocked' }] };
+        }
+        if (query.includes('RankedReelCandidates')) {
+          return { reels: [] };
+        }
+        if (query.includes('business_follows')) {
+          return { business_follows: [] };
+        }
+        if (query.includes('reel_view_events')) {
+          return { reel_view_events: [] };
+        }
+        return {};
+      });
 
       await service.getFeed({
         ctx: { userId: 'user-1' } as never,
@@ -164,7 +210,7 @@ describe('ReelsFeedService', () => {
       });
 
       expect(hasura.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining('RankedReelIds'),
+        expect.stringContaining('RankedReelCandidates'),
         expect.objectContaining({
           where: expect.objectContaining({
             business_id: { _nin: ['blocked'] },
@@ -181,16 +227,45 @@ describe('ReelsFeedService', () => {
       });
 
       expect(hasura.executeQuery).toHaveBeenCalledTimes(1);
-      expect(hasura.executeQuery.mock.calls[0][0]).toContain('RankedReelIds');
+      expect(hasura.executeQuery.mock.calls[0][0]).toContain(
+        'RankedReelCandidates'
+      );
     });
 
     it('attaches liked flags for authenticated shoppers', async () => {
-      hasura.executeQuery
-        .mockResolvedValueOnce({ business_blocks: [] })
-        .mockResolvedValueOnce({ reels: [{ id: 'reel-1' }] })
-        .mockResolvedValueOnce({ reels: [itemReel()] })
-        .mockResolvedValueOnce({ business_inventory: [inventoryRow('inv-1')] })
-        .mockResolvedValueOnce({ reel_likes: [{ reel_id: 'reel-1' }] });
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('business_blocks')) {
+          return { business_blocks: [] };
+        }
+        if (query.includes('RankedReelCandidates')) {
+          return {
+            reels: [
+              {
+                id: 'reel-1',
+                business_id: 'biz-1',
+                like_count: 0,
+                published_at: '2026-09-15T00:00:00.000Z',
+              },
+            ],
+          };
+        }
+        if (query.includes('business_follows')) {
+          return { business_follows: [] };
+        }
+        if (query.includes('reel_view_events')) {
+          return { reel_view_events: [] };
+        }
+        if (query.includes('reels(where:{id:{_in:$ids}})')) {
+          return { reels: [itemReel()] };
+        }
+        if (query.includes('business_inventory')) {
+          return { business_inventory: [inventoryRow('inv-1')] };
+        }
+        if (query.includes('reel_likes')) {
+          return { reel_likes: [{ reel_id: 'reel-1' }] };
+        }
+        return {};
+      });
 
       const page = await service.getFeed({
         ctx: { userId: 'user-1' } as never,
@@ -222,24 +297,105 @@ describe('ReelsFeedService', () => {
       expect(page.items).toHaveLength(1);
       expect(page.nextCursor).toBe('1');
       expect(catalogCache.set).not.toHaveBeenCalled();
-      expect(hasura.executeQuery.mock.calls[0][0]).not.toContain('RankedReelIds');
+      expect(hasura.executeQuery.mock.calls[0][0]).not.toContain(
+        'RankedReelCandidates'
+      );
     });
 
     it('treats corrupt session JSON as a miss and freezes a new ranking', async () => {
       catalogCache.get.mockResolvedValue('{not-json');
-      hasura.executeQuery.mockResolvedValueOnce({ reels: [{ id: 'reel-1' }] });
-      hasura.executeQuery.mockResolvedValueOnce({ reels: [itemReel()] });
-      hasura.executeQuery.mockResolvedValueOnce({
-        business_inventory: [inventoryRow('inv-1')],
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('RankedReelCandidates')) {
+          return {
+            reels: [
+              {
+                id: 'reel-1',
+                business_id: 'biz-1',
+                like_count: 0,
+                published_at: '2026-09-15T00:00:00.000Z',
+              },
+            ],
+          };
+        }
+        if (query.includes('reels(where:{id:{_in:$ids}})')) {
+          return { reels: [itemReel()] };
+        }
+        if (query.includes('business_inventory')) {
+          return { business_inventory: [inventoryRow('inv-1')] };
+        }
+        return {};
       });
 
       await service.getFeed({ sessionId: 'sess-1', country: 'CM' });
 
       expect(catalogCache.set).toHaveBeenCalledWith(
-        'reels-feed:sess-1:CM',
+        'reels-feed:sess-1:anon:CM',
         JSON.stringify(['reel-1']),
         { ttlSeconds: 3600 }
       );
+    });
+
+    it('downranks reels the shopper already watched longer', async () => {
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('business_blocks')) {
+          return { business_blocks: [] };
+        }
+        if (query.includes('RankedReelCandidates')) {
+          return {
+            reels: [
+              {
+                id: 'watched',
+                business_id: 'biz-1',
+                like_count: 100,
+                published_at: '2026-09-16T11:00:00.000Z',
+              },
+              {
+                id: 'fresh',
+                business_id: 'biz-2',
+                like_count: 0,
+                published_at: '2026-09-16T10:00:00.000Z',
+              },
+            ],
+          };
+        }
+        if (query.includes('business_follows')) {
+          return { business_follows: [] };
+        }
+        if (query.includes('reel_view_events')) {
+          return {
+            reel_view_events: [
+              {
+                reel_id: 'watched',
+                watch_time_ms: 20000,
+                completed: true,
+              },
+            ],
+          };
+        }
+        if (query.includes('reels(where:{id:{_in:$ids}})')) {
+          return {
+            reels: [
+              itemReel({ id: 'fresh', business_id: 'biz-2' }),
+              itemReel({ id: 'watched', like_count: 100 }),
+            ],
+          };
+        }
+        if (query.includes('business_inventory')) {
+          return { business_inventory: [] };
+        }
+        if (query.includes('reel_likes')) {
+          return { reel_likes: [] };
+        }
+        return {};
+      });
+
+      const page = await service.getFeed({
+        ctx: { userId: 'user-1' } as never,
+        country: 'CM',
+        limit: 2,
+      });
+
+      expect(page.items.map((i) => i.id)).toEqual(['fresh', 'watched']);
     });
   });
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Button, IconButton, Text } from 'react-native-paper';
+import { Button, Chip, IconButton, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -12,6 +12,7 @@ import { ReportContentSheet } from './ReportContentSheet';
 import { ReelCommentsSheet } from './ReelCommentsSheet';
 import { setReelLike } from '../../services/reelsApi';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { resolveReelPresetLabel } from '../../utils/reelPresetLabel';
 
 interface Props {
   reel: FeedReel;
@@ -60,10 +61,25 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
   const buyDisabled =
     reel.purchasable === false ||
     (reel.subject_type === 'item' && !reel.inventoryItemId);
+  const presetLabel = resolveReelPresetLabel(reel.prompt_preset);
 
   return (
     <>
-      <View style={[styles.overlay, { paddingBottom: bottomClearance }]}>
+      <View
+        style={[styles.overlay, { paddingBottom: bottomClearance }]}
+        pointerEvents="box-none"
+      >
+        {presetLabel ? (
+          <View style={styles.presetChipWrap} pointerEvents="none">
+            <Chip
+              compact
+              style={styles.presetChip}
+              textStyle={styles.presetChipText}
+            >
+              {t(presetLabel.key, presetLabel.defaultLabel)}
+            </Chip>
+          </View>
+        ) : null}
         <View style={[styles.rail, { bottom: bottomClearance + 72 }]}>
           <Pressable onPress={() => void toggleLike()} style={styles.railBtn}>
             <MaterialCommunityIcons
@@ -85,7 +101,7 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
             <MaterialCommunityIcons name="flag-outline" size={28} color="#fff" />
           </Pressable>
         </View>
-        <View style={styles.bottom}>
+        <View style={styles.bottom} pointerEvents="box-none">
           {onBuy ? (
             <View style={styles.ctaRow}>
               <IconButton
@@ -149,6 +165,18 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
     paddingHorizontal: 16,
+  },
+  presetChipWrap: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+  },
+  presetChip: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  presetChipText: {
+    color: '#fff',
+    fontSize: 12,
   },
   rail: {
     position: 'absolute',

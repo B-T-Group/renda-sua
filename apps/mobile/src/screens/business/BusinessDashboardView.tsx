@@ -16,6 +16,7 @@ import { BusinessStoreReachCard } from '../../components/business/BusinessStoreR
 import { BusinessCatalogHealthCard } from '../../components/business/BusinessCatalogHealthCard';
 import { BusinessQuietHomeNextActionCard } from '../../components/business/BusinessQuietHomeNextActionCard';
 import { BusinessMerchantTipCard } from '../../components/business/BusinessMerchantTipCard';
+import { BusinessFirstReelCta } from '../../components/business/BusinessFirstReelCta';
 import { BusinessPreviewStoreCta } from '../../components/business/BusinessPreviewStoreCta';
 import { BusinessGoLiveCelebration } from '../../components/business/BusinessGoLiveCelebration';
 import { BusinessSetupChecklist } from '../../components/business/BusinessSetupChecklist';
@@ -68,6 +69,9 @@ export function BusinessDashboardView({
   onCatalogHealthPrimary,
   onQuietNextAction,
   onQuietNextDismiss,
+  showFirstReelCta,
+  onCreateFirstReel,
+  onDismissFirstReelCta,
   onShareStorefront,
   onSetupSignAgreement,
   onSetupPayouts,
@@ -280,6 +284,11 @@ export function BusinessDashboardView({
         {/* —— Quiet / fulfillment operational pillars —— */}
         {!showSkeleton && !setupMode ? (
           <>
+            <BusinessFirstReelCta
+              visible={!!showFirstReelCta}
+              onPress={onCreateFirstReel}
+              onDismiss={onDismissFirstReelCta}
+            />
             <BusinessStoreReachCard
               productViews={totalProductViews}
               metricsLoading={

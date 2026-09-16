@@ -113,7 +113,7 @@ export async function generateAiReel(body: {
   prompt?: string;
   caption?: string;
   marketCountry: string;
-  tier?: 'lite' | 'fast' | 'standard';
+  tier?: 'fast' | 'standard';
 }): Promise<MerchantReel> {
   return apiRequest<MerchantReel>('/reels/ai-generate', {
     method: 'POST',

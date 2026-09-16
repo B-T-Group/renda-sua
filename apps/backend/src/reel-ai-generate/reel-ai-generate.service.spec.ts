@@ -10,7 +10,8 @@ describe('ReelAiGenerateService.generate', () => {
     get: jest.fn((key: string) => {
       if (key === 'veo') {
         return {
-          tier: 'lite',
+          tier: 'fast',
+
           modelOverride: '',
           resolution: '720p',
           durationSeconds: 8,
@@ -64,7 +65,7 @@ describe('ReelAiGenerateService.generate', () => {
         name: 'Soap',
         description: null,
         brand: null,
-        imageUrl: 'https://cdn/x.jpg',
+        imageUrls: ['https://cdn/x.jpg'],
       } as never);
     jest
       .spyOn(service as never, 'insertGeneratingReel' as never)
@@ -80,7 +81,7 @@ describe('ReelAiGenerateService.generate', () => {
     await service.generate('user-1', {
       subjectType: 'item',
       subjectId: 'item-1',
-      presetId: 'product_centered',
+      presetId: 'premium',
       marketCountry: 'CM',
     });
 
@@ -99,7 +100,7 @@ describe('ReelAiGenerateService.generate', () => {
         name: 'Soap',
         description: null,
         brand: null,
-        imageUrl: 'https://cdn/x.jpg',
+        imageUrls: ['https://cdn/x.jpg'],
       } as never);
     tokens.tryReserveTokens.mockResolvedValue(0);
     jest
@@ -110,7 +111,7 @@ describe('ReelAiGenerateService.generate', () => {
       service.generate('user-1', {
         subjectType: 'item',
         subjectId: 'item-1',
-        presetId: 'product_centered',
+        presetId: 'premium',
         marketCountry: 'CM',
       })
     ).rejects.toThrow('insert failed');
@@ -133,7 +134,7 @@ describe('ReelAiGenerateService.generate', () => {
         name: 'Soap',
         description: null,
         brand: null,
-        imageUrl: 'https://cdn/x.jpg',
+        imageUrls: ['https://cdn/x.jpg'],
       } as never);
     tokens.tryReserveTokens.mockResolvedValue(3);
     jest
@@ -150,14 +151,14 @@ describe('ReelAiGenerateService.generate', () => {
     await service.generate('user-1', {
       subjectType: 'item',
       subjectId: 'item-1',
-      presetId: 'product_centered',
+      presetId: 'premium',
       marketCountry: 'CM',
     });
 
     expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 2);
   });
 
-  it('charges lite tier tokens for non-superusers', async () => {
+  it('charges fast tier tokens for non-superusers when lite is requested', async () => {
     rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
     tokens.tryReserveTokens.mockResolvedValue(0);
     jest
@@ -166,7 +167,7 @@ describe('ReelAiGenerateService.generate', () => {
         name: 'Soap',
         description: null,
         brand: null,
-        imageUrl: 'https://cdn/x.jpg',
+        imageUrls: ['https://cdn/x.jpg'],
       } as never);
     jest
       .spyOn(service as never, 'insertGeneratingReel' as never)
@@ -189,12 +190,12 @@ describe('ReelAiGenerateService.generate', () => {
     await service.generate('user-1', {
       subjectType: 'item',
       subjectId: 'item-1',
-      presetId: 'product_centered',
+      presetId: 'premium',
       marketCountry: 'CM',
-      tier: 'lite',
+      tier: 'lite' as never,
     });
 
-    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 1);
+    expect(tokens.tryReserveTokens).toHaveBeenCalledWith('business-1', 2);
   });
 
   it('uses the original catalog photo instead of the display thumbnail', async () => {
@@ -228,14 +229,14 @@ describe('ReelAiGenerateService.generate', () => {
     await service.generate('user-1', {
       subjectType: 'item',
       subjectId: 'item-1',
-      presetId: 'product_centered',
+      presetId: 'premium',
       marketCountry: 'CM',
     });
 
     expect(startVeoJob).toHaveBeenCalledWith(
       expect.objectContaining({
         product: expect.objectContaining({
-          imageUrl: 'https://cdn/original.jpg',
+          imageUrls: ['https://cdn/original.jpg'],
         }),
       })
     );
@@ -249,7 +250,7 @@ describe('ReelAiGenerateService.generate', () => {
         name: 'Soap',
         description: null,
         brand: null,
-        imageUrl: 'https://cdn/x.jpg',
+        imageUrls: ['https://cdn/x.jpg'],
       } as never);
     jest
       .spyOn(service as never, 'insertGeneratingReel' as never)
@@ -272,15 +273,16 @@ describe('ReelAiGenerateService.generate', () => {
     await service.generate('user-1', {
       subjectType: 'item',
       subjectId: 'item-1',
-      presetId: 'product_centered',
+      presetId: 'premium',
       marketCountry: 'CM',
-      tier: 'lite',
+      tier: 'fast',
+
     });
 
     expect(veo.startImageToVideo).toHaveBeenCalledWith(
       expect.objectContaining({
         personGeneration: 'allow_adult',
-        model: 'veo-3.1-lite-generate-preview',
+        model: 'veo-3.1-fast-generate-preview',
       })
     );
   });
@@ -302,7 +304,7 @@ describe('ReelAiGenerateService.generate', () => {
       service.generate('user-1', {
         subjectType: 'item',
         subjectId: 'item-1',
-        presetId: 'product_centered',
+        presetId: 'premium',
         marketCountry: 'CM',
       })
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -351,7 +353,7 @@ describe('ReelAiGenerateService.generate', () => {
         name: 'Soap',
         description: null,
         brand: null,
-        imageUrl: 'https://cdn/x.jpg',
+        imageUrls: ['https://cdn/x.jpg'],
       } as never);
     tokens.tryReserveTokens.mockResolvedValue(null);
 
@@ -359,7 +361,7 @@ describe('ReelAiGenerateService.generate', () => {
       await service.generate('user-1', {
         subjectType: 'item',
         subjectId: 'item-1',
-        presetId: 'product_centered',
+        presetId: 'premium',
         marketCountry: 'CM',
       });
       fail('expected payment required');

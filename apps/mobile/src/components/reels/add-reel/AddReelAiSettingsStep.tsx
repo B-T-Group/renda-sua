@@ -47,7 +47,6 @@ export function AddReelAiSettingsStep({
 }: Props) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
-  const promptRequired = presetId === 'custom';
 
   return (
     <KeyboardAwareScrollView
@@ -85,14 +84,10 @@ export function AddReelAiSettingsStep({
 
       <TextInput
         mode="outlined"
-        label={
-          promptRequired
-            ? t('business.reels.add.promptRequired', 'Direction (required)')
-            : t('business.reels.add.prompt', 'Optional direction')
-        }
+        label={t('business.reels.add.prompt', 'Optional direction')}
         value={prompt}
         onChangeText={onPrompt}
-        maxLength={200}
+        maxLength={500}
       />
       <TextInput
         mode="outlined"

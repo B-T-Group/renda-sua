@@ -31,6 +31,8 @@ export interface DashboardAggregates {
   topViewedOutOfStockCount?: number;
   tipsRemindersEnabled?: boolean;
   approvedReelCount?: number;
+  /** Non-deleted reels (any status). */
+  reelCount?: number;
 }
 
 export interface DashboardAggregatesResponse {

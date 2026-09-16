@@ -94,10 +94,10 @@ function aiTips(t: (key: string, fallback: string) => string): Tip[] {
   return [
     {
       icon: 'image-multiple-outline',
-      title: t('business.reels.add.aiTipPhotosTitle', '2–3 photos from different angles'),
+      title: t('business.reels.add.aiTipPhotosTitle', 'Up to 3 photos from different angles'),
       body: t(
         'business.reels.add.aiTipPhotosBody',
-        'Add sharp catalog photos. The first photo is the AI reference frame—put your best shot first.'
+        'Add sharp catalog photos. Up to 3 are sent as AI product references—put your best shot first.'
       ),
     },
     {
@@ -129,7 +129,7 @@ function aiTips(t: (key: string, fallback: string) => string): Tip[] {
       title: t('business.reels.add.aiTipTokensTitle', 'Token costs'),
       body: t(
         'business.reels.add.aiTipTokensBody',
-        'Lite uses 1 token, Fast 2, Standard 8. Generation runs in the background.'
+        'Fast uses 2 tokens, Standard 8. Generation runs in the background.'
       ),
     },
   ];

@@ -8,7 +8,12 @@ import {
   IsUUID,
 } from 'class-validator';
 
+/** Current presets plus legacy ids (normalized server-side). */
 const PRESET_IDS = [
+  'dynamic',
+  'premium',
+  'lifestyle',
+  'social',
   'product_centered',
   'explosive',
   'exciting',
@@ -21,7 +26,7 @@ const PRESET_IDS = [
   'custom',
 ] as const;
 
-const VEO_TIERS = ['lite', 'fast', 'standard'] as const;
+const VEO_TIERS = ['fast', 'standard'] as const;
 
 export class GenerateAiReelDto {
   @ApiProperty({ enum: ['item', 'rental'] })
@@ -32,14 +37,18 @@ export class GenerateAiReelDto {
   @IsUUID()
   subjectId!: string;
 
-  @ApiProperty({ enum: PRESET_IDS })
+  @ApiProperty({
+    enum: ['dynamic', 'premium', 'lifestyle', 'social'],
+    description:
+      'Creative style. Legacy ids (e.g. luxury, ugc) are accepted and mapped.',
+  })
   @IsIn(PRESET_IDS as unknown as string[])
   presetId!: (typeof PRESET_IDS)[number];
 
-  @ApiPropertyOptional({ maxLength: 200 })
+  @ApiPropertyOptional({ maxLength: 500 })
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(500)
   prompt?: string;
 
   @ApiPropertyOptional({ maxLength: 2200 })

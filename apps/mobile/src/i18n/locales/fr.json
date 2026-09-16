@@ -1693,16 +1693,10 @@
       "addFab": "Ajouter un reel",
       "myReels": "Mes reels",
       "presets": {
-        "productCentered": "Produit centré",
-        "explosive": "Explosif",
-        "exciting": "Dynamique",
-        "luxury": "Luxe",
-        "fresh": "Frais et lumineux",
-        "unboxing": "Révélation",
-        "ugc": "UGC téléphone",
-        "cozy": "Cosy",
-        "outdoor": "Extérieur",
-        "custom": "Personnalisé"
+        "dynamic": "🔥 Dynamic",
+        "premium": "✨ Premium",
+        "lifestyle": "🏠 Lifestyle",
+        "social": "💥 Social / Viral"
       },
       "add": {
         "title": "Ajouter un reel",
@@ -1717,13 +1711,13 @@
         "modeTitle": "Comment voulez-vous créer ce reel ?",
         "modeSubtitle": "Générez une pub produit IA de 8 s, ou importez une vidéo de 15–30 s depuis votre bibliothèque.",
         "modeAiTitle": "Généré par IA",
-        "modeAiBody": "Créez une pub verticale de 8 secondes à partir d’une photo produit. Utilise des jetons reel (Lite 1 · Fast 2 · Standard 8).",
+        "modeAiBody": "Créez une pub verticale de 8 secondes à partir d’une photo produit. Utilise des jetons reel (Fast 2 · Standard 8).",
         "modeUploadTitle": "Importer une vidéo existante",
         "modeUploadBody": "Importez une vidéo de 15–30 s mettant en avant votre produit. Gratuit, puis revue avant d’apparaître dans Reels.",
         "aiTipsTitle": "Conseils pour un bon reel IA",
         "aiTipsIntro": "Quelques minutes de préparation améliorent beaucoup la pub de 8 secondes.",
-        "aiTipPhotosTitle": "2–3 photos sous différents angles",
-        "aiTipPhotosBody": "Ajoutez des photos catalogue nettes. La première photo est la référence IA—mettez votre meilleure photo en premier.",
+        "aiTipPhotosTitle": "Jusqu’à 3 photos sous différents angles",
+        "aiTipPhotosBody": "Ajoutez des photos catalogue nettes. Jusqu’à 3 sont envoyées comme références produit IA—mettez votre meilleure photo en premier.",
         "aiTipCopyTitle": "Nom et description clairs",
         "aiTipCopyBody": "Un bon nom et une bonne description aident l’IA à décrire votre article avec précision.",
         "aiTipFormatTitle": "Vertical 9:16, environ 8 secondes",
@@ -1731,7 +1725,7 @@
         "aiTipFaithfulTitle": "Emballage fidèle",
         "aiTipFaithfulBody": "L’IA suit votre photo—pas de faux logos, prix, URL ou numéros dans la pub générée.",
         "aiTipTokensTitle": "Coût en jetons",
-        "aiTipTokensBody": "Lite utilise 1 jeton, Fast 2, Standard 8. La génération tourne en arrière-plan.",
+        "aiTipTokensBody": "Fast utilise 2 jetons, Standard 8. La génération tourne en arrière-plan.",
         "uploadTipsTitle": "Conseils pour importer un reel",
         "uploadTipsIntro": "Suivez ces conseils pour passer la revue et bien paraître dans Reels.",
         "uploadTipDurationTitle": "Clip vertical de 15–30 secondes",
@@ -1763,7 +1757,6 @@
         "model": "Qualité du modèle",
         "tokenCost": "Utilise {{count}} jetons",
         "tier": {
-          "lite": "Lite",
           "fast": "Fast",
           "standard": "Standard"
         },
@@ -1861,7 +1854,7 @@
       "tokens": {
         "navTitle": "Jetons reel IA",
         "title": "Jetons reel IA",
-        "subtitle": "Le coût en jetons dépend du modèle (Lite 1, Fast 2, Standard 8). L'import depuis la bibliothèque est toujours gratuit.",
+        "subtitle": "Le coût en jetons dépend du modèle (Fast 2, Standard 8). L'import depuis la bibliothèque est toujours gratuit.",
         "balanceLabel": "Vous avez {{count}} jetons reel",
         "phoneNumber": "Numéro de téléphone mobile money",
         "packTokens": "{{count}} jetons",
@@ -2193,6 +2186,11 @@
         "rentalTitle": "Ajoutez votre première location",
         "rentalBody": "Ajoutez des photos, choisissez opéré ou à emporter, puis publiez les tarifs.",
         "rentalCta": "Configurer une location"
+      },
+      "firstReel": {
+        "title": "Devenez créateur de contenu pour vos produits",
+        "body": "Publiez votre premier reel — générez une pub IA de 8 s, ou importez une vidéo depuis votre bibliothèque.",
+        "cta": "Créer mon premier reel"
       },
       "rentalsTitle": "Locations",
       "rentalsDescription": "Gérez le catalogue de location, les demandes et le planning.",
@@ -6593,6 +6591,8 @@
     "emptyTitle": "Pas encore de reels",
     "errorTitle": "Impossible de charger les reels",
     "buy": "Acheter",
+    "play": "Lecture",
+    "pause": "Pause",
     "updateRequired": "Mettez à jour l'application pour lire les reels sur cet appareil.",
     "notAvailableInMarket": "Indisponible dans votre région",
     "comments": {

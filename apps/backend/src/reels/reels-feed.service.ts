@@ -2,10 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { RequestContext } from '../auth/request-context';
+import {
+  mergeWatchSignals,
+  rankReelsByRelevance,
+  type RankableReel,
+  type ReelWatchSignal,
+} from './reel-feed-rank.util';
 
 const FEED_SESSION_TTL_SECONDS = 3600;
 const SESSION_FEED_CAP = 200;
+const CANDIDATE_POOL = 500;
 const VIEW_THRESHOLD_MS = 3000;
+const WATCH_LOOKBACK_DAYS = 14;
 
 export type FeedReel = {
   id: string;
@@ -20,6 +28,7 @@ export type FeedReel = {
   view_count: number;
   duration_ms: number | null;
   published_at: string | null;
+  prompt_preset?: string | null;
   business: { id: string; name: string };
   liked?: boolean;
   purchasable?: boolean;
@@ -107,61 +116,103 @@ export class ReelsFeedService {
     limit: number;
   }): Promise<{ ids: string[]; nextCursor: string | null }> {
     const sessionKey = params.sessionId
-      ? `reels-feed:${params.sessionId}:${params.country || 'all'}`
+      ? `reels-feed:${params.sessionId}:${params.userId || 'anon'}:${params.country || 'all'}`
       : null;
     if (sessionKey) {
-      return this.pageFromSession(
+      return this.pageFromSession({
         sessionKey,
-        params.userId,
-        params.offset,
-        params.limit
-      );
+        userId: params.userId,
+        sessionId: params.sessionId,
+        offset: params.offset,
+        limit: params.limit,
+      });
     }
     const blockedIds = params.userId
       ? await this.loadBlockedBusinessIds(params.userId)
       : [];
-    const ids = await this.loadRankedReelIds(
+    const ids = await this.loadRankedReelIds({
       blockedIds,
-      params.limit,
-      params.offset
-    );
+      userId: params.userId,
+      sessionId: params.sessionId,
+      limit: params.limit,
+      offset: params.offset,
+    });
     return {
       ids,
-      nextCursor: ids.length === params.limit ? String(params.offset + params.limit) : null,
+      nextCursor:
+        ids.length === params.limit
+          ? String(params.offset + params.limit)
+          : null,
     };
   }
 
-  private async pageFromSession(
-    sessionKey: string,
-    userId: string | null,
-    offset: number,
-    limit: number
-  ): Promise<{ ids: string[]; nextCursor: string | null }> {
-    let frozen = await this.loadSessionIds(sessionKey);
+  private async pageFromSession(params: {
+    sessionKey: string;
+    userId: string | null;
+    sessionId?: string;
+    offset: number;
+    limit: number;
+  }): Promise<{ ids: string[]; nextCursor: string | null }> {
+    let frozen = await this.loadSessionIds(params.sessionKey);
     if (!frozen?.length) {
-      const blockedIds = userId
-        ? await this.loadBlockedBusinessIds(userId)
+      const blockedIds = params.userId
+        ? await this.loadBlockedBusinessIds(params.userId)
         : [];
-      frozen = await this.loadRankedReelIds(blockedIds, SESSION_FEED_CAP, 0);
+      frozen = await this.loadRankedReelIds({
+        blockedIds,
+        userId: params.userId,
+        sessionId: params.sessionId,
+        limit: SESSION_FEED_CAP,
+        offset: 0,
+      });
       if (frozen.length) {
-        await this.catalogCache.set(sessionKey, JSON.stringify(frozen), {
+        await this.catalogCache.set(params.sessionKey, JSON.stringify(frozen), {
           ttlSeconds: FEED_SESSION_TTL_SECONDS,
         });
       }
     }
-    const remaining = frozen.slice(offset);
+    const remaining = frozen.slice(params.offset);
     return {
-      ids: remaining.slice(0, limit),
+      ids: remaining.slice(0, params.limit),
       nextCursor:
-        remaining.length > limit ? String(offset + limit) : null,
+        remaining.length > params.limit
+          ? String(params.offset + params.limit)
+          : null,
     };
   }
 
-  private async loadRankedReelIds(
-    blockedIds: string[],
-    limit: number,
-    offset: number
-  ): Promise<string[]> {
+  private async loadRankedReelIds(params: {
+    blockedIds: string[];
+    userId: string | null;
+    sessionId?: string;
+    limit: number;
+    offset: number;
+  }): Promise<string[]> {
+    const candidates = await this.loadCandidateReels(params.blockedIds);
+    if (!candidates.length) return [];
+    const [followed, watches] = await Promise.all([
+      params.userId
+        ? this.loadFollowedBusinessIds(params.userId)
+        : Promise.resolve(new Set<string>()),
+      this.loadWatchSignals({
+        userId: params.userId,
+        sessionId: params.sessionId,
+        reelIds: candidates.map((r) => r.id),
+      }),
+    ]);
+    const ranked = rankReelsByRelevance({
+      reels: candidates,
+      followedBusinessIds: followed,
+      watchByReelId: watches,
+    });
+    return ranked
+      .slice(params.offset, params.offset + params.limit)
+      .map((r) => r.id);
+  }
+
+  private async loadCandidateReels(
+    blockedIds: string[]
+  ): Promise<RankableReel[]> {
     const where: Record<string, unknown> = {
       moderation_status: { _eq: 'approved' },
       processing_status: { _eq: 'ready' },
@@ -173,19 +224,64 @@ export class ReelsFeedService {
       where.business_id = { _nin: blockedIds };
     }
     const result = await this.hasura.executeQuery<{
-      reels: Array<{ id: string }>;
+      reels: RankableReel[];
     }>(
-      `query RankedReelIds($where: reels_bool_exp!, $limit: Int!, $offset: Int!) {
+      `query RankedReelCandidates($where: reels_bool_exp!, $limit: Int!) {
         reels(
           where: $where
           order_by: [{ published_at: desc }, { created_at: desc }]
           limit: $limit
-          offset: $offset
-        ) { id }
+        ) { id business_id like_count published_at }
       }`,
-      { where, limit, offset }
+      { where, limit: CANDIDATE_POOL }
     );
-    return (result.reels ?? []).map((r) => r.id);
+    return result.reels ?? [];
+  }
+
+  private async loadFollowedBusinessIds(userId: string): Promise<Set<string>> {
+    const result = await this.hasura.executeQuery<{
+      business_follows: Array<{ business_id: string }>;
+    }>(
+      `query($userId:uuid!){
+        business_follows(where:{user_id:{_eq:$userId}}){business_id}
+      }`,
+      { userId }
+    );
+    return new Set((result.business_follows ?? []).map((r) => r.business_id));
+  }
+
+  private async loadWatchSignals(params: {
+    userId: string | null;
+    sessionId?: string;
+    reelIds: string[];
+  }): Promise<Map<string, ReelWatchSignal>> {
+    if (!params.reelIds.length) return new Map();
+    if (!params.userId && !params.sessionId) return new Map();
+    const since = new Date(
+      Date.now() - WATCH_LOOKBACK_DAYS * 24 * 60 * 60_000
+    ).toISOString();
+    const viewerFilter = params.userId
+      ? { user_id: { _eq: params.userId } }
+      : { session_id: { _eq: params.sessionId } };
+    const result = await this.hasura.executeQuery<{
+      reel_view_events: ReelWatchSignal[];
+    }>(
+      `query($where:reel_view_events_bool_exp!){
+        reel_view_events(where:$where){
+          reel_id watch_time_ms completed
+        }
+      }`,
+      {
+        where: {
+          _and: [
+            viewerFilter,
+            { reel_id: { _in: params.reelIds } },
+            { created_at: { _gte: since } },
+          ],
+        },
+      }
+    );
+    return mergeWatchSignals(result.reel_view_events ?? []);
   }
 
   private async loadSessionIds(sessionKey: string): Promise<string[] | null> {
@@ -209,7 +305,7 @@ export class ReelsFeedService {
       `query($ids:[uuid!]!){
         reels(where:{id:{_in:$ids}}){
           id business_id subject_type subject_id caption video_url thumbnail_url
-          market_country like_count view_count duration_ms published_at
+          market_country like_count view_count duration_ms published_at prompt_preset
           business { id name }
         }
       }`,

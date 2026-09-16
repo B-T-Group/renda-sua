@@ -82,8 +82,7 @@ export default function BusinessAddReelScreen() {
     canAfford &&
     Boolean(selected) &&
     selectedHasPhoto &&
-    Boolean(presetId) &&
-    (presetId !== 'custom' || Boolean(prompt.trim()));
+    Boolean(presetId);
 
   const stepIndex = ADD_REEL_STEP_ORDER.indexOf(step);
 
@@ -99,6 +98,9 @@ export default function BusinessAddReelScreen() {
         ]);
         if (cancelled) return;
         setPresets(presetRows);
+        if (presetRows.length && !cancelled) {
+          setPresetId((current) => current ?? presetRows[0]?.id ?? 'dynamic');
+        }
         setProducts([
           ...mapSaleProducts(saleRes.data?.items ?? []),
           ...mapRentalProducts(rentalRows),
@@ -172,10 +174,6 @@ export default function BusinessAddReelScreen() {
           'Add at least one product photo before generating'
         )
       );
-      return;
-    }
-    if (presetId === 'custom' && !prompt.trim()) {
-      setSnack(t('business.reels.add.customPrompt', 'Enter a custom prompt'));
       return;
     }
     setBusy(true);

@@ -10,12 +10,17 @@ import axios from 'axios';
 import type { Configuration } from '../config/configuration';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+export const VEO_MAX_REFERENCE_IMAGES = 3;
+
+export interface VeoImageInput {
+  imageBase64: string;
+  mimeType: string;
+}
 
 export interface StartVeoVideoParams {
   model: string;
   prompt: string;
-  imageBase64: string;
-  mimeType: string;
+  images: VeoImageInput[];
   aspectRatio: string;
   resolution: string;
   durationSeconds: number;
@@ -36,17 +41,28 @@ export class VeoReelClient {
   constructor(private readonly config: ConfigService<Configuration>) {}
 
   async startImageToVideo(params: StartVeoVideoParams): Promise<string> {
-    try {
-      const response = await axios.post<{ name?: string }>(
-        `${GEMINI_BASE}/models/${params.model}:predictLongRunning`,
-        this.buildStartBody(params),
-        this.authJsonHeaders()
+    if (!params.images.length) {
+      throw new BadRequestException(
+        'Add at least one product photo before generating an AI reel'
       );
-      const name = response.data?.name;
-      if (!name) throw new Error('Veo did not return an operation name');
-      return name;
+    }
+    try {
+      return await this.postPredict(params.model, this.buildReferenceBody(params));
     } catch (error: any) {
-      throw this.toVeoHttpError(error);
+      if (!this.shouldFallbackToSingleImage(error)) {
+        throw this.toVeoHttpError(error);
+      }
+      this.logger.warn(
+        'Veo referenceImages rejected; retrying with single image'
+      );
+      try {
+        return await this.postPredict(
+          params.model,
+          this.buildSingleImageBody(params)
+        );
+      } catch (retryError: any) {
+        throw this.toVeoHttpError(retryError);
+      }
     }
   }
 
@@ -71,6 +87,17 @@ export class VeoReelClient {
     } catch (error: any) {
       throw this.toVeoHttpError(error);
     }
+  }
+
+  private async postPredict(model: string, body: unknown): Promise<string> {
+    const response = await axios.post<{ name?: string }>(
+      `${GEMINI_BASE}/models/${model}:predictLongRunning`,
+      body,
+      this.authJsonHeaders()
+    );
+    const name = response.data?.name;
+    if (!name) throw new Error('Veo did not return an operation name');
+    return name;
   }
 
   private async fetchOperation(
@@ -101,26 +128,63 @@ export class VeoReelClient {
     };
   }
 
-  private buildStartBody(params: StartVeoVideoParams) {
-    // Gemini API Veo 3.1 rejects `generateAudio` — native audio is always on.
+  private buildReferenceBody(params: StartVeoVideoParams) {
+    const images = params.images.slice(0, VEO_MAX_REFERENCE_IMAGES);
+    return {
+      instances: [
+        {
+          prompt: params.prompt,
+          referenceImages: images.map((img) => ({
+            image: {
+              bytesBase64Encoded: img.imageBase64,
+              mimeType: img.mimeType,
+            },
+            referenceType: 'asset',
+          })),
+        },
+      ],
+      parameters: this.buildParameters(params),
+    };
+  }
+
+  private buildSingleImageBody(params: StartVeoVideoParams) {
+    const first = params.images[0];
     return {
       instances: [
         {
           prompt: params.prompt,
           image: {
-            bytesBase64Encoded: params.imageBase64,
-            mimeType: params.mimeType,
+            bytesBase64Encoded: first.imageBase64,
+            mimeType: first.mimeType,
           },
         },
       ],
-      parameters: {
-        aspectRatio: params.aspectRatio,
-        resolution: params.resolution,
-        durationSeconds: params.durationSeconds,
-        personGeneration: params.personGeneration,
-        sampleCount: 1,
-      },
+      parameters: this.buildParameters(params),
     };
+  }
+
+  private buildParameters(params: StartVeoVideoParams) {
+    // Gemini API Veo 3.1 rejects `generateAudio` — native audio is always on.
+    return {
+      aspectRatio: params.aspectRatio,
+      resolution: params.resolution,
+      durationSeconds: params.durationSeconds,
+      personGeneration: params.personGeneration,
+      sampleCount: 1,
+    };
+  }
+
+  private shouldFallbackToSingleImage(error: any): boolean {
+    if (!axios.isAxiosError(error)) return false;
+    const status = error.response?.status;
+    if (status !== 400) return false;
+    const message = this.googleErrorMessage(error.response?.data)?.toLowerCase();
+    if (!message) return true;
+    return (
+      message.includes('not supported') ||
+      message.includes('reference') ||
+      message.includes('invalid')
+    );
   }
 
   private authJsonHeaders() {

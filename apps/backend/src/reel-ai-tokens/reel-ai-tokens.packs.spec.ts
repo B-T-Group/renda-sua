@@ -29,7 +29,6 @@ describe('reel-ai-tokens.packs', () => {
   });
 
   it('prices generate by tier', () => {
-    expect(reelAiTokenCost('lite')).toBe(1);
     expect(reelAiTokenCost('fast')).toBe(2);
     expect(reelAiTokenCost('standard')).toBe(8);
   });
