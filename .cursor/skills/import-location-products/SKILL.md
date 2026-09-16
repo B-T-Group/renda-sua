@@ -113,7 +113,7 @@ Required effective fields after enrichment (may be filled by AI):
 | `price` / `selling_price` | > 0 for ready product — **or** omit / placeholder when `export_available` |
 | `quantity` | Default **10** if blank |
 | `image_url` or usable `image_path` | Prefer ≥1 usable image. **No image → insert with `is_active=false`.** Generate image only if user explicitly allows |
-| `export_available` / `interest_only` | Optional boolean / aliases `pricing_not_applicable`, `sur_demande`. Default **false**. When true: set `items.export_available = true`; price may be `0`; shoppers submit interest. List at **one** home location (e.g. Joliette) and insert `item_export_markets` for destination countries (`CM`, `GA`, `PH`) — do **not** clone inventory into other countries |
+| `export_available` / `interest_only` | Optional boolean / aliases `pricing_not_applicable`, `sur_demande`. Default **false**. When true: set `items.export_available = true`; price may be `0`; shoppers submit interest. List at **one** home location (e.g. Joliette) and insert `item_export_markets` for destination countries (`CM`, `CI`, `TG`, `CG`, `GA`, and `PH` when relevant) — do **not** clone inventory into other countries |
 
 Optional: description, sku, brand, category, subcategory, unit_cost, reorder_*, weight, color, model, dimensions, is_used, etc. Full alias map: [reference.md](reference.md). Example: [scripts/products.example.csv](scripts/products.example.csv).
 
