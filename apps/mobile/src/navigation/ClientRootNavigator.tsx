@@ -13,6 +13,7 @@ import ClientRentalsHomeScreen from '../screens/client/ClientRentalsHomeScreen';
 import ClientOrdersScreen from '../screens/client/ClientOrdersScreen';
 import ClientMenuTabScreen from '../screens/client/ClientMenuTabScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
+import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import ManageRecipientsScreen from '../screens/client/ManageRecipientsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import UserLikesScreen from '../screens/shared/UserLikesScreen';
@@ -226,7 +227,7 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
             tabBarAccessibilityLabel: t('nav.clientTabs.reels', { defaultValue: 'Reels' }),
             tabBarIcon: ({ color, focused }) => (
               <TabBarIconContent focused={focused} label={t('nav.clientTabs.reels', { defaultValue: 'Reels' })}>
-                <MaterialCommunityIcons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />
+                <ReelsTabIcon color={color} size={30} />
               </TabBarIconContent>
             ),
           }}
