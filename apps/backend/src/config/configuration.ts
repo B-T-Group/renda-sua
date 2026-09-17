@@ -449,6 +449,10 @@ export interface ReelsConfig {
   dailyQuota: number;
   /** Minutes before in-progress reels can be cancelled / force-retried. */
   stuckAfterMinutes: number;
+  /** Daily cron that auto-generates one platform-sponsored AI reel. */
+  autoGenerateEnabled: boolean;
+  /** Cron expression (UTC). Default 08:00 daily. */
+  autoGenerateCron: string;
 }
 
 export interface VeoConfig {
@@ -1186,6 +1190,10 @@ export default (): Configuration => {
         process.env.REELS_STUCK_AFTER_MINUTES || '15',
         10
       ),
+      autoGenerateEnabled:
+        process.env.REEL_AUTO_GENERATE_ENABLED === 'true',
+      autoGenerateCron:
+        process.env.REEL_AUTO_GENERATE_CRON?.trim() || '0 8 * * *',
     },
     veo: {
       tier: process.env.VEO_REEL_TIER?.trim() || 'fast',

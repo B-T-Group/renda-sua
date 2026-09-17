@@ -16,6 +16,20 @@ export function buildReelModerationApprovedPush(params: {
   };
 }
 
+export function buildReelAutoSponsoredLivePush(params: {
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = locale(params.preferredLanguage) === 'fr';
+  return {
+    title: fr
+      ? 'Nous avons créé une pub pour vous'
+      : 'We created an ad for you',
+    body: fr
+      ? 'Un de vos produits attire beaucoup d’attention — nous avons généré un reel sponsorisé. Vous pouvez le désactiver dans Mes reels.'
+      : 'One of your products is getting traction — we generated a sponsored reel. You can turn it off in My reels.',
+  };
+}
+
 export function buildReelPendingReviewPush(params: {
   preferredLanguage?: string | null;
 }): { title: string; body: string } {

@@ -71,6 +71,22 @@ describe('ReelMerchantNotifyService', () => {
     });
   });
 
+  it('sends auto-sponsored live copy with My Reels deep link', async () => {
+    mockOwner('user-1', 'en');
+
+    await service.notifyAutoSponsoredLive('reel-sponsored');
+
+    expect(notifications.sendReelMerchantPush).toHaveBeenCalledWith({
+      userId: 'user-1',
+      title: 'We created an ad for you',
+      body: expect.stringContaining('sponsored reel'),
+      reelId: 'reel-sponsored',
+      event: 'reel.auto_sponsored.live',
+      url: '/business/reels/mine',
+      appUrl: 'rendasua://business/my-reels',
+    });
+  });
+
   it('routes rejected moderation to the rejected event', async () => {
     mockOwner('user-1', 'en');
 

@@ -27,7 +27,8 @@ export class ReelMediaService {
   async complete(reelId: string, result: ReelMediaResult): Promise<void> {
     const ready = result.status === 'ready';
     const now = new Date().toISOString();
-    const isAi = await this.isAiGenerated(reelId);
+    const reelMeta = await this.loadReelMeta(reelId);
+    const isAi = reelMeta?.generation_source === 'ai';
     await this.writeProcessingResult(reelId, result, now);
     if (!ready) {
       void this.merchantNotify.notifyFailed(reelId);
@@ -35,18 +36,33 @@ export class ReelMediaService {
     }
     if (isAi) {
       await this.tryAutoApprove(reelId, now);
-      void this.merchantNotify.notifyLive(reelId);
+      if (reelMeta?.platform_sponsored) {
+        void this.merchantNotify.notifyAutoSponsoredLive(reelId);
+      } else {
+        void this.merchantNotify.notifyLive(reelId);
+      }
       return;
     }
     await this.aiReview.requestReview(reelId);
     void this.merchantNotify.notifyPendingReview(reelId);
   }
 
-  private async isAiGenerated(reelId: string): Promise<boolean> {
+  private async loadReelMeta(reelId: string): Promise<{
+    generation_source: string | null;
+    platform_sponsored: boolean;
+  } | null> {
     const result = await this.hasura.executeQuery<{
-      reels_by_pk: { generation_source: string | null } | null;
-    }>(`query($id:uuid!){reels_by_pk(id:$id){generation_source}}`, { id: reelId });
-    return result.reels_by_pk?.generation_source === 'ai';
+      reels_by_pk: {
+        generation_source: string | null;
+        platform_sponsored: boolean;
+      } | null;
+    }>(
+      `query($id:uuid!){
+        reels_by_pk(id:$id){generation_source platform_sponsored}
+      }`,
+      { id: reelId }
+    );
+    return result.reels_by_pk;
   }
 
   private async writeProcessingResult(

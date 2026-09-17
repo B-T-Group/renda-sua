@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.reels_one_platform_sponsored_per_utc_day_idx;
