@@ -1,13 +1,9 @@
-import {
-  BadRequestException,
-  HttpException,
-  HttpStatus,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import type { Configuration } from '../config/configuration';
+import { VideoGenerationError } from './video-generation/video-generation.error';
+import type { VideoGenerationErrorCategory } from './video-generation/video-generation.types';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 export const VEO_MAX_REFERENCE_IMAGES = 3;
@@ -42,15 +38,17 @@ export class VeoReelClient {
 
   async startImageToVideo(params: StartVeoVideoParams): Promise<string> {
     if (!params.images.length) {
-      throw new BadRequestException(
-        'Add at least one product photo before generating an AI reel'
-      );
+      throw new VideoGenerationError({
+        message: 'Add at least one product photo before generating an AI reel',
+        category: 'INVALID_REQUEST',
+        provider: 'google',
+      });
     }
     try {
       return await this.postPredict(params.model, this.buildReferenceBody(params));
     } catch (error: any) {
       if (!this.shouldFallbackToSingleImage(error)) {
-        throw this.toVeoHttpError(error);
+        throw this.toVideoError(error);
       }
       this.logger.warn(
         'Veo referenceImages rejected; retrying with single image'
@@ -61,7 +59,7 @@ export class VeoReelClient {
           this.buildSingleImageBody(params)
         );
       } catch (retryError: any) {
-        throw this.toVeoHttpError(retryError);
+        throw this.toVideoError(retryError);
       }
     }
   }
@@ -70,7 +68,7 @@ export class VeoReelClient {
     try {
       return await this.fetchOperation(operationName);
     } catch (error: any) {
-      throw this.toVeoHttpError(error);
+      throw this.toVideoError(error);
     }
   }
 
@@ -85,7 +83,7 @@ export class VeoReelClient {
       });
       return Buffer.from(response.data);
     } catch (error: any) {
-      throw this.toVeoHttpError(error);
+      throw this.toVideoError(error);
     }
   }
 
@@ -96,7 +94,13 @@ export class VeoReelClient {
       this.authJsonHeaders()
     );
     const name = response.data?.name;
-    if (!name) throw new Error('Veo did not return an operation name');
+    if (!name) {
+      throw new VideoGenerationError({
+        message: 'Veo did not return an operation name',
+        category: 'UNKNOWN_PROVIDER_ERROR',
+        provider: 'google',
+      });
+    }
     return name;
   }
 
@@ -197,33 +201,64 @@ export class VeoReelClient {
     };
   }
 
-  private toVeoHttpError(error: any): Error {
-    if (error instanceof HttpException) return error;
+  private toVideoError(error: any): VideoGenerationError {
+    if (error instanceof VideoGenerationError) return error;
     if (!axios.isAxiosError(error)) {
-      return error instanceof Error ? error : new Error(String(error));
+      return new VideoGenerationError({
+        message: error instanceof Error ? error.message : String(error),
+        category: 'UNKNOWN_PROVIDER_ERROR',
+        provider: 'google',
+      });
     }
     const status = error.response?.status;
     const googleMessage = this.googleErrorMessage(error.response?.data);
     if (googleMessage) this.logger.error(`Veo request failed: ${googleMessage}`);
-    return this.httpErrorForStatus(status);
+    const category = this.categoryForStatus(status, googleMessage);
+    return new VideoGenerationError({
+      message: googleMessage || this.defaultMessageForCategory(category),
+      category,
+      provider: 'google',
+      httpStatus: status,
+    });
   }
 
-  private httpErrorForStatus(status?: number): HttpException {
+  private categoryForStatus(
+    status: number | undefined,
+    message?: string
+  ): VideoGenerationErrorCategory {
+    const lower = message?.toLowerCase() ?? '';
+    if (status === 401 || status === 403) return 'AUTHENTICATION_ERROR';
     if (status === 429) {
-      return new HttpException(
-        'AI reel generation is busy. Please try again shortly.',
-        HttpStatus.TOO_MANY_REQUESTS
-      );
+      if (lower.includes('quota') || lower.includes('resource_exhausted')) {
+        return 'QUOTA_EXCEEDED';
+      }
+      return 'RATE_LIMITED';
     }
-    if (status && status >= 400 && status < 500) {
-      return new BadRequestException(
-        'Could not start AI reel generation. Try a different product photo.'
-      );
+    if (status === 408 || lower.includes('timeout')) return 'TIMEOUT';
+    if (status && status >= 500) return 'PROVIDER_UNAVAILABLE';
+    if (status === 400) {
+      if (lower.includes('not supported') || lower.includes('unsupported')) {
+        return 'UNSUPPORTED_CONFIGURATION';
+      }
+      return 'INVALID_REQUEST';
     }
-    return new HttpException(
-      'AI video generation is temporarily unavailable. Please try again.',
-      HttpStatus.BAD_GATEWAY
-    );
+    if (status && status >= 400 && status < 500) return 'INVALID_REQUEST';
+    return 'UNKNOWN_PROVIDER_ERROR';
+  }
+
+  private defaultMessageForCategory(
+    category: VideoGenerationErrorCategory
+  ): string {
+    if (category === 'RATE_LIMITED' || category === 'QUOTA_EXCEEDED') {
+      return 'AI reel generation is busy. Please try again shortly.';
+    }
+    if (
+      category === 'INVALID_REQUEST' ||
+      category === 'UNSUPPORTED_CONFIGURATION'
+    ) {
+      return 'Could not start AI reel generation. Try a different product photo.';
+    }
+    return 'AI video generation is temporarily unavailable. Please try again.';
   }
 
   private googleErrorMessage(data: unknown): string | undefined {
@@ -236,7 +271,11 @@ export class VeoReelClient {
     const key = this.config.get('gemini')?.apiKey?.trim();
     if (!key) {
       this.logger.error('GEMINI_API_KEY is not configured');
-      throw new Error('Gemini API key is not configured');
+      throw new VideoGenerationError({
+        message: 'Gemini API key is not configured',
+        category: 'AUTHENTICATION_ERROR',
+        provider: 'google',
+      });
     }
     return key;
   }

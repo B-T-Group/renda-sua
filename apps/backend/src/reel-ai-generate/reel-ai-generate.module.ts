@@ -10,6 +10,10 @@ import { ReelAiGenerateController } from './reel-ai-generate.controller';
 import { ReelAiGenerateSweeperService } from './reel-ai-generate-sweeper.service';
 import { ReelAiGenerateService } from './reel-ai-generate.service';
 import { VeoReelClient } from './veo-reel-client';
+import { GoogleVideoGenerationProvider } from './video-generation/providers/google-video-generation.provider';
+import { RunwayReelClient } from './video-generation/providers/runway-reel-client';
+import { RunwayVideoGenerationProvider } from './video-generation/providers/runway-video-generation.provider';
+import { VideoGenerationRouter } from './video-generation/video-generation-router.service';
 
 @Module({
   imports: [
@@ -24,6 +28,10 @@ import { VeoReelClient } from './veo-reel-client';
   controllers: [ReelAiGenerateController],
   providers: [
     VeoReelClient,
+    RunwayReelClient,
+    GoogleVideoGenerationProvider,
+    RunwayVideoGenerationProvider,
+    VideoGenerationRouter,
     ReelAiGenerateService,
     ReelAiGenerateSweeperService,
   ],

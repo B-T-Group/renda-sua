@@ -20,6 +20,9 @@ select_permissions:
         - user_prompt
         - status
         - error
+        - provider
+        - generation_tier
+        - fallback_used
         - created_at
         - updated_at
       filter:

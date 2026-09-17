@@ -461,6 +461,19 @@ export interface VeoConfig {
   aspectRatio: string;
 }
 
+export interface RunwayConfig {
+  apiKey: string;
+  apiVersion: string;
+  modelFast: string;
+  modelStandard: string;
+}
+
+export interface VideoGenerationConfig {
+  primaryProvider: string;
+  fallbackProviders: string[];
+  enableFallback: boolean;
+}
+
 export interface ReelAiReviewConfig {
   enabled: boolean;
   model: string;
@@ -593,6 +606,8 @@ export interface Configuration {
   itemAiReview: ItemAiReviewConfig;
   reels: ReelsConfig;
   veo: VeoConfig;
+  runway: RunwayConfig;
+  videoGeneration: VideoGenerationConfig;
   reelAiReview: ReelAiReviewConfig;
   idDocumentAiReview: IdDocumentAiReviewConfig;
   commerceIntegrations: CommerceIntegrationsConfig;
@@ -609,6 +624,15 @@ function parseImageValidationModerationProvider(
     return normalized;
   }
   return 'none';
+}
+
+function parseCsvProviders(value: string | undefined): string[] {
+  const raw = value?.trim();
+  if (!raw) return ['runway'];
+  return raw
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 /** Parses `XAF:CAD=0.00224,XAF:USD=0.00165` into a rate lookup. */
@@ -1172,6 +1196,25 @@ export default (): Configuration => {
         10
       ),
       aspectRatio: process.env.VEO_REEL_ASPECT_RATIO?.trim() || '9:16',
+    },
+    runway: {
+      apiKey:
+        process.env.RUNWAY_API_KEY?.trim() ||
+        process.env.RUNWAYML_API_SECRET?.trim() ||
+        '',
+      apiVersion: process.env.RUNWAY_API_VERSION?.trim() || '2024-11-06',
+      modelFast: process.env.RUNWAY_VIDEO_MODEL_FAST?.trim() || 'gen4_turbo',
+      modelStandard:
+        process.env.RUNWAY_VIDEO_MODEL_STANDARD?.trim() || 'gen4.5',
+    },
+    videoGeneration: {
+      primaryProvider:
+        process.env.VIDEO_GENERATION_PRIMARY_PROVIDER?.trim() || 'google',
+      fallbackProviders: parseCsvProviders(
+        process.env.VIDEO_GENERATION_FALLBACK_PROVIDERS
+      ),
+      enableFallback:
+        process.env.VIDEO_GENERATION_ENABLE_FALLBACK !== 'false',
     },
     reelAiReview: {
       enabled: process.env.REEL_AI_AUTO_REVIEW_ENABLED === 'true',
