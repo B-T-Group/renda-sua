@@ -15,6 +15,53 @@ describe('reel-boosts packs', () => {
   });
 });
 
+describe('ReelBoostsService.creditPack', () => {
+  const hasura = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+  let service: ReelBoostsService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new ReelBoostsService(hasura as never);
+  });
+
+  it('rejects an unknown pack without writing credits', async () => {
+    await expect(service.creditPack('biz-1', 'reel_pack_99')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('increments only the paid pack amount and logs the purchase', async () => {
+    hasura.executeMutation
+      .mockResolvedValueOnce({
+        update_businesses_by_pk: { reel_credits: 25 },
+      })
+      .mockResolvedValueOnce({});
+
+    await expect(service.creditPack('biz-1', 'reel_pack_20')).resolves.toBe(25);
+    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('_inc:{reel_credits:$credits}'),
+      { id: 'biz-1', credits: 20 }
+    );
+    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('insert_business_reel_credit_usage_one'),
+      {
+        object: {
+          business_id: 'biz-1',
+          reel_id: null,
+          credits: 20,
+          reason: 'purchase:reel_pack_20',
+        },
+      }
+    );
+  });
+});
+
 describe('ReelBoostsService.boostReel', () => {
   const hasura = {
     executeQuery: jest.fn(),

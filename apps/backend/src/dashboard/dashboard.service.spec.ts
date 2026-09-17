@@ -411,6 +411,12 @@ describe('DashboardService', () => {
           if (query.includes('BusinessTipsReminders')) {
             return { businesses_by_pk: { tips_reminders_enabled: true } };
           }
+          if (query.includes('all_reels:')) {
+            return {
+              all_reels: { aggregate: { count: 2 } },
+              approved_reels: { aggregate: { count: 1 } },
+            };
+          }
           if (query.includes('DashboardOrdersByStatus')) {
             return {
               pending: { aggregate: { count: 1 } },
@@ -448,6 +454,8 @@ describe('DashboardService', () => {
       expect(result.hasLogo).toBe(true);
       expect(result.itemsNeedingAiCleanupCount).toBe(2);
       expect(result.tipsRemindersEnabled).toBe(true);
+      expect(result.reelCount).toBe(2);
+      expect(result.approvedReelCount).toBe(1);
       expect(result.topViewedOutOfStockCount).toBe(1);
       expect(result.ordersByStatus).toEqual({ pending: 1, confirmed: 2 });
       expect(result.ordersTotal).toBe(3);
