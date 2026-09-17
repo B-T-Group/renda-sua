@@ -4671,16 +4671,21 @@ export class NotificationsService {
     businessName: string;
     signerLegalName: string;
     agreementVersion: string;
+    pdfGenerated?: boolean;
   }): Promise<void> {
     this.initializeResend();
     if (!this.resendClient || !params.to) {
       this.logger.warn('Skipping merchant agreement email — Resend or recipient missing');
       return;
     }
+    const copyLine =
+      params.pdfGenerated === false
+        ? '<p>Your acceptance is recorded. A signed PDF copy will appear in your document library once it is ready.</p>'
+        : '<p>A signed copy has been saved to your document library on Rendasua.</p>';
     const html = `
       <p>Hello ${params.signerLegalName},</p>
       <p>Thank you for accepting the Rendasua Merchant Partnership Agreement (version ${params.agreementVersion}) on behalf of <strong>${params.businessName}</strong>.</p>
-      <p>A signed copy has been saved to your document library on Rendasua.</p>
+      ${copyLine}
       <p>Next step: upload a government-issued ID in the Documents section so we can verify your account.</p>
       <p>— Rendasua</p>
     `;
