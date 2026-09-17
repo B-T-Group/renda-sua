@@ -178,7 +178,7 @@ export class BusinessVerificationService {
       business.id,
       'merchant_agreement_accepted'
     );
-    const pdfUploadId = await this.tryGenerateAgreementPdf({
+    const pdfUploadId = await this.finishAcceptPdfAndEmail({
       acceptanceId: acceptance.id,
       businessId: business.id,
       locale: user.preferred_language ?? 'en',
@@ -189,13 +189,6 @@ export class BusinessVerificationService {
       signatureBase64: dto.signatureBase64,
       countryCode,
     });
-    await this.notificationsService.sendMerchantAgreementCopyEmail({
-      to: user.email ?? '',
-      businessName: business.name,
-      signerLegalName: legalName,
-      agreementVersion: MERCHANT_AGREEMENT_VERSION,
-      pdfGenerated: Boolean(pdfUploadId),
-    });
     return {
       acceptance,
       pdfUploadId,
@@ -205,20 +198,129 @@ export class BusinessVerificationService {
 
   async retryMerchantAgreementPdf(acceptanceId: string) {
     const user = await this.requireBusinessUser();
-    const row = await this.requireOwnedAcceptance(acceptanceId, user.business!.id);
+    const row = await this.requireOwnedAcceptance(
+      acceptanceId,
+      user.business!.id
+    );
+    return this.generatePdfForAcceptanceRow(
+      row,
+      user.preferred_language ?? 'en'
+    );
+  }
+
+  async retryMerchantAgreementPdfAsAdmin(businessId: string) {
+    const row = await this.requireLatestAcceptance(businessId);
+    const owner = await this.resolveBusinessOwner(businessId);
+    return this.generatePdfForAcceptanceRow(
+      row,
+      owner.locale,
+      owner.userId
+    );
+  }
+
+  private async resolveBusinessOwner(businessId: string): Promise<{
+    userId: string;
+    locale: string;
+  }> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      businesses_by_pk: {
+        user: { id: string; preferred_language: string | null };
+      } | null;
+    }>(
+      `query OwnerLocale($id: uuid!) {
+        businesses_by_pk(id: $id) {
+          user { id preferred_language }
+        }
+      }`,
+      { id: businessId }
+    );
+    const user = result.businesses_by_pk?.user;
+    if (!user?.id) {
+      throw new NotFoundException('Business owner not found');
+    }
+    return {
+      userId: user.id,
+      locale: user.preferred_language ?? 'en',
+    };
+  }
+
+  private async finishAcceptPdfAndEmail(params: {
+    acceptanceId: string;
+    businessId: string;
+    locale: string;
+    businessName: string;
+    signerLegalName: string;
+    signerEmail: string;
+    acceptedAt: string;
+    signatureBase64?: string;
+    countryCode: string | null;
+  }): Promise<string | null> {
+    const result = await this.safeTryGenerateAgreementPdf(params);
+    const pdfUploadId = result?.uploadId ?? null;
+    try {
+      await this.notificationsService.sendMerchantAgreementCopyEmail({
+        to: params.signerEmail,
+        businessName: params.businessName,
+        signerLegalName: params.signerLegalName,
+        agreementVersion: MERCHANT_AGREEMENT_VERSION,
+        pdfGenerated: Boolean(pdfUploadId),
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Merchant agreement email failed after accept for business ${params.businessId}: ${error?.message || error}`
+      );
+    }
+    return pdfUploadId;
+  }
+
+  private async safeTryGenerateAgreementPdf(params: {
+    acceptanceId: string;
+    businessId: string;
+    locale: string;
+    businessName: string;
+    signerLegalName: string;
+    signerEmail: string;
+    acceptedAt: string;
+    signatureBase64?: string;
+    countryCode: string | null;
+    agreementVersion?: string;
+  }): Promise<{ uploadId: string; linked: boolean } | null> {
+    try {
+      return await this.tryGenerateAgreementPdf(params);
+    } catch (error: any) {
+      this.logger.error(
+        `Merchant agreement PDF escaped tryGenerate for business ${params.businessId} acceptance ${params.acceptanceId}: ${error?.message || error}`
+      );
+      return null;
+    }
+  }
+
+  private async generatePdfForAcceptanceRow(
+    row: {
+      id: string;
+      accepted_at: string;
+      pdf_upload_id: string | null;
+      signature_image_key: string | null;
+      business_id: string;
+      business_name: string;
+      signer_legal_name: string;
+      signer_email: string;
+      country_code: string | null;
+      agreement_version: string;
+    },
+    locale: string,
+    ownerUserId?: string
+  ) {
     if (row.pdf_upload_id) {
-      return {
-        pdfUploadId: row.pdf_upload_id,
-        pdfGenerated: true,
-      };
+      return { pdfUploadId: row.pdf_upload_id, pdfGenerated: true };
     }
     const signatureBase64 = await this.resolveRetrySignature(
       row.signature_image_key
     );
-    const pdfUploadId = await this.tryGenerateAgreementPdf({
+    const result = await this.tryGenerateAgreementPdf({
       acceptanceId: row.id,
-      businessId: user.business!.id,
-      locale: user.preferred_language ?? 'en',
+      businessId: row.business_id,
+      locale,
       businessName: row.business_name,
       signerLegalName: row.signer_legal_name,
       signerEmail: row.signer_email,
@@ -226,13 +328,17 @@ export class BusinessVerificationService {
       signatureBase64,
       countryCode: row.country_code,
       agreementVersion: row.agreement_version,
+      ownerUserId,
     });
-    if (!pdfUploadId) {
+    if (!result?.uploadId) {
       throw new BadRequestException(
         'Could not generate agreement PDF. Please try again later.'
       );
     }
-    return { pdfUploadId, pdfGenerated: true };
+    if (!result.linked) {
+      await this.setAcceptancePdfUploadId(row.id, result.uploadId);
+    }
+    return { pdfUploadId: result.uploadId, pdfGenerated: true };
   }
 
   private async resolveRetrySignature(
@@ -559,8 +665,9 @@ export class BusinessVerificationService {
     signatureBase64?: string;
     countryCode: string | null;
     agreementVersion?: string;
-  }): Promise<string | null> {
-    let pdfUploadId: string;
+    ownerUserId?: string;
+  }): Promise<{ uploadId: string; linked: boolean } | null> {
+    let uploadId: string;
     try {
       const pdfUpload = await this.pdfService.generateMerchantAgreementPdf({
         locale: params.locale,
@@ -571,33 +678,36 @@ export class BusinessVerificationService {
         acceptedAt: params.acceptedAt,
         signatureBase64: params.signatureBase64,
         countryCode: params.countryCode,
+        ownerUserId: params.ownerUserId,
       });
-      pdfUploadId = pdfUpload.id;
+      uploadId = pdfUpload.id;
     } catch (error: any) {
       this.logger.error(
         `Merchant agreement PDF failed for business ${params.businessId} acceptance ${params.acceptanceId}: ${error?.message || error}`
       );
       return null;
     }
-    await this.linkAcceptancePdfUploadId(
+    const linked = await this.linkAcceptancePdfUploadId(
       params.acceptanceId,
       params.businessId,
-      pdfUploadId
+      uploadId
     );
-    return pdfUploadId;
+    return { uploadId, linked };
   }
 
   private async linkAcceptancePdfUploadId(
     acceptanceId: string,
     businessId: string,
     pdfUploadId: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await this.setAcceptancePdfUploadId(acceptanceId, pdfUploadId);
+      return true;
     } catch (error: any) {
       this.logger.error(
         `Failed to link PDF ${pdfUploadId} to acceptance ${acceptanceId} (business ${businessId}): ${error?.message || error}`
       );
+      return false;
     }
   }
 
@@ -667,17 +777,49 @@ export class BusinessVerificationService {
   private async requireOwnedAcceptance(
     acceptanceId: string,
     businessId: string
-  ): Promise<{
-    id: string;
-    accepted_at: string;
-    pdf_upload_id: string | null;
-    signature_image_key: string | null;
-    business_name: string;
-    signer_legal_name: string;
-    signer_email: string;
-    country_code: string | null;
-    agreement_version: string;
-  }> {
+  ) {
+    const row = await this.loadAcceptanceById(acceptanceId);
+    if (!row || row.business_id !== businessId) {
+      throw new NotFoundException('Agreement acceptance not found');
+    }
+    return row;
+  }
+
+  private async requireLatestAcceptance(businessId: string) {
+    const result = await this.hasuraSystemService.executeQuery<{
+      business_merchant_agreement_acceptances: Array<{
+        id: string;
+        accepted_at: string;
+        pdf_upload_id: string | null;
+        signature_image_key: string | null;
+        business_id: string;
+        business_name: string;
+        signer_legal_name: string;
+        signer_email: string;
+        country_code: string | null;
+        agreement_version: string;
+      }>;
+    }>(
+      `query LatestAcceptance($businessId: uuid!) {
+        business_merchant_agreement_acceptances(
+          where: { business_id: { _eq: $businessId } }
+          order_by: { accepted_at: desc }
+          limit: 1
+        ) {
+          id accepted_at pdf_upload_id signature_image_key business_id
+          business_name signer_legal_name signer_email country_code agreement_version
+        }
+      }`,
+      { businessId }
+    );
+    const row = result.business_merchant_agreement_acceptances?.[0];
+    if (!row) {
+      throw new NotFoundException('Agreement acceptance not found');
+    }
+    return row;
+  }
+
+  private async loadAcceptanceById(acceptanceId: string) {
     const result = await this.hasuraSystemService.executeQuery<{
       business_merchant_agreement_acceptances_by_pk: {
         id: string;
@@ -700,10 +842,6 @@ export class BusinessVerificationService {
       }`,
       { id: acceptanceId }
     );
-    const row = result.business_merchant_agreement_acceptances_by_pk;
-    if (!row || row.business_id !== businessId) {
-      throw new NotFoundException('Agreement acceptance not found');
-    }
-    return row;
+    return result.business_merchant_agreement_acceptances_by_pk;
   }
 }

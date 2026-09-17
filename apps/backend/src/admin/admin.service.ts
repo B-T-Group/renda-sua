@@ -969,6 +969,7 @@ export class AdminService {
           signer_legal_name
           accepted_at
           pdf_upload_id
+          signature_image_key
         }
         user_uploads(
           where: {

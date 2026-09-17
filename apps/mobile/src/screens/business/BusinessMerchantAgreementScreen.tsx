@@ -44,6 +44,7 @@ export default function BusinessMerchantAgreementScreen() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
+  const [pdfDeferred, setPdfDeferred] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [contract, setContract] = useState<MerchantContractStatus | null>(null);
   const [agreementComplete, setAgreementComplete] = useState(false);
@@ -154,11 +155,12 @@ export default function BusinessMerchantAgreementScreen() {
     if (!hasScrolledToEnd || !legalName.trim() || !version) return;
     setBusy(true);
     try {
-      await businessVerificationApi.acceptMerchantAgreement({
+      const res = await businessVerificationApi.acceptMerchantAgreement({
         legalName: legalName.trim(),
         agreementVersion: version,
         deviceInfo: buildMerchantAgreementDeviceInfo(),
       });
+      setPdfDeferred(res.data?.pdfGenerated === false);
       setAgreementComplete(true);
       setDone(true);
     } catch (e) {
@@ -258,7 +260,10 @@ export default function BusinessMerchantAgreementScreen() {
 
   if (done) {
     return (
-      <MerchantAgreementSuccessView onBackToDashboard={goDashboard} />
+      <MerchantAgreementSuccessView
+        onBackToDashboard={goDashboard}
+        pdfDeferred={pdfDeferred}
+      />
     );
   }
 

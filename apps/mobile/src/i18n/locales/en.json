@@ -2051,6 +2051,7 @@
       "catalogPendingNotice": "Your product is awaiting review. Once approved, this step will complete.",
       "successBodyStripe": "Return to the dashboard to continue setup — connect payouts is next.",
       "signAgreement": "Sign merchant agreement",
+      "agreementPdfDeferred": "Your signature is saved. A signed PDF copy will appear in your documents once it is ready.",
       "uploadId": "Upload valid ID",
       "pendingReview": "We received your identification document. Rendasua will review your account shortly.",
       "idUploadHint": "Name on document must match: {{fullName}}",

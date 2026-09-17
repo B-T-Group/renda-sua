@@ -52,6 +52,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [pdfDeferred, setPdfDeferred] = useState(false);
   const [contract, setContract] = useState<MerchantContractStatus | null>(null);
   const [agreementComplete, setAgreementComplete] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -235,11 +236,15 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
     setBusy(true);
     setError(null);
     try {
-      await apiClient.post('/business-verification/merchant-agreement/accept', {
+      const res = await apiClient.post<{
+        success: boolean;
+        data?: { pdfGenerated?: boolean; pdfUploadId?: string | null };
+      }>('/business-verification/merchant-agreement/accept', {
         legalName: legalName.trim(),
         agreementVersion: version,
         deviceInfo: buildWebDeviceInfo(),
       });
+      setPdfDeferred(res.data?.data?.pdfGenerated === false);
       setDone(true);
     } catch (e: any) {
       setError(
@@ -354,6 +359,14 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
             'Agreement accepted. Your store is active — return to the dashboard to keep selling. You can earn a Verified badge later.'
           )}
         </Alert>
+        {pdfDeferred ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t(
+              'business.verification.agreementPdfDeferred',
+              'Your signature is saved. A signed PDF copy will appear in your documents once it is ready.'
+            )}
+          </Alert>
+        ) : null}
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -365,7 +378,7 @@ export const BusinessMerchantAgreementPage: React.FC = () => {
         <Button
           sx={{ ml: 1 }}
           variant="outlined"
-          disabled={openingSigned}
+          disabled={openingSigned || pdfDeferred}
           onClick={() => void openSignedContract()}
         >
           {t('business.contract.viewSigned', 'View signed contract')}

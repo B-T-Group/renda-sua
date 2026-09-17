@@ -8,6 +8,7 @@ import { CreditsModule } from '../credits/credits.module';
 import { AiGenerationModule } from '../ai/ai-generation.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
+import { BusinessVerificationModule } from '../business-verification/business-verification.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
@@ -67,6 +68,7 @@ import { AdminWhatsAppInboxService } from './admin-whatsapp-inbox.service';
     MerchantLifecycleModule,
     StripePaymentsModule,
     BusinessContractsModule,
+    BusinessVerificationModule,
     BusinessItemsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,

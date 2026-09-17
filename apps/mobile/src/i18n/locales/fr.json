@@ -1983,6 +1983,7 @@
       "catalogPendingNotice": "Votre produit est en cours d'examen. Une fois approuvé, cette étape sera terminée.",
       "successBodyStripe": "Retournez au tableau de bord pour continuer — connecter les paiements est la prochaine étape.",
       "signAgreement": "Signer le contrat marchand",
+      "agreementPdfDeferred": "Votre signature est enregistrée. Une copie PDF signée apparaîtra dans vos documents lorsqu'elle sera prête.",
       "uploadId": "Téléverser une pièce d'identité valide",
       "pendingReview": "Nous avons reçu votre pièce d'identité. Rendasua examinera votre compte sous peu.",
       "idUploadHint": "Le nom sur la pièce doit correspondre à : {{fullName}}",

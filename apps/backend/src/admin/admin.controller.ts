@@ -31,6 +31,7 @@ import {
 import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
+import { BusinessVerificationService } from '../business-verification/business-verification.service';
 import type { CountryOnboardingConfigDto } from './dto/country-onboarding.dto';
 import { RejectRentalListingDto } from './dto/rental-listing-moderation.dto';
 import {
@@ -94,7 +95,8 @@ export class AdminController {
     private readonly transferService: BusinessLocationTransferService,
     private readonly threadsService: ThreadsService,
     private readonly businessAccountTypeService: BusinessAccountTypeService,
-    private readonly aiImageCleanupService: AiImageCleanupService
+    private readonly aiImageCleanupService: AiImageCleanupService,
+    private readonly businessVerificationService: BusinessVerificationService
   ) {}
 
   @Post('message')
@@ -923,6 +925,24 @@ export class AdminController {
   async regenerateBusinessContract(@Param('id') businessId: string) {
     await this.adminService.regenerateBusinessContract(businessId);
     return { success: true };
+  }
+
+  @Post('businesses/:id/merchant-agreement/retry-pdf')
+  @RequirePermissions(PlatformPermissions.MANAGE_CONTRACTS)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Regenerate signed in-app merchant agreement PDF (ops)',
+  })
+  @ApiParam({ name: 'id', description: 'Business ID' })
+  @ApiResponse({ status: 200, description: 'PDF generated and linked' })
+  @ApiResponse({ status: 400, description: 'PDF generation still unavailable' })
+  @ApiResponse({ status: 404, description: 'No agreement acceptance found' })
+  async retryMerchantAgreementPdf(@Param('id') businessId: string) {
+    const data =
+      await this.businessVerificationService.retryMerchantAgreementPdfAsAdmin(
+        businessId
+      );
+    return { success: true, data };
   }
 
   @Get('businesses/:id/contract/:contractId/download')

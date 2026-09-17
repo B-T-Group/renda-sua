@@ -133,7 +133,10 @@ export const businessVerificationApi = {
       brand?: string;
     };
   }) =>
-    api.post<{ success: boolean }>('/business-verification/merchant-agreement/accept', body),
+    api.post<{
+      success: boolean;
+      data?: { pdfGenerated?: boolean; pdfUploadId?: string | null };
+    }>('/business-verification/merchant-agreement/accept', body),
   resendContract: () =>
     api.post<{ success: boolean }>('/business-contracts/resend'),
   refreshContract: () =>

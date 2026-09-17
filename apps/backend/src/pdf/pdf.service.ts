@@ -359,6 +359,7 @@ export class PdfService {
     acceptedAt: string;
     signatureBase64?: string;
     countryCode?: string | null;
+    ownerUserId?: string;
   }): Promise<{ id: string }> {
     const lang = params.locale?.startsWith('fr') ? 'fr' : 'en';
     const templatePath = path.join(
@@ -387,13 +388,18 @@ export class PdfService {
     const pdfBuffer = await this.convertHtmlToPdf(html);
     const docTypeId = await this.getDocumentTypeId('rendasua_contract_agreement');
     const fileName = `merchant-agreement-${Date.now()}.pdf`;
-    const uploadResult = await this.uploadService.generateUploadUrl({
-      document_type_id: docTypeId,
-      file_name: fileName,
-      content_type: 'application/pdf',
-      file_size: pdfBuffer.length,
-      note: `Merchant agreement ${params.agreementVersion}`,
-    });
+    const uploadResult = await this.uploadService.generateUploadUrl(
+      {
+        document_type_id: docTypeId,
+        file_name: fileName,
+        content_type: 'application/pdf',
+        file_size: pdfBuffer.length,
+        note: `Merchant agreement ${params.agreementVersion}`,
+      },
+      params.ownerUserId
+        ? { userId: params.ownerUserId, persona: 'business' }
+        : undefined
+    );
     try {
       await axios.put(uploadResult.presigned_url, pdfBuffer, {
         headers: { 'Content-Type': 'application/pdf' },
