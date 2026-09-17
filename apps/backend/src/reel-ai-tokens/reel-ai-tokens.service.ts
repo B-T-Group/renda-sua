@@ -346,16 +346,12 @@ export class ReelAiTokensService {
     }
     const reference = this.buildPaymentReference(params.businessId);
     const provider = this.mobilePaymentsService.getProvider(phone);
-    const isMyPVitLike = provider === 'mypvit';
-    const providerReference = isMyPVitLike
-      ? reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15)
-      : reference;
-    const description = isMyPVitLike
-      ? providerReference
-      : `AI reel tokens ${params.pack.tokens}`;
+    // Store the full RAT-… reference. MobilePaymentsService short-hashes for MyPVit
+    // (≤15 chars); pre-slicing here collapses same-business purchases into one ref.
+    const description = `AI reel tokens ${params.pack.tokens}`;
 
     const transaction = await this.mobilePaymentsDatabaseService.createTransaction({
-      reference: providerReference,
+      reference,
       amount: params.amount,
       currency: params.currency,
       description,
@@ -378,7 +374,7 @@ export class ReelAiTokensService {
         ownerCharge: 'CUSTOMER' as const,
         transactionType: 'PAYMENT' as const,
       },
-      providerReference,
+      reference,
       params.userId
     );
     await this.persistMobileProviderResponse(transaction.id, paymentResponse);
@@ -394,7 +390,7 @@ export class ReelAiTokensService {
       success: true,
       payment_rail: 'mobile_money' as const,
       paymentPending: true,
-      reference: providerReference,
+      reference,
       tokens: params.pack.tokens,
       amount: params.amount,
       currency: params.currency,
