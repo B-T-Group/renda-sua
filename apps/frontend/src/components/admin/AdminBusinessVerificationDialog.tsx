@@ -68,10 +68,12 @@ export interface BusinessVerificationDetails {
     user: { first_name: string; last_name: string; email: string };
   };
   latestAcceptance: {
+    id?: string;
     signer_legal_name: string;
     agreement_version: string;
     accepted_at: string;
     pdf_upload_id?: string | null;
+    signature_image_key?: string | null;
   } | null;
   latestContract?: {
     complete: boolean;
@@ -335,6 +337,32 @@ export const AdminBusinessVerificationDialog: React.FC<
         t(
           'admin.businesses.resendContractFailed',
           'Could not resend the contract reminder.'
+        );
+      setContractActionError(
+        typeof message === 'string' ? message : String(message)
+      );
+    } finally {
+      setContractActionLoading(false);
+    }
+  }, [apiClient, businessId, fetchDetails, t]);
+
+  const handleGenerateAgreementPdf = useCallback(async () => {
+    if (!apiClient || !businessId) return;
+    setContractActionLoading(true);
+    setContractActionError(null);
+    try {
+      await apiClient.post(
+        `/admin/businesses/${businessId}/merchant-agreement/retry-pdf`
+      );
+      await fetchDetails(businessId);
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        t(
+          'admin.businesses.generateAgreementPdfFailed',
+          'Could not generate the signed agreement PDF.'
         );
       setContractActionError(
         typeof message === 'string' ? message : String(message)
@@ -641,7 +669,27 @@ export const AdminBusinessVerificationDialog: React.FC<
                           'View signed PDF'
                         )}
                       </Button>
-                    ) : null}
+                    ) : (
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Alert severity="warning">
+                          {t(
+                            'admin.businesses.agreementPdfMissing',
+                            'Signed PDF not generated yet. The merchant signature is on file.'
+                          )}
+                        </Alert>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={contractActionLoading}
+                          onClick={() => void handleGenerateAgreementPdf()}
+                        >
+                          {t(
+                            'admin.businesses.generateAgreementPdf',
+                            'Generate PDF'
+                          )}
+                        </Button>
+                      </Stack>
+                    )}
                   </Box>
                 ) : null}
               </Paper>

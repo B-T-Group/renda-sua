@@ -22,6 +22,7 @@ type Props = {
   isRental?: boolean;
   onContinueSetup?: () => void;
   onBackToDashboard: () => void;
+  footnote?: string;
 };
 
 export function SetupStepSuccessView({
@@ -30,6 +31,7 @@ export function SetupStepSuccessView({
   isRental = false,
   onContinueSetup,
   onBackToDashboard,
+  footnote,
 }: Props) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
@@ -171,6 +173,14 @@ export function SetupStepSuccessView({
       >
         {copy.body}
       </Text>
+      {footnote ? (
+        <Text
+          variant="bodyMedium"
+          style={[styles.subtitle, { color: colors.text.secondary }]}
+        >
+          {footnote}
+        </Text>
+      ) : null}
 
       <Button
         mode="contained"

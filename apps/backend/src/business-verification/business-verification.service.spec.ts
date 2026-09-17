@@ -1,6 +1,8 @@
 jest.mock('../notifications/notifications.service', () => ({
   NotificationsService: class NotificationsService {},
 }));
+import { HttpException, HttpStatus } from '@nestjs/common';
+import { PDF_UNAVAILABLE_MESSAGE } from '../pdf/pdf-endpoint-error.util';
 import { BusinessVerificationService } from './business-verification.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -480,6 +482,25 @@ describe('BusinessVerificationService.acceptAgreement PDF decoupling', () => {
     expect(result.pdfUploadId).toBe('pdf-2');
     expect(notifications.sendMerchantAgreementCopyEmail).toHaveBeenCalledWith(
       expect.objectContaining({ pdfGenerated: true })
+    );
+  });
+
+  it('still completes when PDF throws HttpException', async () => {
+    pdfService.generateMerchantAgreementPdf.mockRejectedValue(
+      new HttpException(PDF_UNAVAILABLE_MESSAGE, HttpStatus.SERVICE_UNAVAILABLE)
+    );
+
+    const result = await service.acceptAgreement(
+      { legalName: 'Ada Lovelace', agreementVersion: VERSION },
+      '127.0.0.1',
+      'jest'
+    );
+
+    expect(result.pdfGenerated).toBe(false);
+    expect(result.pdfUploadId).toBeNull();
+    expect(result.acceptance.id).toBe('acc-1');
+    expect(notifications.sendMerchantAgreementCopyEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ pdfGenerated: false })
     );
   });
 });
