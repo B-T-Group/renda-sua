@@ -322,7 +322,7 @@ describe('BusinessVerificationService Stripe Connect next action', () => {
 });
 
 describe('BusinessVerificationService.acceptAgreement PDF decoupling', () => {
-  const VERSION = '2026-09-1';
+  const VERSION = '2026-09-2';
   let service: BusinessVerificationService;
   let hasuraUser: { getUser: jest.Mock };
   let hasuraSystem: { executeMutation: jest.Mock; executeQuery: jest.Mock };

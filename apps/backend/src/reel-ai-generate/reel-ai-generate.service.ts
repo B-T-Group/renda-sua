@@ -129,7 +129,7 @@ export class ReelAiGenerateService {
     );
     let reel: ReelRow;
     try {
-      reel = await this.insertGeneratingReel(business.id, dto);
+      reel = await this.insertGeneratingReel(business.id, dto, false);
     } catch (error: any) {
       await this.refundReservedToken(business.id, userId, reserved);
       throw error;
@@ -155,6 +155,68 @@ export class ReelAiGenerateService {
       throw this.toHttpError(error);
     }
     return reel;
+  }
+
+  /**
+   * Platform-sponsored AI reel: no token debit, no daily quota.
+   * Caller must validate allowlist / eligibility.
+   */
+  async generatePlatformSponsored(params: {
+    businessId: string;
+    subjectId: string;
+    marketCountry: string;
+    presetId?: string;
+    tier?: ReelAiVeoTier;
+  }): Promise<ReelRow> {
+    const dto = this.toSponsoredDto(params);
+    this.assertPreset(dto);
+    const product = await this.loadProduct(params.businessId, dto);
+    const tier = parseVeoReelTier(dto.tier) as ReelAiVeoTier;
+    const reel = await this.insertGeneratingReel(params.businessId, dto, true);
+    await this.runSponsoredJob(reel, params.businessId, dto, product, tier);
+    return reel;
+  }
+
+  private toSponsoredDto(params: {
+    subjectId: string;
+    marketCountry: string;
+    presetId?: string;
+    tier?: ReelAiVeoTier;
+  }): GenerateAiReelDto {
+    return {
+      subjectType: 'item',
+      subjectId: params.subjectId,
+      presetId: (params.presetId || 'dynamic') as GenerateAiReelDto['presetId'],
+      marketCountry: params.marketCountry.toUpperCase(),
+      tier: params.tier || 'fast',
+    };
+  }
+
+  private async runSponsoredJob(
+    reel: ReelRow,
+    businessId: string,
+    dto: GenerateAiReelDto,
+    product: ProductSubject,
+    tier: ReelAiVeoTier
+  ): Promise<void> {
+    try {
+      await this.startGenerationJob({
+        reelId: reel.id,
+        businessId,
+        dto,
+        product,
+        tokensReserved: 0,
+        tier,
+      });
+    } catch (error: any) {
+      await this.failAndRefund({
+        reelId: reel.id,
+        businessId,
+        tokensReserved: 0,
+        message: error?.message || 'Failed to start AI generation',
+      });
+      throw this.toHttpError(error);
+    }
   }
 
   async pollPendingGenerations(): Promise<void> {
@@ -213,7 +275,7 @@ export class ReelAiGenerateService {
   private async startGenerationJob(params: {
     reelId: string;
     businessId: string;
-    userId: string;
+    userId?: string;
     dto: GenerateAiReelDto;
     product: ProductSubject;
     tokensReserved: number;
@@ -842,7 +904,8 @@ export class ReelAiGenerateService {
 
   private async insertGeneratingReel(
     businessId: string,
-    dto: GenerateAiReelDto
+    dto: GenerateAiReelDto,
+    platformSponsored: boolean
   ): Promise<ReelRow> {
     const result = await this.hasura.executeMutation<{
       insert_reels_one: ReelRow | null;
@@ -860,6 +923,7 @@ export class ReelAiGenerateService {
           market_country: dto.marketCountry.toUpperCase(),
           caption: dto.caption?.trim() || null,
           generation_source: 'ai',
+          platform_sponsored: platformSponsored,
           processing_status: 'generating',
           moderation_status: 'draft',
           prompt_preset: normalizeReelAiPresetId(dto.presetId),

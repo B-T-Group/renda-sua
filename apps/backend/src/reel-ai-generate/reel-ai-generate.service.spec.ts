@@ -482,3 +482,104 @@ describe('ReelAiGenerateService.generate', () => {
     }
   });
 });
+
+describe('ReelAiGenerateService.generatePlatformSponsored', () => {
+  const hasura = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+  const config = {
+    get: jest.fn((key: string) => {
+      if (key === 'veo') {
+        return {
+          tier: 'fast',
+          modelOverride: '',
+          resolution: '720p',
+          durationSeconds: 8,
+          aspectRatio: '9:16',
+        };
+      }
+      if (key === 'videoGeneration') {
+        return {
+          primaryProvider: 'google',
+          fallbackProviders: ['runway'],
+          enableFallback: true,
+        };
+      }
+      return undefined;
+    }),
+  };
+  const tokens = {
+    tryReserveTokens: jest.fn(),
+    refundTokens: jest.fn(),
+    recordUsage: jest.fn(),
+  };
+  const videoRouter = {
+    submit: jest.fn(),
+    getJobStatus: jest.fn(),
+    retrieveVideo: jest.fn(),
+    fallbackAfterPrimaryJobFailure: jest.fn(),
+  };
+
+  let service: ReelAiGenerateService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new ReelAiGenerateService(
+      hasura as never,
+      config as never,
+      { getS3Client: jest.fn(), getBucketName: jest.fn() } as never,
+      { getEffectiveAccess: jest.fn() } as never,
+      tokens as never,
+      videoRouter as never,
+      { enqueue: jest.fn() } as never,
+      { notifyFailed: jest.fn() } as never
+    );
+  });
+
+  it('skips token debit and sets platform_sponsored', async () => {
+    jest
+      .spyOn(service as never, 'loadProduct' as never)
+      .mockResolvedValue({
+        name: 'Soap',
+        description: null,
+        brand: null,
+        imageUrls: ['https://cdn/x.jpg'],
+      } as never);
+    hasura.executeMutation.mockResolvedValueOnce({
+      insert_reels_one: {
+        id: 'reel-sponsored',
+        business_id: 'business-1',
+        processing_status: 'generating',
+      },
+    });
+    const startGenerationJob = jest
+      .spyOn(service as never, 'startGenerationJob' as never)
+      .mockResolvedValue(undefined as never);
+
+    await service.generatePlatformSponsored({
+      businessId: 'business-1',
+      subjectId: 'item-1',
+      marketCountry: 'cm',
+    });
+
+    expect(tokens.tryReserveTokens).not.toHaveBeenCalled();
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('insert_reels_one'),
+      expect.objectContaining({
+        object: expect.objectContaining({
+          platform_sponsored: true,
+          generation_source: 'ai',
+          prompt_preset: 'dynamic',
+          market_country: 'CM',
+        }),
+      })
+    );
+    expect(startGenerationJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokensReserved: 0,
+        tier: 'fast',
+      })
+    );
+  });
+});

@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -16,6 +15,7 @@ describe('ReelMediaService', () => {
   const aiReview = { requestReview: jest.fn() };
   const merchantNotify = {
     notifyLive: jest.fn(),
+    notifyAutoSponsoredLive: jest.fn(),
     notifyPendingReview: jest.fn(),
     notifyFailed: jest.fn(),
   };
@@ -43,7 +43,7 @@ describe('ReelMediaService', () => {
 
   it('auto-approves AI-generated reels when media is ready', async () => {
     hasura.executeQuery.mockResolvedValue({
-      reels_by_pk: { generation_source: 'ai' },
+      reels_by_pk: { generation_source: 'ai', platform_sponsored: false },
     });
     hasura.executeMutation.mockResolvedValue({});
 
@@ -73,11 +73,26 @@ describe('ReelMediaService', () => {
     );
     expect(aiReview.requestReview).not.toHaveBeenCalled();
     expect(merchantNotify.notifyLive).toHaveBeenCalledWith('reel-1');
+    expect(merchantNotify.notifyAutoSponsoredLive).not.toHaveBeenCalled();
+  });
+
+  it('notifies auto-sponsored copy for platform-sponsored AI reels', async () => {
+    hasura.executeQuery.mockResolvedValue({
+      reels_by_pk: { generation_source: 'ai', platform_sponsored: true },
+    });
+    hasura.executeMutation.mockResolvedValue({});
+
+    await service.complete('reel-sponsored', readyResult);
+
+    expect(merchantNotify.notifyAutoSponsoredLive).toHaveBeenCalledWith(
+      'reel-sponsored'
+    );
+    expect(merchantNotify.notifyLive).not.toHaveBeenCalled();
   });
 
   it('does not auto-approve a rejected AI reel after media completes', async () => {
     hasura.executeQuery.mockResolvedValue({
-      reels_by_pk: { generation_source: 'ai' },
+      reels_by_pk: { generation_source: 'ai', platform_sponsored: false },
     });
     hasura.executeMutation.mockResolvedValue({
       update_reels: { affected_rows: 0 },
@@ -98,7 +113,7 @@ describe('ReelMediaService', () => {
 
   it('queues AI review for merchant uploads', async () => {
     hasura.executeQuery.mockResolvedValue({
-      reels_by_pk: { generation_source: 'merchant' },
+      reels_by_pk: { generation_source: 'merchant', platform_sponsored: false },
     });
     hasura.executeMutation.mockResolvedValue({});
 

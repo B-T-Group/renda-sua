@@ -5,6 +5,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { DeepLinkService } from './deep-link.service';
 import { NotificationsService } from './notifications.service';
 import {
+  buildReelAutoSponsoredLivePush,
   buildReelGenerationFailedPush,
   buildReelModerationApprovedPush,
   buildReelModerationRejectedPush,
@@ -30,6 +31,12 @@ export class ReelMerchantNotifyService {
   async notifyLive(reelId: string): Promise<void> {
     await this.send(reelId, 'reel.moderation.approved', (lang) =>
       buildReelModerationApprovedPush({ preferredLanguage: lang })
+    );
+  }
+
+  async notifyAutoSponsoredLive(reelId: string): Promise<void> {
+    await this.send(reelId, 'reel.auto_sponsored.live', (lang) =>
+      buildReelAutoSponsoredLivePush({ preferredLanguage: lang })
     );
   }
 
