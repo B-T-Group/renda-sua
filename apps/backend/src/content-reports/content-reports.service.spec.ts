@@ -140,6 +140,52 @@ describe('ContentReportsService', () => {
     });
   });
 
+  describe('listQueue', () => {
+    it('clamps page and limit and defaults status to pending', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({ content_reports: [report()] })
+        .mockResolvedValueOnce({
+          content_reports_aggregate: { aggregate: { count: 3 } },
+        });
+
+      const result = await service.listQueue({ page: 0, limit: 99 });
+
+      expect(hasura.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('ContentReportsQueue'),
+        {
+          where: { status: { _eq: 'pending' } },
+          limit: 50,
+          offset: 0,
+        }
+      );
+      expect(result).toEqual({ rows: [report()], total: 3 });
+    });
+
+    it('pages a custom status and treats a missing aggregate as zero', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({ content_reports: null })
+        .mockResolvedValueOnce({
+          content_reports_aggregate: { aggregate: null },
+        });
+
+      const result = await service.listQueue({
+        status: 'resolved',
+        page: 3,
+        limit: 10,
+      });
+
+      expect(hasura.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('ContentReportsQueue'),
+        {
+          where: { status: { _eq: 'resolved' } },
+          limit: 10,
+          offset: 20,
+        }
+      );
+      expect(result).toEqual({ rows: [], total: 0 });
+    });
+  });
+
   describe('resolveReport', () => {
     it('hides a reel when action is hide_content', async () => {
       hasura.executeMutation

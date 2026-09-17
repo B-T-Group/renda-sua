@@ -14,7 +14,7 @@ describe('ReelAiReviewService', () => {
   let service: ReelAiReviewService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     config.get.mockImplementation((key: string) =>
       key === 'reelAiReview' ? { enabled: true } : undefined
     );
@@ -86,6 +86,17 @@ describe('ReelAiReviewService', () => {
   });
 
   describe('runReview', () => {
+    it('skips without loading the reel when AI review is disabled', async () => {
+      config.get.mockReturnValue({ enabled: false });
+
+      await expect(service.runReview('reel-1')).resolves.toEqual({
+        success: true,
+        skipped: true,
+      });
+      expect(hasura.executeQuery).not.toHaveBeenCalled();
+      expect(model.review).not.toHaveBeenCalled();
+    });
+
     it('skips when the reel is no longer in ai_reviewing', async () => {
       hasura.executeQuery.mockResolvedValueOnce({
         reels_by_pk: { ...reviewingReel(), moderation_status: 'pending' },
@@ -125,6 +136,65 @@ describe('ReelAiReviewService', () => {
           reviewId: 'review-1',
           reason: 'On-topic product ad',
         })
+      );
+    });
+
+    it('defers when processing is not ready without calling the model', async () => {
+      mockLoadReel({ ...reviewingReel(), processing_status: 'queued' });
+      hasura.executeMutation
+        .mockResolvedValueOnce({
+          insert_reel_ai_reviews_one: { id: 'review-1' },
+        })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+
+      await expect(service.runReview('reel-1')).resolves.toEqual({
+        success: true,
+        skipped: true,
+      });
+      expect(model.review).not.toHaveBeenCalled();
+      expect(hasura.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('status:skipped'),
+        expect.objectContaining({ reason: 'Processing not ready' })
+      );
+    });
+
+    it('defers when the subject is missing without calling the model', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        reels_by_pk: { ...reviewingReel(), subject_type: '', subject_id: '' },
+      });
+      hasura.executeMutation
+        .mockResolvedValueOnce({
+          insert_reel_ai_reviews_one: { id: 'review-1' },
+        })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({});
+
+      await expect(service.runReview('reel-1')).resolves.toEqual({
+        success: true,
+        skipped: true,
+      });
+      expect(model.review).not.toHaveBeenCalled();
+      expect(hasura.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('status:skipped'),
+        expect.objectContaining({ reason: 'Missing subject' })
+      );
+    });
+
+    it('resets pending when the review row cannot be created', async () => {
+      mockLoadReel();
+      hasura.executeMutation
+        .mockResolvedValueOnce({ insert_reel_ai_reviews_one: null })
+        .mockResolvedValueOnce({});
+
+      await expect(service.runReview('reel-1')).resolves.toEqual({
+        success: false,
+        error: 'Failed to create reel AI review',
+      });
+      expect(model.review).not.toHaveBeenCalled();
+      expect(hasura.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('moderation_status:pending'),
+        { id: 'reel-1' }
       );
     });
 
