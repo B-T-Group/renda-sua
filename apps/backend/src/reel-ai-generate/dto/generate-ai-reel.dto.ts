@@ -64,7 +64,7 @@ export class GenerateAiReelDto {
   @ApiPropertyOptional({
     enum: VEO_TIERS,
     default: 'fast',
-    description: 'Veo model tier. Default fast.',
+    description: 'Generation quality tier. Default fast.',
   })
   @IsOptional()
   @IsIn(VEO_TIERS as unknown as string[])

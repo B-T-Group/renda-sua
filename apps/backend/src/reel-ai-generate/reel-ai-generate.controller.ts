@@ -30,7 +30,7 @@ export class ReelAiGenerateController {
   }
 
   @Post('ai-generate')
-  @ApiOperation({ summary: 'Generate an 8s AI product-ad reel with Veo' })
+  @ApiOperation({ summary: 'Generate an 8s AI product-ad reel' })
   @ApiResponse({ status: 201, description: 'AI reel generation started' })
   @ApiResponse({ status: 402, description: 'Insufficient AI reel tokens' })
   generateReel(

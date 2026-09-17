@@ -29,16 +29,23 @@ import {
   normalizeReelAiPresetId,
   REEL_AI_PRESETS,
 } from './reel-ai-presets';
-import { VeoReelClient, VEO_MAX_REFERENCE_IMAGES } from './veo-reel-client';
-import {
-  parseVeoReelTier,
-  resolveVeoPersonGeneration,
-  resolveVeoReelModel,
-} from './veo-reel-model.util';
+import { VEO_MAX_REFERENCE_IMAGES } from './veo-reel-client';
+import { parseVeoReelTier } from './veo-reel-model.util';
 import {
   detectImageMime,
   pickOriginalProductImageUrl,
 } from './veo-source-image.util';
+import { isVideoGenerationError } from './video-generation/video-generation.error';
+import { VIDEO_GENERATION_EVENTS } from './video-generation/video-generation-events';
+import { VideoGenerationRouter } from './video-generation/video-generation-router.service';
+import type {
+  GenerateVideoRequest,
+  GenerateVideoResponse,
+  VideoGenerationProviderId,
+  VideoGenerationTier,
+  VideoImageInput,
+} from './video-generation/video-generation.types';
+import { RETRYABLE_ERROR_CATEGORIES } from './video-generation/video-generation.types';
 
 interface ProductSubject {
   name: string;
@@ -52,10 +59,21 @@ interface GenerationRow {
   reel_id: string;
   business_id: string;
   gemini_operation_name: string | null;
+  provider: string | null;
+  provider_job_id: string | null;
+  generation_tier: string | null;
+  fallback_used: boolean | null;
+  original_provider: string | null;
   model: string;
   status: string;
   tokens_reserved: number;
+  preset_id: string;
+  user_prompt: string | null;
+  updated_at?: string | null;
 }
+
+/** After claim, allow this long before treating mid-fallback as orphaned. */
+const POLL_FALLBACK_CLAIM_STALE_MS = 2 * 60 * 1000;
 
 const QUEUE_GENERATED_REEL = `
   mutation($id:uuid!,$key:String!,$now:timestamptz!){
@@ -84,7 +102,7 @@ export class ReelAiGenerateService {
     private readonly aws: AwsService,
     private readonly rbac: RbacService,
     private readonly tokens: ReelAiTokensService,
-    private readonly veo: VeoReelClient,
+    private readonly videoRouter: VideoGenerationRouter,
     private readonly mediaQueue: ReelMediaQueueService,
     private readonly merchantNotify: ReelMerchantNotifyService
   ) {}
@@ -117,7 +135,7 @@ export class ReelAiGenerateService {
       throw error;
     }
     try {
-      await this.startVeoJob({
+      await this.startGenerationJob({
         reelId: reel.id,
         businessId: business.id,
         userId,
@@ -134,7 +152,7 @@ export class ReelAiGenerateService {
         tokensReserved: reserved,
         message: error?.message || 'Failed to start AI generation',
       });
-      throw error;
+      throw this.toHttpError(error);
     }
     return reel;
   }
@@ -146,7 +164,7 @@ export class ReelAiGenerateService {
         await this.pollOne(row);
       } catch (error: any) {
         this.logger.error(
-          `Veo poll failed for reel ${row.reel_id}: ${error?.message || error}`
+          `Video poll failed for reel ${row.reel_id}: ${error?.message || error}`
         );
       }
     }
@@ -192,7 +210,7 @@ export class ReelAiGenerateService {
     return tokenCost;
   }
 
-  private async startVeoJob(params: {
+  private async startGenerationJob(params: {
     reelId: string;
     businessId: string;
     userId: string;
@@ -201,32 +219,13 @@ export class ReelAiGenerateService {
     tokensReserved: number;
     tier: ReelAiVeoTier;
   }): Promise<void> {
-    const model = this.resolveModelForTier(params.tier);
-    const veoCfg = this.config.get('veo')!;
     const presetId = normalizeReelAiPresetId(params.dto.presetId);
-    const prompt = buildVeoReelPrompt({
-      presetId,
-      userPrompt: params.dto.prompt,
-      productName: params.product.name,
-      productDescription: params.product.description,
-      brand: params.product.brand,
-      marketCountry: params.dto.marketCountry,
-    });
-    const images = await this.fetchImagesForVeo(params.product.imageUrls);
-    const operationName = await this.veo.startImageToVideo({
-      model,
-      prompt,
-      images,
-      aspectRatio: veoCfg.aspectRatio,
-      resolution: veoCfg.resolution,
-      durationSeconds: veoCfg.durationSeconds,
-      personGeneration: resolveVeoPersonGeneration(model),
-    });
+    const request = await this.buildGenerateRequest(params, presetId);
+    const response = await this.videoRouter.submit(request);
     await this.insertGenerationRow({
       reelId: params.reelId,
       businessId: params.businessId,
-      operationName,
-      model,
+      response,
       presetId,
       userPrompt: params.dto.prompt?.trim() || null,
       tokensReserved: params.tokensReserved,
@@ -242,42 +241,270 @@ export class ReelAiGenerateService {
     }
   }
 
+  private async buildGenerateRequest(
+    params: {
+      reelId: string;
+      businessId: string;
+      dto: GenerateAiReelDto;
+      product: ProductSubject;
+      tier: ReelAiVeoTier;
+    },
+    presetId: string
+  ): Promise<GenerateVideoRequest> {
+    const veoCfg = this.config.get('veo')!;
+    const prompt = buildVeoReelPrompt({
+      presetId,
+      userPrompt: params.dto.prompt,
+      productName: params.product.name,
+      productDescription: params.product.description,
+      brand: params.product.brand,
+      marketCountry: params.dto.marketCountry,
+    });
+    const images = await this.fetchImagesForGeneration(
+      params.product.imageUrls
+    );
+    return {
+      prompt,
+      images,
+      aspectRatio: veoCfg.aspectRatio,
+      resolution: veoCfg.resolution,
+      durationSeconds: veoCfg.durationSeconds,
+      tier: params.tier as VideoGenerationTier,
+      metadata: {
+        reelId: params.reelId,
+        businessId: params.businessId,
+      },
+    };
+  }
+
   private async pollOne(row: GenerationRow): Promise<void> {
-    if (!row.gemini_operation_name) return;
-    const status = await this.veo.getOperation(row.gemini_operation_name);
-    if (!status.done) return;
-    if (status.error?.message || !status.videoUri) {
+    const jobId = row.provider_job_id || row.gemini_operation_name;
+    if (!jobId) return;
+    const providerId = this.resolveProviderId(row);
+    const status = await this.videoRouter.getJobStatus(providerId, jobId);
+    if (status.status === 'QUEUED' || status.status === 'PROCESSING') {
+      return;
+    }
+    if (status.status === 'COMPLETED' && status.videoUri) {
+      await this.ingestVideo(row, providerId, status.videoUri);
+      return;
+    }
+    await this.handleFailedJob(row, providerId, status);
+  }
+
+  private async handleFailedJob(
+    row: GenerationRow,
+    providerId: VideoGenerationProviderId,
+    status: { errorMessage?: string | null; failureCategory?: string }
+  ): Promise<void> {
+    // Claim sets fallback_used before provider/job_id switch. Skip fail while a
+    // peer is mid Runway submit; if the claim is stale, treat as orphaned.
+    if (row.fallback_used && providerId === 'google') {
+      if (!this.isStalePollFallbackClaim(row)) return;
       await this.failAndRefund({
         reelId: row.reel_id,
         businessId: row.business_id,
         tokensReserved: row.tokens_reserved,
-        message: status.error?.message || 'Veo generation returned no video',
+        message:
+          status.errorMessage ||
+          'Video generation fallback timed out after primary failure',
         generationId: row.id,
+        failureCategory: status.failureCategory,
       });
       return;
     }
-    await this.ingestVideo(row, status.videoUri);
+    const category = status.failureCategory;
+    const canFallback =
+      !row.fallback_used &&
+      providerId === 'google' &&
+      category != null &&
+      RETRYABLE_ERROR_CATEGORIES.has(category as never) &&
+      this.config.get('videoGeneration')?.enableFallback !== false;
+    if (canFallback) {
+      const retried = await this.tryPollTimeFallback(
+        row,
+        category || 'UNKNOWN_PROVIDER_ERROR'
+      );
+      if (retried) return;
+    }
+    await this.failAndRefund({
+      reelId: row.reel_id,
+      businessId: row.business_id,
+      tokensReserved: row.tokens_reserved,
+      message: status.errorMessage || 'Video generation returned no video',
+      generationId: row.id,
+      failureCategory: category,
+    });
   }
 
-  private async ingestVideo(row: GenerationRow, videoUri: string): Promise<void> {
-    const key = await this.uploadGeneratedVideo(row, videoUri);
+  private isStalePollFallbackClaim(row: GenerationRow): boolean {
+    if (!row.updated_at) return true;
+    const ageMs = Date.now() - new Date(row.updated_at).getTime();
+    return ageMs > POLL_FALLBACK_CLAIM_STALE_MS;
+  }
+
+  private async tryPollTimeFallback(
+    row: GenerationRow,
+    failureCategory: string
+  ): Promise<boolean> {
+    const claimed = await this.claimPollFallback(row.id);
+    if (!claimed) {
+      // Another sweeper already claimed fallback; do not fail/refund.
+      return true;
+    }
+    try {
+      const request = await this.rebuildRequestFromRow(row);
+      const response = await this.videoRouter.fallbackAfterPrimaryJobFailure({
+        request,
+        originalProvider: 'google',
+        failureCategory,
+      });
+      await this.updateGenerationForFallback(row.id, response);
+      return true;
+    } catch (error: any) {
+      this.logger.warn(
+        `Poll-time fallback failed for reel ${row.reel_id}: ${
+          error?.message || error
+        }`
+      );
+      return false;
+    }
+  }
+
+  private async claimPollFallback(generationId: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const result = await this.hasura.executeMutation<{
+      update_reel_ai_generations: { affected_rows: number };
+    }>(
+      `mutation($id:uuid!,$now:timestamptz!){
+        update_reel_ai_generations(
+          where:{
+            id:{_eq:$id}
+            fallback_used:{_eq:false}
+            status:{_in:[pending,running]}
+          }
+          _set:{fallback_used:true,updated_at:$now}
+        ){affected_rows}
+      }`,
+      { id: generationId, now }
+    );
+    return (result.update_reel_ai_generations?.affected_rows ?? 0) > 0;
+  }
+
+  private async rebuildRequestFromRow(
+    row: GenerationRow
+  ): Promise<GenerateVideoRequest> {
+    const reel = await this.loadReelForFallback(row.reel_id);
+    if (!reel) throw new Error('Reel not found for fallback');
+    const dto = {
+      subjectType: reel.subject_type as 'item' | 'rental',
+      subjectId: reel.subject_id,
+      presetId: row.preset_id as GenerateAiReelDto['presetId'],
+      marketCountry: reel.market_country,
+      prompt: row.user_prompt || undefined,
+    };
+    const product = await this.loadProduct(row.business_id, dto);
+    return this.buildGenerateRequest(
+      {
+        reelId: row.reel_id,
+        businessId: row.business_id,
+        dto: dto as GenerateAiReelDto,
+        product,
+        tier: (row.generation_tier || 'fast') as ReelAiVeoTier,
+      },
+      normalizeReelAiPresetId(row.preset_id)
+    );
+  }
+
+  private async loadReelForFallback(reelId: string): Promise<{
+    subject_type: string;
+    subject_id: string;
+    market_country: string;
+  } | null> {
+    const result = await this.hasura.executeQuery<{
+      reels_by_pk: {
+        subject_type: string;
+        subject_id: string;
+        market_country: string;
+      } | null;
+    }>(
+      `query($id:uuid!){
+        reels_by_pk(id:$id){subject_type subject_id market_country}
+      }`,
+      { id: reelId }
+    );
+    return result.reels_by_pk;
+  }
+
+  private async updateGenerationForFallback(
+    generationId: string,
+    response: GenerateVideoResponse
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await this.hasura.executeMutation(
+      `mutation(
+        $id:uuid!,$provider:String!,$jobId:String!,$model:String!,
+        $original:String,$now:timestamptz!
+      ){
+        update_reel_ai_generations_by_pk(
+          pk_columns:{id:$id}
+          _set:{
+            provider:$provider
+            provider_job_id:$jobId
+            model:$model
+            fallback_used:true
+            original_provider:$original
+            status:running
+            error:null
+            updated_at:$now
+          }
+        ){id}
+      }`,
+      {
+        id: generationId,
+        provider: response.provider,
+        jobId: response.jobId,
+        model: response.providerModel,
+        original: response.originalProvider || 'google',
+        now,
+      }
+    );
+  }
+
+  private async ingestVideo(
+    row: GenerationRow,
+    providerId: VideoGenerationProviderId,
+    videoUri: string
+  ): Promise<void> {
+    const key = await this.uploadGeneratedVideo(row, providerId, videoUri);
     const queued = await this.queueGeneratedReel(row.reel_id, key);
     if (!queued) {
       await this.abandonUnpublishableIngest(row);
       return;
     }
     await this.markGenerationSucceeded(row.id);
+    this.logger.log(
+      JSON.stringify({
+        event: VIDEO_GENERATION_EVENTS.COMPLETED,
+        generationId: row.id,
+        provider: providerId,
+        model: row.model,
+        fallbackUsed: Boolean(row.fallback_used),
+        reelId: row.reel_id,
+      })
+    );
     await this.mediaQueue.enqueue(row.reel_id, key, 'ai');
   }
 
   private async uploadGeneratedVideo(
     row: GenerationRow,
+    providerId: VideoGenerationProviderId,
     videoUri: string
   ): Promise<string> {
     const bucket = this.config.get('reels')?.bucketName;
     if (!bucket) throw new Error('Reels bucket is not configured');
-    const buffer = await this.veo.downloadVideo(videoUri);
-    const key = `source/${row.business_id}/${row.reel_id}/veo.mp4`;
+    const buffer = await this.videoRouter.retrieveVideo(providerId, videoUri);
+    const key = `source/${row.business_id}/${row.reel_id}/generated.mp4`;
     await this.aws.getS3Client().send(
       new PutObjectCommand({
         Bucket: bucket,
@@ -289,7 +516,10 @@ export class ReelAiGenerateService {
     return key;
   }
 
-  private async queueGeneratedReel(reelId: string, key: string): Promise<boolean> {
+  private async queueGeneratedReel(
+    reelId: string,
+    key: string
+  ): Promise<boolean> {
     const now = new Date().toISOString();
     const updated = await this.hasura.executeMutation<{
       update_reels: { affected_rows: number };
@@ -353,6 +583,7 @@ export class ReelAiGenerateService {
     tokensReserved: number;
     message: string;
     generationId?: string;
+    failureCategory?: string;
   }): Promise<void> {
     const now = new Date().toISOString();
     const err = params.message.slice(0, 500);
@@ -384,12 +615,19 @@ export class ReelAiGenerateService {
   }
 
   private async claimFailedGeneration(
-    params: { reelId: string; generationId?: string },
+    params: {
+      reelId: string;
+      generationId?: string;
+      failureCategory?: string;
+    },
     err: string,
     now: string
   ): Promise<boolean> {
     const where = params.generationId
-      ? { id: { _eq: params.generationId }, status: { _in: ['pending', 'running'] } }
+      ? {
+          id: { _eq: params.generationId },
+          status: { _in: ['pending', 'running'] },
+        }
       : {
           reel_id: { _eq: params.reelId },
           status: { _in: ['pending', 'running'] },
@@ -397,13 +635,24 @@ export class ReelAiGenerateService {
     const result = await this.hasura.executeMutation<{
       update_reel_ai_generations: { affected_rows: number };
     }>(
-      `mutation($where:reel_ai_generations_bool_exp!,$err:String!,$now:timestamptz!){
+      `mutation(
+        $where:reel_ai_generations_bool_exp!,$err:String!,
+        $category:String,$now:timestamptz!
+      ){
         update_reel_ai_generations(
           where:$where
-          _set:{status:failed,error:$err,tokens_reserved:0,updated_at:$now}
+          _set:{
+            status:failed,error:$err,failure_category:$category,
+            tokens_reserved:0,updated_at:$now
+          }
         ){affected_rows}
       }`,
-      { where, err, now }
+      {
+        where,
+        err,
+        category: params.failureCategory || null,
+        now,
+      }
     );
     return (result.update_reel_ai_generations?.affected_rows ?? 0) > 0;
   }
@@ -425,17 +674,44 @@ export class ReelAiGenerateService {
     });
   }
 
-  private resolveModelForTier(tier: ReelAiVeoTier): string {
-    const veo = this.config.get('veo');
-    return resolveVeoReelModel({
-      modelOverride: veo?.modelOverride,
-      tierOverride: tier,
-    });
+  private resolveProviderId(row: GenerationRow): VideoGenerationProviderId {
+    if (row.provider === 'runway') return 'runway';
+    return 'google';
+  }
+
+  private toHttpError(error: unknown): Error {
+    if (!isVideoGenerationError(error)) {
+      return error instanceof Error ? error : new Error(String(error));
+    }
+    if (
+      error.category === 'RATE_LIMITED' ||
+      error.category === 'QUOTA_EXCEEDED'
+    ) {
+      return new HttpException(
+        'AI reel generation is busy. Please try again shortly.',
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+    if (
+      error.category === 'INVALID_REQUEST' ||
+      error.category === 'UNSUPPORTED_CONFIGURATION'
+    ) {
+      return new BadRequestException(
+        'Could not start AI reel generation. Try a different product photo.'
+      );
+    }
+    return new HttpException(
+      'AI video generation is temporarily unavailable. Please try again.',
+      HttpStatus.BAD_GATEWAY
+    );
   }
 
   private async loadProduct(
     businessId: string,
-    dto: GenerateAiReelDto
+    dto: Pick<
+      GenerateAiReelDto,
+      'subjectType' | 'subjectId' | 'presetId' | 'marketCountry' | 'prompt'
+    >
   ): Promise<ProductSubject> {
     if (dto.subjectType === 'item') {
       return this.loadSaleItem(businessId, dto.subjectId);
@@ -454,18 +730,14 @@ export class ReelAiGenerateService {
         name: string;
         description: string | null;
         brand: { name: string } | null;
-        item_images: Array<{
-          image_url: string;
-        }>;
+        item_images: Array<{ image_url: string }>;
       } | null;
     }>(
       `query($id:uuid!){
         items_by_pk(id:$id){
           id business_id name description
           brand { name }
-          item_images(order_by:{display_order:asc},limit:3){
-            image_url
-          }
+          item_images(order_by:{display_order:asc},limit:3){image_url}
         }
       }`,
       { id: itemId }
@@ -533,16 +805,16 @@ export class ReelAiGenerateService {
     };
   }
 
-  private async fetchImagesForVeo(
+  private async fetchImagesForGeneration(
     urls: string[]
-  ): Promise<Array<{ imageBase64: string; mimeType: string }>> {
-    const images: Array<{ imageBase64: string; mimeType: string }> = [];
+  ): Promise<VideoImageInput[]> {
+    const images: VideoImageInput[] = [];
     for (const url of urls.slice(0, VEO_MAX_REFERENCE_IMAGES)) {
       try {
-        images.push(await this.fetchImageForVeo(url));
+        images.push(await this.fetchImageForGeneration(url));
       } catch (error: any) {
         this.logger.warn(
-          `Skipping Veo reference image ${url}: ${error?.message || error}`
+          `Skipping reference image ${url}: ${error?.message || error}`
         );
       }
     }
@@ -554,9 +826,7 @@ export class ReelAiGenerateService {
     return images;
   }
 
-  private async fetchImageForVeo(
-    url: string
-  ): Promise<{ imageBase64: string; mimeType: string }> {
+  private async fetchImageForGeneration(url: string): Promise<VideoImageInput> {
     const response = await axios.get<ArrayBuffer>(url, {
       responseType: 'arraybuffer',
       timeout: 30_000,
@@ -606,12 +876,12 @@ export class ReelAiGenerateService {
   private async insertGenerationRow(params: {
     reelId: string;
     businessId: string;
-    operationName: string;
-    model: string;
+    response: GenerateVideoResponse;
     presetId: string;
     userPrompt: string | null;
     tokensReserved: number;
   }): Promise<void> {
+    const isGoogle = params.response.provider === 'google';
     await this.hasura.executeMutation(
       `mutation($object:reel_ai_generations_insert_input!){
         insert_reel_ai_generations_one(object:$object){id}
@@ -620,8 +890,13 @@ export class ReelAiGenerateService {
         object: {
           reel_id: params.reelId,
           business_id: params.businessId,
-          gemini_operation_name: params.operationName,
-          model: params.model,
+          gemini_operation_name: isGoogle ? params.response.jobId : null,
+          provider: params.response.provider,
+          provider_job_id: params.response.jobId,
+          generation_tier: params.response.tier,
+          fallback_used: params.response.fallbackUsed,
+          original_provider: params.response.originalProvider || null,
+          model: params.response.providerModel,
           preset_id: params.presetId,
           user_prompt: params.userPrompt,
           status: 'running',
@@ -641,7 +916,9 @@ export class ReelAiGenerateService {
           order_by:{created_at:asc}
           limit:25
         ){
-          id reel_id business_id gemini_operation_name model status tokens_reserved
+          id reel_id business_id gemini_operation_name
+          provider provider_job_id generation_tier fallback_used original_provider
+          model status tokens_reserved preset_id user_prompt updated_at
         }
       }`
     );
