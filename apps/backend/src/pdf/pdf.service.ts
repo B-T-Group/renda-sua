@@ -18,6 +18,10 @@ import {
 import { UploadService } from '../services/upload.service';
 import { generateBarcodeDataUrl } from './barcode.util';
 import {
+  httpExceptionFromPdfEndpointError,
+  httpExceptionFromPdfStoreError,
+} from './pdf-endpoint-error.util';
+import {
   OrderReceiptData,
   PdfEndpointRequest,
   PdfEndpointResponse,
@@ -175,45 +179,13 @@ export class PdfService {
   private async callPdfEndpoint(
     requestData: PdfEndpointRequest
   ): Promise<Buffer> {
-    const pdfConfig = this.configService.get('pdfEndpoint');
-    if (!pdfConfig?.apiToken) {
-      throw new HttpException(
-        'PDFEndpoint API token not configured',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+    try {
+      const response = await this.postPdfEndpoint(requestData);
+      return await this.bufferFromPdfResponse(response);
+    } catch (error: any) {
+      this.logger.error(`PDFEndpoint convert failed: ${error?.message}`);
+      throw httpExceptionFromPdfEndpointError(error);
     }
-    const response = await axios.post<PdfEndpointResponse>(
-      'https://api.pdfendpoint.com/v1/convert',
-      requestData,
-      {
-        headers: {
-          Authorization: `Bearer ${pdfConfig.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 30000,
-      }
-    );
-    const { success, data: resData, pdf: pdfBase64, error } = response.data;
-    if (!success) {
-      throw new HttpException(
-        `PDF generation failed: ${error || 'Unknown error'}`,
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-    if (resData?.url) {
-      const fileRes = await axios.get<ArrayBuffer>(resData.url, {
-        responseType: 'arraybuffer',
-        timeout: 30000,
-      });
-      return Buffer.from(fileRes.data);
-    }
-    if (pdfBase64) {
-      return Buffer.from(pdfBase64, 'base64');
-    }
-    throw new HttpException(
-      'PDF generation failed: no PDF data or URL in response',
-      HttpStatus.INTERNAL_SERVER_ERROR
-    );
   }
 
   /**
@@ -223,6 +195,65 @@ export class PdfService {
   private async callPdfEndpointForUrl(
     requestData: PdfEndpointRequest
   ): Promise<string> {
+    try {
+      const response = await this.postPdfEndpoint(requestData);
+      if (response.data?.url) return response.data.url;
+      throw new HttpException(
+        'PDF generation failed: no URL in response',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    } catch (error: any) {
+      this.logger.error(`PDFEndpoint convert URL failed: ${error?.message}`);
+      throw httpExceptionFromPdfEndpointError(error);
+    }
+  }
+
+  private async postPdfEndpoint(
+    requestData: PdfEndpointRequest
+  ): Promise<PdfEndpointResponse> {
+    const pdfConfig = this.requirePdfConfig();
+    const response = await axios.post<PdfEndpointResponse>(
+      'https://api.pdfendpoint.com/v1/convert',
+      requestData,
+      this.pdfEndpointRequestConfig(pdfConfig.apiToken)
+    );
+    if (!response.data?.success) {
+      throw new HttpException(
+        `PDF generation failed: ${response.data?.error || 'Unknown error'}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return response.data;
+  }
+
+  private pdfEndpointRequestConfig(apiToken: string) {
+    return {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    };
+  }
+
+  private async bufferFromPdfResponse(
+    body: PdfEndpointResponse
+  ): Promise<Buffer> {
+    if (body.data?.url) {
+      const fileRes = await axios.get<ArrayBuffer>(body.data.url, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+      return Buffer.from(fileRes.data);
+    }
+    if (body.pdf) return Buffer.from(body.pdf, 'base64');
+    throw new HttpException(
+      'PDF generation failed: no PDF data or URL in response',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+
+  private requirePdfConfig() {
     const pdfConfig = this.configService.get('pdfEndpoint');
     if (!pdfConfig?.apiToken) {
       throw new HttpException(
@@ -230,40 +261,22 @@ export class PdfService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
-    const response = await axios.post<PdfEndpointResponse>(
-      'https://api.pdfendpoint.com/v1/convert',
-      requestData,
-      {
-        headers: {
-          Authorization: `Bearer ${pdfConfig.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 30000,
-      }
-    );
-    const { success, data: resData, error } = response.data;
-    if (!success) {
-      throw new HttpException(
-        `PDF generation failed: ${error || 'Unknown error'}`,
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-    if (resData?.url) return resData.url;
-    throw new HttpException(
-      'PDF generation failed: no URL in response',
-      HttpStatus.INTERNAL_SERVER_ERROR
-    );
+    return pdfConfig;
   }
 
   /**
    * Fetch PDF from a URL (e.g. stored label URL or PDFEndpoint) and return as Buffer.
    */
   async fetchPdfFromUrl(url: string): Promise<Buffer> {
-    const res = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 30000,
-    });
-    return Buffer.from(res.data);
+    try {
+      const res = await axios.get<ArrayBuffer>(url, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
+      return Buffer.from(res.data);
+    } catch (error: any) {
+      throw httpExceptionFromPdfEndpointError(error);
+    }
   }
 
   /**
@@ -272,55 +285,16 @@ export class PdfService {
    * @returns Promise with PDF buffer
    */
   private async convertHtmlToPdf(html: string): Promise<Buffer> {
-    try {
-      const pdfConfig = this.configService.get('pdfEndpoint');
-      if (!pdfConfig?.apiToken) {
-        throw new HttpException(
-          'PDFEndpoint API token not configured',
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-      const requestData: PdfEndpointRequest = {
-        html,
-        sandbox: pdfConfig.sandbox,
-        options: {
-          format: 'A4',
-          margin: {
-            top: '20mm',
-            right: '20mm',
-            bottom: '20mm',
-            left: '20mm',
-          },
-          orientation: 'portrait',
-        },
-      };
-      return this.callPdfEndpoint(requestData);
-    } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      if (error.response) {
-        this.logger.error(
-          `PDFEndpoint API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`
-        );
-        throw new HttpException(
-          `PDF generation service error: ${
-            error.response?.data?.error || error.message
-          }`,
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-      if (error.code === 'ECONNABORTED') {
-        this.logger.error('PDFEndpoint API timeout');
-        throw new HttpException(
-          'PDF generation timeout',
-          HttpStatus.REQUEST_TIMEOUT
-        );
-      }
-      this.logger.error(`PDF conversion error: ${error.message}`);
-      throw new HttpException(
-        'PDF generation failed',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+    const pdfConfig = this.requirePdfConfig();
+    return this.callPdfEndpoint({
+      html,
+      sandbox: pdfConfig.sandbox,
+      options: {
+        format: 'A4',
+        margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
+        orientation: 'portrait',
+      },
+    });
   }
 
   /**
@@ -420,10 +394,15 @@ export class PdfService {
       file_size: pdfBuffer.length,
       note: `Merchant agreement ${params.agreementVersion}`,
     });
-    await axios.put(uploadResult.presigned_url, pdfBuffer, {
-      headers: { 'Content-Type': 'application/pdf' },
-      timeout: 30000,
-    });
+    try {
+      await axios.put(uploadResult.presigned_url, pdfBuffer, {
+        headers: { 'Content-Type': 'application/pdf' },
+        timeout: 30000,
+      });
+    } catch (error: any) {
+      this.logger.error(`Agreement PDF upload failed: ${error?.message}`);
+      throw httpExceptionFromPdfStoreError(error);
+    }
     return { id: uploadResult.upload_record.id };
   }
 
@@ -541,55 +520,16 @@ export class PdfService {
    * PDFEndpoint format A6, zero margin; content fills the page.
    */
   private async convertHtmlToPdfForLabel(html: string): Promise<Buffer> {
-    try {
-      const pdfConfig = this.configService.get('pdfEndpoint');
-      if (!pdfConfig?.apiToken) {
-        throw new HttpException(
-          'PDFEndpoint API token not configured',
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-      const requestData: PdfEndpointRequest = {
-        html,
-        sandbox: pdfConfig.sandbox,
-        options: {
-          format: 'A6',
-          margin: {
-            top: '0',
-            right: '0',
-            bottom: '0',
-            left: '0',
-          },
-          orientation: 'portrait',
-        },
-      };
-      return this.callPdfEndpoint(requestData);
-    } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      if (error.response) {
-        this.logger.error(
-          `PDFEndpoint API error (label): ${error.response.status} - ${JSON.stringify(error.response.data)}`
-        );
-        throw new HttpException(
-          `PDF generation service error: ${
-            error.response?.data?.error || error.message
-          }`,
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-      if (error.code === 'ECONNABORTED') {
-        this.logger.error('PDFEndpoint API timeout');
-        throw new HttpException(
-          'PDF generation timeout',
-          HttpStatus.REQUEST_TIMEOUT
-        );
-      }
-      this.logger.error(`PDF conversion error (label): ${error.message}`);
-      throw new HttpException(
-        'PDF generation failed',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+    const pdfConfig = this.requirePdfConfig();
+    return this.callPdfEndpoint({
+      html,
+      sandbox: pdfConfig.sandbox,
+      options: {
+        format: 'A6',
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        orientation: 'portrait',
+      },
+    });
   }
 
   /**
@@ -597,55 +537,16 @@ export class PdfService {
    * Uses A6 format, zero margin; content fills the page.
    */
   private async convertHtmlToPdfForLabelUrl(html: string): Promise<string> {
-    try {
-      const pdfConfig = this.configService.get('pdfEndpoint');
-      if (!pdfConfig?.apiToken) {
-        throw new HttpException(
-          'PDFEndpoint API token not configured',
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-      const requestData: PdfEndpointRequest = {
-        html,
-        sandbox: pdfConfig.sandbox,
-        options: {
-          format: 'A6',
-          margin: {
-            top: '0',
-            right: '0',
-            bottom: '0',
-            left: '0',
-          },
-          orientation: 'portrait',
-        },
-      };
-      return this.callPdfEndpointForUrl(requestData);
-    } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      if (error.response) {
-        this.logger.error(
-          `PDFEndpoint API error (label URL): ${error.response.status} - ${JSON.stringify(error.response.data)}`
-        );
-        throw new HttpException(
-          `PDF generation service error: ${
-            error.response?.data?.error || error.message
-          }`,
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-      if (error.code === 'ECONNABORTED') {
-        this.logger.error('PDFEndpoint API timeout');
-        throw new HttpException(
-          'PDF generation timeout',
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
-      this.logger.error(`PDF conversion error (label URL): ${error.message}`);
-      throw new HttpException(
-        'PDF generation failed',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+    const pdfConfig = this.requirePdfConfig();
+    return this.callPdfEndpointForUrl({
+      html,
+      sandbox: pdfConfig.sandbox,
+      options: {
+        format: 'A6',
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        orientation: 'portrait',
+      },
+    });
   }
 
   /**
