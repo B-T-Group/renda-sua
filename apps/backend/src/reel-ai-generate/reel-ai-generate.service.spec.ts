@@ -345,6 +345,106 @@ describe('ReelAiGenerateService.generate', () => {
     expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
   });
 
+  it('refunds tokens when Veo finishes after the merchant cancelled the reel', async () => {
+    const runningJob = {
+      id: 'gen-1',
+      reel_id: 'reel-1',
+      business_id: 'business-1',
+      gemini_operation_name: 'operations/1',
+      model: 'veo',
+      status: 'running',
+      tokens_reserved: 1,
+    };
+    hasura.executeQuery
+      .mockResolvedValueOnce({ reel_ai_generations: [runningJob] })
+      .mockResolvedValueOnce({
+        reels_by_pk: { deleted_at: '2026-09-17T00:00:00.000Z', moderation_status: 'draft' },
+      });
+    veo.getOperation.mockResolvedValue({
+      done: true,
+      videoUri: 'https://veo.example/video.mp4',
+    });
+    veo.downloadVideo.mockResolvedValue(Buffer.from('mp4'));
+    aws.getS3Client.mockReturnValue({ send: jest.fn().mockResolvedValue({}) });
+    config.get.mockImplementation((key: string) => {
+      if (key === 'reels') return { bucketName: 'reels-bucket' };
+      if (key === 'veo') {
+        return {
+          tier: 'fast',
+          modelOverride: '',
+          resolution: '720p',
+          durationSeconds: 8,
+          aspectRatio: '9:16',
+        };
+      }
+      return undefined;
+    });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels: { affected_rows: 0 } })
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+
+    await service.pollPendingGenerations();
+
+    expect(mediaQueue.enqueue).not.toHaveBeenCalled();
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
+  });
+
+  it('does not overwrite an admin rejection when ingesting a finished Veo job', async () => {
+    const runningJob = {
+      id: 'gen-1',
+      reel_id: 'reel-1',
+      business_id: 'business-1',
+      gemini_operation_name: 'operations/1',
+      model: 'veo',
+      status: 'running',
+      tokens_reserved: 4,
+    };
+    hasura.executeQuery
+      .mockResolvedValueOnce({ reel_ai_generations: [runningJob] })
+      .mockResolvedValueOnce({
+        reels_by_pk: { deleted_at: null, moderation_status: 'rejected' },
+      });
+    veo.getOperation.mockResolvedValue({
+      done: true,
+      videoUri: 'https://veo.example/video.mp4',
+    });
+    veo.downloadVideo.mockResolvedValue(Buffer.from('mp4'));
+    aws.getS3Client.mockReturnValue({ send: jest.fn().mockResolvedValue({}) });
+    config.get.mockImplementation((key: string) => {
+      if (key === 'reels') return { bucketName: 'reels-bucket' };
+      if (key === 'veo') {
+        return {
+          tier: 'fast',
+          modelOverride: '',
+          resolution: '720p',
+          durationSeconds: 8,
+          aspectRatio: '9:16',
+        };
+      }
+      return undefined;
+    });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels: { affected_rows: 0 } })
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+
+    await service.pollPendingGenerations();
+
+    expect(hasura.executeMutation.mock.calls[0][0]).toContain(
+      'moderation_status:{_in:[draft]}'
+    );
+    expect(hasura.executeMutation.mock.calls[0][0]).toContain(
+      'deleted_at:{_is_null:true}'
+    );
+    expect(mediaQueue.enqueue).not.toHaveBeenCalled();
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 4);
+  });
+
   it('throws payment required when no tokens remain', async () => {
     rbac.getEffectiveAccess.mockResolvedValue({ isSuperuser: false });
     jest
