@@ -400,17 +400,39 @@ describe('ReelsFeedService', () => {
   });
 
   describe('recordView', () => {
+    const reelId = '11111111-1111-4111-8111-111111111111';
+    const userId = '22222222-2222-4222-8222-222222222222';
+
     it('ignores watches below the 3s threshold', async () => {
-      await service.recordView({ reelId: 'reel-1', watchTimeMs: 2999 });
+      await service.recordView({ reelId, watchTimeMs: 2999 });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips tracking when the reel id is not a UUID', async () => {
+      await service.recordView({ reelId: 'not-a-uuid', watchTimeMs: 4000 });
+      expect(hasura.executeQuery).not.toHaveBeenCalled();
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('skips tracking when the reel no longer exists', async () => {
+      hasura.executeQuery.mockResolvedValue({ reels_by_pk: null });
+
+      await service.recordView({ reelId, watchTimeMs: 4000 });
+
+      expect(hasura.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('reels_by_pk'),
+        { id: reelId }
+      );
       expect(hasura.executeMutation).not.toHaveBeenCalled();
     });
 
     it('records a view and marks completion at 15s', async () => {
+      hasura.executeQuery.mockResolvedValue({ reels_by_pk: { id: reelId } });
       hasura.executeMutation.mockResolvedValue({});
 
       await service.recordView({
-        reelId: 'reel-1',
-        userId: 'user-1',
+        reelId,
+        userId,
         sessionId: 'sess-1',
         watchTimeMs: 15000,
       });
@@ -420,8 +442,8 @@ describe('ReelsFeedService', () => {
         expect.stringContaining('TrackReelView'),
         expect.objectContaining({
           object: expect.objectContaining({
-            reel_id: 'reel-1',
-            user_id: 'user-1',
+            reel_id: reelId,
+            user_id: userId,
             completed: true,
           }),
         })
@@ -429,8 +451,57 @@ describe('ReelsFeedService', () => {
       expect(hasura.executeMutation).toHaveBeenNthCalledWith(
         2,
         expect.stringContaining('IncReelViews'),
-        { id: 'reel-1' }
+        { id: reelId }
       );
+    });
+
+    it('stores a non-UUID user id as null', async () => {
+      hasura.executeQuery.mockResolvedValue({ reels_by_pk: { id: reelId } });
+      hasura.executeMutation.mockResolvedValue({});
+
+      await service.recordView({
+        reelId,
+        userId: 'anonymous',
+        watchTimeMs: 4000,
+      });
+
+      expect(hasura.executeMutation).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('TrackReelView'),
+        expect.objectContaining({
+          object: expect.objectContaining({ user_id: null }),
+        })
+      );
+    });
+
+    it('swallows a reel_id foreign-key race without incrementing views', async () => {
+      hasura.executeQuery.mockResolvedValue({ reels_by_pk: { id: reelId } });
+      hasura.executeMutation.mockRejectedValueOnce({
+        message:
+          'Foreign key violation. insert or update on table "reel_view_events" violates foreign key constraint "reel_view_events_reel_id_fkey"',
+        response: {
+          errors: [
+            {
+              message:
+                'Foreign key violation. insert or update on table "reel_view_events" violates foreign key constraint "reel_view_events_reel_id_fkey"',
+            },
+          ],
+        },
+      });
+
+      await expect(
+        service.recordView({ reelId, watchTimeMs: 4000 })
+      ).resolves.toBeUndefined();
+      expect(hasura.executeMutation).toHaveBeenCalledTimes(1);
+    });
+
+    it('rethrows unexpected Hasura errors', async () => {
+      hasura.executeQuery.mockResolvedValue({ reels_by_pk: { id: reelId } });
+      hasura.executeMutation.mockRejectedValueOnce(new Error('network down'));
+
+      await expect(
+        service.recordView({ reelId, watchTimeMs: 4000 })
+      ).rejects.toThrow('network down');
     });
   });
 
