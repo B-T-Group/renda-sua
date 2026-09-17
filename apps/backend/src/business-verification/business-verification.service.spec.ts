@@ -100,7 +100,8 @@ describe('BusinessVerificationService MoMo ID status', () => {
       contracts as unknown as BusinessContractsService,
       mobilePhones as unknown as MobilePaymentPhonesService,
       {} as any,
-      launchPromo as any
+      launchPromo as any,
+      { getS3Client: jest.fn() } as any
     );
   });
 
@@ -209,7 +210,8 @@ describe('BusinessVerificationService Stripe Connect next action', () => {
       contracts as unknown as BusinessContractsService,
       {} as any,
       {} as any,
-      launchPromo as any
+      launchPromo as any,
+      { getS3Client: jest.fn() } as any
     );
   });
 
@@ -314,5 +316,170 @@ describe('BusinessVerificationService Stripe Connect next action', () => {
     expect(status.steps.stripeConnect.complete).toBe(false);
     expect(status.steps.stripeConnect.connected).toBe(false);
     expect(status.steps.stripeConnect.status).toBe('not_started');
+  });
+});
+
+describe('BusinessVerificationService.acceptAgreement PDF decoupling', () => {
+  const VERSION = '2026-09-1';
+  let service: BusinessVerificationService;
+  let hasuraUser: { getUser: jest.Mock };
+  let hasuraSystem: { executeMutation: jest.Mock; executeQuery: jest.Mock };
+  let pdfService: { generateMerchantAgreementPdf: jest.Mock };
+  let notifications: { sendMerchantAgreementCopyEmail: jest.Mock };
+  let merchantLifecycle: { recompute: jest.Mock };
+  let contracts: { isBoldSignEnabledForBusiness: jest.Mock };
+  let agreementProvider: { getBusinessCountryCode: jest.Mock };
+  let aws: { getS3Client: jest.Mock };
+
+  beforeEach(() => {
+    hasuraUser = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'user-1',
+        email: 'ada@example.com',
+        preferred_language: 'en',
+        business: {
+          id: 'biz-1',
+          name: 'Ada Shop',
+          merchant_agreement_version: null,
+        },
+      }),
+    };
+    hasuraSystem = {
+      executeMutation: jest
+        .fn()
+        .mockResolvedValueOnce({
+          insert_business_merchant_agreement_acceptances_one: {
+            id: 'acc-1',
+            accepted_at: '2026-09-17T00:00:00.000Z',
+          },
+        })
+        .mockResolvedValue({ update_businesses_by_pk: { id: 'biz-1' } }),
+      executeQuery: jest.fn(),
+    };
+    pdfService = {
+      generateMerchantAgreementPdf: jest.fn(),
+    };
+    notifications = {
+      sendMerchantAgreementCopyEmail: jest.fn().mockResolvedValue(undefined),
+    };
+    merchantLifecycle = {
+      recompute: jest.fn().mockResolvedValue(null),
+    };
+    contracts = {
+      isBoldSignEnabledForBusiness: jest.fn().mockResolvedValue(false),
+    };
+    agreementProvider = {
+      getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+    };
+    aws = {
+      getS3Client: jest.fn().mockReturnValue({
+        send: jest.fn().mockResolvedValue({}),
+      }),
+    };
+
+    service = new BusinessVerificationService(
+      hasuraUser as any,
+      hasuraSystem as any,
+      pdfService as any,
+      notifications as any,
+      {} as any,
+      {} as any,
+      merchantLifecycle as any,
+      contracts as any,
+      {} as any,
+      agreementProvider as any,
+      {} as any,
+      aws as any
+    );
+  });
+
+  it('still completes signature when PDFEndpoint fails', async () => {
+    pdfService.generateMerchantAgreementPdf.mockRejectedValue(
+      new Error('PDFEndpoint 403')
+    );
+
+    const result = await service.acceptAgreement(
+      { legalName: 'Ada Lovelace', agreementVersion: VERSION },
+      '127.0.0.1',
+      'jest'
+    );
+
+    expect(result.pdfGenerated).toBe(false);
+    expect(result.pdfUploadId).toBeNull();
+    expect(result.acceptance.id).toBe('acc-1');
+    expect(hasuraSystem.executeMutation).toHaveBeenCalled();
+    expect(merchantLifecycle.recompute).toHaveBeenCalledWith(
+      'biz-1',
+      'merchant_agreement_accepted'
+    );
+    expect(notifications.sendMerchantAgreementCopyEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ pdfGenerated: false })
+    );
+  });
+
+  it('links pdf_upload_id when PDF generation succeeds', async () => {
+    pdfService.generateMerchantAgreementPdf.mockResolvedValue({ id: 'pdf-1' });
+    hasuraSystem.executeMutation
+      .mockReset()
+      .mockResolvedValueOnce({
+        insert_business_merchant_agreement_acceptances_one: {
+          id: 'acc-1',
+          accepted_at: '2026-09-17T00:00:00.000Z',
+        },
+      })
+      .mockResolvedValueOnce({ update_businesses_by_pk: { id: 'biz-1' } })
+      .mockResolvedValueOnce({
+        update_business_merchant_agreement_acceptances_by_pk: { id: 'acc-1' },
+      });
+
+    const result = await service.acceptAgreement(
+      {
+        legalName: 'Ada Lovelace',
+        agreementVersion: VERSION,
+        signatureBase64: 'aaaa',
+      },
+      undefined,
+      undefined
+    );
+
+    expect(result.pdfGenerated).toBe(true);
+    expect(result.pdfUploadId).toBe('pdf-1');
+    expect(notifications.sendMerchantAgreementCopyEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ pdfGenerated: true })
+    );
+    expect(hasuraSystem.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('SetPdf'),
+      expect.objectContaining({ id: 'acc-1', pdfId: 'pdf-1' })
+    );
+  });
+
+  it('still reports pdfGenerated when linking pdf_upload_id fails', async () => {
+    pdfService.generateMerchantAgreementPdf.mockResolvedValue({ id: 'pdf-2' });
+    hasuraSystem.executeMutation
+      .mockReset()
+      .mockResolvedValueOnce({
+        insert_business_merchant_agreement_acceptances_one: {
+          id: 'acc-1',
+          accepted_at: '2026-09-17T00:00:00.000Z',
+        },
+      })
+      .mockResolvedValueOnce({ update_businesses_by_pk: { id: 'biz-1' } })
+      .mockRejectedValueOnce(new Error('Hasura link failed'));
+
+    const result = await service.acceptAgreement(
+      {
+        legalName: 'Ada Lovelace',
+        agreementVersion: VERSION,
+        signatureBase64: 'aaaa',
+      },
+      undefined,
+      undefined
+    );
+
+    expect(result.pdfGenerated).toBe(true);
+    expect(result.pdfUploadId).toBe('pdf-2');
+    expect(notifications.sendMerchantAgreementCopyEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ pdfGenerated: true })
+    );
   });
 });

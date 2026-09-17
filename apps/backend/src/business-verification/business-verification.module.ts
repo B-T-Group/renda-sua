@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { AwsModule } from '../aws/aws.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -14,6 +15,7 @@ import { BusinessVerificationService } from './business-verification.service';
 @Module({
   imports: [
     AuthModule,
+    AwsModule,
     HasuraModule,
     PdfModule,
     NotificationsModule,

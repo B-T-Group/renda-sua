@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -12,6 +13,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -113,8 +115,17 @@ export class BusinessVerificationController {
 
   @Post('merchant-agreement/accept')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Accept the merchant partnership agreement' })
+  @ApiOperation({
+    summary: 'Accept the merchant partnership agreement',
+    description:
+      'Persists the signature even if PDF generation fails. Check data.pdfGenerated / data.pdfUploadId and call retry-pdf if needed.',
+  })
   @ApiBody({ type: AcceptMerchantAgreementDto })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Agreement accepted; pdfGenerated may be false if PDFEndpoint failed',
+  })
   async acceptAgreement(
     @Body() body: AcceptMerchantAgreementDto,
     @Req() req: Request
@@ -124,6 +135,22 @@ export class BusinessVerificationController {
       clientIp(req),
       req.headers['user-agent']
     );
+    return { success: true, data };
+  }
+
+  @Post('merchant-agreement/:acceptanceId/retry-pdf')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Retry generating the signed merchant agreement PDF',
+  })
+  @ApiParam({ name: 'acceptanceId', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'PDF generated and linked' })
+  @ApiResponse({ status: 400, description: 'PDF generation still unavailable' })
+  async retryAgreementPdf(@Param('acceptanceId') acceptanceId: string) {
+    const data =
+      await this.businessVerificationService.retryMerchantAgreementPdf(
+        acceptanceId
+      );
     return { success: true, data };
   }
 }
