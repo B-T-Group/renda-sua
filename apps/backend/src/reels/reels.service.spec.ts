@@ -5,6 +5,13 @@ import {
 } from '@nestjs/common';
 import { ReelsService } from './reels.service';
 
+function tokensStub() {
+  return {
+    refundTokens: jest.fn(),
+    recordUsage: jest.fn(),
+  };
+}
+
 describe('ReelsService.retryProcessing', () => {
   const hasura = {
     executeQuery: jest.fn(),
@@ -14,6 +21,7 @@ describe('ReelsService.retryProcessing', () => {
   const config = { get: jest.fn() };
   const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
+  const tokens = tokensStub();
 
   let service: ReelsService;
 
@@ -26,7 +34,8 @@ describe('ReelsService.retryProcessing', () => {
       config as never,
       rbac as never,
       mediaQueue as never,
-      { notifyModeration: jest.fn() } as never
+      { notifyModeration: jest.fn() } as never,
+      tokens as never
     );
   });
 
@@ -135,6 +144,7 @@ describe('ReelsService merchant gates', () => {
   const config = { get: jest.fn(() => ({ dailyQuota: 10 })) };
   const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
+  const tokens = tokensStub();
   let service: ReelsService;
 
   beforeEach(() => {
@@ -146,7 +156,8 @@ describe('ReelsService merchant gates', () => {
       config as never,
       rbac as never,
       mediaQueue as never,
-      { notifyModeration: jest.fn() } as never
+      { notifyModeration: jest.fn() } as never,
+      tokens as never
     );
   });
 
@@ -299,6 +310,7 @@ describe('ReelsService.setActive', () => {
   const config = { get: jest.fn() };
   const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
+  const tokens = tokensStub();
   let service: ReelsService;
 
   beforeEach(() => {
@@ -310,7 +322,8 @@ describe('ReelsService.setActive', () => {
       config as never,
       rbac as never,
       mediaQueue as never,
-      { notifyModeration: jest.fn() } as never
+      { notifyModeration: jest.fn() } as never,
+      tokens as never
     );
   });
 
@@ -435,6 +448,160 @@ describe('ReelsService.setActive', () => {
     expect(hasura.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('deleted_at'),
       expect.objectContaining({ id: 'reel-1' })
+    );
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
+  });
+
+  it('refunds reserved tokens when cancelling a generating AI reel', async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString();
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'draft',
+          processing_status: 'generating',
+          generation_source: 'ai',
+          deleted_at: null,
+          updated_at: stale,
+        },
+      })
+      .mockResolvedValueOnce({
+        reel_ai_generations: [{ id: 'gen-1', tokens_reserved: 4 }],
+      });
+    hasura.executeMutation
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      })
+      .mockResolvedValueOnce({
+        update_reels_by_pk: { id: 'reel-1' },
+      });
+    config.get.mockReturnValue({ dailyQuota: 10, stuckAfterMinutes: 15 });
+
+    await service.delete('user-1', 'reel-1');
+
+    expect(tokens.refundTokens).toHaveBeenCalledWith('biz-1', 4);
+    expect(tokens.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: 'biz-1',
+        reelId: 'reel-1',
+        tokensConsumed: 4,
+        operationType: 'refund',
+      })
+    );
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('deleted_at'),
+      expect.objectContaining({ id: 'reel-1' })
+    );
+  });
+
+  it('does not refund when the generation was already claimed', async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString();
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          moderation_status: 'draft',
+          processing_status: 'generating',
+          generation_source: 'ai',
+          deleted_at: null,
+          updated_at: stale,
+        },
+      })
+      .mockResolvedValueOnce({
+        reel_ai_generations: [{ id: 'gen-1', tokens_reserved: 1 }],
+      });
+    hasura.executeMutation
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 0 },
+      })
+      .mockResolvedValueOnce({
+        update_reels_by_pk: { id: 'reel-1' },
+      });
+    config.get.mockReturnValue({ dailyQuota: 10, stuckAfterMinutes: 15 });
+
+    await service.delete('user-1', 'reel-1');
+
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
+  });
+
+  it('rejects submit of a rejected reel so AI auto-approve cannot republish it', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          source_s3_key: 'source/biz-1/reel-1/veo.mp4',
+          moderation_status: 'rejected',
+          processing_status: 'ready',
+          generation_source: 'ai',
+          deleted_at: null,
+        },
+      });
+
+    await expect(service.submit('user-1', 'reel-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(mediaQueue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('rejects submit of an approved reel', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          source_s3_key: 'source/biz-1/reel-1/upload.mp4',
+          moderation_status: 'approved',
+          processing_status: 'ready',
+          generation_source: 'merchant',
+          deleted_at: null,
+        },
+      });
+
+    await expect(service.submit('user-1', 'reel-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(mediaQueue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('submits a draft reel with uploaded media', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          source_s3_key: 'source/biz-1/reel-1/upload.mp4',
+          moderation_status: 'draft',
+          processing_status: 'awaiting_upload',
+          generation_source: 'merchant',
+          deleted_at: null,
+        },
+      });
+    hasura.executeMutation.mockResolvedValueOnce({});
+    mediaQueue.enqueue.mockResolvedValueOnce(undefined);
+
+    await service.submit('user-1', 'reel-1');
+
+    expect(mediaQueue.enqueue).toHaveBeenCalledWith(
+      'reel-1',
+      'source/biz-1/reel-1/upload.mp4'
     );
   });
 

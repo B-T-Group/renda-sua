@@ -6,6 +6,7 @@ import { CatalogCacheModule } from '../catalog-cache/catalog-cache.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ReelAiReviewModule } from '../reel-ai-review/reel-ai-review.module';
+import { ReelAiTokensModule } from '../reel-ai-tokens/reel-ai-tokens.module';
 import { ReelMediaQueueService } from './reel-media-queue.service';
 import { ReelsAdminController } from './reels-admin.controller';
 import { ReelsController } from './reels.controller';
@@ -21,6 +22,7 @@ import { ReelsService } from './reels.service';
     CatalogCacheModule,
     HasuraModule,
     NotificationsModule,
+    ReelAiTokensModule,
     forwardRef(() => ReelAiReviewModule),
   ],
   controllers: [ReelsController, ReelsFeedController, ReelsAdminController],

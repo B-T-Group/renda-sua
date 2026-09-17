@@ -57,6 +57,23 @@ interface GenerationRow {
   tokens_reserved: number;
 }
 
+const QUEUE_GENERATED_REEL = `
+  mutation($id:uuid!,$key:String!,$now:timestamptz!){
+    update_reels(
+      where:{
+        id:{_eq:$id}
+        processing_status:{_eq:generating}
+        deleted_at:{_is_null:true}
+        moderation_status:{_in:[draft]}
+      }
+      _set:{
+        source_s3_key:$key,processing_status:queued,moderation_status:pending,
+        submitted_at:$now,updated_at:$now
+      }
+    ){affected_rows}
+  }
+`;
+
 @Injectable()
 export class ReelAiGenerateService {
   private readonly logger = new Logger(ReelAiGenerateService.name);
@@ -243,6 +260,20 @@ export class ReelAiGenerateService {
   }
 
   private async ingestVideo(row: GenerationRow, videoUri: string): Promise<void> {
+    const key = await this.uploadGeneratedVideo(row, videoUri);
+    const queued = await this.queueGeneratedReel(row.reel_id, key);
+    if (!queued) {
+      await this.abandonUnpublishableIngest(row);
+      return;
+    }
+    await this.markGenerationSucceeded(row.id);
+    await this.mediaQueue.enqueue(row.reel_id, key, 'ai');
+  }
+
+  private async uploadGeneratedVideo(
+    row: GenerationRow,
+    videoUri: string
+  ): Promise<string> {
     const bucket = this.config.get('reels')?.bucketName;
     if (!bucket) throw new Error('Reels bucket is not configured');
     const buffer = await this.veo.downloadVideo(videoUri);
@@ -255,34 +286,64 @@ export class ReelAiGenerateService {
         ContentType: 'video/mp4',
       })
     );
+    return key;
+  }
+
+  private async queueGeneratedReel(reelId: string, key: string): Promise<boolean> {
     const now = new Date().toISOString();
     const updated = await this.hasura.executeMutation<{
       update_reels: { affected_rows: number };
-    }>(
-      `mutation($id:uuid!,$key:String!,$now:timestamptz!){
-        update_reels(
-          where:{id:{_eq:$id},processing_status:{_eq:generating}}
-          _set:{
-            source_s3_key:$key,processing_status:queued,moderation_status:pending,
-            submitted_at:$now,updated_at:$now
-          }
-        ){affected_rows}
+    }>(QUEUE_GENERATED_REEL, { id: reelId, key, now });
+    return (updated.update_reels?.affected_rows ?? 0) > 0;
+  }
+
+  private async markGenerationSucceeded(generationId: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation($id:uuid!,$now:timestamptz!){
+        update_reel_ai_generations_by_pk(pk_columns:{id:$id},_set:{status:succeeded,updated_at:$now}){id}
       }`,
-      { id: row.reel_id, key, now }
+      { id: generationId, now: new Date().toISOString() }
     );
-    if (!updated.update_reels?.affected_rows) {
+  }
+
+  private async abandonUnpublishableIngest(row: GenerationRow): Promise<void> {
+    const reel = await this.loadIngestReel(row.reel_id);
+    if (!this.shouldRefundAbandonedIngest(reel)) {
       this.logger.warn(
         `Skipping ingest for reel ${row.reel_id}: no longer generating`
       );
       return;
     }
-    await this.hasura.executeMutation(
-      `mutation($id:uuid!,$now:timestamptz!){
-        update_reel_ai_generations_by_pk(pk_columns:{id:$id},_set:{status:succeeded,updated_at:$now}){id}
-      }`,
-      { id: row.id, now }
+    await this.failAndRefund({
+      reelId: row.reel_id,
+      businessId: row.business_id,
+      tokensReserved: row.tokens_reserved,
+      message: 'Generation cancelled before ingest',
+      generationId: row.id,
+    });
+  }
+
+  private shouldRefundAbandonedIngest(
+    reel: { deleted_at?: string | null; moderation_status?: string } | null
+  ): boolean {
+    if (!reel) return true;
+    return Boolean(reel.deleted_at) || reel.moderation_status === 'rejected';
+  }
+
+  private async loadIngestReel(reelId: string): Promise<{
+    deleted_at?: string | null;
+    moderation_status?: string;
+  } | null> {
+    const result = await this.hasura.executeQuery<{
+      reels_by_pk: {
+        deleted_at?: string | null;
+        moderation_status?: string;
+      } | null;
+    }>(
+      `query($id:uuid!){reels_by_pk(id:$id){deleted_at moderation_status}}`,
+      { id: reelId }
     );
-    await this.mediaQueue.enqueue(row.reel_id, key, 'ai');
+    return result.reels_by_pk;
   }
 
   private async failAndRefund(params: {

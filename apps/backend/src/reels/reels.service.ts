@@ -10,6 +10,7 @@ import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReelMerchantNotifyService } from '../notifications/reel-merchant-notify.service';
 import { RbacService } from '../rbac/rbac.service';
+import { ReelAiTokensService } from '../reel-ai-tokens/reel-ai-tokens.service';
 import {
   CreateReelDto,
   ListMerchantReelsQueryDto,
@@ -58,7 +59,8 @@ export class ReelsService {
     private readonly config: ConfigService<Configuration>,
     private readonly rbac: RbacService,
     private readonly mediaQueue: ReelMediaQueueService,
-    private readonly merchantNotify: ReelMerchantNotifyService
+    private readonly merchantNotify: ReelMerchantNotifyService,
+    private readonly tokens: ReelAiTokensService
   ) {}
 
   async listForMerchant(
@@ -148,6 +150,11 @@ export class ReelsService {
   async delete(userId: string, reelId: string): Promise<void> {
     const reel = await this.requireOwnedReel(userId, reelId);
     this.assertCanSoftDelete(reel);
+    await this.refundCancelledAiGeneration(reel);
+    await this.markReelDeleted(reelId);
+  }
+
+  private async markReelDeleted(reelId: string): Promise<void> {
     const now = new Date().toISOString();
     await this.hasura.executeMutation(
       `mutation($id:uuid!,$now:timestamptz!){
@@ -157,6 +164,66 @@ export class ReelsService {
       }`,
       { id: reelId, now }
     );
+  }
+
+  private async refundCancelledAiGeneration(reel: ReelRow): Promise<void> {
+    if (reel.generation_source !== 'ai' || reel.processing_status !== 'generating') {
+      return;
+    }
+    const reserved = await this.claimRunningGenerationTokens(reel.id);
+    if (reserved == null || reserved <= 0) return;
+    await this.tokens.refundTokens(reel.business_id, reserved);
+    await this.tokens.recordUsage({
+      businessId: reel.business_id,
+      reelId: reel.id,
+      tokensConsumed: reserved,
+      operationType: 'refund',
+    });
+  }
+
+  private async claimRunningGenerationTokens(
+    reelId: string
+  ): Promise<number | null> {
+    const row = await this.loadRunningGeneration(reelId);
+    if (!row) return null;
+    const claimed = await this.markGenerationCancelled(row.id);
+    return claimed ? row.tokens_reserved : null;
+  }
+
+  private async loadRunningGeneration(
+    reelId: string
+  ): Promise<{ id: string; tokens_reserved: number } | null> {
+    const result = await this.hasura.executeQuery<{
+      reel_ai_generations: Array<{ id: string; tokens_reserved: number }>;
+    }>(
+      `query($reelId:uuid!){
+        reel_ai_generations(
+          where:{reel_id:{_eq:$reelId},status:{_in:[pending,running]}}
+          limit:1
+        ){id tokens_reserved}
+      }`,
+      { reelId }
+    );
+    return result.reel_ai_generations?.[0] ?? null;
+  }
+
+  private async markGenerationCancelled(generationId: string): Promise<boolean> {
+    const result = await this.hasura.executeMutation<{
+      update_reel_ai_generations: { affected_rows: number };
+    }>(
+      `mutation($id:uuid!,$err:String!,$now:timestamptz!){
+        update_reel_ai_generations(
+          where:{id:{_eq:$id},status:{_in:[pending,running]}}
+          _set:{status:failed,error:$err,tokens_reserved:0,updated_at:$now}
+        ){affected_rows}
+      }`,
+      {
+        id: generationId,
+        err: 'Merchant cancelled generation',
+        now: new Date().toISOString(),
+      }
+    );
+    return (result.update_reel_ai_generations?.affected_rows ?? 0) > 0;
   }
 
   private assertCanSoftDelete(reel: ReelRow): void {
@@ -216,12 +283,24 @@ export class ReelsService {
 
   async submit(userId: string, reelId: string): Promise<void> {
     const reel = await this.requireOwnedReel(userId, reelId);
-    if (!reel.source_s3_key) throw new BadRequestException('Upload reel media first');
+    this.assertSubmittable(reel);
     await this.hasura.executeMutation(
       `mutation($id:uuid!,$now:timestamptz!){update_reels_by_pk(pk_columns:{id:$id},_set:{moderation_status:pending,processing_status:queued,submitted_at:$now,updated_at:$now}){id}}`,
       { id: reelId, now: new Date().toISOString() }
     );
-    await this.mediaQueue.enqueue(reelId, reel.source_s3_key);
+    await this.mediaQueue.enqueue(reelId, reel.source_s3_key!);
+  }
+
+  private assertSubmittable(reel: ReelRow): void {
+    if (reel.moderation_status === 'rejected') {
+      throw new BadRequestException('Rejected reels cannot be resubmitted');
+    }
+    if (reel.moderation_status !== 'draft') {
+      throw new BadRequestException('Only draft reels can be submitted');
+    }
+    if (!reel.source_s3_key) {
+      throw new BadRequestException('Upload reel media first');
+    }
   }
 
   async retryProcessing(userId: string, reelId: string): Promise<ReelRow> {
