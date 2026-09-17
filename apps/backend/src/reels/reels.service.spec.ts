@@ -14,6 +14,10 @@ describe('ReelsService.retryProcessing', () => {
   const config = { get: jest.fn() };
   const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
+  const tokens = {
+    refundTokens: jest.fn(),
+    recordUsage: jest.fn(),
+  };
 
   let service: ReelsService;
 
@@ -26,7 +30,8 @@ describe('ReelsService.retryProcessing', () => {
       config as never,
       rbac as never,
       mediaQueue as never,
-      { notifyModeration: jest.fn() } as never
+      { notifyModeration: jest.fn() } as never,
+      tokens as never
     );
   });
 
@@ -135,6 +140,10 @@ describe('ReelsService merchant gates', () => {
   const config = { get: jest.fn(() => ({ dailyQuota: 10 })) };
   const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
+  const tokens = {
+    refundTokens: jest.fn(),
+    recordUsage: jest.fn(),
+  };
   let service: ReelsService;
 
   beforeEach(() => {
@@ -146,7 +155,8 @@ describe('ReelsService merchant gates', () => {
       config as never,
       rbac as never,
       mediaQueue as never,
-      { notifyModeration: jest.fn() } as never
+      { notifyModeration: jest.fn() } as never,
+      tokens as never
     );
   });
 
@@ -299,6 +309,10 @@ describe('ReelsService.setActive', () => {
   const config = { get: jest.fn() };
   const rbac = { getEffectiveAccess: jest.fn() };
   const aws = {};
+  const tokens = {
+    refundTokens: jest.fn(),
+    recordUsage: jest.fn(),
+  };
   let service: ReelsService;
 
   beforeEach(() => {
@@ -310,7 +324,8 @@ describe('ReelsService.setActive', () => {
       config as never,
       rbac as never,
       mediaQueue as never,
-      { notifyModeration: jest.fn() } as never
+      { notifyModeration: jest.fn() } as never,
+      tokens as never
     );
   });
 
@@ -489,6 +504,104 @@ describe('ReelsService.setActive', () => {
       BadRequestException
     );
     expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('refunds reserved tokens when cancelling a stuck generating AI reel', async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString();
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          generation_source: 'ai',
+          moderation_status: 'draft',
+          processing_status: 'generating',
+          deleted_at: null,
+          updated_at: stale,
+          source_s3_key: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        reel_ai_generations: [{ id: 'gen-1', tokens_reserved: 3 }],
+      });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+    config.get.mockReturnValue({ stuckAfterMinutes: 15 });
+
+    await service.delete('user-1', 'reel-1');
+
+    expect(tokens.refundTokens).toHaveBeenCalledWith('biz-1', 3);
+    expect(tokens.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: 'biz-1',
+        reelId: 'reel-1',
+        tokensConsumed: 3,
+        operationType: 'refund',
+      })
+    );
+  });
+
+  it('does not refund when the cancelled generation was already claimed', async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString();
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          generation_source: 'ai',
+          moderation_status: 'draft',
+          processing_status: 'generating',
+          deleted_at: null,
+          updated_at: stale,
+          source_s3_key: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        reel_ai_generations: [{ id: 'gen-1', tokens_reserved: 3 }],
+      });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 0 },
+      });
+    config.get.mockReturnValue({ stuckAfterMinutes: 15 });
+
+    await service.delete('user-1', 'reel-1');
+
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
+  });
+
+  it('does not refund tokens when deleting a failed upload reel', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses: [{ id: 'biz-1', reels_enabled_allowlist: true }],
+      })
+      .mockResolvedValueOnce({
+        reels_by_pk: {
+          id: 'reel-1',
+          business_id: 'biz-1',
+          generation_source: 'merchant',
+          moderation_status: 'draft',
+          processing_status: 'failed',
+          deleted_at: null,
+        },
+      });
+    hasura.executeMutation.mockResolvedValueOnce({
+      update_reels_by_pk: { id: 'reel-1' },
+    });
+
+    await service.delete('user-1', 'reel-1');
+
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
   });
 });
 

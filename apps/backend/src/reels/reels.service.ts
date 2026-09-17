@@ -10,6 +10,7 @@ import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReelMerchantNotifyService } from '../notifications/reel-merchant-notify.service';
 import { RbacService } from '../rbac/rbac.service';
+import { ReelAiTokensService } from '../reel-ai-tokens/reel-ai-tokens.service';
 import {
   CreateReelDto,
   ListMerchantReelsQueryDto,
@@ -58,7 +59,8 @@ export class ReelsService {
     private readonly config: ConfigService<Configuration>,
     private readonly rbac: RbacService,
     private readonly mediaQueue: ReelMediaQueueService,
-    private readonly merchantNotify: ReelMerchantNotifyService
+    private readonly merchantNotify: ReelMerchantNotifyService,
+    private readonly tokens: ReelAiTokensService
   ) {}
 
   async listForMerchant(
@@ -148,15 +150,81 @@ export class ReelsService {
   async delete(userId: string, reelId: string): Promise<void> {
     const reel = await this.requireOwnedReel(userId, reelId);
     this.assertCanSoftDelete(reel);
+    await this.softDeleteReel(reel.id);
+    await this.refundCancelledAiGeneration(reel);
+  }
+
+  private async softDeleteReel(reelId: string): Promise<void> {
     const now = new Date().toISOString();
     await this.hasura.executeMutation(
       `mutation($id:uuid!,$now:timestamptz!){
         update_reels_by_pk(pk_columns:{id:$id},_set:{
-          deleted_at:$now,is_active:false,updated_at:$now
+          deleted_at:$now,is_active:false,processing_status:failed,updated_at:$now
         }){id}
       }`,
       { id: reelId, now }
     );
+  }
+
+  private shouldRefundCancelledGeneration(reel: ReelRow): boolean {
+    return (
+      reel.generation_source === 'ai' && reel.processing_status === 'generating'
+    );
+  }
+
+  private async refundCancelledAiGeneration(reel: ReelRow): Promise<void> {
+    if (!this.shouldRefundCancelledGeneration(reel)) return;
+    const generation = await this.loadCancellableGeneration(reel.id);
+    if (!generation) return;
+    if (!(await this.claimCancelledGeneration(generation.id))) return;
+    if (generation.tokens_reserved <= 0) return;
+    await this.creditCancelledGeneration(reel, generation.tokens_reserved);
+  }
+
+  private async loadCancellableGeneration(
+    reelId: string
+  ): Promise<{ id: string; tokens_reserved: number } | null> {
+    const result = await this.hasura.executeQuery<{
+      reel_ai_generations: Array<{ id: string; tokens_reserved: number }>;
+    }>(
+      `query($reelId:uuid!){
+        reel_ai_generations(
+          where:{reel_id:{_eq:$reelId},status:{_in:[pending,running]}}
+          limit:1
+        ){id tokens_reserved}
+      }`,
+      { reelId }
+    );
+    return result.reel_ai_generations?.[0] ?? null;
+  }
+
+  private async claimCancelledGeneration(generationId: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const result = await this.hasura.executeMutation<{
+      update_reel_ai_generations: { affected_rows: number };
+    }>(
+      `mutation($id:uuid!,$now:timestamptz!){
+        update_reel_ai_generations(
+          where:{id:{_eq:$id},status:{_in:[pending,running]}}
+          _set:{status:failed,error:"Cancelled by merchant",tokens_reserved:0,updated_at:$now}
+        ){affected_rows}
+      }`,
+      { id: generationId, now }
+    );
+    return (result.update_reel_ai_generations?.affected_rows ?? 0) > 0;
+  }
+
+  private async creditCancelledGeneration(
+    reel: ReelRow,
+    tokensReserved: number
+  ): Promise<void> {
+    await this.tokens.refundTokens(reel.business_id, tokensReserved);
+    await this.tokens.recordUsage({
+      businessId: reel.business_id,
+      reelId: reel.id,
+      tokensConsumed: tokensReserved,
+      operationType: 'refund',
+    });
   }
 
   private assertCanSoftDelete(reel: ReelRow): void {

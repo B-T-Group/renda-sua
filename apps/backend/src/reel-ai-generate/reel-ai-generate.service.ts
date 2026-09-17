@@ -261,7 +261,11 @@ export class ReelAiGenerateService {
     }>(
       `mutation($id:uuid!,$key:String!,$now:timestamptz!){
         update_reels(
-          where:{id:{_eq:$id},processing_status:{_eq:generating}}
+          where:{
+            id:{_eq:$id},
+            processing_status:{_eq:generating},
+            deleted_at:{_is_null:true}
+          }
           _set:{
             source_s3_key:$key,processing_status:queued,moderation_status:pending,
             submitted_at:$now,updated_at:$now

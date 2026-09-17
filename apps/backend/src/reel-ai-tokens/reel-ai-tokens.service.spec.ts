@@ -199,4 +199,53 @@ describe('ReelAiTokensService', () => {
       { transaction_id: 'provider-tx-9' }
     );
   });
+
+  it('stores a unique long MoMo reference so repeat purchases can be credited', async () => {
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.com',
+      phone_number: '+237600000000',
+      business: { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
+    });
+    paymentRoutingService.getBusinessCountryCode.mockResolvedValue('CM');
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      supported_country_states: [{ currency_code: 'XAF' }],
+    });
+    paymentRoutingService.resolveRailForBusiness.mockResolvedValue(
+      'mobile_money'
+    );
+    mobilePaymentsService.getProvider.mockReturnValue('mypvit');
+    mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+      id: 'mp-tx-1',
+    });
+    mobilePaymentsService.initiatePayment.mockResolvedValue({
+      success: true,
+      transactionId: 'provider-tx-9',
+    });
+
+    await service.initiatePackPurchase({
+      packId: 'reel_ai_pack_1',
+      phoneNumber: '+237600000000',
+    });
+    await service.initiatePackPurchase({
+      packId: 'reel_ai_pack_1',
+      phoneNumber: '+237600000000',
+    });
+
+    const firstRef =
+      mobilePaymentsDatabaseService.createTransaction.mock.calls[0][0]
+        .reference;
+    const secondRef =
+      mobilePaymentsDatabaseService.createTransaction.mock.calls[1][0]
+        .reference;
+    expect(firstRef).toMatch(/^RAT-/);
+    expect(firstRef.length).toBeGreaterThan(15);
+    expect(secondRef).not.toBe(firstRef);
+    expect(mobilePaymentsService.initiatePayment.mock.calls[0][1]).toBe(
+      firstRef
+    );
+    expect(mobilePaymentsService.initiatePayment.mock.calls[1][1]).toBe(
+      secondRef
+    );
+  });
 });
