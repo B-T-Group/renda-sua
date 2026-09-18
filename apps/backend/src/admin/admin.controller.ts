@@ -5,12 +5,14 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Inject,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
+  forwardRef,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -96,6 +98,7 @@ export class AdminController {
     private readonly threadsService: ThreadsService,
     private readonly businessAccountTypeService: BusinessAccountTypeService,
     private readonly aiImageCleanupService: AiImageCleanupService,
+    @Inject(forwardRef(() => BusinessVerificationService))
     private readonly businessVerificationService: BusinessVerificationService
   ) {}
 

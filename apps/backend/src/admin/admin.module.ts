@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AgentsModule } from '../agents/agents.module';
 import { AuthModule } from '../auth/auth.module';
 import { BusinessReferralPayoutsModule } from '../business-referral-payouts/business-referral-payouts.module';
@@ -68,7 +68,7 @@ import { AdminWhatsAppInboxService } from './admin-whatsapp-inbox.service';
     MerchantLifecycleModule,
     StripePaymentsModule,
     BusinessContractsModule,
-    BusinessVerificationModule,
+    forwardRef(() => BusinessVerificationModule),
     BusinessItemsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,
