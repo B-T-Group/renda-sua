@@ -8,6 +8,7 @@ function inventoryRow(params: {
   images?: number;
   country?: string | null;
   isActive?: boolean;
+  locations?: Array<{ address?: { country?: string | null } | null }>;
 }): Record<string, unknown> {
   return {
     item_id: params.itemId,
@@ -22,9 +23,10 @@ function inventoryRow(params: {
       business: {
         id: params.businessId,
         reels_enabled_allowlist: params.allowlist ?? true,
-        business_locations: [
-          { address: { country: params.country ?? 'CM' } },
-        ],
+        business_locations:
+          params.locations ?? [
+            { address: { country: params.country ?? 'CM' } },
+          ],
       },
     },
   };
@@ -141,6 +143,54 @@ describe('ReelAutoGenerateService', () => {
         })
       );
     });
+
+    it('skips inactive items and defaults market country to CM', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [
+            inventoryRow({
+              itemId: 'inactive',
+              businessId: 'b1',
+              views: 40,
+              isActive: false,
+            }),
+            inventoryRow({
+              itemId: 'no-country',
+              businessId: 'b2',
+              views: 12,
+              locations: [],
+            }),
+          ],
+        })
+        .mockResolvedValueOnce({
+          reels_aggregate: { aggregate: { count: 0 } },
+        });
+
+      await expect(service.selectCandidate()).resolves.toEqual({
+        itemId: 'no-country',
+        businessId: 'b2',
+        marketCountry: 'CM',
+        viewCount: 12,
+      });
+    });
+
+    it('returns null when every eligible item is still in cooldown', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [
+            inventoryRow({ itemId: 'a', businessId: 'b1', views: 20 }),
+            inventoryRow({ itemId: 'b', businessId: 'b2', views: 15 }),
+          ],
+        })
+        .mockResolvedValueOnce({
+          reels_aggregate: { aggregate: { count: 1 } },
+        })
+        .mockResolvedValueOnce({
+          reels_aggregate: { aggregate: { count: 2 } },
+        });
+
+      await expect(service.selectCandidate()).resolves.toBeNull();
+    });
   });
 
   describe('tryCreateDailySponsoredReel', () => {
@@ -219,6 +269,80 @@ describe('ReelAutoGenerateService', () => {
       );
 
       await expect(service.tryCreateDailySponsoredReel()).resolves.toBeNull();
+    });
+
+    it('also treats a unique-constraint message as a same-day race', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          reels_aggregate: { aggregate: { count: 0 } },
+        })
+        .mockResolvedValueOnce({
+          business_inventory: [
+            inventoryRow({
+              itemId: 'item-1',
+              businessId: 'biz-1',
+              views: 12,
+            }),
+          ],
+        })
+        .mockResolvedValueOnce({
+          reels_aggregate: { aggregate: { count: 0 } },
+        });
+      generateService.generatePlatformSponsored.mockRejectedValue(
+        new Error(
+          'unique constraint "reels_one_platform_sponsored_per_utc_day"'
+        )
+      );
+
+      await expect(service.tryCreateDailySponsoredReel()).resolves.toBeNull();
+    });
+
+    it('rethrows non-uniqueness generation failures', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          reels_aggregate: { aggregate: { count: 0 } },
+        })
+        .mockResolvedValueOnce({
+          business_inventory: [
+            inventoryRow({
+              itemId: 'item-1',
+              businessId: 'biz-1',
+              views: 12,
+            }),
+          ],
+        })
+        .mockResolvedValueOnce({
+          reels_aggregate: { aggregate: { count: 0 } },
+        });
+      generateService.generatePlatformSponsored.mockRejectedValue(
+        new Error('Hasura timeout')
+      );
+
+      await expect(service.tryCreateDailySponsoredReel()).rejects.toThrow(
+        'Hasura timeout'
+      );
+    });
+
+    it('counts only non-failed sponsored reels since UTC midnight', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-09-18T15:30:00.000Z'));
+      try {
+        hasura.executeQuery
+          .mockResolvedValueOnce({
+            reels_aggregate: { aggregate: { count: 0 } },
+          })
+          .mockResolvedValueOnce({ business_inventory: [] });
+
+        await service.tryCreateDailySponsoredReel();
+
+        expect(hasura.executeQuery).toHaveBeenNthCalledWith(
+          1,
+          expect.stringContaining('processing_status:{_neq:failed}'),
+          { since: '2026-09-18T00:00:00.000Z' }
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });
