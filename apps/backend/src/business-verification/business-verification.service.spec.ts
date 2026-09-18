@@ -1,7 +1,12 @@
 jest.mock('../notifications/notifications.service', () => ({
   NotificationsService: class NotificationsService {},
 }));
-import { HttpException, HttpStatus } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+} from '@nestjs/common';
 import { PDF_UNAVAILABLE_MESSAGE } from '../pdf/pdf-endpoint-error.util';
 import { BusinessVerificationService } from './business-verification.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
@@ -502,5 +507,210 @@ describe('BusinessVerificationService.acceptAgreement PDF decoupling', () => {
     expect(notifications.sendMerchantAgreementCopyEmail).toHaveBeenCalledWith(
       expect.objectContaining({ pdfGenerated: false })
     );
+  });
+
+  it('still completes when the agreement email send fails', async () => {
+    pdfService.generateMerchantAgreementPdf.mockRejectedValue(
+      new Error('PDFEndpoint 403')
+    );
+    notifications.sendMerchantAgreementCopyEmail.mockRejectedValue(
+      new Error('ses down')
+    );
+
+    const result = await service.acceptAgreement(
+      { legalName: 'Ada Lovelace', agreementVersion: VERSION },
+      '127.0.0.1',
+      'jest'
+    );
+
+    expect(result.acceptance.id).toBe('acc-1');
+    expect(result.pdfGenerated).toBe(false);
+    expect(merchantLifecycle.recompute).toHaveBeenCalled();
+  });
+});
+
+describe('BusinessVerificationService merchant agreement PDF retry', () => {
+  const VERSION = '2026-09-2';
+  let service: BusinessVerificationService;
+  let hasuraUser: { getUser: jest.Mock };
+  let hasuraSystem: { executeMutation: jest.Mock; executeQuery: jest.Mock };
+  let pdfService: { generateMerchantAgreementPdf: jest.Mock };
+  let aws: { getS3Client: jest.Mock };
+
+  function acceptanceRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'acc-1',
+      accepted_at: '2026-09-17T00:00:00.000Z',
+      pdf_upload_id: null,
+      signature_image_key: null,
+      business_id: 'biz-1',
+      business_name: 'Ada Shop',
+      signer_legal_name: 'Ada Lovelace',
+      signer_email: 'ada@example.com',
+      country_code: 'CM',
+      agreement_version: VERSION,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    hasuraUser = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'user-1',
+        email: 'ada@example.com',
+        preferred_language: 'fr-CM',
+        business: { id: 'biz-1', name: 'Ada Shop' },
+      }),
+    };
+    hasuraSystem = {
+      executeMutation: jest.fn(),
+      executeQuery: jest.fn(),
+    };
+    pdfService = {
+      generateMerchantAgreementPdf: jest.fn(),
+    };
+    aws = {
+      getS3Client: jest.fn().mockReturnValue({
+        send: jest.fn(),
+      }),
+    };
+    service = new BusinessVerificationService(
+      hasuraUser as any,
+      hasuraSystem as any,
+      pdfService as any,
+      { sendMerchantAgreementCopyEmail: jest.fn() } as any,
+      {} as any,
+      {} as any,
+      { recompute: jest.fn() } as any,
+      { isBoldSignEnabledForBusiness: jest.fn() } as any,
+      {} as any,
+      { getBusinessCountryCode: jest.fn() } as any,
+      {} as any,
+      aws as any
+    );
+  });
+
+  it('returns the existing PDF without regenerating', async () => {
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_merchant_agreement_acceptances_by_pk: acceptanceRow({
+        pdf_upload_id: 'pdf-existing',
+      }),
+    });
+
+    await expect(service.retryMerchantAgreementPdf('acc-1')).resolves.toEqual({
+      pdfUploadId: 'pdf-existing',
+      pdfGenerated: true,
+    });
+    expect(pdfService.generateMerchantAgreementPdf).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the acceptance belongs to another business', async () => {
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_merchant_agreement_acceptances_by_pk: acceptanceRow({
+        business_id: 'other-biz',
+      }),
+    });
+
+    await expect(service.retryMerchantAgreementPdf('acc-1')).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+  });
+
+  it('rejects retry when the stored signature cannot be loaded', async () => {
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_merchant_agreement_acceptances_by_pk: acceptanceRow({
+        signature_image_key: 'business/user-1/sig.png',
+      }),
+    });
+    aws.getS3Client().send.mockRejectedValue(new Error('s3 miss'));
+
+    await expect(service.retryMerchantAgreementPdf('acc-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(pdfService.generateMerchantAgreementPdf).not.toHaveBeenCalled();
+  });
+
+  it('rejects retry when PDF generation is still unavailable', async () => {
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_merchant_agreement_acceptances_by_pk: acceptanceRow(),
+    });
+    pdfService.generateMerchantAgreementPdf.mockRejectedValue(
+      new Error('PDFEndpoint 403')
+    );
+
+    await expect(service.retryMerchantAgreementPdf('acc-1')).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+  });
+
+  it('links a newly generated PDF when the first accept link was missed', async () => {
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_merchant_agreement_acceptances_by_pk: acceptanceRow(),
+    });
+    pdfService.generateMerchantAgreementPdf.mockResolvedValue({ id: 'pdf-9' });
+    hasuraSystem.executeMutation.mockRejectedValueOnce(
+      new Error('first link failed')
+    );
+    hasuraSystem.executeMutation.mockResolvedValueOnce({
+      update_business_merchant_agreement_acceptances_by_pk: { id: 'acc-1' },
+    });
+
+    await expect(service.retryMerchantAgreementPdf('acc-1')).resolves.toEqual({
+      pdfUploadId: 'pdf-9',
+      pdfGenerated: true,
+    });
+    expect(hasuraSystem.executeMutation).toHaveBeenCalledTimes(2);
+  });
+
+  it('admin retry uses the owner locale and upload user id', async () => {
+    hasuraSystem.executeQuery
+      .mockResolvedValueOnce({
+        business_merchant_agreement_acceptances: [acceptanceRow()],
+      })
+      .mockResolvedValueOnce({
+        businesses_by_pk: {
+          user: { id: 'owner-9', preferred_language: 'fr' },
+        },
+      });
+    pdfService.generateMerchantAgreementPdf.mockResolvedValue({ id: 'pdf-admin' });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_business_merchant_agreement_acceptances_by_pk: { id: 'acc-1' },
+    });
+
+    await expect(
+      service.retryMerchantAgreementPdfAsAdmin('biz-1')
+    ).resolves.toEqual({
+      pdfUploadId: 'pdf-admin',
+      pdfGenerated: true,
+    });
+    expect(pdfService.generateMerchantAgreementPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locale: 'fr',
+        ownerUserId: 'owner-9',
+      })
+    );
+  });
+
+  it('admin retry 404s when the business has no owner', async () => {
+    hasuraSystem.executeQuery
+      .mockResolvedValueOnce({
+        business_merchant_agreement_acceptances: [acceptanceRow()],
+      })
+      .mockResolvedValueOnce({ businesses_by_pk: { user: null } });
+
+    await expect(
+      service.retryMerchantAgreementPdfAsAdmin('biz-1')
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(pdfService.generateMerchantAgreementPdf).not.toHaveBeenCalled();
+  });
+
+  it('admin retry 404s when no acceptance exists', async () => {
+    hasuraSystem.executeQuery.mockResolvedValueOnce({
+      business_merchant_agreement_acceptances: [],
+    });
+
+    await expect(
+      service.retryMerchantAgreementPdfAsAdmin('biz-1')
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

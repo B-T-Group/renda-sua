@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
 import { AdminMobilePaymentsController } from './admin-mobile-payments.controller';
@@ -11,7 +11,11 @@ import { PendingWithdrawalReconcilerService } from './pending-withdrawal-reconci
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 
 @Module({
-  imports: [MobilePaymentsCoreModule, AdminModule, AuthModule],
+  imports: [
+    MobilePaymentsCoreModule,
+    forwardRef(() => AdminModule),
+    AuthModule,
+  ],
   controllers: [MobilePaymentsController, AdminMobilePaymentsController],
   providers: [
     MobilePaymentCallbackProcessor,

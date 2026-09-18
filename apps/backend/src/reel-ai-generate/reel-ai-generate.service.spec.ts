@@ -1,5 +1,27 @@
 import { BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { ReelAiGenerateService } from './reel-ai-generate.service';
+import { VideoGenerationError } from './video-generation/video-generation.error';
+
+function pendingJob(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'gen-1',
+    reel_id: 'reel-1',
+    business_id: 'business-1',
+    gemini_operation_name: 'operations/1',
+    provider: 'google',
+    provider_job_id: 'operations/1',
+    generation_tier: 'fast',
+    fallback_used: false,
+    original_provider: null,
+    model: 'veo',
+    status: 'running',
+    tokens_reserved: 1,
+    preset_id: 'premium',
+    user_prompt: null,
+    updated_at: '2026-09-18T10:00:00.000Z',
+    ...overrides,
+  };
+}
 
 describe('ReelAiGenerateService.generate', () => {
   const hasura = {
@@ -280,24 +302,8 @@ describe('ReelAiGenerateService.generate', () => {
   });
 
   it('refunds reserved tokens only once when two polls see the same failed job', async () => {
-    const failedJob = {
-      id: 'gen-1',
-      reel_id: 'reel-1',
-      business_id: 'business-1',
-      gemini_operation_name: 'operations/1',
-      provider: 'google',
-      provider_job_id: 'operations/1',
-      generation_tier: 'fast',
-      fallback_used: false,
-      original_provider: null,
-      model: 'veo',
-      status: 'running',
-      tokens_reserved: 1,
-      preset_id: 'premium',
-      user_prompt: null,
-    };
     hasura.executeQuery.mockResolvedValue({
-      reel_ai_generations: [failedJob],
+      reel_ai_generations: [pendingJob()],
     });
     videoRouter.getJobStatus.mockResolvedValue({
       jobId: 'operations/1',
@@ -323,24 +329,8 @@ describe('ReelAiGenerateService.generate', () => {
   });
 
   it('refunds tokens when generation finishes after the merchant cancelled the reel', async () => {
-    const runningJob = {
-      id: 'gen-1',
-      reel_id: 'reel-1',
-      business_id: 'business-1',
-      gemini_operation_name: 'operations/1',
-      provider: 'google',
-      provider_job_id: 'operations/1',
-      generation_tier: 'fast',
-      fallback_used: false,
-      original_provider: null,
-      model: 'veo',
-      status: 'running',
-      tokens_reserved: 1,
-      preset_id: 'premium',
-      user_prompt: null,
-    };
     hasura.executeQuery
-      .mockResolvedValueOnce({ reel_ai_generations: [runningJob] })
+      .mockResolvedValueOnce({ reel_ai_generations: [pendingJob()] })
       .mockResolvedValueOnce({
         reels_by_pk: {
           deleted_at: '2026-09-17T00:00:00.000Z',
@@ -388,24 +378,12 @@ describe('ReelAiGenerateService.generate', () => {
   });
 
   it('does not overwrite an admin rejection when ingesting a finished job', async () => {
-    const runningJob = {
-      id: 'gen-1',
-      reel_id: 'reel-1',
-      business_id: 'business-1',
-      gemini_operation_name: 'operations/1',
-      provider: 'google',
-      provider_job_id: 'operations/1',
-      generation_tier: 'standard',
-      fallback_used: false,
-      original_provider: null,
-      model: 'veo',
-      status: 'running',
-      tokens_reserved: 4,
-      preset_id: 'premium',
-      user_prompt: null,
-    };
     hasura.executeQuery
-      .mockResolvedValueOnce({ reel_ai_generations: [runningJob] })
+      .mockResolvedValueOnce({
+        reel_ai_generations: [
+          pendingJob({ generation_tier: 'standard', tokens_reserved: 4 }),
+        ],
+      })
       .mockResolvedValueOnce({
         reels_by_pk: { deleted_at: null, moderation_status: 'rejected' },
       });
@@ -480,6 +458,234 @@ describe('ReelAiGenerateService.generate', () => {
     } catch (error: any) {
       expect(error.getStatus()).toBe(HttpStatus.PAYMENT_REQUIRED);
     }
+  });
+
+  it('retries a quota-failed Google job on Runway without refunding', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [pendingJob()],
+    });
+    videoRouter.getJobStatus.mockResolvedValue({
+      jobId: 'operations/1',
+      status: 'FAILED',
+      errorMessage: 'quota',
+      failureCategory: 'QUOTA_EXCEEDED',
+    });
+    jest
+      .spyOn(service as never, 'rebuildRequestFromRow' as never)
+      .mockResolvedValue({ prompt: 'ad' } as never);
+    hasura.executeMutation
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations_by_pk: { id: 'gen-1' },
+      });
+    videoRouter.fallbackAfterPrimaryJobFailure.mockResolvedValue({
+      jobId: 'runway-job-1',
+      provider: 'runway',
+      providerModel: 'gen4_turbo',
+      tier: 'fast',
+      status: 'QUEUED',
+      fallbackUsed: true,
+      originalProvider: 'google',
+    });
+
+    await service.pollPendingGenerations();
+
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
+    expect(videoRouter.fallbackAfterPrimaryJobFailure).toHaveBeenCalledWith({
+      request: { prompt: 'ad' },
+      originalProvider: 'google',
+      failureCategory: 'QUOTA_EXCEEDED',
+    });
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('original_provider'),
+      expect.objectContaining({
+        provider: 'runway',
+        jobId: 'runway-job-1',
+        original: 'google',
+      })
+    );
+  });
+
+  it('does not fail or refund when another sweeper already claimed fallback', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [pendingJob()],
+    });
+    videoRouter.getJobStatus.mockResolvedValue({
+      jobId: 'operations/1',
+      status: 'FAILED',
+      failureCategory: 'RATE_LIMITED',
+    });
+    hasura.executeMutation.mockResolvedValueOnce({
+      update_reel_ai_generations: { affected_rows: 0 },
+    });
+
+    await service.pollPendingGenerations();
+
+    expect(videoRouter.fallbackAfterPrimaryJobFailure).not.toHaveBeenCalled();
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
+  });
+
+  it('refunds after a claimed poll-time fallback also fails', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [pendingJob()],
+    });
+    videoRouter.getJobStatus.mockResolvedValue({
+      jobId: 'operations/1',
+      status: 'FAILED',
+      errorMessage: 'quota',
+      failureCategory: 'QUOTA_EXCEEDED',
+    });
+    jest
+      .spyOn(service as never, 'rebuildRequestFromRow' as never)
+      .mockResolvedValue({ prompt: 'ad' } as never);
+    videoRouter.fallbackAfterPrimaryJobFailure.mockRejectedValue(
+      new Error('runway down')
+    );
+    hasura.executeMutation
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      })
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+
+    await service.pollPendingGenerations();
+
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
+  });
+
+  it('skips a fresh mid-fallback Google claim so a peer can finish Runway submit', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [
+        pendingJob({
+          fallback_used: true,
+          updated_at: new Date().toISOString(),
+        }),
+      ],
+    });
+    videoRouter.getJobStatus.mockResolvedValue({
+      jobId: 'operations/1',
+      status: 'FAILED',
+      failureCategory: 'TIMEOUT',
+    });
+
+    await service.pollPendingGenerations();
+
+    expect(videoRouter.fallbackAfterPrimaryJobFailure).not.toHaveBeenCalled();
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
+  });
+
+  it('refunds a stale mid-fallback Google claim as an orphaned submit', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [
+        pendingJob({
+          fallback_used: true,
+          updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+        }),
+      ],
+    });
+    videoRouter.getJobStatus.mockResolvedValue({
+      jobId: 'operations/1',
+      status: 'FAILED',
+      errorMessage: 'timed out',
+      failureCategory: 'TIMEOUT',
+    });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+
+    await service.pollPendingGenerations();
+
+    expect(videoRouter.fallbackAfterPrimaryJobFailure).not.toHaveBeenCalled();
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
+  });
+
+  it('refunds a later Runway job failure instead of falling back again', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [
+        pendingJob({
+          provider: 'runway',
+          provider_job_id: 'runway-job-1',
+          fallback_used: true,
+        }),
+      ],
+    });
+    videoRouter.getJobStatus.mockResolvedValue({
+      jobId: 'runway-job-1',
+      status: 'FAILED',
+      errorMessage: 'runway failed',
+      failureCategory: 'UNKNOWN_PROVIDER_ERROR',
+    });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+
+    await service.pollPendingGenerations();
+
+    expect(videoRouter.getJobStatus).toHaveBeenCalledWith(
+      'runway',
+      'runway-job-1'
+    );
+    expect(videoRouter.fallbackAfterPrimaryJobFailure).not.toHaveBeenCalled();
+    expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
+  });
+
+  it('does not poll-time fallback when the feature flag is off', async () => {
+    const previousImpl = config.get.getMockImplementation();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'videoGeneration') {
+        return {
+          primaryProvider: 'google',
+          fallbackProviders: ['runway'],
+          enableFallback: false,
+        };
+      }
+      return undefined;
+    });
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [pendingJob()],
+    });
+    videoRouter.getJobStatus.mockResolvedValue({
+      jobId: 'operations/1',
+      status: 'FAILED',
+      failureCategory: 'QUOTA_EXCEEDED',
+    });
+    hasura.executeMutation
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-1' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+
+    try {
+      await service.pollPendingGenerations();
+      expect(videoRouter.fallbackAfterPrimaryJobFailure).not.toHaveBeenCalled();
+      expect(tokens.refundTokens).toHaveBeenCalledWith('business-1', 1);
+    } finally {
+      if (previousImpl) config.get.mockImplementation(previousImpl);
+    }
+  });
+
+  it('skips rows that have no provider job id yet', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reel_ai_generations: [
+        pendingJob({
+          provider_job_id: null,
+          gemini_operation_name: null,
+        }),
+      ],
+    });
+
+    await service.pollPendingGenerations();
+
+    expect(videoRouter.getJobStatus).not.toHaveBeenCalled();
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
   });
 });
 
@@ -581,5 +787,50 @@ describe('ReelAiGenerateService.generatePlatformSponsored', () => {
         tier: 'fast',
       })
     );
+  });
+
+  it('marks the reel failed without refunding tokens when start throws', async () => {
+    jest
+      .spyOn(service as never, 'loadProduct' as never)
+      .mockResolvedValue({
+        name: 'Soap',
+        description: null,
+        brand: null,
+        imageUrls: ['https://cdn/x.jpg'],
+      } as never);
+    hasura.executeMutation
+      .mockResolvedValueOnce({
+        insert_reels_one: {
+          id: 'reel-sponsored',
+          business_id: 'business-1',
+          processing_status: 'generating',
+        },
+      })
+      .mockResolvedValueOnce({ update_reels_by_pk: { id: 'reel-sponsored' } })
+      .mockResolvedValueOnce({
+        update_reel_ai_generations: { affected_rows: 1 },
+      });
+    jest
+      .spyOn(service as never, 'startGenerationJob' as never)
+      .mockRejectedValue(
+        new VideoGenerationError({
+          message: 'quota',
+          category: 'QUOTA_EXCEEDED',
+          provider: 'google',
+        })
+      );
+
+    try {
+      await service.generatePlatformSponsored({
+        businessId: 'business-1',
+        subjectId: 'item-1',
+        marketCountry: 'CM',
+      });
+      throw new Error('expected generatePlatformSponsored to reject');
+    } catch (error: any) {
+      expect(error.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    }
+    expect(tokens.refundTokens).not.toHaveBeenCalled();
+    expect(tokens.tryReserveTokens).not.toHaveBeenCalled();
   });
 });

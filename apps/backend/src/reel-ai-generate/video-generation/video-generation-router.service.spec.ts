@@ -48,15 +48,14 @@ function makeProvider(
 describe('VideoGenerationRouter', () => {
   const google = makeProvider('google', 'veo-3.1-fast-generate-preview');
   const runway = makeProvider('runway', 'gen4_turbo');
+  const defaultVideoGeneration = {
+    primaryProvider: 'google',
+    fallbackProviders: ['runway'],
+    enableFallback: true,
+  };
   const config = {
     get: jest.fn((key: string) => {
-      if (key === 'videoGeneration') {
-        return {
-          primaryProvider: 'google',
-          fallbackProviders: ['runway'],
-          enableFallback: true,
-        };
-      }
+      if (key === 'videoGeneration') return { ...defaultVideoGeneration };
       return undefined;
     }),
   };
@@ -65,6 +64,10 @@ describe('VideoGenerationRouter', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    config.get.mockImplementation((key: string) => {
+      if (key === 'videoGeneration') return { ...defaultVideoGeneration };
+      return undefined;
+    });
     google.supports.mockReturnValue(true);
     runway.supports.mockReturnValue(true);
     google.submit.mockImplementation(async (req) => ({
@@ -289,5 +292,147 @@ describe('VideoGenerationRouter', () => {
       category: 'QUOTA_EXCEEDED',
     });
     expect(runway.submit).not.toHaveBeenCalled();
+  });
+
+  it('wraps unknown primary errors as UNKNOWN_PROVIDER_ERROR without fallback', async () => {
+    google.submit.mockRejectedValue(new Error('socket hang up'));
+
+    await expect(router.submit(makeRequest())).rejects.toMatchObject({
+      category: 'UNKNOWN_PROVIDER_ERROR',
+      provider: 'google',
+      retryable: false,
+    });
+    expect(runway.submit).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back when Runway does not support the request', async () => {
+    google.submit.mockRejectedValue(
+      new VideoGenerationError({
+        message: 'quota',
+        category: 'QUOTA_EXCEEDED',
+        provider: 'google',
+      })
+    );
+    runway.supports.mockReturnValue(false);
+
+    await expect(router.submit(makeRequest())).rejects.toMatchObject({
+      category: 'QUOTA_EXCEEDED',
+      provider: 'google',
+    });
+    expect(runway.submit).not.toHaveBeenCalled();
+  });
+
+  it('falls back after a completed primary job fails', async () => {
+    const response = await router.fallbackAfterPrimaryJobFailure({
+      request: makeRequest(),
+      originalProvider: 'google',
+      failureCategory: 'QUOTA_EXCEEDED',
+    });
+
+    expect(google.submit).not.toHaveBeenCalled();
+    expect(runway.submit).toHaveBeenCalledTimes(1);
+    expect(response).toMatchObject({
+      provider: 'runway',
+      fallbackUsed: true,
+      originalProvider: 'google',
+    });
+  });
+
+  it('throws when poll-time fallback is disabled', async () => {
+    config.get.mockImplementation((key: string) => {
+      if (key === 'videoGeneration') {
+        return {
+          primaryProvider: 'google',
+          fallbackProviders: ['runway'],
+          enableFallback: false,
+        };
+      }
+      return undefined;
+    });
+    router = new VideoGenerationRouter(
+      config as never,
+      google as never,
+      runway as never
+    );
+
+    await expect(
+      router.fallbackAfterPrimaryJobFailure({
+        request: makeRequest(),
+        originalProvider: 'google',
+        failureCategory: 'RATE_LIMITED',
+      })
+    ).rejects.toMatchObject({
+      category: 'PROVIDER_UNAVAILABLE',
+      message: 'Video generation fallback is disabled',
+    });
+    expect(runway.submit).not.toHaveBeenCalled();
+  });
+
+  it('throws when no other fallback provider is configured', async () => {
+    config.get.mockImplementation((key: string) => {
+      if (key === 'videoGeneration') {
+        return {
+          primaryProvider: 'google',
+          fallbackProviders: ['google'],
+          enableFallback: true,
+        };
+      }
+      return undefined;
+    });
+    router = new VideoGenerationRouter(
+      config as never,
+      google as never,
+      runway as never
+    );
+
+    await expect(
+      router.fallbackAfterPrimaryJobFailure({
+        request: makeRequest(),
+        originalProvider: 'google',
+        failureCategory: 'TIMEOUT',
+      })
+    ).rejects.toMatchObject({
+      category: 'PROVIDER_UNAVAILABLE',
+      message: 'No fallback video provider configured',
+    });
+  });
+
+  it('throws when the fallback provider rejects the configuration', async () => {
+    runway.supports.mockReturnValue(false);
+
+    await expect(
+      router.fallbackAfterPrimaryJobFailure({
+        request: makeRequest(),
+        originalProvider: 'google',
+        failureCategory: 'PROVIDER_UNAVAILABLE',
+      })
+    ).rejects.toMatchObject({
+      category: 'UNSUPPORTED_CONFIGURATION',
+      provider: 'runway',
+    });
+    expect(runway.submit).not.toHaveBeenCalled();
+  });
+
+  it('treats an unknown primary provider id as google', async () => {
+    config.get.mockImplementation((key: string) => {
+      if (key === 'videoGeneration') {
+        return {
+          primaryProvider: 'not-a-vendor',
+          fallbackProviders: ['runway'],
+          enableFallback: true,
+        };
+      }
+      return undefined;
+    });
+    router = new VideoGenerationRouter(
+      config as never,
+      google as never,
+      runway as never
+    );
+
+    const response = await router.submit(makeRequest());
+
+    expect(response.provider).toBe('google');
+    expect(google.submit).toHaveBeenCalledTimes(1);
   });
 });
