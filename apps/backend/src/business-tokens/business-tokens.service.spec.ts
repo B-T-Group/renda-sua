@@ -127,6 +127,9 @@ describe('BusinessTokensService', () => {
     const grantPackTokens = jest
       .spyOn(service, 'grantPackTokens')
       .mockResolvedValue(undefined);
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      insert_business_ai_token_usage_one: { id: 'claim-1' },
+    });
 
     await service.processTokenPaymentSuccess({
       entity_id: 'business-1',
@@ -136,6 +139,63 @@ describe('BusinessTokensService', () => {
     });
 
     expect(grantPackTokens).toHaveBeenCalledWith('business-1', 1000, 'pay-1');
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('InsertAiTokenPurchaseClaim'),
+      {
+        object: expect.objectContaining({
+          business_id: 'business-1',
+          tokens_consumed: 1000,
+          operation_type: 'purchase',
+          subject_type: 'token_pack',
+          payment_reference: 'pay-1',
+        }),
+      }
+    );
+  });
+
+  it('skips grant when the payment reference was already claimed', async () => {
+    const grantPackTokens = jest
+      .spyOn(service, 'grantPackTokens')
+      .mockResolvedValue(undefined);
+    hasuraSystemService.executeMutation.mockRejectedValue(
+      new Error('Uniqueness violation')
+    );
+
+    await service.processTokenPaymentSuccess({
+      entity_id: 'business-1',
+      reference: 'pay-1',
+      amount: 15,
+      currency: 'CAD',
+    });
+
+    expect(grantPackTokens).not.toHaveBeenCalled();
+  });
+
+  it('releases the purchase claim when grant fails so retries can succeed', async () => {
+    jest
+      .spyOn(service, 'grantPackTokens')
+      .mockRejectedValue(new Error('hasura down'));
+    hasuraSystemService.executeMutation
+      .mockResolvedValueOnce({
+        insert_business_ai_token_usage_one: { id: 'claim-1' },
+      })
+      .mockResolvedValueOnce({
+        delete_business_ai_token_usage: { affected_rows: 1 },
+      });
+
+    await expect(
+      service.processTokenPaymentSuccess({
+        entity_id: 'business-1',
+        reference: 'pay-1',
+        amount: 15,
+        currency: 'CAD',
+      })
+    ).rejects.toThrow('hasura down');
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('DeleteAiTokenPurchaseClaim'),
+      { ref: 'pay-1' }
+    );
   });
 
   it('requires token payments to include a business id', async () => {

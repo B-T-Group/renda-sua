@@ -6,6 +6,12 @@ import tempfile
 import urllib.error
 import urllib.request
 
+# Merchant uploads: min 15s; longer clips are trimmed to the first 30s on encode.
+MERCHANT_MIN_SECONDS = 15
+MERCHANT_MAX_OUTPUT_SECONDS = 30
+# Hard cap on source length so huge files do not blow Lambda time/disk.
+MERCHANT_MAX_SOURCE_SECONDS = 120
+
 
 def handler(event, _context):
     failures = []
@@ -40,9 +46,13 @@ def _process_reel(reel_id: str, source_key: str, source_kind: str) -> dict:
         out = os.path.join(tmp, "output.mp4")
         thumb = os.path.join(tmp, "poster.jpg")
         _download_s3_object(bucket, source_key, src)
-        duration_ms = _probe_duration_ms(src)
-        _assert_duration(duration_ms, source_kind)
-        _run_ffmpeg_faststart(src, out)
+        source_duration_ms = _probe_duration_ms(src)
+        _assert_duration(source_duration_ms, source_kind)
+        trim_seconds = (
+            MERCHANT_MAX_OUTPUT_SECONDS if source_kind != "ai" else None
+        )
+        _run_ffmpeg_faststart(src, out, trim_seconds=trim_seconds)
+        output_duration_ms = _probe_duration_ms(out)
         _run_ffmpeg_poster(out, thumb)
         processed_key = f"processed/{reel_id}.mp4"
         thumb_key = f"thumbnails/{reel_id}.jpg"
@@ -52,7 +62,7 @@ def _process_reel(reel_id: str, source_key: str, source_kind: str) -> dict:
             "status": "ready",
             "processedS3Key": processed_key,
             "thumbnailS3Key": thumb_key,
-            "durationMs": duration_ms,
+            "durationMs": output_duration_ms,
         }
 
 
@@ -64,9 +74,15 @@ def _assert_duration(duration_ms: int, source_kind: str) -> None:
                 f"AI reel duration {seconds:.1f}s outside allowed 4–10s"
             )
         return
-    if seconds < 15 or seconds > 30:
+    if seconds < MERCHANT_MIN_SECONDS:
         raise RuntimeError(
-            f"Upload duration {seconds:.1f}s outside allowed 15–30s"
+            f"Upload duration {seconds:.1f}s below minimum "
+            f"{MERCHANT_MIN_SECONDS}s"
+        )
+    if seconds > MERCHANT_MAX_SOURCE_SECONDS:
+        raise RuntimeError(
+            f"Upload duration {seconds:.1f}s exceeds maximum "
+            f"{MERCHANT_MAX_SOURCE_SECONDS}s source length"
         )
 
 
@@ -90,30 +106,32 @@ def _probe_duration_ms(src: str) -> int:
     return max(1, int(round(seconds * 1000)))
 
 
-def _run_ffmpeg_faststart(src: str, out: str) -> None:
-    subprocess.run(
-        [
-            _ffmpeg_bin("ffmpeg"),
-            "-y",
-            "-i",
-            src,
-            "-vf",
-            "scale='min(1280,iw)':-2",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-movflags",
-            "+faststart",
-            out,
-        ],
-        check=True,
-        capture_output=True,
-    )
+def _run_ffmpeg_faststart(
+    src: str, out: str, trim_seconds: int | None = None
+) -> None:
+    # -t caps output length (first N seconds). Shorter sources are unchanged.
+    cmd = [
+        _ffmpeg_bin("ffmpeg"),
+        "-y",
+        "-i",
+        src,
+        "-vf",
+        "scale='min(1280,iw)':-2",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-movflags",
+        "+faststart",
+    ]
+    if trim_seconds is not None:
+        cmd.extend(["-t", str(trim_seconds)])
+    cmd.append(out)
+    subprocess.run(cmd, check=True, capture_output=True)
 
 
 def _run_ffmpeg_poster(src: str, dest: str) -> None:

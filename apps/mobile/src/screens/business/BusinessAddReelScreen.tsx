@@ -40,14 +40,15 @@ import {
 } from '@/services/merchantReelsApi';
 import { getBusinessItems } from '@/services/rentalsApi';
 import { reelAiTokenCost, type ReelAiVeoTier } from '@/utils/reelAiTokenCost';
+import {
+  checkReelUploadDuration,
+  normalizePickerDurationMs,
+} from '@/utils/reelUploadDuration';
 
 type Route = NativeStackScreenProps<
   BusinessRootStackParamList,
   'BusinessAddReel'
 >['route'];
-
-const MIN_UPLOAD_MS = 15_000;
-const MAX_UPLOAD_MS = 30_000;
 
 export default function BusinessAddReelScreen() {
   const { t } = useTranslation();
@@ -233,16 +234,19 @@ export default function BusinessAddReelScreen() {
     });
     if (picked.canceled || !picked.assets[0]) return;
     const asset = picked.assets[0];
-    const normalizedMs =
-      asset.duration && asset.duration < 1000
-        ? Math.round(asset.duration * 1000)
-        : Math.round(asset.duration ?? 0);
-    if (normalizedMs < MIN_UPLOAD_MS || normalizedMs > MAX_UPLOAD_MS) {
+    const normalizedMs = normalizePickerDurationMs(asset.duration);
+    const durationCheck = checkReelUploadDuration(normalizedMs);
+    if (!durationCheck.ok) {
       setSnack(
-        t(
-          'business.reels.add.durationError',
-          'Upload a video between 15 and 30 seconds'
-        )
+        durationCheck.reason === 'tooLong'
+          ? t(
+              'business.reels.add.durationTooLongError',
+              'Upload a video of 2 minutes or less (clips over 30s are trimmed)'
+            )
+          : t(
+              'business.reels.add.durationError',
+              'Upload a video of at least 15 seconds'
+            )
       );
       return;
     }

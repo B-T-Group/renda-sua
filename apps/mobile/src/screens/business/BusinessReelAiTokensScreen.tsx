@@ -108,7 +108,7 @@ export default function BusinessReelAiTokensScreen() {
       >
         {t(
           'business.reels.tokens.subtitle',
-          'Token cost depends on model (Fast 1, Standard 4). Upload from your library is always free.'
+          'Token cost depends on model (Standard 1, Premium 4). Upload from your library is always free.'
         )}
       </Text>
 

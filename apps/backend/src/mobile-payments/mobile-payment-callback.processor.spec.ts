@@ -265,6 +265,33 @@ describe('MobilePaymentCallbackProcessor', () => {
     });
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
   });
+
+  it('does not re-grant AI tokens when MyPVit retries an already-success pack', async () => {
+    const onPaymentSuccess = jest.fn();
+    paymentCallbackRegistry.getHandlers.mockReturnValue([
+      {
+        supportsPaymentEntity: (entity: string) => entity === 'token',
+        onPaymentSuccess,
+        onPaymentFailure: jest.fn(),
+        finalizeCashReconciliationAfterPayment: jest.fn(),
+      },
+    ]);
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...baseTx,
+      payment_entity: 'token',
+      account_id: undefined,
+      status: 'success',
+    });
+
+    const result = await processor.processMypvitCallback({
+      ...successCallback,
+      merchantReferenceId: baseTx.reference,
+    });
+
+    expect(result.skipped).toBe(true);
+    expect(onPaymentSuccess).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
 });
 
 describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {

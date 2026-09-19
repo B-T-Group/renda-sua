@@ -39,7 +39,7 @@ export function AddReelUploadStep({
       <Text style={{ color: colors.text.secondary }}>
         {t(
           'business.reels.add.uploadStepSubtitle',
-          'Choose a 15–30 second vertical clip linked to {{name}}.',
+          'Choose a vertical clip linked to {{name}} (15s min; over 30s is trimmed).',
           { name: product?.name ?? t('business.reels.add.product', 'Product') }
         )}
       </Text>
@@ -63,7 +63,7 @@ export function AddReelUploadStep({
         <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
           {t(
             'business.reels.add.uploadStepHint',
-            'Portrait video · 15–30 seconds · clearly shows this product'
+            'Portrait video · 15s minimum · clips over 30s trimmed to 30s'
           )}
         </Text>
       </View>
@@ -83,7 +83,7 @@ export function AddReelUploadStep({
         onPress={onUpload}
         icon="upload"
       >
-        {t('business.reels.add.upload', 'Upload from library (15–30s)')}
+        {t('business.reels.add.upload', 'Upload from library (15s min)')}
       </Button>
     </KeyboardAwareScrollView>
   );
