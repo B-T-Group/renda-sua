@@ -129,7 +129,7 @@ function aiTips(t: (key: string, fallback: string) => string): Tip[] {
       title: t('business.reels.add.aiTipTokensTitle', 'Token costs'),
       body: t(
         'business.reels.add.aiTipTokensBody',
-        'Fast uses 1 token, Standard 4. Generation runs in the background.'
+        'Standard uses 1 token, Premium 4. Generation runs in the background.'
       ),
     },
   ];
@@ -139,10 +139,13 @@ function uploadTips(t: (key: string, fallback: string) => string): Tip[] {
   return [
     {
       icon: 'timer-outline',
-      title: t('business.reels.add.uploadTipDurationTitle', '15–30 second vertical clip'),
+      title: t(
+        'business.reels.add.uploadTipDurationTitle',
+        'At least 15 seconds (max 30s after trim)'
+      ),
       body: t(
         'business.reels.add.uploadTipDurationBody',
-        'Shoot or pick a portrait video that clearly shows the product you select next.'
+        'Shoot or pick a portrait video of at least 15 seconds. Clips longer than 30s are trimmed to the first 30 seconds. Max source length is 2 minutes.'
       ),
     },
     {

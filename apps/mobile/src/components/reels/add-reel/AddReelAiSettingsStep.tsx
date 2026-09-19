@@ -108,7 +108,10 @@ export function AddReelAiSettingsStep({
             onPress={() => onTier(option)}
             style={{ marginBottom: 8 }}
           >
-            {t(`business.reels.add.tier.${option}`, option)}
+            {t(
+              `business.reels.add.tier.${option}`,
+              option === 'fast' ? 'Standard' : 'Premium'
+            )}
           </Chip>
         ))}
       </View>

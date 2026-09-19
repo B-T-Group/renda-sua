@@ -56,7 +56,7 @@ export function AddReelModeStep({
         <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
           {t(
             'business.reels.add.modeSubtitle',
-            'Generate an 8s AI product ad, or upload a 15–30s video from your library.'
+            'Generate an 8s AI product ad, or upload a video from your library (15s min; over 30s is trimmed).'
           )}
         </Text>
         <Text style={{ color: colors.primary.main, fontWeight: '600' }}>{tokenLabel}</Text>
@@ -73,7 +73,7 @@ export function AddReelModeStep({
         title={t('business.reels.add.modeAiTitle', 'AI generated')}
         body={t(
           'business.reels.add.modeAiBody',
-          'Create an 8-second vertical ad from a product photo. Uses reel tokens (Fast 1 · Standard 4).'
+          'Create an 8-second vertical ad from a product photo. Uses reel tokens (Standard 1 · Premium 4).'
         )}
         onPress={() => onSelectMode('ai')}
       />
@@ -83,7 +83,7 @@ export function AddReelModeStep({
         title={t('business.reels.add.modeUploadTitle', 'Upload existing video')}
         body={t(
           'business.reels.add.modeUploadBody',
-          'Upload a 15–30s video featuring your product. Free, then reviewed before it appears in Reels.'
+          'Upload a video featuring your product (at least 15s; clips over 30s are trimmed to the first 30s). Free, then reviewed before it appears in Reels.'
         )}
         onPress={() => onSelectMode('upload')}
       />
