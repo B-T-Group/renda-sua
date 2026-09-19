@@ -66,10 +66,21 @@ export class PurchaseCreditsService {
   }
 
   async grant(input: GrantInput): Promise<{ id: string }> {
+    await this.assertClient(input.userId);
     await this.assertSpecificPartner(input);
     const row = await this.insertGrant(input);
     await this.notifyGrant(input, row.id);
     return { id: row.id };
+  }
+
+  async searchClients(search: string) {
+    const term = search.trim();
+    if (term.length < 2) return [];
+    const result = await this.hasura.executeQuery(SEARCH_CLIENTS, {
+      where: clientSearchWhere(term),
+      limit: 8,
+    });
+    return (result.clients ?? []).map(mapClientOption);
   }
 
   private async redeemOne(orderId: string, allocation: CreditAllocation): Promise<void> {
@@ -106,6 +117,13 @@ export class PurchaseCreditsService {
   private async redemptionsForOrder(orderId: string) {
     const result = await this.hasura.executeQuery(REDEMPTIONS, { orderId });
     return result.purchase_credit_redemptions ?? [];
+  }
+
+  private async assertClient(userId: string): Promise<void> {
+    const result = await this.hasura.executeQuery(CLIENT_BY_USER, { userId });
+    if (!result.clients?.length) {
+      throw new BadRequestException('Purchase credits can only be granted to clients');
+    }
   }
 
   private async assertSpecificPartner(input: GrantInput): Promise<void> {
@@ -251,5 +269,53 @@ const REDEMPTIONS = `
 const DELETE_REDEMPTION = `
   mutation DeleteRedemption($id: uuid!) {
     delete_purchase_credit_redemptions_by_pk(id: $id) { id }
+  }
+`;
+
+const CLIENT_BY_USER = `
+  query ClientByUser($userId: uuid!) {
+    clients(where: { user_id: { _eq: $userId } }, limit: 1) { id }
+  }
+`;
+
+function clientSearchWhere(term: string) {
+  return {
+    _and: term.split(/\s+/).filter(Boolean).map((token) => ({
+      _or: clientTokenMatches(`%${token}%`),
+    })),
+  };
+}
+
+function clientTokenMatches(pattern: string) {
+  return [
+    { user: { email: { _ilike: pattern } } },
+    { user: { first_name: { _ilike: pattern } } },
+    { user: { last_name: { _ilike: pattern } } },
+    { user: { phone_number: { _ilike: pattern } } },
+  ];
+}
+
+function mapClientOption(row: {
+  id: string;
+  user_id: string;
+  user?: { first_name?: string; last_name?: string; email?: string; phone_number?: string | null };
+}) {
+  const user = row.user ?? {};
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: name || user.email || row.id,
+    email: user.email ?? '',
+    phone: user.phone_number ?? null,
+  };
+}
+
+const SEARCH_CLIENTS = `
+  query SearchPaymentProgramClients($where: clients_bool_exp!, $limit: Int!) {
+    clients(where: $where, limit: $limit, order_by: { created_at: desc }) {
+      id user_id
+      user { first_name last_name email phone_number }
+    }
   }
 `;

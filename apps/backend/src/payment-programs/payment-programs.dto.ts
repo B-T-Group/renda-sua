@@ -16,7 +16,7 @@ export class CreateScheduleDto {
   @IsIn(['daily', 'weekly', 'biweekly', 'monthly'])
   frequency!: 'daily' | 'weekly' | 'biweekly' | 'monthly';
 
-  @IsString()
+  @IsIn(['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF', 'PHP'])
   currency!: string;
 
   @Type(() => Number)
@@ -58,7 +58,7 @@ export class CreateCashAdvanceProgramDto {
   @IsString()
   name!: string;
 
-  @IsString()
+  @IsIn(['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF', 'PHP'])
   currency!: string;
 
   @Type(() => Number)
@@ -71,7 +71,7 @@ export class OpenFacilityDto {
   @IsUUID()
   userId!: string;
 
-  @IsString()
+  @IsIn(['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF', 'PHP'])
   currency!: string;
 
   @Type(() => Number)
@@ -92,7 +92,7 @@ export class GrantCreditDto {
   @IsUUID()
   userId!: string;
 
-  @IsString()
+  @IsIn(['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF', 'PHP'])
   currency!: string;
 
   @Type(() => Number)
@@ -142,6 +142,6 @@ export class DrawCashAdvanceDto {
   @Min(0.01)
   amount!: number;
 
-  @IsString()
+  @IsIn(['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF', 'PHP'])
   currency!: string;
 }

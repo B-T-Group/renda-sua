@@ -1,5 +1,6 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Container,
@@ -12,7 +13,104 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CURRENCIES } from '../../constants/enums';
 import { useApiClient } from '../../hooks/useApiClient';
+
+interface DirectoryOption {
+  id: string;
+  userId?: string;
+  name: string;
+  email: string;
+  referralCode?: string | null;
+  phone?: string | null;
+}
+
+function optionLabel(option: DirectoryOption): string {
+  const extra = option.phone || option.referralCode;
+  const suffix = extra ? ` · ${extra}` : '';
+  return `${option.name} · ${option.email}${suffix}`;
+}
+
+function CurrencyField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <TextField
+      select
+      label={t('admin.paymentPrograms.currency', 'Currency')}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {CURRENCIES.map((code) => (
+        <MenuItem key={code} value={code}>
+          {code}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}
+
+function DirectorySearch({
+  label,
+  placeholder,
+  endpoint,
+  value,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  endpoint: string;
+  value: DirectoryOption | null;
+  onChange: (value: DirectoryOption | null) => void;
+}) {
+  const api = useApiClient();
+  const [input, setInput] = useState('');
+  const [options, setOptions] = useState<DirectoryOption[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const term = input.trim();
+    if (term.length < 2) {
+      setOptions([]);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setLoading(true);
+      void api
+        .get(endpoint, { params: { search: term } })
+        .then((response) => setOptions(response.data || []))
+        .catch(() => setOptions([]))
+        .finally(() => setLoading(false));
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [api, endpoint, input]);
+
+  const shown =
+    value && !options.some((row) => row.id === value.id) ? [value, ...options] : options;
+
+  return (
+    <Autocomplete
+      options={shown}
+      loading={loading}
+      value={value}
+      filterOptions={(items) => items}
+      onChange={(_event, next) => onChange(next)}
+      onInputChange={(_event, next, reason) => {
+        if (reason === 'input') setInput(next);
+      }}
+      getOptionLabel={optionLabel}
+      isOptionEqualToValue={(left, right) => left.id === right.id}
+      renderInput={(params) => (
+        <TextField {...params} label={label} placeholder={placeholder} />
+      )}
+    />
+  );
+}
 
 export default function AdminPaymentProgramsPage() {
   const { t } = useTranslation();
@@ -83,12 +181,13 @@ export default function AdminPaymentProgramsPage() {
 }
 
 function ScheduleForm({ schedules, onDone }: { schedules: any[]; onDone: (message: string) => Promise<void> }) {
+  const { t } = useTranslation();
   const api = useApiClient();
   const [name, setName] = useState('');
   const [frequency, setFrequency] = useState('weekly');
   const [currency, setCurrency] = useState('XAF');
   const [amount, setAmount] = useState('10000');
-  const [agentId, setAgentId] = useState('');
+  const [agent, setAgent] = useState<DirectoryOption | null>(null);
   const [scheduleId, setScheduleId] = useState('');
 
   return (
@@ -99,7 +198,7 @@ function ScheduleForm({ schedules, onDone }: { schedules: any[]; onDone: (messag
           <MenuItem key={value} value={value}>{value}</MenuItem>
         ))}
       </TextField>
-      <TextField label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+      <CurrencyField value={currency} onChange={setCurrency} />
       <TextField label="Default amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
       <Button
         variant="contained"
@@ -121,14 +220,20 @@ function ScheduleForm({ schedules, onDone }: { schedules: any[]; onDone: (messag
           <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>
         ))}
       </TextField>
-      <TextField label="Agent id" value={agentId} onChange={(e) => setAgentId(e.target.value)} />
+      <DirectorySearch
+        label={t('admin.paymentPrograms.agent', 'Agent')}
+        placeholder={t('admin.paymentPrograms.directorySearch', 'Name, email, or referral code')}
+        endpoint="/admin/payment-programs/agents"
+        value={agent}
+        onChange={setAgent}
+      />
       <Button
         variant="outlined"
-        disabled={!scheduleId || !agentId}
+        disabled={!scheduleId || !agent}
         onClick={() =>
           void api
             .post(`/admin/payment-programs/schedules/${scheduleId}/assignments`, {
-              agentId,
+              agentId: agent?.id,
               startsAt: new Date().toISOString(),
             })
             .then(() => onDone('Schedule applied to agent'))
@@ -148,17 +253,18 @@ function ScheduleForm({ schedules, onDone }: { schedules: any[]; onDone: (messag
 }
 
 function AdvanceForm({ programs, onDone }: { programs: any[]; onDone: (message: string) => Promise<void> }) {
+  const { t } = useTranslation();
   const api = useApiClient();
   const [name, setName] = useState('');
   const [currency, setCurrency] = useState('XAF');
   const [limit, setLimit] = useState('50000');
   const [programId, setProgramId] = useState('');
-  const [userId, setUserId] = useState('');
+  const [agent, setAgent] = useState<DirectoryOption | null>(null);
 
   return (
     <Stack spacing={2}>
       <TextField label="Program name" value={name} onChange={(e) => setName(e.target.value)} />
-      <TextField label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+      <CurrencyField value={currency} onChange={setCurrency} />
       <TextField label="Default limit" value={limit} onChange={(e) => setLimit(e.target.value)} />
       <Button
         variant="contained"
@@ -179,14 +285,20 @@ function AdvanceForm({ programs, onDone }: { programs: any[]; onDone: (message: 
           <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>
         ))}
       </TextField>
-      <TextField label="User id" value={userId} onChange={(e) => setUserId(e.target.value)} />
+      <DirectorySearch
+        label={t('admin.paymentPrograms.agent', 'Agent')}
+        placeholder={t('admin.paymentPrograms.directorySearch', 'Name, email, or referral code')}
+        endpoint="/admin/payment-programs/agents"
+        value={agent}
+        onChange={setAgent}
+      />
       <Button
         variant="outlined"
-        disabled={!programId || !userId}
+        disabled={!programId || !agent?.userId}
         onClick={() =>
           void api
             .post(`/admin/payment-programs/cash-advances/${programId}/facilities`, {
-              userId,
+              userId: agent?.userId,
               currency,
               limitAmount: Number(limit),
             })
@@ -200,8 +312,9 @@ function AdvanceForm({ programs, onDone }: { programs: any[]; onDone: (message: 
 }
 
 function CreditForm({ onDone }: { onDone: (message: string) => void }) {
+  const { t } = useTranslation();
   const api = useApiClient();
-  const [userId, setUserId] = useState('');
+  const [client, setClient] = useState<DirectoryOption | null>(null);
   const [amount, setAmount] = useState('5000');
   const [currency, setCurrency] = useState('XAF');
   const [applicability, setApplicability] = useState('any_store');
@@ -209,9 +322,15 @@ function CreditForm({ onDone }: { onDone: (message: string) => void }) {
 
   return (
     <Stack spacing={2}>
-      <TextField label="User id" value={userId} onChange={(e) => setUserId(e.target.value)} />
+      <DirectorySearch
+        label={t('admin.paymentPrograms.client', 'Client')}
+        placeholder={t('admin.paymentPrograms.clientSearch', 'Name, email, or phone number')}
+        endpoint="/admin/payment-programs/clients"
+        value={client}
+        onChange={setClient}
+      />
       <TextField label="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
-      <TextField label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+      <CurrencyField value={currency} onChange={setCurrency} />
       <TextField select label="Applies to" value={applicability} onChange={(e) => setApplicability(e.target.value)}>
         <MenuItem value="any_store">Any store</MenuItem>
         <MenuItem value="partner_businesses">All partner businesses</MenuItem>
@@ -222,10 +341,11 @@ function CreditForm({ onDone }: { onDone: (message: string) => void }) {
       )}
       <Button
         variant="contained"
+        disabled={!client?.userId}
         onClick={() =>
           void api
             .post('/admin/payment-programs/credits', {
-              userId,
+              userId: client?.userId,
               amount: Number(amount),
               currency,
               applicability,
@@ -241,16 +361,24 @@ function CreditForm({ onDone }: { onDone: (message: string) => void }) {
 }
 
 function PartnerForm({ partners, onDone }: { partners: any[]; onDone: (message: string) => Promise<void> }) {
+  const { t } = useTranslation();
   const api = useApiClient();
-  const [businessId, setBusinessId] = useState('');
+  const [business, setBusiness] = useState<DirectoryOption | null>(null);
   return (
     <Stack spacing={2}>
-      <TextField label="Business id" value={businessId} onChange={(e) => setBusinessId(e.target.value)} />
+      <DirectorySearch
+        label={t('admin.paymentPrograms.business', 'Business')}
+        placeholder={t('admin.paymentPrograms.directorySearch', 'Name, email, or referral code')}
+        endpoint="/admin/payment-programs/businesses"
+        value={business}
+        onChange={setBusiness}
+      />
       <Button
         variant="contained"
+        disabled={!business}
         onClick={() =>
           void api
-            .post('/admin/payment-programs/partners', { businessId, isActive: true })
+            .post('/admin/payment-programs/partners', { businessId: business?.id, isActive: true })
             .then(() => onDone('Partner business saved'))
         }
       >

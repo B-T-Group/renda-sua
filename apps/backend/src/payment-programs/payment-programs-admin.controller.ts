@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { RequirePermissions } from '../rbac/permissions.decorator';
@@ -39,6 +39,13 @@ export class PaymentProgramsAdminController {
   @ApiOperation({ summary: 'List payment schedules and assignments' })
   listSchedules() {
     return this.schedules.listSchedules();
+  }
+
+  @Get('agents')
+  @ApiOperation({ summary: 'Search agents by name, email, or referral code' })
+  @ApiQuery({ name: 'search', required: false })
+  searchAgents(@Query('search') search = '') {
+    return this.schedules.searchAgents(search);
   }
 
   @Post('schedules')
@@ -101,9 +108,23 @@ export class PaymentProgramsAdminController {
   }
 
   @Post('credits')
-  @ApiOperation({ summary: 'Grant scoped purchase credits' })
+  @ApiOperation({ summary: 'Grant scoped purchase credits to a client' })
   async grant(@Body() dto: GrantCreditDto) {
     return this.credits.grant({ ...dto, createdBy: await this.actorId() });
+  }
+
+  @Get('clients')
+  @ApiOperation({ summary: 'Search clients by name, email, or phone number' })
+  @ApiQuery({ name: 'search', required: false })
+  searchClients(@Query('search') search = '') {
+    return this.credits.searchClients(search);
+  }
+
+  @Get('businesses')
+  @ApiOperation({ summary: 'Search businesses by name, email, or referral code' })
+  @ApiQuery({ name: 'search', required: false })
+  searchBusinesses(@Query('search') search = '') {
+    return this.partners.search(search);
   }
 
   @Get('partners')

@@ -533,7 +533,13 @@
       "schedules": "Schedules",
       "advances": "Cash advances",
       "credits": "Credits",
-      "partners": "Partners"
+      "partners": "Partners",
+      "currency": "Currency",
+      "agent": "Agent",
+      "business": "Business",
+      "client": "Client",
+      "clientSearch": "Name, email, or phone number",
+      "directorySearch": "Name, email, or referral code"
     },
     "accountRecharge": {
       "pageTitle": "HQ account recharge",

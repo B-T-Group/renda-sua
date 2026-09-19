@@ -276,7 +276,13 @@
       "schedules": "Calendriers",
       "advances": "Avances de fonds",
       "credits": "Crédits",
-      "partners": "Partenaires"
+      "partners": "Partenaires",
+      "currency": "Devise",
+      "agent": "Agent",
+      "business": "Entreprise",
+      "client": "Client",
+      "clientSearch": "Nom, e-mail ou numéro de téléphone",
+      "directorySearch": "Nom, e-mail ou code de parrainage"
     },
     "accountRecharge": {
       "pageTitle": "Recharge du compte HQ",
