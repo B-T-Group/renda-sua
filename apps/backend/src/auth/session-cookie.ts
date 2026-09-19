@@ -4,14 +4,21 @@ const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 type CookieRequest = {
   secure?: boolean;
-  headers?: { 'x-forwarded-proto'?: string | string[] };
+  headers?: object;
 };
+
+function forwardedProto(headers: object | undefined): string | undefined {
+  if (!headers) return undefined;
+  const value = (headers as Record<string, string | string[] | undefined>)[
+    'x-forwarded-proto'
+  ];
+  const first = Array.isArray(value) ? value[0] : value;
+  return first?.split(',')[0]?.trim();
+}
 
 export function isHttpsRequest(req: CookieRequest): boolean {
   if (req.secure) return true;
-  const proto = req.headers?.['x-forwarded-proto'];
-  const first = Array.isArray(proto) ? proto[0] : proto;
-  return first?.split(',')[0]?.trim() === 'https';
+  return forwardedProto(req.headers) === 'https';
 }
 
 /** HTTPS APIs use None+Secure so localhost can send the cookie cross-site. */
