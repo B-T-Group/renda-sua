@@ -83,7 +83,13 @@ function catalogContextFromPath(pathname: string): MarketStatesCatalog {
 
 const Header: React.FC = () => {
   const { isLoading } = useAuth0();
-  const { isAuthenticated, user, logout } = useSessionAuth();
+  const {
+    isAuthenticated: hasSession,
+    isSessionReady,
+    user,
+    logout,
+  } = useSessionAuth();
+  const isAuthenticated = hasSession || !isSessionReady;
   const {
     userType,
     profile,

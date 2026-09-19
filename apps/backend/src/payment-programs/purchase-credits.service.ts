@@ -65,6 +65,31 @@ export class PurchaseCreditsService {
     return result.purchase_credit_grants ?? [];
   }
 
+  async listAll() {
+    const result = await this.hasura.executeQuery(LIST_ALL_GRANTS, {});
+    return result.purchase_credit_grants ?? [];
+  }
+
+  async updateGrant(id: string, input: { expiresAt?: string | null; memo?: string | null }) {
+    const result = await this.hasura.executeMutation(UPDATE_GRANT, {
+      id,
+      set: { expires_at: input.expiresAt || null, memo: input.memo ?? null },
+    });
+    const row = result.update_purchase_credit_grants?.returning?.[0];
+    if (!row) throw new BadRequestException('Grant cannot be edited');
+    return row;
+  }
+
+  async revoke(id: string) {
+    const result = await this.hasura.executeMutation(REVOKE_GRANT, {
+      id,
+      revokedAt: new Date().toISOString(),
+    });
+    const row = result.update_purchase_credit_grants?.returning?.[0];
+    if (!row) throw new BadRequestException('Grant is already revoked');
+    return row;
+  }
+
   async grant(input: GrantInput): Promise<{ id: string }> {
     await this.assertClient(input.userId);
     await this.assertSpecificPartner(input);
@@ -96,6 +121,8 @@ export class PurchaseCreditsService {
   }
 
   private async restoreOne(row: { id: string; grant_id: string; amount: number }): Promise<void> {
+    const grant = await this.hasura.executeQuery(GRANT_REVOKED, { id: row.grant_id });
+    if (grant.purchase_credit_grants_by_pk?.revoked_at) return;
     await this.hasura.executeMutation(ADJUST_REMAINING, {
       id: row.grant_id,
       delta: row.amount,
@@ -205,6 +232,7 @@ const ACTIVE_GRANTS = `
         user_id: { _eq: $userId }
         currency: { _eq: $currency }
         remaining_amount: { _gt: 0 }
+        revoked_at: { _is_null: true }
       }
     ) {
       id remaining_amount applicability business_id expires_at created_at
@@ -219,7 +247,7 @@ const LIST_GRANTS = `
       order_by: { created_at: desc }
     ) {
       id currency amount remaining_amount applicability business_id expires_at
-      source memo created_at
+      source memo revoked_at created_at
       business { name }
       redemptions(order_by: { created_at: desc }) { id order_id amount created_at }
     }
@@ -269,6 +297,41 @@ const REDEMPTIONS = `
 const DELETE_REDEMPTION = `
   mutation DeleteRedemption($id: uuid!) {
     delete_purchase_credit_redemptions_by_pk(id: $id) { id }
+  }
+`;
+
+const GRANT_REVOKED = `
+  query GrantRevoked($id: uuid!) {
+    purchase_credit_grants_by_pk(id: $id) { revoked_at }
+  }
+`;
+
+const LIST_ALL_GRANTS = `
+  query ListAllPurchaseCredits {
+    purchase_credit_grants(order_by: { created_at: desc }) {
+      id user_id currency amount remaining_amount applicability business_id
+      expires_at memo revoked_at created_at
+      user { first_name last_name email }
+      business { name }
+    }
+  }
+`;
+
+const UPDATE_GRANT = `
+  mutation UpdatePurchaseCredit($id: uuid!, $set: purchase_credit_grants_set_input!) {
+    update_purchase_credit_grants(
+      where: { id: { _eq: $id }, revoked_at: { _is_null: true } }
+      _set: $set
+    ) { returning { id expires_at memo } }
+  }
+`;
+
+const REVOKE_GRANT = `
+  mutation RevokePurchaseCredit($id: uuid!, $revokedAt: timestamptz!) {
+    update_purchase_credit_grants(
+      where: { id: { _eq: $id }, revoked_at: { _is_null: true } }
+      _set: { revoked_at: $revokedAt, remaining_amount: 0 }
+    ) { returning { id remaining_amount revoked_at } }
   }
 `;
 

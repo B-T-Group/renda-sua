@@ -136,6 +136,74 @@ export class PartnerBusinessDto {
   notes?: string;
 }
 
+export class UpdateScheduleDto {
+  @IsString()
+  name!: string;
+
+  @IsIn(['daily', 'weekly', 'biweekly', 'monthly'])
+  frequency!: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  defaultAmount!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  defaultDurationDays?: number;
+}
+
+export class UpdateAssignmentTermsDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  amount?: number;
+
+  @IsOptional()
+  @IsString()
+  endsAt?: string;
+}
+
+export class UpdateCashAdvanceProgramDto {
+  @IsString()
+  name!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  defaultLimit!: number;
+}
+
+export class SetActiveDto {
+  @IsBoolean()
+  isActive!: boolean;
+}
+
+export class UpdateFacilityDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  limitAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  endsAt?: string;
+}
+
+export class UpdateGrantDto {
+  @IsOptional()
+  @IsString()
+  expiresAt?: string;
+
+  @IsOptional()
+  @IsString()
+  memo?: string;
+}
+
 export class DrawCashAdvanceDto {
   @Type(() => Number)
   @IsNumber()

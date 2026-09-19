@@ -27,7 +27,7 @@ function resolveComposingPersona(
  */
 const SmartHome: React.FC = () => {
   const location = useLocation();
-  const { isAuthenticated } = useSessionAuth();
+  const { isAuthenticated, isSessionReady } = useSessionAuth();
   const {
     loading,
     userType,
@@ -50,6 +50,10 @@ const SmartHome: React.FC = () => {
 
   if (showComposing && composingPersona) {
     return <DashboardComposingOverlay persona={composingPersona} />;
+  }
+
+  if (!isSessionReady) {
+    return <LoadingPage message="Loading" subtitle="Please wait" showProgress />;
   }
 
   if (isAuthenticated && loading) {

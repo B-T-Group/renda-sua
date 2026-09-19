@@ -22,6 +22,7 @@ export interface SessionAuthUser {
 
 interface SessionAuthContextType {
   isAuthenticated: boolean;
+  isSessionReady: boolean;
   user: any | SessionAuthUser | undefined;
   getAccessToken: (options?: { refresh?: boolean }) => Promise<string | null>;
   logout: () => Promise<void>;
@@ -75,6 +76,17 @@ async function refreshWithBackend(): Promise<{
   }
 }
 
+let cookieHydrate: ReturnType<typeof refreshWithBackend> | null = null;
+
+function hydrateFromCookie() {
+  if (!cookieHydrate) {
+    cookieHydrate = refreshWithBackend().finally(() => {
+      cookieHydrate = null;
+    });
+  }
+  return cookieHydrate;
+}
+
 export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
@@ -84,6 +96,7 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   const [passwordlessAccessToken, setPasswordlessAccessToken] = useState<string | null>(null);
   const [passwordlessIdToken, setPasswordlessIdToken] = useState<string | null>(null);
   const [passwordlessExpiresAtMs, setPasswordlessExpiresAtMs] = useState<number>(0);
+  const [isSessionReady, setIsSessionReady] = useState(false);
   const passwordlessAccessTokenRef = useRef<string | null>(null);
   const passwordlessExpiresAtMsRef = useRef(0);
 
@@ -109,14 +122,10 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
     let isMounted = true;
 
     const hydrateSession = async () => {
-      try {
-        const refreshed = await refreshWithBackend();
-        if (refreshed && isMounted) {
-          applyPasswordlessTokens(refreshed);
-        }
-      } catch {
-        // Cookie not present or invalid - user is logged out
-      }
+      const refreshed = await hydrateFromCookie();
+      if (!isMounted) return;
+      if (refreshed) applyPasswordlessTokens(refreshed);
+      setIsSessionReady(true);
     };
 
     void hydrateSession();
@@ -216,6 +225,7 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const value: SessionAuthContextType = {
     isAuthenticated: auth0.isAuthenticated || isPasswordlessAuthenticated,
+    isSessionReady: auth0.isAuthenticated || isSessionReady,
     user: (auth0.user as any) || passwordlessUser,
     getAccessToken,
     logout,

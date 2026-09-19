@@ -25,24 +25,49 @@ export class PaymentScheduleCatalogService {
     return result.payment_schedules ?? [];
   }
 
+  async updateSchedule(id: string, input: UpdateScheduleInput) {
+    const result = await this.hasura.executeMutation(UPDATE_SCHEDULE, {
+      id,
+      set: schedulePatch(input),
+    });
+    return result.update_payment_schedules_by_pk;
+  }
+
+  async setScheduleActive(id: string, active: boolean) {
+    const mutation = active ? REACTIVATE_SCHEDULE : DEACTIVATE_SCHEDULE;
+    const result = await this.hasura.executeMutation(mutation, { id });
+    return result.update_payment_schedules_by_pk;
+  }
+
   async assign(input: AssignInput) {
     const schedule = await this.requireSchedule(input.scheduleId);
+    await this.assertNoOtherActive(input.scheduleId, input.agentId, NIL_ID);
     const endsAt = input.endsAt ?? this.durationEnd(input.startsAt, schedule.default_duration_days);
     const result = await this.hasura.executeMutation(INSERT_ASSIGNMENT, {
-      object: {
-        schedule_id: input.scheduleId,
-        agent_id: input.agentId,
-        amount: input.amount ?? schedule.default_amount,
-        currency: schedule.currency,
-        starts_at: input.startsAt,
-        ends_at: endsAt,
-        created_by: input.createdBy ?? null,
-      },
+      object: assignmentInsert(input, schedule, endsAt),
     });
     return result.insert_payment_schedule_assignments_one;
   }
 
+  async updateAssignment(id: string, input: { amount?: number; endsAt?: string | null }) {
+    const row = await this.assignmentById(id);
+    if (!row || !['active', 'paused'].includes(row.status)) {
+      throw new BadRequestException('Assignment amount can only change while active or paused');
+    }
+    const result = await this.hasura.executeMutation(UPDATE_ASSIGNMENT, {
+      id,
+      set: assignmentTerms(input),
+    });
+    return result.update_payment_schedule_assignments_by_pk;
+  }
+
   async setAssignmentStatus(id: string, status: string) {
+    const row = await this.assignmentById(id);
+    if (!row) throw new BadRequestException('Assignment not found');
+    if (!canTransitionAssignment(row.status, status)) {
+      throw new BadRequestException('Assignment cannot change to that status');
+    }
+    if (status === 'active') await this.assertCanResume(row);
     const result = await this.hasura.executeMutation(SET_STATUS, { id, status });
     return result.update_payment_schedule_assignments_by_pk;
   }
@@ -75,6 +100,97 @@ export class PaymentScheduleCatalogService {
     end.setUTCDate(end.getUTCDate() + days);
     return end.toISOString();
   }
+
+  private async assignmentById(id: string) {
+    const result = await this.hasura.executeQuery(ASSIGNMENT_BY_ID, { id });
+    return result.payment_schedule_assignments_by_pk;
+  }
+
+  private async assertCanResume(row: AssignmentRow) {
+    const endsAt = row.ends_at ?? null;
+    if (!canResumeAssignment(!!row.schedule?.is_active, endsAt)) {
+      throw new BadRequestException('Assignment cannot resume');
+    }
+    await this.assertNoOtherActive(row.schedule_id, row.agent_id, row.id);
+  }
+
+  private async assertNoOtherActive(scheduleId: string, agentId: string, exceptId: string) {
+    const result = await this.hasura.executeQuery(ACTIVE_ASSIGNMENT, {
+      scheduleId,
+      agentId,
+      exceptId,
+    });
+    if (result.payment_schedule_assignments?.length) {
+      throw new BadRequestException('This agent already has an active assignment for this schedule');
+    }
+  }
+}
+
+const NIL_ID = '00000000-0000-0000-0000-000000000000';
+
+export function canResumeAssignment(
+  scheduleActive: boolean,
+  endsAt: string | null,
+  now = Date.now()
+): boolean {
+  if (!scheduleActive) return false;
+  if (!endsAt) return true;
+  return new Date(endsAt).getTime() > now;
+}
+
+export function canTransitionAssignment(from: string, to: string): boolean {
+  if (from === to) return true;
+  if (from === 'active') return to === 'paused' || to === 'ended';
+  if (from === 'paused') return to === 'active' || to === 'ended';
+  return false;
+}
+
+function schedulePatch(input: UpdateScheduleInput) {
+  return {
+    name: input.name,
+    frequency: input.frequency,
+    default_amount: input.defaultAmount,
+    default_duration_days: input.defaultDurationDays ?? null,
+  };
+}
+
+function assignmentInsert(
+  input: AssignInput,
+  schedule: { currency: string; default_amount: number },
+  endsAt: string | null
+) {
+  return {
+    schedule_id: input.scheduleId,
+    agent_id: input.agentId,
+    amount: input.amount ?? schedule.default_amount,
+    currency: schedule.currency,
+    starts_at: input.startsAt,
+    ends_at: endsAt,
+    created_by: input.createdBy ?? null,
+  };
+}
+
+function assignmentTerms(input: { amount?: number; endsAt?: string | null }) {
+  const set: Record<string, unknown> = {};
+  if (input.amount != null) set.amount = input.amount;
+  if (input.endsAt !== undefined) set.ends_at = input.endsAt || null;
+  return set;
+}
+
+export interface UpdateScheduleInput {
+  name: string;
+  frequency: ScheduleFrequency;
+  defaultAmount: number;
+  defaultDurationDays?: number | null;
+}
+
+interface AssignmentRow {
+  id: string;
+  status: string;
+  schedule_id: string;
+  agent_id: string;
+  ends_at?: string | null;
+  schedule?: { is_active?: boolean };
 }
 
 export interface CreateScheduleInput {
@@ -132,6 +248,54 @@ const INSERT_ASSIGNMENT = `
 const SET_STATUS = `
   mutation SetAssignmentStatus($id: uuid!, $status: payment_program_status!) {
     update_payment_schedule_assignments_by_pk(pk_columns: { id: $id }, _set: { status: $status }) { id status }
+  }
+`;
+
+const UPDATE_SCHEDULE = `
+  mutation UpdateSchedule($id: uuid!, $set: payment_schedules_set_input!) {
+    update_payment_schedules_by_pk(pk_columns: { id: $id }, _set: $set) { id is_active }
+  }
+`;
+
+const DEACTIVATE_SCHEDULE = `
+  mutation DeactivateSchedule($id: uuid!) {
+    update_payment_schedules_by_pk(pk_columns: { id: $id }, _set: { is_active: false }) { id is_active }
+    update_payment_schedule_assignments(
+      where: { schedule_id: { _eq: $id }, status: { _in: [active, paused] } }
+      _set: { status: ended }
+    ) { affected_rows }
+  }
+`;
+
+const REACTIVATE_SCHEDULE = `
+  mutation ReactivateSchedule($id: uuid!) {
+    update_payment_schedules_by_pk(pk_columns: { id: $id }, _set: { is_active: true }) { id is_active }
+  }
+`;
+
+const ASSIGNMENT_BY_ID = `
+  query AssignmentById($id: uuid!) {
+    payment_schedule_assignments_by_pk(id: $id) {
+      id status schedule_id agent_id ends_at
+      schedule { is_active }
+    }
+  }
+`;
+
+const ACTIVE_ASSIGNMENT = `
+  query ActiveAssignment($scheduleId: uuid!, $agentId: uuid!, $exceptId: uuid!) {
+    payment_schedule_assignments(where: {
+      schedule_id: { _eq: $scheduleId }
+      agent_id: { _eq: $agentId }
+      status: { _eq: active }
+      id: { _neq: $exceptId }
+    }, limit: 1) { id }
+  }
+`;
+
+const UPDATE_ASSIGNMENT = `
+  mutation UpdateAssignment($id: uuid!, $set: payment_schedule_assignments_set_input!) {
+    update_payment_schedule_assignments_by_pk(pk_columns: { id: $id }, _set: $set) { id amount ends_at }
   }
 `;
 

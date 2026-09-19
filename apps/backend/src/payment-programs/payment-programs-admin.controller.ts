@@ -14,7 +14,13 @@ import {
   GrantCreditDto,
   OpenFacilityDto,
   PartnerBusinessDto,
+  SetActiveDto,
   SetStatusDto,
+  UpdateAssignmentTermsDto,
+  UpdateCashAdvanceProgramDto,
+  UpdateFacilityDto,
+  UpdateGrantDto,
+  UpdateScheduleDto,
 } from './payment-programs.dto';
 import { PurchaseCreditsService } from './purchase-credits.service';
 
@@ -54,6 +60,18 @@ export class PaymentProgramsAdminController {
     return this.schedules.createSchedule({ ...dto, createdBy: await this.actorId() });
   }
 
+  @Patch('schedules/:id')
+  @ApiOperation({ summary: 'Edit a schedule template. Currency stays fixed.' })
+  updateSchedule(@Param('id') id: string, @Body() dto: UpdateScheduleDto) {
+    return this.schedules.updateSchedule(id, dto);
+  }
+
+  @Post('schedules/:id/active')
+  @ApiOperation({ summary: 'Deactivate or reactivate a schedule. Deactivate ends assignments.' })
+  setScheduleActive(@Param('id') id: string, @Body() dto: SetActiveDto) {
+    return this.schedules.setScheduleActive(id, dto.isActive);
+  }
+
   @Post('schedules/:id/assignments')
   @ApiOperation({ summary: 'Apply a payment schedule to an agent' })
   async assign(@Param('id') id: string, @Body() dto: AssignScheduleDto) {
@@ -73,6 +91,12 @@ export class PaymentProgramsAdminController {
     return this.schedules.setAssignmentStatus(id, dto.status);
   }
 
+  @Patch('assignments/:id/terms')
+  @ApiOperation({ summary: 'Edit assignment amount or end date while active or paused' })
+  updateAssignment(@Param('id') id: string, @Body() dto: UpdateAssignmentTermsDto) {
+    return this.schedules.updateAssignment(id, dto);
+  }
+
   @Get('cash-advances')
   @ApiOperation({ summary: 'List cash-advance programs' })
   listPrograms() {
@@ -88,6 +112,30 @@ export class PaymentProgramsAdminController {
       defaultLimit: dto.defaultLimit,
       createdBy: await this.actorId(),
     });
+  }
+
+  @Patch('cash-advances/:id')
+  @ApiOperation({ summary: 'Edit a cash-advance program name and default limit' })
+  updateProgram(@Param('id') id: string, @Body() dto: UpdateCashAdvanceProgramDto) {
+    return this.cashAdvances.updateProgram(id, dto);
+  }
+
+  @Post('cash-advances/:id/active')
+  @ApiOperation({ summary: 'Deactivate or reactivate a cash-advance program' })
+  setProgramActive(@Param('id') id: string, @Body() dto: SetActiveDto) {
+    return this.cashAdvances.setProgramActive(id, dto.isActive);
+  }
+
+  @Patch('cash-advances/facilities/:id')
+  @ApiOperation({ summary: 'Edit a facility limit or end date. Limit cannot drop below drawn debt.' })
+  updateFacility(@Param('id') id: string, @Body() dto: UpdateFacilityDto) {
+    return this.cashAdvances.updateFacility(id, dto);
+  }
+
+  @Post('cash-advances/facilities/:id/close')
+  @ApiOperation({ summary: 'Close a facility without forgiving outstanding debt' })
+  closeFacility(@Param('id') id: string) {
+    return this.cashAdvances.closeFacility(id);
   }
 
   @Post('cash-advances/:id/facilities')
@@ -107,10 +155,28 @@ export class PaymentProgramsAdminController {
     });
   }
 
+  @Get('credits')
+  @ApiOperation({ summary: 'List purchase credit grants' })
+  listCredits() {
+    return this.credits.listAll();
+  }
+
   @Post('credits')
   @ApiOperation({ summary: 'Grant scoped purchase credits to a client' })
   async grant(@Body() dto: GrantCreditDto) {
     return this.credits.grant({ ...dto, createdBy: await this.actorId() });
+  }
+
+  @Patch('credits/:id')
+  @ApiOperation({ summary: 'Edit a grant expiry or memo. Amount and scope stay fixed.' })
+  updateGrant(@Param('id') id: string, @Body() dto: UpdateGrantDto) {
+    return this.credits.updateGrant(id, dto);
+  }
+
+  @Post('credits/:id/revoke')
+  @ApiOperation({ summary: 'Revoke a grant and zero its remaining balance' })
+  revokeGrant(@Param('id') id: string) {
+    return this.credits.revoke(id);
   }
 
   @Get('clients')

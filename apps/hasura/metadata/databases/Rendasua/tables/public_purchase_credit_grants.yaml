@@ -36,6 +36,7 @@ select_permissions:
         - expires_at
         - source
         - memo
+        - revoked_at
         - created_at
         - updated_at
       filter:
@@ -54,6 +55,7 @@ select_permissions:
         - expires_at
         - source
         - memo
+        - revoked_at
         - created_at
         - updated_at
       filter:
@@ -72,6 +74,7 @@ select_permissions:
         - expires_at
         - source
         - memo
+        - revoked_at
         - created_at
         - updated_at
       filter:
@@ -90,6 +93,7 @@ select_permissions:
         - expires_at
         - source
         - memo
+        - revoked_at
         - created_at
         - updated_at
       filter:

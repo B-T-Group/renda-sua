@@ -34,23 +34,40 @@ export class CashAdvanceService {
     return result.cash_advance_programs ?? [];
   }
 
+  async updateProgram(id: string, input: { name: string; defaultLimit: number }) {
+    const result = await this.hasura.executeMutation(UPDATE_PROGRAM, {
+      id,
+      set: { name: input.name, default_limit: input.defaultLimit },
+    });
+    return result.update_cash_advance_programs_by_pk;
+  }
+
+  async setProgramActive(id: string, isActive: boolean) {
+    const result = await this.hasura.executeMutation(SET_PROGRAM_ACTIVE, { id, isActive });
+    return result.update_cash_advance_programs_by_pk;
+  }
+
   async openFacility(input: OpenFacilityInput) {
+    await this.requireActiveProgram(input.programId);
     const account = await this.personalAccount(input.userId, input.currency);
     const facility = await this.insertFacility(input, account.id);
-    await this.notifications.sendPaymentProgramNotice({
-      userId: input.userId,
-      ...facilityCopy({
-        limit: input.limitAmount,
-        currency: input.currency,
-        name: input.programName,
-        preferredLanguage: input.preferredLanguage,
-      }),
-      messageType: 'CASH_ADVANCE_FACILITY',
-      entityId: facility.id,
-      path: '/accounts/cash-advance',
-      event: 'wallet.cash_advance.facility',
-    });
+    await this.notifyFacility(input, facility.id);
     return facility;
+  }
+
+  async updateFacility(id: string, input: { limitAmount?: number; endsAt?: string | null }) {
+    const row = await this.facilityById(id);
+    this.assertFacilityEditable(row, input.limitAmount);
+    const result = await this.hasura.executeMutation(UPDATE_FACILITY, {
+      id,
+      set: facilityPatch(input),
+    });
+    return result.update_cash_advance_facilities_by_pk;
+  }
+
+  async closeFacility(id: string) {
+    const result = await this.hasura.executeMutation(CLOSE_FACILITY, { id });
+    return result.update_cash_advance_facilities_by_pk;
   }
 
   async listForUser(userId: string) {
@@ -120,6 +137,47 @@ export class CashAdvanceService {
     }
     return facility;
   }
+
+  private async requireActiveProgram(id: string) {
+    const result = await this.hasura.executeQuery(PROGRAM_BY_ID, { id });
+    if (!result.cash_advance_programs_by_pk?.is_active) {
+      throw new BadRequestException('Cash-advance program is not active');
+    }
+  }
+
+  private async facilityById(id: string) {
+    const result = await this.hasura.executeQuery(FACILITY_BY_ID, { id });
+    return result.cash_advance_facilities_by_pk;
+  }
+
+  private assertFacilityEditable(
+    row: { status?: string; account?: { cash_advance_balance?: number } } | null,
+    limitAmount?: number
+  ) {
+    if (!row || row.status !== 'active') {
+      throw new BadRequestException('Facility is not editable');
+    }
+    const drawn = row.account?.cash_advance_balance ?? 0;
+    if (limitAmount != null && !limitCoversDrawn(limitAmount, drawn)) {
+      throw new BadRequestException('Limit cannot be below the amount already drawn');
+    }
+  }
+
+  private async notifyFacility(input: OpenFacilityInput, facilityId: string) {
+    await this.notifications.sendPaymentProgramNotice({
+      userId: input.userId,
+      ...facilityCopy({
+        limit: input.limitAmount,
+        currency: input.currency,
+        name: input.programName,
+        preferredLanguage: input.preferredLanguage,
+      }),
+      messageType: 'CASH_ADVANCE_FACILITY',
+      entityId: facilityId,
+      path: '/accounts/cash-advance',
+      event: 'wallet.cash_advance.facility',
+    });
+  }
 }
 
 interface OpenFacilityInput {
@@ -143,6 +201,11 @@ const LIST_PROGRAMS = `
   query ListCashAdvancePrograms {
     cash_advance_programs(order_by: { created_at: desc }) {
       id name currency default_limit is_active created_at
+      facilities(order_by: { created_at: desc }) {
+        id user_id limit_amount currency status ends_at
+        user { first_name last_name email }
+        account { cash_advance_balance }
+      }
     }
   }
 `;
@@ -195,7 +258,57 @@ const INSERT_DRAW = `
   }
 `;
 
+const PROGRAM_BY_ID = `
+  query CashAdvanceProgramById($id: uuid!) {
+    cash_advance_programs_by_pk(id: $id) { id is_active }
+  }
+`;
+
+const FACILITY_BY_ID = `
+  query FacilityById($id: uuid!) {
+    cash_advance_facilities_by_pk(id: $id) {
+      id status
+      account { cash_advance_balance }
+    }
+  }
+`;
+
+const UPDATE_PROGRAM = `
+  mutation UpdateCashAdvanceProgram($id: uuid!, $set: cash_advance_programs_set_input!) {
+    update_cash_advance_programs_by_pk(pk_columns: { id: $id }, _set: $set) { id }
+  }
+`;
+
+const SET_PROGRAM_ACTIVE = `
+  mutation SetCashAdvanceProgramActive($id: uuid!, $isActive: Boolean!) {
+    update_cash_advance_programs_by_pk(pk_columns: { id: $id }, _set: { is_active: $isActive }) { id is_active }
+  }
+`;
+
+const UPDATE_FACILITY = `
+  mutation UpdateFacility($id: uuid!, $set: cash_advance_facilities_set_input!) {
+    update_cash_advance_facilities_by_pk(pk_columns: { id: $id }, _set: $set) { id limit_amount ends_at }
+  }
+`;
+
+const CLOSE_FACILITY = `
+  mutation CloseFacility($id: uuid!) {
+    update_cash_advance_facilities_by_pk(pk_columns: { id: $id }, _set: { status: closed }) { id status }
+  }
+`;
+
 export function drawableRemaining(limitAmount: number, cashAdvanceBalance: number): number {
   const owed = Math.abs(Number(cashAdvanceBalance || 0));
   return Math.max(0, Number(limitAmount) - owed);
+}
+
+export function limitCoversDrawn(limitAmount: number, cashAdvanceBalance: number): boolean {
+  return Number(limitAmount) >= Math.abs(Number(cashAdvanceBalance || 0));
+}
+
+function facilityPatch(input: { limitAmount?: number; endsAt?: string | null }) {
+  const set: Record<string, unknown> = {};
+  if (input.limitAmount != null) set.limit_amount = input.limitAmount;
+  if (input.endsAt !== undefined) set.ends_at = input.endsAt || null;
+  return set;
 }

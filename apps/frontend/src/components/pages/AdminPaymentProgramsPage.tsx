@@ -1,7 +1,6 @@
 import {
   Alert,
   Autocomplete,
-  Box,
   Button,
   Container,
   MenuItem,
@@ -15,6 +14,10 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CURRENCIES } from '../../constants/enums';
 import { useApiClient } from '../../hooks/useApiClient';
+import { AdvanceTables } from './admin-payment-programs/AdvanceTables';
+import { CreditTables } from './admin-payment-programs/CreditTables';
+import { PartnerTables } from './admin-payment-programs/PartnerTables';
+import { ScheduleTables } from './admin-payment-programs/ScheduleTables';
 
 interface DirectoryOption {
   id: string;
@@ -120,16 +123,19 @@ export default function AdminPaymentProgramsPage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [partners, setPartners] = useState<any[]>([]);
+  const [grants, setGrants] = useState<any[]>([]);
 
   async function reload() {
-    const [scheduleRows, programRows, partnerRows] = await Promise.all([
+    const [scheduleRows, programRows, partnerRows, grantRows] = await Promise.all([
       api.get('/admin/payment-programs/schedules'),
       api.get('/admin/payment-programs/cash-advances'),
       api.get('/admin/payment-programs/partners'),
+      api.get('/admin/payment-programs/credits'),
     ]);
     setSchedules(scheduleRows.data || []);
     setPrograms(programRows.data || []);
     setPartners(partnerRows.data || []);
+    setGrants(grantRows.data || []);
   }
 
   useEffect(() => {
@@ -137,7 +143,7 @@ export default function AdminPaymentProgramsPage() {
   }, []);
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>
         {t('admin.paymentPrograms.title', 'Payment programs')}
       </Typography>
@@ -149,32 +155,60 @@ export default function AdminPaymentProgramsPage() {
         <Tab label={t('admin.paymentPrograms.partners', 'Partners')} />
       </Tabs>
       {tab === 0 && (
-        <ScheduleForm
-          schedules={schedules}
-          onDone={async (message) => {
+        <Stack spacing={3}>
+          <ScheduleForm
+            schedules={schedules}
+            onDone={async (message) => {
+              setNotice(message);
+              await reload();
+            }}
+          />
+          <ScheduleTables schedules={schedules} onChanged={async (message) => {
             setNotice(message);
             await reload();
-          }}
-        />
+          }} />
+        </Stack>
       )}
       {tab === 1 && (
-        <AdvanceForm
-          programs={programs}
-          onDone={async (message) => {
+        <Stack spacing={3}>
+          <AdvanceForm
+            programs={programs}
+            onDone={async (message) => {
+              setNotice(message);
+              await reload();
+            }}
+          />
+          <AdvanceTables programs={programs} onChanged={async (message) => {
             setNotice(message);
             await reload();
-          }}
-        />
+          }} />
+        </Stack>
       )}
-      {tab === 2 && <CreditForm onDone={setNotice} />}
-      {tab === 3 && (
-        <PartnerForm
-          partners={partners}
-          onDone={async (message) => {
+      {tab === 2 && (
+        <Stack spacing={3}>
+          <CreditForm partners={partners} onDone={async (message) => {
             setNotice(message);
             await reload();
-          }}
-        />
+          }} />
+          <CreditTables grants={grants} onChanged={async (message) => {
+            setNotice(message);
+            await reload();
+          }} />
+        </Stack>
+      )}
+      {tab === 3 && (
+        <Stack spacing={3}>
+          <PartnerForm
+            onDone={async (message) => {
+              setNotice(message);
+              await reload();
+            }}
+          />
+          <PartnerTables partners={partners} onChanged={async (message) => {
+            setNotice(message);
+            await reload();
+          }} />
+        </Stack>
       )}
     </Container>
   );
@@ -192,14 +226,14 @@ function ScheduleForm({ schedules, onDone }: { schedules: any[]; onDone: (messag
 
   return (
     <Stack spacing={2}>
-      <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} />
-      <TextField select label="Frequency" value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+      <TextField label={t('admin.paymentPrograms.name', 'Name')} value={name} onChange={(e) => setName(e.target.value)} />
+      <TextField select label={t('admin.paymentPrograms.frequency', 'Frequency')} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
         {['daily', 'weekly', 'biweekly', 'monthly'].map((value) => (
-          <MenuItem key={value} value={value}>{value}</MenuItem>
+          <MenuItem key={value} value={value}>{t(`admin.paymentPrograms.${value}`, value)}</MenuItem>
         ))}
       </TextField>
       <CurrencyField value={currency} onChange={setCurrency} />
-      <TextField label="Default amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <TextField label={t('admin.paymentPrograms.amount', 'Amount')} value={amount} onChange={(e) => setAmount(e.target.value)} />
       <Button
         variant="contained"
         onClick={() =>
@@ -210,13 +244,13 @@ function ScheduleForm({ schedules, onDone }: { schedules: any[]; onDone: (messag
               currency,
               defaultAmount: Number(amount),
             })
-            .then(() => onDone('Schedule created'))
+            .then(() => onDone(t('admin.paymentPrograms.createSchedule', 'Create schedule')))
         }
       >
-        Create schedule
+        {t('admin.paymentPrograms.createSchedule', 'Create schedule')}
       </Button>
-      <TextField select label="Schedule" value={scheduleId} onChange={(e) => setScheduleId(e.target.value)}>
-        {schedules.map((row) => (
+      <TextField select label={t('admin.paymentPrograms.schedule', 'Schedule')} value={scheduleId} onChange={(e) => setScheduleId(e.target.value)}>
+        {schedules.filter((row) => row.is_active).map((row) => (
           <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>
         ))}
       </TextField>
@@ -236,18 +270,11 @@ function ScheduleForm({ schedules, onDone }: { schedules: any[]; onDone: (messag
               agentId: agent?.id,
               startsAt: new Date().toISOString(),
             })
-            .then(() => onDone('Schedule applied to agent'))
+            .then(() => onDone(t('admin.paymentPrograms.assign', 'Assign')))
         }
       >
-        Apply to agent
+        {t('admin.paymentPrograms.assign', 'Assign')}
       </Button>
-      <Box>
-        {schedules.map((row) => (
-          <Typography key={row.id} variant="body2">
-            {row.name} · {row.frequency} · {row.default_amount} {row.currency}
-          </Typography>
-        ))}
-      </Box>
     </Stack>
   );
 }
@@ -263,9 +290,9 @@ function AdvanceForm({ programs, onDone }: { programs: any[]; onDone: (message: 
 
   return (
     <Stack spacing={2}>
-      <TextField label="Program name" value={name} onChange={(e) => setName(e.target.value)} />
+      <TextField label={t('admin.paymentPrograms.name', 'Name')} value={name} onChange={(e) => setName(e.target.value)} />
       <CurrencyField value={currency} onChange={setCurrency} />
-      <TextField label="Default limit" value={limit} onChange={(e) => setLimit(e.target.value)} />
+      <TextField label={t('admin.paymentPrograms.limit', 'Limit')} value={limit} onChange={(e) => setLimit(e.target.value)} />
       <Button
         variant="contained"
         onClick={() =>
@@ -275,13 +302,13 @@ function AdvanceForm({ programs, onDone }: { programs: any[]; onDone: (message: 
               currency,
               defaultLimit: Number(limit),
             })
-            .then(() => onDone('Cash advance program created'))
+            .then(() => onDone(t('admin.paymentPrograms.createProgram', 'Create program')))
         }
       >
-        Create program
+        {t('admin.paymentPrograms.createProgram', 'Create program')}
       </Button>
-      <TextField select label="Program" value={programId} onChange={(e) => setProgramId(e.target.value)}>
-        {programs.map((row) => (
+      <TextField select label={t('admin.paymentPrograms.program', 'Program')} value={programId} onChange={(e) => setProgramId(e.target.value)}>
+        {programs.filter((row) => row.is_active).map((row) => (
           <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>
         ))}
       </TextField>
@@ -302,16 +329,22 @@ function AdvanceForm({ programs, onDone }: { programs: any[]; onDone: (message: 
               currency,
               limitAmount: Number(limit),
             })
-            .then(() => onDone('Facility opened'))
+            .then(() => onDone(t('admin.paymentPrograms.openFacility', 'Open facility')))
         }
       >
-        Open facility
+        {t('admin.paymentPrograms.openFacility', 'Open facility')}
       </Button>
     </Stack>
   );
 }
 
-function CreditForm({ onDone }: { onDone: (message: string) => void }) {
+function CreditForm({
+  partners,
+  onDone,
+}: {
+  partners: Array<{ business_id: string; is_active: boolean; business?: { name?: string } }>;
+  onDone: (message: string) => Promise<void>;
+}) {
   const { t } = useTranslation();
   const api = useApiClient();
   const [client, setClient] = useState<DirectoryOption | null>(null);
@@ -319,6 +352,8 @@ function CreditForm({ onDone }: { onDone: (message: string) => void }) {
   const [currency, setCurrency] = useState('XAF');
   const [applicability, setApplicability] = useState('any_store');
   const [businessId, setBusinessId] = useState('');
+  const activePartners = partners.filter((row) => row.is_active);
+  const selected = activePartners.find((row) => row.business_id === businessId);
 
   return (
     <Stack spacing={2}>
@@ -329,19 +364,31 @@ function CreditForm({ onDone }: { onDone: (message: string) => void }) {
         value={client}
         onChange={setClient}
       />
-      <TextField label="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <TextField label={t('admin.paymentPrograms.amount', 'Amount')} value={amount} onChange={(e) => setAmount(e.target.value)} />
       <CurrencyField value={currency} onChange={setCurrency} />
-      <TextField select label="Applies to" value={applicability} onChange={(e) => setApplicability(e.target.value)}>
-        <MenuItem value="any_store">Any store</MenuItem>
-        <MenuItem value="partner_businesses">All partner businesses</MenuItem>
-        <MenuItem value="specific_business">One partner business</MenuItem>
+      <TextField select label={t('admin.paymentPrograms.appliesTo', 'Applies to')} value={applicability} onChange={(e) => setApplicability(e.target.value)}>
+        <MenuItem value="any_store">{t('admin.paymentPrograms.anyStore', 'Any store')}</MenuItem>
+        <MenuItem value="partner_businesses">{t('admin.paymentPrograms.allPartners', 'All partner businesses')}</MenuItem>
+        <MenuItem value="specific_business">{t('admin.paymentPrograms.onePartner', 'One partner business')}</MenuItem>
       </TextField>
       {applicability === 'specific_business' && (
-        <TextField label="Business id" value={businessId} onChange={(e) => setBusinessId(e.target.value)} />
+        <TextField
+          select
+          label={t('admin.paymentPrograms.partnerBusiness', 'Partner business')}
+          value={businessId}
+          onChange={(e) => setBusinessId(e.target.value)}
+          helperText={activePartners.length ? undefined : t('admin.paymentPrograms.noPartners', 'Add an active partner before granting credit for one store.')}
+        >
+          {activePartners.map((row) => (
+            <MenuItem key={row.business_id} value={row.business_id}>
+              {row.business?.name || row.business_id}
+            </MenuItem>
+          ))}
+        </TextField>
       )}
       <Button
         variant="contained"
-        disabled={!client?.userId}
+        disabled={!client?.userId || (applicability === 'specific_business' && !businessId)}
         onClick={() =>
           void api
             .post('/admin/payment-programs/credits', {
@@ -350,17 +397,18 @@ function CreditForm({ onDone }: { onDone: (message: string) => void }) {
               currency,
               applicability,
               businessId: businessId || undefined,
+              businessName: selected?.business?.name,
             })
-            .then(() => onDone('Purchase credit granted'))
+            .then(() => onDone(t('admin.paymentPrograms.grantCredits', 'Grant credits')))
         }
       >
-        Grant credits
+        {t('admin.paymentPrograms.grantCredits', 'Grant credits')}
       </Button>
     </Stack>
   );
 }
 
-function PartnerForm({ partners, onDone }: { partners: any[]; onDone: (message: string) => Promise<void> }) {
+function PartnerForm({ onDone }: { onDone: (message: string) => Promise<void> }) {
   const { t } = useTranslation();
   const api = useApiClient();
   const [business, setBusiness] = useState<DirectoryOption | null>(null);
@@ -379,16 +427,11 @@ function PartnerForm({ partners, onDone }: { partners: any[]; onDone: (message: 
         onClick={() =>
           void api
             .post('/admin/payment-programs/partners', { businessId: business?.id, isActive: true })
-            .then(() => onDone('Partner business saved'))
+            .then(() => onDone(t('admin.paymentPrograms.markPartner', 'Mark as partner')))
         }
       >
-        Mark as partner
+        {t('admin.paymentPrograms.markPartner', 'Mark as partner')}
       </Button>
-      {partners.map((row) => (
-        <Typography key={row.id} variant="body2">
-          {row.business?.name || row.business_id} · {row.is_active ? 'active' : 'inactive'}
-        </Typography>
-      ))}
     </Stack>
   );
 }
