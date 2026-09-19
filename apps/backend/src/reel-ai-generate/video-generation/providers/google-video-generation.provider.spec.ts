@@ -1,5 +1,7 @@
 import { GoogleVideoGenerationProvider } from './google-video-generation.provider';
+import { VideoGenerationError } from '../video-generation.error';
 import type { GenerateVideoRequest } from '../video-generation.types';
+import { VEO_REEL_MODEL_BY_TIER } from '../../veo-reel-model.util';
 
 function makeRequest(
   overrides: Partial<GenerateVideoRequest> = {}
@@ -38,6 +40,57 @@ describe('GoogleVideoGenerationProvider', () => {
     expect(provider.supports(makeRequest({ images: [] }))).toBe(false);
     expect(provider.supports(makeRequest({ durationSeconds: 12 }))).toBe(false);
     expect(provider.supports(makeRequest())).toBe(true);
+  });
+
+  it('starts a Veo 3.1 job with allow_adult and returns PROCESSING', async () => {
+    veo.startImageToVideo.mockResolvedValue('op-1');
+
+    await expect(provider.submit(makeRequest())).resolves.toEqual({
+      jobId: 'op-1',
+      provider: 'google',
+      providerModel: VEO_REEL_MODEL_BY_TIER.fast,
+      tier: 'fast',
+      status: 'PROCESSING',
+      fallbackUsed: false,
+    });
+    expect(veo.startImageToVideo).toHaveBeenCalledWith({
+      model: VEO_REEL_MODEL_BY_TIER.fast,
+      prompt: 'Product ad',
+      images: [{ imageBase64: 'abc', mimeType: 'image/jpeg' }],
+      aspectRatio: '9:16',
+      resolution: '720p',
+      durationSeconds: 8,
+      personGeneration: 'allow_adult',
+    });
+  });
+
+  it('uses dont_allow only for non-Veo-3 model overrides', async () => {
+    config.get.mockReturnValue({ modelOverride: 'veo-2.0-generate-001' });
+    veo.startImageToVideo.mockResolvedValue('op-2');
+
+    await expect(provider.submit(makeRequest())).resolves.toMatchObject({
+      jobId: 'op-2',
+      providerModel: 'veo-2.0-generate-001',
+    });
+    expect(veo.startImageToVideo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'veo-2.0-generate-001',
+        personGeneration: 'dont_allow',
+      })
+    );
+  });
+
+  it('throws UNSUPPORTED_CONFIGURATION instead of starting Veo', async () => {
+    await expect(
+      provider.submit(makeRequest({ images: [] }))
+    ).rejects.toBeInstanceOf(VideoGenerationError);
+    await expect(
+      provider.submit(makeRequest({ images: [] }))
+    ).rejects.toMatchObject({
+      category: 'UNSUPPORTED_CONFIGURATION',
+      provider: 'google',
+    });
+    expect(veo.startImageToVideo).not.toHaveBeenCalled();
   });
 
   it('returns PROCESSING while the Veo operation is still running', async () => {

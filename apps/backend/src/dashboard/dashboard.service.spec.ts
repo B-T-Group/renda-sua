@@ -471,4 +471,15 @@ describe('DashboardService', () => {
       ).toBe(false);
     });
   });
+
+  describe('getReelCounts', () => {
+    it('returns zeros when the reel aggregate query throws', async () => {
+      hasuraSystemService.executeQuery.mockRejectedValue(new Error('hasura down'));
+
+      await expect((service as any).getReelCounts('biz-1')).resolves.toEqual({
+        reelCount: 0,
+        approvedReelCount: 0,
+      });
+    });
+  });
 });
