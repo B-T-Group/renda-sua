@@ -19,6 +19,7 @@ select_permissions:
         - subject_type
         - subject_id
         - image_url
+        - payment_reference
         - created_by_user_id
         - created_at
       filter:

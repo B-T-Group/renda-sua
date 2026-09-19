@@ -65,6 +65,44 @@ describe('RunwayReelClient', () => {
     );
   });
 
+  it('normalizes Runway 429 quota or credit errors as QUOTA_EXCEEDED', async () => {
+    (axios.post as jest.Mock).mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 429, data: { error: 'quota / credit exhausted' } },
+    });
+
+    await expect(
+      client.startImageToVideo({
+        model: 'gen4_turbo',
+        prompt: 'Product ad',
+        promptImageDataUri: 'data:image/jpeg;base64,abc',
+        ratio: '720:1280',
+        duration: 8,
+      })
+    ).rejects.toMatchObject({
+      category: 'QUOTA_EXCEEDED',
+      provider: 'runway',
+      retryable: true,
+    });
+  });
+
+  it('fails when Runway returns no task id', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+
+    await expect(
+      client.startImageToVideo({
+        model: 'gen4_turbo',
+        prompt: 'Product ad',
+        promptImageDataUri: 'data:image/jpeg;base64,abc',
+        ratio: '720:1280',
+        duration: 8,
+      })
+    ).rejects.toMatchObject({
+      category: 'UNKNOWN_PROVIDER_ERROR',
+      provider: 'runway',
+    });
+  });
+
   it('normalizes Runway 429 as RATE_LIMITED', async () => {
     (axios.post as jest.Mock).mockRejectedValue({
       isAxiosError: true,
