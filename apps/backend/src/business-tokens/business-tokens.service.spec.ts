@@ -23,6 +23,7 @@ describe('BusinessTokensService', () => {
   };
   const mobilePaymentsDatabaseService = {
     createTransaction: jest.fn(),
+    updateTransaction: jest.fn(),
   };
 
   let service: BusinessTokensService;
@@ -215,6 +216,40 @@ describe('BusinessTokensService', () => {
       })
     ).rejects.toThrow('No token pack for 999 CAD');
     expect(grantPackTokens).not.toHaveBeenCalled();
+  });
+
+  it('stores the provider transaction id so MoMo callbacks can credit tokens', async () => {
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.com',
+      phone_number: '+237600000000',
+      business: { id: 'business-1' },
+    });
+    paymentRoutingService.getBusinessCountryCode.mockResolvedValue('CM');
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      supported_country_states: [{ currency_code: 'XAF' }],
+    });
+    paymentRoutingService.resolveRailForBusiness.mockResolvedValue(
+      'mobile_money'
+    );
+    mobilePaymentsService.getProvider.mockReturnValue('mypvit');
+    mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+      id: 'mp-tx-1',
+    });
+    mobilePaymentsService.initiatePayment.mockResolvedValue({
+      success: true,
+      transactionId: 'provider-tx-9',
+    });
+
+    await service.initiatePackPurchase({
+      packId: 'pack_100',
+      phoneNumber: '+237600000000',
+    });
+
+    expect(mobilePaymentsDatabaseService.updateTransaction).toHaveBeenCalledWith(
+      'mp-tx-1',
+      { transaction_id: 'provider-tx-9' }
+    );
   });
 
   it('stores a unique long MoMo reference so repeat purchases can be credited', async () => {

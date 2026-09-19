@@ -505,7 +505,7 @@ export class BusinessTokensService {
     // (≤15 chars); pre-slicing here collapses same-business purchases into one ref.
     const description = `AI tokens ${params.pack.tokens}`;
 
-    await this.mobilePaymentsDatabaseService.createTransaction({
+    const transaction = await this.mobilePaymentsDatabaseService.createTransaction({
       reference,
       amount: params.amount,
       currency: params.currency,
@@ -532,6 +532,7 @@ export class BusinessTokensService {
       reference,
       params.userId
     );
+    await this.persistMobileProviderResponse(transaction.id, paymentResponse);
 
     if (!paymentResponse.success) {
       throw new HttpException(
@@ -549,6 +550,29 @@ export class BusinessTokensService {
       amount: params.amount,
       currency: params.currency,
     };
+  }
+
+  private async persistMobileProviderResponse(
+    transactionId: string,
+    paymentResponse: {
+      success: boolean;
+      transactionId?: string;
+      message?: string;
+      errorCode?: string;
+    }
+  ): Promise<void> {
+    if (paymentResponse.success && paymentResponse.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
+        transaction_id: paymentResponse.transactionId,
+      });
+      return;
+    }
+    if (paymentResponse.success) return;
+    await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
+      status: 'failed',
+      error_message: paymentResponse.message,
+      error_code: paymentResponse.errorCode,
+    });
   }
 
   private buildTokenPaymentReference(businessId: string): string {
