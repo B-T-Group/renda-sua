@@ -402,7 +402,9 @@
       "programCreated": "Programme créé",
       "creditGranted": "Crédit accordé",
       "assignmentCreated": "Attribution créée",
-      "partnerMarked": "Partenaire enregistré"
+      "partnerMarked": "Partenaire enregistré",
+      "existingSchedules": "Calendriers existants",
+      "actions": "Actions"
     },
     "accountRecharge": {
       "pageTitle": "Recharge du compte HQ",

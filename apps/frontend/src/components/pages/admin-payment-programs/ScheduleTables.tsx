@@ -5,10 +5,12 @@ import {
   DialogContent,
   DialogTitle,
   MenuItem,
+  Paper,
   Stack,
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -17,6 +19,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
+import { formatProgramMoney } from './impact';
 import { fromLocalInput, personName, StatusChip, toLocalInput, useConfirm } from './shared';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
@@ -119,51 +122,103 @@ function ScheduleList({
   onChanged: (message: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const api = useApiClient();
   if (!schedules.length) return <Typography>{t('admin.paymentPrograms.empty', 'Nothing here yet.')}</Typography>;
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>{t('admin.paymentPrograms.name', 'Name')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.frequency', 'Frequency')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.amount', 'Amount')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-          <TableCell />
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {schedules.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>{row.name}</TableCell>
-            <TableCell>{t(`admin.paymentPrograms.${row.frequency}`, row.frequency)}</TableCell>
-            <TableCell>{row.default_amount} {row.currency}</TableCell>
-            <TableCell>
-              <StatusChip status={row.is_active ? 'active' : 'inactive'} />
-            </TableCell>
-            <TableCell>
-              <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
-              {row.is_active ? (
-                <Button size="small" color="warning" onClick={() => onDeactivate(row)}>
-                  {t('admin.paymentPrograms.deactivate', 'Deactivate')}
-                </Button>
-              ) : (
-                <Button
-                  size="small"
-                  onClick={() =>
-                    void api
-                      .post(`/admin/payment-programs/schedules/${row.id}/active`, { isActive: true })
-                      .then(() => onChanged(t('admin.paymentPrograms.active', 'Active')))
-                  }
-                >
-                  {t('admin.paymentPrograms.reactivate', 'Reactivate')}
-                </Button>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+      <Typography variant="subtitle2" sx={{ px: 2, py: 1.5 }}>
+        {t('admin.paymentPrograms.existingSchedules', 'Existing schedules')}
+      </Typography>
+      <TableContainer>
+        <Table size="small">
+          <ScheduleHead />
+          <TableBody>
+            {schedules.map((row) => (
+              <ScheduleRow key={row.id} row={row} onEdit={onEdit} onDeactivate={onDeactivate} onChanged={onChanged} />
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Paper>
+  );
+}
+
+function ScheduleHead() {
+  const { t } = useTranslation();
+  const cell = { fontWeight: 600, color: 'text.secondary', bgcolor: 'action.hover', whiteSpace: 'nowrap' };
+  return (
+    <TableHead>
+      <TableRow>
+        <TableCell sx={cell}>{t('admin.paymentPrograms.name', 'Name')}</TableCell>
+        <TableCell sx={cell}>{t('admin.paymentPrograms.frequency', 'Frequency')}</TableCell>
+        <TableCell sx={cell}>{t('admin.paymentPrograms.amount', 'Amount')}</TableCell>
+        <TableCell sx={cell}>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
+        <TableCell sx={cell} align="right">{t('admin.paymentPrograms.actions', 'Actions')}</TableCell>
+      </TableRow>
+    </TableHead>
+  );
+}
+
+function ScheduleRow({
+  row,
+  onEdit,
+  onDeactivate,
+  onChanged,
+}: {
+  row: Schedule;
+  onEdit: (row: Schedule) => void;
+  onDeactivate: (row: Schedule) => void;
+  onChanged: (message: string) => Promise<void>;
+}) {
+  const { t, i18n } = useTranslation();
+  const api = useApiClient();
+  const money = formatProgramMoney(String(row.default_amount), row.currency, i18n.language);
+  return (
+    <TableRow hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
+      <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
+      <TableCell>{t(`admin.paymentPrograms.${row.frequency}`, row.frequency)}</TableCell>
+      <TableCell>{money || `${row.default_amount} ${row.currency}`}</TableCell>
+      <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
+      <TableCell align="right">
+        <ScheduleActions row={row} onEdit={onEdit} onDeactivate={onDeactivate} onChanged={onChanged} api={api} />
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function ScheduleActions({
+  row,
+  onEdit,
+  onDeactivate,
+  onChanged,
+  api,
+}: {
+  row: Schedule;
+  onEdit: (row: Schedule) => void;
+  onDeactivate: (row: Schedule) => void;
+  onChanged: (message: string) => Promise<void>;
+  api: { post: (url: string, body: unknown) => Promise<unknown> };
+}) {
+  const { t } = useTranslation();
+  return (
+    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+      <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
+      {row.is_active ? (
+        <Button size="small" color="warning" onClick={() => onDeactivate(row)}>
+          {t('admin.paymentPrograms.deactivate', 'Deactivate')}
+        </Button>
+      ) : (
+        <Button
+          size="small"
+          onClick={() =>
+            void api
+              .post(`/admin/payment-programs/schedules/${row.id}/active`, { isActive: true })
+              .then(() => onChanged(t('admin.paymentPrograms.active', 'Active')))
+          }
+        >
+          {t('admin.paymentPrograms.reactivate', 'Reactivate')}
+        </Button>
+      )}
+    </Stack>
   );
 }
 

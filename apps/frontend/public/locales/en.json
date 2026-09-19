@@ -659,7 +659,9 @@
       "programCreated": "Program created",
       "creditGranted": "Credit granted",
       "assignmentCreated": "Assignment created",
-      "partnerMarked": "Partner saved"
+      "partnerMarked": "Partner saved",
+      "existingSchedules": "Existing schedules",
+      "actions": "Actions"
     },
     "accountRecharge": {
       "pageTitle": "HQ account recharge",
