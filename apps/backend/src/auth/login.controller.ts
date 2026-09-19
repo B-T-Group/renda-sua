@@ -20,6 +20,10 @@ import { LoginStartDto } from './dto/login-start.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
 import type { ClientPlatform } from './platform.decorator';
 import { Platform } from './platform.decorator';
+import {
+  sessionClearCookieOptions,
+  sessionCookieOptions,
+} from './session-cookie';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -94,13 +98,7 @@ export class LoginController {
     );
 
     if (platform === 'web' && result.sessionId) {
-      res.cookie('rs_session', result.sessionId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        path: '/',
-      });
+      res.cookie('rs_session', result.sessionId, sessionCookieOptions(req));
     }
 
     return result.response;
@@ -145,13 +143,11 @@ export class LoginController {
     );
 
     if (result.newSessionId) {
-      res.cookie('rs_session', result.newSessionId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        path: '/',
-      });
+      res.cookie(
+        'rs_session',
+        result.newSessionId,
+        sessionCookieOptions(req)
+      );
     }
 
     return result.response;
@@ -183,12 +179,7 @@ export class LoginController {
       await this.loginService.destroySession(sessionId);
     }
 
-    res.clearCookie('rs_session', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-    });
+    res.clearCookie('rs_session', sessionClearCookieOptions(req));
 
     return { success: true };
   }

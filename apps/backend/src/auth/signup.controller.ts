@@ -31,6 +31,7 @@ import { Platform } from './platform.decorator';
 import { SignupAttemptStartResult, SignupService } from './signup.service';
 import { SignupStartDto } from './dto/signup-start.dto';
 import { SignupResendOtpDto, SignupVerifyOtpDto } from './dto/signup-otp.dto';
+import { sessionCookieOptions } from './session-cookie';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -158,13 +159,7 @@ export class SignupController {
     );
 
     if (platform === 'web' && result.sessionId) {
-      res.cookie('rs_session', result.sessionId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        path: '/',
-      });
+      res.cookie('rs_session', result.sessionId, sessionCookieOptions(req));
     }
 
     return result.response;
