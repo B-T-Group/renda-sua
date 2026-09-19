@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { environment } from '../config/environment';
@@ -22,7 +23,7 @@ export interface SessionAuthUser {
 interface SessionAuthContextType {
   isAuthenticated: boolean;
   user: any | SessionAuthUser | undefined;
-  getAccessToken: () => Promise<string | null>;
+  getAccessToken: (options?: { refresh?: boolean }) => Promise<string | null>;
   logout: () => Promise<void>;
   setPasswordlessSession: (data: {
     access_token: string;
@@ -34,15 +35,6 @@ interface SessionAuthContextType {
 }
 
 const SessionAuthContext = createContext<SessionAuthContextType | null>(null);
-
-function safeJsonParse<T>(value: string | null): T | null {
-  if (!value) return null;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
-}
 
 function decodeJwtPayload(token: string): JwtPayload | null {
   try {
@@ -91,38 +83,48 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   // Memory-only passwordless session (no localStorage)
   const [passwordlessAccessToken, setPasswordlessAccessToken] = useState<string | null>(null);
   const [passwordlessIdToken, setPasswordlessIdToken] = useState<string | null>(null);
-  const [passwordlessTokenType, setPasswordlessTokenType] = useState<string>('Bearer');
   const [passwordlessExpiresAtMs, setPasswordlessExpiresAtMs] = useState<number>(0);
-  const [isHydrating, setIsHydrating] = useState(true);
+  const passwordlessAccessTokenRef = useRef<string | null>(null);
+  const passwordlessExpiresAtMsRef = useRef(0);
+
+  const applyPasswordlessTokens = useCallback(
+    (data: {
+      access_token: string;
+      id_token?: string;
+      token_type: string;
+      expires_in: number;
+    }) => {
+      const expiresAtMs = Date.now() + (data.expires_in || 0) * 1000;
+      passwordlessAccessTokenRef.current = data.access_token;
+      passwordlessExpiresAtMsRef.current = expiresAtMs;
+      setPasswordlessAccessToken(data.access_token);
+      setPasswordlessIdToken(data.id_token || null);
+      setPasswordlessExpiresAtMs(expiresAtMs);
+    },
+    []
+  );
 
   // Hydrate session from cookie on mount
   useEffect(() => {
     let isMounted = true;
-    
+
     const hydrateSession = async () => {
       try {
         const refreshed = await refreshWithBackend();
         if (refreshed && isMounted) {
-          setPasswordlessAccessToken(refreshed.access_token);
-          setPasswordlessIdToken(refreshed.id_token);
-          setPasswordlessTokenType(refreshed.token_type || 'Bearer');
-          setPasswordlessExpiresAtMs(Date.now() + (refreshed.expires_in || 0) * 1000);
+          applyPasswordlessTokens(refreshed);
         }
       } catch {
         // Cookie not present or invalid - user is logged out
-      } finally {
-        if (isMounted) {
-          setIsHydrating(false);
-        }
       }
     };
 
     void hydrateSession();
-    
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [applyPasswordlessTokens]);
 
   const passwordlessUser = useMemo((): SessionAuthUser | undefined => {
     if (!passwordlessIdToken) return undefined;
@@ -141,9 +143,10 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   }, [passwordlessAccessToken, passwordlessExpiresAtMs]);
 
   const clearPasswordlessSession = useCallback(() => {
+    passwordlessAccessTokenRef.current = null;
+    passwordlessExpiresAtMsRef.current = 0;
     setPasswordlessAccessToken(null);
     setPasswordlessIdToken(null);
-    setPasswordlessTokenType('Bearer');
     setPasswordlessExpiresAtMs(0);
   }, []);
 
@@ -154,35 +157,40 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
       token_type: string;
       expires_in: number;
     }) => {
-      const expiresAtMs = Date.now() + (data.expires_in || 0) * 1000;
-      setPasswordlessAccessToken(data.access_token);
-      setPasswordlessIdToken(data.id_token || null);
-      setPasswordlessTokenType(data.token_type || 'Bearer');
-      setPasswordlessExpiresAtMs(expiresAtMs);
+      applyPasswordlessTokens(data);
     },
-    []
+    [applyPasswordlessTokens]
   );
 
-  const getAccessToken = useCallback(async () => {
-    if (auth0.isAuthenticated && auth0.getAccessTokenSilently) {
-      return await auth0.getAccessTokenSilently(personaAuthorizationParams());
-    }
+  const getAccessToken = useCallback(
+    async (options?: { refresh?: boolean }) => {
+      if (auth0.isAuthenticated && auth0.getAccessTokenSilently) {
+        return await auth0.getAccessTokenSilently(personaAuthorizationParams());
+      }
 
-    if (!passwordlessAccessToken) return null;
+      const token = passwordlessAccessTokenRef.current;
+      const expiresAtMs = passwordlessExpiresAtMsRef.current;
+      if (token && expiresAtMs > Date.now() + 30_000) {
+        return token;
+      }
+      if (options?.refresh === false) return null;
 
-    if (passwordlessExpiresAtMs > Date.now() + 30_000) {
-      return passwordlessAccessToken;
-    }
+      const refreshed = await refreshWithBackend();
+      if (!refreshed) {
+        clearPasswordlessSession();
+        return null;
+      }
 
-    const refreshed = await refreshWithBackend();
-    if (!refreshed) {
-      clearPasswordlessSession();
-      return null;
-    }
-
-    setPasswordlessSession(refreshed);
-    return refreshed.access_token;
-  }, [auth0.isAuthenticated, auth0.getAccessTokenSilently, passwordlessAccessToken, passwordlessExpiresAtMs, setPasswordlessSession, clearPasswordlessSession]);
+      applyPasswordlessTokens(refreshed);
+      return refreshed.access_token;
+    },
+    [
+      auth0.isAuthenticated,
+      auth0.getAccessTokenSilently,
+      applyPasswordlessTokens,
+      clearPasswordlessSession,
+    ]
+  );
 
   const logout = useCallback(async () => {
     clearPasswordlessSession();
@@ -207,7 +215,7 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   }, [auth0.isAuthenticated, auth0.logout, clearPasswordlessSession]);
 
   const value: SessionAuthContextType = {
-    isAuthenticated: auth0.isAuthenticated || (isPasswordlessAuthenticated && !isHydrating),
+    isAuthenticated: auth0.isAuthenticated || isPasswordlessAuthenticated,
     user: (auth0.user as any) || passwordlessUser,
     getAccessToken,
     logout,
