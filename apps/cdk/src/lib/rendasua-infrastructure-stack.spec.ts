@@ -21,6 +21,7 @@ describe('RendasuaInfrastructureStack', () => {
     'src/lambda/notify-agents',
     'src/lambda/business-referral-payouts',
     'src/lambda/payment-schedule-runs',
+    'src/lambda/credit-campaign-signup',
     'src/lambda/reel-media-handler',
     'src/lambda/reel-ai-review-handler',
     'src/lambda/sync-backend-reels-secrets',

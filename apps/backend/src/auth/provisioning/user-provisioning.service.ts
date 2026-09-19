@@ -56,6 +56,8 @@ export interface UserProvisioningInput {
   agent_referral_agent_id?: string;
   agent_referral_business_id?: string;
   agent_referral_code_used?: string;
+  client_referral_code_used?: string;
+  client_referred_by_user_id?: string;
   storeAddress?: NormalizedSignupAddress;
 }
 
@@ -78,6 +80,8 @@ export class UserProvisioningService {
       agent_referral_agent_id: input.agent_referral_agent_id,
       agent_referral_business_id: input.agent_referral_business_id,
       agent_referral_code_used: input.agent_referral_code_used,
+      client_referral_code_used: input.client_referral_code_used,
+      client_referred_by_user_id: input.client_referred_by_user_id,
       storeAddress: input.storeAddress,
     };
     const fragments = buildPersonaFragments(ctx);

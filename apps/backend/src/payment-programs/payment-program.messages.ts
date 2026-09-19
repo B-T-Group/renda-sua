@@ -82,6 +82,25 @@ export function creditGrantCopy(params: {
   };
 }
 
+export function campaignCashCopy(params: {
+  amount: number;
+  currency: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const amount = formatAmount(params.amount, params.currency, locale);
+  if (locale === 'fr') {
+    return {
+      title: 'Récompense de parrainage',
+      body: `${amount} ont été ajoutés à votre portefeuille. Vous pouvez les retirer.`,
+    };
+  }
+  return {
+    title: 'Referral reward',
+    body: `${amount} was added to your wallet. You can withdraw it.`,
+  };
+}
+
 export function scopeLabel(
   applicability: string,
   businessName: string | null,

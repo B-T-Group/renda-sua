@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -15,8 +15,10 @@ import { SessionStoreService } from './session-store.service';
 import { ClientPlatform } from './platform.decorator';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
+import type { ResolvedBusinessReferral } from '../business-referrals/business-referrals.service';
 import { normalizeSignupAddress } from './provisioning/signup-address.normalize';
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
+import { CreditCampaignPublisher } from '../payment-programs/credit-campaign-publisher.service';
 import {
   resolveSignupOtpChannel,
   type SignupOtpChannel,
@@ -163,7 +165,8 @@ export class SignupService {
     private readonly userProvisioning: UserProvisioningService,
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly referralProvisioning: ReferralProvisioningService,
-    private readonly metaConversionsService: MetaConversionsService
+    private readonly metaConversionsService: MetaConversionsService,
+    @Optional() private readonly campaigns?: CreditCampaignPublisher
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -1342,6 +1345,26 @@ export class SignupService {
     }
   }
 
+  private async publishSignupCampaign(
+    userId: string,
+    personas: PersonaId[],
+    country: string | undefined,
+    referral: ResolvedBusinessReferral | null
+  ): Promise<void> {
+    const market = country?.trim().toUpperCase();
+    if (!this.campaigns || !market) return;
+    try {
+      await this.campaigns.publishSignup({
+        userId,
+        personas,
+        country: market,
+        referrerUserId: this.referralProvisioning.referrerUserId(referral),
+      });
+    } catch (error: any) {
+      this.logger.warn(`Signup campaign failed: ${error?.message ?? error}`);
+    }
+  }
+
   private async createVerifiedUser(input: {
     payload: SignupStartPayload;
     personas: PersonaId[];
@@ -1392,6 +1415,9 @@ export class SignupService {
           main_interest: payload.profile?.main_interest ?? 'sell_items',
           ...businessReferralFields,
           ...agentReferralFields,
+          ...this.referralProvisioning.clientInsertFields(
+            personas.includes('client') ? signupReferral : null
+          ),
           storeAddress: nestStoreAddress,
         });
     await this.markPhoneVerifiedIfNeeded(user.id, channel === 'sms');
@@ -1420,6 +1446,7 @@ export class SignupService {
       businessName,
       ownerName: `${payload.first_name} ${payload.last_name}`.trim(),
     });
+    await this.publishSignupCampaign(user.id, personas, normalizedAddress?.country, signupReferral);
     await this.businessProvisioning.scheduleEnsureContractForUser(user.id);
     this.emitCompleteRegistration(user, payload);
     return {

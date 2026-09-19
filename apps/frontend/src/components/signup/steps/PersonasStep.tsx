@@ -145,7 +145,7 @@ export const PersonasStep: React.FC = () => {
                       compact
                       align="center"
                     />
-                    {(opt.id === 'agent' || opt.id === 'business') && (
+                    {(opt.id === 'client' || opt.id === 'agent' || opt.id === 'business') && (
                       <Box
                         sx={{ mt: 1.5, textAlign: 'left' }}
                         onClick={(e) => e.stopPropagation()}

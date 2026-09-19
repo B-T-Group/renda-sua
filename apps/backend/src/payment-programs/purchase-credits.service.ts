@@ -98,6 +98,13 @@ export class PurchaseCreditsService {
     return { id: row.id };
   }
 
+  async grantCampaign(input: GrantInput): Promise<{ id: string } | { skipped: string }> {
+    if (!(await this.specificPartnerActive(input))) return { skipped: 'partner_inactive' };
+    const row = await this.insertGrant({ ...input, source: 'campaign' });
+    await this.notifyGrant(input, row.id);
+    return { id: row.id };
+  }
+
   async searchClients(search: string) {
     const term = search.trim();
     if (term.length < 2) return [];
@@ -153,6 +160,14 @@ export class PurchaseCreditsService {
     }
   }
 
+  private async specificPartnerActive(input: GrantInput): Promise<boolean> {
+    if (input.applicability !== 'specific_business') return true;
+    const result = await this.hasura.executeQuery(PARTNER_ACTIVE, {
+      businessId: input.businessId,
+    });
+    return Boolean(result.partner_businesses?.length);
+  }
+
   private async assertSpecificPartner(input: GrantInput): Promise<void> {
     if (input.applicability !== 'specific_business') return;
     const result = await this.hasura.executeQuery(PARTNER_ACTIVE, {
@@ -173,7 +188,8 @@ export class PurchaseCreditsService {
         applicability: input.applicability,
         business_id: input.applicability === 'specific_business' ? input.businessId : null,
         expires_at: input.expiresAt ?? null,
-        source: 'admin',
+        source: input.source ?? 'admin',
+        source_id: input.sourceId ?? null,
         memo: input.memo ?? null,
         created_by: input.createdBy ?? null,
       },
@@ -212,6 +228,8 @@ export interface GrantInput {
   memo?: string | null;
   createdBy?: string | null;
   preferredLanguage?: string | null;
+  source?: 'admin' | 'campaign';
+  sourceId?: string | null;
 }
 
 function toGrantInput(row: GrantRow) {

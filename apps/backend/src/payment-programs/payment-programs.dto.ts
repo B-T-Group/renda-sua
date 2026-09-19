@@ -2,11 +2,14 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsIn,
+  IsInt,
+  IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateScheduleDto {
@@ -212,4 +215,58 @@ export class DrawCashAdvanceDto {
 
   @IsIn(['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF', 'PHP'])
   currency!: string;
+}
+
+export class CreateCampaignDto {
+  @IsString()
+  name!: string;
+
+  @IsString()
+  countryCode!: string;
+
+  @IsIn(['client', 'agent', 'business', 'any'])
+  persona!: 'client' | 'agent' | 'business' | 'any';
+
+  @IsISO8601()
+  startsAt!: string;
+
+  @IsISO8601()
+  endsAt!: string;
+
+  @IsIn(['CAD', 'USD', 'EUR', 'GBP', 'XAF', 'XOF', 'PHP'])
+  currency!: string;
+
+  @IsIn(['any_store', 'partner_businesses', 'specific_business'])
+  storeScope!: 'any_store' | 'partner_businesses' | 'specific_business';
+
+  @ValidateIf((row) => row.storeScope === 'specific_business')
+  @IsUUID()
+  businessId?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subjectAmount!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subjectBonusIfReferred!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  storeCreditExpiresDays?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  referrerAmount!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxReferrerRewards?: number;
 }

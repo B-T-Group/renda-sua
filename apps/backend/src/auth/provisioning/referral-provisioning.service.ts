@@ -23,12 +23,29 @@ export class ReferralProvisioningService {
     personas: PersonaId[],
     referralAgentCode?: string
   ): Promise<ResolvedBusinessReferral | null> {
-    if (!personas.includes('business') && !personas.includes('agent')) {
-      return null;
-    }
+    if (!referralAgentCode?.trim()) return null;
+    const watches = personas.some(
+      (persona) => persona === 'client' || persona === 'agent' || persona === 'business'
+    );
+    if (!watches) return null;
     return this.businessReferralsService.resolveBusinessReferralCode(
       referralAgentCode
     );
+  }
+
+  clientInsertFields(referral: ResolvedBusinessReferral | null): {
+    client_referral_code_used?: string;
+    client_referred_by_user_id?: string;
+  } {
+    if (!referral) return {};
+    return {
+      client_referral_code_used: referral.normalizedCode,
+      client_referred_by_user_id: referral.userId,
+    };
+  }
+
+  referrerUserId(referral: ResolvedBusinessReferral | null): string | null {
+    return referral?.userId ?? null;
   }
 
   /** @deprecated use resolveSignupReferral */
@@ -114,6 +131,7 @@ export class ReferralProvisioningService {
     referral: ResolvedBusinessReferral,
     target: { kind: 'business' | 'agent'; id: string }
   ): Promise<void> {
+    if (referral.kind === 'user') return;
     try {
       const referrerUserId = await this.creditsService.resolveReferrerUserId({
         kind: referral.kind,

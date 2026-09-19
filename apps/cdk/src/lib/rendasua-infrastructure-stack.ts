@@ -1021,6 +1021,45 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       schedule: events.Schedule.cron({ hour: '6', minute: '0' }),
       targets: [new targets.LambdaFunction(paymentScheduleRunsFunction)],
     });
+
+    const creditCampaignBus = new events.EventBus(
+      this,
+      `CreditCampaignBus-${environment}`,
+      { eventBusName: `credit-campaigns-${environment}` }
+    );
+    const creditCampaignSignupFunction = new lambda.Function(
+      this,
+      `CreditCampaignSignup-${environment}`,
+      {
+        functionName: `credit-campaign-signup-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/credit-campaign-signup'),
+        timeout: cdk.Duration.minutes(2),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+    new events.Rule(this, `CreditCampaignSignupRule-${environment}`, {
+      ruleName: `credit-campaign-signup-rule-${environment}`,
+      description: 'Retries signup credit campaigns from signup.completed',
+      eventBus: creditCampaignBus,
+      eventPattern: {
+        source: ['rendasua.signup'],
+        detailType: ['signup.completed'],
+      },
+      targets: [new targets.LambdaFunction(creditCampaignSignupFunction)],
+    });
+    new cdk.CfnOutput(this, `CreditCampaignEventBusName-${environment}`, {
+      value: creditCampaignBus.eventBusName,
+      description: 'Set CREDIT_CAMPAIGN_EVENT_BUS_NAME on the backend',
+    });
   }
 
   /** Keep Nest Lightsail env in sync: backend loads these from Secrets Manager. */

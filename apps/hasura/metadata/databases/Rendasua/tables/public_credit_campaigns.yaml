@@ -1,0 +1,15 @@
+table:
+  name: credit_campaigns
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+array_relationships:
+  - name: grants
+    using:
+      foreign_key_constraint_on:
+        column: campaign_id
+        table:
+          name: credit_campaign_grants
+          schema: public

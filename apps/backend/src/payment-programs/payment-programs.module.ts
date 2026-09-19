@@ -8,6 +8,11 @@ import { PaymentProgramsUserController } from './payment-programs-user.controlle
 import { PaymentScheduleCatalogService } from './payment-schedule-catalog.service';
 import { PaymentScheduleInternalController } from './payment-schedule-internal.controller';
 import { PaymentScheduleRunnerService } from './payment-schedule-runner.service';
+import { CreditCampaignAdminController } from './credit-campaign-admin.controller';
+import { CreditCampaignInternalController } from './credit-campaign-internal.controller';
+import { CreditCampaignPublisher } from './credit-campaign-publisher.service';
+import { CreditCampaignRunnerService } from './credit-campaign-runner.service';
+import { CreditCampaignService } from './credit-campaign.service';
 import { PurchaseCreditsService } from './purchase-credits.service';
 
 @Module({
@@ -16,6 +21,8 @@ import { PurchaseCreditsService } from './purchase-credits.service';
     PaymentProgramsAdminController,
     PaymentProgramsUserController,
     PaymentScheduleInternalController,
+    CreditCampaignAdminController,
+    CreditCampaignInternalController,
   ],
   providers: [
     PurchaseCreditsService,
@@ -23,7 +30,10 @@ import { PurchaseCreditsService } from './purchase-credits.service';
     PaymentScheduleCatalogService,
     PaymentScheduleRunnerService,
     PartnerBusinessesService,
+    CreditCampaignService,
+    CreditCampaignRunnerService,
+    CreditCampaignPublisher,
   ],
-  exports: [PurchaseCreditsService],
+  exports: [PurchaseCreditsService, CreditCampaignPublisher],
 })
 export class PaymentProgramsModule {}

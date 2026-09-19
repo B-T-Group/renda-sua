@@ -606,7 +606,22 @@
       "daily": "Daily",
       "weekly": "Weekly",
       "biweekly": "Every two weeks",
-      "monthly": "Monthly"
+      "monthly": "Monthly",
+      "campaigns": "Campaigns",
+      "market": "Market",
+      "persona": "Persona",
+      "any": "Any persona",
+      "storeCredit": "Store credit for the new user",
+      "referredBonus": "Extra store credit if referred",
+      "referrerCash": "Withdrawable cash for the referrer",
+      "referrerCap": "Referrer reward cap",
+      "expiresDays": "Store credit expires (days)",
+      "endsAt": "Ends at",
+      "createCampaign": "Create campaign",
+      "campaignCreated": "Campaign created",
+      "deactivateCampaignTitle": "Change this campaign?",
+      "deactivateCampaignMessage": "New signups will not match it. Credits already granted stay.",
+      "reactivateCampaignMessage": "New signups in this market will match it again."
     },
     "accountRecharge": {
       "pageTitle": "HQ account recharge",
@@ -1799,11 +1814,11 @@
     }
   },
   "referrals": {
-    "haveCodeLink": "Enter the code of the agent who referred you to Rendasua",
-    "codeApplied": "Agent referral code: {{code}}",
+    "haveCodeLink": "Enter a referral code",
+    "codeApplied": "Referral code: {{code}}",
     "changeCode": "Change",
-    "enterCodeTitle": "Agent referral code",
-    "referralCodeLabel": "Agent referral code (optional)",
+    "enterCodeTitle": "Referral code",
+    "referralCodeLabel": "Referral code (optional)",
     "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
     "followUp": {
       "listTitle": "Referred businesses",
@@ -1925,7 +1940,7 @@
       "avgCommission": "Avg. commission (today)"
     },
     "referrals": {
-      "referralCodeLabel": "Agent referral code (optional)",
+      "referralCodeLabel": "Referral code (optional)",
       "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
       "lookupLoading": "Looking up agent...",
       "lookupSuccess": "Referred by {{name}}",
@@ -2456,7 +2471,7 @@
       "uploading": "Uploading..."
     },
     "referrals": {
-      "referralCodeLabel": "Agent referral code (optional)",
+      "referralCodeLabel": "Referral code (optional)",
       "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
       "invalidCodeLength": "Referral code must be 6 characters.",
       "sideCashTitle": "Earn on the side — refer businesses",

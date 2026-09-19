@@ -201,6 +201,21 @@
     "@smithy/types" "^4.17.2"
     tslib "^2.6.2"
 
+"@aws-sdk/client-eventbridge@3.1129.0":
+  version "3.1129.0"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/client-eventbridge/-/client-eventbridge-3.1129.0.tgz#d910489c281b484fad36e75620362a1c4bcfee82"
+  integrity sha512-qCA5QzJzKBkXqtuhjl32G4QC2ICaerpiXSXNy5huIiemdtVh2AuiwyjXACf17OrHOi7gAGk8Gqr75ZTWPiSHlQ==
+  dependencies:
+    "@aws-sdk/core" "^3.978.0"
+    "@aws-sdk/credential-provider-node" "^3.972.83"
+    "@aws-sdk/signature-v4-multi-region" "^3.996.46"
+    "@aws-sdk/types" "^3.974.5"
+    "@smithy/core" "^3.33.3"
+    "@smithy/fetch-http-handler" "^5.7.2"
+    "@smithy/node-http-handler" "^4.11.3"
+    "@smithy/types" "^4.17.2"
+    tslib "^2.6.2"
+
 "@aws-sdk/client-lambda@3.1129.0":
   version "3.1129.0"
   resolved "https://registry.yarnpkg.com/@aws-sdk/client-lambda/-/client-lambda-3.1129.0.tgz#94b0452e23b8620b3a6156aa1d0d3a85ee0bb209"

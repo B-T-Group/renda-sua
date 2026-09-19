@@ -235,7 +235,7 @@ export function PersonasStep({
             {selected ? (
               <>
                 <SelectedBenefitsPanel persona={p} accent={accent} />
-                {p === 'agent' || p === 'business' ? (
+                {p === 'client' || p === 'agent' || p === 'business' ? (
                   <ReferralCodeEntryButton
                     value={referralAgentCode}
                     onChange={onChangeReferralAgentCode}

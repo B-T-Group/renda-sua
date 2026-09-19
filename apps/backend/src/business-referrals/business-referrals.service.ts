@@ -26,6 +26,15 @@ export type ResolvedBusinessReferral =
   | {
       kind: 'agent';
       agentId: string;
+      userId: string;
+      normalizedCode: string;
+      userEmail: string;
+      userFirstName: string;
+      preferredLanguage: string;
+    }
+  | {
+      kind: 'user';
+      userId: string;
       normalizedCode: string;
       userEmail: string;
       userFirstName: string;
@@ -107,6 +116,7 @@ export class BusinessReferralsService {
       return {
         kind: 'agent',
         agentId: agent.agentId,
+        userId: agent.userId,
         normalizedCode,
         userEmail: agent.userEmail,
         userFirstName: agent.userFirstName,
@@ -158,6 +168,7 @@ export class BusinessReferralsService {
       return {
         kind: 'agent',
         agentId: agent.agentId,
+        userId: user.userId,
         normalizedCode,
         userEmail: user.userEmail,
         userFirstName: user.userFirstName,
@@ -167,7 +178,14 @@ export class BusinessReferralsService {
 
     const business = await this.findBusinessForUser(user.userId);
     if (!business) {
-      this.throwReferralError('This referral code is not currently active');
+      return {
+        kind: 'user',
+        userId: user.userId,
+        normalizedCode,
+        userEmail: user.userEmail,
+        userFirstName: user.userFirstName,
+        preferredLanguage: user.preferredLanguage,
+      };
     }
     if (business.lifecycleStatus === 'suspended') {
       this.throwReferralError('This referral code is not currently active');
@@ -289,7 +307,7 @@ export class BusinessReferralsService {
     business_referral_business_id?: string;
     business_referral_code_used?: string;
   } {
-    if (!resolved) {
+    if (!resolved || resolved.kind === 'user') {
       return {};
     }
     if (resolved.kind === 'agent') {
@@ -354,6 +372,7 @@ export class BusinessReferralsService {
     params: BusinessReferralParams,
     resolved: ResolvedBusinessReferral
   ): Promise<void> {
+    if (resolved.kind === 'user') return;
     if (resolved.kind === 'agent') {
       await this.notifyAgentOfBusinessReferral(params, resolved);
       return;

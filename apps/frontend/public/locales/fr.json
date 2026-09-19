@@ -349,7 +349,22 @@
       "daily": "Quotidien",
       "weekly": "Hebdomadaire",
       "biweekly": "Toutes les deux semaines",
-      "monthly": "Mensuel"
+      "monthly": "Mensuel",
+      "campaigns": "Campagnes",
+      "market": "Marché",
+      "persona": "Profil",
+      "any": "Tous les profils",
+      "storeCredit": "Crédit magasin pour le nouvel utilisateur",
+      "referredBonus": "Crédit magasin supplémentaire si parrainé",
+      "referrerCash": "Argent retirable pour le parrain",
+      "referrerCap": "Plafond de récompenses du parrain",
+      "expiresDays": "Le crédit magasin expire (jours)",
+      "endsAt": "Se termine le",
+      "createCampaign": "Créer la campagne",
+      "campaignCreated": "Campagne créée",
+      "deactivateCampaignTitle": "Modifier cette campagne ?",
+      "deactivateCampaignMessage": "Les nouvelles inscriptions ne correspondront plus. Les crédits déjà accordés restent.",
+      "reactivateCampaignMessage": "Les nouvelles inscriptions de ce marché correspondront à nouveau."
     },
     "accountRecharge": {
       "pageTitle": "Recharge du compte HQ",
@@ -1532,11 +1547,11 @@
     }
   },
   "referrals": {
-    "haveCodeLink": "Saisir le code de l'agent qui vous a recommandé sur Rendasua",
-    "codeApplied": "Code de l'agent : {{code}}",
+    "haveCodeLink": "Saisir un code de parrainage",
+    "codeApplied": "Code de parrainage : {{code}}",
     "changeCode": "Modifier",
-    "enterCodeTitle": "Code de l'agent qui vous a recommandé",
-    "referralCodeLabel": "Code de l'agent (optionnel)",
+    "enterCodeTitle": "Code de parrainage",
+    "referralCodeLabel": "Code de parrainage (optionnel)",
     "referralCodeHelp": "Entrez le code à 6 caractères de l'agent Rendasua qui vous a recommandé.",
     "followUp": {
       "listTitle": "Commerces parrainés",
@@ -2179,7 +2194,7 @@
       "uploading": "Téléversement en cours..."
     },
     "referrals": {
-      "referralCodeLabel": "Code de l'agent (optionnel)",
+      "referralCodeLabel": "Code de parrainage (optionnel)",
       "referralCodeHelp": "Entrez le code à 6 caractères de l'agent Rendasua qui vous a recommandé.",
       "invalidCodeLength": "Le code de parrainage doit comporter 6 caractères.",
       "sideCashTitle": "Gagnez en plus — parrainez des commerces",

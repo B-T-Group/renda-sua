@@ -134,6 +134,8 @@ describe('SignupService', () => {
             resolveBusinessReferral: jest.fn().mockResolvedValue(null),
             getBusinessInsertReferralFields: jest.fn().mockReturnValue({}),
             getAgentInsertReferralFields: jest.fn().mockReturnValue({}),
+            clientInsertFields: jest.fn().mockReturnValue({}),
+            referrerUserId: jest.fn().mockReturnValue(null),
             runPostCommitEffects: jest.fn().mockResolvedValue(undefined),
           },
         },

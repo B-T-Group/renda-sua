@@ -117,6 +117,8 @@
 - "!include public_cash_advance_facilities.yaml"
 - "!include public_cash_advance_draws.yaml"
 - "!include public_purchase_credit_grants.yaml"
+- "!include public_credit_campaigns.yaml"
+- "!include public_credit_campaign_grants.yaml"
 - "!include public_purchase_credit_redemptions.yaml"
 - "!include public_product_interest_requests.yaml"
 - "!include public_payment_callbacks.yaml"

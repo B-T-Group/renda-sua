@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { CURRENCIES } from '../../constants/enums';
 import { useApiClient } from '../../hooks/useApiClient';
 import { AdvanceTables } from './admin-payment-programs/AdvanceTables';
+import { CampaignPanel } from './admin-payment-programs/CampaignPanel';
 import { CreditTables } from './admin-payment-programs/CreditTables';
 import { PartnerTables } from './admin-payment-programs/PartnerTables';
 import { ScheduleTables } from './admin-payment-programs/ScheduleTables';
@@ -153,6 +154,7 @@ export default function AdminPaymentProgramsPage() {
         <Tab label={t('admin.paymentPrograms.advances', 'Cash advances')} />
         <Tab label={t('admin.paymentPrograms.credits', 'Credits')} />
         <Tab label={t('admin.paymentPrograms.partners', 'Partners')} />
+        <Tab label={t('admin.paymentPrograms.campaigns', 'Campaigns')} />
       </Tabs>
       {tab === 0 && (
         <Stack spacing={3}>
@@ -210,6 +212,7 @@ export default function AdminPaymentProgramsPage() {
           }} />
         </Stack>
       )}
+      {tab === 4 && <CampaignPanel onNotice={setNotice} />}
     </Container>
   );
 }

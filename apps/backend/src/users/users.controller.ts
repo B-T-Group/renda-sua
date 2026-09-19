@@ -177,6 +177,7 @@ export class UsersController {
     referral: ResolvedBusinessReferral,
     target: { kind: 'business' | 'agent'; id: string }
   ): Promise<void> {
+    if (referral.kind === 'user') return;
     try {
       const referrerUserId = await this.creditsService.resolveReferrerUserId({
         kind: referral.kind,
