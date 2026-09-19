@@ -128,6 +128,28 @@ describe('MobilePaymentCallbackProcessor provider confirmation', () => {
       expect.objectContaining({ status: 'success' })
     );
   });
+
+  it('retries token pack side effects when a SUCCESS callback is replayed', async () => {
+    const onPaymentSuccess = jest.fn().mockResolvedValue(undefined);
+    const { processor, databaseService, paymentCallbackRegistry } = buildProcessor({
+      liveStatus: 'success',
+    });
+    paymentCallbackRegistry.getHandlers.mockReturnValue([
+      {
+        supportsPaymentEntity: (e: string) => e === 'token',
+        onPaymentSuccess,
+        onPaymentFailure: jest.fn(),
+        finalizeCashReconciliationAfterPayment: jest.fn(),
+      },
+    ]);
+    const alreadyPaid = { ...pendingTokenTx, status: 'success' as const };
+    databaseService.getTransactionByReference.mockResolvedValue(alreadyPaid);
+
+    const result = await processor.processMypvitCallback(successCallback);
+
+    expect(result.skipped).toBe(true);
+    expect(onPaymentSuccess).toHaveBeenCalledWith(alreadyPaid);
+  });
 });
 
 describe('MobilePaymentCallbackProcessor', () => {

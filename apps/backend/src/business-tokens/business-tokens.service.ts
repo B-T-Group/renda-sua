@@ -201,10 +201,27 @@ export class BusinessTokensService {
     currency: string;
     description?: string | null;
   }): Promise<void> {
-    const businessId = transaction.entity_id;
-    if (!businessId) {
+    const businessId = this.requireTokenBusinessId(transaction.entity_id);
+    const pack = this.requirePurchasedPack(transaction);
+    await this.grantPackOnce(
+      businessId,
+      pack.tokens,
+      transaction.reference ?? businessId
+    );
+  }
+
+  private requireTokenBusinessId(entityId?: string | null): string {
+    if (!entityId) {
       throw new Error('Token payment missing business id (entity_id)');
     }
+    return entityId;
+  }
+
+  private requirePurchasedPack(transaction: {
+    amount: number;
+    currency: string;
+    description?: string | null;
+  }): TokenPack {
     const pack = resolvePurchasedPack({
       amount: Number(transaction.amount),
       currency: transaction.currency,
@@ -215,10 +232,72 @@ export class BusinessTokensService {
         `No token pack for ${transaction.amount} ${transaction.currency}`
       );
     }
-    await this.grantPackTokens(
-      businessId,
-      pack.tokens,
-      transaction.reference ?? businessId
+    return pack;
+  }
+
+  private async grantPackOnce(
+    businessId: string,
+    tokens: number,
+    paymentReference: string
+  ): Promise<void> {
+    const claimed = await this.claimPurchase(businessId, tokens, paymentReference);
+    if (!claimed) {
+      this.logger.log(
+        `Skipping duplicate AI token grant for payment ${paymentReference}`
+      );
+      return;
+    }
+    try {
+      await this.grantPackTokens(businessId, tokens, paymentReference);
+    } catch (error: any) {
+      await this.deletePurchaseClaim(paymentReference);
+      throw error;
+    }
+  }
+
+  private async claimPurchase(
+    businessId: string,
+    tokens: number,
+    paymentReference: string
+  ): Promise<boolean> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation ClaimAiTokenPurchase($object: business_ai_token_usage_insert_input!) {
+          insert_business_ai_token_usage_one(object: $object) { id }
+        }`,
+        {
+          object: {
+            business_id: businessId,
+            tokens_consumed: tokens,
+            operation_type: 'purchase',
+            payment_reference: paymentReference,
+          },
+        }
+      );
+      return true;
+    } catch (error: any) {
+      if (this.isUniqueViolation(error)) return false;
+      throw error;
+    }
+  }
+
+  private async deletePurchaseClaim(paymentReference: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation DeleteAiTokenPurchaseClaim($ref: String!) {
+        delete_business_ai_token_usage(
+          where: { payment_reference: { _eq: $ref } }
+        ) { affected_rows }
+      }`,
+      { ref: paymentReference }
+    );
+  }
+
+  private isUniqueViolation(error: any): boolean {
+    const message = String(error?.message || error || '');
+    return (
+      message.includes('Uniqueness violation') ||
+      message.includes('unique constraint') ||
+      message.includes('duplicate key')
     );
   }
 
