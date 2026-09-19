@@ -323,7 +323,12 @@ export class MobilePaymentCallbackProcessor {
       );
       return;
     }
+    if (this.isTokenPackEntity(transaction.payment_entity)) return;
     await this.runHandlerSuccess(transaction);
+  }
+
+  private isTokenPackEntity(paymentEntity?: string | null): boolean {
+    return paymentEntity === 'token' || paymentEntity === 'reel_ai_token';
   }
 
   private async applyFailedStatus(
