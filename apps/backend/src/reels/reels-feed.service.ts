@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { ItemViewsService } from '../item-views/item-views.service';
 import type { RequestContext } from '../auth/request-context';
 import { isUuid } from '../common/uuid.util';
 import {
@@ -16,6 +17,34 @@ const SESSION_FEED_CAP = 200;
 const CANDIDATE_POOL = 500;
 const VIEW_THRESHOLD_MS = 3000;
 const WATCH_LOOKBACK_DAYS = 14;
+
+const CANDIDATE_QUERY = `query RankedReelCandidates($where: reels_bool_exp!, $limit: Int!) {
+  reels(
+    where: $where
+    order_by: [{ published_at: desc }, { created_at: desc }]
+    limit: $limit
+  ) { id business_id like_count published_at }
+}`;
+
+const REEL_SUBJECT_QUERY = `query($id:uuid!){
+  reels_by_pk(id:$id){
+    id subject_type subject_id business_id market_country
+  }
+}`;
+
+const INVENTORY_FOR_ITEMS_QUERY = `query($itemIds:[uuid!]!, $country:String!){
+  business_inventory(
+    where:{
+      item_id:{_in:$itemIds}
+      is_active:{_eq:true}
+      business_location:{
+        is_active:{_eq:true}
+        address:{country:{_eq:$country}}
+      }
+    }
+    order_by:[{quantity:desc},{updated_at:desc}]
+  ){id item_id business_location{business_id}}
+}`;
 
 export type FeedReel = {
   id: string;
@@ -45,11 +74,40 @@ type RecordViewParams = {
   watchTimeMs: number;
 };
 
+type ReelSubject = {
+  id: string;
+  subject_type: string;
+  subject_id: string;
+  business_id: string;
+  market_country: string;
+};
+
+type InventoryRow = {
+  id: string;
+  item_id: string;
+  business_location: { business_id: string };
+};
+
+type FeedPageParams = {
+  userId: string | null;
+  country: string;
+  sessionId?: string;
+  offset: number;
+  limit: number;
+};
+
+type ItemSubject = {
+  subject_type: string;
+  subject_id: string;
+  business_id: string;
+};
+
 @Injectable()
 export class ReelsFeedService {
   constructor(
     private readonly hasura: HasuraSystemService,
-    private readonly catalogCache: CatalogCacheService
+    private readonly catalogCache: CatalogCacheService,
+    private readonly itemViews: ItemViewsService
   ) {}
 
   async getFeed(params: {
@@ -59,15 +117,15 @@ export class ReelsFeedService {
     limit?: number;
     sessionId?: string;
   }): Promise<{ items: FeedReel[]; nextCursor: string | null }> {
+    const country = this.resolveFeedCountry(params.country);
+    if (!country) return { items: [], nextCursor: null };
     const limit = Math.min(Math.max(params.limit ?? 10, 1), 25);
-    const country = params.country?.trim().toUpperCase();
     const userId = this.resolveUserId(params.ctx);
-    const offset = params.cursor ? Number.parseInt(params.cursor, 10) || 0 : 0;
     const page = await this.resolveFeedPage({
       userId,
       country,
       sessionId: params.sessionId,
-      offset,
+      offset: this.parseCursor(params.cursor),
       limit,
     });
     const items = await this.hydrateFeedRows(page.ids, country, userId);
@@ -77,8 +135,10 @@ export class ReelsFeedService {
   async recordView(params: RecordViewParams): Promise<void> {
     if (params.watchTimeMs < VIEW_THRESHOLD_MS) return;
     if (!isUuid(params.reelId)) return;
-    if (!(await this.reelExists(params.reelId))) return;
-    await this.persistQualifiedView(params);
+    const reel = await this.loadReelSubject(params.reelId);
+    if (!reel) return;
+    if (!(await this.persistQualifiedView(params))) return;
+    await this.trackUnderlyingItemView(reel, params);
   }
 
   async setLike(userId: string, reelId: string, liked: boolean): Promise<void> {
@@ -89,21 +149,59 @@ export class ReelsFeedService {
     await this.deleteLikeIfPresent(userId, reelId);
   }
 
-  private async persistQualifiedView(params: RecordViewParams): Promise<void> {
+  private async persistQualifiedView(params: RecordViewParams): Promise<boolean> {
     try {
       await this.insertViewEvent(params);
       await this.incrementViewCount(params.reelId);
+      return true;
     } catch (error: any) {
-      if (isMissingReelViewReference(error)) return;
+      if (isMissingReelViewReference(error)) return false;
       throw error;
     }
   }
 
-  private async reelExists(reelId: string): Promise<boolean> {
+  private resolveFeedCountry(country?: string): string | null {
+    const code = country?.trim().toUpperCase();
+    return code || null;
+  }
+
+  private parseCursor(cursor?: string): number {
+    return cursor ? Number.parseInt(cursor, 10) || 0 : 0;
+  }
+
+  private async loadReelSubject(reelId: string): Promise<ReelSubject | null> {
     const result = await this.hasura.executeQuery<{
-      reels_by_pk: { id: string } | null;
-    }>(`query($id:uuid!){reels_by_pk(id:$id){id}}`, { id: reelId });
-    return Boolean(result.reels_by_pk?.id);
+      reels_by_pk: ReelSubject | null;
+    }>(REEL_SUBJECT_QUERY, { id: reelId });
+    return result.reels_by_pk?.id ? result.reels_by_pk : null;
+  }
+
+  private async trackUnderlyingItemView(
+    reel: ReelSubject,
+    params: RecordViewParams
+  ): Promise<void> {
+    if (reel.subject_type !== 'item') return;
+    const viewer = this.productViewer(params);
+    if (!viewer) return;
+    const inventoryId = await this.resolveItemInventoryId(reel);
+    if (!inventoryId) return;
+    await this.itemViews.trackView(inventoryId, viewer.type, viewer.id);
+  }
+
+  private productViewer(params: RecordViewParams): { type: string; id: string } | null {
+    if (params.userId && isUuid(params.userId)) {
+      return { type: 'user', id: params.userId };
+    }
+    const sessionId = params.sessionId?.trim();
+    return sessionId ? { type: 'anon', id: sessionId } : null;
+  }
+
+  private async resolveItemInventoryId(reel: ReelSubject): Promise<string | null> {
+    const map = await this.loadInventoryIdsForItemSubjects(
+      [reel],
+      reel.market_country
+    );
+    return map.get(`${reel.business_id}:${reel.subject_id}`) ?? null;
   }
 
   private async insertViewEvent(params: RecordViewParams): Promise<void> {
@@ -140,88 +238,92 @@ export class ReelsFeedService {
     return ctx.userId;
   }
 
-  private async resolveFeedPage(params: {
-    userId: string | null;
-    country?: string;
-    sessionId?: string;
-    offset: number;
-    limit: number;
-  }): Promise<{ ids: string[]; nextCursor: string | null }> {
-    const sessionKey = params.sessionId
-      ? `reels-feed:${params.sessionId}:${params.userId || 'anon'}:${params.country || 'all'}`
-      : null;
-    if (sessionKey) {
-      return this.pageFromSession({
-        sessionKey,
-        userId: params.userId,
-        sessionId: params.sessionId,
-        offset: params.offset,
-        limit: params.limit,
-      });
-    }
-    const blockedIds = params.userId
-      ? await this.loadBlockedBusinessIds(params.userId)
-      : [];
-    const ids = await this.loadRankedReelIds({
-      blockedIds,
-      userId: params.userId,
-      sessionId: params.sessionId,
-      limit: params.limit,
-      offset: params.offset,
-    });
+  private async resolveFeedPage(
+    params: FeedPageParams
+  ): Promise<{ ids: string[]; nextCursor: string | null }> {
+    const sessionKey = this.sessionKey(params);
+    if (sessionKey) return this.pageFromSession({ ...params, sessionKey });
+    return this.pageWithoutSession(params);
+  }
+
+  private sessionKey(params: FeedPageParams): string | null {
+    if (!params.sessionId) return null;
+    const viewer = params.userId || 'anon';
+    return `reels-feed:${params.sessionId}:${viewer}:${params.country}`;
+  }
+
+  private async pageWithoutSession(
+    params: FeedPageParams
+  ): Promise<{ ids: string[]; nextCursor: string | null }> {
+    const blockedIds = await this.blockedIdsFor(params.userId);
+    const ids = await this.loadRankedReelIds({ ...params, blockedIds });
+    const hasMore = ids.length === params.limit;
     return {
       ids,
-      nextCursor:
-        ids.length === params.limit
-          ? String(params.offset + params.limit)
-          : null,
+      nextCursor: hasMore ? String(params.offset + params.limit) : null,
     };
   }
 
-  private async pageFromSession(params: {
-    sessionKey: string;
-    userId: string | null;
-    sessionId?: string;
-    offset: number;
-    limit: number;
-  }): Promise<{ ids: string[]; nextCursor: string | null }> {
+  private async pageFromSession(
+    params: FeedPageParams & { sessionKey: string }
+  ): Promise<{ ids: string[]; nextCursor: string | null }> {
     let frozen = await this.loadSessionIds(params.sessionKey);
-    if (!frozen?.length) {
-      const blockedIds = params.userId
-        ? await this.loadBlockedBusinessIds(params.userId)
-        : [];
-      frozen = await this.loadRankedReelIds({
-        blockedIds,
-        userId: params.userId,
-        sessionId: params.sessionId,
-        limit: SESSION_FEED_CAP,
-        offset: 0,
-      });
-      if (frozen.length) {
-        await this.catalogCache.set(params.sessionKey, JSON.stringify(frozen), {
-          ttlSeconds: FEED_SESSION_TTL_SECONDS,
-        });
-      }
-    }
+    if (!frozen?.length) frozen = await this.freezeSession(params);
     const remaining = frozen.slice(params.offset);
+    const hasMore = remaining.length > params.limit;
     return {
       ids: remaining.slice(0, params.limit),
-      nextCursor:
-        remaining.length > params.limit
-          ? String(params.offset + params.limit)
-          : null,
+      nextCursor: hasMore ? String(params.offset + params.limit) : null,
     };
+  }
+
+  private async freezeSession(params: FeedPageParams & { sessionKey: string }) {
+    const blockedIds = await this.blockedIdsFor(params.userId);
+    const frozen = await this.loadRankedReelIds({
+      ...params,
+      blockedIds,
+      limit: SESSION_FEED_CAP,
+      offset: 0,
+    });
+    if (frozen.length) await this.storeSession(params.sessionKey, frozen);
+    return frozen;
+  }
+
+  private async storeSession(sessionKey: string, ids: string[]): Promise<void> {
+    await this.catalogCache.set(sessionKey, JSON.stringify(ids), {
+      ttlSeconds: FEED_SESSION_TTL_SECONDS,
+    });
+  }
+
+  private async blockedIdsFor(userId: string | null): Promise<string[]> {
+    return userId ? this.loadBlockedBusinessIds(userId) : [];
   }
 
   private async loadRankedReelIds(params: {
     blockedIds: string[];
     userId: string | null;
+    country: string;
     sessionId?: string;
     limit: number;
     offset: number;
   }): Promise<string[]> {
-    const candidates = await this.loadCandidateReels(params.blockedIds);
+    const candidates = await this.loadCandidateReels(
+      params.blockedIds,
+      params.country
+    );
     if (!candidates.length) return [];
+    return this.rankCandidateIds(candidates, params);
+  }
+
+  private async rankCandidateIds(
+    candidates: RankableReel[],
+    params: {
+      userId: string | null;
+      sessionId?: string;
+      limit: number;
+      offset: number;
+    }
+  ): Promise<string[]> {
     const [followed, watches] = await Promise.all([
       params.userId
         ? this.loadFollowedBusinessIds(params.userId)
@@ -232,42 +334,40 @@ export class ReelsFeedService {
         reelIds: candidates.map((r) => r.id),
       }),
     ]);
-    const ranked = rankReelsByRelevance({
+    return rankReelsByRelevance({
       reels: candidates,
       followedBusinessIds: followed,
       watchByReelId: watches,
-    });
-    return ranked
+    })
       .slice(params.offset, params.offset + params.limit)
       .map((r) => r.id);
   }
 
   private async loadCandidateReels(
-    blockedIds: string[]
+    blockedIds: string[],
+    country: string
   ): Promise<RankableReel[]> {
+    const result = await this.hasura.executeQuery<{ reels: RankableReel[] }>(
+      CANDIDATE_QUERY,
+      { where: this.candidateWhere(blockedIds, country), limit: CANDIDATE_POOL }
+    );
+    return result.reels ?? [];
+  }
+
+  private candidateWhere(
+    blockedIds: string[],
+    country: string
+  ): Record<string, unknown> {
     const where: Record<string, unknown> = {
       moderation_status: { _eq: 'approved' },
       processing_status: { _eq: 'ready' },
       is_active: { _eq: true },
       video_url: { _is_null: false },
       deleted_at: { _is_null: true },
+      market_country: { _eq: country },
     };
-    if (blockedIds.length) {
-      where.business_id = { _nin: blockedIds };
-    }
-    const result = await this.hasura.executeQuery<{
-      reels: RankableReel[];
-    }>(
-      `query RankedReelCandidates($where: reels_bool_exp!, $limit: Int!) {
-        reels(
-          where: $where
-          order_by: [{ published_at: desc }, { created_at: desc }]
-          limit: $limit
-        ) { id business_id like_count published_at }
-      }`,
-      { where, limit: CANDIDATE_POOL }
-    );
-    return result.reels ?? [];
+    if (blockedIds.length) where.business_id = { _nin: blockedIds };
+    return where;
   }
 
   private async loadFollowedBusinessIds(userId: string): Promise<Set<string>> {
@@ -329,10 +429,35 @@ export class ReelsFeedService {
 
   private async hydrateFeedRows(
     ids: string[],
-    country?: string,
+    country: string,
     userId?: string | null
   ): Promise<FeedReel[]> {
     if (!ids.length) return [];
+    const items = await this.loadFeedRows(ids, country);
+    return this.attachLikes(items, userId);
+  }
+
+  private async loadFeedRows(ids: string[], country: string): Promise<FeedReel[]> {
+    const rows = await this.queryFeedRows(ids);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const matched = ids
+      .map((id) => byId.get(id))
+      .filter((r) => this.isMarketReel(r, country));
+    const withInventory = await this.attachInventoryIds(matched, country);
+    return withInventory.map((r) => ({
+      ...r,
+      purchasable: Boolean(r.inventoryItemId),
+    }));
+  }
+
+  private isMarketReel(
+    reel: FeedReel | undefined,
+    country: string
+  ): reel is FeedReel {
+    return reel?.market_country?.trim().toUpperCase() === country;
+  }
+
+  private async queryFeedRows(ids: string[]): Promise<FeedReel[]> {
     const result = await this.hasura.executeQuery<{ reels: FeedReel[] }>(
       `query($ids:[uuid!]!){
         reels(where:{id:{_in:$ids}}){
@@ -343,38 +468,55 @@ export class ReelsFeedService {
       }`,
       { ids }
     );
-    const byId = new Map((result.reels ?? []).map((r) => [r.id, r]));
-    let items = ids.map((id) => byId.get(id)).filter(Boolean) as FeedReel[];
-    items = await this.attachInventoryIds(items);
-    if (country) {
-      items = items.map((r) => ({
-        ...r,
-        purchasable:
-          r.market_country === country && Boolean(r.inventoryItemId),
-      }));
-    }
-    if (userId) {
-      const liked = await this.loadLikedIds(userId, items.map((i) => i.id));
-      items = items.map((r) => ({ ...r, liked: liked.has(r.id) }));
-    }
-    return items;
+    return result.reels ?? [];
   }
 
-  private async attachInventoryIds(reels: FeedReel[]): Promise<FeedReel[]> {
-    const inventoryByKey = await this.loadInventoryIdsForItemSubjects(reels);
+  private async attachLikes(
+    items: FeedReel[],
+    userId?: string | null
+  ): Promise<FeedReel[]> {
+    if (!userId || !items.length) return items;
+    const liked = await this.loadLikedIds(
+      userId,
+      items.map((i) => i.id)
+    );
+    return items.map((r) => ({ ...r, liked: liked.has(r.id) }));
+  }
+
+  private async attachInventoryIds(
+    reels: FeedReel[],
+    country: string
+  ): Promise<FeedReel[]> {
+    const inventoryByKey = await this.loadInventoryIdsForItemSubjects(
+      reels,
+      country
+    );
     return reels.map((r) => ({
       ...r,
-      inventoryItemId:
-        r.subject_type === 'item'
-          ? inventoryByKey.get(`${r.business_id}:${r.subject_id}`) ?? null
-          : null,
+      inventoryItemId: this.inventoryIdFor(r, inventoryByKey),
     }));
   }
 
+  private inventoryIdFor(
+    reel: ItemSubject,
+    inventoryByKey: Map<string, string>
+  ): string | null {
+    if (reel.subject_type !== 'item') return null;
+    return inventoryByKey.get(`${reel.business_id}:${reel.subject_id}`) ?? null;
+  }
+
   private async loadInventoryIdsForItemSubjects(
-    reels: FeedReel[]
+    reels: ItemSubject[],
+    country: string
   ): Promise<Map<string, string>> {
-    const itemIds = [
+    const itemIds = this.itemSubjectIds(reels);
+    if (!itemIds.length) return new Map();
+    const rows = await this.queryInventoryForItems(itemIds, country);
+    return this.indexInventoryByBusinessItem(rows);
+  }
+
+  private itemSubjectIds(reels: ItemSubject[]): string[] {
+    return [
       ...new Set(
         reels
           .filter((r) => r.subject_type === 'item')
@@ -382,28 +524,21 @@ export class ReelsFeedService {
           .filter(Boolean)
       ),
     ];
-    if (!itemIds.length) return new Map();
+  }
+
+  private async queryInventoryForItems(
+    itemIds: string[],
+    country: string
+  ): Promise<InventoryRow[]> {
     const result = await this.hasura.executeQuery<{
-      business_inventory: Array<{
-        id: string;
-        item_id: string;
-        business_location: { business_id: string };
-      }>;
-    }>(
-      `query($itemIds:[uuid!]!){
-        business_inventory(
-          where:{
-            item_id:{_in:$itemIds}
-            is_active:{_eq:true}
-            business_location:{is_active:{_eq:true}}
-          }
-          order_by:[{quantity:desc},{updated_at:desc}]
-        ){id item_id business_location{business_id}}
-      }`,
-      { itemIds }
-    );
+      business_inventory: InventoryRow[];
+    }>(INVENTORY_FOR_ITEMS_QUERY, { itemIds, country });
+    return result.business_inventory ?? [];
+  }
+
+  private indexInventoryByBusinessItem(rows: InventoryRow[]): Map<string, string> {
     const map = new Map<string, string>();
-    for (const row of result.business_inventory ?? []) {
+    for (const row of rows) {
       const key = `${row.business_location.business_id}:${row.item_id}`;
       if (!map.has(key)) map.set(key, row.id);
     }

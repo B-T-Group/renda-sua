@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { observer } from 'mobx-react-lite';
+import { useMarket } from '../../hooks/useMarket';
 import { useReelsFeed } from '../../hooks/useReelsFeed';
 import { ReelPlayer } from '../../components/reels/ReelPlayer';
 import { ReelOverlay } from '../../components/reels/ReelOverlay';
@@ -43,10 +44,11 @@ function ReelsFeedScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const { persona, auth, cart } = useStore();
+  const { selectedMarket, hydrated: marketHydrated } = useMarket();
   const bottomPad = useMainTabContentBottomPadding(8);
   const { onScroll: reportTabBarScroll } = useReportTabBarScroll();
   const { items, loading, refreshing, error, loadMore, refresh, sessionId } =
-    useReelsFeed();
+    useReelsFeed(marketHydrated ? selectedMarket?.countryCode : undefined);
   const [activeIndex, setActiveIndex] = useState(0);
   const [snack, setSnack] = useState<string | null>(null);
   const viewStartRef = useRef<number>(Date.now());
