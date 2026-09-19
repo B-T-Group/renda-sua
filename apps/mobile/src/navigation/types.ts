@@ -182,6 +182,7 @@ export type ClientRootStackParamList = {
   ThreadDetail: { threadId: string };
   SupportTickets: undefined;
   ClientAccounts: undefined;
+  UserPaymentPrograms: undefined;
   RentalListingDetail: { listingId: string };
   RentalRequestSubmitted: { requestId?: string };
   ClientMyRentals: undefined;
@@ -282,6 +283,7 @@ export type BusinessRootStackParamList = {
   AdminCredits: undefined;
   AccountRecharge: undefined;
   BusinessAccounts: undefined;
+  UserPaymentPrograms: undefined;
   BusinessAiTokens: undefined;
   BusinessAddReel:
     | {

@@ -73,6 +73,7 @@ import BusinessReelsScreen from '../screens/business/BusinessReelsScreen';
 import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import BusinessAccountTypeScreen from '../screens/business/BusinessAccountTypeScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
+import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
@@ -758,6 +759,11 @@ export function BusinessRootNavigator() {
             title: t('business.accounts.navTitle', 'Wallet'),
             headerBackTitle: t('business.tabs.dashboard', 'Dashboard'),
           }}
+        />
+        <RootStack.Screen
+          name="UserPaymentPrograms"
+          component={UserPaymentProgramsScreen}
+          options={{ title: t('accounts.walletHub.title', 'Wallet programs') }}
         />
         <RootStack.Screen
           name="BusinessAiTokens"

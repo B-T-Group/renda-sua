@@ -34,6 +34,7 @@ import NotificationsScreen from '../screens/shared/NotificationsScreen';
 import NotificationPermissionScreen from '../screens/shared/NotificationPermissionScreen';
 import AgentLocationTrackingScreen from '../screens/agent/AgentLocationTrackingScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
+import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
 import { EnrollPersonaExplainScreen } from '../screens/shared/enroll/EnrollPersonaExplainScreen';
 import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersonaSetupScreen';
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
@@ -69,6 +70,7 @@ export type RootStackParamList = {
   NotificationPermission: undefined;
   Earnings: undefined;
   AgentAccounts: undefined;
+  UserPaymentPrograms: undefined;
   AgentBusinessReferral: undefined;
   Profile: undefined;
   NotificationPreferences: undefined;
@@ -241,6 +243,11 @@ export function AgentRootNavigator() {
             name="AgentAccounts"
             component={UserAccountsScreen}
             options={{ title: t('agent.accounts.navTitle', 'Wallet') }}
+          />
+          <RootStack.Screen
+            name="UserPaymentPrograms"
+            component={UserPaymentProgramsScreen}
+            options={{ title: t('accounts.walletHub.title', 'Wallet programs') }}
           />
           <RootStack.Screen
             name="AgentBusinessReferral"

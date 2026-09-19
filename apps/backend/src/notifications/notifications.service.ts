@@ -2123,6 +2123,61 @@ export class NotificationsService {
     }
   }
 
+  async sendPaymentProgramNotice(params: {
+    userId: string;
+    title: string;
+    body: string;
+    messageType: string;
+    entityId: string;
+    path: string;
+    event: string;
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId) return;
+    await this.insertPaymentProgramMessage(params);
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        url: params.path,
+        event: params.event,
+        entityId: params.entityId,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendPaymentProgramNotice failed for ${userId}: ${error?.message ?? error}`
+      );
+    }
+  }
+
+  private async insertPaymentProgramMessage(params: {
+    userId: string;
+    body: string;
+    messageType: string;
+    entityId: string;
+    path: string;
+    event: string;
+  }): Promise<void> {
+    const mutation = `
+      mutation InsertPaymentProgramMessage($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }
+    `;
+    try {
+      await this.hasuraSystemService.executeMutation(mutation, {
+        object: {
+          user_id: params.userId,
+          entity_type: 'account',
+          entity_id: params.entityId,
+          message_type: params.messageType,
+          message: params.body,
+          message_payload: { path: params.path, event: params.event },
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(`insertPaymentProgramMessage: ${error?.message ?? error}`);
+    }
+  }
+
   /** Push when a client, agent, or item receives a new rating. */
   async sendRatingReceivedPush(params: {
     recipientUserId: string;

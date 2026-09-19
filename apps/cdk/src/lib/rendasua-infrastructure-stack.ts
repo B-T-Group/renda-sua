@@ -994,6 +994,33 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       schedule: events.Schedule.cron({ weekDay: 'SAT', hour: '19', minute: '0' }),
       targets: [new targets.LambdaFunction(businessReferralPayoutsFunction)],
     });
+
+    const paymentScheduleRunsFunction = new lambda.Function(
+      this,
+      `PaymentScheduleRuns-${environment}`,
+      {
+        functionName: `payment-schedule-runs-${environment}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'handler.handler',
+        code: lambda.Code.fromAsset('src/lambda/payment-schedule-runs'),
+        timeout: cdk.Duration.minutes(15),
+        memorySize: 256,
+        layers: [requestsLayer],
+        environment: {
+          ENVIRONMENT: environment,
+          BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
+          NOTIFICATIONS_INTERNAL_API_KEY:
+            process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
+        },
+      }
+    );
+
+    new events.Rule(this, `PaymentScheduleRunsRule-${environment}`, {
+      ruleName: `payment-schedule-runs-rule-${environment}`,
+      description: 'Posts due agent payment-schedule stipends every day at 06:00 UTC',
+      schedule: events.Schedule.cron({ hour: '6', minute: '0' }),
+      targets: [new targets.LambdaFunction(paymentScheduleRunsFunction)],
+    });
   }
 
   /** Keep Nest Lightsail env in sync: backend loads these from Secrets Manager. */

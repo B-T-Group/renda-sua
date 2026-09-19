@@ -57,6 +57,7 @@ import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
+import { PurchaseCreditCheckoutNote } from '../common/PurchaseCreditCheckoutNote';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import DiasporaCheckoutBanner from '../checkout/DiasporaCheckoutBanner';
 import PayerChargeSummary from '../checkout/PayerChargeSummary';
@@ -1410,6 +1411,7 @@ const CheckoutPage: React.FC = () => {
               <Typography variant="h6" sx={{ mb: 3 }}>
                 {t('checkout.paymentInformation', 'Payment Information')}
               </Typography>
+              <PurchaseCreditCheckoutNote credits={checkoutPreflight?.purchase_credits} />
 
               {/* Locked Payment Method Display */}
               {checkoutPreflight?.checkout_method && (

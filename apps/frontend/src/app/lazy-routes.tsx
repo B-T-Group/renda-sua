@@ -16,6 +16,27 @@ export const AdminPendingMobilePaymentsPage = lazy(() =>
 export const AdminAccountRechargePage = lazy(() =>
   import('../components/pages/AdminAccountRechargePage')
 );
+export const AdminPaymentProgramsPage = lazy(() =>
+  import('../components/pages/AdminPaymentProgramsPage')
+);
+export const WalletHubPage = lazy(() =>
+  import('../components/pages/WalletHubPage')
+);
+export const CashAdvancePage = lazy(() =>
+  import('../components/pages/PaymentProgramPages').then((mod) => ({
+    default: mod.CashAdvancePage,
+  }))
+);
+export const PurchaseCreditsPage = lazy(() =>
+  import('../components/pages/PaymentProgramPages').then((mod) => ({
+    default: mod.PurchaseCreditsPage,
+  }))
+);
+export const PaymentSchedulesPage = lazy(() =>
+  import('../components/pages/PaymentProgramPages').then((mod) => ({
+    default: mod.PaymentSchedulesPage,
+  }))
+);
 export const AdminPerformancePage = lazy(() =>
   import('../components/pages/AdminPerformancePage')
 );

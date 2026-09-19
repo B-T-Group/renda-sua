@@ -14,9 +14,13 @@ export interface TransactionRequest {
     | 'refund'
     | 'fee'
     | 'adjustment'
-    | 'exchange';
+    | 'exchange'
+    | 'cash_advance'
+    | 'cash_advance_repayment';
   memo?: string;
   referenceId?: string;
+  /** Skip the available-balance floor. Used when HQ funds a scheduled stipend. */
+  allowNegative?: boolean;
 }
 
 export interface TransactionResult {
@@ -26,6 +30,7 @@ export interface TransactionResult {
     available: number;
     withheld: number;
     total: number;
+    cashAdvance: number;
   };
   error?: string;
 }
@@ -128,46 +133,35 @@ export class AccountsService {
         };
       }
 
-      const { balanceUpdate } = this.determineTransactionType(
-        request.transactionType,
-        request.amount
-      );
-
-      // Calculate new balances
-      const newBalances = this.calculateNewBalances(account, balanceUpdate);
-
-      // Validate funds for debits and releases (release is a credit to available
-      // but still requires sufficient withheld balance).
-      if (
-        !this.hasSufficientFunds(
-          account,
-          balanceUpdate,
-          request.transactionType
-        )
-      ) {
-        return {
-          success: false,
-          error: 'Insufficient funds for this transaction',
-        };
+      if (request.transactionType === 'deposit') {
+        const repaid = await this.repayAdvanceOnDeposit(request, account);
+        if (repaid) return repaid;
       }
 
-      // Insert transaction record
-      const transactionId = await this.insertTransaction(request);
-
-      // Update account balances
-      await this.updateAccountBalances(request.accountId, newBalances);
-
-      return {
-        success: true,
-        transactionId,
-        newBalance: newBalances,
-      };
+      return this.applyLedgerEntry(request, account);
     } catch (error: any) {
       return {
         success: false,
         error: error.message || 'Failed to register transaction',
       };
     }
+  }
+
+  private async applyLedgerEntry(
+    request: TransactionRequest,
+    account: any
+  ): Promise<TransactionResult> {
+    const { balanceUpdate } = this.determineTransactionType(
+      request.transactionType,
+      request.amount
+    );
+    const newBalances = this.calculateNewBalances(account, balanceUpdate);
+    if (!this.hasSufficientFunds(account, balanceUpdate, request)) {
+      return { success: false, error: 'Insufficient funds for this transaction' };
+    }
+    const transactionId = await this.insertTransaction(request);
+    await this.updateAccountBalances(request.accountId, newBalances);
+    return { success: true, transactionId, newBalance: newBalances };
   }
 
   async hasTransactionForReference(
@@ -220,7 +214,98 @@ export class AccountsService {
       'accountId' | 'amount' | 'memo' | 'referenceId'
     >
   ): Promise<IdempotentTransactionResult> {
-    return this.registerLedgerEntryIfNotExists(request, 'deposit');
+    if (!request.referenceId) {
+      return { success: false, error: 'referenceId is required' };
+    }
+    const remaining = await this.unappliedDepositAmount(
+      request.accountId,
+      request.referenceId,
+      request.amount
+    );
+    if (remaining <= 0) return { success: true, alreadyExists: true };
+    const result = await this.registerTransaction({
+      ...request,
+      amount: remaining,
+      transactionType: 'deposit',
+    });
+    if (!result.success) {
+      const stillOpen = await this.unappliedDepositAmount(
+        request.accountId,
+        request.referenceId,
+        request.amount
+      );
+      if (stillOpen <= 0) return { success: true, alreadyExists: true };
+    }
+    return { ...result, alreadyExists: false };
+  }
+
+  private async unappliedDepositAmount(
+    accountId: string,
+    referenceId: string,
+    amount: number
+  ): Promise<number> {
+    const applied = await this.sumAppliedDeposit(accountId, referenceId);
+    return Number((amount - applied).toFixed(2));
+  }
+
+  private async sumAppliedDeposit(
+    accountId: string,
+    referenceId: string
+  ): Promise<number> {
+    const query = `
+      query SumAppliedDeposit($accountId: uuid!, $referenceId: uuid!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $referenceId }
+            transaction_type: { _in: ["deposit", "cash_advance_repayment"] }
+          }
+        ) { amount }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, {
+      accountId,
+      referenceId,
+    });
+    const rows = result.account_transactions ?? [];
+    return rows.reduce(
+      (sum: number, row: { amount?: number }) => sum + Number(row.amount || 0),
+      0
+    );
+  }
+
+  private async repayAdvanceOnDeposit(
+    request: TransactionRequest,
+    account: {
+      cash_advance_balance?: number;
+      available_balance?: number;
+      withheld_balance?: number;
+    }
+  ): Promise<TransactionResult | null> {
+    const debt = Number(account.cash_advance_balance ?? 0);
+    if (debt >= 0) return null;
+    const repay = Math.min(request.amount, Math.abs(debt));
+    const remainder = Number((request.amount - repay).toFixed(2));
+    const repayment = await this.applyLedgerEntry(
+      {
+        ...request,
+        amount: repay,
+        transactionType: 'cash_advance_repayment',
+        memo: `Cash advance repayment${request.memo ? ` - ${request.memo}` : ''}`,
+      },
+      account
+    );
+    if (!repayment.success || remainder <= 0) return repayment;
+    const refreshed = {
+      ...account,
+      cash_advance_balance: repayment.newBalance?.cashAdvance ?? 0,
+      available_balance: repayment.newBalance?.available ?? account.available_balance,
+      withheld_balance: repayment.newBalance?.withheld ?? account.withheld_balance,
+    };
+    return this.applyLedgerEntry(
+      { ...request, amount: remainder, transactionType: 'deposit' },
+      refreshed
+    );
   }
 
   async registerHoldIfNotExists(
@@ -296,9 +381,9 @@ export class AccountsService {
     amount: number
   ): {
     isCredit: boolean;
-    balanceUpdate: { available: number; withheld: number };
+    balanceUpdate: { available: number; withheld: number; cashAdvance: number };
   } {
-    const balanceUpdate = { available: 0, withheld: 0 };
+    const balanceUpdate = { available: 0, withheld: 0, cashAdvance: 0 };
 
     switch (transactionType) {
       case 'deposit':
@@ -320,13 +405,13 @@ export class AccountsService {
       case 'hold':
         return {
           isCredit: false,
-          balanceUpdate: { available: -amount, withheld: amount },
+          balanceUpdate: { available: -amount, withheld: amount, cashAdvance: 0 },
         };
 
       case 'release':
         return {
           isCredit: true,
-          balanceUpdate: { available: amount, withheld: -amount },
+          balanceUpdate: { available: amount, withheld: -amount, cashAdvance: 0 },
         };
 
       case 'transfer':
@@ -337,10 +422,21 @@ export class AccountsService {
         };
 
       case 'adjustment':
-        // Manual adjustments can be positive or negative
         return {
           isCredit: amount > 0,
           balanceUpdate: { ...balanceUpdate, available: amount },
+        };
+
+      case 'cash_advance':
+        return {
+          isCredit: true,
+          balanceUpdate: { available: amount, withheld: 0, cashAdvance: -amount },
+        };
+
+      case 'cash_advance_repayment':
+        return {
+          isCredit: false,
+          balanceUpdate: { available: 0, withheld: 0, cashAdvance: amount },
         };
 
       default:
@@ -353,18 +449,21 @@ export class AccountsService {
    */
   private calculateNewBalances(
     currentAccount: any,
-    balanceUpdate: { available: number; withheld: number }
-  ): { available: number; withheld: number; total: number } {
+    balanceUpdate: { available: number; withheld: number; cashAdvance: number }
+  ): { available: number; withheld: number; total: number; cashAdvance: number } {
     const newAvailable =
       currentAccount.available_balance + balanceUpdate.available;
     const newWithheld =
       currentAccount.withheld_balance + balanceUpdate.withheld;
+    const newCashAdvance =
+      Number(currentAccount.cash_advance_balance ?? 0) + balanceUpdate.cashAdvance;
     const newTotal = newAvailable + newWithheld;
 
     return {
       available: newAvailable,
       withheld: newWithheld,
       total: newTotal,
+      cashAdvance: newCashAdvance,
     };
   }
 
@@ -373,23 +472,21 @@ export class AccountsService {
    */
   private hasSufficientFunds(
     account: any,
-    balanceUpdate: { available: number; withheld: number },
-    transactionType: string
+    balanceUpdate: { available: number; withheld: number; cashAdvance: number },
+    request: TransactionRequest
   ): boolean {
-    // For hold transactions, check available balance
-    // Hold: { available: -amount, withheld: amount }
+    const transactionType = request.transactionType;
+    if (transactionType === 'cash_advance_repayment') {
+      return Math.abs(Number(account.cash_advance_balance ?? 0)) >= balanceUpdate.cashAdvance;
+    }
     if (transactionType === 'hold') {
       return account.available_balance >= Math.abs(balanceUpdate.available);
     }
-
-    // For release transactions, check withheld balance
-    // Release: { available: amount, withheld: -amount }
     if (transactionType === 'release') {
       return account.withheld_balance >= Math.abs(balanceUpdate.withheld);
     }
-
-    // For other debit transactions that decrease available balance, check available balance
     if (balanceUpdate.available < 0) {
+      if (request.allowNegative) return true;
       return account.available_balance >= Math.abs(balanceUpdate.available);
     }
 
@@ -449,25 +546,28 @@ export class AccountsService {
    */
   private async updateAccountBalances(
     accountId: string,
-    balances: { available: number; withheld: number }
+    balances: { available: number; withheld: number; cashAdvance: number }
   ): Promise<void> {
     const mutation = `
       mutation UpdateAccountBalances(
         $accountId: uuid!, 
         $availableBalance: numeric!, 
-        $withheldBalance: numeric!
+        $withheldBalance: numeric!,
+        $cashAdvanceBalance: numeric!
       ) {
         update_accounts_by_pk(
           pk_columns: { id: $accountId },
           _set: {
             available_balance: $availableBalance,
             withheld_balance: $withheldBalance,
+            cash_advance_balance: $cashAdvanceBalance,
             updated_at: "now()"
           }
         ) {
           id
           available_balance
           withheld_balance
+          cash_advance_balance
           total_balance
           updated_at
         }
@@ -478,6 +578,7 @@ export class AccountsService {
       accountId,
       availableBalance: balances.available,
       withheldBalance: balances.withheld,
+      cashAdvanceBalance: balances.cashAdvance,
     });
   }
 
@@ -493,6 +594,7 @@ export class AccountsService {
           currency
           available_balance
           withheld_balance
+          cash_advance_balance
           total_balance
           is_active
           created_at
@@ -563,7 +665,7 @@ export class AccountsService {
           where: {
             account_id: { _eq: $accountId }
             memo: { _ilike: $memoPrefix }
-            transaction_type: { _eq: "deposit" }
+            transaction_type: { _in: ["deposit", "cash_advance_repayment"] }
           }
           order_by: { created_at: desc }
           limit: $limit
@@ -601,6 +703,7 @@ export class AccountsService {
       currency: account.currency,
       availableBalance: account.available_balance,
       withheldBalance: account.withheld_balance,
+      cashAdvanceBalance: account.cash_advance_balance ?? 0,
       totalBalance: account.total_balance,
       isActive: account.is_active,
     };
@@ -627,7 +730,7 @@ export class AccountsService {
           where: {
             account_id: { _eq: $accountId }
             reference_id: { _eq: $referenceId }
-            transaction_type: { _eq: "deposit" }
+            transaction_type: { _in: ["deposit", "cash_advance_repayment"] }
           }
           limit: 1
         ) { id }
@@ -649,7 +752,7 @@ export class AccountsService {
         account_transactions(
           where: {
             reference_id: { _eq: $referenceId }
-            transaction_type: { _eq: "deposit" }
+            transaction_type: { _in: ["deposit", "cash_advance_repayment"] }
           }
           limit: 1
         ) { id account_id }

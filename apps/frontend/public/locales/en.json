@@ -335,6 +335,44 @@
     "withdrawPhoneCmGaOnly": "Only Cameroon (+237) or Gabon (+241) phone numbers are supported.",
     "available": "Available",
     "availableBalance": "Available Balance",
+    "cashAdvance": {
+      "title": "Cash advance",
+      "empty": "You do not have an open cash advance.",
+      "limit": "Limit",
+      "owed": "Owed",
+      "remaining": "Available to draw",
+      "amount": "Amount",
+      "draw": "Draw",
+      "drawn": "Cash advance added to your balance."
+    },
+    "purchaseCredits": {
+      "title": "Purchase credits",
+      "note": "These credits cannot be withdrawn. They apply automatically at checkout.",
+      "empty": "No purchase credits yet.",
+      "anyStore": "Any store",
+      "allPartners": "Rendasua partner stores",
+      "onePartner": "One partner store",
+      "expires": "Expires",
+      "checkoutApply": "{{amount}} {{currency}} in purchase credits will apply",
+      "appliedLine": "Purchase credit",
+      "dueAtDelivery": "Due at delivery",
+      "dueAtPickup": "Due at pickup",
+      "whenDelivery": "delivery",
+      "whenPickup": "pickup",
+      "payLater": "{{credit}} purchase credit is applied. You only pay {{amount}} at {{when}}.",
+      "freeLater": "Your purchase credit covers this order. Nothing to pay at {{when}}.",
+      "freeLaterDeposit": "Your purchase credit covers this order. Nothing to pay at {{when}}. You still pay the {{deposit}} deposit now.",
+      "payNowRemaining": "{{credit}} purchase credit is applied. You pay {{amount}} now.",
+      "freeNow": "Your purchase credit covers this order. Nothing to pay."
+    },
+    "schedules": {
+      "title": "Payment schedules",
+      "empty": "No payment schedule is assigned to you."
+    },
+    "walletHub": {
+      "title": "Wallet",
+      "subtitle": "Spendable balance, cash advances, and purchase credits live here."
+    },
     "balance": "Balance",
     "balanceNotAvailable": "Balance not available",
     "creditAccount": "Top Up",
@@ -489,6 +527,13 @@
         "saturday": "Sat",
         "sunday": "Sun"
       }
+    },
+    "paymentPrograms": {
+      "title": "Payment programs",
+      "schedules": "Schedules",
+      "advances": "Cash advances",
+      "credits": "Credits",
+      "partners": "Partners"
     },
     "accountRecharge": {
       "pageTitle": "HQ account recharge",
@@ -1893,7 +1938,9 @@
       "resendFailed": "Could not resend code. Please try again.",
       "changeContact": "Use a different email or phone",
       "loginCodeSms": "We sent a 4-digit code to {{phone}}.",
-      "loginCodeEmail": "We sent a 4-digit code to {{email}}."
+      "loginCodeEmail": "We sent a 4-digit code to {{email}}.",
+      "verificationTitle": "Enter verification code",
+      "digitLabel": "Digit {{n}}"
     },
     "otpLogin": {
       "continue": "Continue with OTP",
@@ -2514,6 +2561,8 @@
       "businessReliabilityDescription": "Top least reliable merchants by acceptance score",
       "manageCategories": "Manage Categories",
       "manageCategoriesDescription": "Manage product categories and subcategories",
+      "paymentPrograms": "Payment programs",
+      "paymentProgramsDescription": "Schedules, cash advances, purchase credits, and partner stores",
       "manageClients": "Manage Clients",
       "manageClientsDescription": "View and update clients",
       "manageConfigurations": "Manage Configurations",

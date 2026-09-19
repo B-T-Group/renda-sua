@@ -17,6 +17,10 @@ export type NotificationDeliveryStatus =
 /** Canonical notification event types used by the orchestrator. */
 export type NotificationType =
   | 'wallet.credit'
+  | 'wallet.schedule_credit'
+  | 'wallet.cash_advance.facility'
+  | 'wallet.cash_advance.draw'
+  | 'wallet.purchase_credit.granted'
   | 'order.created'
   | 'order.status.changed'
   | 'order.offer'

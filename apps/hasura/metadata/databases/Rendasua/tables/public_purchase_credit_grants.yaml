@@ -1,0 +1,97 @@
+table:
+  name: purchase_credit_grants
+  schema: public
+object_relationships:
+  - name: user
+    using:
+      manual_configuration:
+        column_mapping:
+          user_id: id
+        insertion_order: null
+        remote_table:
+          name: users
+          schema: public
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+array_relationships:
+  - name: redemptions
+    using:
+      foreign_key_constraint_on:
+        column: grant_id
+        table:
+          name: purchase_credit_redemptions
+          schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - user_id
+        - currency
+        - amount
+        - remaining_amount
+        - applicability
+        - business_id
+        - expires_at
+        - source
+        - memo
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - user_id
+        - currency
+        - amount
+        - remaining_amount
+        - applicability
+        - business_id
+        - expires_at
+        - source
+        - memo
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns:
+        - id
+        - user_id
+        - currency
+        - amount
+        - remaining_amount
+        - applicability
+        - business_id
+        - expires_at
+        - source
+        - memo
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - user_id
+        - currency
+        - amount
+        - remaining_amount
+        - applicability
+        - business_id
+        - expires_at
+        - source
+        - memo
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id

@@ -78,6 +78,44 @@
     "withdrawPhoneCmGaOnly": "Seuls les numéros du Cameroun (+237) ou du Gabon (+241) sont acceptés.",
     "available": "Disponible",
     "availableBalance": "Solde disponible",
+    "cashAdvance": {
+      "title": "Avance de fonds",
+      "empty": "Vous n'avez pas d'avance de fonds ouverte.",
+      "limit": "Plafond",
+      "owed": "Dû",
+      "remaining": "Disponible à tirer",
+      "amount": "Montant",
+      "draw": "Tirer",
+      "drawn": "L'avance a été ajoutée à votre solde."
+    },
+    "purchaseCredits": {
+      "title": "Crédits d'achat",
+      "note": "Ces crédits ne peuvent pas être retirés. Ils s'appliquent automatiquement au paiement.",
+      "empty": "Aucun crédit d'achat pour le moment.",
+      "anyStore": "N'importe quel magasin",
+      "allPartners": "Magasins partenaires Rendasua",
+      "onePartner": "Un magasin partenaire",
+      "expires": "Expire",
+      "checkoutApply": "{{amount}} {{currency}} de crédits d'achat seront appliqués",
+      "appliedLine": "Crédit d'achat",
+      "dueAtDelivery": "Dû à la livraison",
+      "dueAtPickup": "Dû au retrait",
+      "whenDelivery": "à la livraison",
+      "whenPickup": "au retrait",
+      "payLater": "{{credit}} de crédit d'achat est appliqué. Vous ne payez que {{amount}} {{when}}.",
+      "freeLater": "Votre crédit d'achat couvre cette commande. Rien à payer {{when}}.",
+      "freeLaterDeposit": "Votre crédit d'achat couvre cette commande. Rien à payer {{when}}. Vous payez toujours l'acompte de {{deposit}} maintenant.",
+      "payNowRemaining": "{{credit}} de crédit d'achat est appliqué. Vous payez {{amount}} maintenant.",
+      "freeNow": "Votre crédit d'achat couvre cette commande. Rien à payer."
+    },
+    "schedules": {
+      "title": "Paiements programmés",
+      "empty": "Aucun calendrier de paiement ne vous est assigné."
+    },
+    "walletHub": {
+      "title": "Portefeuille",
+      "subtitle": "Le solde disponible, les avances et les crédits d'achat sont ici."
+    },
     "balance": "Solde",
     "balanceNotAvailable": "Solde non disponible",
     "creditAccount": "Recharger",
@@ -232,6 +270,13 @@
         "saturday": "Sam",
         "sunday": "Dim"
       }
+    },
+    "paymentPrograms": {
+      "title": "Programmes de paiement",
+      "schedules": "Calendriers",
+      "advances": "Avances de fonds",
+      "credits": "Crédits",
+      "partners": "Partenaires"
     },
     "accountRecharge": {
       "pageTitle": "Recharge du compte HQ",
@@ -1621,7 +1666,9 @@
       "resendFailed": "Impossible de renvoyer le code. Veuillez réessayer.",
       "changeContact": "Utiliser un autre e-mail ou téléphone",
       "loginCodeSms": "Nous avons envoyé un code à 4 chiffres au {{phone}}.",
-      "loginCodeEmail": "Nous avons envoyé un code à 4 chiffres à {{email}}."
+      "loginCodeEmail": "Nous avons envoyé un code à 4 chiffres à {{email}}.",
+      "verificationTitle": "Entrez le code de vérification",
+      "digitLabel": "Chiffre {{n}}"
     },
     "otpLogin": {
       "continue": "Continuer avec OTP",
@@ -2237,6 +2284,8 @@
       "businessReliabilityDescription": "Commerces les moins fiables selon le score d’acceptation",
       "manageCategories": "Gérer les Catégories",
       "manageCategoriesDescription": "Gérer les catégories et sous-catégories de produits",
+      "paymentPrograms": "Programmes de paiement",
+      "paymentProgramsDescription": "Calendriers, avances, crédits d'achat et magasins partenaires",
       "manageClients": "Gérer les Clients",
       "manageClientsDescription": "Voir et mettre à jour les clients",
       "manageConfigurations": "Gérer les Configurations",

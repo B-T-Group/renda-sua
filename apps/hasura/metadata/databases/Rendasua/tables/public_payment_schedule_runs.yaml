@@ -1,0 +1,25 @@
+table:
+  name: payment_schedule_runs
+  schema: public
+object_relationships:
+  - name: assignment
+    using:
+      foreign_key_constraint_on: assignment_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - assignment_id
+        - period_start
+        - period_end
+        - amount
+        - status
+        - failure_reason
+        - created_at
+      filter:
+        assignment:
+          agent:
+            user_id:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: true

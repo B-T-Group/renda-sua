@@ -110,6 +110,7 @@ export class AccountsController {
             currency
             available_balance
             withheld_balance
+            cash_advance_balance
             total_balance
             is_active
             created_at
@@ -341,6 +342,7 @@ export class AccountsController {
             currency
             available_balance
             withheld_balance
+            cash_advance_balance
             total_balance
             is_active
             created_at
@@ -476,6 +478,7 @@ export class AccountsController {
             currency
             available_balance
             withheld_balance
+            cash_advance_balance
             total_balance
             is_active
             created_at

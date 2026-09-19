@@ -567,6 +567,18 @@ export function useBusinessDashboardModules({
         path: '/admin/account-recharge',
       },
       {
+        title: t('business.dashboard.paymentPrograms', 'Payment programs'),
+        description: t(
+          'business.dashboard.paymentProgramsDescription',
+          'Schedules, cash advances, purchase credits, and partner businesses'
+        ),
+        icon: <PaymentsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: brandTokens.secondary.main,
+        requiredPermission: PlatformPermissions.PAYMENT_PROGRAMS,
+        path: '/admin/payment-programs',
+      },
+      {
         title: t('business.dashboard.creditsModule', 'Ops follow-ups'),
         description: t(
           'business.dashboard.creditsModuleDescription',

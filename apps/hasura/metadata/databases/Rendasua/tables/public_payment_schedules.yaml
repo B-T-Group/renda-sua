@@ -1,0 +1,15 @@
+table:
+  name: payment_schedules
+  schema: public
+object_relationships:
+  - name: creator
+    using:
+      foreign_key_constraint_on: created_by
+array_relationships:
+  - name: assignments
+    using:
+      foreign_key_constraint_on:
+        column: schedule_id
+        table:
+          name: payment_schedule_assignments
+          schema: public

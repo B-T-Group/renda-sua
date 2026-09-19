@@ -76,6 +76,15 @@ export interface CheckoutPreflightResult {
    * unavailable." message and steer the user to store pickup.
    */
   delivery_availability?: CheckoutDeliveryAvailability | null;
+  purchase_credits?: {
+    total: number;
+    currency: string;
+    allocations?: Array<{
+      amount: number;
+      applicability: string;
+      businessId: string | null;
+    }>;
+  } | null;
 }
 
 export function useCheckoutPreflight(

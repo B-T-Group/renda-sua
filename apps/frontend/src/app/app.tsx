@@ -613,6 +613,46 @@ function App() {
               }
             />
             <Route
+              path="/admin/payment-programs"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AdminPaymentProgramsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounts"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.WalletHubPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounts/cash-advance"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.CashAdvancePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounts/credits"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.PurchaseCreditsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounts/schedules"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.PaymentSchedulesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/refunds"
               element={
                 <ProtectedRoute>

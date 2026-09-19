@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { PurchaseCreditsService } from '../payment-programs/purchase-credits.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeRefundService } from '../stripe-payments/stripe-refund.service';
@@ -74,7 +75,8 @@ export class OrderCleanupService {
     private readonly orderQueueService: OrderQueueService,
     private readonly notificationsService: NotificationsService,
     private readonly deliveryConfigService: DeliveryConfigService,
-    private readonly configService: ConfigService<Configuration>
+    private readonly configService: ConfigService<Configuration>,
+    @Optional() private readonly purchaseCredits?: PurchaseCreditsService
   ) {}
 
   async runDailyCleanup(): Promise<{
@@ -203,13 +205,11 @@ export class OrderCleanupService {
     if (skipReason) {
       return { cancelled: false, skipped: true, reason: skipReason };
     }
-    const ok = await this.cancelWithClaim(
+    const ok = await this.cancelUnpaidOrder(
       order,
       order.current_status,
-      CANCEL_REASON_PAYMENT_NOT_COMPLETED,
       notes,
       notes,
-      false,
       options?.releaseInventory !== false
     );
     return ok
@@ -342,14 +342,42 @@ export class OrderCleanupService {
   private async cancelPendingPaymentOrder(
     order: CleanupOrderRow
   ): Promise<boolean> {
-    return this.cancelWithClaim(
+    return this.cancelUnpaidOrder(
       order,
       'pending_payment',
-      CANCEL_REASON_PAYMENT_NOT_COMPLETED,
       'Payment not completed in time',
-      'Auto-cancelled: payment not completed in time',
-      false
+      'Auto-cancelled: payment not completed in time'
     );
+  }
+
+  private async cancelUnpaidOrder(
+    order: CleanupOrderRow,
+    expectedStatus: string,
+    notes: string,
+    historyNotes: string,
+    releaseInventory = true
+  ): Promise<boolean> {
+    const ok = await this.cancelWithClaim(
+      order,
+      expectedStatus,
+      CANCEL_REASON_PAYMENT_NOT_COMPLETED,
+      notes,
+      historyNotes,
+      false,
+      releaseInventory
+    );
+    if (ok) await this.restorePurchaseCredits(order.id);
+    return ok;
+  }
+
+  private async restorePurchaseCredits(orderId: string): Promise<void> {
+    try {
+      await this.purchaseCredits?.restore(orderId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Purchase credit restore failed for ${orderId}: ${error?.message}`
+      );
+    }
   }
 
   private async cancelMissedPickupOrder(

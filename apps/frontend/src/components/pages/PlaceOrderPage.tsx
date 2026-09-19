@@ -102,6 +102,10 @@ import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
 import FastDeliveryOption from '../common/FastDeliveryOption';
+import {
+  appliedPurchaseCredit,
+  PurchaseCreditPlaceOrderNote,
+} from '../common/PurchaseCreditCheckoutNote';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import {
   CheckoutTaxSummaryLines,
@@ -259,6 +263,10 @@ interface OrderSummaryProps {
   depositAmount?: number | null;
   /** Remaining after deposit (from preflight). */
   amountDueAfterDeposit?: number | null;
+  /** Purchase credit that will auto-apply to the item subtotal. */
+  purchaseCreditTotal?: number | null;
+  /** Pay-later timing shown in the credit notice. Null means pay now. */
+  payLater?: 'delivery' | 'pickup' | null;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -299,6 +307,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryUnavailable = false,
   depositAmount = null,
   amountDueAfterDeposit = null,
+  purchaseCreditTotal = null,
+  payLater = null,
 }) => {
   const { t } = useTranslation();
   const hasDealPrices = resolvedPricing.hasDeal;
@@ -314,6 +324,14 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       ? Number(((total * discountPercentage) / 100).toFixed(2))
       : 0;
   const totalAfterDiscount = Math.max(0, total - discountAmount);
+  const credit = appliedPurchaseCredit({
+    itemSubtotal: subtotal,
+    orderTotal: totalAfterDiscount,
+    creditTotal: purchaseCreditTotal ?? 0,
+    depositNow: depositAmount,
+  });
+  const dueLater =
+    credit.applied > 0 ? credit.dueAtFulfillment : amountDueAfterDeposit;
 
   return (
     <Paper
@@ -674,6 +692,17 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Box>
           )}
 
+          {credit.applied > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, mt: 1 }}>
+              <Typography variant="body2" color="success.main" fontWeight="medium">
+                {t('accounts.purchaseCredits.appliedLine', 'Purchase credit')}
+              </Typography>
+              <Typography variant="body2" color="success.main" fontWeight="medium">
+                −{formatCurrency(credit.applied, selectedItem.item.currency)}
+              </Typography>
+            </Box>
+          )}
+
           <Divider sx={{ my: 1.5 }} />
 
           <CheckoutTaxSummaryLines
@@ -689,7 +718,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               )}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              {formatCurrency(totalAfterDiscount, selectedItem.item.currency)}
+              {formatCurrency(
+                credit.applied > 0 ? credit.remaining : totalAfterDiscount,
+                selectedItem.item.currency
+              )}
             </Typography>
           </Box>
 
@@ -705,11 +737,15 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2" color="text.secondary">
-                  {t('deposit.amountDue', 'Amount due')}
+                  {payLater === 'delivery'
+                    ? t('accounts.purchaseCredits.dueAtDelivery', 'Due at delivery')
+                    : payLater === 'pickup'
+                      ? t('accounts.purchaseCredits.dueAtPickup', 'Due at pickup')
+                      : t('deposit.amountDue', 'Amount due')}
                 </Typography>
                 <Typography variant="body2" fontWeight="medium">
                   {formatCurrency(
-                    amountDueAfterDeposit ??
+                    dueLater ??
                       Math.max(0, totalAfterDiscount - depositAmount),
                     selectedItem.item.currency
                   )}
@@ -733,6 +769,14 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             {error}
           </Alert>
         )}
+
+        <PurchaseCreditPlaceOrderNote
+          applied={credit.applied}
+          due={payLater ? credit.dueAtFulfillment : credit.remaining}
+          depositNow={depositAmount ?? 0}
+          payLater={payLater}
+          formatAmount={(amount) => formatCurrency(amount, selectedItem.item.currency)}
+        />
 
         {/* CTA Button */}
         <Button
@@ -3172,6 +3216,18 @@ const PlaceOrderPage: React.FC = () => {
               deliveryUnavailable={deliveryUnavailable}
               depositAmount={preflightDeposit.depositAmount}
               amountDueAfterDeposit={preflightDeposit.amountDue}
+              purchaseCreditTotal={checkoutPreflight?.purchase_credits?.total}
+              payLater={
+                pickupAtStore
+                  ? isStripeStorePickup
+                    ? null
+                    : 'pickup'
+                  : paymentTiming === 'pay_at_delivery'
+                    ? 'delivery'
+                    : paymentTiming === 'pay_at_pickup'
+                      ? 'pickup'
+                      : null
+              }
             />
 
             {/* Fixed bottom nav */}
@@ -4068,6 +4124,18 @@ const PlaceOrderPage: React.FC = () => {
               deliveryUnavailable={deliveryUnavailable}
               depositAmount={preflightDeposit.depositAmount}
               amountDueAfterDeposit={preflightDeposit.amountDue}
+              purchaseCreditTotal={checkoutPreflight?.purchase_credits?.total}
+              payLater={
+                pickupAtStore
+                  ? isStripeStorePickup
+                    ? null
+                    : 'pickup'
+                  : paymentTiming === 'pay_at_delivery'
+                    ? 'delivery'
+                    : paymentTiming === 'pay_at_pickup'
+                      ? 'pickup'
+                      : null
+              }
             />
           </Grid>
         </Grid>
