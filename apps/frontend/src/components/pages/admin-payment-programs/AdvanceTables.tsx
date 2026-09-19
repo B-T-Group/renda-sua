@@ -40,9 +40,11 @@ interface Program {
 export function AdvanceTables({
   programs,
   onChanged,
+  part = 'programs',
 }: {
   programs: Program[];
   onChanged: (message: string) => Promise<void>;
+  part?: 'programs' | 'facilities';
 }) {
   const { t } = useTranslation();
   const api = useApiClient();
@@ -54,8 +56,12 @@ export function AdvanceTables({
   return (
     <Stack spacing={2}>
       {confirm.dialog}
-      <ProgramList programs={programs} onEdit={setProgram} onChanged={onChanged} ask={confirm.ask} />
-      <FacilityList rows={rows} onEdit={setFacility} onChanged={onChanged} ask={confirm.ask} />
+      {part === 'programs' && (
+        <ProgramList programs={programs} onEdit={setProgram} onChanged={onChanged} ask={confirm.ask} />
+      )}
+      {part === 'facilities' && (
+        <FacilityList rows={rows} onEdit={setFacility} onChanged={onChanged} ask={confirm.ask} />
+      )}
       {program && (
         <ProgramDialog
           row={program}

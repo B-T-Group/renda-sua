@@ -613,7 +613,7 @@ function App() {
               }
             />
             <Route
-              path="/admin/payment-programs"
+              path="/admin/payment-programs/:section?"
               element={
                 <ProtectedRoute>
                   <LazyPages.AdminPaymentProgramsPage />

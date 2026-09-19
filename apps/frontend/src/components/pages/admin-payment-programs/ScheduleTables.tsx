@@ -44,9 +44,11 @@ interface Schedule {
 export function ScheduleTables({
   schedules,
   onChanged,
+  part = 'templates',
 }: {
   schedules: Schedule[];
   onChanged: (message: string) => Promise<void>;
+  part?: 'templates' | 'assignments';
 }) {
   const { t } = useTranslation();
   const api = useApiClient();
@@ -71,13 +73,12 @@ export function ScheduleTables({
   return (
     <Stack spacing={2}>
       {confirm.dialog}
-      <ScheduleList schedules={schedules} onEdit={setSchedule} onDeactivate={deactivate} onChanged={onChanged} />
-      <AssignmentList
-        schedules={schedules}
-        onEdit={setAssignment}
-        onChanged={onChanged}
-        ask={confirm.ask}
-      />
+      {part === 'templates' && (
+        <ScheduleList schedules={schedules} onEdit={setSchedule} onDeactivate={deactivate} onChanged={onChanged} />
+      )}
+      {part === 'assignments' && (
+        <AssignmentList schedules={schedules} onEdit={setAssignment} onChanged={onChanged} ask={confirm.ask} />
+      )}
       {schedule && (
         <ScheduleDialog
           row={schedule}
