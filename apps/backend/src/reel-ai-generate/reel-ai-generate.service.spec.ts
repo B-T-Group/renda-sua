@@ -687,6 +687,113 @@ describe('ReelAiGenerateService.generate', () => {
     expect(videoRouter.getJobStatus).not.toHaveBeenCalled();
     expect(tokens.refundTokens).not.toHaveBeenCalled();
   });
+
+  it('rebuilds a fallback request from the generation row and reel subject', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reels_by_pk: {
+        subject_type: 'item',
+        subject_id: 'item-1',
+        market_country: 'CM',
+      },
+    });
+    const loadProduct = jest
+      .spyOn(service as never, 'loadProduct' as never)
+      .mockResolvedValue({
+        name: 'Soap',
+        description: 'Bar soap',
+        brand: 'CleanCo',
+        imageUrls: ['https://cdn/x.jpg'],
+      } as never);
+    jest
+      .spyOn(service as never, 'fetchImagesForGeneration' as never)
+      .mockResolvedValue([
+        { imageBase64: 'abc', mimeType: 'image/jpeg' },
+      ] as never);
+
+    const request = await (service as any).rebuildRequestFromRow(
+      pendingJob({
+        user_prompt: 'Make it pop',
+        generation_tier: 'standard',
+        preset_id: 'premium',
+      })
+    );
+
+    expect(hasura.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('reels_by_pk'),
+      { id: 'reel-1' }
+    );
+    expect(loadProduct).toHaveBeenCalledWith(
+      'business-1',
+      expect.objectContaining({
+        subjectType: 'item',
+        subjectId: 'item-1',
+        presetId: 'premium',
+        marketCountry: 'CM',
+        prompt: 'Make it pop',
+      })
+    );
+    expect(request.tier).toBe('standard');
+    expect(request.images).toEqual([
+      { imageBase64: 'abc', mimeType: 'image/jpeg' },
+    ]);
+    expect(request.prompt).toContain('Soap');
+    expect(request.prompt).toContain('Make it pop');
+    expect(request.metadata).toEqual({
+      reelId: 'reel-1',
+      businessId: 'business-1',
+    });
+  });
+
+  it('fails fallback rebuild when the reel row is gone', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({ reels_by_pk: null });
+
+    await expect(
+      (service as any).rebuildRequestFromRow(pendingJob())
+    ).rejects.toThrow('Reel not found for fallback');
+  });
+
+  it('defaults a missing generation tier to fast and omits a blank user prompt', async () => {
+    hasura.executeQuery.mockResolvedValueOnce({
+      reels_by_pk: {
+        subject_type: 'rental',
+        subject_id: 'rental-1',
+        market_country: 'GA',
+      },
+    });
+    const loadProduct = jest
+      .spyOn(service as never, 'loadProduct' as never)
+      .mockResolvedValue({
+        name: 'Drill',
+        description: null,
+        brand: null,
+        imageUrls: ['https://cdn/d.jpg'],
+      } as never);
+    jest
+      .spyOn(service as never, 'fetchImagesForGeneration' as never)
+      .mockResolvedValue([
+        { imageBase64: 'def', mimeType: 'image/png' },
+      ] as never);
+
+    const request = await (service as any).rebuildRequestFromRow(
+      pendingJob({
+        user_prompt: null,
+        generation_tier: null,
+        preset_id: 'unknown-legacy',
+      })
+    );
+
+    expect(loadProduct).toHaveBeenCalledWith(
+      'business-1',
+      expect.objectContaining({
+        subjectType: 'rental',
+        subjectId: 'rental-1',
+        prompt: undefined,
+      })
+    );
+    expect(request.tier).toBe('fast');
+    expect(request.prompt).toContain('Drill');
+    expect(request.prompt).not.toContain('unknown-legacy');
+  });
 });
 
 describe('ReelAiGenerateService.generatePlatformSponsored', () => {
