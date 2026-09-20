@@ -5,10 +5,7 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
-  Table,
-  TableBody,
   TableCell,
-  TableHead,
   TableRow,
   TextField,
   Typography,
@@ -16,7 +13,8 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
-import { fromLocalInput, personName, StatusChip, toLocalInput, useConfirm } from './shared';
+import { moneyText } from './impact';
+import { fromLocalInput, personName, ProgramTable, programRowSx, StatusChip, toLocalInput, useConfirm } from './shared';
 
 export interface CreditGrant {
   id: string;
@@ -38,7 +36,7 @@ export function CreditTables({
   grants: CreditGrant[];
   onChanged: (message: string) => Promise<void>;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const api = useApiClient();
   const confirm = useConfirm();
   const [grant, setGrant] = useState<CreditGrant | null>(null);
@@ -47,53 +45,53 @@ export function CreditTables({
   return (
     <Stack spacing={2}>
       {confirm.dialog}
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('admin.paymentPrograms.client', 'Client')}</TableCell>
-            <TableCell>{t('admin.paymentPrograms.appliesTo', 'Applies to')}</TableCell>
-            <TableCell>{t('admin.paymentPrograms.remaining', 'Remaining')}</TableCell>
-            <TableCell>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-            <TableCell />
+      <ProgramTable
+        title={t('admin.paymentPrograms.existingGrants', 'Existing grants')}
+        columns={[
+          { label: t('admin.paymentPrograms.client', 'Client') },
+          { label: t('admin.paymentPrograms.appliesTo', 'Applies to') },
+          { label: t('admin.paymentPrograms.remaining', 'Remaining') },
+          { label: t('admin.paymentPrograms.status', 'Status') },
+          { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+        ]}
+      >
+        {grants.map((row) => (
+          <TableRow key={row.id} hover sx={programRowSx}>
+            <TableCell sx={{ fontWeight: 600 }}>{personName(row.user) || row.id}</TableCell>
+            <TableCell>{scopeText(row, t)}</TableCell>
+            <TableCell>
+              {moneyText(row.remaining_amount, row.currency, i18n.language)} / {moneyText(row.amount, row.currency, i18n.language)}
+            </TableCell>
+            <TableCell><StatusChip status={row.revoked_at ? 'revoked' : 'active'} /></TableCell>
+            <TableCell align="right">
+              {!row.revoked_at && (
+                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                  <Button size="small" onClick={() => setGrant(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
+                  <Button
+                    size="small"
+                    color="warning"
+                    onClick={() =>
+                      confirm.ask({
+                        title: t('admin.paymentPrograms.revokeGrantTitle', 'Revoke this credit?'),
+                        message: t(
+                          'admin.paymentPrograms.revokeGrantMessage',
+                          'The remaining balance becomes zero. Past redemptions stay, and a cancelled order will not restore this grant.'
+                        ),
+                        run: () =>
+                          api
+                            .post(`/admin/payment-programs/credits/${row.id}/revoke`)
+                            .then(() => onChanged(t('admin.paymentPrograms.revoked', 'Revoked'))),
+                      })
+                    }
+                  >
+                    {t('admin.paymentPrograms.revoke', 'Revoke')}
+                  </Button>
+                </Stack>
+              )}
+            </TableCell>
           </TableRow>
-        </TableHead>
-        <TableBody>
-          {grants.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell>{personName(row.user) || row.id}</TableCell>
-              <TableCell>{scopeText(row, t)}</TableCell>
-              <TableCell>{row.remaining_amount} / {row.amount} {row.currency}</TableCell>
-              <TableCell><StatusChip status={row.revoked_at ? 'revoked' : 'active'} /></TableCell>
-              <TableCell>
-                {!row.revoked_at && (
-                  <>
-                    <Button size="small" onClick={() => setGrant(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
-                    <Button
-                      size="small"
-                      color="warning"
-                      onClick={() =>
-                        confirm.ask({
-                          title: t('admin.paymentPrograms.revokeGrantTitle', 'Revoke this credit?'),
-                          message: t(
-                            'admin.paymentPrograms.revokeGrantMessage',
-                            'The remaining balance becomes zero. Past redemptions stay, and a cancelled order will not restore this grant.'
-                          ),
-                          run: () =>
-                            api
-                              .post(`/admin/payment-programs/credits/${row.id}/revoke`)
-                              .then(() => onChanged(t('admin.paymentPrograms.revoked', 'Revoked'))),
-                        })
-                      }
-                    >
-                      {t('admin.paymentPrograms.revoke', 'Revoke')}
-                    </Button>
-                  </>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+        ))}
+      </ProgramTable>
       {grant && (
         <GrantDialog
           row={grant}

@@ -1,4 +1,4 @@
-import { formatProgramMoney, advanceImpact, creditImpact, scheduleImpact } from './impact';
+import { formatProgramMoney, advanceImpact, campaignImpact, creditImpact, scheduleImpact } from './impact';
 
 const t = (key: string, fallback: string, options?: Record<string, string>) => {
   return fallback.replace(/\{\{(\w+)\}\}/g, (_, name) => options?.[name] ?? '');
@@ -47,5 +47,26 @@ describe('payment program impact', () => {
     expect(text).toContain('Bea');
     expect(text).toContain('Ada Shop');
     expect(text).toContain('cannot be withdrawn');
+  });
+
+  it('explains a signup campaign before it is created', () => {
+    const text = campaignImpact(t, {
+      persona: 'client',
+      market: 'CM',
+      currency: 'XAF',
+      locale: 'en',
+      storeScope: 'any_store',
+      subjectAmount: '500',
+      bonus: '250',
+      referrerAmount: '250',
+      cap: '5',
+      expiresDays: '30',
+      hasWindow: true,
+    });
+    expect(text).toContain('client');
+    expect(text).toContain('CM');
+    expect(text).toContain('cannot be withdrawn');
+    expect(text).toContain('5');
+    expect(text).toContain('30');
   });
 });

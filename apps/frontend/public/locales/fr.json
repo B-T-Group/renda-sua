@@ -404,7 +404,25 @@
       "assignmentCreated": "Attribution créée",
       "partnerMarked": "Partenaire enregistré",
       "existingSchedules": "Calendriers existants",
-      "actions": "Actions"
+      "existingPrograms": "Programmes existants",
+      "existingFacilities": "Lignes ouvertes",
+      "existingGrants": "Crédits existants",
+      "existingPartners": "Commerces partenaires",
+      "existingAssignments": "Attributions de calendrier",
+      "existingCampaigns": "Campagnes existantes",
+      "actions": "Actions",
+      "personaWho": {
+        "client": "client",
+        "agent": "agent",
+        "business": "commerce",
+        "any": "utilisateur"
+      },
+      "thisMarket": "ce marché",
+      "campaignImpact": "Un nouveau {{persona}} qui s'inscrit dans {{market}} reçoit {{store}} de crédit magasin{{bonus}} {{where}}. Ce crédit ne peut pas être retiré et ne couvre pas l'acompte de réservation. Le parrain reçoit {{cash}} qu'il peut retirer, au plus {{cap}} fois.{{expiry}}{{window}}",
+      "campaignBonus": ", plus {{bonus}} s'il a utilisé un code de parrainage",
+      "campaignExpiry": " Le crédit magasin expire après {{days}} jours.",
+      "campaignWindow": " Cela ne correspond qu'aux inscriptions entre le début et la fin que vous avez définis.",
+      "campaignNeedWindow": " Définissez un début et une fin avant que cela puisse s'appliquer."
     },
     "accountRecharge": {
       "pageTitle": "Recharge du compte HQ",

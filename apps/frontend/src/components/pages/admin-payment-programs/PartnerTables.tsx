@@ -5,10 +5,7 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
-  Table,
-  TableBody,
   TableCell,
-  TableHead,
   TableRow,
   TextField,
   Typography,
@@ -16,7 +13,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
-import { StatusChip, useConfirm } from './shared';
+import { ProgramTable, programRowSx, StatusChip, useConfirm } from './shared';
 
 export interface PartnerRow {
   id: string;
@@ -52,28 +49,26 @@ export function PartnerTables({
   return (
     <Stack spacing={2}>
       {confirm.dialog}
-      <Typography variant="body2" color="text.secondary">
-        {t(
+      <ProgramTable
+        title={t('admin.paymentPrograms.existingPartners', 'Partner businesses')}
+        note={t(
           'admin.paymentPrograms.partnerStillApplies',
           'Deactivating a partner stops all-partner credits from matching that store. A credit granted for that specific store still applies.'
         )}
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('admin.paymentPrograms.business', 'Business')}</TableCell>
-            <TableCell>{t('admin.paymentPrograms.notes', 'Notes')}</TableCell>
-            <TableCell>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-            <TableCell />
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {partners.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell>{row.business?.name || row.business_id}</TableCell>
-              <TableCell>{row.notes || '—'}</TableCell>
-              <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
-              <TableCell>
+        columns={[
+          { label: t('admin.paymentPrograms.business', 'Business') },
+          { label: t('admin.paymentPrograms.notes', 'Notes') },
+          { label: t('admin.paymentPrograms.status', 'Status') },
+          { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+        ]}
+      >
+        {partners.map((row) => (
+          <TableRow key={row.id} hover sx={programRowSx}>
+            <TableCell sx={{ fontWeight: 600 }}>{row.business?.name || row.business_id}</TableCell>
+            <TableCell>{row.notes || '—'}</TableCell>
+            <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
+            <TableCell align="right">
+              <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                 <Button size="small" onClick={() => setPartner(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
                 {row.is_active ? (
                   <Button
@@ -97,11 +92,11 @@ export function PartnerTables({
                     {t('admin.paymentPrograms.reactivate', 'Reactivate')}
                   </Button>
                 )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              </Stack>
+            </TableCell>
+          </TableRow>
+        ))}
+      </ProgramTable>
       {partner && (
         <PartnerDialog
           row={partner}

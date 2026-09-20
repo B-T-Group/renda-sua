@@ -1,3 +1,7 @@
+export function moneyText(amount: number | string, currency: string, locale: string): string {
+  return formatProgramMoney(String(amount), currency, locale) || `${amount} ${currency}`;
+}
+
 export function formatProgramMoney(amount: string, currency: string, locale: string): string | null {
   const value = Number(amount);
   if (!Number.isFinite(value) || value <= 0 || !currency) return null;
@@ -115,6 +119,80 @@ export function creditImpact(
     '{{who}} receives {{money}} of store credit {{where}}. It cannot be withdrawn and does not cover the reservation deposit.',
     { who: whoLabel(t, input.clientName), money, where: whereLabel(t, input.scope, input.storeName) }
   );
+}
+
+export function campaignImpact(
+  t: Translate,
+  input: {
+    persona: string;
+    market: string;
+    currency: string;
+    locale: string;
+    storeScope: string;
+    storeName?: string;
+    subjectAmount: string;
+    bonus: string;
+    referrerAmount: string;
+    cap: string;
+    expiresDays?: string;
+    hasWindow: boolean;
+  }
+): string {
+  if (input.storeScope === 'specific_business' && !input.storeName) {
+    return t('admin.paymentPrograms.needStore', 'Choose a partner store to see where this credit applies.');
+  }
+  const store = allowance(input.subjectAmount, input.currency, input.locale);
+  const cash = allowance(input.referrerAmount, input.currency, input.locale);
+  const extra = allowance(input.bonus || '0', input.currency, input.locale);
+  if (!store || !cash || !extra) {
+    return t('admin.paymentPrograms.needAmount', 'Enter an amount to see what an agent would receive.');
+  }
+  return t(
+    'admin.paymentPrograms.campaignImpact',
+    'A new {{persona}} who signs up in {{market}} receives {{store}} of store credit{{bonus}} {{where}}. It cannot be withdrawn and does not cover the reservation deposit. The referrer receives {{cash}} they can withdraw, at most {{cap}} times.{{expiry}}{{window}}',
+    {
+      persona: t(`admin.paymentPrograms.personaWho.${input.persona}`, input.persona),
+      market: input.market.trim() || t('admin.paymentPrograms.thisMarket', 'this market'),
+      store,
+      bonus: Number(input.bonus) > 0
+        ? t('admin.paymentPrograms.campaignBonus', ', plus {{bonus}} if they used a referral code', { bonus: extra })
+        : '',
+      where: whereLabel(t, input.storeScope, input.storeName),
+      cash,
+      cap: String(Number(input.cap) > 0 ? Number(input.cap) : 0),
+      expiry: expiryPhrase(t, input.expiresDays),
+      window: windowPhrase(t, input.hasWindow),
+    }
+  );
+}
+
+function expiryPhrase(t: Translate, days?: string): string {
+  return Number(days) > 0
+    ? t('admin.paymentPrograms.campaignExpiry', ' Store credit expires after {{days}} days.', { days: String(Number(days)) })
+    : '';
+}
+
+function windowPhrase(t: Translate, hasWindow: boolean): string {
+  return hasWindow
+    ? t('admin.paymentPrograms.campaignWindow', ' It only matches signups between the start and end you set.')
+    : t('admin.paymentPrograms.campaignNeedWindow', ' Set a start and an end before this can run.');
+}
+
+function allowance(amount: string, currency: string, locale: string): string | null {
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value < 0 || !currency) return null;
+  if (value === 0) return formatZero(currency, locale);
+  return formatProgramMoney(amount, currency, locale);
+}
+
+function formatZero(currency: string, locale: string): string {
+  const language = locale.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+  const digits = currency === 'XAF' || currency === 'XOF' ? 0 : 2;
+  try {
+    return new Intl.NumberFormat(language, { style: 'currency', currency, maximumFractionDigits: digits }).format(0);
+  } catch {
+    return `0 ${currency}`;
+  }
 }
 
 function everyLabel(t: Translate, frequency: string): string {

@@ -1,4 +1,4 @@
-import { Chip } from '@mui/material';
+import { Chip, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfirmationModal from '../../common/ConfirmationModal';
@@ -22,6 +22,46 @@ export function toLocalInput(value?: string | null): string {
 
 export function fromLocalInput(value: string): string | null {
   return value ? new Date(value).toISOString() : null;
+}
+
+export const programHeadCell = {
+  fontWeight: 600,
+  color: 'text.secondary',
+  bgcolor: 'action.hover',
+  whiteSpace: 'nowrap',
+};
+
+export const programRowSx = { '&:last-child td': { borderBottom: 0 } };
+
+export function ProgramTable({
+  title,
+  note,
+  columns,
+  children,
+}: {
+  title: string;
+  note?: string;
+  columns: Array<{ label: string; align?: 'left' | 'right' }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+      <Typography variant="subtitle2" sx={{ px: 2, pt: 1.5, pb: note ? 0.5 : 1.5 }}>{title}</Typography>
+      {note ? <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 1.5 }}>{note}</Typography> : null}
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              {columns.map((column) => (
+                <TableCell key={column.label} align={column.align || 'left'} sx={programHeadCell}>{column.label}</TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>{children}</TableBody>
+        </Table>
+      </TableContainer>
+    </Paper>
+  );
 }
 
 export function StatusChip({ status }: { status: string }) {

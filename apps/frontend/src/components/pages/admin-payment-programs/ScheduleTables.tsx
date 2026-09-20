@@ -5,13 +5,8 @@ import {
   DialogContent,
   DialogTitle,
   MenuItem,
-  Paper,
   Stack,
-  Table,
-  TableBody,
   TableCell,
-  TableContainer,
-  TableHead,
   TableRow,
   TextField,
   Typography,
@@ -19,8 +14,8 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
-import { formatProgramMoney } from './impact';
-import { fromLocalInput, personName, StatusChip, toLocalInput, useConfirm } from './shared';
+import { moneyText } from './impact';
+import { fromLocalInput, personName, ProgramTable, programRowSx, StatusChip, toLocalInput, useConfirm } from './shared';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
 
@@ -124,37 +119,20 @@ function ScheduleList({
   const { t } = useTranslation();
   if (!schedules.length) return <Typography>{t('admin.paymentPrograms.empty', 'Nothing here yet.')}</Typography>;
   return (
-    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-      <Typography variant="subtitle2" sx={{ px: 2, py: 1.5 }}>
-        {t('admin.paymentPrograms.existingSchedules', 'Existing schedules')}
-      </Typography>
-      <TableContainer>
-        <Table size="small">
-          <ScheduleHead />
-          <TableBody>
-            {schedules.map((row) => (
-              <ScheduleRow key={row.id} row={row} onEdit={onEdit} onDeactivate={onDeactivate} onChanged={onChanged} />
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Paper>
-  );
-}
-
-function ScheduleHead() {
-  const { t } = useTranslation();
-  const cell = { fontWeight: 600, color: 'text.secondary', bgcolor: 'action.hover', whiteSpace: 'nowrap' };
-  return (
-    <TableHead>
-      <TableRow>
-        <TableCell sx={cell}>{t('admin.paymentPrograms.name', 'Name')}</TableCell>
-        <TableCell sx={cell}>{t('admin.paymentPrograms.frequency', 'Frequency')}</TableCell>
-        <TableCell sx={cell}>{t('admin.paymentPrograms.amount', 'Amount')}</TableCell>
-        <TableCell sx={cell}>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-        <TableCell sx={cell} align="right">{t('admin.paymentPrograms.actions', 'Actions')}</TableCell>
-      </TableRow>
-    </TableHead>
+    <ProgramTable
+      title={t('admin.paymentPrograms.existingSchedules', 'Existing schedules')}
+      columns={[
+        { label: t('admin.paymentPrograms.name', 'Name') },
+        { label: t('admin.paymentPrograms.frequency', 'Frequency') },
+        { label: t('admin.paymentPrograms.amount', 'Amount') },
+        { label: t('admin.paymentPrograms.status', 'Status') },
+        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+      ]}
+    >
+      {schedules.map((row) => (
+        <ScheduleRow key={row.id} row={row} onEdit={onEdit} onDeactivate={onDeactivate} onChanged={onChanged} />
+      ))}
+    </ProgramTable>
   );
 }
 
@@ -171,12 +149,12 @@ function ScheduleRow({
 }) {
   const { t, i18n } = useTranslation();
   const api = useApiClient();
-  const money = formatProgramMoney(String(row.default_amount), row.currency, i18n.language);
+  const money = moneyText(row.default_amount, row.currency, i18n.language);
   return (
-    <TableRow hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
+    <TableRow hover sx={programRowSx}>
       <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
       <TableCell>{t(`admin.paymentPrograms.${row.frequency}`, row.frequency)}</TableCell>
-      <TableCell>{money || `${row.default_amount} ${row.currency}`}</TableCell>
+      <TableCell>{money}</TableCell>
       <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
       <TableCell align="right">
         <ScheduleActions row={row} onEdit={onEdit} onDeactivate={onDeactivate} onChanged={onChanged} api={api} />
@@ -233,7 +211,7 @@ function AssignmentList({
   onChanged: (message: string) => Promise<void>;
   ask: ReturnType<typeof useConfirm>['ask'];
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const api = useApiClient();
   const rows = schedules.flatMap((schedule) =>
     (schedule.assignments || []).map((row) => ({ ...row, schedule, scheduleActive: schedule.is_active }))
@@ -247,24 +225,24 @@ function AssignmentList({
   }
 
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>{t('admin.paymentPrograms.agent', 'Agent')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.schedule', 'Schedule')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.amount', 'Amount')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-          <TableCell />
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>{personName(row.agent?.user) || row.id}</TableCell>
-            <TableCell>{row.schedule.name}</TableCell>
-            <TableCell>{row.amount} {row.currency}</TableCell>
-            <TableCell><StatusChip status={row.status} /></TableCell>
-            <TableCell>
+    <ProgramTable
+      title={t('admin.paymentPrograms.existingAssignments', 'Schedule assignments')}
+      columns={[
+        { label: t('admin.paymentPrograms.agent', 'Agent') },
+        { label: t('admin.paymentPrograms.schedule', 'Schedule') },
+        { label: t('admin.paymentPrograms.amount', 'Amount') },
+        { label: t('admin.paymentPrograms.status', 'Status') },
+        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+      ]}
+    >
+      {rows.map((row) => (
+        <TableRow key={row.id} hover sx={programRowSx}>
+          <TableCell sx={{ fontWeight: 600 }}>{personName(row.agent?.user) || row.id}</TableCell>
+          <TableCell>{row.schedule.name}</TableCell>
+          <TableCell>{moneyText(row.amount, row.currency, i18n.language)}</TableCell>
+          <TableCell><StatusChip status={row.status} /></TableCell>
+          <TableCell align="right">
+            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
               {['active', 'paused'].includes(row.status) && (
                 <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
               )}
@@ -296,11 +274,11 @@ function AssignmentList({
                   {t('admin.paymentPrograms.end', 'End')}
                 </Button>
               )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+            </Stack>
+          </TableCell>
+        </TableRow>
+      ))}
+    </ProgramTable>
   );
 }
 

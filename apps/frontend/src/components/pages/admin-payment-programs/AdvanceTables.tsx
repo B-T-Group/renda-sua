@@ -5,10 +5,7 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
-  Table,
-  TableBody,
   TableCell,
-  TableHead,
   TableRow,
   TextField,
   Typography,
@@ -16,7 +13,8 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
-import { fromLocalInput, personName, StatusChip, toLocalInput, useConfirm } from './shared';
+import { moneyText } from './impact';
+import { fromLocalInput, personName, ProgramTable, programRowSx, StatusChip, toLocalInput, useConfirm } from './shared';
 
 interface Facility {
   id: string;
@@ -101,7 +99,7 @@ function ProgramList({
   onChanged: (message: string) => Promise<void>;
   ask: ReturnType<typeof useConfirm>['ask'];
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const api = useApiClient();
   if (!programs.length) return <Typography>{t('admin.paymentPrograms.empty', 'Nothing here yet.')}</Typography>;
 
@@ -112,22 +110,22 @@ function ProgramList({
   }
 
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>{t('admin.paymentPrograms.name', 'Name')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.limit', 'Limit')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-          <TableCell />
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {programs.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>{row.name}</TableCell>
-            <TableCell>{row.default_limit} {row.currency}</TableCell>
-            <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
-            <TableCell>
+    <ProgramTable
+      title={t('admin.paymentPrograms.existingPrograms', 'Existing programs')}
+      columns={[
+        { label: t('admin.paymentPrograms.name', 'Name') },
+        { label: t('admin.paymentPrograms.limit', 'Limit') },
+        { label: t('admin.paymentPrograms.status', 'Status') },
+        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+      ]}
+    >
+      {programs.map((row) => (
+        <TableRow key={row.id} hover sx={programRowSx}>
+          <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
+          <TableCell>{moneyText(row.default_limit, row.currency, i18n.language)}</TableCell>
+          <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
+          <TableCell align="right">
+            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
               <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
               {row.is_active ? (
                 <Button
@@ -151,11 +149,11 @@ function ProgramList({
                   {t('admin.paymentPrograms.reactivate', 'Reactivate')}
                 </Button>
               )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+            </Stack>
+          </TableCell>
+        </TableRow>
+      ))}
+    </ProgramTable>
   );
 }
 
@@ -170,59 +168,57 @@ function FacilityList({
   onChanged: (message: string) => Promise<void>;
   ask: ReturnType<typeof useConfirm>['ask'];
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const api = useApiClient();
   if (!rows.length) return null;
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>{t('admin.paymentPrograms.agent', 'Agent')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.program', 'Program')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.limit', 'Limit')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.drawn', 'Drawn')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-          <TableCell />
+    <ProgramTable
+      title={t('admin.paymentPrograms.existingFacilities', 'Opened lines')}
+      columns={[
+        { label: t('admin.paymentPrograms.agent', 'Agent') },
+        { label: t('admin.paymentPrograms.program', 'Program') },
+        { label: t('admin.paymentPrograms.limit', 'Limit') },
+        { label: t('admin.paymentPrograms.drawn', 'Drawn') },
+        { label: t('admin.paymentPrograms.status', 'Status') },
+        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+      ]}
+    >
+      {rows.map((row) => (
+        <TableRow key={row.id} hover sx={programRowSx}>
+          <TableCell sx={{ fontWeight: 600 }}>{personName(row.user) || row.id}</TableCell>
+          <TableCell>{row.program.name}</TableCell>
+          <TableCell>{moneyText(row.limit_amount, row.currency, i18n.language)}</TableCell>
+          <TableCell>{moneyText(Math.abs(Number(row.account?.cash_advance_balance || 0)), row.currency, i18n.language)}</TableCell>
+          <TableCell><StatusChip status={row.status} /></TableCell>
+          <TableCell align="right">
+            {row.status === 'active' && (
+              <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
+                <Button
+                  size="small"
+                  color="warning"
+                  onClick={() =>
+                    ask({
+                      title: t('admin.paymentPrograms.closeFacilityTitle', 'Close this cash-advance line?'),
+                      message: t(
+                        'admin.paymentPrograms.closeFacilityMessage',
+                        'The agent cannot draw more. Any debt stays and is still repaid by deposits.'
+                      ),
+                      run: () =>
+                        api
+                          .post(`/admin/payment-programs/cash-advances/facilities/${row.id}/close`)
+                          .then(() => onChanged(t('admin.paymentPrograms.closed', 'Closed'))),
+                    })
+                  }
+                >
+                  {t('admin.paymentPrograms.close', 'Close')}
+                </Button>
+              </Stack>
+            )}
+          </TableCell>
         </TableRow>
-      </TableHead>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>{personName(row.user) || row.id}</TableCell>
-            <TableCell>{row.program.name}</TableCell>
-            <TableCell>{row.limit_amount} {row.currency}</TableCell>
-            <TableCell>{Math.abs(Number(row.account?.cash_advance_balance || 0))}</TableCell>
-            <TableCell><StatusChip status={row.status} /></TableCell>
-            <TableCell>
-              {row.status === 'active' && (
-                <>
-                  <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
-                  <Button
-                    size="small"
-                    color="warning"
-                    onClick={() =>
-                      ask({
-                        title: t('admin.paymentPrograms.closeFacilityTitle', 'Close this cash-advance line?'),
-                        message: t(
-                          'admin.paymentPrograms.closeFacilityMessage',
-                          'The agent cannot draw more. Any debt stays and is still repaid by deposits.'
-                        ),
-                        run: () =>
-                          api
-                            .post(`/admin/payment-programs/cash-advances/facilities/${row.id}/close`)
-                            .then(() => onChanged(t('admin.paymentPrograms.closed', 'Closed'))),
-                      })
-                    }
-                  >
-                    {t('admin.paymentPrograms.close', 'Close')}
-                  </Button>
-                </>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+      ))}
+    </ProgramTable>
   );
 }
 

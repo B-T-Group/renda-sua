@@ -2,10 +2,7 @@ import {
   Button,
   MenuItem,
   Stack,
-  Table,
-  TableBody,
   TableCell,
-  TableHead,
   TableRow,
   TextField,
   Typography,
@@ -14,7 +11,9 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CURRENCIES } from '../../../constants/enums';
 import { useApiClient } from '../../../hooks/useApiClient';
-import { StatusChip, fromLocalInput, useConfirm } from './shared';
+import { ImpactCard } from './fields';
+import { campaignImpact, moneyText } from './impact';
+import { ProgramTable, programRowSx, StatusChip, fromLocalInput, useConfirm } from './shared';
 
 interface PartnerOption {
   business_id: string;
@@ -135,32 +134,72 @@ function CampaignForm({
   onChange: (next: typeof emptyForm) => void;
   onSubmit: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const set = (key: keyof typeof emptyForm, value: string) => onChange({ ...form, [key]: value });
+  const store = partners.find((row) => row.business_id === form.businessId);
+  const amountsReady = [form.subjectAmount, form.referrerAmount, form.subjectBonusIfReferred || '0'].every((value) => {
+    const number = Number(value);
+    return value.trim() !== '' && Number.isFinite(number) && number >= 0;
+  });
+  const missingStore = form.storeScope === 'specific_business' && !form.businessId;
+  const blocked = !form.name || !form.startsAt || !form.endsAt || !amountsReady || missingStore;
+  const impact = campaignImpact(t, {
+    persona: form.persona,
+    market: form.countryCode,
+    currency: form.currency,
+    locale: i18n.language,
+    storeScope: form.storeScope,
+    storeName: store?.business?.name,
+    subjectAmount: form.subjectAmount,
+    bonus: form.subjectBonusIfReferred || '0',
+    referrerAmount: form.referrerAmount,
+    cap: form.maxReferrerRewards,
+    expiresDays: form.storeCreditExpiresDays,
+    hasWindow: Boolean(form.startsAt && form.endsAt),
+  });
   return (
     <Stack spacing={2}>
       <Typography variant="h6">{t('admin.paymentPrograms.campaigns', 'Credit campaigns')}</Typography>
-      <TextField label={t('admin.paymentPrograms.name', 'Name')} value={form.name} onChange={(e) => set('name', e.target.value)} />
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-        <TextField label={t('admin.paymentPrograms.market', 'Market')} value={form.countryCode} onChange={(e) => set('countryCode', e.target.value.toUpperCase())} />
-        <TextField select label={t('admin.paymentPrograms.persona', 'Persona')} value={form.persona} onChange={(e) => set('persona', e.target.value)}>
-          {['client', 'agent', 'business', 'any'].map((persona) => (
-            <MenuItem key={persona} value={persona}>{t(`admin.paymentPrograms.${persona}`, persona)}</MenuItem>
-          ))}
-        </TextField>
-        <TextField select label={t('admin.paymentPrograms.currency', 'Currency')} value={form.currency} onChange={(e) => set('currency', e.target.value)}>
-          {CURRENCIES.map((code) => <MenuItem key={code} value={code}>{code}</MenuItem>)}
-        </TextField>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="stretch">
+        <Stack spacing={2} sx={{ flex: 1.4 }}>
+          <TextField label={t('admin.paymentPrograms.name', 'Name')} value={form.name} onChange={(e) => set('name', e.target.value)} />
+          <CampaignBasics form={form} onChange={set} />
+          <CampaignWindow form={form} onChange={set} />
+          <ScopeFields form={form} partners={partners} onChange={set} />
+          <AmountFields form={form} onChange={set} />
+          <Button variant="contained" onClick={onSubmit} disabled={blocked}>
+            {t('admin.paymentPrograms.createCampaign', 'Create campaign')}
+          </Button>
+        </Stack>
+        <ImpactCard text={impact} />
       </Stack>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-        <TextField type="datetime-local" label={t('admin.paymentPrograms.startsAt', 'Starts at')} value={form.startsAt} onChange={(e) => set('startsAt', e.target.value)} InputLabelProps={{ shrink: true }} />
-        <TextField type="datetime-local" label={t('admin.paymentPrograms.endsAt', 'Ends at')} value={form.endsAt} onChange={(e) => set('endsAt', e.target.value)} InputLabelProps={{ shrink: true }} />
-      </Stack>
-      <ScopeFields form={form} partners={partners} onChange={set} />
-      <AmountFields form={form} onChange={set} />
-      <Button variant="contained" onClick={onSubmit} disabled={!form.name || !form.startsAt || !form.endsAt}>
-        {t('admin.paymentPrograms.createCampaign', 'Create campaign')}
-      </Button>
+    </Stack>
+  );
+}
+
+function CampaignBasics({ form, onChange }: { form: typeof emptyForm; onChange: (key: keyof typeof emptyForm, value: string) => void }) {
+  const { t } = useTranslation();
+  return (
+    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+      <TextField label={t('admin.paymentPrograms.market', 'Market')} value={form.countryCode} onChange={(e) => onChange('countryCode', e.target.value.toUpperCase())} />
+      <TextField select label={t('admin.paymentPrograms.persona', 'Persona')} value={form.persona} onChange={(e) => onChange('persona', e.target.value)}>
+        {['client', 'agent', 'business', 'any'].map((persona) => (
+          <MenuItem key={persona} value={persona}>{t(`admin.paymentPrograms.${persona}`, persona)}</MenuItem>
+        ))}
+      </TextField>
+      <TextField select label={t('admin.paymentPrograms.currency', 'Currency')} value={form.currency} onChange={(e) => onChange('currency', e.target.value)}>
+        {CURRENCIES.map((code) => <MenuItem key={code} value={code}>{code}</MenuItem>)}
+      </TextField>
+    </Stack>
+  );
+}
+
+function CampaignWindow({ form, onChange }: { form: typeof emptyForm; onChange: (key: keyof typeof emptyForm, value: string) => void }) {
+  const { t } = useTranslation();
+  return (
+    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+      <TextField type="datetime-local" label={t('admin.paymentPrograms.startsAt', 'Starts at')} value={form.startsAt} onChange={(e) => onChange('startsAt', e.target.value)} InputLabelProps={{ shrink: true }} />
+      <TextField type="datetime-local" label={t('admin.paymentPrograms.endsAt', 'Ends at')} value={form.endsAt} onChange={(e) => onChange('endsAt', e.target.value)} InputLabelProps={{ shrink: true }} />
     </Stack>
   );
 }
@@ -213,36 +252,34 @@ function AmountFields({
 }
 
 function CampaignTable({ rows, onToggle }: { rows: CampaignRow[]; onToggle: (row: CampaignRow) => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   if (!rows.length) return <Typography>{t('admin.paymentPrograms.empty', 'Nothing here yet.')}</Typography>;
   return (
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>{t('admin.paymentPrograms.name', 'Name')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.market', 'Market')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.storeCredit', 'Store credit')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.referrerCash', 'Referrer cash')}</TableCell>
-          <TableCell>{t('admin.paymentPrograms.status', 'Status')}</TableCell>
-          <TableCell />
+    <ProgramTable
+      title={t('admin.paymentPrograms.existingCampaigns', 'Existing campaigns')}
+      columns={[
+        { label: t('admin.paymentPrograms.name', 'Name') },
+        { label: t('admin.paymentPrograms.market', 'Market') },
+        { label: t('admin.paymentPrograms.storeCredit', 'Store credit') },
+        { label: t('admin.paymentPrograms.referrerCash', 'Referrer cash') },
+        { label: t('admin.paymentPrograms.status', 'Status') },
+        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+      ]}
+    >
+      {rows.map((row) => (
+        <TableRow key={row.id} hover sx={programRowSx}>
+          <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
+          <TableCell>{row.country_code} · {t(`admin.paymentPrograms.${row.persona}`, row.persona)}</TableCell>
+          <TableCell>{moneyText(row.subject_amount, row.currency, i18n.language)}</TableCell>
+          <TableCell>{moneyText(row.referrer_amount, row.currency, i18n.language)} / {row.max_referrer_rewards}</TableCell>
+          <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
+          <TableCell align="right">
+            <Button size="small" color={row.is_active ? 'warning' : 'primary'} onClick={() => onToggle(row)}>
+              {row.is_active ? t('admin.paymentPrograms.deactivate', 'Deactivate') : t('admin.paymentPrograms.reactivate', 'Reactivate')}
+            </Button>
+          </TableCell>
         </TableRow>
-      </TableHead>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>{row.name}</TableCell>
-            <TableCell>{row.country_code} · {row.persona}</TableCell>
-            <TableCell>{row.subject_amount} {row.currency}</TableCell>
-            <TableCell>{row.referrer_amount} / {row.max_referrer_rewards}</TableCell>
-            <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
-            <TableCell>
-              <Button size="small" onClick={() => onToggle(row)}>
-                {row.is_active ? t('admin.paymentPrograms.deactivate', 'Deactivate') : t('admin.paymentPrograms.reactivate', 'Reactivate')}
-              </Button>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+      ))}
+    </ProgramTable>
   );
 }

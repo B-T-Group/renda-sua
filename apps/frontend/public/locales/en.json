@@ -661,7 +661,25 @@
       "assignmentCreated": "Assignment created",
       "partnerMarked": "Partner saved",
       "existingSchedules": "Existing schedules",
-      "actions": "Actions"
+      "existingPrograms": "Existing programs",
+      "existingFacilities": "Opened lines",
+      "existingGrants": "Existing grants",
+      "existingPartners": "Partner businesses",
+      "existingAssignments": "Schedule assignments",
+      "existingCampaigns": "Existing campaigns",
+      "actions": "Actions",
+      "personaWho": {
+        "client": "client",
+        "agent": "agent",
+        "business": "business",
+        "any": "user"
+      },
+      "thisMarket": "this market",
+      "campaignImpact": "A new {{persona}} who signs up in {{market}} receives {{store}} of store credit{{bonus}} {{where}}. It cannot be withdrawn and does not cover the reservation deposit. The referrer receives {{cash}} they can withdraw, at most {{cap}} times.{{expiry}}{{window}}",
+      "campaignBonus": ", plus {{bonus}} if they used a referral code",
+      "campaignExpiry": " Store credit expires after {{days}} days.",
+      "campaignWindow": " It only matches signups between the start and end you set.",
+      "campaignNeedWindow": " Set a start and an end before this can run."
     },
     "accountRecharge": {
       "pageTitle": "HQ account recharge",
