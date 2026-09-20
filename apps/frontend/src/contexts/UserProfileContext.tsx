@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSessionAuth } from './SessionAuthContext';
+import { profileSessionGate } from './profileSessionGate';
 import { useApiClient } from '../hooks/useApiClient';
 import { useGraphQLRequest } from '../hooks/useGraphQLRequest';
 import {
@@ -379,7 +380,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   );
 
   const { isLoading, getAccessTokenSilently } = useAuth0();
-  const { isAuthenticated } = useSessionAuth();
+  const { isAuthenticated, isSessionReady } = useSessionAuth();
   const apiClient = useApiClient();
   const { i18n } = useTranslation();
 
@@ -825,22 +826,26 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   };
 
   // Fetch profile then accounts so /me can create a wallet before accounts load.
+  // Wait for cookie hydrate: before that, passwordless users look logged out and
+  // clearing would wipe the stored persona and bounce them to /select-persona.
   useEffect(() => {
-    if (isLoading) return;
-    if (isAuthenticated) {
-      let cancelled = false;
-      void (async () => {
-        await checkProfile();
-        if (!cancelled) {
-          await checkAccounts();
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
+    const gate = profileSessionGate(isLoading, isSessionReady, isAuthenticated);
+    if (gate === 'wait') return;
+    if (gate === 'clear') {
+      clearProfile();
+      return;
     }
-    clearProfile();
-  }, [isAuthenticated, isLoading, checkProfile, checkAccounts]);
+    let cancelled = false;
+    void (async () => {
+      await checkProfile();
+      if (!cancelled) {
+        await checkAccounts();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isLoading, isSessionReady, checkProfile, checkAccounts]);
 
   const value: UserProfileContextType = {
     profile,
