@@ -84,7 +84,11 @@ describe('Auth0Service passwordless error mapping', () => {
       createService().verifySmsOtp('+15555550100', '000000')
     ).rejects.toMatchObject({
       status: HttpStatus.BAD_REQUEST,
-      response: { success: false, error: 'Invalid or expired code' },
+      response: {
+        success: false,
+        error: 'Invalid or expired code',
+        code: 'invalid_grant',
+      },
     });
   });
 

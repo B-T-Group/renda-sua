@@ -28,10 +28,14 @@ export const programHeadCell = {
   fontWeight: 600,
   color: 'text.secondary',
   bgcolor: 'action.hover',
-  whiteSpace: 'nowrap',
+  whiteSpace: 'normal',
+  lineHeight: 1.25,
 };
 
-export const programRowSx = { '&:last-child td': { borderBottom: 0 } };
+export const programRowSx = {
+  '&:last-child td': { borderBottom: 0 },
+  '& td': { overflowWrap: 'break-word' },
+};
 
 export function ProgramTable({
   title,
@@ -41,7 +45,7 @@ export function ProgramTable({
 }: {
   title: string;
   note?: string;
-  columns: Array<{ label: string; align?: 'left' | 'right' }>;
+  columns: Array<{ label: string; align?: 'left' | 'right'; width?: string }>;
   children: React.ReactNode;
 }) {
   return (
@@ -49,18 +53,34 @@ export function ProgramTable({
       <Typography variant="subtitle2" sx={{ px: 2, pt: 1.5, pb: note ? 0.5 : 1.5 }}>{title}</Typography>
       {note ? <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 1.5 }}>{note}</Typography> : null}
       <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              {columns.map((column) => (
-                <TableCell key={column.label} align={column.align || 'left'} sx={programHeadCell}>{column.label}</TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
+        <Table size="small" sx={{ width: '100%', tableLayout: 'fixed' }}>
+          <ProgramHead columns={columns} />
           <TableBody>{children}</TableBody>
         </Table>
       </TableContainer>
     </Paper>
+  );
+}
+
+function ProgramHead({
+  columns,
+}: {
+  columns: Array<{ label: string; align?: 'left' | 'right'; width?: string }>;
+}) {
+  return (
+    <TableHead>
+      <TableRow>
+        {columns.map((column) => (
+          <TableCell
+            key={column.label}
+            align={column.align || 'left'}
+            sx={{ ...programHeadCell, width: column.width }}
+          >
+            {column.label}
+          </TableCell>
+        ))}
+      </TableRow>
+    </TableHead>
   );
 }
 

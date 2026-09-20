@@ -1,10 +1,19 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
-import { Auth0Service } from './auth0.service';
+import { Auth0Service, Auth0TokenResponse } from './auth0.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
-import { SessionStoreService } from './session-store.service';
+import {
+  SessionData,
+  SessionStoreService,
+} from './session-store.service';
 import { LockoutService } from './lockout.service';
+import {
+  accessTokenTtlSec,
+  canReuseAccessToken,
+  isInvalidGrantError,
+  requireRefreshToken,
+} from './session-refresh.util';
 import { LoginStartDto } from './dto/login-start.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
 import type { ClientPlatform } from './platform.decorator';
@@ -56,6 +65,19 @@ interface MobileLoginResult {
 
 type LoginResult = WebLoginResult | MobileLoginResult;
 
+type RefreshResponse = {
+  success: boolean;
+  access_token: string;
+  id_token?: string;
+  token_type: string;
+  expires_in: number;
+};
+
+type RefreshResult = {
+  newSessionId?: string;
+  response: RefreshResponse;
+};
+
 interface LoginUserRow {
   id: string;
   email: string | null;
@@ -77,6 +99,8 @@ export interface LoginOtpStartResult extends LoginOtpOptionsResult {
 
 @Injectable()
 export class LoginService {
+  private readonly logger = new Logger(LoginService.name);
+
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly auth0Service: Auth0Service,
@@ -504,11 +528,12 @@ export class LoginService {
       const sessionId = this.sessionStore.generateSessionId();
       await this.sessionStore.createSession(sessionId, {
         userId: user.id,
-        auth0RefreshToken: tokenData.refresh_token!,
+        auth0RefreshToken: requireRefreshToken(tokenData.refresh_token),
         auth0AccessToken: tokenData.access_token,
         auth0IdToken: tokenData.id_token,
         createdAt: Date.now(),
         lastRefreshedAt: Date.now(),
+        familyId: sessionId,
         userAgent,
         ipAddress,
       });
@@ -556,62 +581,152 @@ export class LoginService {
     sessionId: string,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<{
-    newSessionId?: string;
-    response: {
-      success: boolean;
-      access_token: string;
-      id_token?: string;
-      token_type: string;
-      expires_in: number;
-    };
-  }> {
-    const session = await this.sessionStore.getSession(sessionId);
-    if (!session) {
+  ): Promise<RefreshResult> {
+    const live = await this.requireLiveSession(sessionId);
+    const cached = this.cachedRefreshResponse(live.data);
+    if (cached) return this.withCookieIfRotated(sessionId, live.id, cached);
+    const familyKey = live.data.familyId || live.id;
+    return this.sessionStore.runExclusiveRefresh(familyKey, () =>
+      this.refreshLocked(sessionId, ipAddress, userAgent)
+    );
+  }
+
+  private async refreshLocked(
+    sessionId: string,
+    ipAddress?: string,
+    userAgent?: string
+  ) {
+    const live = await this.requireLiveSession(sessionId);
+    const cached = this.cachedRefreshResponse(live.data);
+    if (cached) return this.withCookieIfRotated(sessionId, live.id, cached);
+    try {
+      return await this.exchangeAndRotate(live, ipAddress, userAgent);
+    } catch (error: any) {
+      return this.recoverOrThrowRefreshError(sessionId, live.id, error);
+    }
+  }
+
+  private async requireLiveSession(
+    sessionId: string
+  ): Promise<{ id: string; data: SessionData }> {
+    const live = await this.sessionStore.resolveLiveSession(sessionId);
+    if (!live?.data.auth0RefreshToken) {
       throw new HttpException(
         { success: false, error: 'Invalid or expired session' },
         HttpStatus.UNAUTHORIZED
       );
     }
+    return live;
+  }
 
-    try {
-      const refreshed = await this.auth0Service.refreshAccessToken(
-        session.auth0RefreshToken
-      );
+  private cachedRefreshResponse(session: SessionData) {
+    if (!canReuseAccessToken(session.auth0AccessToken)) return null;
+    const expiresIn = accessTokenTtlSec(session.auth0AccessToken);
+    if (expiresIn == null) return null;
+    return {
+      success: true,
+      access_token: session.auth0AccessToken!,
+      id_token: session.auth0IdToken,
+      token_type: 'Bearer',
+      expires_in: expiresIn,
+    };
+  }
 
-      const newSessionId = await this.sessionStore.rotateSession(sessionId);
-      if (!newSessionId) {
-        throw new HttpException(
-          { success: false, error: 'Session rotation failed' },
-          HttpStatus.INTERNAL_SERVER_ERROR
-        );
-      }
+  private withCookieIfRotated(
+    requestedId: string,
+    liveId: string,
+    response: RefreshResponse
+  ): RefreshResult {
+    return liveId === requestedId
+      ? { response }
+      : { newSessionId: liveId, response };
+  }
 
-      await this.sessionStore.updateSession(newSessionId, {
-        auth0AccessToken: refreshed.access_token,
-        auth0IdToken: refreshed.id_token,
-        lastRefreshedAt: Date.now(),
-        userAgent,
-        ipAddress,
-      });
-
-      return {
-        newSessionId,
-        response: {
-          success: true,
-          access_token: refreshed.access_token,
-          id_token: refreshed.id_token,
-          token_type: refreshed.token_type,
-          expires_in: refreshed.expires_in,
-        },
-      };
-    } catch (error: any) {
-      await this.sessionStore.deleteSession(sessionId);
+  private async exchangeAndRotate(
+    live: { id: string; data: SessionData },
+    ipAddress?: string,
+    userAgent?: string
+  ) {
+    const refreshed = await this.auth0Service.refreshAccessToken(
+      live.data.auth0RefreshToken
+    );
+    await this.persistRefreshedTokens(live.id, live.data, refreshed, ipAddress, userAgent);
+    const newSessionId = await this.sessionStore.rotateSession(live.id);
+    if (!newSessionId) {
       throw new HttpException(
-        { success: false, error: 'Token refresh failed' },
+        { success: false, error: 'Session rotation failed' },
         HttpStatus.UNAUTHORIZED
       );
     }
+    return {
+      newSessionId,
+      response: this.toTokenResponse(refreshed),
+    };
+  }
+
+  private async persistRefreshedTokens(
+    sessionId: string,
+    session: SessionData,
+    refreshed: Auth0TokenResponse,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<void> {
+    await this.sessionStore.updateSession(sessionId, {
+      auth0AccessToken: refreshed.access_token,
+      auth0IdToken: refreshed.id_token,
+      auth0RefreshToken:
+        refreshed.refresh_token || session.auth0RefreshToken,
+      lastRefreshedAt: Date.now(),
+      userAgent,
+      ipAddress,
+    });
+  }
+
+  private toTokenResponse(refreshed: Auth0TokenResponse) {
+    return {
+      success: true,
+      access_token: refreshed.access_token,
+      id_token: refreshed.id_token,
+      token_type: refreshed.token_type,
+      expires_in: refreshed.expires_in,
+    };
+  }
+
+  private async recoverOrThrowRefreshError(
+    requestedId: string,
+    liveId: string,
+    error: any
+  ): Promise<RefreshResult> {
+    const recovered = await this.cachedAfterFailure(requestedId);
+    if (recovered) return recovered;
+    this.logRefreshFailure(error);
+    if (isInvalidGrantError(error)) {
+      await this.sessionStore.deleteSession(liveId);
+    }
+    if (error instanceof HttpException && !isInvalidGrantError(error)) {
+      throw error;
+    }
+    throw new HttpException(
+      { success: false, error: 'Token refresh failed' },
+      HttpStatus.UNAUTHORIZED
+    );
+  }
+
+  private async cachedAfterFailure(sessionId: string) {
+    try {
+      const live = await this.requireLiveSession(sessionId);
+      const cached = this.cachedRefreshResponse(live.data);
+      return cached
+        ? this.withCookieIfRotated(sessionId, live.id, cached)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private logRefreshFailure(error: any): void {
+    const message = error?.message || error?.response?.error || String(error);
+    this.logger.error(`Token refresh failed: ${message}`);
   }
 
   async destroySession(sessionId: string): Promise<void> {

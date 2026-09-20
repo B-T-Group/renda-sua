@@ -90,6 +90,7 @@ export class CashAdvanceService {
       amount,
       transactionType: 'cash_advance',
       memo: `Cash advance draw - ${facility.program?.name ?? 'program'}`,
+      maxCashAdvanceDebt: Number(facility.limit_amount),
     });
     if (!tx.success) throw new BadRequestException(tx.error || 'Draw failed');
     await this.hasura.executeMutation(INSERT_DRAW, {

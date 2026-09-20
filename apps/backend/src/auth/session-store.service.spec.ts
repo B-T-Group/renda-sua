@@ -20,6 +20,8 @@ function createRedisApi() {
   return {
     isReady: true,
     isOpen: true,
+    set: jest.fn().mockResolvedValue('OK'),
+    exists: jest.fn().mockResolvedValue(0),
     get: jest.fn().mockResolvedValue(null),
     setEx: jest.fn().mockResolvedValue('OK'),
     del: jest.fn().mockResolvedValue(1),
@@ -157,6 +159,35 @@ describe('SessionStoreService', () => {
       retired: false,
       familyId: 'fam-1',
     });
+  });
+
+  it('follows a recently rotated session id to the live successor', async () => {
+    const store = memoryStore();
+    await store.createSession('sid-old', sessionData({ familyId: 'fam-1' }));
+    const newId = await store.rotateSession('sid-old');
+
+    await expect(store.resolveLiveSession('sid-old')).resolves.toMatchObject({
+      id: newId,
+      data: { userId: 'user-1', retired: false },
+    });
+  });
+
+  it('shares in-flight exclusive refresh work on the same family', async () => {
+    const store = memoryStore();
+    let runs = 0;
+    const work = () => {
+      runs += 1;
+      return Promise.resolve(`done-${runs}`);
+    };
+
+    const [first, second] = await Promise.all([
+      store.runExclusiveRefresh('fam-1', work),
+      store.runExclusiveRefresh('fam-1', work),
+    ]);
+
+    expect(runs).toBe(1);
+    expect(first).toBe('done-1');
+    expect(second).toBe('done-1');
   });
 
   it('returns the successor when a just-rotated session is presented again', async () => {

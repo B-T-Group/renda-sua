@@ -52,10 +52,11 @@ export function useReelsFeed(country?: string) {
         if (requestId !== requestRef.current) return;
         setError(e instanceof Error ? e.message : 'Failed to load reels');
       } finally {
-        if (requestId !== requestRef.current) return;
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
+        if (requestId === requestRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
     },
     [country]

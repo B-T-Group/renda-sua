@@ -6,6 +6,7 @@ import { Configuration } from '../config/configuration';
 import {
   connectRedisWithRetry,
   createAppRedisClient,
+  sleepMs,
   waitForRedisReady,
 } from '../common/redis-client.util';
 import { redisCommandOrFallback } from '../common/redis-error.util';
@@ -39,8 +40,11 @@ export class SessionStoreService implements OnModuleDestroy {
   private redisUnhealthy = false;
   private readonly inMemoryStore = new Map<string, string>();
   private readonly rotationLocks = new Map<string, Promise<string | null>>();
+  private readonly refreshLocks = new Map<string, Promise<unknown>>();
+  private readonly memoryRefreshLocks = new Map<string, number>();
   private readonly encryptionKey: Buffer;
   private readonly SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
+  private readonly REFRESH_LOCK_TTL_SEC = 20;
   private readonly ALGORITHM = 'aes-256-gcm';
 
   constructor(private readonly configService: ConfigService<Configuration>) {
@@ -317,6 +321,117 @@ export class SessionStoreService implements OnModuleDestroy {
     } catch {
       // Key is already gone; skip family cleanup for unreadable payloads.
     }
+  }
+
+  async resolveLiveSession(
+    sessionId: string
+  ): Promise<{ id: string; data: SessionData } | null> {
+    const data = await this.getSession(sessionId);
+    if (!data) return null;
+    if (!data.retired) return { id: sessionId, data };
+    return this.followRecentRotation(data);
+  }
+
+  private async followRecentRotation(
+    data: SessionData
+  ): Promise<{ id: string; data: SessionData } | null> {
+    if (!isRecentRotation(data) || !data.rotatedTo) return null;
+    const successor = await this.getSession(data.rotatedTo);
+    if (!successor || successor.retired) return null;
+    return { id: data.rotatedTo, data: successor };
+  }
+
+  async runExclusiveRefresh<T>(
+    lockKey: string,
+    work: () => Promise<T>
+  ): Promise<T> {
+    const existing = this.refreshLocks.get(lockKey);
+    if (existing) return existing as Promise<T>;
+    const run = this.executeRefreshWithLock(lockKey, work);
+    this.refreshLocks.set(lockKey, run);
+    void run.finally(() => this.refreshLocks.delete(lockKey));
+    return run;
+  }
+
+  private async executeRefreshWithLock<T>(
+    lockKey: string,
+    work: () => Promise<T>
+  ): Promise<T> {
+    if (await this.acquireRefreshLock(lockKey)) {
+      try {
+        return await work();
+      } finally {
+        await this.releaseRefreshLock(lockKey);
+      }
+    }
+    await this.waitForRefreshLock(lockKey);
+    return work();
+  }
+
+  private refreshLockRedisKey(lockKey: string): string {
+    return `session-refresh-lock:${lockKey}`;
+  }
+
+  private async acquireRefreshLock(lockKey: string): Promise<boolean> {
+    return this.withStore(
+      () => this.acquireRedisRefreshLock(lockKey),
+      () => this.acquireMemoryRefreshLock(lockKey)
+    );
+  }
+
+  private async acquireRedisRefreshLock(lockKey: string): Promise<boolean> {
+    const result = await this.redisClient!.set(
+      this.refreshLockRedisKey(lockKey),
+      '1',
+      { NX: true, EX: this.REFRESH_LOCK_TTL_SEC }
+    );
+    return result === 'OK';
+  }
+
+  private acquireMemoryRefreshLock(lockKey: string): boolean {
+    this.expireMemoryRefreshLock(lockKey);
+    if (this.memoryRefreshLocks.has(lockKey)) return false;
+    this.memoryRefreshLocks.set(
+      lockKey,
+      Date.now() + this.REFRESH_LOCK_TTL_SEC * 1000
+    );
+    return true;
+  }
+
+  private expireMemoryRefreshLock(lockKey: string): void {
+    const expiresAt = this.memoryRefreshLocks.get(lockKey);
+    if (expiresAt && expiresAt <= Date.now()) {
+      this.memoryRefreshLocks.delete(lockKey);
+    }
+  }
+
+  private async releaseRefreshLock(lockKey: string): Promise<void> {
+    await this.withStore(
+      () => this.redisClient!.del(this.refreshLockRedisKey(lockKey)),
+      () => {
+        this.memoryRefreshLocks.delete(lockKey);
+        return 1;
+      }
+    );
+  }
+
+  private async waitForRefreshLock(lockKey: string): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      if (!(await this.isRefreshLockHeld(lockKey))) return;
+      await sleepMs(150);
+    }
+  }
+
+  private async isRefreshLockHeld(lockKey: string): Promise<boolean> {
+    return this.withStore(
+      async () =>
+        (await this.redisClient!.exists(this.refreshLockRedisKey(lockKey))) === 1,
+      () => {
+        this.expireMemoryRefreshLock(lockKey);
+        return this.memoryRefreshLocks.has(lockKey);
+      }
+    );
   }
 
   async rotateSession(oldSessionId: string): Promise<string | null> {

@@ -50,7 +50,7 @@ describe('payment program admin rules', () => {
     expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
-  it('revokes a grant by zeroing remaining and blocks restore', async () => {
+  it('revokes a grant by zeroing remaining and blocks restore credit', async () => {
     const hasura = {
       executeQuery: jest.fn(async (query: string) => {
         if (query.includes('purchase_credit_redemptions')) {
@@ -58,15 +58,21 @@ describe('payment program admin rules', () => {
         }
         return { purchase_credit_grants_by_pk: { revoked_at: '2026-09-19T00:00:00Z' } };
       }),
-      executeMutation: jest.fn(async () => ({
-        update_purchase_credit_grants: { returning: [{ id: 'g1', remaining_amount: 0 }] },
-      })),
+      executeMutation: jest.fn(async (mutation: string) => {
+        if (mutation.includes('delete_purchase_credit_redemptions_by_pk')) {
+          return { delete_purchase_credit_redemptions_by_pk: { id: 'r1' } };
+        }
+        return {
+          update_purchase_credit_grants: { returning: [{ id: 'g1', remaining_amount: 0 }] },
+        };
+      }),
     };
     const service = new PurchaseCreditsService(hasura as never, {} as never);
     await service.revoke('g1');
     expect(hasura.executeMutation.mock.calls[0][0]).toContain('remaining_amount: 0');
     await service.restore('order-1');
-    expect(hasura.executeMutation).toHaveBeenCalledTimes(1);
+    const mutations = hasura.executeMutation.mock.calls.map(([query]) => query as string);
+    expect(mutations.some((query) => query.includes('CreditCreditRemaining'))).toBe(false);
   });
 
   it('keeps a deactivated partner row and still applies a specific grant', async () => {

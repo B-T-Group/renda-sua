@@ -23,6 +23,7 @@ describe('OrderCleanupService', () => {
   let notifications: { sendPendingPaymentCleanupDigestPush: jest.Mock };
   let deliveryConfig: { getTimezone: jest.Mock };
   let config: { get: jest.Mock };
+  let purchaseCredits: { restore: jest.Mock };
 
   beforeEach(() => {
     hasura = {
@@ -58,6 +59,7 @@ describe('OrderCleanupService', () => {
         storePickupCancelDays: 7,
       }),
     };
+    purchaseCredits = { restore: jest.fn().mockResolvedValue(undefined) };
 
     service = new OrderCleanupService(
       hasura as any,
@@ -66,7 +68,8 @@ describe('OrderCleanupService', () => {
       orderQueue as any,
       notifications as any,
       deliveryConfig as any,
-      config as any
+      config as any,
+      purchaseCredits as any
     );
   });
 
@@ -293,6 +296,7 @@ describe('OrderCleanupService', () => {
         null
       );
       expect(stripeCapture.cancelOrderPaymentIntent).toHaveBeenCalled();
+      expect(purchaseCredits.restore).toHaveBeenCalledWith('o1');
     });
 
     it('skips orders that are not yet stale', async () => {
@@ -316,6 +320,7 @@ describe('OrderCleanupService', () => {
 
       expect(n).toBe(0);
       expect(orderQueue.sendOrderCancelledMessage).not.toHaveBeenCalled();
+      expect(purchaseCredits.restore).not.toHaveBeenCalled();
     });
 
     it('does not cancel a late-prepped ASAP order from a stale placement promise', async () => {
@@ -430,6 +435,7 @@ describe('OrderCleanupService', () => {
         'cancelled',
         null
       );
+      expect(purchaseCredits.restore).toHaveBeenCalledWith('o1');
     });
 
     it('releases reserved inventory atomically instead of writing reserved_quantity', async () => {
@@ -668,6 +674,7 @@ describe('OrderCleanupService', () => {
         'failed',
         null
       );
+      expect(purchaseCredits.restore).toHaveBeenCalledWith('o1');
     });
 
     it('does not report success when failed_delivery insert fails', async () => {
@@ -710,6 +717,7 @@ describe('OrderCleanupService', () => {
         )
       ).toBe(true);
       expect(orderQueue.sendOrderStatusUpdatedMessage).not.toHaveBeenCalled();
+      expect(purchaseCredits.restore).not.toHaveBeenCalled();
     });
 
     it('no-ops when CAS claim loses complete/delivered race', async () => {

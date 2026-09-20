@@ -55,19 +55,25 @@ export class Auth0Service {
 
   private throwMappedAuth0Error(error: any, fallbackMessage: string): never {
     const status = Number(error?.response?.status);
+    const body = this.mappedAuth0Body(error, fallbackMessage);
     if (status >= 400 && status < 500) {
       throw new HttpException(
-        { success: false, error: fallbackMessage },
+        body,
         status === 429 ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.BAD_REQUEST
       );
     }
     if (status >= 500) {
-      throw new HttpException(
-        { success: false, error: fallbackMessage },
-        HttpStatus.BAD_GATEWAY
-      );
+      throw new HttpException(body, HttpStatus.BAD_GATEWAY);
     }
     throw error;
+  }
+
+  private mappedAuth0Body(error: any, fallbackMessage: string) {
+    const code = error?.response?.data?.error;
+    if (typeof code !== 'string' || !code) {
+      return { success: false, error: fallbackMessage };
+    }
+    return { success: false, error: fallbackMessage, code };
   }
 
   private async postPasswordlessStart(

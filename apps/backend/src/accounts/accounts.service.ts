@@ -21,6 +21,8 @@ export interface TransactionRequest {
   referenceId?: string;
   /** Skip the available-balance floor. Used when HQ funds a scheduled stipend. */
   allowNegative?: boolean;
+  /** Facility cap. Required for cash_advance so concurrent draws cannot exceed it. */
+  maxCashAdvanceDebt?: number;
 }
 
 export interface TransactionResult {
@@ -136,6 +138,10 @@ export class AccountsService {
       if (request.transactionType === 'deposit') {
         const repaid = await this.repayAdvanceOnDeposit(request, account);
         if (repaid) return repaid;
+      }
+
+      if (request.transactionType === 'cash_advance') {
+        return this.applyCashAdvanceDraw(request);
       }
 
       return this.applyLedgerEntry(request, account);
@@ -763,4 +769,128 @@ export class AccountsService {
     });
     return result.account_transactions?.[0] ?? null;
   }
+
+  private async applyCashAdvanceDraw(
+    request: TransactionRequest
+  ): Promise<TransactionResult> {
+    const limit = Number(request.maxCashAdvanceDebt);
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return { success: false, error: 'Cash-advance limit is required' };
+    }
+    const claimed = await this.claimCashAdvanceCapacity(
+      request.accountId,
+      request.amount,
+      limit
+    );
+    if (!claimed) {
+      return { success: false, error: 'Draw exceeds the remaining cash-advance limit' };
+    }
+    return this.persistClaimedCashAdvance(request, claimed);
+  }
+
+  private async persistClaimedCashAdvance(
+    request: TransactionRequest,
+    claimed: NonNullable<TransactionResult['newBalance']>
+  ): Promise<TransactionResult> {
+    try {
+      const transactionId = await this.insertTransaction(request);
+      return { success: true, transactionId, newBalance: claimed };
+    } catch (error: any) {
+      await this.releaseCashAdvanceClaim(request.accountId, request.amount);
+      return {
+        success: false,
+        error: error.message || 'Failed to register transaction',
+      };
+    }
+  }
+
+  private async claimCashAdvanceCapacity(
+    accountId: string,
+    amount: number,
+    limit: number
+  ): Promise<NonNullable<TransactionResult['newBalance']> | null> {
+    const result = await this.hasuraSystemService.executeMutation(
+      CLAIM_CASH_ADVANCE,
+      {
+        accountId,
+        amount,
+        negAmount: -amount,
+        minBalance: cashAdvanceMinBalance(limit, amount),
+      }
+    );
+    const row = result.update_accounts?.returning?.[0];
+    return row ? balancesFromAccount(row) : null;
+  }
+
+  private async releaseCashAdvanceClaim(
+    accountId: string,
+    amount: number
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(RELEASE_CASH_ADVANCE, {
+      accountId,
+      amount: -amount,
+      posAmount: amount,
+    });
+  }
 }
+
+export function cashAdvanceMinBalance(limit: number, amount: number): number {
+  return Number((-(limit - amount)).toFixed(2));
+}
+
+function balancesFromAccount(row: {
+  available_balance: number;
+  withheld_balance: number;
+  cash_advance_balance: number;
+}): NonNullable<TransactionResult['newBalance']> {
+  const available = Number(row.available_balance);
+  const withheld = Number(row.withheld_balance);
+  return {
+    available,
+    withheld,
+    total: available + withheld,
+    cashAdvance: Number(row.cash_advance_balance),
+  };
+}
+
+const CLAIM_CASH_ADVANCE = `
+  mutation ClaimCashAdvance(
+    $accountId: uuid!
+    $amount: numeric!
+    $negAmount: numeric!
+    $minBalance: numeric!
+  ) {
+    update_accounts(
+      where: {
+        id: { _eq: $accountId }
+        cash_advance_balance: { _gte: $minBalance }
+      }
+      _inc: {
+        available_balance: $amount
+        cash_advance_balance: $negAmount
+      }
+    ) {
+      returning {
+        available_balance
+        withheld_balance
+        cash_advance_balance
+      }
+    }
+  }
+`;
+
+const RELEASE_CASH_ADVANCE = `
+  mutation ReleaseCashAdvanceClaim(
+    $accountId: uuid!
+    $amount: numeric!
+    $posAmount: numeric!
+  ) {
+    update_accounts(
+      where: { id: { _eq: $accountId } }
+      _inc: {
+        available_balance: $amount
+        cash_advance_balance: $posAmount
+      }
+    ) { affected_rows }
+  }
+`;
