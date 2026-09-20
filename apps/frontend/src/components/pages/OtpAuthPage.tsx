@@ -262,7 +262,47 @@ const OtpAuthPage: React.FC = () => {
 
   const goToApp = () => {
     sessionStorage.removeItem('pendingSignupLaunchPromo');
-    navigate('/app');
+    navigate('/app', { replace: true });
+  };
+
+  const showSignupPromo = (promo: LaunchPromoCongratsData) => {
+    setLaunchPromo(promo);
+    try {
+      sessionStorage.setItem(
+        'pendingSignupLaunchPromo',
+        JSON.stringify(promo)
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const completeSignupVerify = (data: {
+    access_token: string;
+    id_token?: string;
+    token_type: string;
+    expires_in: number;
+    launchPromo?: LaunchPromoCongratsData | null;
+  }) => {
+    setPasswordlessSession(data);
+    clearSignupDraft();
+    clearSignupSessionKeys();
+    if (data.launchPromo) {
+      showSignupPromo(data.launchPromo);
+      return;
+    }
+    navigate('/app', { replace: true });
+  };
+
+  const completeLoginVerify = (data: {
+    access_token: string;
+    id_token?: string;
+    token_type: string;
+    expires_in: number;
+  }) => {
+    setPasswordlessSession(data);
+    clearLoginSession();
+    navigate(validateReturnTo(returnTo), { replace: true });
   };
 
   const handleVerify = async () => {
@@ -283,24 +323,7 @@ const OtpAuthPage: React.FC = () => {
           attemptId,
           otp,
         });
-        setPasswordlessSession(res.data);
-        clearSignupDraft();
-        clearSignupSessionKeys();
-        await apiClient.get('/users/me');
-        const promo = res.data?.launchPromo as LaunchPromoCongratsData | null;
-        if (promo) {
-          setLaunchPromo(promo);
-          try {
-            sessionStorage.setItem(
-              'pendingSignupLaunchPromo',
-              JSON.stringify(promo)
-            );
-          } catch {
-            // ignore
-          }
-          return;
-        }
-        navigate('/app');
+        completeSignupVerify(res.data);
         return;
       }
 
@@ -317,10 +340,7 @@ const OtpAuthPage: React.FC = () => {
         ? { email: loginEmail, otp, channel }
         : { phone_number: loginPhone, otp, channel };
       const res = await apiClient.post('/auth/login/verify-otp', payload);
-      setPasswordlessSession(res.data);
-      await apiClient.get('/users/me');
-      clearLoginSession();
-      navigate(validateReturnTo(returnTo));
+      completeLoginVerify(res.data);
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
@@ -460,45 +480,62 @@ const OtpAuthPage: React.FC = () => {
           )}
           <Box
             sx={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 2,
+              gap: 1.5,
               bgcolor: 'action.hover',
               px: 2,
-              py: 1,
+              py: 0.75,
               borderRadius: 2,
+              alignSelf: 'center',
             }}
           >
-            <Typography variant="body2" color="text.secondary">
-              {t('auth.otp.expiresIn', 'Expires in')} {timerLabel}
+            <Typography
+              variant="body2"
+              color={isExpired ? 'error.main' : 'text.secondary'}
+            >
+              {isExpired
+                ? t('auth.otp.expired', 'Code expired')
+                : `${t('auth.otp.expiresIn', 'Expires in')} ${timerLabel}`}
             </Typography>
-            {isExpired ? (
-              <Typography variant="body2" color="error.main">
-                {t('auth.otp.expired', 'Code expired')}
-              </Typography>
-            ) : null}
           </Box>
           {error && <Alert severity="error">{error}</Alert>}
           <Box
             onPaste={handlePaste}
-            sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 1.5,
+              py: 0.5,
+            }}
           >
             {digits.map((d, idx) => (
               <TextField
                 key={idx}
                 value={d}
+                autoFocus={idx === 0}
+                disabled={loading || isExpired}
                 inputRef={(el) => {
                   inputRefs.current[idx] = el;
                 }}
                 onChange={(e) => handleDigitChange(idx, e.target.value)}
                 onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                autoComplete={idx === 0 ? 'one-time-code' : 'off'}
                 inputProps={{
                   inputMode: 'numeric',
                   maxLength: 1,
-                  style: { textAlign: 'center', fontSize: 20, fontWeight: 700 },
+                  'aria-label': t('auth.otp.digitLabel', 'Digit {{n}}', {
+                    n: idx + 1,
+                  }),
+                  style: { textAlign: 'center', fontSize: 22, fontWeight: 700 },
                 }}
-                sx={{ width: 48 }}
+                sx={{
+                  width: 56,
+                  '& .MuiOutlinedInput-root': {
+                    height: 64,
+                    borderRadius: 2,
+                  },
+                }}
               />
             ))}
           </Box>

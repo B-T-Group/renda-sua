@@ -512,6 +512,19 @@ export class CheckoutPreflightResponseDto {
   })
   wallet_balance?: number | null;
 
+  @ApiPropertyOptional({
+    description: 'Purchase credits that will auto-apply to item subtotals. Not withdrawable and not applied to reservation deposits.',
+  })
+  purchase_credits?: {
+    total: number;
+    currency: string;
+    allocations?: Array<{
+      amount: number;
+      applicability: string;
+      businessId: string | null;
+    }>;
+  } | null;
+
   @ApiProperty({
     description:
       'Whether a delivery address is required before the payment method can be confirmed. Always true for delivery orders.',

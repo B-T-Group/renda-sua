@@ -1,0 +1,33 @@
+table:
+  name: partner_businesses
+  schema: public
+object_relationships:
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+select_permissions:
+  - role: user
+    permission:
+      columns: [id, business_id, is_active, notes, created_at, updated_at]
+      filter:
+        is_active:
+          _eq: true
+  - role: client
+    permission:
+      columns: [id, business_id, is_active, created_at]
+      filter:
+        is_active:
+          _eq: true
+  - role: agent
+    permission:
+      columns: [id, business_id, is_active, created_at]
+      filter:
+        is_active:
+          _eq: true
+  - role: business
+    permission:
+      columns: [id, business_id, is_active, notes, created_at, updated_at]
+      filter:
+        business:
+          user_id:
+            _eq: X-Hasura-User-Id

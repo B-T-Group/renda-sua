@@ -159,11 +159,24 @@ describe('SessionStoreService', () => {
     });
   });
 
+  it('returns the successor when a just-rotated session is presented again', async () => {
+    const store = memoryStore();
+    await store.createSession('sid-old', sessionData({ familyId: 'fam-1' }));
+    const newId = await store.rotateSession('sid-old');
+
+    await expect(store.rotateSession('sid-old')).resolves.toBe(newId);
+    await expect(store.getSession(newId!)).resolves.toMatchObject({ userId: 'user-1' });
+  });
+
   it('treats reuse of a retired session as an attack and wipes the family', async () => {
     const store = memoryStore();
     await store.createSession('sid-old', sessionData({ familyId: 'fam-1' }));
     const newId = await store.rotateSession('sid-old');
-    expect(newId).toBeTruthy();
+    const retired = await store.getSession('sid-old');
+    await store.updateSession('sid-old', {
+      ...retired!,
+      retiredAt: Date.now() - 20_000,
+    });
 
     await expect(store.rotateSession('sid-old')).resolves.toBeNull();
     await expect(store.getSession('sid-old')).resolves.toBeNull();

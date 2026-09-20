@@ -11,6 +11,7 @@ describe('AgentReferralsService.creditAfterFirstDelivery', () => {
 
   const referringAgent = {
     id: 'ref-agent',
+    user_id: 'ref-user',
     user: {
       first_name: 'Ada',
       email: 'ada@x.com',
@@ -100,6 +101,7 @@ describe('AgentReferralsService.creditAfterFirstDelivery', () => {
       {
         kind: 'agent',
         agentId: 'ref-agent',
+        userId: 'ref-user',
         normalizedCode: 'ABC123',
         userEmail: 'ada@x.com',
         userFirstName: 'Ada',

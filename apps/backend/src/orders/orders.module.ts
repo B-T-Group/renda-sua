@@ -9,6 +9,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
 import { LocationsModule } from '../locations/locations.module';
 import { GoogleModule } from '../google/google.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { PaymentProgramsModule } from '../payment-programs/payment-programs.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
@@ -75,6 +76,7 @@ import { DepositRefundService } from './deposit-refund.service';
     ),
     MessagingModule,
     LoyaltyModule,
+    forwardRef(() => PaymentProgramsModule),
     AdminModule,
     AgentsModule,
     DeliveryModule,

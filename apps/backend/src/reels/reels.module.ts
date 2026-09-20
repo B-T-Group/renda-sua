@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AwsModule } from '../aws/aws.module';
 import { CatalogCacheModule } from '../catalog-cache/catalog-cache.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { ItemViewsModule } from '../item-views/item-views.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ReelAiReviewModule } from '../reel-ai-review/reel-ai-review.module';
 import { ReelAiTokensModule } from '../reel-ai-tokens/reel-ai-tokens.module';
@@ -21,6 +22,7 @@ import { ReelsService } from './reels.service';
     AwsModule,
     CatalogCacheModule,
     HasuraModule,
+    ItemViewsModule,
     NotificationsModule,
     ReelAiTokensModule,
     forwardRef(() => ReelAiReviewModule),

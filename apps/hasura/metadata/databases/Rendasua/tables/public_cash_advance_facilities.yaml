@@ -1,0 +1,96 @@
+table:
+  name: cash_advance_facilities
+  schema: public
+object_relationships:
+  - name: program
+    using:
+      foreign_key_constraint_on: program_id
+  - name: user
+    using:
+      manual_configuration:
+        column_mapping:
+          user_id: id
+        insertion_order: null
+        remote_table:
+          name: users
+          schema: public
+  - name: account
+    using:
+      foreign_key_constraint_on: account_id
+array_relationships:
+  - name: draws
+    using:
+      foreign_key_constraint_on:
+        column: facility_id
+        table:
+          name: cash_advance_draws
+          schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - program_id
+        - user_id
+        - account_id
+        - limit_amount
+        - currency
+        - status
+        - ends_at
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: client
+    permission:
+      columns:
+        - id
+        - program_id
+        - user_id
+        - account_id
+        - limit_amount
+        - currency
+        - status
+        - ends_at
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: agent
+    permission:
+      columns:
+        - id
+        - program_id
+        - user_id
+        - account_id
+        - limit_amount
+        - currency
+        - status
+        - ends_at
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true
+  - role: business
+    permission:
+      columns:
+        - id
+        - program_id
+        - user_id
+        - account_id
+        - limit_amount
+        - currency
+        - status
+        - ends_at
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true

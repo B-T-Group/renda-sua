@@ -14,6 +14,7 @@ describe('ReferralProvisioningService.runPostCommitEffects', () => {
   const agentReferral = {
     kind: 'agent' as const,
     agentId: 'ref-agent',
+    userId: 'ref-user',
     normalizedCode: 'ABC123',
     userEmail: 'a@x.com',
     userFirstName: 'Ada',

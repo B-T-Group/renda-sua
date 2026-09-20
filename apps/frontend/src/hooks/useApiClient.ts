@@ -41,6 +41,17 @@ function applyLongRunningTimeout(config: InternalAxiosRequestConfig) {
   }
 }
 
+async function resolveRequestToken(params: {
+  getValidToken?: () => Promise<string | null>;
+  getAccessToken: () => Promise<string | null>;
+}): Promise<string | null> {
+  if (params.getValidToken) {
+    const token = await params.getValidToken();
+    if (token) return token;
+  }
+  return params.getAccessToken();
+}
+
 /** Avoid stacking the global LoadingScreen on flows that already show inline loading. */
 function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -110,26 +121,18 @@ export const useApiClient = (): AxiosInstance => {
     });
 
     instance.interceptors.request.use(async (config) => {
-      if (isAuthenticated) {
-        try {
-          // Use token refresh context if available, otherwise fallback to direct Auth0 call
-          const token = getValidToken
-            ? await getValidToken()
-            : await getAccessToken();
-
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-            applyActiveContextHeaders(config.headers, token);
-          } else {
-            config.headers['X-Hasura-Role'] = 'anonymous';
-          }
-        } catch (error) {
-          console.error('Failed to get access token:', error);
-          // Fallback to anonymous role if token retrieval fails
+      try {
+        const token = isAuthenticated
+          ? await resolveRequestToken({ getValidToken, getAccessToken })
+          : await getAccessToken({ refresh: false });
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+          applyActiveContextHeaders(config.headers, token);
+        } else {
           config.headers['X-Hasura-Role'] = 'anonymous';
         }
-      } else {
-        // Not authenticated, use anonymous role
+      } catch (error) {
+        console.error('Failed to get access token:', error);
         config.headers['X-Hasura-Role'] = 'anonymous';
       }
 

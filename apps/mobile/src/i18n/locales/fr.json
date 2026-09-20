@@ -1866,7 +1866,7 @@
       }
     },
     "referrals": {
-      "referralCodeLabel": "Code de l'agent (optionnel)",
+      "referralCodeLabel": "Code de parrainage (optionnel)",
       "referralCodeHelp": "Entrez le code à 6 caractères de l'agent Rendasua qui vous a recommandé.",
       "invalidCodeLength": "Le code de parrainage doit comporter 6 caractères.",
       "sideCashTitle": "Gagnez en plus — parrainez des commerces",
@@ -4043,11 +4043,11 @@
     }
   },
   "referrals": {
-    "haveCodeLink": "Saisir le code de l'agent qui vous a recommandé",
+    "haveCodeLink": "Saisir un code de parrainage",
     "haveCodeHint": "Facultatif — 6 caractères de l'agent Rendasua qui vous a invité",
-    "codeApplied": "Code de l'agent : {{code}}",
+    "codeApplied": "Code de parrainage : {{code}}",
     "changeCode": "Modifier",
-    "enterCodeTitle": "Code de l'agent qui vous a recommandé",
+    "enterCodeTitle": "Code de parrainage",
     "yourCode": "Votre code de parrainage",
     "copyCode": "Copier le code",
     "copied": "Copié !",

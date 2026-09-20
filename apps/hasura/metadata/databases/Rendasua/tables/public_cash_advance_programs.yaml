@@ -1,0 +1,11 @@
+table:
+  name: cash_advance_programs
+  schema: public
+array_relationships:
+  - name: facilities
+    using:
+      foreign_key_constraint_on:
+        column: program_id
+        table:
+          name: cash_advance_facilities
+          schema: public

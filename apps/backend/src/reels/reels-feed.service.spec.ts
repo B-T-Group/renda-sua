@@ -10,13 +10,22 @@ describe('ReelsFeedService', () => {
     set: jest.fn(),
   };
 
+  const itemViews = {
+    trackView: jest.fn(),
+  };
+
   let service: ReelsFeedService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     catalogCache.get.mockResolvedValue(null);
     catalogCache.set.mockResolvedValue(undefined);
-    service = new ReelsFeedService(hasura as never, catalogCache as never);
+    itemViews.trackView.mockResolvedValue(undefined);
+    service = new ReelsFeedService(
+      hasura as never,
+      catalogCache as never,
+      itemViews as never
+    );
   });
 
   function itemReel(overrides: Partial<FeedReel> = {}): FeedReel {
@@ -75,7 +84,7 @@ describe('ReelsFeedService', () => {
       expect(hasura.executeQuery).toHaveBeenNthCalledWith(
         3,
         expect.stringContaining('business_inventory'),
-        { itemIds: ['item-1'] }
+        { itemIds: ['item-1'], country: 'CM' }
       );
     });
 
@@ -88,13 +97,20 @@ describe('ReelsFeedService', () => {
       expect(page.items[0].purchasable).toBe(false);
     });
 
-    it('still returns inventory id when country mismatches, but not purchasable', async () => {
+    it('drops reels whose market does not match the requested country', async () => {
       mockAnonymousCountryFeed([itemReel()], [inventoryRow('inv-1')]);
 
       const page = await service.getFeed({ country: 'CA' });
 
-      expect(page.items[0].inventoryItemId).toBe('inv-1');
-      expect(page.items[0].purchasable).toBe(false);
+      expect(page.items).toEqual([]);
+      expect(hasura.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('RankedReelCandidates'),
+        expect.objectContaining({
+          where: expect.objectContaining({
+            market_country: { _eq: 'CA' },
+          }),
+        })
+      );
     });
 
     it('uses the first inventory row for a business+item key', async () => {
@@ -158,6 +174,13 @@ describe('ReelsFeedService', () => {
   });
 
   describe('getFeed paging and session', () => {
+    it('returns an empty feed when country is missing', async () => {
+      const page = await service.getFeed({});
+
+      expect(page).toEqual({ items: [], nextCursor: null });
+      expect(hasura.executeQuery).not.toHaveBeenCalled();
+    });
+
     it('filters the ranked feed to active approved ready reels', async () => {
       hasura.executeQuery.mockResolvedValueOnce({ reels: [] });
 
@@ -171,6 +194,7 @@ describe('ReelsFeedService', () => {
             moderation_status: { _eq: 'approved' },
             processing_status: { _eq: 'ready' },
             deleted_at: { _is_null: true },
+            market_country: { _eq: 'CM' },
           }),
         })
       );
@@ -179,7 +203,7 @@ describe('ReelsFeedService', () => {
     it('loads a candidate pool then pages by relevance offset', async () => {
       hasura.executeQuery.mockResolvedValueOnce({ reels: [] });
 
-      await service.getFeed({ limit: 99, cursor: 'nope' });
+      await service.getFeed({ country: 'CM', limit: 99, cursor: 'nope' });
 
       expect(hasura.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining('RankedReelCandidates'),
@@ -224,6 +248,7 @@ describe('ReelsFeedService', () => {
 
       await service.getFeed({
         ctx: { userId: 'anonymous' } as never,
+        country: 'CM',
       });
 
       expect(hasura.executeQuery).toHaveBeenCalledTimes(1);
@@ -403,9 +428,32 @@ describe('ReelsFeedService', () => {
     const reelId = '11111111-1111-4111-8111-111111111111';
     const userId = '22222222-2222-4222-8222-222222222222';
 
+    function itemSubject(subjectType: string) {
+      return {
+        id: reelId,
+        subject_type: subjectType,
+        subject_id: 'item-1',
+        business_id: 'biz-1',
+        market_country: 'CM',
+      };
+    }
+
+    function mockItemSubject(subjectType: string) {
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('reels_by_pk')) {
+          return { reels_by_pk: itemSubject(subjectType) };
+        }
+        if (query.includes('business_inventory')) {
+          return { business_inventory: [inventoryRow('inv-1')] };
+        }
+        return {};
+      });
+    }
+
     it('ignores watches below the 3s threshold', async () => {
       await service.recordView({ reelId, watchTimeMs: 2999 });
       expect(hasura.executeMutation).not.toHaveBeenCalled();
+      expect(itemViews.trackView).not.toHaveBeenCalled();
     });
 
     it('skips tracking when the reel id is not a UUID', async () => {
@@ -493,6 +541,7 @@ describe('ReelsFeedService', () => {
         service.recordView({ reelId, watchTimeMs: 4000 })
       ).resolves.toBeUndefined();
       expect(hasura.executeMutation).toHaveBeenCalledTimes(1);
+      expect(itemViews.trackView).not.toHaveBeenCalled();
     });
 
     it('rethrows unexpected Hasura errors', async () => {
@@ -502,6 +551,73 @@ describe('ReelsFeedService', () => {
       await expect(
         service.recordView({ reelId, watchTimeMs: 4000 })
       ).rejects.toThrow('network down');
+      expect(itemViews.trackView).not.toHaveBeenCalled();
+    });
+
+    it('records a product view for an item-subject reel', async () => {
+      mockItemSubject('item');
+      hasura.executeMutation.mockResolvedValue({});
+
+      await service.recordView({ reelId, userId, watchTimeMs: 4000 });
+
+      expect(itemViews.trackView).toHaveBeenCalledWith('inv-1', 'user', userId);
+      expect(hasura.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('business_inventory'),
+        expect.objectContaining({ country: 'CM', itemIds: ['item-1'] })
+      );
+    });
+
+    it('uses the session id as an anonymous product viewer', async () => {
+      mockItemSubject('item');
+      hasura.executeMutation.mockResolvedValue({});
+
+      await service.recordView({
+        reelId,
+        sessionId: 'sess-1',
+        watchTimeMs: 4000,
+      });
+
+      expect(itemViews.trackView).toHaveBeenCalledWith('inv-1', 'anon', 'sess-1');
+    });
+
+    it.each(['rental', 'business'])(
+      'does not record a product view for %s reels',
+      async (subjectType) => {
+        mockItemSubject(subjectType);
+        hasura.executeMutation.mockResolvedValue({});
+
+        await service.recordView({ reelId, userId, watchTimeMs: 4000 });
+
+        expect(itemViews.trackView).not.toHaveBeenCalled();
+        expect(
+          hasura.executeQuery.mock.calls.some((c) =>
+            String(c[0]).includes('business_inventory')
+          )
+        ).toBe(false);
+      }
+    );
+
+    it('skips the product view when inventory cannot be resolved', async () => {
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('reels_by_pk')) return { reels_by_pk: itemSubject('item') };
+        if (query.includes('business_inventory')) return { business_inventory: [] };
+        return {};
+      });
+      hasura.executeMutation.mockResolvedValue({});
+
+      await service.recordView({ reelId, userId, watchTimeMs: 4000 });
+
+      expect(itemViews.trackView).not.toHaveBeenCalled();
+    });
+
+    it('skips the product view when the watcher has no identity', async () => {
+      mockItemSubject('item');
+      hasura.executeMutation.mockResolvedValue({});
+
+      await service.recordView({ reelId, watchTimeMs: 4000 });
+
+      expect(hasura.executeMutation).toHaveBeenCalled();
+      expect(itemViews.trackView).not.toHaveBeenCalled();
     });
   });
 

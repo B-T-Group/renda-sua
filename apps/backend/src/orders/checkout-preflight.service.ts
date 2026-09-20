@@ -8,7 +8,7 @@
  * All business rules here must stay aligned with OrdersService.createOrder.
  * If you change a rule in one, change it in both.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
@@ -17,6 +17,7 @@ import { toPublicDeliveryAvailability } from '../delivery-availability/delivery-
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { PurchaseCreditsService } from '../payment-programs/purchase-credits.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
 import { StripeConfig, Configuration } from '../config/configuration';
@@ -152,8 +153,73 @@ export class CheckoutPreflightService {
     private readonly metaConversionsService: MetaConversionsService,
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
     private readonly fxEstimateService: FxEstimateService,
-    private readonly depositCalculationService: DepositCalculationService
+    private readonly depositCalculationService: DepositCalculationService,
+    @Optional()
+    private readonly purchaseCreditsService?: PurchaseCreditsService
   ) {}
+
+  private async safeUserId(): Promise<string | null> {
+    try {
+      const user = await this.hasuraUserService.getUser();
+      return user?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async previewPurchaseCredits(
+    userId: string | null,
+    groups: Array<{ business_id: string; subtotal: number; currency?: string }>
+  ): Promise<{
+    total: number;
+    currency: string;
+    allocations: Array<{
+      amount: number;
+      applicability: string;
+      businessId: string | null;
+    }>;
+  } | null> {
+    if (!userId || !this.purchaseCreditsService || groups.length === 0) return null;
+    const currency = groups[0].currency;
+    if (!currency) return null;
+    const lines = groups.map((group) => ({
+      businessId: group.business_id,
+      subtotal: Number(group.subtotal || 0),
+    }));
+    const maxTotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
+    if (maxTotal <= 0) return null;
+    const plan = await this.purchaseCreditsService.plan({
+      userId,
+      currency,
+      lines,
+      maxTotal,
+    });
+    return {
+      total: plan.total,
+      currency,
+      allocations: plan.allocations.map((row) => ({
+        amount: row.amount,
+        applicability: row.applicability,
+        businessId: row.businessId,
+      })),
+    };
+  }
+
+  private walletCoversDue(
+    paymentTiming: string | undefined,
+    walletBalance: number,
+    gross: number,
+    discount: number,
+    credits: number
+  ): boolean {
+    if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
+      return false;
+    }
+    const payable = Math.max(0, Number((gross - discount).toFixed(2)));
+    const applied = Math.min(Math.max(0, credits), payable);
+    const due = Math.max(0, Number((payable - applied).toFixed(2)));
+    return walletBalance >= due;
+  }
 
   async resolve(
     dto: CheckoutPreflightDto,
@@ -829,6 +895,26 @@ export class CheckoutPreflightService {
       }
     }
 
+    const purchaseCredits = await this.previewPurchaseCredits(
+      isAuthenticated ? await this.safeUserId() : null,
+      groups
+    );
+    if (walletBalance != null && canPayWithWallet != null) {
+      const gross = groups.reduce((sum, group) => sum + Number(group.total || 0), 0);
+      const discount = discountPreview?.valid
+        ? Number(discountPreview.discount_amount || 0)
+        : 0;
+      canPayWithWallet =
+        gross > 0 &&
+        this.walletCoversDue(
+          dto.payment_timing,
+          walletBalance,
+          gross,
+          discount,
+          purchaseCredits?.total ?? 0
+        );
+    }
+
     // -----------------------------------------------------------------------
     // 11. Assemble response
     // -----------------------------------------------------------------------
@@ -871,6 +957,7 @@ export class CheckoutPreflightService {
       buyer_rail: buyerRail,
       can_pay_with_wallet: canPayWithWallet,
       wallet_balance: walletBalance,
+      purchase_credits: purchaseCredits,
       requires_address_for_payment: this.needsShipToAddress(fulfillment),
       requires_payment_phone: requiresPaymentPhoneOverall,
       stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
@@ -1146,6 +1233,7 @@ export class CheckoutPreflightService {
       buyer_rail: null,
       can_pay_with_wallet: null,
       wallet_balance: null,
+      purchase_credits: null,
       requires_address_for_payment: dto.fulfillment_method !== 'pickup',
       requires_payment_phone: false,
       stripe_retry_unsupported: true,

@@ -16,8 +16,6 @@ export function buildSignupPayload({
 }: BuildSignupPayloadInput): SignupStartPayload {
   const personas = [...new Set(values.personas)];
   const hasBusiness = personas.includes('business');
-  const hasAgentOrBusiness =
-    hasBusiness || personas.includes('agent');
   const trimmedReferral = values.business.referralAgentCode.trim();
   const trimmedEmail = values.contact.email.trim().toLowerCase();
 
@@ -51,7 +49,7 @@ export function buildSignupPayload({
     };
   }
 
-  if (hasAgentOrBusiness && trimmedReferral) {
+  if (trimmedReferral) {
     payload.referral_agent_code = trimmedReferral.toUpperCase();
   }
 

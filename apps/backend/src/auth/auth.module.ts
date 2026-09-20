@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AddressesModule } from '../addresses/addresses.module';
@@ -10,6 +10,7 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MobilePaymentPhoneSeedModule } from '../mobile-payment-phones/mobile-payment-phone-seed.module';
+import { PaymentProgramsModule } from '../payment-programs/payment-programs.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { AuthGuard } from './auth.guard';
 import { Auth0Service } from './auth0.service';
@@ -39,6 +40,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     LaunchPromoModule,
     MobilePaymentPhoneSeedModule,
     MetaConversionsModule,
+    forwardRef(() => PaymentProgramsModule),
   ],
   controllers: [SignupController, LoginController, Auth0ActionsController],
   providers: [

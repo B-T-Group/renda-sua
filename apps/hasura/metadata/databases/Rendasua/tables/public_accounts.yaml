@@ -50,6 +50,7 @@ select_permissions:
         - currency
         - available_balance
         - withheld_balance
+        - cash_advance_balance
         - total_balance
         - is_active
         - created_at
@@ -67,6 +68,7 @@ select_permissions:
         - currency
         - available_balance
         - withheld_balance
+        - cash_advance_balance
         - total_balance
         - is_active
         - created_at
@@ -84,6 +86,7 @@ select_permissions:
         - currency
         - available_balance
         - withheld_balance
+        - cash_advance_balance
         - total_balance
         - is_active
         - created_at
@@ -101,6 +104,7 @@ select_permissions:
         - currency
         - available_balance
         - withheld_balance
+        - cash_advance_balance
         - total_balance
         - is_active
         - created_at

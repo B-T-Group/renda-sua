@@ -1,0 +1,19 @@
+table:
+  name: credit_campaign_grants
+  schema: public
+object_relationships:
+  - name: campaign
+    using:
+      foreign_key_constraint_on: campaign_id
+  - name: signup_user
+    using:
+      foreign_key_constraint_on: signup_user_id
+  - name: beneficiary
+    using:
+      manual_configuration:
+        column_mapping:
+          beneficiary_user_id: id
+        insertion_order: null
+        remote_table:
+          name: users
+          schema: public

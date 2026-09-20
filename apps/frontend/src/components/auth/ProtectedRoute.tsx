@@ -12,9 +12,9 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isLoading } = useAuth0();
-  const { isAuthenticated, user } = useSessionAuth();
+  const { isAuthenticated, isSessionReady, user } = useSessionAuth();
 
-  if (isLoading) {
+  if (isLoading || !isSessionReady) {
     return <LoadingPage message="Authenticating" />;
   }
 

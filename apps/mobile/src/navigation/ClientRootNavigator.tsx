@@ -44,6 +44,7 @@ import CartCheckoutScreen from '../screens/client/CartCheckoutScreen';
 import ClientOrderDetailScreen from '../screens/client/ClientOrderDetailScreen';
 import UserOrderMessagesScreen from '../screens/shared/UserOrderMessagesScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
+import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
 import RentalRequestSubmittedScreen from '../screens/client/RentalRequestSubmittedScreen';
 import ClientMyRentalsScreen from '../screens/client/ClientMyRentalsScreen';
@@ -418,6 +419,11 @@ export function ClientRootNavigator() {
           name="ClientAccounts"
           component={UserAccountsScreen}
           options={{ title: t('client.accounts.navTitle', 'Wallet') }}
+        />
+        <ClientRootStack.Screen
+          name="UserPaymentPrograms"
+          component={UserPaymentProgramsScreen}
+          options={{ title: t('accounts.walletHub.title', 'Wallet programs') }}
         />
         <ClientRootStack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil' }} />
         <ClientRootStack.Screen

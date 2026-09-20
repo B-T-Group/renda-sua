@@ -88,8 +88,32 @@ describe('LoginController session cookie and CSRF gates', () => {
       expect.objectContaining({
         httpOnly: true,
         sameSite: 'lax',
+        secure: false,
         path: '/',
       })
+    );
+  });
+
+  it('sets SameSite=None on HTTPS so localhost can refresh', async () => {
+    loginService.verifyLoginOtp.mockResolvedValue({
+      sessionId: 'sid-1',
+      response: { success: true, verified: true, access_token: 'a' },
+    });
+    const res = mockRes();
+    await controller.verifyOtp(
+      { email: 'a@b.com', otp: '1234' },
+      'web',
+      {
+        ip: '9.9.9.9',
+        secure: true,
+        headers: { 'user-agent': 'jest', 'x-forwarded-proto': 'https' },
+      } as never,
+      res as never
+    );
+    expect(res.cookie).toHaveBeenCalledWith(
+      'rs_session',
+      'sid-1',
+      expect.objectContaining({ sameSite: 'none', secure: true })
     );
   });
 

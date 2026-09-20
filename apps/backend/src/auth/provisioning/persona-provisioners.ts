@@ -13,6 +13,8 @@ export interface PersonaInsertContext {
   agent_referral_agent_id?: string;
   agent_referral_business_id?: string;
   agent_referral_code_used?: string;
+  client_referral_code_used?: string;
+  client_referred_by_user_id?: string;
   /** Full store location — nested under business when present and not country-only. */
   storeAddress?: NormalizedSignupAddress;
 }
@@ -32,10 +34,25 @@ function buildClientFragment(
   ctx: PersonaInsertContext
 ): PersonaInsertFragment | null {
   if (!ctx.personas.includes('client')) return null;
+  if (!ctx.client_referred_by_user_id || !ctx.client_referral_code_used) {
+    return {
+      varDecls: [],
+      vars: {},
+      objectField: 'client: { data: {} }',
+      returnSel: 'client { id user_id created_at updated_at }',
+    };
+  }
   return {
-    varDecls: [],
-    vars: {},
-    objectField: 'client: { data: {} }',
+    varDecls: [
+      '$client_referred_by_user_id: uuid!',
+      '$client_referral_code_used: String!',
+    ],
+    vars: {
+      client_referred_by_user_id: ctx.client_referred_by_user_id,
+      client_referral_code_used: ctx.client_referral_code_used,
+    },
+    objectField:
+      'client: { data: { referred_by_user_id: $client_referred_by_user_id, referral_code_used: $client_referral_code_used } }',
     returnSel: 'client { id user_id created_at updated_at }',
   };
 }

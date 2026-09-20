@@ -1,0 +1,39 @@
+table:
+  name: purchase_credit_redemptions
+  schema: public
+object_relationships:
+  - name: grant
+    using:
+      foreign_key_constraint_on: grant_id
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+select_permissions:
+  - role: user
+    permission:
+      columns: [id, grant_id, order_id, amount, created_at]
+      filter:
+        grant:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns: [id, grant_id, order_id, amount, created_at]
+      filter:
+        grant:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns: [id, grant_id, order_id, amount, created_at]
+      filter:
+        grant:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns: [id, grant_id, order_id, amount, created_at]
+      filter:
+        grant:
+          user_id:
+            _eq: X-Hasura-User-Id

@@ -16,10 +16,13 @@ export function useReelsFeed(country?: string) {
   const sessionRef = useRef(sessionId);
   const exhaustedRef = useRef(false);
   const hasLoadedRef = useRef(false);
+  const requestRef = useRef(0);
 
   const load = useCallback(
     async (reset = false) => {
+      if (!country) return;
       if (!reset && exhaustedRef.current) return;
+      const requestId = reset ? ++requestRef.current : requestRef.current;
       const isPullRefresh = reset && hasLoadedRef.current;
       if (reset) {
         if (isPullRefresh) setRefreshing(true);
@@ -40,13 +43,16 @@ export function useReelsFeed(country?: string) {
           limit: 10,
           sessionId: sessionRef.current,
         });
+        if (requestId !== requestRef.current) return;
         cursorRef.current = data.nextCursor;
         if (!data.nextCursor) exhaustedRef.current = true;
         setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
         hasLoadedRef.current = true;
       } catch (e: unknown) {
+        if (requestId !== requestRef.current) return;
         setError(e instanceof Error ? e.message : 'Failed to load reels');
       } finally {
+        if (requestId !== requestRef.current) return;
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
@@ -56,8 +62,11 @@ export function useReelsFeed(country?: string) {
   );
 
   useEffect(() => {
+    if (!country) return;
+    setItems([]);
+    hasLoadedRef.current = false;
     void load(true);
-  }, [load]);
+  }, [country, load]);
 
   const loadMore = useCallback(() => {
     if (loadingMore || loading || refreshing || exhaustedRef.current) return;

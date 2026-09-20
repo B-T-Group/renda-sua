@@ -24,6 +24,27 @@ describe('buildSignupPayload', () => {
     expect(payload.country).toBe('CM');
     expect(payload.personas).toEqual(['client']);
     expect(payload.profile.name).toBeUndefined();
+    expect(payload.referral_agent_code).toBeUndefined();
+  });
+
+  it('sends a referral code for a client signup', () => {
+    const payload = buildSignupPayload({
+      ...DEFAULT_SIGNUP_VALUES,
+      contact: {
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@b.com',
+        phone: '+1234567890',
+      },
+      personas: ['client'],
+      country: 'CM',
+      business: {
+        ...DEFAULT_SIGNUP_VALUES.business,
+        referralAgentCode: 'ab12cd',
+      },
+    });
+    expect(payload.referral_agent_code).toBe('AB12CD');
+    expect(payload.store_location).toBeUndefined();
   });
 
   it('includes store_location and business profile when business selected', () => {

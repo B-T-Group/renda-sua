@@ -69,6 +69,8 @@ insert_permissions:
         - user_id
         - created_at
         - updated_at
+        - referral_code_used
+        - referred_by_user_id
   - role: business
     permission:
       check: {}
@@ -77,6 +79,8 @@ insert_permissions:
         - user_id
         - created_at
         - updated_at
+        - referral_code_used
+        - referred_by_user_id
   - role: client
     permission:
       check:
@@ -93,6 +97,8 @@ insert_permissions:
         - user_id
         - created_at
         - updated_at
+        - referral_code_used
+        - referred_by_user_id
 select_permissions:
   - role: agent
     permission:
@@ -101,6 +107,8 @@ select_permissions:
         - user_id
         - created_at
         - updated_at
+        - referral_code_used
+        - referred_by_user_id
       filter:
         user:
           id:
@@ -112,6 +120,8 @@ select_permissions:
         - user_id
         - created_at
         - updated_at
+        - referral_code_used
+        - referred_by_user_id
       filter:
         orders:
           business:
@@ -125,6 +135,8 @@ select_permissions:
         - user_id
         - created_at
         - updated_at
+        - referral_code_used
+        - referred_by_user_id
       filter:
         user:
           id:
@@ -136,6 +148,8 @@ select_permissions:
         - user_id
         - created_at
         - updated_at
+        - referral_code_used
+        - referred_by_user_id
       filter:
         user:
           id:

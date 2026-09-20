@@ -103,7 +103,7 @@ describe('AccountsService', () => {
       ).resolves.toEqual({ id: 'dep-1' });
 
       const [query, variables] = executeQuery.mock.calls[0];
-      expect(String(query)).toContain('transaction_type: { _eq: "deposit" }');
+      expect(String(query)).toContain('cash_advance_repayment');
       expect(variables).toEqual({ accountId, referenceId });
     });
 
@@ -137,7 +137,7 @@ describe('AccountsService', () => {
   describe('registerDepositIfNotExists', () => {
     it('skips insert when a deposit already exists for the reference', async () => {
       executeQuery.mockResolvedValue({
-        account_transactions: [{ id: 'dep-1' }],
+        account_transactions: [{ id: 'dep-1', amount: 125 }],
       });
 
       await expect(
@@ -184,6 +184,37 @@ describe('AccountsService', () => {
         alreadyExists: false,
         transactionId: 'tx-new',
       });
+    });
+
+    it('credits only the remainder when a repayment leg already exists', async () => {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('SumAppliedDeposit')) {
+          return { account_transactions: [{ amount: 400 }] };
+        }
+        if (query.includes('GetAccountById')) {
+          return { accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 } };
+        }
+        return { account_transactions: [] };
+      });
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx-rest' } };
+        }
+        return { update_accounts_by_pk: { id: accountId } };
+      });
+
+      const result = await service.registerDepositIfNotExists({
+        accountId,
+        amount: 1000,
+        memo: 'top-up',
+        referenceId,
+      });
+
+      expect(result.success).toBe(true);
+      const insert = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('InsertTransaction')
+      );
+      expect(insert?.[1]).toMatchObject({ amount: 600, transactionType: 'deposit' });
     });
   });
 
@@ -259,6 +290,7 @@ describe('AccountsService', () => {
           available: 1250,
           withheld: 200,
           total: 1450,
+          cashAdvance: 0,
         },
       });
 
@@ -280,7 +312,20 @@ describe('AccountsService', () => {
         accountId,
         availableBalance: 1250,
         withheldBalance: 200,
+        cashAdvanceBalance: 0,
       });
+    });
+
+    it('lets a flagged payment drive available balance negative', async () => {
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 1001,
+        transactionType: 'payment',
+        allowNegative: true,
+        memo: 'Scheduled payment source',
+      });
+      expect(result.success).toBe(true);
+      expect(result.newBalance?.available).toBe(-1);
     });
 
     it('rejects withdrawals that exceed available funds', async () => {
@@ -312,6 +357,21 @@ describe('AccountsService', () => {
           total: 1200,
         },
       });
+    });
+
+    it('repays a negative cash advance before the remainder becomes available', async () => {
+      mockAccount({ ...activeAccount, cash_advance_balance: -400 });
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 1000,
+        transactionType: 'deposit',
+        memo: 'top-up',
+      });
+      expect(result.success).toBe(true);
+      const types = executeMutation.mock.calls
+        .filter(([mutation]) => String(mutation).includes('InsertTransaction'))
+        .map(([, vars]) => vars.transactionType);
+      expect(types).toEqual(['cash_advance_repayment', 'deposit']);
     });
 
     it('rejects release when withheld balance is insufficient', async () => {

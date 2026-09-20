@@ -21,6 +21,15 @@ export interface SessionData {
   ipAddress?: string;
   familyId?: string;
   retired?: boolean;
+  retiredAt?: number;
+  rotatedTo?: string;
+}
+
+const ROTATION_GRACE_MS = 15_000;
+
+function isRecentRotation(data: SessionData): boolean {
+  if (!data.rotatedTo || !data.retiredAt) return false;
+  return Date.now() - data.retiredAt < ROTATION_GRACE_MS;
 }
 
 @Injectable()
@@ -29,6 +38,7 @@ export class SessionStoreService implements OnModuleDestroy {
   private redisClient: RedisClientType | null = null;
   private redisUnhealthy = false;
   private readonly inMemoryStore = new Map<string, string>();
+  private readonly rotationLocks = new Map<string, Promise<string | null>>();
   private readonly encryptionKey: Buffer;
   private readonly SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
   private readonly ALGORITHM = 'aes-256-gcm';
@@ -310,37 +320,60 @@ export class SessionStoreService implements OnModuleDestroy {
   }
 
   async rotateSession(oldSessionId: string): Promise<string | null> {
+    const inflight = this.rotationLocks.get(oldSessionId);
+    if (inflight) return inflight;
+    const run = this.rotateUnlocked(oldSessionId);
+    this.rotationLocks.set(oldSessionId, run);
+    void run.finally(() => this.rotationLocks.delete(oldSessionId));
+    return run;
+  }
+
+  private async rotateUnlocked(oldSessionId: string): Promise<string | null> {
     const oldData = await this.getSession(oldSessionId);
-    if (!oldData) {
-      return null;
-    }
+    if (!oldData) return null;
+    if (oldData.retired) return this.resolveRetiredReuse(oldSessionId, oldData);
+    return this.issueRotatedSession(oldSessionId, oldData);
+  }
 
-    // Check if this session was already retired (potential reuse attack)
-    if (oldData.retired) {
-      this.logger.warn(`Session reuse detected for session ${oldSessionId.slice(0, 8)}... - invalidating family`);
-      
-      // Invalidate all sessions in this family
-      const familyId = oldData.familyId || oldSessionId;
-      await this.invalidateSessionFamily(familyId);
-      
-      return null;
-    }
+  private async resolveRetiredReuse(
+    sessionId: string,
+    oldData: SessionData
+  ): Promise<string | null> {
+    if (isRecentRotation(oldData)) return oldData.rotatedTo ?? null;
+    this.logger.warn(`Session reuse detected for session ${sessionId.slice(0, 8)}...`);
+    await this.invalidateSessionFamily(oldData.familyId || sessionId);
+    return null;
+  }
 
+  private async issueRotatedSession(
+    oldSessionId: string,
+    oldData: SessionData
+  ): Promise<string> {
     const newSessionId = this.generateSessionId();
     const familyId = oldData.familyId || oldSessionId;
-
-    // Mark old session as retired
-    await this.updateSession(oldSessionId, { ...oldData, retired: true });
-
-    // Create new session with same family
+    await this.retireSession(oldSessionId, oldData, familyId, newSessionId);
     await this.createSession(newSessionId, {
       ...oldData,
       familyId,
       retired: false,
       lastRefreshedAt: Date.now(),
     });
-
     return newSessionId;
+  }
+
+  private async retireSession(
+    oldSessionId: string,
+    oldData: SessionData,
+    familyId: string,
+    newSessionId: string
+  ): Promise<void> {
+    await this.updateSession(oldSessionId, {
+      ...oldData,
+      familyId,
+      retired: true,
+      retiredAt: Date.now(),
+      rotatedTo: newSessionId,
+    });
   }
 
   private async invalidateSessionFamily(familyId: string): Promise<void> {

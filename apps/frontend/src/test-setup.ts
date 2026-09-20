@@ -31,6 +31,7 @@ jest.mock('./contexts/SessionAuthContext', () => ({
   SessionAuthProvider: ({ children }: { children: unknown }) => children,
   useSessionAuth: () => ({
     isAuthenticated: true,
+    isSessionReady: true,
     user: { sub: 'auth0|test-user', email: 'test@example.com' },
     getAccessToken: jest.fn().mockResolvedValue('test-token'),
     logout: jest.fn().mockResolvedValue(undefined),

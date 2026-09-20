@@ -29,6 +29,8 @@ function inferPersonaForMessage(
     case 'business_referral_review':
     case 'agent':
       return 'agent';
+    case 'account':
+      return active;
     case 'sale_item':
     case 'business':
     case 'rental_listing':
@@ -311,6 +313,15 @@ export function useNotificationNavigation(): (msg: UserMessage) => NotificationN
                   typeof payload.body_fr === 'string' ? payload.body_fr : undefined,
               });
             },
+          };
+        }
+
+        case 'account': {
+          return {
+            label: 'wallet',
+            navigate: withPersona(targetPersona, () =>
+              navigation.navigate('UserPaymentPrograms')
+            ),
           };
         }
 

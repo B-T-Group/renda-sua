@@ -1,0 +1,36 @@
+table:
+  name: cash_advance_draws
+  schema: public
+object_relationships:
+  - name: facility
+    using:
+      foreign_key_constraint_on: facility_id
+select_permissions:
+  - role: user
+    permission:
+      columns: [id, facility_id, amount, transaction_id, created_at]
+      filter:
+        facility:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns: [id, facility_id, amount, transaction_id, created_at]
+      filter:
+        facility:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: agent
+    permission:
+      columns: [id, facility_id, amount, transaction_id, created_at]
+      filter:
+        facility:
+          user_id:
+            _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns: [id, facility_id, amount, transaction_id, created_at]
+      filter:
+        facility:
+          user_id:
+            _eq: X-Hasura-User-Id

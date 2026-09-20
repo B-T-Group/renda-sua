@@ -99,7 +99,7 @@ export class AgentReferralsService {
     agent_referral_business_id?: string;
     agent_referral_code_used?: string;
   } {
-    if (!resolved) return {};
+    if (!resolved || resolved.kind === 'user') return {};
     if (resolved.kind === 'agent') {
       return {
         agent_referral_agent_id: resolved.agentId,
@@ -138,6 +138,7 @@ export class AgentReferralsService {
   ): Promise<void> {
     if (!countryCode) return;
     const throwOnFailure = options?.swallowErrors === false;
+    if (resolved.kind === 'user') return;
     try {
       if (resolved.kind === 'agent') {
         const earnerUserId = await this.getAgentUserId(resolved.agentId);
@@ -344,6 +345,7 @@ export class AgentReferralsService {
           user { first_name last_name }
           referring_agent {
             id
+            user_id
             user { first_name email preferred_language }
           }
           referring_business {
@@ -374,13 +376,14 @@ export class AgentReferralsService {
   }
 
   private resolvedAgentReferrer(
-    agent: { id: string; user?: any },
+    agent: { id: string; user_id?: string; user?: any },
     code: string
   ): ResolvedBusinessReferral {
     const user = agent.user || {};
     return {
       kind: 'agent',
       agentId: agent.id,
+      userId: agent.user_id || user.id || '',
       normalizedCode: code,
       userEmail: user.email ?? '',
       userFirstName: user.first_name ?? '',

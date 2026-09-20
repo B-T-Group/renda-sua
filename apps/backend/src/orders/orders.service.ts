@@ -10,6 +10,8 @@ import { assertMobileLocationConsentAccepted } from '../agents/agent-location-cl
 import { CommerceOrderInventoryHook } from '../commerce-integrations/commerce-order-inventory.hook';
 import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import { CreditsService } from '../credits/credits.service';
+import { PurchaseCreditsService } from '../payment-programs/purchase-credits.service';
+import type { CreditAllocation, CreditLine } from '../payment-programs/purchase-credit.allocator';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -525,7 +527,9 @@ export class OrdersService {
     @Optional()
     private readonly representativeCompensationService?: RepresentativeCompensationService,
     @Optional()
-    private readonly creditsService?: CreditsService
+    private readonly creditsService?: CreditsService,
+    @Optional()
+    private readonly purchaseCreditsService?: PurchaseCreditsService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -8625,6 +8629,11 @@ export class OrdersService {
     notes?: string
   ): Promise<void> {
     try {
+      await this.purchaseCreditsService?.restore(orderId);
+    } catch (error: any) {
+      this.logger.warn(`Purchase credit restore failed for ${orderId}: ${error?.message}`);
+    }
+    try {
       const orderItems = order.order_items || [];
       await this.updateReservedQuantities(orderItems, 'decrement');
     } catch (error: any) {
@@ -9599,6 +9608,22 @@ export class OrdersService {
     });
   }
 
+  private purchaseCreditLines(
+    lineContexts: Array<{ inventory: any; variant: any | null }>,
+    items: Array<{ quantity: number }>,
+    dealsMap: Record<string, any>
+  ): CreditLine[] {
+    return lineContexts.map((ctx, idx) => ({
+      businessId: ctx.inventory.business_location.business_id,
+      subtotal:
+        this.computeUnitPriceFromVariantOrInventory(
+          ctx.inventory,
+          ctx.variant,
+          dealsMap[ctx.inventory.id]
+        ) * items[idx].quantity,
+    }));
+  }
+
   /**
    * Create a new order with validation and fund withholding
    */
@@ -10133,6 +10158,21 @@ export class OrdersService {
       total_amount = Math.max(0, total_amount - discountAmount);
     }
 
+    let depositBaseAmount = total_amount;
+    let plannedCreditAllocations: CreditAllocation[] = [];
+    if (this.purchaseCreditsService && totalAmount > 0 && total_amount > 0) {
+      const creditPlan = await this.purchaseCreditsService.plan({
+        userId: user.id,
+        currency,
+        lines: this.purchaseCreditLines(lineContexts, orderData.items, dealsMap),
+        maxTotal: Math.min(totalAmount, total_amount),
+      });
+      if (creditPlan.total > 0) {
+        plannedCreditAllocations = creditPlan.allocations;
+        total_amount = Math.max(0, Number((total_amount - creditPlan.total).toFixed(2)));
+      }
+    }
+
     const phoneNumber = orderData.phone_number || user.phone_number || '';
     const requiredAmountForHold = total_amount;
     const availableBalance = Number(account.available_balance ?? 0);
@@ -10622,6 +10662,17 @@ export class OrdersService {
 
     const order = orderResult.insert_orders_one;
 
+    if (plannedCreditAllocations.length && this.purchaseCreditsService) {
+      try {
+        await this.purchaseCreditsService.commit(order.id, plannedCreditAllocations);
+      } catch (error: any) {
+        await this.compensateUnpaidCreate(order.id, 'Create failed: purchase credit commit', {
+          allowPendingUnpaid: true,
+        });
+        throw error;
+      }
+    }
+
     try {
       await this.updateReservedQuantities(orderItemsData, 'increment');
     } catch (error: any) {
@@ -10728,7 +10779,7 @@ export class OrdersService {
       if (requiresDeposit) {
         try {
           const depositCalc = this.depositCalculationService.calculateDeposit(
-            total_amount,
+            depositBaseAmount,
             currency
           );
 
@@ -11200,6 +11251,13 @@ export class OrdersService {
       return;
     }
 
+    try {
+      await this.purchaseCreditsService?.restore(orderId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Purchase credit restore during create compensation failed for ${orderId}: ${error?.message}`
+      );
+    }
     try {
       await this.releaseWalletHoldsForPendingPaymentOrder(orderId);
     } catch (error: any) {

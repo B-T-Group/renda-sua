@@ -216,6 +216,7 @@ export class AdminReferralService {
     resolved: ResolvedBusinessReferral,
     target: { kind: 'business' | 'agent'; id: string }
   ): Promise<void> {
+    if (resolved.kind === 'user') return;
     try {
       const referrerUserId = await this.creditsService.resolveReferrerUserId({
         kind: resolved.kind,
