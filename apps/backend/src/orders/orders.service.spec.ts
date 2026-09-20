@@ -732,6 +732,166 @@ describe('OrdersService', () => {
         })
       );
     });
+
+    it('calculates the MoMo deposit from the post-credit total', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraUserService.getUserAddressById.mockResolvedValue({
+        id: 'address-123',
+        address_line_1: '123 Main St',
+        city: 'Douala',
+        state: 'Littoral',
+        postal_code: '00237',
+        country: 'CM',
+      } as any);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-pad-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      (service as any).purchaseCreditsService = {
+        plan: jest.fn().mockResolvedValue({
+          total: 1000,
+          allocations: [{ grantId: 'g1', amount: 1000 }],
+        }),
+        commit: jest.fn().mockResolvedValue(undefined),
+      };
+      jest.spyOn(service as any, 'updateReservedQuantities').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'isMarketFlagEnabled').mockResolvedValue(true);
+      jest.spyOn(service as any, 'assertDeliveryAvailable').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'calculateItemDeliveryFee').mockResolvedValue({
+        baseDeliveryFee: 500,
+        perKmDeliveryFee: 0,
+        deliveryFee: 500,
+        method: 'flat_fee',
+        currency: 'XAF',
+        country: 'CM',
+        isFirstOrderClient: false,
+        firstOrderDeliveryFeePromo: false,
+        firstOrderBaseDeliveryDiscountAmount: 0,
+        baseDeliveryFeeBeforeDiscount: 500,
+      });
+      const depositCalcService = module.get(
+        DepositCalculationService
+      ) as jest.Mocked<DepositCalculationService>;
+      depositCalcService.isDepositRequired.mockReturnValue(true);
+      depositCalcService.calculateDeposit.mockReturnValue({
+        depositAmount: 450,
+        rate: 0.1,
+        amountDue: 4050,
+        totalAmount: 4500,
+      });
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn().mockResolvedValue({
+          success: true,
+          transactionId: 'momo-tx-credit',
+          message: 'Payment initiated',
+        }),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+      (service as any).mobilePaymentsDatabaseService = {
+        createTransaction: jest.fn().mockResolvedValue({
+          id: 'db-tx-credit',
+          reference: 'REF-DEP-CREDIT',
+          status: 'pending',
+        }),
+      };
+      (service as any).waitAndExecuteScheduleService = {
+        schedulePaymentTimeout: jest.fn().mockResolvedValue(undefined),
+      };
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [
+            {
+              id: 'inventory-pad-123',
+              computed_available_quantity: 10,
+              selling_price: 5000,
+              is_active: true,
+              business_location_id: 'location-123',
+              item_variant_id: null,
+              variant_price_overrides: [],
+              item_variant: null,
+              business_location: {
+                business_id: 'business-123',
+                is_active: true,
+                operating_hours: null,
+                mobile_payment_phone: { is_verified: true },
+                address: {
+                  country: 'CM',
+                  address_line_1: '123 Main St',
+                  city: 'Douala',
+                  state: 'Littoral',
+                  postal_code: '00237',
+                },
+                business: {
+                  id: 'business-123',
+                  name: 'Test Business',
+                  can_accept_orders: true,
+                  is_verified: true,
+                  user: {
+                    id: 'merchant-user-123',
+                    email: 'merchant@example.com',
+                    first_name: 'Merchant',
+                    last_name: 'User',
+                    country: 'CM',
+                  },
+                },
+              },
+              item: {
+                name: 'Pay at delivery item',
+                description: 'Pay at delivery item',
+                pay_on_delivery_enabled: true,
+                pay_at_pickup_enabled: true,
+                shipping_enabled: false,
+                currency: 'XAF',
+                weight: 1,
+                max_order_quantity: null,
+                stripe_tax_code_id: null,
+                item_variants: [],
+                item_sub_category: { item_category: { name: 'Test Category' } },
+              },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-pad-credit',
+            order_number: 'ORD-PAD-CREDIT',
+            payment_source: 'mobile_payment',
+            currency: 'XAF',
+            total_amount: 4500,
+            current_status: 'pending',
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 })
+        .mockResolvedValueOnce({
+          update_orders_by_pk: { id: 'order-pad-credit' },
+        });
+
+      await service.createOrder({
+        fulfillment_method: 'delivery',
+        payment_timing: 'pay_at_delivery',
+        phone_number: '+237670000000',
+        items: [{ business_inventory_id: 'inventory-pad-123', quantity: 1 }],
+        delivery_address_id: 'address-123',
+      });
+
+      expect(depositCalcService.calculateDeposit).toHaveBeenCalledWith(4500, 'XAF');
+    });
   });
 
   describe.skip('confirmOrder', () => {

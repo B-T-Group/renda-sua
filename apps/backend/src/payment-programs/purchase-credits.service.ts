@@ -116,25 +116,48 @@ export class PurchaseCreditsService {
   }
 
   private async redeemOne(orderId: string, allocation: CreditAllocation): Promise<void> {
+    await this.debitGrant(allocation.grantId, allocation.amount);
+    try {
+      await this.insertRedemption(orderId, allocation);
+    } catch (error: any) {
+      await this.creditGrant(allocation.grantId, allocation.amount);
+      throw error;
+    }
+  }
+
+  private async restoreOne(row: { id: string; grant_id: string; amount: number }): Promise<void> {
+    if (!(await this.deleteRedemption(row.id))) return;
+    const grant = await this.hasura.executeQuery(GRANT_REVOKED, { id: row.grant_id });
+    if (grant.purchase_credit_grants_by_pk?.revoked_at) return;
+    await this.creditGrant(row.grant_id, row.amount);
+  }
+
+  private async debitGrant(id: string, amount: number): Promise<void> {
+    const result = await this.hasura.executeMutation(DEBIT_REMAINING, {
+      id,
+      amount,
+      delta: -amount,
+    });
+    if (!result.update_purchase_credit_grants?.affected_rows) {
+      throw new BadRequestException('Purchase credit is no longer available');
+    }
+  }
+
+  private async creditGrant(id: string, amount: number): Promise<void> {
+    await this.hasura.executeMutation(CREDIT_REMAINING, { id, delta: amount });
+  }
+
+  private async insertRedemption(orderId: string, allocation: CreditAllocation): Promise<void> {
     await this.hasura.executeMutation(INSERT_REDEMPTION, {
       grantId: allocation.grantId,
       orderId,
       amount: allocation.amount,
     });
-    await this.hasura.executeMutation(ADJUST_REMAINING, {
-      id: allocation.grantId,
-      delta: -allocation.amount,
-    });
   }
 
-  private async restoreOne(row: { id: string; grant_id: string; amount: number }): Promise<void> {
-    const grant = await this.hasura.executeQuery(GRANT_REVOKED, { id: row.grant_id });
-    if (grant.purchase_credit_grants_by_pk?.revoked_at) return;
-    await this.hasura.executeMutation(ADJUST_REMAINING, {
-      id: row.grant_id,
-      delta: row.amount,
-    });
-    await this.hasura.executeMutation(DELETE_REDEMPTION, { id: row.id });
+  private async deleteRedemption(id: string): Promise<boolean> {
+    const result = await this.hasura.executeMutation(DELETE_REDEMPTION, { id });
+    return Boolean(result.delete_purchase_credit_redemptions_by_pk?.id);
   }
 
   private async loadGrants(userId: string, currency: string): Promise<GrantRow[]> {
@@ -298,9 +321,25 @@ const INSERT_REDEMPTION = `
   }
 `;
 
-const ADJUST_REMAINING = `
-  mutation AdjustCreditRemaining($id: uuid!, $delta: numeric!) {
-    update_purchase_credit_grants_by_pk(pk_columns: { id: $id }, _inc: { remaining_amount: $delta }) { id }
+const DEBIT_REMAINING = `
+  mutation DebitCreditRemaining($id: uuid!, $amount: numeric!, $delta: numeric!) {
+    update_purchase_credit_grants(
+      where: {
+        id: { _eq: $id }
+        remaining_amount: { _gte: $amount }
+        revoked_at: { _is_null: true }
+      }
+      _inc: { remaining_amount: $delta }
+    ) { affected_rows }
+  }
+`;
+
+const CREDIT_REMAINING = `
+  mutation CreditCreditRemaining($id: uuid!, $delta: numeric!) {
+    update_purchase_credit_grants(
+      where: { id: { _eq: $id }, revoked_at: { _is_null: true } }
+      _inc: { remaining_amount: $delta }
+    ) { affected_rows }
   }
 `;
 
