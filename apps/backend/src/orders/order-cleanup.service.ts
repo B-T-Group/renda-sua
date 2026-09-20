@@ -383,7 +383,7 @@ export class OrderCleanupService {
   private async cancelMissedPickupOrder(
     order: CleanupOrderRow
   ): Promise<boolean> {
-    return this.cancelWithClaim(
+    return this.cancelAndRestoreCredits(
       order,
       'ready_for_pickup',
       CANCEL_REASON_NOT_PICKED_UP_IN_TIME,
@@ -396,7 +396,7 @@ export class OrderCleanupService {
   private async cancelStaleStorePickupOrder(
     order: CleanupOrderRow
   ): Promise<boolean> {
-    return this.cancelWithClaim(
+    return this.cancelAndRestoreCredits(
       order,
       'ready_for_pickup',
       CANCEL_REASON_NOT_PICKED_UP_IN_TIME,
@@ -404,6 +404,26 @@ export class OrderCleanupService {
       'Auto-cancelled: store pickup not collected within 7 days',
       true
     );
+  }
+
+  private async cancelAndRestoreCredits(
+    order: CleanupOrderRow,
+    expectedStatus: string,
+    reasonId: number,
+    notes: string,
+    historyNotes: string,
+    notifyViaStatusUpdated: boolean
+  ): Promise<boolean> {
+    const ok = await this.cancelWithClaim(
+      order,
+      expectedStatus,
+      reasonId,
+      notes,
+      historyNotes,
+      notifyViaStatusUpdated
+    );
+    if (ok) await this.restorePurchaseCredits(order.id);
+    return ok;
   }
 
   private isStorePickupStale(
@@ -575,6 +595,7 @@ export class OrderCleanupService {
       'Auto-failed: delivery window missed'
     );
     await this.queueFailedStatusUpdate(order.id, previousStatus);
+    await this.restorePurchaseCredits(order.id);
     return true;
   }
 

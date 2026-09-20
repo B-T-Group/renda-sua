@@ -10158,7 +10158,6 @@ export class OrdersService {
       total_amount = Math.max(0, total_amount - discountAmount);
     }
 
-    let depositBaseAmount = total_amount;
     let plannedCreditAllocations: CreditAllocation[] = [];
     if (this.purchaseCreditsService && totalAmount > 0 && total_amount > 0) {
       const creditPlan = await this.purchaseCreditsService.plan({
@@ -10779,7 +10778,7 @@ export class OrdersService {
       if (requiresDeposit) {
         try {
           const depositCalc = this.depositCalculationService.calculateDeposit(
-            depositBaseAmount,
+            total_amount,
             currency
           );
 
