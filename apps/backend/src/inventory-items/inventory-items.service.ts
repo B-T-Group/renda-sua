@@ -289,6 +289,8 @@ export interface TopInventoryStoreRow {
   is_verified: boolean;
   can_accept_orders: boolean;
   is_storefront_visible: boolean;
+  /** True when the business is an active Rendasua payment-program partner. */
+  is_partner?: boolean;
   /** Straight-line distance in meters when origin coordinates are available. */
   distance_meters?: number | null;
 }
@@ -1458,7 +1460,8 @@ export class InventoryItemsService {
       | 'include_unavailable'
       | 'origin_lat'
       | 'origin_lng'
-    > & { search?: string } = {}
+      | 'business_id'
+    > & { search?: string; partners_only?: boolean } = {}
   ): Promise<TopInventoryStoreRow[]> {
     const take = Math.min(Math.max(limit, 1), 50);
     const { country_code, state } = await this.resolveInventoryListGeo(query);
@@ -1467,6 +1470,7 @@ export class InventoryItemsService {
       include_unavailable: query.include_unavailable ?? false,
       country_code,
       state,
+      business_id: query.business_id,
     });
     if ('unsupported' in built) return [];
     const counts = await this.countDistinctCatalogItemsByLocation(built.where);
@@ -1477,6 +1481,21 @@ export class InventoryItemsService {
       if (!byId.has(id)) counts.delete(id);
     }
     if (counts.size === 0) return [];
+    await this.applyStoreDirectoryFilters(counts, byId, query);
+    if (counts.size === 0) return [];
+    const ranked = this.rankTopStoresByOrigin(counts, byId, origin, take);
+    const partnerIds = await this.activePartnerBusinessIds();
+    return ranked.map((row) => ({
+      ...row,
+      is_partner: partnerIds.has(row.business_id),
+    }));
+  }
+
+  private async applyStoreDirectoryFilters(
+    counts: Map<string, number>,
+    byId: Map<string, { business_id: string; name: string }>,
+    query: { search?: string; partners_only?: boolean }
+  ): Promise<void> {
     const q = query.search?.trim().toLowerCase();
     if (q) {
       for (const [id, loc] of byId) {
@@ -1485,9 +1504,30 @@ export class InventoryItemsService {
           byId.delete(id);
         }
       }
-      if (counts.size === 0) return [];
     }
-    return this.rankTopStoresByOrigin(counts, byId, origin, take);
+    if (!query.partners_only || counts.size === 0) return;
+    const partnerIds = await this.activePartnerBusinessIds();
+    for (const [id, loc] of byId) {
+      if (!partnerIds.has(loc.business_id)) {
+        counts.delete(id);
+        byId.delete(id);
+      }
+    }
+  }
+
+  private async activePartnerBusinessIds(): Promise<Set<string>> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `
+      query ActivePartnerBusinessIds {
+        partner_businesses(where: { is_active: { _eq: true } }) {
+          business_id
+        }
+      }
+    `
+    );
+    const rows: Array<{ business_id: string }> =
+      result.partner_businesses ?? [];
+    return new Set(rows.map((row) => row.business_id));
   }
 
   /**
@@ -1580,6 +1620,7 @@ export class InventoryItemsService {
       is_verified: loc.is_verified,
       can_accept_orders: loc.can_accept_orders,
       is_storefront_visible: loc.is_storefront_visible,
+      is_partner: (await this.activePartnerBusinessIds()).has(loc.business_id),
       distance_meters: origin ? distance_meters : null,
     };
   }

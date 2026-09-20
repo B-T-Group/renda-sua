@@ -19,7 +19,10 @@ interface GrantRow {
   currency: string;
   amount: number;
   memo: string | null;
-  business?: { name: string } | null;
+  source?: string | null;
+  source_id?: string | null;
+  revoked_at?: string | null;
+  business?: { id: string; name: string } | null;
 }
 
 @Injectable()
@@ -288,8 +291,8 @@ const LIST_GRANTS = `
       order_by: { created_at: desc }
     ) {
       id currency amount remaining_amount applicability business_id expires_at
-      source memo revoked_at created_at
-      business { name }
+      source source_id memo revoked_at created_at
+      business { id name }
       redemptions(order_by: { created_at: desc }) { id order_id amount created_at }
     }
   }

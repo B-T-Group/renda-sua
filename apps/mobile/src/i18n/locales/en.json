@@ -4068,6 +4068,22 @@
         "business": "Set up my store"
       }
     },
+    "signupCredits": {
+      "title": "You've got store credit!",
+      "giftPill": "Welcome gift",
+      "progress": "{{current}} of {{total}}",
+      "loading": "Checking your welcome credits…",
+      "loadError": "We could not load your welcome credits. Check your connection and try again.",
+      "bodyAny": "Use this credit at any store on Rendasua. It applies automatically at checkout.",
+      "bodyPartners": "Use this credit at any Rendasua partner store. It applies automatically at checkout.",
+      "bodySpecific": "Shop at {{name}} — your credit applies automatically at checkout.",
+      "notWithdrawable": "Store credits cannot be withdrawn. They apply automatically when you shop.",
+      "shopAny": "Start shopping",
+      "shopPartners": "Browse partner stores",
+      "shopStore": "Shop this store",
+      "next": "Next credit",
+      "skip": "Continue to app"
+    },
     "signupSuccessTitle": "Account successfully created",
     "signupSuccessMessage": "Your account is ready. You can start using Rendasua right away.",
     "resetPassword": {
@@ -4805,6 +4821,34 @@
       "daysAgo": "{{count}}d ago",
       "showMore": "Show {{count}} more",
       "showLess": "Show less"
+    },
+    "purchaseCredits": {
+      "title": "Store credits",
+      "menuSubtitle": "Credits that apply at checkout",
+      "note": "These credits cannot be withdrawn. They apply automatically at checkout to item prices (not delivery or deposits).",
+      "empty": "No store credits yet.",
+      "anyStore": "Any store",
+      "allPartners": "Rendasua partner stores",
+      "onePartner": "One partner store",
+      "expires": "Expires",
+      "shop": "Shop now",
+      "shopAny": "Browse stores",
+      "shopPartners": "Browse partner stores",
+      "shopStore": "Shop this store",
+      "viewDetails": "View details",
+      "browseStores": "Browse stores",
+      "ofOriginal": "{{remaining}} of {{original}} remaining",
+      "snapshotTitle": "Store credits",
+      "snapshotMulti": "{{count}} credit balances ready to shop",
+      "snapshotA11y": "Store credits available",
+      "illustrationLabel": "Store credits",
+      "partnerBadge": "Credits apply",
+      "partnersListHint": "Partner stores where your store credits can apply.",
+      "checkoutApply": "{{amount}} in store credits will apply"
+    },
+    "walletHub": {
+      "title": "Wallet programs",
+      "otherPrograms": "Other wallet programs"
     }
   },
   "legal": {

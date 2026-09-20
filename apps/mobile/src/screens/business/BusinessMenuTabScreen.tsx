@@ -236,6 +236,15 @@ function BusinessMenuTabScreenBase() {
             onPress={() => goTo('BusinessAccounts')}
           />
           <UserMenuRow
+            icon="ticket-percent-outline"
+            label={t('accounts.purchaseCredits.title', 'Store credits')}
+            subtitle={t(
+              'accounts.purchaseCredits.menuSubtitle',
+              'Credits that apply at checkout'
+            )}
+            onPress={() => goTo('UserPurchaseCredits')}
+          />
+          <UserMenuRow
             icon="auto-fix"
             label={t('business.tokens.menuTitle', 'AI tokens')}
             subtitle={t('business.tokens.menuSubtitle', 'Buy credits for image cleanup')}

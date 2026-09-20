@@ -29,6 +29,10 @@ import { DashboardComposingOverlay } from '../../components/feedback/DashboardCo
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { AgentReferredBusinessesHero } from '../../components/agent/AgentReferredBusinessesHero';
 import { ReferralPayoutSnapshot } from '../../components/common/ReferralPayoutSnapshot';
+import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
+import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
+import { usePostSignupCreditShopNavigation } from '../../hooks/usePostSignupCreditShopNavigation';
+import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { AgentWithdrawDialog } from '../../components/dialogs/AgentWithdrawDialog';
 import { AgentAccountTransactionsDialog } from '../../components/dialogs/AgentAccountTransactionsDialog';
 import { SimpleMessageDialog } from '../../components/dialogs/SimpleMessageDialog';
@@ -128,6 +132,8 @@ export default function HomeScreen() {
 
   const { items: actionsNeededItems, refresh: refreshActionsNeeded, dismissAll } =
     useActionsNeeded('agent');
+  const { summary: creditSummary, usable: usableCredits } = usePurchaseCredits(true);
+  usePostSignupCreditShopNavigation(true);
   const { unreadCount: notifUnreadCount } = useNotifications();
 
   const idVerificationPending =
@@ -208,6 +214,9 @@ export default function HomeScreen() {
         root &&
         (route === 'AgentLocationTracking' ||
           route === 'AgentAccounts' ||
+          route === 'UserPurchaseCredits' ||
+          route === 'StoresList' ||
+          route === 'StoreDetail' ||
           route === 'Earnings' ||
           route === 'AgentBusinessReferral' ||
           route === 'Documents' ||
@@ -410,6 +419,37 @@ export default function HomeScreen() {
             projectedCurrency={referralPayout?.currency ?? displayCurrency}
             onOpenWallet={() => goTo('AgentAccounts')}
           />
+          {creditSummary.totalRemaining > 0 ? (
+            <StoreCreditsSnapshot
+              grants={usableCredits}
+              totalRemaining={creditSummary.totalRemaining}
+              currency={creditSummary.currency}
+              nearestExpiry={creditSummary.nearestExpiry}
+              primaryGrant={creditSummary.primaryGrant}
+              onShop={() => {
+                const grant = creditSummary.primaryGrant;
+                if (!grant) {
+                  goTo('StoresList');
+                  return;
+                }
+                const target = purchaseCreditShopTarget(grant);
+                if (target.kind === 'store') {
+                  (navigation.getParent() as any)?.navigate('StoreDetail', {
+                    businessId: target.businessId,
+                  });
+                  return;
+                }
+                if (target.kind === 'partners') {
+                  (navigation.getParent() as any)?.navigate('StoresList', {
+                    partnersOnly: true,
+                  });
+                  return;
+                }
+                goTo('StoresList');
+              }}
+              onViewDetails={() => goTo('UserPurchaseCredits')}
+            />
+          ) : null}
           {!me?.profile_picture_url && !auth.displayProfilePhotoUri ? (
             <FeatureCard
               title={t('ftue.education.agentPhotoTipTitle', 'Tip: add a profile photo')}

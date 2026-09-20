@@ -31,6 +31,7 @@ import { useAgentFocus } from '../../hooks/useAgentFocus';
 const ROOT_STACK_SCREENS: AppNavScreen[] = [
   'Earnings',
   'AgentAccounts',
+  'UserPurchaseCredits',
   'AgentBusinessReferral',
   'Profile',
   'NotificationPreferences',
@@ -149,6 +150,15 @@ function MenuTabScreen() {
             label={t('menuTab.accountsTitle', 'My wallet')}
             subtitle={t('menuTab.accountsSubtitle', 'Top up and withdraw')}
             onPress={() => goTo('AgentAccounts')}
+          />
+          <UserMenuRow
+            icon="ticket-percent-outline"
+            label={t('accounts.purchaseCredits.title', 'Store credits')}
+            subtitle={t(
+              'accounts.purchaseCredits.menuSubtitle',
+              'Credits that apply at checkout'
+            )}
+            onPress={() => goTo('UserPurchaseCredits')}
           />
           {showCommercial ? (
             <UserMenuRow

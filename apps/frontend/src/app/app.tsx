@@ -445,181 +445,145 @@ function App() {
               }
             />
             <Route
-              path="/admin/agents"
               element={
                 <ProtectedRoute>
-                  <LazyPages.AdminManageAgents />
+                  <LazyPages.AdminToolsLayout />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="/admin/clients"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminManageClients />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/businesses"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminManageBusinesses />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/business-reliability"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminBusinessReliabilityPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/pickup-ops"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminPickupOpsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/orders"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminOrdersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/orders/:orderId"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminOrderDetailPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/location-transfers"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminLocationTransfersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/rental-listings/moderation"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminRentalListingsModerationPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/rental-listings/ai-reviews"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminRentalAiReviewsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/items/moderation"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminItemsModerationPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/content-reports"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminContentReportsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/reels/moderation"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminReelsModerationPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/reels/ai-reviews"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminReelAiReviewsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/items/ai-reviews"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminItemAiReviewsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/configurations"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminConfigurationPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/application-setup"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.ApplicationSetupPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/country-onboarding"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.CountryOnboardingPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/commission-accounts"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminCommissionAccounts />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/pending-mobile-payments"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminPendingMobilePaymentsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/account-recharge"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminAccountRechargePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/payment-programs/:section?"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminPaymentProgramsPage />
-                </ProtectedRoute>
-              }
-            />
+            >
+              <Route
+                path="/business/dashboard/admin"
+                element={<LazyPages.BusinessDashboardAdminPage />}
+              />
+              <Route
+                path="/admin/agents"
+                element={<LazyPages.AdminManageAgents />}
+              />
+              <Route
+                path="/admin/clients"
+                element={<LazyPages.AdminManageClients />}
+              />
+              <Route
+                path="/admin/businesses"
+                element={<LazyPages.AdminManageBusinesses />}
+              />
+              <Route
+                path="/admin/business-reliability"
+                element={<LazyPages.AdminBusinessReliabilityPage />}
+              />
+              <Route
+                path="/admin/pickup-ops"
+                element={<LazyPages.AdminPickupOpsPage />}
+              />
+              <Route
+                path="/admin/orders"
+                element={<LazyPages.AdminOrdersPage />}
+              />
+              <Route
+                path="/admin/orders/:orderId"
+                element={<LazyPages.AdminOrderDetailPage />}
+              />
+              <Route
+                path="/admin/location-transfers"
+                element={<LazyPages.AdminLocationTransfersPage />}
+              />
+              <Route
+                path="/admin/rental-listings/moderation"
+                element={<LazyPages.AdminRentalListingsModerationPage />}
+              />
+              <Route
+                path="/admin/rental-listings/ai-reviews"
+                element={<LazyPages.AdminRentalAiReviewsPage />}
+              />
+              <Route
+                path="/admin/items/moderation"
+                element={<LazyPages.AdminItemsModerationPage />}
+              />
+              <Route
+                path="/admin/content-reports"
+                element={<LazyPages.AdminContentReportsPage />}
+              />
+              <Route
+                path="/admin/reels/moderation"
+                element={<LazyPages.AdminReelsModerationPage />}
+              />
+              <Route
+                path="/admin/reels/ai-reviews"
+                element={<LazyPages.AdminReelAiReviewsPage />}
+              />
+              <Route
+                path="/admin/items/ai-reviews"
+                element={<LazyPages.AdminItemAiReviewsPage />}
+              />
+              <Route
+                path="/admin/configurations"
+                element={<LazyPages.AdminConfigurationPage />}
+              />
+              <Route
+                path="/admin/application-setup"
+                element={<LazyPages.ApplicationSetupPage />}
+              />
+              <Route
+                path="/admin/country-onboarding"
+                element={<LazyPages.CountryOnboardingPage />}
+              />
+              <Route
+                path="/admin/commission-accounts"
+                element={<LazyPages.AdminCommissionAccounts />}
+              />
+              <Route
+                path="/admin/pending-mobile-payments"
+                element={<LazyPages.AdminPendingMobilePaymentsPage />}
+              />
+              <Route
+                path="/admin/account-recharge"
+                element={<LazyPages.AdminAccountRechargePage />}
+              />
+              <Route
+                path="/admin/payment-programs/:section?"
+                element={<LazyPages.AdminPaymentProgramsPage />}
+              />
+              <Route
+                path="/admin/refunds"
+                element={<LazyPages.AdminRefundsPage />}
+              />
+              <Route
+                path="/admin/site-events"
+                element={<LazyPages.AdminSiteEventsPage />}
+              />
+              <Route
+                path="/admin/broadcasts"
+                element={<LazyPages.AdminBroadcastsPage />}
+              />
+              <Route
+                path="/admin/performance"
+                element={<LazyPages.AdminPerformancePage />}
+              />
+              <Route
+                path="/admin/follow-ups"
+                element={<LazyPages.AdminCreditsPage />}
+              />
+              <Route
+                path="/admin/credits"
+                element={<Navigate to="/admin/follow-ups" replace />}
+              />
+              <Route
+                path="/content-management/brands"
+                element={<LazyPages.BrandsManagementPage />}
+              />
+              <Route
+                path="/content-management/categories"
+                element={<LazyPages.CategoriesManagementPage />}
+              />
+              <Route
+                path="/admin/:userType/:userId/documents"
+                element={<LazyPages.AdminUserDocumentsPage />}
+              />
+              <Route
+                path="/admin/:userType/:userId/messages"
+                element={<LazyPages.AdminUserMessagesPage />}
+              />
+            </Route>
             <Route
               path="/accounts"
               element={
@@ -649,68 +613,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.PaymentSchedulesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/refunds"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminRefundsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/site-events"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminSiteEventsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/broadcasts"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminBroadcastsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/performance"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminPerformancePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/follow-ups"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminCreditsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/credits"
-              element={<Navigate to="/admin/follow-ups" replace />}
-            />
-
-            {/* Content Management routes */}
-            <Route
-              path="/content-management/brands"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.BrandsManagementPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/content-management/categories"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.CategoriesManagementPage />
                 </ProtectedRoute>
               }
             />
@@ -853,14 +755,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.BusinessDashboardCatalogMenuPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/business/dashboard/admin"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.BusinessDashboardAdminPage />
                 </ProtectedRoute>
               }
             />
@@ -1132,26 +1026,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.MessagesCenterPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Admin User Documents route */}
-            <Route
-              path="/admin/:userType/:userId/documents"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminUserDocumentsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Admin User Messages route */}
-            <Route
-              path="/admin/:userType/:userId/messages"
-              element={
-                <ProtectedRoute>
-                  <LazyPages.AdminUserMessagesPage />
                 </ProtectedRoute>
               }
             />

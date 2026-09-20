@@ -10,8 +10,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
-import { Snackbar, Text } from 'react-native-paper';
-import { useFocusEffect } from '@react-navigation/native';
+import { Button, Snackbar, Text } from 'react-native-paper';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useStore } from '../../stores/RootStore';
 import { useProfileMe } from '../../hooks/useProfileMe';
@@ -42,6 +43,7 @@ function UserAccountsScreenBase() {
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing } = useTheme();
   const { auth } = useStore();
+  const navigation = useNavigation<NativeStackNavigationProp<Record<string, object | undefined>>>();
   const { me, refetch: refetchMe } = useProfileMe(!!auth.isAuthenticated);
   const { currency: meCurrency } = useUserCurrency(!!auth.isAuthenticated);
   const {
@@ -176,6 +178,14 @@ function UserAccountsScreenBase() {
           />
         }
       >
+        <Button
+          mode="outlined"
+          icon="ticket-percent-outline"
+          onPress={() => navigation.navigate('UserPurchaseCredits')}
+          style={{ alignSelf: 'stretch' }}
+        >
+          {t('accounts.purchaseCredits.title', 'Store credits')}
+        </Button>
         {loading && !hasAnyAccount ? (
           <View style={styles.centered}>
             <ActivityIndicator color={colors.primary.main} />

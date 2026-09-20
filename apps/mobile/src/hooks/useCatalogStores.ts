@@ -13,6 +13,8 @@ export interface UseCatalogStoresOptions {
   origin?: { lat: number; lng: number } | null;
   withAuth?: boolean;
   enabled?: boolean;
+  partnersOnly?: boolean;
+  businessId?: string;
 }
 
 export function useCatalogStores({
@@ -23,6 +25,8 @@ export function useCatalogStores({
   origin,
   withAuth = false,
   enabled = true,
+  partnersOnly = false,
+  businessId,
 }: UseCatalogStoresOptions) {
   const [stores, setStores] = useState<CatalogStore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +51,8 @@ export function useCatalogStores({
           ...(countryCode && { country_code: countryCode }),
           ...(state?.trim() && { state: state.trim() }),
           ...(origin && { origin_lat: origin.lat, origin_lng: origin.lng }),
+          ...(partnersOnly && { partners_only: true }),
+          ...(businessId?.trim() && { business_id: businessId.trim() }),
         },
         { signal: controller.signal }
       );
@@ -74,6 +80,8 @@ export function useCatalogStores({
     state,
     origin?.lat,
     origin?.lng,
+    partnersOnly,
+    businessId,
   ]);
 
   useEffect(() => {

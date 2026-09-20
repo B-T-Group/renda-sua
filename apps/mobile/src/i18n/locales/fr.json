@@ -3974,6 +3974,22 @@
         "business": "Configurer ma boutique"
       }
     },
+    "signupCredits": {
+      "title": "Vous avez un crédit boutique !",
+      "giftPill": "Cadeau de bienvenue",
+      "progress": "{{current}} sur {{total}}",
+      "loading": "Vérification de vos crédits de bienvenue…",
+      "loadError": "Impossible de charger vos crédits de bienvenue. Vérifiez votre connexion et réessayez.",
+      "bodyAny": "Utilisez ce crédit dans toute boutique sur Rendasua. Il s'applique automatiquement à la caisse.",
+      "bodyPartners": "Utilisez ce crédit chez n'importe quel partenaire Rendasua. Il s'applique automatiquement à la caisse.",
+      "bodySpecific": "Achetez chez {{name}} — votre crédit s'applique automatiquement à la caisse.",
+      "notWithdrawable": "Les crédits boutique ne sont pas retirables. Ils s'appliquent automatiquement lorsque vous achetez.",
+      "shopAny": "Commencer à acheter",
+      "shopPartners": "Voir les partenaires",
+      "shopStore": "Voir cette boutique",
+      "next": "Crédit suivant",
+      "skip": "Continuer vers l'app"
+    },
     "signupSuccessTitle": "Compte créé avec succès",
     "signupSuccessMessage": "Votre compte est prêt. Vous pouvez commencer à utiliser Rendasua.",
     "resetPassword": {
@@ -4711,6 +4727,34 @@
       "daysAgo": "il y a {{count}} j",
       "showMore": "Afficher {{count}} de plus",
       "showLess": "Afficher moins"
+    },
+    "purchaseCredits": {
+      "title": "Crédits boutique",
+      "menuSubtitle": "Crédits applicables à la caisse",
+      "note": "Ces crédits ne sont pas retirables. Ils s'appliquent automatiquement au prix des articles à la caisse (pas à la livraison ni aux acomptes).",
+      "empty": "Aucun crédit boutique pour le moment.",
+      "anyStore": "Toute boutique",
+      "allPartners": "Boutiques partenaires Rendasua",
+      "onePartner": "Une boutique partenaire",
+      "expires": "Expire",
+      "shop": "Acheter",
+      "shopAny": "Parcourir les boutiques",
+      "shopPartners": "Voir les partenaires",
+      "shopStore": "Voir cette boutique",
+      "viewDetails": "Voir les détails",
+      "browseStores": "Parcourir les boutiques",
+      "ofOriginal": "{{remaining}} sur {{original}} restants",
+      "snapshotTitle": "Crédits boutique",
+      "snapshotMulti": "{{count}} soldes de crédit prêts à utiliser",
+      "snapshotA11y": "Crédits boutique disponibles",
+      "illustrationLabel": "Crédits boutique",
+      "partnerBadge": "Crédits applicables",
+      "partnersListHint": "Boutiques partenaires où vos crédits boutique peuvent s'appliquer.",
+      "checkoutApply": "{{amount}} de crédits boutique seront appliqués"
+    },
+    "walletHub": {
+      "title": "Programmes portefeuille",
+      "otherPrograms": "Autres programmes portefeuille"
     }
   },
   "legal": {

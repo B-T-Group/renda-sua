@@ -127,6 +127,9 @@ export const BusinessDashboardCatalogMenuPage = lazy(() =>
 export const BusinessDashboardAdminPage = lazy(() =>
   import('../components/pages/BusinessDashboardAdminPage')
 );
+export const AdminToolsLayout = lazy(() =>
+  import('../components/admin/AdminToolsLayout')
+);
 export const BusinessAccountTypePage = lazy(() =>
   import('../components/pages/BusinessAccountTypePage')
 );

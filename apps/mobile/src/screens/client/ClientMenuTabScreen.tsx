@@ -29,6 +29,7 @@ import { PERSONA_ACCENT } from '../../constants/personaTheme';
 
 const ROOT_STACK_SCREENS: ClientAppNavScreen[] = [
   'ClientAccounts',
+  'UserPurchaseCredits',
   'Profile',
   'ManageRecipients',
   'NotificationPreferences',
@@ -156,6 +157,15 @@ function ClientMenuTabScreenBase() {
             label={t('menuTab.accountsTitle', 'My wallet')}
             subtitle={t('menuTab.accountsSubtitle', 'Top up and withdraw')}
             onPress={() => goTo('ClientAccounts')}
+          />
+          <UserMenuRow
+            icon="ticket-percent-outline"
+            label={t('accounts.purchaseCredits.title', 'Store credits')}
+            subtitle={t(
+              'accounts.purchaseCredits.menuSubtitle',
+              'Credits that apply at checkout'
+            )}
+            onPress={() => goTo('UserPurchaseCredits')}
           />
         </UserMenuSection>
 

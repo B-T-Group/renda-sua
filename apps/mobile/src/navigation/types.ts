@@ -113,11 +113,16 @@ export type StoreDetailParams = {
   previewMode?: boolean;
 };
 
+export type StoresListParams = {
+  partnersOnly?: boolean;
+  businessId?: string;
+};
+
 export type GuestRootStackParamList = {
   GuestTabs: NavigatorScreenParams<GuestTabParamList> | undefined;
   InventoryItemDetail: InventoryItemDetailParams;
   CollectionDetail: CollectionDetailParams;
-  StoresList: undefined;
+  StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;
   Cart: undefined;
   RentalListingDetail: { listingId: string };
@@ -146,7 +151,7 @@ export type ClientRootStackParamList = {
   NotificationsCenter: undefined;
   InventoryItemDetail: InventoryItemDetailParams;
   CollectionDetail: CollectionDetailParams;
-  StoresList: undefined;
+  StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;
   PlaceOrder: PlaceOrderParams;
   Cart: undefined;
@@ -182,6 +187,7 @@ export type ClientRootStackParamList = {
   ThreadDetail: { threadId: string };
   SupportTickets: undefined;
   ClientAccounts: undefined;
+  UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
   RentalListingDetail: { listingId: string };
   RentalRequestSubmitted: { requestId?: string };
@@ -283,6 +289,7 @@ export type BusinessRootStackParamList = {
   AdminCredits: undefined;
   AccountRecharge: undefined;
   BusinessAccounts: undefined;
+  UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
   BusinessAiTokens: undefined;
   BusinessAddReel:
@@ -306,7 +313,7 @@ export type BusinessRootStackParamList = {
   };
   BusinessConfigurePayments: undefined;
   BusinessMobilePaymentPhones: undefined;
-  StoresList: undefined;
+  StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;
   Profile: undefined;
   NotificationPreferences: undefined;

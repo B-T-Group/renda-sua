@@ -13,11 +13,13 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCatalogStores } from '../../hooks/useCatalogStores';
+import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
 import { useGuestCatalogCountry } from '../../hooks/useGuestCatalogCountry';
 import { StatusPill } from '../../components/common/StatusPill';
 import { StoreDefaultAvatar } from '../../components/illustrations/StoreDefaultAvatar';
 import { shadows } from '../../theme';
 import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
+import { storeShowsCreditPartnerBadge } from '../../utils/purchaseCredits';
 import type { CatalogStore } from '../../types/stores';
 import type {
   BusinessRootStackParamList,
@@ -41,13 +43,16 @@ function formatDistanceKm(
   return approxLabel(km);
 }
 
-export default function StoresListScreen({ navigation }: Props) {
+export default function StoresListScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const { auth } = useStore();
   const [searchDraft, setSearchDraft] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const partnersOnly = route.params?.partnersOnly === true;
+  const filterBusinessId = route.params?.businessId?.trim() || undefined;
+  const { usable: creditGrants } = usePurchaseCredits(auth.isAuthenticated);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(searchDraft.trim()), 400);
@@ -65,6 +70,8 @@ export default function StoresListScreen({ navigation }: Props) {
     countryCode,
     withAuth,
     enabled: catalogReady,
+    partnersOnly,
+    businessId: filterBusinessId,
   });
 
   const openStore = useCallback(
@@ -175,12 +182,21 @@ export default function StoresListScreen({ navigation }: Props) {
                   style={{ marginTop: 6 }}
                 />
               ) : null}
+              {storeShowsCreditPartnerBadge(item, creditGrants) ? (
+                <StatusPill
+                  compact
+                  label={t('accounts.purchaseCredits.partnerBadge', 'Credits apply')}
+                  backgroundColor={colors.successTint}
+                  textColor={colors.success.dark}
+                  style={{ marginTop: 6 }}
+                />
+              ) : null}
             </View>
           </View>
         </Pressable>
       );
     },
-    [borderRadius.md, colors, openStore, spacing, t]
+    [borderRadius.md, colors, creditGrants, openStore, spacing, t]
   );
 
   return (
@@ -189,6 +205,17 @@ export default function StoresListScreen({ navigation }: Props) {
       edges={['bottom']}
     >
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+        {partnersOnly ? (
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+          >
+            {t(
+              'accounts.purchaseCredits.partnersListHint',
+              'Partner stores where your store credits can apply.'
+            )}
+          </Text>
+        ) : null}
         <Searchbar
           placeholder={t('stores.searchPlaceholder', 'Search store locations')}
           value={searchDraft}

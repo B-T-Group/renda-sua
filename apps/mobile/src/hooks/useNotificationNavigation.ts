@@ -317,10 +317,13 @@ export function useNotificationNavigation(): (msg: UserMessage) => NotificationN
         }
 
         case 'account': {
+          const isCredit = message_type === 'PURCHASE_CREDIT';
           return {
-            label: 'wallet',
+            label: isCredit ? 'credits' : 'wallet',
             navigate: withPersona(targetPersona, () =>
-              navigation.navigate('UserPaymentPrograms')
+              navigation.navigate(
+                isCredit ? 'UserPurchaseCredits' : 'UserPaymentPrograms'
+              )
             ),
           };
         }

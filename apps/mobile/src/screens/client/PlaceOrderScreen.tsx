@@ -30,6 +30,7 @@ import { VariantOptionPicker } from '../../components/browse/VariantOptionPicker
 import { AddPaymentPhoneDialog } from '../../components/dialogs/AddPaymentPhoneDialog';
 import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
 import { PlaceOrderSummaryCard } from '../../components/browse/PlaceOrderSummaryCard';
+import { PurchaseCreditCheckoutNote } from '../../components/credits/PurchaseCreditCheckoutNote';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
 import { PlaceOrderDeliveryAddressBlock } from '../../components/place-order/PlaceOrderDeliveryAddressBlock';
 import {
@@ -1325,6 +1326,8 @@ export default function PlaceOrderScreen() {
             style={{ marginBottom: spacing.sm }}
           />
         ) : null}
+
+        <PurchaseCreditCheckoutNote credits={preflightConfig?.purchase_credits} />
 
         <PlaceOrderSummaryCard
           thumb={thumb}

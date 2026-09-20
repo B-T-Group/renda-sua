@@ -5,6 +5,7 @@ import { useStore } from '../stores/RootStore';
 
 import PersonaSessionGate from '../screens/shared/PersonaSessionGate';
 import SignupSuccessScreen from '../screens/shared/SignupSuccessScreen';
+import SignupCreditsScreen from '../screens/shared/SignupCreditsScreen';
 import FirstRunOnboardingScreen from '../screens/shared/onboarding/FirstRunOnboardingScreen';
 import type { OnboardingFinishResult } from '../screens/shared/onboarding/useFirstRunOnboarding';
 import { NonProdEnvBanner } from '../components/common/NonProdEnvBanner';
@@ -121,6 +122,9 @@ function AppNavigatorContent() {
   const mainContent = (() => {
     if (auth.signupWelcomePending) {
       return <SignupSuccessScreen />;
+    }
+    if (auth.signupCreditsPending) {
+      return <SignupCreditsScreen />;
     }
     if (!persona.showMainApp) {
       return <PersonaSessionGate />;

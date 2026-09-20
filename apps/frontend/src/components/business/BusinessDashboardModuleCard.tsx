@@ -13,6 +13,15 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { getOrderStatusBoxColor } from '../orders/shared';
 
+/** Admin hub side-nav category */
+export type AdminModuleSection =
+  | 'people'
+  | 'operations'
+  | 'moderation'
+  | 'catalog'
+  | 'finance'
+  | 'platform';
+
 export interface BusinessDashboardModule {
   title: string;
   description: string;
@@ -23,6 +32,8 @@ export interface BusinessDashboardModule {
   orderCountByStatus?: Record<string, number>;
   /** Platform permission required to show this admin module */
   requiredPermission?: string;
+  /** Admin tools category for side-nav grouping */
+  section?: AdminModuleSection;
   showBadge?: boolean;
   countBreakdown?: {
     verified: number;
