@@ -258,12 +258,12 @@ function CampaignTable({ rows, onToggle }: { rows: CampaignRow[]; onToggle: (row
     <ProgramTable
       title={t('admin.paymentPrograms.existingCampaigns', 'Existing campaigns')}
       columns={[
-        { label: t('admin.paymentPrograms.name', 'Name') },
-        { label: t('admin.paymentPrograms.market', 'Market') },
-        { label: t('admin.paymentPrograms.storeCredit', 'Store credit') },
-        { label: t('admin.paymentPrograms.referrerCash', 'Referrer cash') },
-        { label: t('admin.paymentPrograms.status', 'Status') },
-        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+        { label: t('admin.paymentPrograms.name', 'Name'), width: '22%' },
+        { label: t('admin.paymentPrograms.market', 'Market'), width: '16%' },
+        { label: t('admin.paymentPrograms.storeCreditCol', 'Store credit'), width: '16%' },
+        { label: t('admin.paymentPrograms.referrerCashCol', 'Referrer cash'), width: '16%' },
+        { label: t('admin.paymentPrograms.status', 'Status'), width: '12%' },
+        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right', width: '18%' },
       ]}
     >
       {rows.map((row) => (
