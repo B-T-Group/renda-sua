@@ -11,6 +11,10 @@ import { useAgentXafWallet } from '../../hooks/useAgentXafWallet';
 import { resolveDisplayCurrency, useUserCurrency } from '../../hooks/useUserCurrency';
 import { useReferralProjectedPayout } from '../../hooks/useReferralProjectedPayout';
 import { ReferralPayoutSnapshot } from '../../components/common/ReferralPayoutSnapshot';
+import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
+import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
+import { usePostSignupCreditShopNavigation } from '../../hooks/usePostSignupCreditShopNavigation';
+import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { BusinessModuleCard } from '../../components/business/BusinessModuleCard';
 import { BusinessStoreReachCard } from '../../components/business/BusinessStoreReachCard';
 import { BusinessCatalogHealthCard } from '../../components/business/BusinessCatalogHealthCard';
@@ -126,6 +130,26 @@ export function BusinessDashboardView({
   const tabBottomPadding = useMainTabContentBottomPadding(16);
   const navigation =
     useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
+  const { summary: creditSummary, usable: usableCredits } = usePurchaseCredits(true);
+  usePostSignupCreditShopNavigation(true);
+
+  const onShopCredits = useCallback(() => {
+    const grant = creditSummary.primaryGrant;
+    if (!grant) {
+      navigation.navigate('StoresList');
+      return;
+    }
+    const target = purchaseCreditShopTarget(grant);
+    if (target.kind === 'store') {
+      navigation.navigate('StoreDetail', { businessId: target.businessId });
+      return;
+    }
+    if (target.kind === 'partners') {
+      navigation.navigate('StoresList', { partnersOnly: true });
+      return;
+    }
+    navigation.navigate('StoresList');
+  }, [creditSummary.primaryGrant, navigation]);
   const { auth } = useStore();
   const { currency: meCurrency } = useUserCurrency(!!auth.isAuthenticated);
   const {
@@ -437,6 +461,18 @@ export function BusinessDashboardView({
         ) : null}
 
         {/* —— Bottom: wallet (non-zero), promo, referral, admin —— */}
+        {creditSummary.totalRemaining > 0 ? (
+          <StoreCreditsSnapshot
+            grants={usableCredits}
+            totalRemaining={creditSummary.totalRemaining}
+            currency={creditSummary.currency}
+            nearestExpiry={creditSummary.nearestExpiry}
+            primaryGrant={creditSummary.primaryGrant}
+            onShop={onShopCredits}
+            onViewDetails={() => navigation.navigate('UserPurchaseCredits')}
+          />
+        ) : null}
+
         {showWalletSnapshot ? (
           <ReferralPayoutSnapshot
             availableBalance={walletAvailable}

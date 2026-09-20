@@ -95,6 +95,23 @@ describe('buildStoresCacheKey', () => {
     expect(storesActiveFilter(undefined)).toBe('any');
     expect(storesActiveFilter('false')).toBe('false');
   });
+
+  it('skips cache for partners-only or business-scoped store rails', () => {
+    expect(
+      buildStoresCacheKey({
+        hasOrigin: false,
+        limit: 20,
+        partnersOnly: true,
+      })
+    ).toBeNull();
+    expect(
+      buildStoresCacheKey({
+        hasOrigin: false,
+        limit: 20,
+        businessId: '11111111-1111-1111-1111-111111111111',
+      })
+    ).toBeNull();
+  });
 });
 
 describe('buildEssentialsCacheKey', () => {

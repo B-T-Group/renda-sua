@@ -35,6 +35,9 @@ import NotificationPermissionScreen from '../screens/shared/NotificationPermissi
 import AgentLocationTrackingScreen from '../screens/agent/AgentLocationTrackingScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
+import UserPurchaseCreditsScreen from '../screens/shared/UserPurchaseCreditsScreen';
+import StoresListScreen from '../screens/shared/StoresListScreen';
+import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import { EnrollPersonaExplainScreen } from '../screens/shared/enroll/EnrollPersonaExplainScreen';
 import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersonaSetupScreen';
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
@@ -70,6 +73,7 @@ export type RootStackParamList = {
   NotificationPermission: undefined;
   Earnings: undefined;
   AgentAccounts: undefined;
+  UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
   AgentBusinessReferral: undefined;
   Profile: undefined;
@@ -87,6 +91,8 @@ export type RootStackParamList = {
   ThreadDetail: { threadId: string };
   SupportTickets: undefined;
   AgentLocationTracking: undefined;
+  StoresList: { partnersOnly?: boolean; businessId?: string } | undefined;
+  StoreDetail: { businessId: string; previewMode?: boolean };
   EnrollPersonaExplain: EnrollPersonaParams;
   EnrollPersonaSetup: EnrollPersonaParams;
   EnrollPersonaSuccess: EnrollPersonaParams;
@@ -245,9 +251,24 @@ export function AgentRootNavigator() {
             options={{ title: t('agent.accounts.navTitle', 'Wallet') }}
           />
           <RootStack.Screen
+            name="UserPurchaseCredits"
+            component={UserPurchaseCreditsScreen}
+            options={{ title: t('accounts.purchaseCredits.title', 'Store credits') }}
+          />
+          <RootStack.Screen
             name="UserPaymentPrograms"
             component={UserPaymentProgramsScreen}
             options={{ title: t('accounts.walletHub.title', 'Wallet programs') }}
+          />
+          <RootStack.Screen
+            name="StoresList"
+            component={StoresListScreen}
+            options={{ title: t('stores.listTitle', 'Stores') }}
+          />
+          <RootStack.Screen
+            name="StoreDetail"
+            component={StoreDetailScreen}
+            options={{ title: t('stores.detailTitle', 'Store') }}
           />
           <RootStack.Screen
             name="AgentBusinessReferral"

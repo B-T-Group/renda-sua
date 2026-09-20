@@ -59,5 +59,10 @@ Reservation deposit (mobile money pay-at-delivery or pay-at-pickup): a deposit i
 
 For pay-at-delivery, the courier sends a mobile payment request at the door; the customer approves it on their phone (they do not tap Pay in the app). For mobile-money pickup, the customer taps Pay in the app when they arrive and approves the request on their phone; after approval the order is complete and they can collect it. The merchant can also send a payment request if they need help.`;
 
-  return `${base}\n\n${countrySection(country, locale)}`;
+  const credits =
+    locale === 'fr'
+      ? `Crédits boutique (crédits d'achat) : ce ne sont pas de l'argent portefeuille — ils ne sont pas retirables. Ils s'appliquent automatiquement au sous-total des articles à la caisse (pas aux frais de livraison ni aux acomptes). Selon la campagne, un crédit peut servir dans toute boutique, chez les partenaires Rendasua, ou chez un partenaire précis. Consultez vos crédits dans le menu Portefeuille.`
+      : `Store credits (purchase credits): these are not wallet cash — they cannot be withdrawn. They apply automatically to item subtotals at checkout (not delivery fees or deposits). Depending on the campaign, a credit may work at any store, at Rendasua partner stores, or at one specific partner. Check your credits under the Wallet menu.`;
+
+  return `${base}\n\n${countrySection(country, locale)}\n\n${credits}`;
 }

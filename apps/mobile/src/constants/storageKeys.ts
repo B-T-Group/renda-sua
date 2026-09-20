@@ -17,4 +17,6 @@ export const STORAGE_KEYS = {
   pendingSignupAttemptId: '@RendasuaAgent:pendingSignupAttemptId',
   /** Post-signup welcome state (promo + persona) — survives restart until welcome dismissed. */
   pendingSignupWelcome: '@RendasuaAgent:pendingSignupWelcome',
+  /** After welcome, show campaign store-credit screens until dismissed. */
+  pendingSignupCredits: '@RendasuaAgent:pendingSignupCredits',
 } as const;

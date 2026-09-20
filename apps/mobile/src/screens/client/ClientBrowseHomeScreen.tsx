@@ -20,13 +20,17 @@ import type {
 import { useStore } from '../../stores/RootStore';
 import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
+import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { AssistantIconButton } from '../../components/common/AssistantIconButton';
 import { NotificationBellButton } from '../../components/common/NotificationBellButton';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
+import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
 import { useNotifications } from '../../hooks/useNotifications';
+import { usePostSignupCreditShopNavigation } from '../../hooks/usePostSignupCreditShopNavigation';
 import { useTheme } from '../../contexts/ThemeContext';
 import { spacing } from '../../theme';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
+import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import type { Order } from '../../types/agent';
 
 /** Client browse tab: catalog + navigation to item detail on the root stack. */
@@ -125,8 +129,30 @@ function ClientBrowseHomeScreenBase({
   const { items: actionsNeededItems, dismissAll } = useActionsNeeded(
     isClientAuthenticated ? 'client' : null
   );
+  const { summary, usable } = usePurchaseCredits(isClientAuthenticated);
+  usePostSignupCreditShopNavigation(isClientAuthenticated);
   const showActions =
     !foodOnly && isClientAuthenticated && actionsNeededItems.length > 0;
+  const showCredits =
+    !foodOnly && isClientAuthenticated && summary.totalRemaining > 0;
+
+  const onShopCredits = useCallback(() => {
+    const grant = summary.primaryGrant;
+    if (!grant) {
+      rootNav?.navigate('StoresList');
+      return;
+    }
+    const target = purchaseCreditShopTarget(grant);
+    if (target.kind === 'store') {
+      rootNav?.navigate('StoreDetail', { businessId: target.businessId });
+      return;
+    }
+    if (target.kind === 'partners') {
+      rootNav?.navigate('StoresList', { partnersOnly: true });
+      return;
+    }
+    rootNav?.navigate('StoresList');
+  }, [rootNav, summary.primaryGrant]);
 
   const notificationBell = isClientAuthenticated ? (
     <NotificationBellButton unreadCount={unreadCount} onPress={onOpenNotifications} />
@@ -145,6 +171,19 @@ function ClientBrowseHomeScreenBase({
           <ActionsNeededSection
             items={actionsNeededItems}
             onMarkAllRead={() => void dismissAll()}
+          />
+        </View>
+      ) : null}
+      {showCredits ? (
+        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+          <StoreCreditsSnapshot
+            grants={usable}
+            totalRemaining={summary.totalRemaining}
+            currency={summary.currency}
+            nearestExpiry={summary.nearestExpiry}
+            primaryGrant={summary.primaryGrant}
+            onShop={onShopCredits}
+            onViewDetails={() => rootNav?.navigate('UserPurchaseCredits')}
           />
         </View>
       ) : null}

@@ -86,6 +86,13 @@ export class AuthStore {
     zeroCommissionOrders: number | null;
     identificationWindowDays: number | null;
   } | null = null;
+  /** After welcome: show campaign credit screens when grants exist. */
+  signupCreditsPending = false;
+  /** After credit reveal "Shop", navigate once persona home mounts. */
+  postSignupCreditShop: {
+    kind: 'browse' | 'partners' | 'store';
+    businessId?: string;
+  } | null = null;
   /** Saved account id for the active session. */
   activeSavedAccountId: string | null = null;
   /** Prompt to enable Face ID / fingerprint after OTP login. */
@@ -141,7 +148,28 @@ export class AuthStore {
     this.signupWelcomePending = false;
     this.signupWelcomePersona = null;
     this.signupLaunchPromo = null;
+    this.signupCreditsPending = true;
     void StorageService.remove(APP_STORAGE_KEYS.pendingSignupWelcome);
+    void StorageService.setObject(APP_STORAGE_KEYS.pendingSignupCredits, {
+      pending: true,
+    });
+  }
+
+  dismissSignupCredits(): void {
+    this.signupCreditsPending = false;
+    void StorageService.remove(APP_STORAGE_KEYS.pendingSignupCredits);
+  }
+
+  setPostSignupCreditShop(
+    target: AuthStore['postSignupCreditShop']
+  ): void {
+    this.postSignupCreditShop = target;
+  }
+
+  consumePostSignupCreditShop(): AuthStore['postSignupCreditShop'] {
+    const target = this.postSignupCreditShop;
+    this.postSignupCreditShop = null;
+    return target;
   }
 
   setActiveSavedAccountId(id: string | null): void {
@@ -400,9 +428,12 @@ export class AuthStore {
       this.signupWelcomePending = false;
       this.signupWelcomePersona = null;
       this.signupLaunchPromo = null;
+      this.signupCreditsPending = false;
+      this.postSignupCreditShop = null;
       this.biometricPromptPending = false;
     });
     await StorageService.remove(APP_STORAGE_KEYS.pendingSignupWelcome);
+    await StorageService.remove(APP_STORAGE_KEYS.pendingSignupCredits);
     await this.clearPersistedAuth();
   }
 
@@ -773,6 +804,14 @@ export class AuthStore {
           this.signupLaunchPromo = pendingWelcome.launchPromo ?? null;
         });
       }
+      const pendingCredits = await StorageService.getObject<{
+        pending?: boolean;
+      }>(APP_STORAGE_KEYS.pendingSignupCredits);
+      if (pendingCredits) {
+        runInAction(() => {
+          this.signupCreditsPending = Boolean(pendingCredits.pending);
+        });
+      }
 
       const [userData, tokensData, isAuth, activeAccountId] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.user),
@@ -895,7 +934,10 @@ export class AuthStore {
     this.signupWelcomePending = false;
     this.signupWelcomePersona = null;
     this.signupLaunchPromo = null;
+    this.signupCreditsPending = false;
+    this.postSignupCreditShop = null;
     void StorageService.remove(APP_STORAGE_KEYS.pendingSignupWelcome);
+    void StorageService.remove(APP_STORAGE_KEYS.pendingSignupCredits);
     this.activeSavedAccountId = null;
     this.biometricPromptPending = false;
   }

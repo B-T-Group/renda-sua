@@ -11,8 +11,10 @@ import { ActivityIndicator, Button, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { CatalogStore } from '../../types/stores';
+import type { PurchaseCreditGrant } from '../../types/purchaseCredits';
 import { shadows, type Theme } from '../../theme';
 import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
+import { storeShowsCreditPartnerBadge } from '../../utils/purchaseCredits';
 import { StatusPill } from '../common/StatusPill';
 import { StoreDefaultAvatar } from '../illustrations/StoreDefaultAvatar';
 
@@ -22,6 +24,7 @@ export interface CatalogStoresRowProps {
   loading: boolean;
   onStorePress: (businessLocationId: string) => void;
   onSeeAllStores?: () => void;
+  creditGrants?: PurchaseCreditGrant[];
 }
 
 const CARD_WIDTH = 148;
@@ -48,6 +51,7 @@ export const CatalogStoresRow = memo(function CatalogStoresRow({
   loading,
   onStorePress,
   onSeeAllStores,
+  creditGrants = [],
 }: CatalogStoresRowProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = theme;
@@ -121,6 +125,7 @@ export const CatalogStoresRow = memo(function CatalogStoresRow({
               colors={colors}
               spacing={spacing}
               borderRadius={borderRadius.md}
+              showCreditBadge={storeShowsCreditPartnerBadge(store, creditGrants)}
               onPress={() => onStorePress(store.business_location_id)}
             />
           ))}
@@ -135,6 +140,7 @@ interface StorePillCardProps {
   colors: Theme['colors'];
   spacing: Theme['spacing'];
   borderRadius: number;
+  showCreditBadge?: boolean;
   onPress: () => void;
 }
 
@@ -143,6 +149,7 @@ const StorePillCard = memo(function StorePillCard({
   colors,
   spacing,
   borderRadius,
+  showCreditBadge,
   onPress,
 }: StorePillCardProps) {
   const { t } = useTranslation();
@@ -246,6 +253,16 @@ const StorePillCard = memo(function StorePillCard({
                 label={t('business.lifecycle.openingSoonBadge', 'Opening Soon')}
                 backgroundColor={colors.warning.main + '22'}
                 textColor={colors.warning.dark ?? colors.warning.main}
+              />
+            </View>
+          ) : null}
+          {showCreditBadge ? (
+            <View style={[styles.badgeSlot, { paddingTop: spacing.xs }]}>
+              <StatusPill
+                compact
+                label={t('accounts.purchaseCredits.partnerBadge', 'Credits apply')}
+                backgroundColor={colors.successTint}
+                textColor={colors.success.dark}
               />
             </View>
           ) : null}

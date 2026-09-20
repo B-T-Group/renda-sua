@@ -210,6 +210,18 @@ export class InventoryItemsController {
     required: false,
     type: Boolean,
   })
+  @ApiQuery({
+    name: 'partners_only',
+    required: false,
+    type: Boolean,
+    description: 'When true, only return active Rendasua partner stores',
+  })
+  @ApiQuery({
+    name: 'business_id',
+    required: false,
+    type: String,
+    description: 'When set, only return locations for this business UUID',
+  })
   @ApiResponse({
     status: 200,
     description: 'Stores with item counts and optional distance',
@@ -222,7 +234,9 @@ export class InventoryItemsController {
     @Query('is_active') is_active?: string,
     @Query('include_unavailable') include_unavailable?: string,
     @Query('origin_lat') origin_lat?: string,
-    @Query('origin_lng') origin_lng?: string
+    @Query('origin_lng') origin_lng?: string,
+    @Query('partners_only') partners_only?: string,
+    @Query('business_id') business_id?: string
   ): Promise<{
     success: boolean;
     data: { stores: TopInventoryStoreRow[] };
@@ -234,6 +248,8 @@ export class InventoryItemsController {
     const lng =
       origin_lng !== undefined ? Number.parseFloat(origin_lng) : undefined;
     const hasOrigin = Number.isFinite(lat) && Number.isFinite(lng);
+    const partnersOnly = partners_only === 'true';
+    const businessId = business_id?.trim() || undefined;
     const cacheKey = buildStoresCacheKey({
       hasOrigin,
       search,
@@ -242,38 +258,10 @@ export class InventoryItemsController {
       isActive: is_active,
       includeUnavailable: include_unavailable,
       limit: n,
+      partnersOnly,
+      businessId,
     });
-
-    if (cacheKey) {
-      return await this.catalogCacheService.getOrCompute(
-        cacheKey,
-        async () => {
-          const stores = await this.inventoryItemsService.getTopInventoryStores(n, {
-            search,
-            country_code,
-            state,
-            is_active:
-              is_active === 'true'
-                ? true
-                : is_active === 'false'
-                  ? false
-                  : undefined,
-            include_unavailable:
-              include_unavailable !== undefined
-                ? include_unavailable === 'true'
-                : undefined,
-          });
-          return {
-            success: true,
-            data: { stores },
-            message: 'Stores retrieved successfully',
-          };
-        },
-        { ttlSeconds: STORES_TTL_SECONDS }
-      );
-    }
-
-    const stores = await this.inventoryItemsService.getTopInventoryStores(n, {
+    const storeQuery = {
       search,
       country_code,
       state,
@@ -287,8 +275,33 @@ export class InventoryItemsController {
         include_unavailable !== undefined
           ? include_unavailable === 'true'
           : undefined,
+      partners_only: partnersOnly || undefined,
+      business_id: businessId,
       ...(hasOrigin && { origin_lat: lat, origin_lng: lng }),
-    });
+    };
+
+    if (cacheKey) {
+      return await this.catalogCacheService.getOrCompute(
+        cacheKey,
+        async () => {
+          const stores = await this.inventoryItemsService.getTopInventoryStores(
+            n,
+            storeQuery
+          );
+          return {
+            success: true,
+            data: { stores },
+            message: 'Stores retrieved successfully',
+          };
+        },
+        { ttlSeconds: STORES_TTL_SECONDS }
+      );
+    }
+
+    const stores = await this.inventoryItemsService.getTopInventoryStores(
+      n,
+      storeQuery
+    );
     return {
       success: true,
       data: { stores },

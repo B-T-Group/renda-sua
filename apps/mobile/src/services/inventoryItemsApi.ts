@@ -42,6 +42,8 @@ export interface FetchCatalogStoresParams {
   origin_lng?: number;
   include_unavailable?: boolean;
   owner_preview?: boolean;
+  partners_only?: boolean;
+  business_id?: string;
 }
 
 /** Exported for tests — Food-tab queries must pin the cooked-food category. */
@@ -126,6 +128,8 @@ function catalogStoresPath(params: FetchCatalogStoresParams): string {
   if (params.country_code) search.set('country_code', params.country_code);
   if (params.state) search.set('state', params.state);
   if (params.include_unavailable === true) search.set('include_unavailable', 'true');
+  if (params.partners_only === true) search.set('partners_only', 'true');
+  if (params.business_id?.trim()) search.set('business_id', params.business_id.trim());
   if (typeof params.origin_lat === 'number' && Number.isFinite(params.origin_lat)) {
     search.set('origin_lat', String(params.origin_lat));
   }

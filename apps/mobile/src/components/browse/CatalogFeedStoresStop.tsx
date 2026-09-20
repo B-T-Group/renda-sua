@@ -1,6 +1,8 @@
 import React, { memo } from 'react';
 import { StyleSheet } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useStore } from '../../stores/RootStore';
+import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
 import type { CatalogStore } from '../../types/stores';
 import { CatalogStoresRow } from './CatalogStoresRow';
 
@@ -20,6 +22,8 @@ export const CatalogFeedStoresStop = memo(function CatalogFeedStoresStop({
   onSeeAllStores,
 }: CatalogFeedStoresStopProps) {
   const theme = useTheme();
+  const { auth } = useStore();
+  const { usable } = usePurchaseCredits(auth.isAuthenticated);
 
   if (stores.length === 0) return null;
 
@@ -30,6 +34,7 @@ export const CatalogFeedStoresStop = memo(function CatalogFeedStoresStop({
       loading={false}
       onStorePress={onStorePress ?? (() => {})}
       onSeeAllStores={onSeeAllStores}
+      creditGrants={usable}
     />
   );
 });

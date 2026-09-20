@@ -192,6 +192,16 @@ export interface ResolvedCheckoutConfig {
   deposit_paid?: number | null;
   amount_due?: number | null;
   deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
+  /** Purchase credits that will auto-apply to item subtotals. */
+  purchase_credits?: {
+    total: number;
+    currency: string;
+    allocations?: Array<{
+      amount: number;
+      applicability: string;
+      businessId: string | null;
+    }>;
+  } | null;
 }
 
 /** Input shape for POST /orders/checkout/preflight */

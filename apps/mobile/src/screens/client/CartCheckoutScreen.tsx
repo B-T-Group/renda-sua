@@ -38,6 +38,7 @@ import { useResolvedCheckout } from '../../hooks/useResolvedCheckout';
 import useUpdateClientProfile from '../../hooks/useUpdateClientProfile';
 import { PlaceOrderDeliveryWindowBlock } from '../../components/browse/PlaceOrderDeliveryWindowBlock';
 import { PlaceOrderPaymentBlock } from '../../components/browse/PlaceOrderPaymentBlock';
+import { PurchaseCreditCheckoutNote } from '../../components/credits/PurchaseCreditCheckoutNote';
 import { AddPaymentPhoneDialog } from '../../components/dialogs/AddPaymentPhoneDialog';
 import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
@@ -1320,6 +1321,8 @@ export default observer(function CartCheckoutScreen() {
             style={{ marginBottom: spacing.sm }}
           />
         ) : null}
+
+        <PurchaseCreditCheckoutNote credits={preflightConfig?.purchase_credits} />
 
         <CartCheckoutSummaryCard
           currency={currency}

@@ -146,4 +146,33 @@ describe('InventoryItemsController catalog cache gates', () => {
       { ttlSeconds: STORES_TTL_SECONDS }
     );
   });
+
+  it('skips the store rail cache for partners-only or business-scoped requests', async () => {
+    await controller.getTopInventoryStores(
+      '20',
+      undefined,
+      'CM',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'true'
+    );
+    await controller.getTopInventoryStores(
+      '20',
+      undefined,
+      'CM',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '11111111-1111-1111-1111-111111111111'
+    );
+
+    expect(catalogCache.getOrCompute).not.toHaveBeenCalled();
+    expect(inventoryItemsService.getTopInventoryStores).toHaveBeenCalledTimes(2);
+  });
 });

@@ -46,8 +46,11 @@ export function buildStoresCacheKey(input: {
   isActive?: string;
   includeUnavailable?: string;
   limit: number;
+  partnersOnly?: boolean;
+  businessId?: string;
 }): string | null {
   if (input.hasOrigin) return null;
+  if (input.partnersOnly || input.businessId) return null;
   return [
     'stores',
     input.search || 'all',

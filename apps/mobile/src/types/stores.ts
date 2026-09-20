@@ -8,6 +8,7 @@ export interface CatalogStore {
   is_verified: boolean;
   can_accept_orders: boolean;
   is_storefront_visible: boolean;
+  is_partner?: boolean;
   distance_meters?: number | null;
 }
 
