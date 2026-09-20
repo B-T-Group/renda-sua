@@ -1,4 +1,4 @@
-import { AccountsService } from './accounts.service';
+import { AccountsService, cashAdvanceMinBalance } from './accounts.service';
 
 describe('AccountsService', () => {
   const accountId = 'account-1';
@@ -385,6 +385,145 @@ describe('AccountsService', () => {
         success: false,
         error: 'Insufficient funds for this transaction',
       });
+    });
+
+    it('claims cash-advance capacity atomically before inserting the ledger row', async () => {
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('ClaimCashAdvance')) {
+          return {
+            update_accounts: {
+              returning: [
+                {
+                  available_balance: 1500,
+                  withheld_balance: 200,
+                  cash_advance_balance: -500,
+                },
+              ],
+            },
+          };
+        }
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx-advance' } };
+        }
+        return {};
+      });
+
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 500,
+        transactionType: 'cash_advance',
+        maxCashAdvanceDebt: 1000,
+        memo: 'Cash advance draw',
+      });
+
+      expect(result).toEqual({
+        success: true,
+        transactionId: 'tx-advance',
+        newBalance: {
+          available: 1500,
+          withheld: 200,
+          total: 1700,
+          cashAdvance: -500,
+        },
+      });
+      const claimCall = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('ClaimCashAdvance')
+      );
+      expect(claimCall?.[1]).toEqual({
+        accountId,
+        amount: 500,
+        negAmount: -500,
+        minBalance: -500,
+      });
+      expect(
+        executeMutation.mock.calls.some(([mutation]) =>
+          String(mutation).includes('UpdateAccountBalances')
+        )
+      ).toBe(false);
+    });
+
+    it('rejects a cash-advance draw when the facility limit is missing', async () => {
+      await expect(
+        service.registerTransaction({
+          accountId,
+          amount: 500,
+          transactionType: 'cash_advance',
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'Cash-advance limit is required',
+      });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cash-advance draw when the atomic claim finds no remaining room', async () => {
+      executeMutation.mockResolvedValue({ update_accounts: { returning: [] } });
+      await expect(
+        service.registerTransaction({
+          accountId,
+          amount: 500,
+          transactionType: 'cash_advance',
+          maxCashAdvanceDebt: 400,
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'Draw exceeds the remaining cash-advance limit',
+      });
+      expect(
+        executeMutation.mock.calls.some(([mutation]) =>
+          String(mutation).includes('InsertTransaction')
+        )
+      ).toBe(false);
+    });
+
+    it('releases the cash-advance claim if the ledger insert fails', async () => {
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('ClaimCashAdvance')) {
+          return {
+            update_accounts: {
+              returning: [
+                {
+                  available_balance: 1500,
+                  withheld_balance: 200,
+                  cash_advance_balance: -500,
+                },
+              ],
+            },
+          };
+        }
+        if (mutation.includes('InsertTransaction')) {
+          throw new Error('insert failed');
+        }
+        return { update_accounts: { affected_rows: 1 } };
+      });
+
+      await expect(
+        service.registerTransaction({
+          accountId,
+          amount: 500,
+          transactionType: 'cash_advance',
+          maxCashAdvanceDebt: 1000,
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'insert failed',
+      });
+      const releaseCall = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('ReleaseCashAdvanceClaim')
+      );
+      expect(releaseCall?.[1]).toEqual({
+        accountId,
+        amount: -500,
+        posAmount: 500,
+      });
+    });
+  });
+
+  describe('cashAdvanceMinBalance', () => {
+    it('requires current debt plus the draw to stay within the facility limit', () => {
+      expect(cashAdvanceMinBalance(1000, 500)).toBe(-500);
+      expect(cashAdvanceMinBalance(1000, 1000)).toBe(0);
+      expect(cashAdvanceMinBalance(100, 150)).toBe(50);
     });
   });
 });
