@@ -181,6 +181,13 @@ describe('ReelsFeedService', () => {
       expect(hasura.executeQuery).not.toHaveBeenCalled();
     });
 
+    it('returns an empty feed when country is whitespace-only', async () => {
+      const page = await service.getFeed({ country: '   ' });
+
+      expect(page).toEqual({ items: [], nextCursor: null });
+      expect(hasura.executeQuery).not.toHaveBeenCalled();
+    });
+
     it('filters the ranked feed to active approved ready reels', async () => {
       hasura.executeQuery.mockResolvedValueOnce({ reels: [] });
 
@@ -578,6 +585,20 @@ describe('ReelsFeedService', () => {
       });
 
       expect(itemViews.trackView).toHaveBeenCalledWith('inv-1', 'anon', 'sess-1');
+    });
+
+    it('attributes product views to the session when userId is not a UUID', async () => {
+      mockItemSubject('item');
+      hasura.executeMutation.mockResolvedValue({});
+
+      await service.recordView({
+        reelId,
+        userId: 'anonymous',
+        sessionId: 'sess-anon',
+        watchTimeMs: 4000,
+      });
+
+      expect(itemViews.trackView).toHaveBeenCalledWith('inv-1', 'anon', 'sess-anon');
     });
 
     it.each(['rental', 'business'])(
