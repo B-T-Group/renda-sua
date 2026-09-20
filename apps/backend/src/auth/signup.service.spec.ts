@@ -571,6 +571,65 @@ describe('SignupService', () => {
       expect(result.response.access_token).toBe('token');
     });
 
+    it('creates a web session on first signup verify and omits refresh_token from JSON', async () => {
+      const webToken = { ...auth0Token, refresh_token: 'refresh-1' };
+      auth0Service.verifyEmailOtp.mockResolvedValue(webToken);
+      (auth0Service as any).setRendasuaUserMetadata = jest.fn().mockResolvedValue(undefined);
+      (auth0Service as any).refreshTokensForNewUser = jest.fn().mockResolvedValue({
+        access_token: 'token',
+        refresh_token: 'refresh-1',
+      });
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [{ id: 'client-123', type: 'client' }],
+      });
+
+      const emailAttempt = {
+        ...pendingAttempt,
+        channel: 'email' as const,
+        payload: {
+          ...pendingAttempt.payload,
+          country: 'CA',
+        },
+      };
+      hasuraSystemService.executeQuery.mockReset();
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('signup_attempts_by_pk') || query.includes('SignupAttempt')) {
+          return { signup_attempts_by_pk: emailAttempt };
+        }
+        return { users: [] };
+      });
+      hasuraSystemService.executeMutation.mockImplementation(
+        async (mutation: string) => {
+          if (mutation.includes('ClaimSignupAttempt')) {
+            return { update_signup_attempts: { affected_rows: 1 } };
+          }
+          return { update_signup_attempts_by_pk: { id: 'attempt-123' } };
+        }
+      );
+
+      const result = await service.verifySignupOtp(
+        { attemptId: 'attempt-123', otp: '123456' },
+        'web',
+        '9.9.9.9',
+        'jest'
+      );
+
+      expect(sessionStore.generateSessionId).toHaveBeenCalled();
+      expect(sessionStore.createSession).toHaveBeenCalledWith(
+        'sid-1',
+        expect.objectContaining({
+          userId: 'user-123',
+          auth0RefreshToken: 'refresh-1',
+          ipAddress: '9.9.9.9',
+          userAgent: 'jest',
+        })
+      );
+      expect(result.sessionId).toBe('sid-1');
+      expect(result.response.refresh_token).toBeUndefined();
+      expect(result.response.access_token).toBe('token');
+    });
+
     it('verifies SMS OTP and marks the phone verified', async () => {
       const smsToken = {
         ...auth0Token,

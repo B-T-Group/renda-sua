@@ -99,6 +99,29 @@ describe('SignupController OTP channel and session cookie gates', () => {
     );
   });
 
+  it('sets SameSite=None on HTTPS for web signup verify', async () => {
+    signupService.verifySignupOtp.mockResolvedValue({
+      sessionId: 'sid-1',
+      response: { success: true, verified: true, access_token: 'a' },
+    });
+    const res = mockRes();
+    await controller.verifyOtp(
+      { attemptId: 'attempt-123', otp: '1234' },
+      'web',
+      {
+        ip: '9.9.9.9',
+        secure: true,
+        headers: { 'user-agent': 'jest', 'x-forwarded-proto': 'https' },
+      } as never,
+      res as never
+    );
+    expect(res.cookie).toHaveBeenCalledWith(
+      'rs_session',
+      'sid-1',
+      expect.objectContaining({ sameSite: 'none', secure: true })
+    );
+  });
+
   it('does not set a cookie for mobile signup verify', async () => {
     signupService.verifySignupOtp.mockResolvedValue({
       response: {

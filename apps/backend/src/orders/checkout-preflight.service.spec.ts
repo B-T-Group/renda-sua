@@ -1460,4 +1460,46 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.payment_rail).toBe('stripe');
     });
   });
+
+  describe('walletCoversDue and purchase credit preview', () => {
+    it('returns false for pay-later timings even when the wallet is large', () => {
+      expect((service as any).walletCoversDue('pay_at_delivery', 99999, 1000, 0, 0)).toBe(false);
+      expect((service as any).walletCoversDue('pay_at_pickup', 99999, 1000, 0, 0)).toBe(false);
+    });
+
+    it('treats wallet as covering the due after discount and capped credits', () => {
+      expect((service as any).walletCoversDue('pay_now', 400, 1000, 100, 500)).toBe(true);
+      expect((service as any).walletCoversDue('pay_now', 399, 1000, 100, 500)).toBe(false);
+      expect((service as any).walletCoversDue('pay_now', 0, 1000, 0, 2000)).toBe(true);
+    });
+
+    it('returns a purchase credit preview only when a user and positive lines exist', async () => {
+      const plan = jest.fn().mockResolvedValue({
+        total: 300,
+        allocations: [{ amount: 300, applicability: 'any_store', businessId: null }],
+      });
+      (service as any).purchaseCreditsService = { plan };
+
+      await expect((service as any).previewPurchaseCredits(null, [])).resolves.toBeNull();
+      await expect(
+        (service as any).previewPurchaseCredits('user-1', [{ business_id: 'b1', subtotal: 0 }])
+      ).resolves.toBeNull();
+
+      await expect(
+        (service as any).previewPurchaseCredits('user-1', [
+          { business_id: 'b1', subtotal: 800, currency: 'XAF' },
+        ])
+      ).resolves.toEqual({
+        total: 300,
+        currency: 'XAF',
+        allocations: [{ amount: 300, applicability: 'any_store', businessId: null }],
+      });
+      expect(plan).toHaveBeenCalledWith({
+        userId: 'user-1',
+        currency: 'XAF',
+        lines: [{ businessId: 'b1', subtotal: 800 }],
+        maxTotal: 800,
+      });
+    });
+  });
 });

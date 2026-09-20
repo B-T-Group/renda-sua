@@ -292,6 +292,33 @@ describe('MobilePaymentCallbackProcessor', () => {
     expect(onPaymentSuccess).not.toHaveBeenCalled();
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
   });
+
+  it('does not re-invoke handler for reel_ai_token on already-success MoMo retry', async () => {
+    const onPaymentSuccess = jest.fn();
+    paymentCallbackRegistry.getHandlers.mockReturnValue([
+      {
+        supportsPaymentEntity: (entity: string) => entity === 'reel_ai_token',
+        onPaymentSuccess,
+        onPaymentFailure: jest.fn(),
+        finalizeCashReconciliationAfterPayment: jest.fn(),
+      },
+    ]);
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...baseTx,
+      payment_entity: 'reel_ai_token',
+      account_id: undefined,
+      status: 'success',
+    });
+
+    const result = await processor.processMypvitCallback({
+      ...successCallback,
+      merchantReferenceId: baseTx.reference,
+    });
+
+    expect(result.skipped).toBe(true);
+    expect(onPaymentSuccess).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
 });
 
 describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
