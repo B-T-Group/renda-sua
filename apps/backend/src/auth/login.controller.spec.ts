@@ -181,6 +181,24 @@ describe('LoginController session cookie and CSRF gates', () => {
     );
   });
 
+  it('does not set a cookie when refresh reuses the current session', async () => {
+    loginService.refreshSession.mockResolvedValue({
+      response: { success: true, access_token: 'cached' },
+    });
+    const res = mockRes();
+    const body = await controller.refreshSession(
+      {
+        cookies: { rs_session: 'sid-1' },
+        headers: { 'user-agent': 'jest' },
+        ip: '1.1.1.1',
+      } as never,
+      res as never,
+      'XMLHttpRequest'
+    );
+    expect(body).toEqual({ success: true, access_token: 'cached' });
+    expect(res.cookie).not.toHaveBeenCalled();
+  });
+
   it('destroys the session and always clears the cookie on logout', async () => {
     const res = mockRes();
     const body = await controller.logout(

@@ -55,36 +55,42 @@ async function refreshWithBackend(): Promise<{
   expires_in: number;
 } | null> {
   try {
-    const res = await fetch(`${environment.apiUrl}/auth/login/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client-Platform': 'web',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-    });
-    if (!res.ok) {
-      if (res.status === 401) {
-        return null;
-      }
-      throw new Error('Failed to refresh token');
-    }
+    const res = await fetchRefresh(false);
+    if (!res) return null;
     return (await res.json()) as any;
   } catch {
     return null;
   }
 }
 
-let cookieHydrate: ReturnType<typeof refreshWithBackend> | null = null;
+async function fetchRefresh(retried: boolean): Promise<Response | null> {
+  const res = await fetch(`${environment.apiUrl}/auth/login/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Client-Platform': 'web',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  });
+  if (res.ok) return res;
+  if ((res.status === 429 || res.status === 503) && !retried) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return fetchRefresh(true);
+  }
+  if (res.status === 401) return null;
+  throw new Error('Failed to refresh token');
+}
 
-function hydrateFromCookie() {
-  if (!cookieHydrate) {
-    cookieHydrate = refreshWithBackend().finally(() => {
-      cookieHydrate = null;
+let inflightRefresh: ReturnType<typeof refreshWithBackend> | null = null;
+
+function refreshSessionOnce() {
+  if (!inflightRefresh) {
+    inflightRefresh = refreshWithBackend().finally(() => {
+      inflightRefresh = null;
     });
   }
-  return cookieHydrate;
+  return inflightRefresh;
 }
 
 export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
@@ -122,7 +128,7 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
     let isMounted = true;
 
     const hydrateSession = async () => {
-      const refreshed = await hydrateFromCookie();
+      const refreshed = await refreshSessionOnce();
       if (!isMounted) return;
       if (refreshed) applyPasswordlessTokens(refreshed);
       setIsSessionReady(true);
@@ -184,7 +190,7 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
       }
       if (options?.refresh === false) return null;
 
-      const refreshed = await refreshWithBackend();
+      const refreshed = await refreshSessionOnce();
       if (!refreshed) {
         clearPasswordlessSession();
         return null;

@@ -12,6 +12,7 @@ import type { PersonaId } from '../users/persona.types';
 import { isPersonaId } from '../users/persona.types';
 import { Auth0Service, Auth0TokenResponse } from './auth0.service';
 import { SessionStoreService } from './session-store.service';
+import { requireRefreshToken } from './session-refresh.util';
 import { ClientPlatform } from './platform.decorator';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
@@ -383,7 +384,7 @@ export class SignupService {
         const sessionId = this.sessionStore.generateSessionId();
         await this.sessionStore.createSession(sessionId, {
           userId: result.user.id,
-          auth0RefreshToken: result.tokens.refresh_token!,
+          auth0RefreshToken: requireRefreshToken(result.tokens.refresh_token),
           auth0AccessToken: result.tokens.access_token,
           auth0IdToken: result.tokens.id_token,
           createdAt: Date.now(),
@@ -454,7 +455,7 @@ export class SignupService {
       const sessionId = this.sessionStore.generateSessionId();
       await this.sessionStore.createSession(sessionId, {
         userId: result.user.id,
-        auth0RefreshToken: result.tokens.refresh_token!,
+        auth0RefreshToken: requireRefreshToken(result.tokens.refresh_token),
         auth0AccessToken: result.tokens.access_token,
         auth0IdToken: result.tokens.id_token,
         createdAt: Date.now(),
