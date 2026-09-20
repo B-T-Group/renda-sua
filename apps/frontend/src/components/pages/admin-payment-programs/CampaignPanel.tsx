@@ -215,14 +215,14 @@ function ScopeFields({
 }) {
   const { t } = useTranslation();
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-      <TextField select label={t('admin.paymentPrograms.appliesTo', 'Applies to')} value={form.storeScope} onChange={(e) => onChange('storeScope', e.target.value)}>
+    <Stack spacing={2}>
+      <TextField fullWidth select label={t('admin.paymentPrograms.appliesTo', 'Applies to')} value={form.storeScope} onChange={(e) => onChange('storeScope', e.target.value)}>
         <MenuItem value="any_store">{t('admin.paymentPrograms.anyStore', 'Any store')}</MenuItem>
         <MenuItem value="partner_businesses">{t('admin.paymentPrograms.allPartners', 'All partner businesses')}</MenuItem>
         <MenuItem value="specific_business">{t('admin.paymentPrograms.onePartner', 'One partner business')}</MenuItem>
       </TextField>
       {form.storeScope === 'specific_business' && (
-        <TextField select label={t('admin.paymentPrograms.partnerBusiness', 'Partner business')} value={form.businessId} onChange={(e) => onChange('businessId', e.target.value)}>
+        <TextField fullWidth select label={t('admin.paymentPrograms.partnerBusiness', 'Partner business')} value={form.businessId} onChange={(e) => onChange('businessId', e.target.value)}>
           {partners.map((partner) => (
             <MenuItem key={partner.business_id} value={partner.business_id}>{partner.business?.name || partner.business_id}</MenuItem>
           ))}
@@ -241,12 +241,12 @@ function AmountFields({
 }) {
   const { t } = useTranslation();
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-      <TextField label={t('admin.paymentPrograms.storeCredit', 'Store credit for the new user')} value={form.subjectAmount} onChange={(e) => onChange('subjectAmount', e.target.value)} />
-      <TextField label={t('admin.paymentPrograms.referredBonus', 'Extra store credit if referred')} value={form.subjectBonusIfReferred} onChange={(e) => onChange('subjectBonusIfReferred', e.target.value)} />
-      <TextField label={t('admin.paymentPrograms.referrerCash', 'Withdrawable cash for the referrer')} value={form.referrerAmount} onChange={(e) => onChange('referrerAmount', e.target.value)} />
-      <TextField label={t('admin.paymentPrograms.referrerCap', 'Referrer reward cap')} value={form.maxReferrerRewards} onChange={(e) => onChange('maxReferrerRewards', e.target.value)} />
-      <TextField label={t('admin.paymentPrograms.expiresDays', 'Store credit expires (days)')} value={form.storeCreditExpiresDays} onChange={(e) => onChange('storeCreditExpiresDays', e.target.value)} />
+    <Stack spacing={2}>
+      <TextField fullWidth label={t('admin.paymentPrograms.storeCredit', 'Store credit for the new user')} value={form.subjectAmount} onChange={(e) => onChange('subjectAmount', e.target.value)} />
+      <TextField fullWidth label={t('admin.paymentPrograms.referredBonus', 'Extra store credit if referred')} value={form.subjectBonusIfReferred} onChange={(e) => onChange('subjectBonusIfReferred', e.target.value)} />
+      <TextField fullWidth label={t('admin.paymentPrograms.referrerCash', 'Withdrawable cash for the referrer')} value={form.referrerAmount} onChange={(e) => onChange('referrerAmount', e.target.value)} />
+      <TextField fullWidth label={t('admin.paymentPrograms.referrerCap', 'Referrer reward cap')} value={form.maxReferrerRewards} onChange={(e) => onChange('maxReferrerRewards', e.target.value)} />
+      <TextField fullWidth label={t('admin.paymentPrograms.expiresDays', 'Store credit expires (days)')} value={form.storeCreditExpiresDays} onChange={(e) => onChange('storeCreditExpiresDays', e.target.value)} />
     </Stack>
   );
 }
