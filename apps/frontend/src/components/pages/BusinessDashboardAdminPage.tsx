@@ -1,63 +1,86 @@
-import { Alert, Container, Typography } from '@mui/material';
-import React from 'react';
+import { Alert, Box, Stack, Typography } from '@mui/material';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useOutletContext } from 'react-router-dom';
+import AdminOverviewSection from '../admin/AdminOverviewSection';
+import SEOHead from '../seo/SEOHead';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import BusinessDashboardHubPage from '../business/BusinessDashboardHubPage';
+import { groupAdminModules } from '../../constants/adminModuleSections';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
+
+export interface AdminToolsOutletContext {
+  adminSearch: string;
+  setAdminSearch: (value: string) => void;
+}
 
 const BusinessDashboardAdminPage: React.FC = () => {
   const { t } = useTranslation();
   const { profile } = useUserProfileContext();
+  const outlet = useOutletContext<AdminToolsOutletContext | undefined>();
+  const search = outlet?.adminSearch ?? '';
+
   const {
     aggregates,
     loading,
     error: aggregatesError,
   } = useDashboardAggregates(profile?.business?.id);
 
-  const mainInterest =
-    profile?.business?.main_interest ?? 'sell_items';
-  const isRentalFocused = mainInterest === 'rent_items';
-  const { adminModules, hasAdminAccess } = useBusinessDashboardModules({
+  const isRentalFocused =
+    (profile?.business?.main_interest ?? 'sell_items') === 'rent_items';
+  const { adminModules } = useBusinessDashboardModules({
     aggregates,
     isRentalFocused,
   });
 
-  if (!hasAdminAccess) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Alert severity="error">
-          <Typography variant="h6" color="text.secondary">
-            {t(
-              'business.dashboard.adminAccessDenied',
-              'You do not have access to admin tools.'
-            )}
-          </Typography>
-        </Alert>
-      </Container>
-    );
-  }
+  const groups = useMemo(
+    () => groupAdminModules(adminModules, search),
+    [adminModules, search]
+  );
 
   return (
-    <BusinessDashboardHubPage
-      seoTitleKey="business.dashboard.adminPageSeoTitle"
-      seoTitleDefault="Admin tools"
-      seoDescriptionKey="business.dashboard.adminPageSeoDescription"
-      seoDescriptionDefault="Platform administration for Rendasua administrators."
-      pageTitle={t('business.dashboard.adminMenuTitle', 'Admin tools')}
-      pageSubtitle={t(
-        'business.dashboard.adminManagementHint',
-        'Platform tools visible to administrators only.'
+    <Box>
+      <SEOHead
+        title={t('business.dashboard.adminPageSeoTitle', 'Admin tools')}
+        description={t(
+          'business.dashboard.adminPageSeoDescription',
+          'Platform administration for Rendasua administrators.'
+        )}
+        keywords={t('seo.business-dashboard.keywords')}
+      />
+
+      <Typography variant="h5" gutterBottom>
+        {t('business.dashboard.adminMenuTitle', 'Admin tools')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+        {t(
+          'business.dashboard.adminManagementHint',
+          'Platform tools visible to administrators only.'
+        )}
+      </Typography>
+
+      {aggregatesError ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {aggregatesError}
+        </Alert>
+      ) : null}
+
+      {groups.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">
+          {t('business.dashboard.adminSearchEmpty', 'No tools match.')}
+        </Typography>
+      ) : (
+        <Stack spacing={2.5}>
+          {groups.map((group) => (
+            <AdminOverviewSection
+              key={group.section}
+              group={group}
+              loading={loading}
+            />
+          ))}
+        </Stack>
       )}
-      sections={[
-        {
-          title: t('business.dashboard.adminManagement'),
-          modules: adminModules,
-        },
-      ]}
-      isLoading={loading}
-      error={aggregatesError}
-    />
+    </Box>
   );
 };
 

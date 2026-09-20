@@ -303,6 +303,7 @@ export function useBusinessDashboardModules({
             : undefined,
         color: brandTokens.secondary.main,
         requiredPermission: PlatformPermissions.MANAGE_AGENTS,
+        section: 'people',
         path: '/admin/agents',
       },
       {
@@ -312,6 +313,7 @@ export function useBusinessDashboardModules({
         count: aggregates?.clientCount ?? null,
         color: '#0288d1',
         requiredPermission: PlatformPermissions.MANAGE_CLIENTS,
+        section: 'people',
         path: '/admin/clients',
       },
       {
@@ -332,6 +334,7 @@ export function useBusinessDashboardModules({
             : undefined,
         color: '#6d4c41',
         requiredPermission: PlatformPermissions.MANAGE_BUSINESSES,
+        section: 'people',
         path: '/admin/businesses',
       },
       {
@@ -347,6 +350,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: brandTokens.cta.main,
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        section: 'operations',
         path: '/admin/business-reliability',
       },
       {
@@ -359,6 +363,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#d32f2f',
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        section: 'operations',
         path: '/admin/orders',
       },
       {
@@ -371,6 +376,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#00695c',
         requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        section: 'operations',
         path: '/admin/pickup-ops',
       },
       {
@@ -386,6 +392,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#5d4037',
         requiredPermission: PlatformPermissions.LOCATIONS_TRANSFERS_ADMIN,
+        section: 'operations',
         path: '/admin/location-transfers',
       },
       {
@@ -395,6 +402,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#9c27b0',
         requiredPermission: PlatformPermissions.CONTENT_BRANDS,
+        section: 'catalog',
         path: '/content-management/brands',
       },
       {
@@ -404,6 +412,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: brandTokens.secondary.light,
         requiredPermission: PlatformPermissions.CONTENT_TAXONOMY,
+        section: 'catalog',
         path: '/content-management/categories',
       },
       {
@@ -415,6 +424,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#1976d2',
         requiredPermission: PlatformPermissions.FINANCIAL_COMMISSIONS,
+        section: 'finance',
         path: '/admin/commission-accounts',
       },
       {
@@ -426,6 +436,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#5d4037',
         requiredPermission: PlatformPermissions.MODERATE_RENTALS,
+        section: 'moderation',
         path: '/admin/rental-listings/moderation',
       },
       {
@@ -441,6 +452,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#6d4c41',
         requiredPermission: PlatformPermissions.MODERATE_RENTALS,
+        section: 'moderation',
         path: '/admin/rental-listings/ai-reviews',
       },
       {
@@ -456,6 +468,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#4e342e',
         requiredPermission: PlatformPermissions.MODERATE_ITEMS,
+        section: 'moderation',
         path: '/admin/items/moderation',
       },
       {
@@ -471,6 +484,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#5d4037',
         requiredPermission: PlatformPermissions.MODERATE_ITEMS,
+        section: 'moderation',
         path: '/admin/items/ai-reviews',
       },
       {
@@ -486,6 +500,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#3e2723',
         requiredPermission: PlatformPermissions.MODERATE_ITEMS,
+        section: 'moderation',
         path: '/admin/reels/moderation',
       },
       {
@@ -501,6 +516,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#4e342e',
         requiredPermission: PlatformPermissions.MODERATE_ITEMS,
+        section: 'moderation',
         path: '/admin/reels/ai-reviews',
       },
       {
@@ -510,6 +526,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#607d8b',
         requiredPermission: PlatformPermissions.CONFIG_APPLICATION,
+        section: 'platform',
         path: '/admin/configurations',
       },
       {
@@ -522,6 +539,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#00695c',
         requiredPermission: PlatformPermissions.CONFIG_APPLICATION_SETUP,
+        section: 'platform',
         path: '/admin/application-setup',
       },
       {
@@ -537,6 +555,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#00838f',
         requiredPermission: PlatformPermissions.CONFIG_COUNTRY_ONBOARDING,
+        section: 'platform',
         path: '/admin/country-onboarding',
       },
       {
@@ -552,6 +571,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#5e35b1',
         requiredPermission: PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS,
+        section: 'finance',
         path: '/admin/pending-mobile-payments',
       },
       {
@@ -564,6 +584,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: brandTokens.primary.main,
         requiredPermission: PlatformPermissions.RECHARGE_ACCOUNT,
+        section: 'finance',
         path: '/admin/account-recharge',
       },
       {
@@ -576,6 +597,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: brandTokens.secondary.main,
         requiredPermission: PlatformPermissions.PAYMENT_PROGRAMS,
+        section: 'finance',
         path: '/admin/payment-programs',
       },
       {
@@ -588,6 +610,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: brandTokens.warning.main,
         requiredPermission: PlatformPermissions.OPS_CREDITS,
+        section: 'operations',
         path: '/admin/follow-ups',
       },
       {
@@ -600,6 +623,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#455a64',
         requiredPermission: PlatformPermissions.OPS_SITE_EVENTS,
+        section: 'platform',
         path: '/admin/site-events',
       },
       {
@@ -615,6 +639,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#6a1b9a',
         requiredPermission: PlatformPermissions.OPS_USER_MESSAGES,
+        section: 'platform',
         path: '/admin/broadcasts',
       },
       {
@@ -630,6 +655,7 @@ export function useBusinessDashboardModules({
         count: null,
         color: '#00695c',
         requiredPermission: PlatformPermissions.DASHBOARD_PLATFORM_STATS,
+        section: 'platform',
         path: '/admin/performance',
       },
     ];
