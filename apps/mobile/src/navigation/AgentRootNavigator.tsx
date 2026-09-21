@@ -36,6 +36,7 @@ import AgentLocationTrackingScreen from '../screens/agent/AgentLocationTrackingS
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
 import UserPurchaseCreditsScreen from '../screens/shared/UserPurchaseCreditsScreen';
+import CashAdvanceDrawSuccessScreen from '../screens/shared/CashAdvanceDrawSuccessScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import { EnrollPersonaExplainScreen } from '../screens/shared/enroll/EnrollPersonaExplainScreen';
@@ -43,6 +44,7 @@ import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersona
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { AgentStatusBar } from '../components/agent/AgentStatusBar';
 import { PersistentActiveDeliveryHeader } from '../components/agent/PersistentActiveDeliveryHeader';
+import type { CashAdvanceDrawSuccessParams, EnrollPersonaParams } from './types';
 import {
   TabBarIconContent,
   useFloatingTabBarSafeAreaInsets,
@@ -54,7 +56,6 @@ import { useAppIconBadge } from '../hooks/useAppIconBadge';
 import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotificationPermissionOnStart';
 
 import type { OrdersStackParamList } from '../screens/shared/orderDetail/types';
-import type { EnrollPersonaParams } from './types';
 const OrdersStack = createNativeStackNavigator<OrdersStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -75,6 +76,7 @@ export type RootStackParamList = {
   AgentAccounts: undefined;
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
+  CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
   AgentBusinessReferral: undefined;
   Profile: undefined;
   NotificationPreferences: undefined;
@@ -258,7 +260,16 @@ export function AgentRootNavigator() {
           <RootStack.Screen
             name="UserPaymentPrograms"
             component={UserPaymentProgramsScreen}
-            options={{ title: t('accounts.walletHub.title', 'Wallet programs') }}
+            options={{ title: t('accounts.cashAdvance.title', 'Cash advance') }}
+          />
+          <RootStack.Screen
+            name="CashAdvanceDrawSuccess"
+            component={CashAdvanceDrawSuccessScreen}
+            options={{
+              title: t('accounts.cashAdvance.successTitle', 'Cash advance credited'),
+              headerBackVisible: false,
+              gestureEnabled: false,
+            }}
           />
           <RootStack.Screen
             name="StoresList"

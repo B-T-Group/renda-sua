@@ -75,6 +75,7 @@ import BusinessAccountTypeScreen from '../screens/business/BusinessAccountTypeSc
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
 import UserPurchaseCreditsScreen from '../screens/shared/UserPurchaseCreditsScreen';
+import CashAdvanceDrawSuccessScreen from '../screens/shared/CashAdvanceDrawSuccessScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
@@ -769,7 +770,16 @@ export function BusinessRootNavigator() {
         <RootStack.Screen
           name="UserPaymentPrograms"
           component={UserPaymentProgramsScreen}
-          options={{ title: t('accounts.walletHub.title', 'Wallet programs') }}
+          options={{ title: t('accounts.cashAdvance.title', 'Cash advance') }}
+        />
+        <RootStack.Screen
+          name="CashAdvanceDrawSuccess"
+          component={CashAdvanceDrawSuccessScreen}
+          options={{
+            title: t('accounts.cashAdvance.successTitle', 'Cash advance credited'),
+            headerBackVisible: false,
+            gestureEnabled: false,
+          }}
         />
         <RootStack.Screen
           name="BusinessAiTokens"

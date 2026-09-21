@@ -32,6 +32,7 @@ const ROOT_STACK_SCREENS: AppNavScreen[] = [
   'Earnings',
   'AgentAccounts',
   'UserPurchaseCredits',
+  'UserPaymentPrograms',
   'AgentBusinessReferral',
   'Profile',
   'NotificationPreferences',
@@ -159,6 +160,15 @@ function MenuTabScreen() {
               'Credits that apply at checkout'
             )}
             onPress={() => goTo('UserPurchaseCredits')}
+          />
+          <UserMenuRow
+            icon="cash-fast"
+            label={t('accounts.cashAdvance.title', 'Cash advance')}
+            subtitle={t(
+              'accounts.cashAdvance.menuSubtitle',
+              'View limit and draw to wallet'
+            )}
+            onPress={() => goTo('UserPaymentPrograms')}
           />
           {showCommercial ? (
             <UserMenuRow

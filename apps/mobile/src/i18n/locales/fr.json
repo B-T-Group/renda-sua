@@ -4750,7 +4750,32 @@
       "illustrationLabel": "Crédits boutique",
       "partnerBadge": "Crédits applicables",
       "partnersListHint": "Boutiques partenaires où vos crédits boutique peuvent s'appliquer.",
-      "checkoutApply": "{{amount}} de crédits boutique seront appliqués"
+      "checkoutApply": "{{amount}} de crédits boutique seront appliqués",
+      "balances": "solde(s)"
+    },
+    "cashAdvance": {
+      "title": "Avance de fonds",
+      "menuSubtitle": "Voir la limite et tirer vers le portefeuille",
+      "empty": "Vous n'avez pas d'avance de fonds ouverte.",
+      "limit": "Limite",
+      "owed": "Dû",
+      "remaining": "Disponible à tirer",
+      "amount": "Montant",
+      "draw": "Tirer",
+      "drawing": "Tirage…",
+      "drawError": "Impossible de tirer sur votre ligne de crédit. Veuillez réessayer.",
+      "loadError": "Impossible de charger l'avance de fonds.",
+      "noneRemaining": "Aucun crédit restant sur cette ligne.",
+      "successTitle": "Avance créditée",
+      "drawnLabel": "Montant tiré",
+      "walletBalance": "Solde disponible du portefeuille",
+      "creditRemaining": "Crédit restant",
+      "repaymentNote": "Le remboursement se fait automatiquement via les commissions que vous gagnez et les recharges de compte. Il n'y a pas de bouton de remboursement séparé.",
+      "backToWallet": "Retour au portefeuille"
+    },
+    "schedules": {
+      "title": "Échéanciers de paiement",
+      "empty": "Aucun échéancier de paiement."
     },
     "walletHub": {
       "title": "Programmes portefeuille",
