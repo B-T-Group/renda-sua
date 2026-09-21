@@ -35,6 +35,12 @@ describe('session-refresh.util', () => {
     expect(() => requireRefreshToken(undefined)).toThrow(HttpException);
   });
 
+  it('does not reuse missing or undecodable access tokens', () => {
+    expect(canReuseAccessToken(undefined)).toBe(false);
+    expect(canReuseAccessToken('not-a-jwt')).toBe(false);
+    expect(accessTokenTtlSec(undefined)).toBeNull();
+  });
+
   it('detects Auth0 invalid_grant from HttpException bodies', () => {
     const error = new HttpException(
       { success: false, error: 'Failed to refresh access token', code: 'invalid_grant' },
@@ -42,5 +48,13 @@ describe('session-refresh.util', () => {
     );
     expect(isInvalidGrantError(error)).toBe(true);
     expect(isInvalidGrantError(new Error('network'))).toBe(false);
+  });
+
+  it('detects Auth0 invalid_grant from axios-style response bodies', () => {
+    expect(
+      isInvalidGrantError({
+        response: { data: { error: 'invalid_grant' } },
+      })
+    ).toBe(true);
   });
 });

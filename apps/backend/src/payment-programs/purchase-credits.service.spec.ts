@@ -16,58 +16,54 @@ const anyStoreGrant = {
   applicability: 'any_store' as const,
 };
 
-describe('PurchaseCreditsService.commit', () => {
-  it('inserts a redemption then decrements remaining for each allocation', async () => {
+describe('PurchaseCreditsService.grantCampaign', () => {
+  it('skips a specific_business grant when the partner is inactive', async () => {
     const hasura = {
-      executeQuery: jest.fn(),
-      executeMutation: jest.fn(async () => ({})),
+      executeQuery: jest.fn(async () => ({ partner_businesses: [] })),
+      executeMutation: jest.fn(),
     };
-    const { service: credits } = service(hasura);
-
-    await credits.commit('order-1', [
-      { grantId: 'g1', amount: 400, applicability: 'any_store', businessId: null },
-      { grantId: 'g2', amount: 200, applicability: 'specific_business', businessId: 'biz-1' },
-    ]);
-
-    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('InsertRedemption'),
-      { grantId: 'g1', orderId: 'order-1', amount: 400 }
-    );
-    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('remaining_amount'),
-      { id: 'g1', delta: -400 }
-    );
-    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
-      3,
-      expect.stringContaining('InsertRedemption'),
-      { grantId: 'g2', orderId: 'order-1', amount: 200 }
-    );
-    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
-      4,
-      expect.stringContaining('remaining_amount'),
-      { id: 'g2', delta: -200 }
-    );
-  });
-
-  it('stops on the first failed allocation without redeeming the rest', async () => {
-    const hasura = {
-      executeQuery: jest.fn(),
-      executeMutation: jest
-        .fn()
-        .mockResolvedValueOnce({})
-        .mockRejectedValueOnce(new Error('adjust failed')),
-    };
-    const { service: credits } = service(hasura);
+    const { service: credits, notifications } = service(hasura);
 
     await expect(
-      credits.commit('order-1', [
-        { grantId: 'g1', amount: 400, applicability: 'any_store', businessId: null },
-        { grantId: 'g2', amount: 200, applicability: 'any_store', businessId: null },
-      ])
-    ).rejects.toThrow('adjust failed');
-    expect(hasura.executeMutation).toHaveBeenCalledTimes(2);
+      credits.grantCampaign({
+        ...anyStoreGrant,
+        applicability: 'specific_business',
+        businessId: 'biz-1',
+      })
+    ).resolves.toEqual({ skipped: 'partner_inactive' });
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+    expect(notifications.sendPaymentProgramNotice).not.toHaveBeenCalled();
+  });
+
+  it('inserts campaign grants with source campaign and no client check', async () => {
+    const hasura = {
+      executeQuery: jest.fn(),
+      executeMutation: jest.fn(async () => ({
+        insert_purchase_credit_grants_one: { id: 'g-camp' },
+      })),
+    };
+    const { service: credits, notifications } = service(hasura);
+
+    await expect(credits.grantCampaign(anyStoreGrant)).resolves.toEqual({
+      id: 'g-camp',
+    });
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('InsertPurchaseCredit'),
+      expect.objectContaining({
+        object: expect.objectContaining({
+          user_id: 'user-1',
+          source: 'campaign',
+          applicability: 'any_store',
+          business_id: null,
+        }),
+      })
+    );
+    expect(notifications.sendPaymentProgramNotice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageType: 'PURCHASE_CREDIT',
+        entityId: 'g-camp',
+      })
+    );
   });
 });
 
