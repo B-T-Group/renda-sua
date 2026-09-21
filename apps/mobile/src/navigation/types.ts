@@ -66,6 +66,14 @@ export type InventoryItemDetailParams = {
 export type PlaceOrderParams = { inventoryItemId: string; variantId?: string };
 
 /** After checkout: next steps depend on payment timing (aligned with web OrderConfirmationPage). */
+export type CashAdvanceDrawSuccessParams = {
+  drawnAmount: number;
+  currency: string;
+  availableBalance: number;
+  remainingCredit: number;
+  programName?: string;
+};
+
 export type OrderPlacedSuccessParams = {
   /** One or more order numbers (multi-business cart → multiple orders). */
   orderNumbers: string[];
@@ -189,6 +197,7 @@ export type ClientRootStackParamList = {
   ClientAccounts: undefined;
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
+  CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
   RentalListingDetail: { listingId: string };
   RentalRequestSubmitted: { requestId?: string };
   ClientMyRentals: undefined;
@@ -291,6 +300,7 @@ export type BusinessRootStackParamList = {
   BusinessAccounts: undefined;
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
+  CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
   BusinessAiTokens: undefined;
   BusinessAddReel:
     | {

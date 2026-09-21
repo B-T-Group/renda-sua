@@ -46,6 +46,7 @@ import UserOrderMessagesScreen from '../screens/shared/UserOrderMessagesScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
 import UserPurchaseCreditsScreen from '../screens/shared/UserPurchaseCreditsScreen';
+import CashAdvanceDrawSuccessScreen from '../screens/shared/CashAdvanceDrawSuccessScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
 import RentalRequestSubmittedScreen from '../screens/client/RentalRequestSubmittedScreen';
 import ClientMyRentalsScreen from '../screens/client/ClientMyRentalsScreen';
@@ -429,7 +430,16 @@ export function ClientRootNavigator() {
         <ClientRootStack.Screen
           name="UserPaymentPrograms"
           component={UserPaymentProgramsScreen}
-          options={{ title: t('accounts.walletHub.title', 'Wallet programs') }}
+          options={{ title: t('accounts.cashAdvance.title', 'Cash advance') }}
+        />
+        <ClientRootStack.Screen
+          name="CashAdvanceDrawSuccess"
+          component={CashAdvanceDrawSuccessScreen}
+          options={{
+            title: t('accounts.cashAdvance.successTitle', 'Cash advance credited'),
+            headerBackVisible: false,
+            gestureEnabled: false,
+          }}
         />
         <ClientRootStack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil' }} />
         <ClientRootStack.Screen

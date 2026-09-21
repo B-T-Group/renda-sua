@@ -4844,7 +4844,32 @@
       "illustrationLabel": "Store credits",
       "partnerBadge": "Credits apply",
       "partnersListHint": "Partner stores where your store credits can apply.",
-      "checkoutApply": "{{amount}} in store credits will apply"
+      "checkoutApply": "{{amount}} in store credits will apply",
+      "balances": "balance(s)"
+    },
+    "cashAdvance": {
+      "title": "Cash advance",
+      "menuSubtitle": "View limit and draw to wallet",
+      "empty": "You do not have an open cash advance.",
+      "limit": "Limit",
+      "owed": "Owed",
+      "remaining": "Available to draw",
+      "amount": "Amount",
+      "draw": "Draw",
+      "drawing": "Drawing…",
+      "drawError": "Could not draw from your credit line. Please try again.",
+      "loadError": "Could not load cash advance.",
+      "noneRemaining": "No credit remaining on this line.",
+      "successTitle": "Cash advance credited",
+      "drawnLabel": "Amount drawn",
+      "walletBalance": "Wallet available balance",
+      "creditRemaining": "Credit line remaining",
+      "repaymentNote": "Repayment happens automatically through commissions you earn and account top-ups. There is no separate repay button.",
+      "backToWallet": "Back to wallet"
+    },
+    "schedules": {
+      "title": "Payment schedules",
+      "empty": "No payment schedules."
     },
     "walletHub": {
       "title": "Wallet programs",

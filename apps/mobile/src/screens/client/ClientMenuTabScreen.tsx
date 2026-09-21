@@ -30,6 +30,7 @@ import { PERSONA_ACCENT } from '../../constants/personaTheme';
 const ROOT_STACK_SCREENS: ClientAppNavScreen[] = [
   'ClientAccounts',
   'UserPurchaseCredits',
+  'UserPaymentPrograms',
   'Profile',
   'ManageRecipients',
   'NotificationPreferences',
@@ -166,6 +167,15 @@ function ClientMenuTabScreenBase() {
               'Credits that apply at checkout'
             )}
             onPress={() => goTo('UserPurchaseCredits')}
+          />
+          <UserMenuRow
+            icon="cash-fast"
+            label={t('accounts.cashAdvance.title', 'Cash advance')}
+            subtitle={t(
+              'accounts.cashAdvance.menuSubtitle',
+              'View limit and draw to wallet'
+            )}
+            onPress={() => goTo('UserPaymentPrograms')}
           />
         </UserMenuSection>
 

@@ -186,6 +186,14 @@ function UserAccountsScreenBase() {
         >
           {t('accounts.purchaseCredits.title', 'Store credits')}
         </Button>
+        <Button
+          mode="outlined"
+          icon="cash-fast"
+          onPress={() => navigation.navigate('UserPaymentPrograms')}
+          style={{ alignSelf: 'stretch' }}
+        >
+          {t('accounts.cashAdvance.title', 'Cash advance')}
+        </Button>
         {loading && !hasAnyAccount ? (
           <View style={styles.centered}>
             <ActivityIndicator color={colors.primary.main} />

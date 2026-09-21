@@ -245,6 +245,15 @@ function BusinessMenuTabScreenBase() {
             onPress={() => goTo('UserPurchaseCredits')}
           />
           <UserMenuRow
+            icon="cash-fast"
+            label={t('accounts.cashAdvance.title', 'Cash advance')}
+            subtitle={t(
+              'accounts.cashAdvance.menuSubtitle',
+              'View limit and draw to wallet'
+            )}
+            onPress={() => goTo('UserPaymentPrograms')}
+          />
+          <UserMenuRow
             icon="auto-fix"
             label={t('business.tokens.menuTitle', 'AI tokens')}
             subtitle={t('business.tokens.menuSubtitle', 'Buy credits for image cleanup')}
