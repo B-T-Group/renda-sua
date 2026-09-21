@@ -574,6 +574,21 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(sessionStore.deleteSession).not.toHaveBeenCalled();
     });
 
+    it('rethrows a non-invalid_grant Auth0 HttpException without wiping the session', async () => {
+      sessionStore.resolveLiveSession.mockResolvedValue(liveSession());
+      auth0Service.refreshAccessToken.mockRejectedValue(
+        new HttpException(
+          { success: false, error: 'Auth0 unavailable' },
+          HttpStatus.BAD_GATEWAY
+        )
+      );
+
+      await expect(service.refreshSession('sid-1')).rejects.toMatchObject({
+        status: HttpStatus.BAD_GATEWAY,
+      });
+      expect(sessionStore.deleteSession).not.toHaveBeenCalled();
+    });
+
     it('maps a failed rotation (replay) to 401 without a generic token wipe', async () => {
       sessionStore.resolveLiveSession.mockResolvedValue(liveSession());
       auth0Service.refreshAccessToken.mockResolvedValue({
@@ -588,6 +603,82 @@ describe('LoginService start, lockout, and session gates', () => {
         status: HttpStatus.UNAUTHORIZED,
         response: { error: 'Session rotation failed' },
       });
+      expect(sessionStore.deleteSession).not.toHaveBeenCalled();
+    });
+
+    it('rejects a live session that has no Auth0 refresh token', async () => {
+      sessionStore.resolveLiveSession.mockResolvedValue(
+        liveSession({ auth0RefreshToken: undefined })
+      );
+
+      await expect(service.refreshSession('sid-1')).rejects.toMatchObject({
+        status: HttpStatus.UNAUTHORIZED,
+        response: { error: 'Invalid or expired session' },
+      });
+      expect(auth0Service.refreshAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('refreshes when the cached access token is inside the reuse buffer', async () => {
+      const access = unsignedJwt({
+        exp: Math.floor(Date.now() / 1000) + 10,
+      });
+      sessionStore.resolveLiveSession.mockResolvedValue(
+        liveSession({ auth0AccessToken: access })
+      );
+      auth0Service.refreshAccessToken.mockResolvedValue({
+        access_token: 'new-access',
+        id_token: 'new-id',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      });
+      sessionStore.rotateSession.mockResolvedValue('sid-2');
+
+      const result = await service.refreshSession('sid-1');
+
+      expect(auth0Service.refreshAccessToken).toHaveBeenCalledWith('refresh');
+      expect(result.newSessionId).toBe('sid-2');
+    });
+
+    it('follows a recently rotated session without calling Auth0', async () => {
+      const access = unsignedJwt({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      sessionStore.resolveLiveSession.mockResolvedValue({
+        id: 'sid-2',
+        data: {
+          userId: 'user-1',
+          auth0RefreshToken: 'refresh',
+          auth0AccessToken: access,
+          auth0IdToken: 'id',
+          familyId: 'fam-1',
+        },
+      });
+
+      const result = await service.refreshSession('sid-1');
+
+      expect(auth0Service.refreshAccessToken).not.toHaveBeenCalled();
+      expect(result.newSessionId).toBe('sid-2');
+      expect(result.response.access_token).toBe(access);
+    });
+
+    it('returns a sibling refresh that already minted a reusable token', async () => {
+      const recovered = unsignedJwt({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      sessionStore.resolveLiveSession
+        .mockResolvedValueOnce(liveSession())
+        .mockResolvedValueOnce(liveSession())
+        .mockResolvedValueOnce(
+          liveSession({
+            auth0AccessToken: recovered,
+            auth0IdToken: 'id',
+          })
+        );
+      auth0Service.refreshAccessToken.mockRejectedValue(new Error('network'));
+
+      const result = await service.refreshSession('sid-1');
+
+      expect(result.response.access_token).toBe(recovered);
       expect(sessionStore.deleteSession).not.toHaveBeenCalled();
     });
   });

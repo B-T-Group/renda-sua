@@ -26,6 +26,28 @@ describe('PurchaseCreditsService.restore', () => {
     );
   });
 
+  it('does not credit remaining when the grant was revoked after the debit', async () => {
+    const hasura = {
+      executeQuery: jest.fn(async (query: string) => {
+        if (query.includes('RedemptionsForOrder') || query.includes('purchase_credit_redemptions')) {
+          return {
+            purchase_credit_redemptions: [{ id: 'r1', grant_id: 'g1', amount: 500 }],
+          };
+        }
+        return { purchase_credit_grants_by_pk: { revoked_at: '2026-09-20T00:00:00.000Z' } };
+      }),
+      executeMutation: jest.fn(async () => ({
+        delete_purchase_credit_redemptions_by_pk: { id: 'r1' },
+      })),
+    };
+    const service = new PurchaseCreditsService(hasura as never, {} as never);
+    await service.restore('order-1');
+    expect(hasura.executeMutation).toHaveBeenCalledTimes(1);
+    expect(hasura.executeMutation.mock.calls[0][0]).toContain(
+      'delete_purchase_credit_redemptions_by_pk'
+    );
+  });
+
   it('does not credit the grant when the redemption was already deleted', async () => {
     const hasura = {
       executeQuery: jest.fn(async () => ({

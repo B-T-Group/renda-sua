@@ -456,6 +456,32 @@ describe('AccountsService', () => {
       expect(executeMutation).not.toHaveBeenCalled();
     });
 
+    it('rejects a cash-advance draw when the facility limit is zero or NaN', async () => {
+      await expect(
+        service.registerTransaction({
+          accountId,
+          amount: 500,
+          transactionType: 'cash_advance',
+          maxCashAdvanceDebt: 0,
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'Cash-advance limit is required',
+      });
+      await expect(
+        service.registerTransaction({
+          accountId,
+          amount: 500,
+          transactionType: 'cash_advance',
+          maxCashAdvanceDebt: Number.NaN,
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'Cash-advance limit is required',
+      });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
     it('rejects a cash-advance draw when the atomic claim finds no remaining room', async () => {
       executeMutation.mockResolvedValue({ update_accounts: { returning: [] } });
       await expect(
