@@ -374,6 +374,63 @@ describe('AccountsService', () => {
       expect(types).toEqual(['cash_advance_repayment', 'deposit']);
     });
 
+    it('does not re-credit a referenced deposit already applied as repayment', async () => {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('SumAppliedDeposit')) {
+          return { account_transactions: [{ amount: 5000 }] };
+        }
+        return { accounts_by_pk: activeAccount };
+      });
+
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 5000,
+        transactionType: 'deposit',
+        memo: 'Mobile payment deposit - retry',
+        referenceId,
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('credits only the leftover after a cash-advance repayment for the same reference', async () => {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('SumAppliedDeposit')) {
+          return { account_transactions: [{ amount: 400 }] };
+        }
+        if (query.includes('GetAccountById')) {
+          return {
+            accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 },
+          };
+        }
+        return { account_transactions: [] };
+      });
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx-rest' } };
+        }
+        return { update_accounts_by_pk: { id: accountId } };
+      });
+
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 1000,
+        transactionType: 'deposit',
+        memo: 'Mobile payment deposit - retry',
+        referenceId,
+      });
+
+      expect(result.success).toBe(true);
+      const insert = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('InsertTransaction')
+      );
+      expect(insert?.[1]).toMatchObject({
+        amount: 600,
+        transactionType: 'deposit',
+      });
+    });
+
     it('rejects release when withheld balance is insufficient', async () => {
       await expect(
         service.registerTransaction({
