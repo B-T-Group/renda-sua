@@ -19,7 +19,6 @@ import { AuthGuard } from '../auth/auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
-import type { TransactionRequest } from './accounts.service';
 import { AccountsService } from './accounts.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -498,42 +497,6 @@ export class AccountsController {
       return {
         success: true,
         account: result.insert_accounts_one,
-      };
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  @Post('transaction')
-  async registerTransaction(@Body() transactionData: TransactionRequest) {
-    try {
-      const result = await this.accountsService.registerTransaction(
-        transactionData
-      );
-
-      if (!result.success) {
-        throw new HttpException(
-          {
-            success: false,
-            error: result.error,
-          },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      return {
-        success: true,
-        transactionId: result.transactionId,
-        newBalance: result.newBalance,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
