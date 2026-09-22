@@ -58,9 +58,15 @@ import { useAgentReferredBusinesses } from '../../hooks/useAgentReferredBusiness
 import { useReferralProjectedPayout } from '../../hooks/useReferralProjectedPayout';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
+import { mobilePaymentPhonesApi } from '../../services/mobilePaymentPhonesApi';
 import { EarnDeliveringIllustration } from '../../components/illustrations/EarnDeliveringIllustration';
 import { ProfilePhotoTipIllustration } from '../../components/illustrations/ProfilePhotoTipIllustration';
 import { useProfileMe } from '../../hooks/useProfileMe';
+import {
+  agentIdVerificationPending,
+  agentNeedsIdUpload,
+  agentNeedsMomoSetup,
+} from '../../utils/agentClaimSetupGate';
 
 const MAX_HOME_ORDERS = 3;
 
@@ -136,12 +142,21 @@ export default function HomeScreen() {
   usePostSignupCreditShopNavigation(true);
   const { unreadCount: notifUnreadCount } = useNotifications();
 
-  const idVerificationPending =
-    !walletIsStripeRail && !isVerified && idDocumentStatus === 'pending';
-  const needsIdUpload =
-    !walletIsStripeRail &&
-    !isVerified &&
-    (idDocumentStatus === 'missing' || idDocumentStatus === 'rejected');
+  const idVerificationPending = agentIdVerificationPending({
+    isStripeRail: walletIsStripeRail,
+    isVerified,
+    idDocumentStatus,
+  });
+  const needsIdUpload = agentNeedsIdUpload({
+    isStripeRail: walletIsStripeRail,
+    isVerified,
+    idDocumentStatus,
+  });
+  const needsMomoSetup = agentNeedsMomoSetup({
+    isStripeRail: walletIsStripeRail,
+    isVerified,
+    idDocumentStatus,
+  });
   const idRejected =
     !walletIsStripeRail && !isVerified && idDocumentStatus === 'rejected';
   const showVerificationBanner =
@@ -167,6 +182,16 @@ export default function HomeScreen() {
       void refetchVerification();
     }
   }, [walletStripeReady, refetchOpenOrders, refetchVerification]);
+
+  // MoMo attach/verify flips is_verified the same way — refresh claimable open orders.
+  const prevVerifiedRef = useRef(isVerified);
+  useEffect(() => {
+    const wasVerified = prevVerifiedRef.current === true;
+    prevVerifiedRef.current = isVerified;
+    if (isVerified && !wasVerified) {
+      void refetchOpenOrders();
+    }
+  }, [isVerified, refetchOpenOrders]);
 
   const activeOrders = agentOrdersCategorized.active;
   const previewOpenOrders = openOrders.slice(0, MAX_HOME_ORDERS);
@@ -312,6 +337,26 @@ export default function HomeScreen() {
     goTo('Documents');
   }, [goTo]);
 
+  const goToMomoSetup = useCallback(() => {
+    const verified = phones.find((p) => p.is_verified);
+    if (!verified) {
+      setPhoneModalOpen(true);
+      return;
+    }
+    if (verified.linkedToAgent) {
+      goTo('MobilePaymentPhones');
+      return;
+    }
+    void (async () => {
+      try {
+        await mobilePaymentPhonesApi.attachAgent(verified.id);
+        await Promise.all([fetchPhones(), refetchVerification(), refetchOpenOrders()]);
+      } catch {
+        goTo('MobilePaymentPhones');
+      }
+    })();
+  }, [fetchPhones, goTo, phones, refetchOpenOrders, refetchVerification]);
+
   const handlePreviewOrderAction = useCallback(() => {
     if (!ordersCanClaim && walletIsStripeRail && !walletStripeReady) {
       void startStripeOnboarding();
@@ -331,12 +376,18 @@ export default function HomeScreen() {
       goToDocuments();
       return;
     }
+    if (needsMomoSetup) {
+      goToMomoSetup();
+      return;
+    }
     goToAvailableOrders();
   }, [
     goToAvailableOrders,
     goToDocuments,
+    goToMomoSetup,
     idVerificationPending,
     needsIdUpload,
+    needsMomoSetup,
     ordersCanClaim,
     startStripeOnboarding,
     t,
@@ -352,7 +403,9 @@ export default function HomeScreen() {
         ? t('agent.openOrders.idPendingCta', 'Pending ID approval')
         : idRejected
           ? t('agent.openOrders.idRejectedCta', 'Re-upload ID')
-          : t('agent.openOrders.uploadIdToClaim', 'Upload ID to claim')
+          : needsMomoSetup
+            ? t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim')
+            : t('agent.openOrders.uploadIdToClaim', 'Upload ID to claim')
     : undefined;
 
   const goToActiveOrders = useCallback(() => {
@@ -512,7 +565,7 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        {!walletIsStripeRail && !hasVerifiedPhone ? (
+        {!walletIsStripeRail && !hasVerifiedPhone && !needsMomoSetup ? (
           <NoticeBanner
             style={{ marginHorizontal: spacing.md, marginBottom: spacing.sm }}
             tone="warning"
@@ -523,6 +576,23 @@ export default function HomeScreen() {
             )}
             actionLabel={t('mobilePaymentPhone.verifyCta', 'Verify mobile money number')}
             onAction={() => setPhoneModalOpen(true)}
+          />
+        ) : null}
+
+        {showDelivery && showVerificationBanner && needsMomoSetup ? (
+          <NoticeBanner
+            style={{ marginHorizontal: spacing.md, marginBottom: spacing.sm }}
+            tone="warning"
+            icon="cellphone-check"
+            message={t(
+              'agent.openOrders.momoSetupBanner',
+              'Your ID is approved. Verify your mobile money number to finish setup and claim deliveries.'
+            )}
+            actionLabel={t(
+              'agent.openOrders.verifyMobileMoneyToFinish',
+              'Verify mobile money to finish'
+            )}
+            onAction={goToMomoSetup}
           />
         ) : null}
 
@@ -909,6 +979,7 @@ export default function HomeScreen() {
         onCompleted={() => {
           void fetchPhones();
           void refetchVerification();
+          void refetchOpenOrders();
           setPhoneModalOpen(false);
         }}
       />

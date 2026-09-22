@@ -11,6 +11,7 @@ import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePa
 import { useTheme } from '../../contexts/ThemeContext';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
+import { mobilePaymentPhonesApi } from '../../services/mobilePaymentPhonesApi';
 import { useStore } from '../../stores/RootStore';
 import type {
   MobilePaymentPhone,
@@ -36,6 +37,7 @@ export default function UserMobilePaymentPhonesScreen({
   const [snack, setSnack] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MobilePaymentPhone | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [attachingId, setAttachingId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<MobilePaymentPhoneModalMode>('add');
   const [modalPhone, setModalPhone] = useState<MobilePaymentPhone | null>(null);
@@ -52,6 +54,23 @@ export default function UserMobilePaymentPhonesScreen({
     setModalMode('add');
     setModalPhone(null);
     setModalOpen(true);
+  };
+
+  const attachPhoneToAgent = async (phone: MobilePaymentPhone) => {
+    setAttachingId(phone.id);
+    try {
+      await mobilePaymentPhonesApi.attachAgent(phone.id);
+      setSnack(t('mobilePaymentPhone.usedByAgent', 'Linked to agent profile'));
+      await fetchPhones();
+    } catch (e: unknown) {
+      setSnack(
+        e instanceof Error
+          ? e.message
+          : t('mobilePaymentPhone.linkFailed', 'Could not link number')
+      );
+    } finally {
+      setAttachingId(null);
+    }
   };
 
   const confirmDelete = async () => {
@@ -195,6 +214,17 @@ export default function UserMobilePaymentPhonesScreen({
                       }}
                     >
                       {t('mobilePaymentPhone.verifyShort', 'Verify')}
+                    </Button>
+                  ) : null}
+                  {isAgent && item.is_verified && !item.linkedToAgent ? (
+                    <Button
+                      mode="text"
+                      compact
+                      loading={attachingId === item.id}
+                      disabled={attachingId === item.id}
+                      onPress={() => void attachPhoneToAgent(item)}
+                    >
+                      {t('mobilePaymentPhone.useForPayouts', 'Use for payouts')}
                     </Button>
                   ) : null}
                   <Button

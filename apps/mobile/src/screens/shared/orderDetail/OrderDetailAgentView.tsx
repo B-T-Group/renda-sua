@@ -10,6 +10,7 @@ import {
   Pressable,
   TextInput,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { AppModal } from '../../../components/common/AppModal';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -41,6 +42,11 @@ import {
 } from '../../../components/delivery';
 import { useStore } from '../../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../../utils/defaultClaimTopupPhone';
+import {
+  agentIdVerificationPending,
+  agentNeedsIdUpload,
+  agentNeedsMomoSetup,
+} from '../../../utils/agentClaimSetupGate';
 import { mergeOrderForDeliverySuccess } from '../../../utils/mergeOrderForDeliverySuccess';
 import { orderNeedsPayAtDeliveryAgentActions } from '../../../utils/orderPaymentAgentActions';
 import { resolveAmountDueAfterDeposit } from '../../../utils/depositResume';
@@ -127,9 +133,17 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     refetch: refetchOrders,
   } = useAgentOrders();
   const { reasons } = useFailedDeliveryReasons('fr');
-  const { agentStatus, isVerified, idDocumentStatus } = useAgentVerificationStatus();
+  const { agentStatus, isVerified, idDocumentStatus, refetch: refetchVerification } =
+    useAgentVerificationStatus();
   const { canClaim: ordersCanClaim, refetch: refetchOpenOrders } = useOpenOrders();
   const { isStripeRail } = useIsStripeRail();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetchVerification();
+      void refetchOpenOrders();
+    }, [refetchVerification, refetchOpenOrders])
+  );
 
   const deliveryVm = useMemo(() => {
     if (!order) return null;
@@ -515,16 +529,34 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     (navigation as { navigate: (name: string) => void }).navigate('Documents');
   }, [navigation]);
 
+  const goToMomoSetup = useCallback(() => {
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.navigate('MobilePaymentPhones' as never);
+      return;
+    }
+    (navigation as { navigate: (name: string) => void }).navigate('MobilePaymentPhones');
+  }, [navigation]);
+
   /** Aligné web `AvailableOrderCard` : fonds OK → confirmation ; sinon → top-up. */
   const handleClaimStart = useCallback(async () => {
     if (!order) return;
     if (!ordersCanClaim) {
-      const idPending =
-        !isStripeRail && !isVerified && idDocumentStatus === 'pending';
-      const needsId =
-        !isStripeRail &&
-        !isVerified &&
-        (idDocumentStatus === 'missing' || idDocumentStatus === 'rejected');
+      const idPending = agentIdVerificationPending({
+        isStripeRail,
+        isVerified,
+        idDocumentStatus,
+      });
+      const needsId = agentNeedsIdUpload({
+        isStripeRail,
+        isVerified,
+        idDocumentStatus,
+      });
+      const needsMomo = agentNeedsMomoSetup({
+        isStripeRail,
+        isVerified,
+        idDocumentStatus,
+      });
 
       if (idPending) {
         setClaimInfoDialog({
@@ -538,6 +570,10 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
       }
       if (needsId) {
         goToDocuments();
+        return;
+      }
+      if (needsMomo) {
+        goToMomoSetup();
         return;
       }
       setClaimInfoDialog({
@@ -581,6 +617,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
   }, [
     auth.user,
     goToDocuments,
+    goToMomoSetup,
     idDocumentStatus,
     isStripeRail,
     isVerified,
@@ -683,11 +720,19 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     );
   const claimButtonLabel = ordersCanClaim
     ? t('agent.openOrders.claimButton', 'Réclamer')
-    : !isStripeRail && !isVerified && idDocumentStatus === 'pending'
+    : agentIdVerificationPending({
+          isStripeRail,
+          isVerified,
+          idDocumentStatus,
+        })
       ? t('agent.openOrders.idPendingCta', 'Pending ID approval')
       : !isStripeRail && !isVerified && idDocumentStatus === 'rejected'
         ? t('agent.openOrders.idRejectedCta', 'Re-upload ID')
-        : !isStripeRail && !isVerified && idDocumentStatus === 'missing'
+        : agentNeedsIdUpload({
+              isStripeRail,
+              isVerified,
+              idDocumentStatus,
+            })
           ? t('agent.openOrders.uploadIdToClaim', 'Upload ID to claim')
           : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim');
   const earningsForCard = deliveryVm
