@@ -53,6 +53,14 @@ describe('purchaseCredits utils', () => {
         business: { id: 'biz-1', name: 'Partner' },
       })
     ).toEqual({ kind: 'store', businessId: 'biz-1' });
+    expect(
+      purchaseCreditShopTarget({
+        ...base,
+        applicability: 'specific_business',
+        business_id: 'biz-fallback',
+        business: null,
+      })
+    ).toEqual({ kind: 'store', businessId: 'biz-fallback' });
   });
 
   it('summarizes usable credits', () => {
@@ -80,6 +88,31 @@ describe('purchaseCredits utils', () => {
       storeShowsCreditPartnerBadge(
         { business_id: 'p2', is_partner: false },
         [partnerGrant]
+      )
+    ).toBe(false);
+    expect(
+      storeShowsCreditPartnerBadge(
+        { business_id: 'named-store', is_partner: false },
+        [
+          {
+            ...base,
+            applicability: 'specific_business',
+            business_id: 'named-store',
+          },
+        ]
+      )
+    ).toBe(true);
+    expect(
+      storeShowsCreditPartnerBadge(
+        { business_id: 'named-store', is_partner: true },
+        [
+          {
+            ...base,
+            applicability: 'specific_business',
+            business_id: 'named-store',
+            revoked_at: '2026-01-01',
+          },
+        ]
       )
     ).toBe(false);
   });
