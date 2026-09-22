@@ -36,9 +36,11 @@ import {
   CheckoutPreflightDto,
   CheckoutPreflightResponseDto,
 } from './dto/checkout-preflight.dto';
+import { ReorderOrderResponseDto } from './dto/reorder-order.dto';
 import { RetryDepositPaymentDto } from './dto/retry-deposit-payment.dto';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderMarkReadyService } from './order-mark-ready.service';
+import { OrderReorderService } from './order-reorder.service';
 import { OrderStatusService } from './order-status.service';
 import type {
   BatchOrderStatusChangeRequest,
@@ -69,6 +71,7 @@ export class OrdersController {
     private readonly orderStatusService: OrderStatusService,
     private readonly orderAcceptanceService: OrderAcceptanceService,
     private readonly orderMarkReadyService: OrderMarkReadyService,
+    private readonly orderReorderService: OrderReorderService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly configurationsService: ConfigurationsService,
     private readonly loyaltyService: LoyaltyService,
@@ -1337,6 +1340,28 @@ export class OrdersController {
         statusCode
       );
     }
+  }
+
+  @Post(':id/reorder')
+  @ApiOperation({
+    summary: 'Rebuild cart payload from a completed order (client only)',
+    description:
+      'Returns current-price cart lines and navigation hint for one-tap reorder. Does not create an order.',
+  })
+  @ApiParam({ name: 'id', description: 'Order UUID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Reorder cart payload',
+    type: ReorderOrderResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Order is not in a completed terminal success status',
+  })
+  @ApiResponse({ status: 403, description: 'Not authorized for this order' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async reorderOrder(@Param('id') orderId: string) {
+    return this.orderReorderService.reorder(orderId);
   }
 
   @Post(':id/retry-payment')
