@@ -118,6 +118,24 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     expect(json).toContain('"_in":["CA","CM"]');
   });
 
+  it('restricts the catalog to one business when business_id is set', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ business_id: '  biz-credit-1  ' });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"id":{"_eq":"biz-credit-1"}');
+  });
+
+  it('does not filter by business id when business_id is blank', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ business_id: '   ' });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).not.toContain('"id":{"_eq":');
+  });
+
   it('excludes export listings from the default local catalog', async () => {
     const { buildWhere, whereJson } = createService();
     const built = await buildWhere({ country_code: 'CA', state: 'Ontario' });
@@ -589,6 +607,75 @@ describe('InventoryItemsService.getInventoryStoreById', () => {
     expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
       expect.stringContaining('query StoreLocationDetails'),
       { ids: [locationId] }
+    );
+  });
+
+  function storeLocation(businessId: string) {
+    return {
+      id: locationId,
+      business_id: businessId,
+      name: 'Partner Mart',
+      is_active: true,
+      logo_url: null,
+      business: {
+        is_verified: true,
+        can_accept_orders: true,
+        is_storefront_visible: true,
+      },
+      address: { city: 'Douala' },
+    };
+  }
+
+  function mockStoreDetail(
+    hasuraSystemService: { executeQuery: jest.Mock },
+    businessId: string,
+    partnerIds: string[]
+  ) {
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('StoreLocationDetails')) {
+        return { business_locations: [storeLocation(businessId)] };
+      }
+      if (query.includes('ActivePartnerBusinessIds')) {
+        return {
+          partner_businesses: partnerIds.map((id) => ({ business_id: id })),
+        };
+      }
+      if (query.includes('DistinctCatalogItemCount')) {
+        return {
+          business_inventory_aggregate: { aggregate: { count: 2 } },
+        };
+      }
+      return {};
+    });
+  }
+
+  it('tags a store detail as a partner only when that business is active', async () => {
+    const { service, hasuraSystemService } = createService();
+    mockStoreDetail(hasuraSystemService, 'biz-partner', ['biz-partner']);
+
+    await expect(service.getInventoryStoreById(locationId)).resolves.toEqual(
+      expect.objectContaining({
+        business_location_id: locationId,
+        business_id: 'biz-partner',
+        is_partner: true,
+        item_count: 2,
+      })
+    );
+
+    mockStoreDetail(hasuraSystemService, 'biz-other', ['biz-partner']);
+    await expect(service.getInventoryStoreById(locationId)).resolves.toEqual(
+      expect.objectContaining({
+        business_id: 'biz-other',
+        is_partner: false,
+      })
+    );
+
+    mockStoreDetail(hasuraSystemService, 'biz-partner', []);
+    await expect(service.getInventoryStoreById(locationId)).resolves.toEqual(
+      expect.objectContaining({
+        business_id: 'biz-partner',
+        is_partner: false,
+      })
     );
   });
 });
