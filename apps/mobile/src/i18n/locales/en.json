@@ -965,6 +965,21 @@
       "cancel": "Cancel",
       "waitingMerchant": "Waiting for merchant acceptance",
       "merchantUnavailable": "The merchant was unavailable to accept your order."
+    },
+    "reorder": {
+      "cta": "Reorder",
+      "ctaA11y": "Reorder this order",
+      "conflictTitle": "Your cart already has items",
+      "conflictMessage": "Replace your cart with this order, or add these items to your cart.",
+      "otherStoreMessage": "Your cart has items from another store. Replace your cart to reorder from this store.",
+      "otherStoreToast": "Your cart has items from another store",
+      "replaceCart": "Replace cart",
+      "addToCart": "Add to cart",
+      "skippedToast": "Unavailable: {{names}}",
+      "andMore": "and {{count}} more",
+      "failed": "Could not reorder. Try again.",
+      "businessClosedBanner": "This store is not accepting orders right now. You can keep these items in your cart and try again later.",
+      "addressInvalidBanner": "Your previous delivery address is no longer valid. Choose an address at checkout."
     }
   },
   "orderActions": {
@@ -1760,12 +1775,12 @@
     "reels": {
       "addFab": "Add reel",
       "myReels": "My reels",
-        "presets": {
-          "dynamic": "🔥 Dynamic",
-          "premium": "✨ Premium",
-          "lifestyle": "🏠 Lifestyle",
-          "social": "💥 Social / Viral"
-        },
+      "presets": {
+        "dynamic": "🔥 Dynamic",
+        "premium": "✨ Premium",
+        "lifestyle": "🏠 Lifestyle",
+        "social": "💥 Social / Viral"
+      },
       "add": {
         "title": "Add reel",
         "subtitle": "Generate an 8s AI product ad, or upload a video from your library (15s min; over 30s is trimmed).",

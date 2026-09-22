@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { cartLineKey } from '../../contexts/cartLineKey';
 import { useCart } from '../../contexts/CartContext';
 import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
@@ -36,6 +36,10 @@ import CheckoutProgressStepper from '../common/CheckoutProgressStepper';
 const CartPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const reorderBanner = (
+    location.state as { reorderBanner?: 'business_closed' | 'address_invalid' } | null
+  )?.reorderBanner;
   const {
     cartItems,
     removeFromCart,
@@ -128,6 +132,23 @@ const CartPage: React.FC = () => {
 
       {/* Progress Stepper */}
       <CheckoutProgressStepper activeStep={0} />
+
+      {reorderBanner === 'business_closed' ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t(
+            'orders.reorder.businessClosedBanner',
+            'This store is not accepting orders right now. You can keep these items in your cart and try again later.'
+          )}
+        </Alert>
+      ) : null}
+      {reorderBanner === 'address_invalid' ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t(
+            'orders.reorder.addressInvalidBanner',
+            'Your previous delivery address is no longer valid. Choose an address at checkout.'
+          )}
+        </Alert>
+      ) : null}
 
       <Box
         sx={{

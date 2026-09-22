@@ -53,6 +53,7 @@ import { AdminOrdersController } from './admin-orders.controller';
 import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { OrdersController } from './orders.controller';
+import { OrderReorderService } from './order-reorder.service';
 import { OrdersService } from './orders.service';
 import { OrderRiskService } from './order-risk.service';
 import { OrderRiskAlertService } from './order-risk-alert.service';
@@ -112,6 +113,7 @@ import { DepositRefundService } from './deposit-refund.service';
   ],
   providers: [
     OrdersService,
+    OrderReorderService,
     OrderStatusService,
     OrderRiskService,
     OrderRiskConfigService,

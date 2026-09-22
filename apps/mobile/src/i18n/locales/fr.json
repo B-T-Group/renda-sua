@@ -950,6 +950,21 @@
       "cancel": "Annuler",
       "waitingMerchant": "En attente de l'acceptation du commerçant",
       "merchantUnavailable": "Le commerçant n'était pas disponible pour accepter votre commande."
+    },
+    "reorder": {
+      "cta": "Commander à nouveau",
+      "ctaA11y": "Commander à nouveau cette commande",
+      "conflictTitle": "Votre panier contient déjà des articles",
+      "conflictMessage": "Remplacez votre panier par cette commande, ou ajoutez ces articles à votre panier.",
+      "otherStoreMessage": "Votre panier contient des articles d’un autre magasin. Remplacez le panier pour commander à nouveau chez ce magasin.",
+      "otherStoreToast": "Votre panier contient des articles d’un autre magasin",
+      "replaceCart": "Remplacer le panier",
+      "addToCart": "Ajouter au panier",
+      "skippedToast": "Indisponible : {{names}}",
+      "andMore": "et {{count}} de plus",
+      "failed": "Impossible de commander à nouveau. Réessayez.",
+      "businessClosedBanner": "Ce magasin n’accepte pas les commandes pour le moment. Vous pouvez garder ces articles dans votre panier et réessayer plus tard.",
+      "addressInvalidBanner": "Votre adresse de livraison précédente n’est plus valide. Choisissez une adresse au paiement."
     }
   },
   "orderActions": {

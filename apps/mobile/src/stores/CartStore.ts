@@ -144,6 +144,40 @@ export class CartStore {
     void AsyncStorage.removeItem(CART_STORAGE_KEY);
   }
 
+  /** Replace entire cart silently (no per-line snackbars). */
+  replaceLines(lines: CartLine[]): void {
+    runInAction(() => {
+      this.items = lines;
+    });
+    this.schedulePersist();
+  }
+
+  /** Merge lines into cart by inventory+variant key; bump qty on match. */
+  addLines(lines: CartLine[]): void {
+    runInAction(() => {
+      const next = [...this.items];
+      for (const incoming of lines) {
+        const key = cartLineKey(incoming.inventoryItemId, incoming.variantId);
+        const idx = next.findIndex(
+          (l) => cartLineKey(l.inventoryItemId, l.variantId) === key
+        );
+        if (idx >= 0) {
+          const existing = next[idx];
+          const max = existing.itemData.maxOrderQuantity;
+          const merged = existing.quantity + incoming.quantity;
+          next[idx] = {
+            ...existing,
+            quantity: max ? Math.min(merged, max) : merged,
+          };
+        } else {
+          next.push(incoming);
+        }
+      }
+      this.items = next;
+    });
+    this.schedulePersist();
+  }
+
   schedulePersist(): void {
     if (this.persistTimer) clearTimeout(this.persistTimer);
     this.persistTimer = setTimeout(() => {

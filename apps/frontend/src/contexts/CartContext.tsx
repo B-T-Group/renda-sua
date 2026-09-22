@@ -54,6 +54,10 @@ interface CartContextType {
     variantId?: string
   ) => void;
   clearCart: () => void;
+  /** Replace entire cart without per-item snackbars (reorder). */
+  replaceItems: (items: CartItem[]) => void;
+  /** Merge lines into cart without per-item snackbars (reorder add). */
+  addItems: (items: CartItem[]) => void;
   getCartItemCount: () => number;
   getCartByBusiness: () => Map<string, CartItem[]>;
   getCartTotal: () => number;
@@ -298,6 +302,34 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
     enqueueSnackbar(t('cart.cleared', 'Cart cleared'), { variant: 'info' });
   }, [enqueueSnackbar, t]);
 
+  const replaceItems = useCallback((items: CartItem[]) => {
+    setCartItems(items);
+  }, []);
+
+  const addItems = useCallback((items: CartItem[]) => {
+    setCartItems((prevItems) => {
+      const next = [...prevItems];
+      for (const incoming of items) {
+        const key = cartLineKey(incoming.inventoryItemId, incoming.variantId);
+        const idx = next.findIndex(
+          (row) => cartLineKey(row.inventoryItemId, row.variantId) === key
+        );
+        if (idx >= 0) {
+          const existing = next[idx];
+          const max = existing.itemData.maxOrderQuantity;
+          const merged = existing.quantity + incoming.quantity;
+          next[idx] = {
+            ...existing,
+            quantity: max ? Math.min(merged, max) : merged,
+          };
+        } else {
+          next.push(incoming);
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const getCartItemCount = useCallback(() => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
   }, [cartItems]);
@@ -368,6 +400,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
     removeFromCart,
     updateQuantity,
     clearCart,
+    replaceItems,
+    addItems,
     getCartItemCount,
     getCartByBusiness,
     getCartTotal,

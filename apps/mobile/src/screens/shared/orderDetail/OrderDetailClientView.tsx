@@ -68,6 +68,8 @@ import {
   remainingAfterDeposit,
 } from '../../../utils/depositResume';
 import { leaveClientOrderDetail } from '../../../utils/clientOrderDetailBack';
+import { useClientReorderFlow } from '../../../hooks/useClientReorderFlow';
+import { ReorderCartConflictSheet } from '../../../components/orders/ReorderCartConflictSheet';
 
 type Props = OrderDetailScreenProps;
 
@@ -260,6 +262,8 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     order?.current_status === 'complete'
   );
 
+  const reorderFlow = useClientReorderFlow(orderId, order?.current_status);
+
   const clientVm = useMemo(() => {
     if (!order) return null;
     const ctx: OrderViewModelContext = {
@@ -350,20 +354,28 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const depositIsPending = isDepositPending(order);
   
   const stickyPrimaryId =
-    primaryActionId === 'rate' && !canShowRatePrimary ? 'none' : primaryActionId;
+    reorderFlow.enabled
+      ? 'reorder'
+      : primaryActionId === 'rate' && !canShowRatePrimary
+        ? 'none'
+        : primaryActionId;
   const showStickyPrimary = [
     'pay',
     'send_pin',
     'rate',
     'complete',
     'confirm_receipt',
+    'reorder',
   ].includes(stickyPrimaryId);
   
   // Determine the label for the sticky primary button
   let primaryLabelKey: string;
   let primaryLabelDefault: string;
   
-  if (stickyPrimaryId === 'pay') {
+  if (stickyPrimaryId === 'reorder') {
+    primaryLabelKey = 'orders.reorder.cta';
+    primaryLabelDefault = 'Reorder';
+  } else if (stickyPrimaryId === 'pay') {
     if (depositIsPending) {
       // Deposit pending: show "Pay deposit" CTA
       primaryLabelKey = 'deposit.payDepositCta';
@@ -574,6 +586,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   };
 
   const onStickyPrimaryPress = () => {
+    if (stickyPrimaryId === 'reorder') {
+      void reorderFlow.onReorderPress();
+      return;
+    }
     if (stickyPrimaryId === 'pay') {
       // Check for deposit pending first
       if (depositIsPending) {
@@ -919,8 +935,17 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           ) : showStickyPrimary ? (
             <Button
               mode="contained"
-              loading={actionLoading || payDepositLoading}
+              loading={
+                stickyPrimaryId === 'reorder'
+                  ? reorderFlow.loading
+                  : actionLoading || payDepositLoading
+              }
               onPress={onStickyPrimaryPress}
+              accessibilityLabel={
+                stickyPrimaryId === 'reorder'
+                  ? t('orders.reorder.ctaA11y', 'Reorder this order')
+                  : undefined
+              }
             >
               {depositIsPending
                 ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
@@ -1061,8 +1086,23 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           void refetchEligibility();
         }}
       />
-      <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
-        {snack}
+      <ReorderCartConflictSheet
+        visible={reorderFlow.sheetOpen}
+        allowAdd={reorderFlow.allowAdd}
+        otherStoreBlocked={reorderFlow.otherStoreBlocked}
+        onReplace={reorderFlow.onReplace}
+        onAdd={reorderFlow.onAdd}
+        onDismiss={reorderFlow.onDismissSheet}
+      />
+      <Snackbar
+        visible={!!(snack || reorderFlow.snack)}
+        onDismiss={() => {
+          setSnack(null);
+          reorderFlow.setSnack(null);
+        }}
+        duration={4000}
+      >
+        {reorderFlow.snack ?? snack}
       </Snackbar>
     </View>
   );

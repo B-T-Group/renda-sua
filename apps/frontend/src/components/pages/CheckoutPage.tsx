@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
@@ -572,6 +572,13 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 const CheckoutPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const reorderPrefill = location.state as
+    | {
+        deliveryAddressId?: string;
+        fulfillmentMethod?: 'delivery' | 'pickup' | 'shipping';
+      }
+    | null;
   const { cartItems } = useCart();
   const { profile, refetch: refetchProfile } = useUserProfileContext();
   const theme = useTheme();
@@ -579,9 +586,11 @@ const CheckoutPage: React.FC = () => {
 
   // State
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>(
-    'delivery'
+    reorderPrefill?.fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery'
   );
-  const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const [selectedAddressId, setSelectedAddressId] = useState<string>(
+    reorderPrefill?.deliveryAddressId ?? ''
+  );
   const [useDifferentPhone, setUseDifferentPhone] = useState(false);
   const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
   const [sendingToSomeoneElse, setSendingToSomeoneElse] = useState(false);
