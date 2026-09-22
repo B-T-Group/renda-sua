@@ -68,7 +68,7 @@ fields @timestamp, level, message, method, path, status, durationMs
 ## Recommended CloudWatch / platform alerts
 
 - **Health check failures:** Lightsail container unhealthy after `/api/health` returns non-2xx/3xx (including Hasura down → 503).
-- **5xx rate:** Alert when overall 5xx response rate exceeds a threshold (from access logs or a future metrics export).
+- **5xx rate:** Alert when overall 5xx response rate exceeds a threshold (ALB/container metrics or error-level application logs).
 - **Order / payment failures:** Alert on payment callback or mobile-payment 5xx or repeated failures (Sentry issue filters by path/tag).
 - **Sentry:** Prefer Sentry alerts for new issues and volume spikes (primary push channel).
 
