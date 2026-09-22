@@ -132,7 +132,11 @@ export type GuestRootStackParamList = {
   CollectionDetail: CollectionDetailParams;
   StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;
-  Cart: undefined;
+  Cart:
+    | {
+        reorderBanner?: 'business_closed' | 'address_invalid';
+      }
+    | undefined;
   RentalListingDetail: { listingId: string };
 };
 
@@ -162,8 +166,17 @@ export type ClientRootStackParamList = {
   StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;
   PlaceOrder: PlaceOrderParams;
-  Cart: undefined;
-  CartCheckout: undefined;
+  Cart:
+    | {
+        reorderBanner?: 'business_closed' | 'address_invalid';
+      }
+    | undefined;
+  CartCheckout:
+    | {
+        deliveryAddressId?: string;
+        fulfillmentMethod?: 'delivery' | 'pickup' | 'shipping';
+      }
+    | undefined;
   OrderPlacedSuccess: OrderPlacedSuccessParams;
   MobileMoneyAwaitingPayment: MobileMoneyAwaitingPaymentParams;
   OrderDetail: {

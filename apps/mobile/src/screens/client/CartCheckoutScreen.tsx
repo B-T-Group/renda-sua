@@ -10,7 +10,8 @@ import {
 } from '../../hooks/useKeyboardVerticalOffset';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
@@ -112,6 +113,8 @@ export default observer(function CartCheckoutScreen() {
   const insets = useSafeAreaInsets();
   const keyboardVerticalOffset = useKeyboardVerticalOffset();
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
+  const route = useRoute<RouteProp<ClientRootStackParamList, 'CartCheckout'>>();
+  const reorderPrefill = route.params;
   const { cart } = useStore();
   const { addresses, loading: addrLoading, error: addrError, refetch: refetchAddresses } = useClientAddresses();
   const { user: meUser, loading: profileLoading, refetch: refetchProfile } = useClientProfileForPlaceOrder();
@@ -136,8 +139,10 @@ export default observer(function CartCheckoutScreen() {
   // Use the first cart item's seller country as provisional fallback while no address is selected.
   const provisionalCountry = cart.items[0]?.sellerCountry?.trim().toUpperCase();
 
-  const [addressId, setAddressId] = useState('');
-  const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery');
+  const [addressId, setAddressId] = useState(reorderPrefill?.deliveryAddressId ?? '');
+  const [fulfillment, setFulfillment] = useState<Fulfillment>(
+    (reorderPrefill?.fulfillmentMethod as Fulfillment) || 'delivery'
+  );
   // Delivery is the default when both options exist; confirmed immediately.
   const [hasChosenFulfillment, setHasChosenFulfillment] = useState(true);
   const [couponExpanded, setCouponExpanded] = useState(false);

@@ -5856,7 +5856,22 @@
     "recipientNotifiedNotice": "{{name}} gets tracking updates and the delivery code by text. They do not need your login.",
     "deliveryContactRecipient": "Recipient",
     "orderedBy": "Ordered by {{name}}",
-    "earningsPendingRelease": "Earnings pending · Releases when agent confirms pickup"
+    "earningsPendingRelease": "Earnings pending · Releases when agent confirms pickup",
+    "reorder": {
+      "cta": "Reorder",
+      "ctaA11y": "Reorder this order",
+      "conflictTitle": "Your cart already has items",
+      "conflictMessage": "Replace your cart with this order, or add these items to your cart.",
+      "otherStoreMessage": "Your cart has items from another store. Replace your cart to reorder from this store.",
+      "otherStoreToast": "Your cart has items from another store",
+      "replaceCart": "Replace cart",
+      "addToCart": "Add to cart",
+      "skippedToast": "Unavailable: {{names}}",
+      "andMore": "and {{count}} more",
+      "failed": "Could not reorder. Try again.",
+      "businessClosedBanner": "This store is not accepting orders right now. You can keep these items in your cart and try again later.",
+      "addressInvalidBanner": "Your previous delivery address is no longer valid. Choose an address at checkout."
+    }
   },
   "items": {
     "brand": "Brand",

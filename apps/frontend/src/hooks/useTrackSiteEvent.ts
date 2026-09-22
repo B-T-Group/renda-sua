@@ -77,6 +77,12 @@ export const SITE_EVENT_DELIVERY_CARD_AREA_PROMPT_CLICK =
 export const SITE_EVENT_DELIVERY_CARD_ESTIMATE_READY =
   'inventory.delivery_card.estimate_ready' as const;
 
+export const SITE_EVENT_ORDERS_REORDER_IMPRESSION =
+  'orders.reorder.impression' as const;
+export const SITE_EVENT_ORDERS_REORDER_TAP = 'orders.reorder.tap' as const;
+export const SITE_EVENT_ORDERS_REORDER_RESULT =
+  'orders.reorder.result' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -100,7 +106,10 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_CHECKOUT_ORDER_CREATED_PICKUP
   | typeof SITE_EVENT_DELIVERY_CARD_VIEW
   | typeof SITE_EVENT_DELIVERY_CARD_AREA_PROMPT_CLICK
-  | typeof SITE_EVENT_DELIVERY_CARD_ESTIMATE_READY;
+  | typeof SITE_EVENT_DELIVERY_CARD_ESTIMATE_READY
+  | typeof SITE_EVENT_ORDERS_REORDER_IMPRESSION
+  | typeof SITE_EVENT_ORDERS_REORDER_TAP
+  | typeof SITE_EVENT_ORDERS_REORDER_RESULT;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

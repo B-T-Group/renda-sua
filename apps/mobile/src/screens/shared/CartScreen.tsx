@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Dialog, Portal, Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -14,6 +15,7 @@ import { CartLineRow } from '../../components/cart/CartLineRow';
 import { CartOrderSummary } from '../../components/cart/CartOrderSummary';
 import { CartSaveAccountNudge } from '../../components/cart/CartSaveAccountNudge';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
+import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 type CartNav = NativeStackNavigationProp<ClientRootStackParamList | GuestRootStackParamList>;
 
@@ -49,6 +51,8 @@ export default observer(function CartScreen() {
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing } = useTheme();
   const navigation = useNavigation<CartNav>();
+  const route = useRoute<RouteProp<ClientRootStackParamList, 'Cart'>>();
+  const reorderBanner = route.params?.reorderBanner;
   const { cart, auth } = useStore();
   const [signInPromptVisible, setSignInPromptVisible] = useState(false);
   const [footerHeight, setFooterHeight] = useState(220);
@@ -156,6 +160,24 @@ export default observer(function CartScreen() {
               ]}
               currentStep="cart"
             />
+            {reorderBanner === 'business_closed' ? (
+              <NoticeBanner
+                tone="warning"
+                message={t(
+                  'orders.reorder.businessClosedBanner',
+                  'This store is not accepting orders right now. You can keep these items in your cart and try again later.'
+                )}
+              />
+            ) : null}
+            {reorderBanner === 'address_invalid' ? (
+              <NoticeBanner
+                tone="warning"
+                message={t(
+                  'orders.reorder.addressInvalidBanner',
+                  'Your previous delivery address is no longer valid. Choose an address at checkout.'
+                )}
+              />
+            ) : null}
             <CartSaveAccountNudge />
             <Text style={[typography.body2, { color: colors.text.secondary, marginBottom: spacing.sm }]}>
               {t('cart.listHeader', '{{itemCount}} items from {{sellerCount}} sellers', {

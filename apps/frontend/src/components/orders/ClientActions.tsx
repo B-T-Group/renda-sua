@@ -1,14 +1,16 @@
-import { Cancel, CheckCircle, NotificationsActive, Payments, Storefront, Undo } from '@mui/icons-material';
+import { Cancel, CheckCircle, NotificationsActive, Payments, Replay, Storefront, Undo } from '@mui/icons-material';
 import { Box, Button } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
+import { useClientReorderFlow } from '../../hooks/useClientReorderFlow';
 import type { OrderData } from '../../hooks/useOrderById';
 import { isWithinRefundWindow } from '../../hooks/useOrderRefunds';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import ClientRefundRequestDialog from '../dialogs/ClientRefundRequestDialog';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 import { ClientDeliveryPinButton } from './ClientDeliveryPinButton';
+import { ReorderCartConflictDialog } from './ReorderCartConflictDialog';
 
 interface ClientActionsProps {
   order: OrderData;
@@ -58,6 +60,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   const [completing, setCompleting] = useState(false);
   const [switchingToPickup, setSwitchingToPickup] = useState(false);
   const [remindingReady, setRemindingReady] = useState(false);
+  const reorderFlow = useClientReorderFlow(order.id, order.current_status);
 
   const handleCancelClick = () => {
     setCancelModalOpen(true);
@@ -265,6 +268,17 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       });
     }
 
+    if (reorderFlow.enabled) {
+      actions.unshift({
+        label: t('orders.reorder.cta', 'Reorder'),
+        action: () => void reorderFlow.onReorderPress(),
+        color: 'primary',
+        icon: <Replay />,
+        variant: 'contained',
+        loading: reorderFlow.loading,
+      });
+    }
+
     return actions;
   };
 
@@ -283,7 +297,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
           'out_for_delivery',
         ].includes(order.current_status));
 
-  if (availableActions.length === 0 && !showPin) {
+  if (availableActions.length === 0 && !showPin && !reorderFlow.enabled) {
     return null;
   }
 
@@ -320,6 +334,11 @@ const ClientActions: React.FC<ClientActionsProps> = ({
                   onClick={action.action}
                   startIcon={action.icon}
                   disabled={Boolean(action.loading)}
+                  aria-label={
+                    action.label === t('orders.reorder.cta', 'Reorder')
+                      ? t('orders.reorder.ctaA11y', 'Reorder this order')
+                      : undefined
+                  }
                   sx={{
                     minWidth: { xs: 0, sm: 120 },
                     width: { xs: '100%', sm: 'auto' },
@@ -369,6 +388,14 @@ const ClientActions: React.FC<ClientActionsProps> = ({
           );
           onActionComplete?.();
         }}
+      />
+      <ReorderCartConflictDialog
+        open={reorderFlow.sheetOpen}
+        allowAdd={reorderFlow.allowAdd}
+        otherStoreBlocked={reorderFlow.otherStoreBlocked}
+        onReplace={reorderFlow.onReplace}
+        onAdd={reorderFlow.onAdd}
+        onCancel={reorderFlow.onDismissSheet}
       />
     </>
   );
