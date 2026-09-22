@@ -39,10 +39,27 @@ describe('LoggingInterceptor', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.NODE_ENV;
     response.statusCode = 200;
     request.url = '/api/orders?code=secret-oauth';
     request.originalUrl = '/api/orders?code=secret-oauth';
     interceptor = new LoggingInterceptor(logger);
+  });
+
+  it('skips access logs in production', (done) => {
+    process.env.NODE_ENV = 'production';
+    const next: CallHandler = { handle: () => of({ ok: true }) };
+
+    interceptor.intercept(context, next).subscribe({
+      complete: () => {
+        expect(response.setHeader).toHaveBeenCalledWith(
+          'X-Request-Id',
+          'req-abc'
+        );
+        expect(logger.info).not.toHaveBeenCalled();
+        done();
+      },
+    });
   });
 
   it('skips access logs for health probe paths', (done) => {

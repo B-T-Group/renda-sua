@@ -59,6 +59,10 @@ export class LoggingInterceptor implements NestInterceptor {
     startedAt: number,
     requestId?: string
   ): void {
+    // Prod CloudWatch is for errors/alerts — skip noisy access lines there.
+    if ((process.env.NODE_ENV || 'development') === 'production') {
+      return;
+    }
     const path = this.pathWithoutQuery(request);
     if (SKIP_ACCESS_LOG_PATHS.has(path)) {
       return;
