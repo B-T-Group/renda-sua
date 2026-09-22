@@ -37,6 +37,11 @@ import { OrderViewToggle } from '../../components/agent/OrderViewToggle';
 import type { OrderViewMode } from '../../components/agent/OrderViewToggle';
 import { useStore } from '../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
+import {
+  agentIdVerificationPending,
+  agentNeedsIdUpload,
+  agentNeedsMomoSetup,
+} from '../../utils/agentClaimSetupGate';
 
 export default function OpenOrdersScreen() {
   const { t } = useTranslation();
@@ -176,15 +181,25 @@ export default function OpenOrdersScreen() {
   useFocusEffect(
     useCallback(() => {
       void refetchVerification();
-    }, [refetchVerification])
+      void refetch();
+    }, [refetchVerification, refetch])
   );
 
-  const idVerificationPending =
-    !isStripeRail && !isVerified && idDocumentStatus === 'pending';
-  const needsIdUpload =
-    !isStripeRail &&
-    !isVerified &&
-    (idDocumentStatus === 'missing' || idDocumentStatus === 'rejected');
+  const idVerificationPending = agentIdVerificationPending({
+    isStripeRail,
+    isVerified,
+    idDocumentStatus,
+  });
+  const needsIdUpload = agentNeedsIdUpload({
+    isStripeRail,
+    isVerified,
+    idDocumentStatus,
+  });
+  const needsMomoSetup = agentNeedsMomoSetup({
+    isStripeRail,
+    isVerified,
+    idDocumentStatus,
+  });
   const idRejected = !isStripeRail && !isVerified && idDocumentStatus === 'rejected';
 
   const claimBlockedLabel = useMemo(() => {
@@ -197,8 +212,15 @@ export default function OpenOrdersScreen() {
     if (idRejected) {
       return t('agent.openOrders.idRejectedCta', 'Re-upload ID');
     }
+    if (needsMomoSetup) {
+      return t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim');
+    }
     return t('agent.openOrders.uploadIdToClaim', 'Upload ID to claim');
-  }, [idRejected, idVerificationPending, isStripeRail, t]);
+  }, [idRejected, idVerificationPending, isStripeRail, needsMomoSetup, t]);
+
+  const goToMomoSetup = useCallback(() => {
+    navigation.navigate('MobilePaymentPhones');
+  }, [navigation]);
 
   const handleSetupRequired = useCallback(() => {
     if (isStripeRail) {
@@ -215,11 +237,17 @@ export default function OpenOrdersScreen() {
       });
       return;
     }
+    if (needsMomoSetup) {
+      goToMomoSetup();
+      return;
+    }
     navigation.navigate('Documents');
   }, [
+    goToMomoSetup,
     idVerificationPending,
     isStripeRail,
     navigation,
+    needsMomoSetup,
     startOnboarding,
     stripeActionLoading,
     t,
@@ -559,6 +587,26 @@ export default function OpenOrdersScreen() {
               : t('agent.openOrders.goToDocuments', 'Go to Documents')
           }
           onAction={() => navigation.navigate('Documents')}
+        />
+      ) : null}
+
+      {!verificationLoading &&
+      agentStatus !== 'suspended' &&
+      !effectiveCanClaim &&
+      needsMomoSetup ? (
+        <NoticeBanner
+          style={[styles.banner, { marginHorizontal: spacing.md }]}
+          tone="warning"
+          icon="cellphone-check"
+          message={t(
+            'agent.openOrders.momoSetupBanner',
+            'Your ID is approved. Verify your mobile money number to finish setup and claim deliveries.'
+          )}
+          actionLabel={t(
+            'agent.openOrders.verifyMobileMoneyToFinish',
+            'Verify mobile money to finish'
+          )}
+          onAction={goToMomoSetup}
         />
       ) : null}
 

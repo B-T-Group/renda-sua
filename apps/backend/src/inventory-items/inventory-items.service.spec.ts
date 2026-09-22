@@ -118,6 +118,24 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     expect(json).toContain('"_in":["CA","CM"]');
   });
 
+  it('restricts the catalog to one business when business_id is set', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ business_id: '  biz-credit-1  ' });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"id":{"_eq":"biz-credit-1"}');
+  });
+
+  it('does not filter by business id when business_id is blank', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ business_id: '   ' });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).not.toContain('"id":{"_eq":');
+  });
+
   it('excludes export listings from the default local catalog', async () => {
     const { buildWhere, whereJson } = createService();
     const built = await buildWhere({ country_code: 'CA', state: 'Ontario' });
@@ -591,4 +609,180 @@ describe('InventoryItemsService.getInventoryStoreById', () => {
       { ids: [locationId] }
     );
   });
+
+  function storeLocation(businessId: string) {
+    return {
+      id: locationId,
+      business_id: businessId,
+      name: 'Partner Mart',
+      is_active: true,
+      logo_url: null,
+      business: {
+        is_verified: true,
+        can_accept_orders: true,
+        is_storefront_visible: true,
+      },
+      address: { city: 'Douala' },
+    };
+  }
+
+  function mockStoreDetail(
+    hasuraSystemService: { executeQuery: jest.Mock },
+    businessId: string,
+    partnerIds: string[]
+  ) {
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('StoreLocationDetails')) {
+        return { business_locations: [storeLocation(businessId)] };
+      }
+      if (query.includes('ActivePartnerBusinessIds')) {
+        return {
+          partner_businesses: partnerIds.map((id) => ({ business_id: id })),
+        };
+      }
+      if (query.includes('DistinctCatalogItemCount')) {
+        return {
+          business_inventory_aggregate: { aggregate: { count: 2 } },
+        };
+      }
+      return {};
+    });
+  }
+
+  it('tags a store detail as a partner only when that business is active', async () => {
+    const { service, hasuraSystemService } = createService();
+    mockStoreDetail(hasuraSystemService, 'biz-partner', ['biz-partner']);
+
+    await expect(service.getInventoryStoreById(locationId)).resolves.toEqual(
+      expect.objectContaining({
+        business_location_id: locationId,
+        business_id: 'biz-partner',
+        is_partner: true,
+        item_count: 2,
+      })
+    );
+
+    mockStoreDetail(hasuraSystemService, 'biz-other', ['biz-partner']);
+    await expect(service.getInventoryStoreById(locationId)).resolves.toEqual(
+      expect.objectContaining({
+        business_id: 'biz-other',
+        is_partner: false,
+      })
+    );
+
+    mockStoreDetail(hasuraSystemService, 'biz-partner', []);
+    await expect(service.getInventoryStoreById(locationId)).resolves.toEqual(
+      expect.objectContaining({
+        business_id: 'biz-partner',
+        is_partner: false,
+      })
+    );
+  });
 });
+
+describe('InventoryItemsService store directory partner filters', () => {
+  const locA = {
+    business_id: 'biz-partner',
+    name: 'Partner Mart',
+    city: 'Douala',
+    logo_url: null,
+    is_verified: true,
+    can_accept_orders: true,
+    is_storefront_visible: true,
+    reliability_tier: 'ok',
+  };
+  const locB = {
+    business_id: 'biz-other',
+    name: 'Corner Shop',
+    city: 'Yaounde',
+    logo_url: null,
+    is_verified: false,
+    can_accept_orders: true,
+    is_storefront_visible: true,
+    reliability_tier: 'ok',
+  };
+
+  function createService() {
+    const service = new InventoryItemsService(
+      { executeQuery: jest.fn() } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+    jest
+      .spyOn(service as any, 'resolveInventoryListGeo')
+      .mockResolvedValue({ country_code: 'CM', state: null });
+    jest
+      .spyOn(service as any, 'buildInventoryCatalogWhere')
+      .mockResolvedValue({ where: {} });
+    jest
+      .spyOn(service as any, 'countDistinctCatalogItemsByLocation')
+      .mockResolvedValue(
+        new Map([
+          ['loc-a', 4],
+          ['loc-b', 2],
+        ])
+      );
+    jest.spyOn(service as any, 'resolveTopLocationsOrigin').mockResolvedValue(null);
+    jest.spyOn(service as any, 'fetchStoreLocationDetailsByIds').mockResolvedValue(
+      new Map([
+        ['loc-a', locA],
+        ['loc-b', locB],
+      ])
+    );
+    jest
+      .spyOn(service as any, 'activePartnerBusinessIds')
+      .mockResolvedValue(new Set(['biz-partner']));
+    return service;
+  }
+
+  it('tags partner stores and keeps non-partners on the public rail', async () => {
+    const rows = await createService().getTopInventoryStores(20, {
+      country_code: 'CM',
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        business_location_id: 'loc-a',
+        is_partner: true,
+      }),
+      expect.objectContaining({
+        business_location_id: 'loc-b',
+        is_partner: false,
+      }),
+    ]);
+  });
+
+  it('drops non-partner stores when partners_only is set', async () => {
+    const rows = await createService().getTopInventoryStores(20, {
+      country_code: 'CM',
+      partners_only: true,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        business_location_id: 'loc-a',
+        business_id: 'biz-partner',
+        is_partner: true,
+      }),
+    ]);
+  });
+
+  it('filters the directory by store name before partner tagging', async () => {
+    const rows = await createService().getTopInventoryStores(20, {
+      country_code: 'CM',
+      search: 'corner',
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        business_location_id: 'loc-b',
+        is_partner: false,
+      }),
+    ]);
+  });
+});
+
