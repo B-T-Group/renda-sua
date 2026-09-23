@@ -126,12 +126,6 @@ export class AccountsService {
         };
       }
 
-      const openDeposit = await this.withUnappliedDeposit(request);
-      if (!openDeposit) {
-        return { success: true };
-      }
-      request = openDeposit;
-
       // Get current account details
       const account = await this.getAccountById(request.accountId);
       if (!account) {
@@ -237,6 +231,7 @@ export class AccountsService {
     if (remaining <= 0) return { success: true, alreadyExists: true };
     const result = await this.registerTransaction({
       ...request,
+      amount: remaining,
       transactionType: 'deposit',
     });
     if (!result.success) {
@@ -257,25 +252,6 @@ export class AccountsService {
   ): Promise<number> {
     const applied = await this.sumAppliedDeposit(accountId, referenceId);
     return Number((amount - applied).toFixed(2));
-  }
-
-  /**
-   * Deposits with a reference may first land as cash_advance_repayment.
-   * Retry the leftover only — never the original amount.
-   */
-  private async withUnappliedDeposit(
-    request: TransactionRequest
-  ): Promise<TransactionRequest | null> {
-    if (request.transactionType !== 'deposit' || !request.referenceId) {
-      return request;
-    }
-    const remaining = await this.unappliedDepositAmount(
-      request.accountId,
-      request.referenceId,
-      request.amount
-    );
-    if (remaining <= 0) return null;
-    return { ...request, amount: remaining };
   }
 
   private async sumAppliedDeposit(
