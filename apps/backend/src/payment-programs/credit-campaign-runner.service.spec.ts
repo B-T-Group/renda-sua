@@ -1,4 +1,5 @@
 import { AccountsService } from '../accounts/accounts.service';
+import { DatabaseService } from '../database/database.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreditCampaignRunnerService } from './credit-campaign-runner.service';
@@ -24,11 +25,24 @@ const event = {
   referrerUserId: 'referrer-user',
 };
 
+function allowReferrerSlot(n = 0) {
+  return {
+    transaction: jest.fn(async (fn: (query: (text: string) => Promise<any[]>) => Promise<unknown>) =>
+      fn(async (text: string) => {
+        if (text.includes('COUNT(*)')) return [{ n }];
+        if (text.includes('UPDATE')) return [{ id: 'referrer' }];
+        return [];
+      })
+    ),
+  };
+}
+
 describe('CreditCampaignRunnerService', () => {
   let hasura: { executeQuery: jest.Mock; executeMutation: jest.Mock };
   let accounts: { registerTransaction: jest.Mock; hasTransactionForReference: jest.Mock };
   let credits: { grantCampaign: jest.Mock };
   let notifications: { sendPaymentProgramNotice: jest.Mock };
+  let database: ReturnType<typeof allowReferrerSlot>;
   let service: CreditCampaignRunnerService;
 
   beforeEach(() => {
@@ -39,17 +53,16 @@ describe('CreditCampaignRunnerService', () => {
     };
     credits = { grantCampaign: jest.fn().mockResolvedValue({ id: 'store-grant' }) };
     notifications = { sendPaymentProgramNotice: jest.fn() };
+    database = allowReferrerSlot(0);
     service = new CreditCampaignRunnerService(
       hasura as unknown as HasuraSystemService,
       accounts as unknown as AccountsService,
       credits as unknown as PurchaseCreditsService,
-      notifications as unknown as NotificationsService
+      notifications as unknown as NotificationsService,
+      database as unknown as DatabaseService
     );
     hasura.executeQuery.mockImplementation(async (query: string) => {
       if (query.includes('ActiveCreditCampaigns')) return { credit_campaigns: [campaign] };
-      if (query.includes('PostedReferrerRewards')) {
-        return { credit_campaign_grants_aggregate: { aggregate: { count: 0 } } };
-      }
       if (query.includes('CampaignHqAccount')) return { users: [{ accounts: [{ id: 'hq' }] }] };
       if (query.includes('CampaignPersonalAccount')) return { accounts: [{ id: 'wallet' }] };
       return { credit_campaign_grants: [] };
@@ -62,13 +75,9 @@ describe('CreditCampaignRunnerService', () => {
   });
 
   it('stops referrer cash at the cap and still grants the referred store bonus', async () => {
-    hasura.executeQuery.mockImplementation(async (query: string) => {
-      if (query.includes('ActiveCreditCampaigns')) return { credit_campaigns: [campaign] };
-      if (query.includes('PostedReferrerRewards')) {
-        return { credit_campaign_grants_aggregate: { aggregate: { count: 5 } } };
-      }
-      return {};
-    });
+    database.transaction.mockImplementation(async (fn) =>
+      fn(async (text: string) => (text.includes('COUNT(*)') ? [{ n: 5 }] : []))
+    );
     await service.applySignup(event);
     expect(credits.grantCampaign).toHaveBeenCalledWith(expect.objectContaining({ amount: 750 }));
     expect(accounts.registerTransaction).not.toHaveBeenCalled();
@@ -76,6 +85,37 @@ describe('CreditCampaignRunnerService', () => {
       (call) => call[0].includes('FinishCampaignGrant') && call[1].reason === 'referrer_cap_reached'
     );
     expect(skipped).toBeTruthy();
+  });
+
+  it('does not pay a second concurrent referrer when the last slot is already claimed', async () => {
+    database.transaction.mockImplementation(async (fn) =>
+      fn(async (text: string) => {
+        if (text.includes('COUNT(*)')) return [{ n: 5 }];
+        return [];
+      })
+    );
+    await service.applySignup({ ...event, userId: 'signup-user-2' });
+    expect(accounts.registerTransaction).not.toHaveBeenCalled();
+    expect(database.transaction).toHaveBeenCalled();
+  });
+
+  it('pays the referrer when one reward slot remains', async () => {
+    database.transaction.mockImplementation(async (fn) =>
+      fn(async (text: string) => {
+        if (text.includes('COUNT(*)')) return [{ n: 4 }];
+        if (text.includes('UPDATE')) return [{ id: 'referrer' }];
+        return [];
+      })
+    );
+    await service.applySignup(event);
+    expect(accounts.registerTransaction).toHaveBeenCalled();
+    expect(notifications.sendPaymentProgramNotice).toHaveBeenCalled();
+  });
+
+  it('does not lock referrer slots when signup has no referrer', async () => {
+    await service.applySignup({ ...event, referrerUserId: null });
+    expect(database.transaction).not.toHaveBeenCalled();
+    expect(credits.grantCampaign).toHaveBeenCalled();
   });
 
   it('does not grant again when the audit row is already posted', async () => {
@@ -122,9 +162,6 @@ describe('CreditCampaignRunnerService', () => {
         return { credit_campaign_grants: [{ id: 'stuck', status: 'posting', updated_at: stale }] };
       }
       if (query.includes('CampaignStoreCredit')) return { purchase_credit_grants: [{ id: 'store-grant' }] };
-      if (query.includes('PostedReferrerRewards')) {
-        return { credit_campaign_grants_aggregate: { aggregate: { count: 0 } } };
-      }
       if (query.includes('CampaignHqAccount')) return { users: [{ accounts: [{ id: 'hq' }] }] };
       return { accounts: [] };
     });
