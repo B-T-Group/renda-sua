@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
+import {
+  DatabaseService,
+  type DatabaseQuery,
+} from '../database/database.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -23,7 +27,8 @@ export class CreditCampaignRunnerService {
     private readonly hasura: HasuraSystemService,
     private readonly accounts: AccountsService,
     private readonly credits: PurchaseCreditsService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly database: DatabaseService
   ) {}
 
   async applySignup(event: SignupCampaignEvent): Promise<{ applied: number }> {
@@ -70,8 +75,12 @@ export class CreditCampaignRunnerService {
     const amount = Number(campaign.referrer_amount) || 0;
     const referrerId = event.referrerUserId;
     if (amount <= 0 || !referrerId) return;
-    const id = await this.openGrant(referrerRow(campaign, event, amount));
+    const id = await this.insertPending(referrerRow(campaign, event, amount));
     if (!id) return;
+    if (!(await this.claimReferrerSlot(campaign, referrerId, id))) {
+      await this.finish(id, 'skipped', 'referrer_cap_reached');
+      return;
+    }
     await this.settleReferrer(campaign, referrerId, amount, id);
   }
 
@@ -85,10 +94,6 @@ export class CreditCampaignRunnerService {
       await this.finish(id, 'posted', null);
       return;
     }
-    if (await this.capped(campaign, referrerId)) {
-      await this.finish(id, 'skipped', 'referrer_cap_reached');
-      return;
-    }
     const outcome = await this.payWallet(referrerId, amount, campaign.currency, campaign.name, id);
     if (outcome === 'missing_hq') {
       await this.finish(id, 'skipped', 'hq_account_missing');
@@ -99,13 +104,55 @@ export class CreditCampaignRunnerService {
     await this.notifyReferrer(referrerId, amount, campaign.currency, id);
   }
 
-  private async capped(campaign: CreditCampaign, referrerId: string): Promise<boolean> {
-    const result = await this.hasura.executeQuery(POSTED_REFERRER, {
-      campaignId: campaign.id,
-      userId: referrerId,
+  private async claimReferrerSlot(
+    campaign: CreditCampaign,
+    referrerId: string,
+    grantId: string
+  ): Promise<boolean> {
+    const max = Number(campaign.max_referrer_rewards) || 0;
+    return this.database.transaction(async (query) => {
+      await query('SELECT pg_advisory_xact_lock(hashtext($1::text))', [
+        `referrer-cap:${campaign.id}:${referrerId}`,
+      ]);
+      if (await this.lockedReferrerAtCap(query, campaign.id, referrerId, grantId, max)) {
+        return false;
+      }
+      return this.takeReferrerSlot(query, grantId);
     });
-    const posted = result.credit_campaign_grants_aggregate?.aggregate?.count ?? 0;
-    return referrerAtCap(posted, campaign.max_referrer_rewards);
+  }
+
+  private async lockedReferrerAtCap(
+    query: DatabaseQuery,
+    campaignId: string,
+    referrerId: string,
+    grantId: string,
+    max: number
+  ): Promise<boolean> {
+    const rows = await query<{ n: number }>(
+      `SELECT COUNT(*)::int AS n
+       FROM public.credit_campaign_grants
+       WHERE campaign_id = $1
+         AND beneficiary_user_id = $2
+         AND beneficiary_role = 'referrer'
+         AND status IN ('posted', 'posting')
+         AND id <> $3`,
+      [campaignId, referrerId, grantId]
+    );
+    return referrerAtCap(Number(rows[0]?.n ?? 0), max);
+  }
+
+  private async takeReferrerSlot(
+    query: DatabaseQuery,
+    grantId: string
+  ): Promise<boolean> {
+    const rows = await query<{ id: string }>(
+      `UPDATE public.credit_campaign_grants
+       SET status = 'posting', updated_at = now()
+       WHERE id = $1 AND status IN ('pending', 'posting')
+       RETURNING id`,
+      [grantId]
+    );
+    return rows.length === 1;
   }
 
   private async load(country: string): Promise<CreditCampaign[]> {
@@ -121,6 +168,27 @@ export class CreditCampaignRunnerService {
     const created = inserted.insert_credit_campaign_grants_one?.id as string | undefined;
     if (created) return this.take(created);
     return this.takeExisting(object);
+  }
+
+  private async insertPending(object: Record<string, unknown>): Promise<string | null> {
+    const inserted = await this.hasura.executeMutation(CLAIM, { object });
+    const created = inserted.insert_credit_campaign_grants_one?.id as string | undefined;
+    if (created) return created;
+    return this.existingOpenGrant(object);
+  }
+
+  private async existingOpenGrant(
+    object: Record<string, unknown>
+  ): Promise<string | null> {
+    const existing = await this.hasura.executeQuery(EXISTING, {
+      campaignId: object.campaign_id,
+      signupUserId: object.signup_user_id,
+      role: object.beneficiary_role,
+    });
+    const row = existing.credit_campaign_grants?.[0];
+    if (!row || row.status === 'posted' || row.status === 'skipped') return null;
+    if (row.status === 'pending') return row.id;
+    return this.reclaim(row);
   }
 
   private async takeExisting(object: Record<string, unknown>): Promise<string | null> {
@@ -402,17 +470,6 @@ const FINISH = `
       pk_columns: { id: $id }
       _set: { status: $status, skip_reason: $reason, purchase_credit_grant_id: $grantId }
     ) { id }
-  }
-`;
-
-const POSTED_REFERRER = `
-  query PostedReferrerRewards($campaignId: uuid!, $userId: uuid!) {
-    credit_campaign_grants_aggregate(where: {
-      campaign_id: { _eq: $campaignId }
-      beneficiary_user_id: { _eq: $userId }
-      beneficiary_role: { _eq: "referrer" }
-      status: { _eq: "posted" }
-    }) { aggregate { count } }
   }
 `;
 
