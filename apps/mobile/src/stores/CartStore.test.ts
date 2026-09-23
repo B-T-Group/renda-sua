@@ -102,3 +102,58 @@ describe('CartStore.hasCheckoutBlockingCountryIssue', () => {
     expect(store.hasCheckoutBlockingCountryIssue).toBe(false);
   });
 });
+
+describe('CartStore reorder merge', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it('replaceLines drops the previous cart', async () => {
+    const store = await makeStore();
+    store.items = [makeLine({ inventoryItemId: 'old' })];
+    store.replaceLines([makeLine({ inventoryItemId: 'new', quantity: 2 })]);
+    expect(store.items.map((line) => line.inventoryItemId)).toEqual(['new']);
+    expect(store.items[0].quantity).toBe(2);
+  });
+
+  it('addLines sums the same listing and caps at max order quantity', async () => {
+    const store = await makeStore();
+    store.items = [
+      makeLine({
+        quantity: 3,
+        itemData: {
+          name: 'Rice',
+          price: 1000,
+          currency: 'XAF',
+          maxOrderQuantity: 5,
+        },
+      }),
+    ];
+    store.addLines([makeLine({ quantity: 4 })]);
+    expect(store.items).toHaveLength(1);
+    expect(store.items[0].quantity).toBe(5);
+  });
+
+  it('addLines keeps a different variant as its own line', async () => {
+    const store = await makeStore();
+    store.items = [makeLine({ quantity: 1, variantId: 'var-a' })];
+    store.addLines([makeLine({ quantity: 2, variantId: 'var-b' })]);
+    expect(store.items).toHaveLength(2);
+    expect(store.quantityForLine('inv-1', 'var-a')).toBe(1);
+    expect(store.quantityForLine('inv-1', 'var-b')).toBe(2);
+  });
+
+  it('addLines appends a new listing without a max cap', async () => {
+    const store = await makeStore();
+    store.items = [makeLine({ quantity: 2 })];
+    store.addLines([makeLine({ inventoryItemId: 'inv-2', quantity: 3 })]);
+    expect(store.items).toHaveLength(2);
+    expect(store.quantityForListing('inv-1')).toBe(2);
+    expect(store.quantityForListing('inv-2')).toBe(3);
+  });
+});
