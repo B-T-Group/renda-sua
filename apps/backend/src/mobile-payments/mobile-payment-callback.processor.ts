@@ -486,20 +486,9 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
 
-    const alreadyReversed =
-      await this.accountsService.hasTransactionForReference({
-        accountId: transaction.account_id,
-        transactionType: 'deposit',
-        referenceId: transaction.id,
-      });
-    if (alreadyReversed) {
-      return;
-    }
-
-    const reversal = await this.accountsService.registerTransaction({
+    const reversal = await this.accountsService.registerDepositIfNotExists({
       accountId: transaction.account_id,
       amount: transaction.amount,
-      transactionType: 'deposit',
       memo: `GIVE_CHANGE reversal - ${transaction.reference}`,
       referenceId: transaction.id,
     });
@@ -509,6 +498,7 @@ export class MobilePaymentCallbackProcessor {
       );
       return;
     }
+    if (reversal.alreadyExists) return;
     this.logger.log(
       `Reversed legacy GIVE_CHANGE wallet debit for ${transaction.id}`
     );
@@ -527,18 +517,9 @@ export class MobilePaymentCallbackProcessor {
       return true;
     }
 
-    const alreadyCredited =
-      await this.accountsService.hasTransactionForReference({
-        accountId: transaction.account_id,
-        transactionType: 'deposit',
-        referenceId: transaction.id,
-      });
-    if (alreadyCredited) return true;
-
-    const creditResult = await this.accountsService.registerTransaction({
+    const creditResult = await this.accountsService.registerDepositIfNotExists({
       accountId: transaction.account_id,
       amount: transaction.amount,
-      transactionType: 'deposit',
       memo: `Mobile payment deposit - ${transaction.reference}`,
       referenceId: transaction.id,
     });
@@ -549,6 +530,7 @@ export class MobilePaymentCallbackProcessor {
       );
       return false;
     }
+    if (creditResult.alreadyExists) return true;
 
     this.logger.log(
       `Successfully credited account ${transaction.account_id} with ${transaction.amount} ${transaction.currency}`
