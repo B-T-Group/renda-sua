@@ -114,22 +114,7 @@ import {
 } from '../common/CheckoutTaxSummaryLines';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
-import { isFoodCatalogItem } from '../../constants/food';
-
-const FOOD_ORDER_SOFT_MAX = 99;
-
-function placeOrderMaxQuantity(item: {
-  computed_available_quantity: number;
-  item?: { max_order_quantity?: number | null } | null;
-}): number {
-  if (isFoodCatalogItem(item)) {
-    return Math.max(1, item.item?.max_order_quantity ?? FOOD_ORDER_SOFT_MAX);
-  }
-  return Math.max(
-    1,
-    Math.min(item.computed_available_quantity, item.item?.max_order_quantity ?? 10, 10)
-  );
-}
+import { isFoodCatalogItem, placeOrderMaxQuantity } from '../../constants/food';
 
 const confirmOrderPulse = keyframes`
   0%, 100% {

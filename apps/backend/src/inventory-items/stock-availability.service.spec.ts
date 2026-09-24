@@ -182,6 +182,27 @@ describe('StockAvailabilityService', () => {
       );
     });
 
+    it('rejects cooked food before creating a low-stock check', async () => {
+      const { service, executeMutation } = buildService({
+        inventory: {
+          ...inventoryRow,
+          computed_available_quantity: 3,
+          item: {
+            ...inventoryRow.item,
+            item_sub_category: {
+              item_category: { name: 'Restaurant & Cooked Food' },
+            },
+          },
+        },
+      });
+      await expectHttpStatus(
+        service.requestCheck(inventoryId),
+        HttpStatus.BAD_REQUEST,
+        'cooked food'
+      );
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
     it('rejects when available stock is zero', async () => {
       const { service } = buildService({
         inventory: { ...inventoryRow, computed_available_quantity: 0 },
