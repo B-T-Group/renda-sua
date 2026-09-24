@@ -40,7 +40,7 @@ The backend distinguishes between web and mobile clients using the `X-Client-Pla
 
 ### Security Features
 
-- **HttpOnly, Secure, SameSite=Lax cookies** for CSRF protection
+- **HttpOnly session cookies**: `SameSite=Lax` for same-site (`*.rendasua.com`); `SameSite=None` + `Secure` only for HTTPS cross-site origins on the CORS allowlist (e.g. `http://localhost:4200` in dev)
 - **`X-Requested-With: XMLHttpRequest`** header required for refresh/logout to prevent CSRF
 - **Strict CORS** with explicit origin allowlist for credentialed requests
 - **`returnTo` validation** on both frontend and backend to prevent open redirects
