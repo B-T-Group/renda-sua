@@ -14,7 +14,7 @@ import { useSnackbar } from 'notistack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   useRentalApi,
@@ -53,7 +53,7 @@ const ClientRentalRequestsPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { createBooking, cancelClientRentalRequest, fetchClientRentalRequests } =
     useRentalApi();
   const { isStripeRail } = useIsStripeRail();

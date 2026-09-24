@@ -1,4 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { CheckCircle, Email, Refresh } from '@mui/icons-material';
 import {
   Alert,
@@ -28,7 +29,8 @@ import Logo from '../common/Logo';
  * - Option to logout if needed
  */
 const EmailVerificationPage: React.FC = () => {
-  const { user, logout, getAccessTokenSilently } = useAuth0();
+  const { user } = useSessionAuth();
+  const { logout, getAccessTokenSilently } = useAuth0();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { resendVerificationEmail } = useUserVerification();

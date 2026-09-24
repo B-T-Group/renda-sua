@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { gql } from 'graphql-request';
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
@@ -36,7 +36,7 @@ export function getOtherRentalCategoryId(
 }
 
 export function useRentalCategories() {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { baseClient, client } = useGraphQLClient();
   const api = useApiClient();
   const [categories, setCategories] = useState<RentalCategoryRow[]>([]);

@@ -1,5 +1,4 @@
 import { ApolloProvider as BaseApolloProvider } from '@apollo/client';
-import { useAuth0 } from '@auth0/auth0-react';
 import { Alert, Box, CircularProgress, Typography } from '@mui/material';
 import React, { useEffect } from 'react';
 import { useSessionAuth } from '../contexts/SessionAuthContext';
@@ -10,8 +9,7 @@ interface ApolloProviderProps {
 }
 
 export const ApolloProvider: React.FC<ApolloProviderProps> = ({ children }) => {
-  const { isLoading: authLoading } = useAuth0();
-  const { isAuthenticated } = useSessionAuth();
+  const { isAuthenticated, isLoading: authLoading } = useSessionAuth();
   const { client, isLoading, error } = useGraphQLSubscription();
 
   // Debug logging

@@ -13,7 +13,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useCatalogStores } from '../../hooks/useCatalogStores';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import SEOHead from '../seo/SEOHead';
@@ -25,7 +25,7 @@ import { alpha } from '@mui/material/styles';
 const StoresIndexPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const browserGeo = usePublicBrowserGeo(!isAuthenticated);
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');

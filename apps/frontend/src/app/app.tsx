@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
 import { Suspense, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,7 +54,7 @@ function RouteSuspenseFallback() {
 }
 
 function App() {
-  const { isLoading } = useAuth0();
+  const { isLoading } = useSessionAuth();
   const { isAuthenticated, isCheckingProfile } = useAuthFlow();
   const location = useLocation();
   const navigate = useNavigate();

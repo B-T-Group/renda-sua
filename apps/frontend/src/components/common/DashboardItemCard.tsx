@@ -31,6 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useSnackbar } from 'notistack';
 import { useCart } from '../../contexts/CartContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useProductInterest } from '../../hooks/useProductInterest';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
@@ -118,7 +119,8 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const [interestSubmitting, setInterestSubmitting] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
-  const { loginWithRedirect, isAuthenticated } = useAuth0();
+  const { loginWithRedirect } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
   const { trackSiteEvent } = useTrackSiteEvent();
