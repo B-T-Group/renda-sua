@@ -15,6 +15,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Item } from '../../../hooks/useItems';
+import { isFoodCatalogItem } from '../../../constants/food';
 import ItemCategoryEditor from './ItemCategoryEditor';
 import { formatItemCurrency, formatItemDate } from './itemViewHelpers';
 
@@ -150,11 +151,23 @@ const ItemDetailsCard: React.FC<ItemDetailsCardProps> = ({
 
           <Field label={t('business.items.orderLimits', 'Order Limits')}>
             <Typography variant="body2">
-              {t('business.items.minOrder', 'Min')}: {item.min_order_quantity}
-              {item.max_order_quantity &&
-                ` • ${t('business.items.maxOrder', 'Max')}: ${
-                  item.max_order_quantity
-                }`}
+              {isFoodCatalogItem(item)
+                ? [
+                    t('business.items.minOrder', 'Min') + ': 1',
+                    item.max_order_quantity
+                      ? `${t('business.items.maxOrder', 'Max')}: ${item.max_order_quantity}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ')
+                : [
+                    `${t('business.items.minOrder', 'Min')}: ${item.min_order_quantity}`,
+                    item.max_order_quantity
+                      ? `${t('business.items.maxOrder', 'Max')}: ${item.max_order_quantity}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ')}
             </Typography>
           </Field>
 

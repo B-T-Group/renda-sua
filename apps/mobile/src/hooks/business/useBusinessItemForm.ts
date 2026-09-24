@@ -21,6 +21,7 @@ import type {
   ItemFormTag,
 } from '../../types/business/itemForm';
 import type { UpdateBusinessItemPayload } from '../../types/business/items';
+import { isFoodCategoryName } from '../../utils/foodAvailability';
 import { useSupportedCurrencies } from './useSupportedCurrencies';
 
 function itemToFormValues(item: BusinessItemDetail, lockedCurrency?: string | null): BusinessItemFormValues {
@@ -51,6 +52,7 @@ function itemToFormValues(item: BusinessItemDetail, lockedCurrency?: string | nu
 
 function buildPayload(
   values: BusinessItemFormValues,
+  categories: ItemFormCategory[],
   lockedCurrency?: string | null
 ): UpdateBusinessItemPayload {
   const price = Number.parseFloat(values.price) || 0;
@@ -58,6 +60,9 @@ function buildPayload(
   const maxQty = values.max_order_quantity.trim()
     ? Number.parseInt(values.max_order_quantity, 10)
     : null;
+  const isFood = isFoodCategoryName(
+    categories.find((c) => c.id === values.categoryId)?.name
+  );
   return {
     name: values.name.trim(),
     description: values.description.trim(),
@@ -74,7 +79,9 @@ function buildPayload(
     is_perishable: values.is_perishable,
     requires_special_handling: values.requires_special_handling,
     pay_on_delivery_enabled: values.pay_on_delivery_enabled,
-    min_order_quantity: Number.parseInt(values.min_order_quantity, 10) || 1,
+    min_order_quantity: isFood
+      ? 1
+      : Number.parseInt(values.min_order_quantity, 10) || 1,
     max_order_quantity: maxQty,
     is_active: values.is_active,
   };
@@ -176,7 +183,7 @@ export function useBusinessItemForm(itemId: string) {
     setSaving(true);
     setError(null);
     try {
-      await updateBusinessItemFields(itemId, buildPayload(values, defaultCurrency));
+      await updateBusinessItemFields(itemId, buildPayload(values, categories, defaultCurrency));
       await setBusinessItemTags(itemId, selectedTagIds);
       return true;
     } catch (e: unknown) {
@@ -185,7 +192,7 @@ export function useBusinessItemForm(itemId: string) {
     } finally {
       setSaving(false);
     }
-  }, [defaultCurrency, itemId, selectedTagIds, t, values]);
+  }, [categories, defaultCurrency, itemId, selectedTagIds, t, values]);
 
   const runAiDescription = useCallback(async () => {
     if (!values.name.trim()) return;

@@ -212,6 +212,7 @@ const ItemFormPage: React.FC = () => {
         ...prev,
         item_sub_category_id: null,
         preparation_minutes: checked ? prev.preparation_minutes : null,
+        min_order_quantity: checked ? 1 : prev.min_order_quantity,
       }));
     },
     [foodCategory]
@@ -477,6 +478,7 @@ const ItemFormPage: React.FC = () => {
         const updateData = {
           ...formData,
           name: normalizedName,
+          min_order_quantity: isFoodItem ? 1 : formData.min_order_quantity,
           // Coerce nullable values to undefined to satisfy API requirements
           weight: formData.weight ?? undefined,
           brand_id: formData.brand_id ?? undefined,
@@ -501,6 +503,7 @@ const ItemFormPage: React.FC = () => {
           ...formData,
           name: normalizedName,
           business_id: effectiveBusinessId,
+          min_order_quantity: isFoodItem ? 1 : formData.min_order_quantity,
           // Coerce nullable values to undefined to satisfy API requirements
           weight: formData.weight ?? undefined,
           brand_id: formData.brand_id ?? undefined,
@@ -1603,28 +1606,30 @@ const ItemFormPage: React.FC = () => {
                 </Stack>
 
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      fullWidth
-                      label={t(
-                        'business.items.minOrderQuantity',
-                        'Min Order Quantity'
-                      )}
-                      type="number"
-                      value={formData.min_order_quantity}
-                      onChange={(e) =>
-                        handleInputChange(
-                          'min_order_quantity',
-                          parseInt(e.target.value) || 1
-                        )
-                      }
-                      required
-                      disabled={loading}
-                      inputProps={{ min: 1 }}
-                    />
-                  </Grid>
+                  {!isFoodItem && (
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        fullWidth
+                        label={t(
+                          'business.items.minOrderQuantity',
+                          'Min Order Quantity'
+                        )}
+                        type="number"
+                        value={formData.min_order_quantity}
+                        onChange={(e) =>
+                          handleInputChange(
+                            'min_order_quantity',
+                            parseInt(e.target.value) || 1
+                          )
+                        }
+                        required
+                        disabled={loading}
+                        inputProps={{ min: 1 }}
+                      />
+                    </Grid>
+                  )}
 
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid size={{ xs: 12, sm: isFoodItem ? 12 : 6 }}>
                     <TextField
                       fullWidth
                       label={t(

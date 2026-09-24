@@ -37,6 +37,62 @@ describe('ItemsService privileged field filtering', () => {
     return { service, hasuraSystem };
   }
 
+  it('forces cooked-food min_order_quantity to 1 on create', async () => {
+    const { service, hasuraSystem } = createService();
+    hasuraSystem.executeQuery.mockResolvedValue({
+      item_sub_categories_by_pk: {
+        item_category: { name: 'Restaurant & Cooked Food' },
+      },
+      supported_country_states: [{ country_code: 'CM', service_status: 'active' }],
+      item_export_markets_aggregate: { aggregate: { count: 1 } },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      insert_items_one: {
+        id: 'item-1',
+        name: 'Griot',
+        description: '',
+        sku: null,
+      },
+    });
+
+    await service.createItem('business-1', {
+      name: 'Griot',
+      item_sub_category_id: 42,
+      min_order_quantity: 80,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual(
+      expect.objectContaining({
+        name: 'Griot',
+        item_sub_category_id: 42,
+        min_order_quantity: 1,
+        business_id: 'business-1',
+        is_active: false,
+        moderation_status: 'draft',
+      })
+    );
+  });
+
+  it('forces cooked-food min_order_quantity to 1 on update even when omitted', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      item_sub_category_id: 42,
+      item_sub_category: {
+        item_category: { name: 'Restaurant & Cooked Food' },
+      },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', name: 'Griot' },
+    });
+
+    await service.updateItem('business-1', 'item-1', { name: 'Griot' });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      name: 'Griot',
+      min_order_quantity: 1,
+    });
+  });
+
   it('forces ownership and moderation defaults when creating an item', async () => {
     const { service, hasuraSystem } = createService();
     hasuraSystem.executeMutation.mockResolvedValue({
@@ -60,6 +116,7 @@ describe('ItemsService privileged field filtering', () => {
       business_id: 'business-1',
       is_active: false,
       moderation_status: 'draft',
+      min_order_quantity: 1,
     });
   });
 
@@ -212,6 +269,7 @@ describe('ItemsService privileged field filtering', () => {
       business_id: 'business-1',
       is_active: false,
       moderation_status: 'draft',
+      min_order_quantity: 1,
     });
   });
 

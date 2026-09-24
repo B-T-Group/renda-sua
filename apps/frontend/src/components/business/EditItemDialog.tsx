@@ -29,6 +29,7 @@ import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WEIGHT_UNITS } from '../../constants/enums';
+import { isFoodCategoryName } from '../../constants/food';
 import { useBusinessLockedCurrency } from '../../hooks/useBusinessLockedCurrency';
 import { Item, useItems } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
@@ -72,6 +73,12 @@ export default function EditItemDialog({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+
+  const isFoodItem = isFoodCategoryName(
+    (itemSubCategories || []).find(
+      (sc) => sc.id === formData.item_sub_category_id
+    )?.item_category?.name ?? item?.item_sub_category?.item_category?.name
+  );
 
   useEffect(() => {
     if (open) {
@@ -145,7 +152,11 @@ export default function EditItemDialog({
       errors.currency = t('business.inventory.currencyRequired');
     }
 
-    if (formData.min_order_quantity && formData.min_order_quantity <= 0) {
+    if (
+      !isFoodItem &&
+      formData.min_order_quantity &&
+      formData.min_order_quantity <= 0
+    ) {
       errors.minOrderQuantity = t('business.inventory.minOrderQuantityInvalid');
     }
 
@@ -154,6 +165,7 @@ export default function EditItemDialog({
     }
 
     if (
+      !isFoodItem &&
       formData.min_order_quantity &&
       formData.max_order_quantity &&
       formData.min_order_quantity > formData.max_order_quantity
@@ -218,6 +230,7 @@ export default function EditItemDialog({
       const updateData = {
         ...formData,
         currency: lockedCurrency,
+        min_order_quantity: isFoodItem ? 1 : formData.min_order_quantity,
         weight: formData.weight ?? undefined,
         weight_unit: formData.weight_unit ?? undefined,
         dimensions: (formData as { dimensions?: string }).dimensions?.trim() || undefined,
@@ -591,21 +604,23 @@ export default function EditItemDialog({
               <Divider sx={{ mb: 2 }} />
 
               <Stack direction="row" spacing={2}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  label={t('business.inventory.minOrderQuantity')}
-                  value={formData.min_order_quantity || ''}
-                  onChange={(e) =>
-                    handleInputChange(
-                      'min_order_quantity',
-                      parseInt(e.target.value) || 1
-                    )
-                  }
-                  error={!!validationErrors.minOrderQuantity}
-                  helperText={validationErrors.minOrderQuantity}
-                  inputProps={{ min: 1 }}
-                />
+                {!isFoodItem && (
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label={t('business.inventory.minOrderQuantity')}
+                    value={formData.min_order_quantity || ''}
+                    onChange={(e) =>
+                      handleInputChange(
+                        'min_order_quantity',
+                        parseInt(e.target.value) || 1
+                      )
+                    }
+                    error={!!validationErrors.minOrderQuantity}
+                    helperText={validationErrors.minOrderQuantity}
+                    inputProps={{ min: 1 }}
+                  />
+                )}
 
                 <TextField
                   fullWidth

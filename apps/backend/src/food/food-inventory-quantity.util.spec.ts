@@ -1,5 +1,6 @@
 import {
   cookedFoodIgnoresStock,
+  resolveCookedFoodMinOrderQuantity,
   resolveInitialInventoryQuantity,
 } from './food-inventory-quantity.util';
 import {
@@ -47,5 +48,34 @@ describe('resolveInitialInventoryQuantity', () => {
     expect(
       resolveInitialInventoryQuantity({ requestedQuantity: 0 })
     ).toBe(0);
+  });
+});
+
+describe('resolveCookedFoodMinOrderQuantity', () => {
+  it('always returns 1 for cooked food', () => {
+    expect(
+      resolveCookedFoodMinOrderQuantity({
+        requestedMin: 80,
+        categoryName: FOOD_CATEGORY_NAME,
+      })
+    ).toBe(1);
+  });
+
+  it('keeps a valid min for non-food items', () => {
+    expect(
+      resolveCookedFoodMinOrderQuantity({
+        requestedMin: 3,
+        categoryName: 'Retail & Shopping',
+      })
+    ).toBe(3);
+  });
+
+  it('defaults missing non-food mins to 1', () => {
+    expect(
+      resolveCookedFoodMinOrderQuantity({
+        requestedMin: null,
+        categoryName: 'Retail & Shopping',
+      })
+    ).toBe(1);
   });
 });

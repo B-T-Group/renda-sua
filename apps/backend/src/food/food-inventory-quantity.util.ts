@@ -21,3 +21,14 @@ export function resolveInitialInventoryQuantity(params: {
   if (!cookedFoodIgnoresStock(categoryName)) return requestedQuantity;
   return FOOD_DEFAULT_INVENTORY_QUANTITY;
 }
+
+/** Cooked food minimum order is always 1 and is not merchant-editable. */
+export function resolveCookedFoodMinOrderQuantity(params: {
+  requestedMin?: number | null;
+  categoryName?: string | null;
+}): number {
+  if (cookedFoodIgnoresStock(params.categoryName)) return 1;
+  const requested = params.requestedMin;
+  if (requested == null || !Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.trunc(requested));
+}
