@@ -37,6 +37,11 @@ export const PaymentSchedulesPage = lazy(() =>
     default: mod.PaymentSchedulesPage,
   }))
 );
+export const PaymentScheduleDetailPage = lazy(() =>
+  import('../components/pages/PaymentScheduleDetailPage').then((mod) => ({
+    default: mod.PaymentScheduleDetailPage,
+  }))
+);
 export const AdminPerformancePage = lazy(() =>
   import('../components/pages/AdminPerformancePage')
 );

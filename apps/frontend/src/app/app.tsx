@@ -616,6 +616,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/accounts/schedules/:assignmentId"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.PaymentScheduleDetailPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Profile management routes */}
             <Route

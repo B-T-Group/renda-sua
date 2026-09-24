@@ -32,6 +32,41 @@ export class CreateScheduleDto {
   @IsNumber()
   @Min(1)
   defaultDurationDays?: number;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetAgentRecruitments?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetClientSignups?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetMerchantRecruitments?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  targetItemSalesAmount?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  targetRentalAmount?: number | null;
 }
 
 export class AssignScheduleDto {
@@ -156,6 +191,41 @@ export class UpdateScheduleDto {
   @IsNumber()
   @Min(1)
   defaultDurationDays?: number;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetAgentRecruitments?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetClientSignups?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetMerchantRecruitments?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  targetItemSalesAmount?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  targetRentalAmount?: number | null;
 }
 
 export class UpdateAssignmentTermsDto {
@@ -168,6 +238,50 @@ export class UpdateAssignmentTermsDto {
   @IsOptional()
   @IsString()
   endsAt?: string;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetAgentRecruitments?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetClientSignups?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetMerchantRecruitments?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  targetItemSalesAmount?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  targetRentalAmount?: number | null;
+}
+
+export class RejectScheduleAssignmentDto {
+  @IsIn(['too_aggressive', 'not_ready_now', 'targets_unclear', 'other'])
+  reason!: 'too_aggressive' | 'not_ready_now' | 'targets_unclear' | 'other';
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
 
 export class UpdateCashAdvanceProgramDto {

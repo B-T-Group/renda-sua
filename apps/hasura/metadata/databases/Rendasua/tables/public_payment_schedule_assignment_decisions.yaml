@@ -1,0 +1,27 @@
+table:
+  name: payment_schedule_assignment_decisions
+  schema: public
+object_relationships:
+  - name: assignment
+    using:
+      foreign_key_constraint_on: assignment_id
+  - name: actor
+    using:
+      foreign_key_constraint_on: actor_user_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - assignment_id
+        - event
+        - reason_code
+        - note
+        - actor_user_id
+        - created_at
+      filter:
+        assignment:
+          agent:
+            user_id:
+              _eq: X-Hasura-User-Id
+      allow_aggregations: false

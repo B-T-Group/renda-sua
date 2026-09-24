@@ -416,6 +416,29 @@ function buildAgentItems(
           priority: action.priority,
           onPress: () => navigation.navigate('Orders' as any),
         };
+      case 'payment_plan_pending':
+        return {
+          kind: action.kind,
+          title: t(
+            'actionsNeeded.agent.paymentPlanPending.title',
+            'Payment plan awaiting response'
+          ),
+          subtitle:
+            action.primaryLabel ||
+            t(
+              'actionsNeeded.agent.paymentPlanPending.subtitle',
+              'Review and accept, defer, or reject this payment plan.'
+            ),
+          icon: 'cash-clock',
+          count: action.count,
+          priority: action.priority,
+          onPress: () =>
+            action.primaryId
+              ? navigation.navigate('PaymentScheduleDetail', {
+                  assignmentId: action.primaryId,
+                })
+              : navigation.navigate('UserPaymentPrograms'),
+        };
       default:
         return {
           kind: action.kind,

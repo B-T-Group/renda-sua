@@ -14,6 +14,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePaymentPrograms } from '../../hooks/usePaymentPrograms';
 import { WalletProgramsIllustration } from '../common/WalletProgramsIllustration';
+import { Link as RouterLink } from 'react-router-dom';
 
 function scopeLabel(
   applicability: string,
@@ -157,13 +158,23 @@ export function PaymentSchedulesPage() {
       )}
       <Stack spacing={2}>
         {(data?.assignments || []).map((row) => (
-          <Card key={row.id}>
+          <Card
+            key={row.id}
+            component={RouterLink}
+            to={`/accounts/schedules/${row.id}`}
+            sx={{ textDecoration: 'none', color: 'inherit' }}
+          >
             <CardContent>
               <Typography variant="h6">{row.schedule?.name}</Typography>
               <Typography>
                 {row.amount} {row.currency} · {row.schedule?.frequency} · {row.status}
               </Typography>
-              {(row.runs || []).map((run) => (
+              {['pending', 'deferred'].includes(row.decision || '') && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  {t('accounts.schedules.needsResponse', 'Needs your response')}
+                </Alert>
+              )}
+              {(row.runs || []).slice(0, 3).map((run) => (
                 <Typography key={run.id} variant="body2">
                   {run.period_start.slice(0, 10)} · {run.amount} · {run.status}
                 </Typography>

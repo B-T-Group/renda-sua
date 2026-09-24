@@ -297,17 +297,55 @@ export class DashboardService {
   }
 
   private async getAgentActions(userId: string): Promise<ActionsNeededDto> {
-    const [openOrders, activeOrders, activation] = await Promise.all([
-      this.countAgentOpenOrders(userId),
-      this.countAgentActiveOrders(userId),
-      this.getAgentActivationAction(userId),
-    ]);
+    const [openOrders, activeOrders, activation, pendingPlans] =
+      await Promise.all([
+        this.countAgentOpenOrders(userId),
+        this.countAgentActiveOrders(userId),
+        this.getAgentActivationAction(userId),
+        this.listPendingPaymentPlans(userId),
+      ]);
     const raw: Array<Omit<ActionItemDto, 'count'> & { count: number }> = [
       activation,
+      ...pendingPlans,
       { id: 'open_deliveries', kind: 'open_deliveries', priority: 'high', count: openOrders },
       { id: 'active_orders', kind: 'active_orders', priority: 'normal', count: activeOrders },
     ];
     return this.buildDto(raw);
+  }
+
+  private async listPendingPaymentPlans(
+    userId: string
+  ): Promise<Array<Omit<ActionItemDto, 'count'> & { count: number }>> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery(
+        `
+        query PendingPaymentPlans($userId: uuid!) {
+          payment_schedule_assignments(where: {
+            agent: { user_id: { _eq: $userId } }
+            decision: { _in: [pending, deferred] }
+            status: { _eq: pending_acceptance }
+          }) {
+            id
+            schedule { name }
+          }
+        }
+        `,
+        { userId }
+      );
+      const rows = result.payment_schedule_assignments ?? [];
+      return rows.map(
+        (row: { id: string; schedule?: { name?: string } }) => ({
+          id: `payment_plan_pending:${row.id}`,
+          kind: 'payment_plan_pending',
+          priority: 'high' as const,
+          count: 1,
+          primaryId: row.id,
+          primaryLabel: row.schedule?.name ?? 'Payment plan',
+        })
+      );
+    } catch {
+      return [];
+    }
   }
 
   private async getAgentActivationAction(
