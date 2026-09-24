@@ -4,6 +4,8 @@ import { useClientFlags } from './useClientFlags';
 import {
   SITE_EVENT_AUTH_GATE_DISMISSED,
   SITE_EVENT_AUTH_GATE_SHOWN,
+  SITE_EVENT_AUTH_LOCKED,
+  SITE_EVENT_AUTH_PASSWORD_USED,
   useTrackSiteEvent,
 } from './useTrackSiteEvent';
 import {
@@ -47,9 +49,36 @@ export function useAuthFunnelTracking(context: string) {
   );
 
   const trackAuthGateDismissed = useCallback(
-    (entry: string, authPath = 'auth0_ul') => {
+    (
+      entry: string,
+      authPath = 'auth0_ul',
+      step?: 'identifier' | 'code' | 'password' | 'locked' | 'finish'
+    ) => {
       void trackSiteEvent({
         eventType: SITE_EVENT_AUTH_GATE_DISMISSED,
+        metadata: {
+          ...baseMetadata(entry, authPath),
+          ...(step ? { step } : {}),
+        },
+      });
+    },
+    [baseMetadata, trackSiteEvent]
+  );
+
+  const trackAuthLocked = useCallback(
+    (entry: string, authPath = 'inapp') => {
+      void trackSiteEvent({
+        eventType: SITE_EVENT_AUTH_LOCKED,
+        metadata: baseMetadata(entry, authPath),
+      });
+    },
+    [baseMetadata, trackSiteEvent]
+  );
+
+  const trackAuthPasswordUsed = useCallback(
+    (entry: string, authPath = 'inapp') => {
+      void trackSiteEvent({
+        eventType: SITE_EVENT_AUTH_PASSWORD_USED,
         metadata: baseMetadata(entry, authPath),
       });
     },
@@ -73,6 +102,8 @@ export function useAuthFunnelTracking(context: string) {
     flagOn,
     trackAuthGateShown,
     trackAuthGateDismissed,
+    trackAuthLocked,
+    trackAuthPasswordUsed,
     loginWithRedirectTracked,
   };
 }

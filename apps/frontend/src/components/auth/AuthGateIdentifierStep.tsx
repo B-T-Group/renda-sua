@@ -15,17 +15,21 @@ import { getAuthOtpCodeLength } from '../../config/authConfig';
 export interface AuthGateIdentifierStepProps {
   disabled?: boolean;
   error: string | null;
+  showPasswordLink?: boolean;
   onClearError: () => void;
   onValidationError: (message: string) => void;
   onSubmit: (payload: { email?: string; phone_number?: string }) => void;
+  onUsePassword?: () => void;
 }
 
 const AuthGateIdentifierStep: React.FC<AuthGateIdentifierStepProps> = ({
   disabled,
   error,
+  showPasswordLink,
   onClearError,
   onValidationError,
   onSubmit,
+  onUsePassword,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -167,6 +171,11 @@ const AuthGateIdentifierStep: React.FC<AuthGateIdentifierStepProps> = ({
           ? t('auth.useEmailInstead', 'Use email instead')
           : t('auth.usePhoneInstead', 'Use phone instead')}
       </Button>
+      {showPasswordLink && identifierMode === 'email' && onUsePassword ? (
+        <Button variant="text" disabled={disabled} onClick={onUsePassword}>
+          {t('auth.gate.usePasswordInstead', 'Use password instead')}
+        </Button>
+      ) : null}
     </Stack>
   );
 };

@@ -1911,7 +1911,16 @@
       "genericError": "Une erreur s’est produite. Veuillez réessayer.",
       "invalidCode": "Ce code n’a pas fonctionné. Veuillez réessayer.",
       "tooManyAttempts": "Trop de tentatives. Veuillez patienter un instant.",
-      "finishAccountPending": "Vérifiez votre code, puis terminez la création du compte pour continuer."
+      "tooManyAttemptsCooldown": "Trop de codes demandés. Réessayez dans {{minutes}} min.",
+      "finishAccountPending": "Vérifiez votre code, puis terminez la création du compte pour continuer.",
+      "usePasswordInstead": "Utiliser un mot de passe",
+      "signInWithCodeInstead": "Se connecter avec un code",
+      "passwordPlaceholder": "Mot de passe",
+      "wrongPassword": "E-mail ou mot de passe incorrect.",
+      "passwordTip": "Astuce : la prochaine fois, connectez-vous avec un code, sans mot de passe.",
+      "lockoutMessage": "Trop de tentatives. Par sécurité, veuillez patienter {{minutes}} min avant de réessayer.",
+      "lockoutCountdown": "{{minutes}} min restantes",
+      "useDifferentIdentifier": "Utiliser un autre e-mail ou numéro"
     },
     "otpLogin": {
       "continue": "Continuer avec OTP",

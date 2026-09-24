@@ -14,11 +14,20 @@ import { useClientFlags } from '../hooks/useClientFlags';
 import { useAuthFunnelTracking } from '../hooks/useAuthFunnelTracking';
 import { completeAuthIntentFromPendingStorage } from '../utils/authFunnelTracking';
 import AuthGate from '../components/auth/AuthGate';
-import type { AuthGateIntent, AuthGateStep } from '../types/authGate';
+import type {
+  AuthGateAuthSuccessMeta,
+  AuthGateIntent,
+  AuthGateStep,
+} from '../types/authGate';
 import {
   getAuthGateIntentErrorMessage,
   getAuthGateSuccessToast,
 } from '../utils/authGateIntentMessages';
+import {
+  markPasswordSignInTipShown,
+  shouldShowPasswordSignInTip,
+} from '../utils/authGatePasswordTip';
+import { decodeAuth0SubFromToken } from '../utils/jwtHasura';
 
 type AuthGateContextValue = {
   flagOn: boolean;
@@ -49,8 +58,8 @@ export const AuthGateProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const dismiss = useCallback(
-    (entry: string) => {
-      if (flagOn) funnel.trackAuthGateDismissed(entry, 'inapp');
+    (entry: string, gateStep?: AuthGateStep) => {
+      if (flagOn) funnel.trackAuthGateDismissed(entry, 'inapp', gateStep);
       setOpen(false);
       setIntent(null);
       setStep('identifier');
@@ -129,9 +138,25 @@ export const AuthGateProvider: React.FC<{ children: ReactNode }> = ({
           step={step}
           intent={intent}
           onStepChange={setStep}
-          onDismiss={() => dismiss(intent?.entry ?? 'auth_gate')}
-          onAuthSuccess={(session) => {
+          onDismiss={() => dismiss(intent?.entry ?? 'auth_gate', step)}
+          onAuthSuccess={(session, meta?: AuthGateAuthSuccessMeta) => {
             setPasswordlessSession(session);
+            if (meta?.usedPassword) {
+              funnel.trackAuthPasswordUsed(intent?.entry ?? 'auth_gate', 'inapp');
+              const sub = session.id_token
+                ? decodeAuth0SubFromToken(session.id_token)
+                : undefined;
+              if (sub && shouldShowPasswordSignInTip(sub)) {
+                enqueueSnackbar(
+                  t(
+                    'auth.gate.passwordTip',
+                    'Tip: next time, skip the password and get a code instead.'
+                  ),
+                  { variant: 'info' }
+                );
+                markPasswordSignInTipShown(sub);
+              }
+            }
             void completeSuccess(intent);
           }}
         />

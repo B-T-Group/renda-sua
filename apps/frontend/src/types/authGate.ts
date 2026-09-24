@@ -12,4 +12,13 @@ export type AuthGateIntent = {
   run?: () => void | Promise<void>;
 };
 
-export type AuthGateStep = 'identifier' | 'code' | 'finish';
+export type AuthGateStep =
+  | 'identifier'
+  | 'code'
+  | 'finish'
+  | 'password'
+  | 'locked';
+
+export type AuthGateAuthSuccessMeta = {
+  usedPassword?: boolean;
+};

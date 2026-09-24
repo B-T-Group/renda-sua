@@ -2183,7 +2183,16 @@
       "genericError": "Something went wrong. Please try again.",
       "invalidCode": "That code did not work. Please try again.",
       "tooManyAttempts": "Too many attempts. Please wait a moment and try again.",
-      "finishAccountPending": "Verify your code first, then complete account setup to continue."
+      "tooManyAttemptsCooldown": "You've asked for too many codes. Try again in {{minutes}} min.",
+      "finishAccountPending": "Verify your code first, then complete account setup to continue.",
+      "usePasswordInstead": "Use password instead",
+      "signInWithCodeInstead": "Sign in with a code instead",
+      "passwordPlaceholder": "Password",
+      "wrongPassword": "That email or password isn't right.",
+      "passwordTip": "Tip: next time, skip the password and get a code instead.",
+      "lockoutMessage": "Too many attempts. For your security, please wait {{minutes}} min before trying again.",
+      "lockoutCountdown": "{{minutes}} min remaining",
+      "useDifferentIdentifier": "Use a different email or phone"
     },
     "otpLogin": {
       "continue": "Continue with OTP",

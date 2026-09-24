@@ -1,5 +1,17 @@
 const HASURA_CLAIMS = 'https://hasura.io/jwt/claims';
 
+export function decodeAuth0SubFromToken(token: string): string | undefined {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return undefined;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(json) as { sub?: string };
+    return typeof payload.sub === 'string' ? payload.sub : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function decodeHasuraUserIdFromAccessToken(
   token: string
 ): string | undefined {

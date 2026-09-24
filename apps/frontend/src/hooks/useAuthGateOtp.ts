@@ -1,7 +1,10 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from './useApiClient';
-import { mapAuthGateApiError } from '../utils/authGateErrors';
+import {
+  mapAuthGateApiError,
+  parseLockoutFromError,
+} from '../utils/authGateErrors';
 import { msUntil } from '../utils/authGateTiming';
 import type { OtpChannelChoice } from '../components/auth/OtpChannelPicker';
 
@@ -34,6 +37,7 @@ export function useAuthGateOtp() {
   const [flow, setFlow] = useState<AuthGateFlowState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lockoutUntilMs, setLockoutUntilMs] = useState<number | null>(null);
 
   const applyStartResponse = useCallback(
     (payload: StartPayload, data: FlowStartResponse) => {
@@ -61,6 +65,7 @@ export function useAuthGateOtp() {
     async (payload: StartPayload) => {
       setBusy(true);
       setError(null);
+      setLockoutUntilMs(null);
       try {
         const { data } = await apiClient.post<FlowStartResponse>(
           '/auth/login/start-otp',
@@ -71,6 +76,8 @@ export function useAuthGateOtp() {
         return true;
       } catch (err: any) {
         setError(mapAuthGateApiError(err, t));
+        const lockout = parseLockoutFromError(err);
+        if (lockout) setLockoutUntilMs(lockout.lockedUntilMs);
         return false;
       } finally {
         setBusy(false);
@@ -92,6 +99,7 @@ export function useAuthGateOtp() {
       if (!flow) return { ok: false as const };
       setBusy(true);
       setError(null);
+      setLockoutUntilMs(null);
       try {
         const { data } = await apiClient.post(
           '/auth/login/verify-otp',
@@ -110,6 +118,8 @@ export function useAuthGateOtp() {
         return { ok: false as const };
       } catch (err: any) {
         setError(mapAuthGateApiError(err, t));
+        const lockout = parseLockoutFromError(err);
+        if (lockout) setLockoutUntilMs(lockout.lockedUntilMs);
         return { ok: false as const };
       } finally {
         setBusy(false);
@@ -162,6 +172,11 @@ export function useAuthGateOtp() {
     setFlow(null);
     setError(null);
     setBusy(false);
+    setLockoutUntilMs(null);
+  }, []);
+
+  const clearLockout = useCallback(() => {
+    setLockoutUntilMs(null);
   }, []);
 
   return {
@@ -169,6 +184,8 @@ export function useAuthGateOtp() {
     busy,
     error,
     setError,
+    lockoutUntilMs,
+    clearLockout,
     startFlow,
     resendFlow,
     verifyOtp,
