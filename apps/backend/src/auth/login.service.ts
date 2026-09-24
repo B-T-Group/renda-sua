@@ -9,6 +9,11 @@ import {
 } from './session-store.service';
 import { LockoutService } from './lockout.service';
 import {
+  buildOtpIdentifier,
+  normalizeOtpDestination,
+  OtpSendLimiterService,
+} from './otp-send-limiter.service';
+import {
   accessTokenTtlSec,
   canReuseAccessToken,
   isInvalidGrantError,
@@ -95,6 +100,9 @@ export interface LoginOtpOptionsResult {
 
 export interface LoginOtpStartResult extends LoginOtpOptionsResult {
   channel: OtpChannel;
+  expiresAt: string;
+  codeExpiresAt: string;
+  resendAvailableAt: string;
 }
 
 @Injectable()
@@ -106,7 +114,8 @@ export class LoginService {
     private readonly auth0Service: Auth0Service,
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly sessionStore: SessionStoreService,
-    private readonly lockout: LockoutService
+    private readonly lockout: LockoutService,
+    private readonly otpSendLimiter: OtpSendLimiterService
   ) {}
 
   private normalizeEmail(email: string): string {
@@ -277,7 +286,10 @@ export class LoginService {
     await this.auth0Service.startSmsOtp(phone);
   }
 
-  async startLoginOtp(body: LoginStartDto): Promise<LoginOtpStartResult> {
+  async startLoginOtp(
+    body: LoginStartDto,
+    ip?: string
+  ): Promise<LoginOtpStartResult> {
     const { email, phone } = this.parseIdentifier(body);
     const user = await this.findUserByIdentifier(email, phone);
     const defaultChannel: OtpChannel = email ? 'email' : 'sms';
@@ -286,11 +298,41 @@ export class LoginService {
       body.channel,
       defaultChannel
     );
+    const destination = this.otpDestinationForChannel(user, channel);
+    const identifier = buildOtpIdentifier({ email, phone });
+    await this.ensureNotLockedOut(
+      this.lockoutKeysForUser(user, destination)
+    );
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
     await this.sendOtpToChannel(user, channel);
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
     return {
       channel,
       ...this.buildOptionsFromUser(user, defaultChannel),
+      expiresAt: timing.codeExpiresAt,
+      codeExpiresAt: timing.codeExpiresAt,
+      resendAvailableAt: timing.resendAvailableAt,
     };
+  }
+
+  private otpDestinationForChannel(
+    user: LoginUserRow,
+    channel: OtpChannel
+  ): string {
+    if (channel === 'email') {
+      return normalizeOtpDestination(this.normalizeEmail(user.email || ''), 'email');
+    }
+    return normalizeOtpDestination(this.normalizePhone(user.phone_number || ''), 'phone');
   }
 
   private isTestUser(identifier: string, isPhone: boolean): boolean {

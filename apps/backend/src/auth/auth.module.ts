@@ -23,6 +23,7 @@ import { SignupService } from './signup.service';
 import { SignupAttemptCleanupService } from './signup-attempt-cleanup.service';
 import { SessionStoreService } from './session-store.service';
 import { LockoutService } from './lockout.service';
+import { OtpSendLimiterService } from './otp-send-limiter.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
 import { ReferralProvisioningService } from './provisioning/referral-provisioning.service';
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
@@ -49,6 +50,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     LoginService,
     SessionStoreService,
     LockoutService,
+    OtpSendLimiterService,
     PermissionService,
     SignupService,
     SignupAttemptCleanupService,
@@ -68,6 +70,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     LoginService,
     SessionStoreService,
     LockoutService,
+    OtpSendLimiterService,
     RbacModule,
   ],
 })

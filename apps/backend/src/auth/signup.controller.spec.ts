@@ -47,13 +47,17 @@ describe('SignupController OTP channel and session cookie gates', () => {
       channel: 'sms',
       availableChannels: ['email', 'sms'],
     });
-    const body = await controller.signupResendOtp({
-      attemptId: 'attempt-123',
-      channel: 'sms',
-    });
+    const body = await controller.signupResendOtp(
+      {
+        attemptId: 'attempt-123',
+        channel: 'sms',
+      },
+      { ip: '9.9.9.9' }
+    );
     expect(signupService.resendSignupOtp).toHaveBeenCalledWith(
       'attempt-123',
-      'sms'
+      'sms',
+      '9.9.9.9'
     );
     expect(body).toEqual({
       success: true,

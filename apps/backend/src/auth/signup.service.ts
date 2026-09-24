@@ -29,6 +29,11 @@ import {
   maskEmailForOtp,
   maskPhoneForOtp,
 } from './otp-channel.util';
+import {
+  buildOtpIdentifier,
+  normalizeOtpDestination,
+  OtpSendLimiterService,
+} from './otp-send-limiter.service';
 
 const ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 120 * 1000;
@@ -109,6 +114,7 @@ export interface SignupAttemptStartResult {
   attemptId: string;
   channel: SignupOtpChannel;
   expiresAt: string;
+  codeExpiresAt: string;
   resendAvailableAt: string;
   availableChannels: SignupOtpChannel[];
   maskedEmail?: string;
@@ -167,6 +173,7 @@ export class SignupService {
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly referralProvisioning: ReferralProvisioningService,
     private readonly metaConversionsService: MetaConversionsService,
+    private readonly otpSendLimiter: OtpSendLimiterService,
     @Optional() private readonly campaigns?: CreditCampaignPublisher
   ) {}
 
@@ -220,6 +227,14 @@ export class SignupService {
     const personas = this.normalizeSignupPersonas(payload);
     this.assertStoreLocationCountry(payload);
     const channel = this.resolveChannel(payload, email, phoneNumber);
+    const destination = this.signupDestination(channel, email, phoneNumber);
+    const identifier = buildOtpIdentifier({ email, phone: phoneNumber });
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip: payload.clientIpAddress,
+      isChannelSwitch: false,
+    });
     const expiresAt = new Date(Date.now() + ATTEMPT_TTL_MS).toISOString();
     const attempt = await this.insertAttempt({
       channel,
@@ -229,17 +244,42 @@ export class SignupService {
       expires_at: expiresAt,
     });
     await this.sendOtpForAttempt(attempt);
-    return this.toStartResult(attempt);
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip: payload.clientIpAddress,
+      isChannelSwitch: false,
+    });
+    return this.toStartResult(attempt, timing);
   }
 
   async resendSignupOtp(
     attemptId: string,
-    preferredChannel?: SignupOtpChannel
+    preferredChannel?: SignupOtpChannel,
+    ip?: string
   ): Promise<SignupAttemptStartResult> {
     let attempt = await this.loadAttempt(attemptId);
     this.assertAttemptResendable(attempt);
     const switching =
       !!preferredChannel && preferredChannel !== attempt.channel;
+    if (!switching && !this.otpSendLimiter.isEnforcementEnabled()) {
+      this.assertResendCooldown(attempt);
+    }
+    const destination = this.signupDestination(
+      switching ? preferredChannel! : attempt.channel,
+      attempt.email,
+      attempt.phone_number
+    );
+    const identifier = buildOtpIdentifier({
+      email: attempt.email,
+      phone: attempt.phone_number,
+    });
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: switching,
+    });
     if (switching) {
       this.assertChannelAvailable(attempt, preferredChannel);
       const previousChannel = attempt.channel;
@@ -251,11 +291,27 @@ export class SignupService {
         throw error;
       }
     } else {
-      this.assertResendCooldown(attempt);
       await this.sendOtpForAttempt(attempt);
     }
     const updated = await this.touchOtpSent(attempt.id);
-    return this.toStartResult(updated);
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: switching,
+    });
+    return this.toStartResult(updated, timing);
+  }
+
+  private signupDestination(
+    channel: SignupOtpChannel,
+    email: string | null,
+    phoneNumber: string | null
+  ): string {
+    if (channel === 'email') {
+      return normalizeOtpDestination(this.normalizeEmail(email || ''), 'email');
+    }
+    return normalizeOtpDestination(this.normalizePhone(phoneNumber || ''), 'phone');
   }
 
   private assertResendCooldown(attempt: SignupAttemptRow): void {
@@ -581,14 +637,19 @@ export class SignupService {
     }
   }
 
-  private toStartResult(attempt: SignupAttemptRow): SignupAttemptStartResult {
+  private toStartResult(
+    attempt: SignupAttemptRow,
+    timing?: { codeExpiresAt: string; resendAvailableAt: string }
+  ): SignupAttemptStartResult {
+    const fallbackResend = this.resendAvailableAt(
+      attempt.last_otp_sent_at
+    ).toISOString();
     return {
       attemptId: attempt.id,
       channel: attempt.channel,
       expiresAt: attempt.expires_at,
-      resendAvailableAt: this.resendAvailableAt(
-        attempt.last_otp_sent_at
-      ).toISOString(),
+      codeExpiresAt: timing?.codeExpiresAt || fallbackResend,
+      resendAvailableAt: timing?.resendAvailableAt || fallbackResend,
       availableChannels: buildAvailableOtpChannels({
         email: attempt.email,
         phoneNumber: attempt.phone_number,

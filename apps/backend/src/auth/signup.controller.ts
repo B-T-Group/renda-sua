@@ -111,11 +111,13 @@ export class SignupController {
   @ApiResponse({ status: 200, description: 'OTP resent' })
   @ApiResponse({ status: 429, description: 'Resend cooldown active' })
   async signupResendOtp(
-    @Body() body: SignupResendOtpDto
+    @Body() body: SignupResendOtpDto,
+    @Req() req: { ip?: string }
   ): Promise<{ success: boolean } & SignupAttemptStartResult> {
     const result = await this.signupService.resendSignupOtp(
       body.attemptId,
-      body.channel
+      body.channel,
+      req.ip
     );
     return { success: true, ...result };
   }

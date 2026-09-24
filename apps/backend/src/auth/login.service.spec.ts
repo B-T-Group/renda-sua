@@ -66,6 +66,11 @@ describe('LoginService start, lockout, and session gates', () => {
     recordFailure: jest.Mock;
     recordSuccess: jest.Mock;
   };
+  let otpSendLimiter: {
+    assertCanSend: jest.Mock;
+    recordSend: jest.Mock;
+    isEnforcementEnabled: jest.Mock;
+  };
   let service: LoginService;
 
   beforeEach(() => {
@@ -102,12 +107,21 @@ describe('LoginService start, lockout, and session gates', () => {
       recordFailure: jest.fn().mockResolvedValue(undefined),
       recordSuccess: jest.fn().mockResolvedValue(undefined),
     };
+    otpSendLimiter = {
+      assertCanSend: jest.fn().mockResolvedValue(undefined),
+      recordSend: jest.fn().mockResolvedValue({
+        codeExpiresAt: '2026-01-01T12:10:00.000Z',
+        resendAvailableAt: '2026-01-01T12:02:00.000Z',
+      }),
+      isEnforcementEnabled: jest.fn().mockReturnValue(false),
+    };
     service = new LoginService(
       hasuraSystemService as never,
       auth0Service as never,
       { ensureContractForUser: jest.fn().mockResolvedValue(undefined) } as never,
       sessionStore as never,
-      lockout as never
+      lockout as never,
+      otpSendLimiter as never
     );
   });
 
@@ -198,6 +212,40 @@ describe('LoginService start, lockout, and session gates', () => {
       );
       expect(result.channel).toBe('email');
       expect(result.availableChannels).toEqual(['email']);
+      expect(result.codeExpiresAt).toBe('2026-01-01T12:10:00.000Z');
+      expect(result.resendAvailableAt).toBe('2026-01-01T12:02:00.000Z');
+      expect(result.expiresAt).toBe(result.codeExpiresAt);
+    });
+
+    it('does not send OTP when the identifier is locked out', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number: null }],
+      });
+      lockout.isLockedOut.mockResolvedValue(true);
+      lockout.getRemainingLockoutMs.mockResolvedValue(120_000);
+
+      await expect(
+        service.startLoginOtp({ email: 'shop@example.com' }, '9.9.9.9')
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
+      expect(otpSendLimiter.assertCanSend).not.toHaveBeenCalled();
+    });
+
+    it('does not send OTP when the send limiter blocks', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number: null }],
+      });
+      otpSendLimiter.assertCanSend.mockRejectedValue(
+        new HttpException(
+          { success: false, code: 'OTP_RESEND_COOLDOWN' },
+          HttpStatus.TOO_MANY_REQUESTS
+        )
+      );
+
+      await expect(
+        service.startLoginOtp({ email: 'shop@example.com' }, '9.9.9.9')
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
     });
 
     it('sends OTP to the alternate channel when requested', async () => {

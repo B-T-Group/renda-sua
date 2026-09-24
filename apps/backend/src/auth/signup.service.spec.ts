@@ -26,6 +26,7 @@ import { ReferralProvisioningService } from './provisioning/referral-provisionin
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
 import { SessionStoreService } from './session-store.service';
 import { SignupService } from './signup.service';
+import { OtpSendLimiterService } from './otp-send-limiter.service';
 
 describe('SignupService', () => {
   let service: SignupService;
@@ -37,6 +38,12 @@ describe('SignupService', () => {
   let referralProvisioning: jest.Mocked<ReferralProvisioningService>;
   let sessionStore: jest.Mocked<SessionStoreService>;
   let metaConversionsService: { trackCompleteRegistrationSafe: jest.Mock };
+  let otpSendLimiter: jest.Mocked<
+    Pick<
+      OtpSendLimiterService,
+      'assertCanSend' | 'recordSend' | 'isEnforcementEnabled'
+    >
+  >;
 
   const insertedUser = {
     id: 'user-123',
@@ -147,6 +154,17 @@ describe('SignupService', () => {
               .mockResolvedValue(undefined),
           },
         },
+        {
+          provide: OtpSendLimiterService,
+          useValue: {
+            assertCanSend: jest.fn().mockResolvedValue(undefined),
+            recordSend: jest.fn().mockResolvedValue({
+              codeExpiresAt: '2026-01-01T12:10:00.000Z',
+              resendAvailableAt: '2026-01-01T12:02:00.000Z',
+            }),
+            isEnforcementEnabled: jest.fn().mockReturnValue(false),
+          },
+        },
       ],
     }).compile();
 
@@ -159,6 +177,7 @@ describe('SignupService', () => {
     referralProvisioning = module.get(ReferralProvisioningService);
     sessionStore = module.get(SessionStoreService);
     metaConversionsService = module.get(MetaConversionsService);
+    otpSendLimiter = module.get(OtpSendLimiterService);
   });
 
   describe('availability checks', () => {
@@ -476,6 +495,32 @@ describe('SignupService', () => {
         expect.objectContaining({ channel: 'email' }),
         expect.objectContaining({ channel: 'sms' }),
       ]);
+    });
+
+    it('blocks alternating channels when OTP send caps are enforced', async () => {
+      otpSendLimiter.isEnforcementEnabled.mockReturnValue(true);
+      otpSendLimiter.assertCanSend.mockRejectedValue(
+        new HttpException(
+          {
+            success: false,
+            code: 'OTP_RESEND_COOLDOWN',
+            resendAvailableAt: '2026-01-01T12:02:00.000Z',
+          },
+          HttpStatus.TOO_MANY_REQUESTS
+        )
+      );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          channel: 'sms',
+          last_otp_sent_at: new Date().toISOString(),
+        },
+      });
+
+      await expect(
+        service.resendSignupOtp('attempt-123', 'email', '9.9.9.9')
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
     });
 
     it('rejects channel switch when the attempt has no phone for SMS', async () => {
