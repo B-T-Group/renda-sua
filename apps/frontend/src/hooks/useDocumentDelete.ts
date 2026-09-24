@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useApiClient } from './useApiClient';
 
 export interface DeleteUploadResponse {
@@ -8,7 +8,7 @@ export interface DeleteUploadResponse {
 }
 
 export const useDocumentDelete = () => {
-  const { isAuthenticated, isLoading } = useAuth0();
+  const { isAuthenticated, isLoading } = useSessionAuth();
   const apiClient = useApiClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

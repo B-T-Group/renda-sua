@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import {
   Alert,
   Box,
@@ -26,7 +26,7 @@ import SEOHead from '../seo/SEOHead';
 
 const DealsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { addToCart } = useCart();
 

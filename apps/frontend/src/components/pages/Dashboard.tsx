@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { Assignment, Inventory } from '@mui/icons-material';
 import {
   Alert,
@@ -38,7 +38,7 @@ import OrderConfirmationModal from '../dialogs/OrderConfirmationModal';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
-  const { user } = useAuth0();
+  const { user } = useSessionAuth();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
   const {

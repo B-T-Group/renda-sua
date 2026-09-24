@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
     Assignment,
     Dashboard,
@@ -82,10 +81,10 @@ function catalogContextFromPath(pathname: string): MarketStatesCatalog {
 }
 
 const Header: React.FC = () => {
-  const { isLoading } = useAuth0();
   const {
     isAuthenticated: hasSession,
     isSessionReady,
+    isLoading,
     user,
     logout,
   } = useSessionAuth();

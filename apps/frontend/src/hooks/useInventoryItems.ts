@@ -5,7 +5,7 @@ import type {
   ItemVariant,
   VariantPriceOverride,
 } from '../types/itemVariant';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useApiClient } from './useApiClient';
 import {
   catalogGeoQueryParams,
@@ -200,7 +200,7 @@ function isLocationScopedCatalogQuery(query: GetInventoryItemsQuery): boolean {
 }
 
 export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const catalogGeo = useCatalogGeoParams();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   // Start true so catalog pages can show skeletons on first paint (avoids empty-state flash).

@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import {
   AutoAwesome,
   Chat,
@@ -47,7 +47,7 @@ const SupportPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { userType, refetch } = useUserProfileContext();
   const { completeOnboarding, loading: onboardingLoading } = useAgentOnboarding();
   const [expandedPanel, setExpandedPanel] = useState<string | false>(false);

@@ -5,10 +5,9 @@
  * Works in the background using Service Worker and Background Sync API.
  */
 
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { environment } from '../config/environment';
-import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import {
     clearLastLocation,
@@ -98,7 +97,7 @@ export const useAgentLocationTracker = (
     ? MIN_DISTANCE_CHANGE_ACTIVE
     : MIN_DISTANCE_CHANGE;
 
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { profile, userType } = useUserProfileContext();
   const apiClient = useApiClient();
 

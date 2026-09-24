@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useCallback, useRef } from 'react';
 import { getOrCreateRsAnonymousId } from '../utils/rsAnonymousId';
 import { getMetaBrowserContext } from '../utils/metaBrowserIds';
@@ -13,7 +13,7 @@ export type TrackItemViewOptions = {
 
 export const useTrackItemView = (inventoryItemId: string | null) => {
   const apiClient = useApiClient();
-  const { isAuthenticated, user } = useAuth0();
+  const { isAuthenticated, user } = useSessionAuth();
   const hasTrackedRef = useRef<Record<string, boolean>>({});
   const metaViewTrackedRef = useRef<Record<string, boolean>>({});
 
