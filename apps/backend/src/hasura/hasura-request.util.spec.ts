@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import {
   formatHasuraNetworkError,
+  DEFAULT_HASURA_RETRY_DELAY_MS,
   HASURA_UNAVAILABLE_MESSAGE,
   isMissingItemsInterestOnlyField,
   isTransientHasuraNetworkError,
@@ -149,6 +150,10 @@ describe('hasura-request.util', () => {
       requestHasuraWithRetry(request, undefined, { delayMs: 0 })
     ).rejects.toBe(error);
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses a 400ms default delay so short nginx blips can recover', () => {
+    expect(DEFAULT_HASURA_RETRY_DELAY_MS).toBe(400);
   });
 
   it('rethrows after exhausting transient retries', async () => {

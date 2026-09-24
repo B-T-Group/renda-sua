@@ -105,7 +105,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       userId: logCtx.userId,
       stack: exception instanceof Error ? exception.stack : undefined,
     };
-    if (status >= 500) {
+    if (status >= 500 && status !== HttpStatus.SERVICE_UNAVAILABLE) {
       this.logger.error(message, meta);
       return;
     }
@@ -118,7 +118,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     request: Request,
     logCtx: { requestId?: string; userId?: string }
   ): void {
-    if (status < 500 || !Sentry.getClient()) {
+    if (!this.shouldReportToSentry(status)) {
       return;
     }
     Sentry.withScope((scope) => {
@@ -132,6 +132,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
       Sentry.captureException(exception);
     });
+  }
+
+  private shouldReportToSentry(status: number): boolean {
+    return (
+      status >= 500 &&
+      status !== HttpStatus.SERVICE_UNAVAILABLE &&
+      !!Sentry.getClient()
+    );
   }
 
   private pathWithoutQuery(request: Request): string {

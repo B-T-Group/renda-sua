@@ -125,8 +125,8 @@ describe('AllExceptionsFilter', () => {
       statusCode: 503,
       message: 'Temporarily unable to reach the data service',
     });
-    expect(logger.error).toHaveBeenCalled();
-    expect(Sentry.captureException).toHaveBeenCalledWith(exception);
+    expect(logger.warn).toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
   it('maps nginx HTML 404 GraphQL failures to 503', () => {
@@ -161,7 +161,8 @@ describe('AllExceptionsFilter', () => {
       statusCode: 503,
       message: 'Temporarily unable to complete this request',
     });
-    expect(Sentry.captureException).toHaveBeenCalledWith(exception);
+    expect(logger.warn).toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
   it('remaps controller-wrapped Hasura 503s from 500 to 503', () => {
@@ -184,6 +185,26 @@ describe('AllExceptionsFilter', () => {
       message: 'Temporarily unable to reach the data service',
       error: 'Temporarily unable to reach the data service',
     });
-    expect(Sentry.captureException).toHaveBeenCalledWith(exception);
+    expect(logger.warn).toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('does not report remapped Hasura 503 HttpExceptions to Sentry', () => {
+    (Sentry.getClient as jest.Mock).mockReturnValue({});
+    const exception = new HttpException(
+      {
+        success: false,
+        statusCode: 503,
+        message: 'Temporarily unable to reach the data service',
+        error: 'Temporarily unable to reach the data service',
+      },
+      HttpStatus.SERVICE_UNAVAILABLE
+    );
+
+    filter.catch(exception, host);
+
+    expect(response.status).toHaveBeenCalledWith(503);
+    expect(logger.warn).toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 });
