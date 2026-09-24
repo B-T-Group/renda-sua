@@ -19,7 +19,7 @@ export class LoginVerifyDto {
     example: 'user@example.com',
   })
   @IsOptional()
-  @ValidateIf((o) => !o.phone_number)
+  @ValidateIf((o) => !o.phone_number && !o.flowId)
   @IsEmail({}, { message: 'Invalid email address' })
   email?: string;
 
@@ -29,10 +29,18 @@ export class LoginVerifyDto {
     example: '+237670000000',
   })
   @IsOptional()
-  @ValidateIf((o) => !o.email)
+  @ValidateIf((o) => !o.email && !o.flowId)
   @IsString()
   @MinLength(10, { message: 'Phone number must be at least 10 characters' })
   phone_number?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Opaque flow id from start-otp (auth flow v2). When set, email/phone are omitted.',
+  })
+  @IsOptional()
+  @IsString()
+  flowId?: string;
 
   @ApiProperty({
     description: '4-digit OTP code',

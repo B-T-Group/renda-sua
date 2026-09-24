@@ -88,7 +88,12 @@ describe('LoginService OTP merchant agreement gating', () => {
       businessProvisioning as never,
       sessionStore as never,
       lockout as never,
-      otpSendLimiter as never
+      otpSendLimiter as never,
+      { save: jest.fn(), get: jest.fn(), delete: jest.fn() } as never,
+      {
+        startIdentifierOnlyOtp: jest.fn(),
+        verifyOtpForAuthFlowV2: jest.fn(),
+      } as never
     );
   });
 

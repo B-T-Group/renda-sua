@@ -32,6 +32,7 @@ import { AuthAvailabilityLimiterService } from './auth-availability-limiter.serv
 import { SignupAttemptStartResult, SignupService } from './signup.service';
 import { SignupStartDto } from './dto/signup-start.dto';
 import { SignupResendOtpDto, SignupVerifyOtpDto } from './dto/signup-otp.dto';
+import { SignupFinishDto } from './dto/signup-finish.dto';
 import { sessionCookieOptions } from './session-cookie';
 
 @ApiTags('auth')
@@ -152,6 +153,50 @@ export class SignupController {
   @ApiResponse({ status: 410, description: 'Endpoint retired' })
   async signupUpdateContact(): Promise<never> {
     return this.signupService.updateContact();
+  }
+
+  @Public()
+  @Post('signup/finish')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 10, ttl: 60000 } })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary:
+      'Auth flow v2: finish account after OTP verify (name, terms, optional persona/country)',
+  })
+  @ApiBody({ type: SignupFinishDto })
+  @ApiResponse({ status: 200, description: 'Account provisioned and session issued' })
+  @ApiResponse({ status: 409, description: 'Attempt not ready or already completed' })
+  @ApiResponse({ status: 410, description: 'Attempt expired' })
+  async signupFinish(
+    @Body() body: SignupFinishDto,
+    @Platform() platform: ClientPlatform,
+    @Req() req: { ip?: string; headers?: Record<string, unknown> },
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const ua = req.headers?.['user-agent'];
+    const result = await this.signupService.finishSignupAccount(
+      {
+        flowId: body.flowId,
+        accept_terms: body.accept_terms,
+        first_name: body.first_name,
+        last_name: body.last_name,
+        user_type_id: body.user_type_id,
+        personas: body.personas,
+        country: body.country,
+        profile: body.profile ?? {},
+        referral_agent_code: body.referral_agent_code,
+      },
+      platform,
+      req.ip,
+      typeof ua === 'string' ? ua : undefined
+    );
+
+    if (platform === 'web' && result.sessionId) {
+      res.cookie('rs_session', result.sessionId, sessionCookieOptions(req));
+    }
+
+    return result.response;
   }
 
   @Public()
