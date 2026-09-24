@@ -19,8 +19,9 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isFoodCategoryName } from '../../constants/food';
 import type { Brand, Item } from '../../hooks/useItems';
 import { useTags, type Tag } from '../../hooks/useTags';
 import {
@@ -127,6 +128,15 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
   const itemRef = useRef(item);
   itemRef.current = item;
   const currentItem = itemRef.current;
+
+  const isFoodItem = useMemo(() => {
+    const fromSelection = itemSubCategories.find(
+      (sc) => sc.id === itemSubCategoryId
+    )?.item_category?.name;
+    return isFoodCategoryName(
+      fromSelection ?? currentItem?.item_sub_category?.item_category?.name
+    );
+  }, [itemSubCategories, itemSubCategoryId, currentItem]);
 
   useEffect(() => {
     if (!open || !item?.id) {
@@ -287,8 +297,11 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
           is_perishable: perishable,
           is_used: isUsed,
           requires_special_handling: specialHandling,
-          min_order_quantity:
-            minOrder === '' ? 1 : Math.max(1, Number(minOrder) || 1),
+          min_order_quantity: isFoodItem
+            ? 1
+            : minOrder === ''
+              ? 1
+              : Math.max(1, Number(minOrder) || 1),
           max_order_quantity:
             maxOrder === '' ? null : Number(maxOrder) || null,
         },
@@ -571,15 +584,17 @@ const RefineItemWithAiDialog: React.FC<RefineItemWithAiDialogProps> = ({
               />
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                label={t('business.items.minOrderQuantity', 'Min Order Quantity')}
-                value={minOrder}
-                onChange={(e) => setMinOrder(e.target.value)}
-                type="number"
-                inputProps={{ min: 1 }}
-                fullWidth
-                helperText={currentHelperText(currentItem?.min_order_quantity)}
-              />
+              {!isFoodItem && (
+                <TextField
+                  label={t('business.items.minOrderQuantity', 'Min Order Quantity')}
+                  value={minOrder}
+                  onChange={(e) => setMinOrder(e.target.value)}
+                  type="number"
+                  inputProps={{ min: 1 }}
+                  fullWidth
+                  helperText={currentHelperText(currentItem?.min_order_quantity)}
+                />
+              )}
               <TextField
                 label={t('business.items.maxOrderQuantity', 'Max Order Quantity')}
                 value={maxOrder}

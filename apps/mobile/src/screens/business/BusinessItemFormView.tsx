@@ -22,6 +22,7 @@ import { useSupportedCurrencies } from '../../hooks/business/useSupportedCurrenc
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import type { useBusinessItemForm } from '../../hooks/business/useBusinessItemForm';
 import type { BusinessRootStackParamList } from '../../navigation/types';
+import { isFoodCategoryName } from '../../utils/foodAvailability';
 
 type FormApi = ReturnType<typeof useBusinessItemForm>;
 
@@ -69,6 +70,9 @@ export function BusinessItemFormView({ itemId, form, onSaveSuccess }: Props) {
   const [newTagName, setNewTagName] = useState('');
   const { values, patch, categories, brands, tags, selectedTags, subCategories } = form;
   const lockedCurrency = defaultCurrency || values.currency || '—';
+  const isFoodItem = isFoodCategoryName(
+    categories.find((c) => c.id === values.categoryId)?.name
+  );
 
   const categoryLabel =
     categories.find((c) => c.id === values.categoryId)?.name ??
@@ -346,14 +350,16 @@ export function BusinessItemFormView({ itemId, form, onSaveSuccess }: Props) {
             value={values.is_active}
             onChange={(v) => patch('is_active', v)}
           />
-          <TextInput
-            label={t('business.items.minOrderQuantity', 'Min order quantity')}
-            value={values.min_order_quantity}
-            onChangeText={(v) => patch('min_order_quantity', v)}
-            keyboardType="number-pad"
-            mode="outlined"
-            style={styles.input}
-          />
+          {!isFoodItem ? (
+            <TextInput
+              label={t('business.items.minOrderQuantity', 'Min order quantity')}
+              value={values.min_order_quantity}
+              onChangeText={(v) => patch('min_order_quantity', v)}
+              keyboardType="number-pad"
+              mode="outlined"
+              style={styles.input}
+            />
+          ) : null}
           <TextInput
             label={t('business.items.maxOrderQuantity', 'Max order quantity')}
             value={values.max_order_quantity}

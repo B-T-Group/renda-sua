@@ -10,6 +10,7 @@ import {
 import { businessApi } from '../../../services/businessApi';
 import type { ItemRefinementSuggestion } from '../../../types/business/collections';
 import type { BusinessCatalogItem } from '../../../types/business/items';
+import { isCookedFoodItem } from '../../../utils/businessFood';
 
 type Props = {
   visible: boolean;
@@ -101,7 +102,7 @@ export function RefineItemWithAiDialog({ visible, item, onDismiss, onApplied }: 
         weight_unit: aiData?.weightUnit ?? undefined,
         dimensions: aiData?.dimensions ?? undefined,
         requires_special_handling: aiData?.requiresSpecialHandling,
-        min_order_quantity: aiData?.minOrderQuantity,
+        min_order_quantity: isCookedFoodItem(item) ? 1 : aiData?.minOrderQuantity,
         max_order_quantity: aiData?.maxOrderQuantity ?? null,
       });
       const tagIds: string[] = [];

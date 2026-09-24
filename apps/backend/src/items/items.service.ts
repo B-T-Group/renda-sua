@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { normalizeWeightUnit } from '../common/weight-units';
 import { ItemEmbeddingService } from '../embeddings/item-embedding.service';
+import { resolveCookedFoodMinOrderQuantity, cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
@@ -58,6 +59,12 @@ const GET_ITEM_BY_ID = `
       shipping_price
       price
       export_available
+      item_sub_category_id
+      item_sub_category {
+        item_category {
+          name
+        }
+      }
     }
   }
 `;
@@ -156,8 +163,19 @@ export class ItemsService {
     input: ItemsInsertInput
   ): Promise<Record<string, unknown>> {
     const marketCodes = this.extractExportMarketCodes(input);
+    const mutable = this.pickMutableFields(input);
+    const categoryName = await this.resolveCategoryNameForSubCategory(
+      mutable.item_sub_category_id
+    );
     const itemData = {
-      ...this.pickMutableFields(input),
+      ...mutable,
+      min_order_quantity: resolveCookedFoodMinOrderQuantity({
+        requestedMin:
+          typeof mutable.min_order_quantity === 'number'
+            ? mutable.min_order_quantity
+            : null,
+        categoryName,
+      }),
       business_id: businessId,
       // Never allow clients to activate on create; moderation must approve first
       is_active: false,
@@ -221,11 +239,15 @@ export class ItemsService {
       shipping_price?: number | null;
       price?: number | null;
       export_available?: boolean | null;
+      item_sub_category_id?: number | null;
+      item_sub_category?: {
+        item_category?: { name?: string | null } | null;
+      } | null;
     },
     updates: UpdateItemDto | Record<string, unknown>
   ): Promise<Record<string, unknown> | null> {
     const marketCodes = this.extractExportMarketCodes(updates);
-    const itemData = this.normalizeUpdatePayload(updates);
+    const itemData = await this.normalizeUpdatePayloadWithFoodMin(item, updates);
     this.assertShippingFields(itemData, item);
     this.assertExportAvailableClearRequiresPrice(itemData, item);
     await this.assertActivationAllowed(item, itemData, itemId);
@@ -499,6 +521,10 @@ export class ItemsService {
     shipping_price?: number | null;
     price?: number | null;
     export_available?: boolean | null;
+    item_sub_category_id?: number | null;
+    item_sub_category?: {
+      item_category?: { name?: string | null } | null;
+    } | null;
   }> {
     const result = await this.hasuraUserService.executeQuery<{
       items_by_pk: {
@@ -511,6 +537,10 @@ export class ItemsService {
         shipping_price?: number | null;
         price?: number | null;
         export_available?: boolean | null;
+        item_sub_category_id?: number | null;
+        item_sub_category?: {
+          item_category?: { name?: string | null } | null;
+        } | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
@@ -531,6 +561,10 @@ export class ItemsService {
     shipping_price?: number | null;
     price?: number | null;
     export_available?: boolean | null;
+    item_sub_category_id?: number | null;
+    item_sub_category?: {
+      item_category?: { name?: string | null } | null;
+    } | null;
   }> {
     const result = await this.hasuraSystemService.executeQuery<{
       items_by_pk: {
@@ -542,6 +576,10 @@ export class ItemsService {
         shipping_price?: number | null;
         price?: number | null;
         export_available?: boolean | null;
+        item_sub_category_id?: number | null;
+        item_sub_category?: {
+          item_category?: { name?: string | null } | null;
+        } | null;
       } | null;
     }>(GET_ITEM_BY_ID, { itemId });
     const item = result?.items_by_pk;
@@ -554,17 +592,73 @@ export class ItemsService {
     return item;
   }
 
-  private normalizeUpdatePayload(
+  private async normalizeUpdatePayloadWithFoodMin(
+    existing: {
+      item_sub_category_id?: number | null;
+      item_sub_category?: {
+        item_category?: { name?: string | null } | null;
+      } | null;
+    },
     updates: UpdateItemDto | Record<string, unknown>
-  ): Record<string, unknown> {
+  ): Promise<Record<string, unknown>> {
     const itemData = this.pickMutableFields(updates);
-    return {
+    const withDescription: Record<string, unknown> = {
       ...itemData,
       ...(Object.prototype.hasOwnProperty.call(itemData, 'description') &&
       (itemData.description === undefined || itemData.description === null)
         ? { description: '' }
         : {}),
     };
+    const nextSubCategoryId =
+      withDescription.item_sub_category_id !== undefined
+        ? withDescription.item_sub_category_id
+        : existing.item_sub_category_id;
+    const categoryName =
+      nextSubCategoryId === existing.item_sub_category_id
+        ? existing.item_sub_category?.item_category?.name
+        : await this.resolveCategoryNameForSubCategory(nextSubCategoryId);
+    const requestedMin =
+      typeof withDescription.min_order_quantity === 'number'
+        ? withDescription.min_order_quantity
+        : null;
+    if (cookedFoodIgnoresStock(categoryName)) {
+      return { ...withDescription, min_order_quantity: 1 };
+    }
+    if (Object.prototype.hasOwnProperty.call(withDescription, 'min_order_quantity')) {
+      return {
+        ...withDescription,
+        min_order_quantity: resolveCookedFoodMinOrderQuantity({
+          requestedMin,
+          categoryName,
+        }),
+      };
+    }
+    return withDescription;
+  }
+
+  private async resolveCategoryNameForSubCategory(
+    subCategoryId: unknown
+  ): Promise<string | null> {
+    const id =
+      typeof subCategoryId === 'number'
+        ? subCategoryId
+        : typeof subCategoryId === 'string' && /^\d+$/.test(subCategoryId)
+          ? Number(subCategoryId)
+          : null;
+    if (id == null) return null;
+    const result = await this.hasuraSystemService.executeQuery<{
+      item_sub_categories_by_pk: {
+        item_category?: { name?: string | null } | null;
+      } | null;
+    }>(
+      `query CategoryNameForSubCategory($id: Int!) {
+        item_sub_categories_by_pk(id: $id) {
+          item_category { name }
+        }
+      }`,
+      { id }
+    );
+    return result.item_sub_categories_by_pk?.item_category?.name ?? null;
   }
 
   private pickMutableFields(
