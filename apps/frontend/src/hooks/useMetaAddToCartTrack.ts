@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useCallback } from 'react';
 import { getOrCreateRsAnonymousId } from '../utils/rsAnonymousId';
 import { getMetaBrowserContext } from '../utils/metaBrowserIds';
@@ -12,7 +12,7 @@ import { metaFunnelEventId } from '../utils/metaEventIds';
  */
 export function useMetaAddToCartTrack() {
   const apiClient = useApiClient();
-  const { isAuthenticated, user } = useAuth0();
+  const { isAuthenticated, user } = useSessionAuth();
   const { trackAddToCart } = useMetaPixel();
 
   return useCallback(

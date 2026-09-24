@@ -9,7 +9,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useCart } from '../../contexts/CartContext';
 import type { CartItem } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -38,7 +38,7 @@ const ITEMS_PER_PAGE = 24;
 const CollectionLandingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();

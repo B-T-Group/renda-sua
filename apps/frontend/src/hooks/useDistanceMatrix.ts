@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useCallback, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
@@ -45,7 +45,7 @@ export function useDistanceMatrix(cacheDuration: number = CACHE_DURATION) {
   const [data, setData] = useState<DistanceMatrixResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const apiClient = useApiClient();
 
   const isCacheValid = useCallback(

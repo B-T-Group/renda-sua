@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -6,7 +6,7 @@ import LoadingPage from '../common/LoadingPage';
 import ErrorPage from '../pages/ErrorPage';
 
 const ProfileRouter: React.FC = () => {
-  const { isAuthenticated, user } = useAuth0();
+  const { isAuthenticated, user } = useSessionAuth();
   const navigate = useNavigate();
   const {
     loading,

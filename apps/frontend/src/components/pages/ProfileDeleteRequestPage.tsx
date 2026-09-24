@@ -27,7 +27,7 @@ import {
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import SEOHead from '../seo/SEOHead';
 
 const DEVELOPER_EMAIL = 'tech@rendasua.com';
@@ -35,7 +35,7 @@ const APP_NAME = 'Rendasua';
 
 const ProfileDeleteRequestPage: React.FC = () => {
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
 
   const mailtoHref = useMemo(() => {
     const subject = encodeURIComponent(

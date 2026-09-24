@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useCallback } from 'react';
 import { getOrCreateRsAnonymousId } from '../utils/rsAnonymousId';
 import { useApiClient } from './useApiClient';
@@ -120,7 +120,7 @@ export type TrackInventoryCtaSiteEventInput = {
 
 export function useTrackSiteEvent() {
   const apiClient = useApiClient();
-  const { isAuthenticated, user } = useAuth0();
+  const { isAuthenticated, user } = useSessionAuth();
 
   const trackSiteEvent = useCallback(
     async (payload: TrackInventoryCtaSiteEventInput) => {

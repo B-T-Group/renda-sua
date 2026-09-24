@@ -18,12 +18,20 @@ export interface SessionAuthUser {
   sub: string;
   email?: string;
   email_verified?: boolean;
+  given_name?: string;
+  family_name?: string;
+  first_name?: string;
+  last_name?: string;
+  picture?: string;
+  phone_number?: string;
+  [key: string]: unknown;
 }
 
 interface SessionAuthContextType {
   isAuthenticated: boolean;
   isSessionReady: boolean;
-  user: any | SessionAuthUser | undefined;
+  isLoading: boolean;
+  user: SessionAuthUser | undefined;
   getAccessToken: (options?: { refresh?: boolean }) => Promise<string | null>;
   logout: () => Promise<void>;
   setPasswordlessSession: (data: {
@@ -144,11 +152,15 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   const passwordlessUser = useMemo((): SessionAuthUser | undefined => {
     if (!passwordlessIdToken) return undefined;
     const payload = decodeJwtPayload(passwordlessIdToken);
-    if (!payload?.sub) return undefined;
+    if (!payload?.sub || typeof payload.sub !== 'string') return undefined;
     return {
+      ...payload,
       sub: payload.sub,
-      email: payload.email,
-      email_verified: payload.email_verified,
+      email: typeof payload.email === 'string' ? payload.email : undefined,
+      email_verified:
+        typeof payload.email_verified === 'boolean'
+          ? payload.email_verified
+          : undefined,
     };
   }, [passwordlessIdToken]);
 
@@ -156,6 +168,12 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
     if (!passwordlessAccessToken) return false;
     return passwordlessExpiresAtMs > Date.now() + 30_000;
   }, [passwordlessAccessToken, passwordlessExpiresAtMs]);
+
+  const isLoading = useMemo(
+    () =>
+      auth0.isLoading || (!auth0.isAuthenticated && !isSessionReady),
+    [auth0.isLoading, auth0.isAuthenticated, isSessionReady]
+  );
 
   const clearPasswordlessSession = useCallback(() => {
     passwordlessAccessTokenRef.current = null;
@@ -232,7 +250,8 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   const value: SessionAuthContextType = {
     isAuthenticated: auth0.isAuthenticated || isPasswordlessAuthenticated,
     isSessionReady: auth0.isAuthenticated || isSessionReady,
-    user: (auth0.user as any) || passwordlessUser,
+    isLoading,
+    user: (auth0.user as SessionAuthUser | undefined) || passwordlessUser,
     getAccessToken,
     logout,
     setPasswordlessSession,

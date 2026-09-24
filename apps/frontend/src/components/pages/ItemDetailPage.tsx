@@ -41,6 +41,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
@@ -420,7 +421,8 @@ export default function ItemDetailPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { loginWithRedirect } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { profile } = useUserProfileContext();
   const { addToCart, getLineQuantityInCart, getListingQuantityInCart } = useCart();
   const { trackViewContent } = useMetaPixel();

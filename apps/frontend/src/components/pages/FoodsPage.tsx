@@ -14,6 +14,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import SEOHead from '../seo/SEOHead';
 import { useCart } from '../../contexts/CartContext';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useFoodSubCategories } from '../../hooks/useFoodSubCategories';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
@@ -57,7 +58,8 @@ const FOODS_GRID_SX = {
  */
 const FoodsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { loginWithRedirect } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { selectedMarket } = useMarket();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();

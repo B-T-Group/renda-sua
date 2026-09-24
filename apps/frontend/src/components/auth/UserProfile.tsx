@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { Email, VerifiedUser } from '@mui/icons-material';
 import {
   Avatar,
@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 
 const UserProfile = () => {
-  const { user, isAuthenticated, isLoading } = useAuth0();
+  const { user, isAuthenticated, isLoading } = useSessionAuth();
 
   if (isLoading) {
     return (

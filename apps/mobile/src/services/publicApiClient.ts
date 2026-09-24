@@ -4,9 +4,21 @@
  */
 
 import { getEnv } from '../config/auth0';
+import { CLIENT_PLATFORM_HEADERS } from './clientPlatformHeaders';
 
 function baseUrl(): string {
   return getEnv().apiUrl ?? 'https://prod.api.rendasua.com/api';
+}
+
+function mergeHeaders(
+  extra?: Record<string, string>
+): Record<string, string> {
+  return {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    ...CLIENT_PLATFORM_HEADERS,
+    ...(extra ?? {}),
+  };
 }
 
 function buildUrl(endpoint: string, params?: Record<string, string | number | boolean | undefined>): string {
@@ -31,7 +43,7 @@ export async function publicApiGet<T>(
   const url = buildUrl(endpoint, params);
   const res = await fetch(url, {
     method: 'GET',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    headers: mergeHeaders(),
     signal: init?.signal,
   });
   const text = await res.text();
@@ -57,11 +69,7 @@ export async function publicApiPost<T>(
   const url = buildUrl(endpoint);
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers: mergeHeaders(init?.headers),
     body: JSON.stringify(body ?? {}),
     signal: init?.signal,
   });

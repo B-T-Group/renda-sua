@@ -379,8 +379,8 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     null
   );
 
-  const { isLoading, getAccessTokenSilently } = useAuth0();
-  const { isAuthenticated, isSessionReady } = useSessionAuth();
+  const { getAccessTokenSilently } = useAuth0();
+  const { isAuthenticated, isSessionReady, isLoading } = useSessionAuth();
   const apiClient = useApiClient();
   const { i18n } = useTranslation();
 

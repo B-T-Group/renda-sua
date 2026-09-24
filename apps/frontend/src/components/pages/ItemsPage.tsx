@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import {
     Assignment,
     Inventory,
@@ -255,7 +255,7 @@ const ItemsPage: React.FC = () => {
     [setSearchParams]
   );
 
-  const { isAuthenticated, user } = useAuth0();
+  const { isAuthenticated, user } = useSessionAuth();
   const { selectedMarket } = useMarket();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();

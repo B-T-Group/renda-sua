@@ -3,13 +3,13 @@ import { useMediaQuery, useTheme } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import BottomNavBar, { BottomNavTab } from './BottomNavBar';
 
 const GuestBottomNav: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 

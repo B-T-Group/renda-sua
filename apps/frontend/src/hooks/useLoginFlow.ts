@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from './useApiClient';
 
 export const useLoginFlow = () => {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { isAuthenticated, isLoading, user } = useSessionAuth();
   const apiClient = useApiClient();
   const navigate = useNavigate();
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
