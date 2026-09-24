@@ -8,6 +8,28 @@ export type RedisSocketConfig = {
 
 export const REDIS_READY_WAIT_MS = 2000;
 export const REDIS_CONNECT_RETRY_DELAYS_MS = [500, 1000, 2000, 4000] as const;
+const REDIS_RECONNECT_MAX_DELAY_MS = 3000;
+const REDIS_RECONNECT_MAX_ATTEMPTS = 20;
+
+const CONNECTION_NOISE_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+]);
+
+const CONNECTION_NOISE_NAMES = new Set([
+  'ConnectionTimeoutError',
+  'TimeoutError',
+  'SocketClosedUnexpectedlyError',
+]);
+
+const CONNECTION_NOISE_MESSAGES = [
+  /connection timeout/i,
+  /connect timeout/i,
+  /socket closed/i,
+  /connection is closed/i,
+];
 
 export function createAppRedisClient(
   redis: RedisSocketConfig
@@ -17,9 +39,35 @@ export function createAppRedisClient(
       host: redis.host,
       port: redis.port,
       connectTimeout: 5000,
+      reconnectStrategy: redisReconnectDelay,
     },
     password: redis.password,
   });
+}
+
+/** Backoff for node-redis reconnect; stop after REDIS_RECONNECT_MAX_ATTEMPTS. */
+export function redisReconnectDelay(retries: number): number | Error {
+  if (retries >= REDIS_RECONNECT_MAX_ATTEMPTS) {
+    return new Error('Redis reconnect exhausted');
+  }
+  return Math.min(retries * 100, REDIS_RECONNECT_MAX_DELAY_MS);
+}
+
+/** Transient socket noise that should not be logged at error. */
+export function isRedisConnectionNoise(error: unknown): boolean {
+  const err = error as { name?: string; message?: string; code?: string };
+  if (!err || typeof err !== 'object') return false;
+  if (err.name && CONNECTION_NOISE_NAMES.has(err.name)) return true;
+  if (err.code && CONNECTION_NOISE_CODES.has(err.code)) return true;
+  const msg = err.message || '';
+  return CONNECTION_NOISE_MESSAGES.some((re) => re.test(msg));
+}
+
+export function formatRedisHostLabel(redis: {
+  host: string;
+  port: number;
+}): string {
+  return `host=${redis.host}:${redis.port}`;
 }
 
 export async function sleepMs(ms: number): Promise<void> {

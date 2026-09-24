@@ -4,6 +4,8 @@ import { RedisClientType } from 'redis';
 import {
   connectRedisWithRetry,
   createAppRedisClient,
+  formatRedisHostLabel,
+  isRedisConnectionNoise,
   waitForRedisReady,
 } from '../common/redis-client.util';
 import { redisCommandOrFallback } from '../common/redis-error.util';
@@ -77,9 +79,12 @@ export class CatalogCacheService implements OnModuleDestroy {
   }
 
   private onRedisError(err: any, redis: { host: string; port: number }): void {
-    this.logger.error(
-      `Redis catalog cache error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
-    );
+    const detail = `${err?.message || String(err)} (${formatRedisHostLabel(redis)})`;
+    if (isRedisConnectionNoise(err)) {
+      this.logger.warn(`Redis catalog cache error: ${detail}`);
+      return;
+    }
+    this.logger.error(`Redis catalog cache error: ${detail}`);
   }
 
   private async disconnectClient(): Promise<void> {

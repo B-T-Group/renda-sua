@@ -38,6 +38,7 @@ import { useBusinessItemsPageData } from '../../hooks/useBusinessItemsPageData';
 import { useBusinessInventory } from '../../hooks/useBusinessInventory';
 import { useSupportedPaymentSystems } from '../../hooks/useSupportedPaymentSystems';
 import { useItems, type Item } from '../../hooks/useItems';
+import { isFoodCategoryName } from '../../constants/food';
 import BusinessItemCardView from '../business/BusinessItemCardView';
 import ItemsFilterBar, {
   ItemsFilterState,
@@ -590,6 +591,10 @@ const BusinessItemsPage: React.FC = () => {
   const getItemStockStatus = (item: any): string => {
     const inventory = item.business_inventories?.[0];
     if (!inventory) return 'noInventory';
+
+    if (isFoodCategoryName(item.item_sub_category?.item_category?.name)) {
+      return inventory.is_active === false ? 'outOfStock' : 'inStock';
+    }
 
     const quantity = inventory.computed_available_quantity || 0;
     const reorderPoint = inventory.reorder_point || 0;

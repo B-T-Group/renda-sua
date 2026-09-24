@@ -3,7 +3,6 @@ import Checkbox from '@mui/material/Checkbox';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,8 +22,8 @@ interface FoodOrderStockPromptProps {
 }
 
 /**
- * Optional stock correction while confirming a food order. Skipping it leaves
- * stock untouched, so confirming stays a single tap when nothing has changed.
+ * Optional sold-out flag while confirming a food order. Stock counts are not
+ * tracked for cooked food; merchants mark a dish unavailable for the day.
  */
 const FoodOrderStockPrompt: React.FC<FoodOrderStockPromptProps> = ({
   lines,
@@ -43,10 +42,8 @@ const FoodOrderStockPrompt: React.FC<FoodOrderStockPromptProps> = ({
     const next = { ...updates };
     const current = next[orderItemId] ?? { order_item_id: orderItemId };
     const merged = { ...current, ...change };
-    const isEmpty =
-      merged.remaining_quantity == null && merged.last_one !== true;
-    if (isEmpty) delete next[orderItemId];
-    else next[orderItemId] = merged;
+    if (merged.last_one !== true) delete next[orderItemId];
+    else next[orderItemId] = { order_item_id: orderItemId, last_one: true };
     onChange(next);
   };
 
@@ -54,72 +51,39 @@ const FoodOrderStockPrompt: React.FC<FoodOrderStockPromptProps> = ({
     <Box>
       <Divider sx={{ my: 2 }} />
       <Typography variant="subtitle2">
-        {t('business.food.remainingTitle', 'How many portions are left?')}
+        {t('business.food.soldOutTitle', 'Still serving these dishes?')}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
         {t(
-          'business.food.remainingHelp',
-          'Optional. Only needed when this order changes what you can still sell today.'
+          'business.food.soldOutHelp',
+          'Optional. Mark a dish sold out for the rest of today when this was the last order.'
         )}
       </Typography>
 
       <Stack spacing={1.5}>
         {lines.map((line) => {
-          const update = updates[line.order_item_id];
-          const lastOne = update?.last_one === true;
+          const lastOne = updates[line.order_item_id]?.last_one === true;
           return (
             <Box key={line.order_item_id}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {line.name}
               </Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <TextField
-                  type="number"
-                  size="small"
-                  label={t(
-                    'business.food.remainingLabel',
-                    'Portions left after this order'
-                  )}
-                  value={update?.remaining_quantity ?? ''}
-                  onChange={(event) =>
-                    patch(line.order_item_id, {
-                      remaining_quantity:
-                        event.target.value === ''
-                          ? undefined
-                          : Math.max(0, parseInt(event.target.value, 10) || 0),
-                    })
-                  }
-                  disabled={disabled || lastOne}
-                  inputProps={{ min: 0, step: 1 }}
-                  sx={{ maxWidth: 240 }}
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={lastOne}
-                      onChange={(event) =>
-                        patch(line.order_item_id, {
-                          last_one: event.target.checked || undefined,
-                          ...(event.target.checked
-                            ? { remaining_quantity: undefined }
-                            : {}),
-                        })
-                      }
-                      disabled={disabled}
-                    />
-                  }
-                  label={t('business.food.lastOne', 'This was the last one')}
-                />
-              </Box>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={lastOne}
+                    onChange={(event) =>
+                      patch(line.order_item_id, {
+                        last_one: event.target.checked || undefined,
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                }
+                label={t('business.food.lastOne', 'This was the last one')}
+              />
               {lastOne && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" display="block">
                   {t(
                     'business.food.lastOneHelp',
                     'Marks the dish sold out for the rest of today.'

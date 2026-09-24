@@ -1,3 +1,5 @@
+import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
+
 const FACEBOOK_CATALOG_HEADERS = [
   'id',
   'title',
@@ -61,6 +63,7 @@ type ItemTagLike = {
 type ItemSubCategoryLike = {
   google_product_category?: string | number | null;
   fb_product_category?: number | null;
+  item_category?: { name?: string | null } | null;
   google_product_category_row?: {
     id?: string | number;
     name_en?: string | null;
@@ -275,10 +278,18 @@ export function availabilityForInventoryRow(
   return 'in stock';
 }
 
-/** Sellable quantity for Facebook; never exceeds computed available stock. */
+/** Sellable quantity for Facebook; blank for cooked food (sentinel stock). */
 export function quantityToSellForInventory(
-  inv: Pick<FeedInventoryRow, 'is_active' | 'computed_available_quantity'>
-): number {
+  inv: Pick<
+    FeedInventoryRow,
+    'is_active' | 'computed_available_quantity' | 'item'
+  >
+): number | '' {
+  if (
+    cookedFoodIgnoresStock(inv.item?.item_sub_category?.item_category?.name)
+  ) {
+    return '';
+  }
   if (inv.is_active === false) return 0;
   const qty = inv.computed_available_quantity;
   if (typeof qty !== 'number' || !Number.isFinite(qty)) return 0;

@@ -119,6 +119,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
+import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
@@ -9984,7 +9985,11 @@ export class OrdersService {
 
       const requestedQuantity =
         requestedQuantityByInventoryId.get(item.business_inventory_id) || 0;
+      const ignoresStock = cookedFoodIgnoresStock(
+        businessInventory.item?.item_sub_category?.item_category?.name
+      );
       if (
+        !ignoresStock &&
         !validatedInventoryIds.has(item.business_inventory_id) &&
         requestedQuantity > businessInventory.computed_available_quantity
       ) {
@@ -13093,7 +13098,10 @@ export class OrdersService {
         `Skipping ${skipped} items with missing reserved-quantity data`
       );
     }
-    const quantityChanges = this.getRequestedQuantitiesByInventory(validItems);
+    const quantityChanges = await this.filterStockTrackedQuantityChanges(
+      this.getRequestedQuantitiesByInventory(validItems)
+    );
+    if (quantityChanges.size === 0) return;
     if (operation === 'increment') {
       await this.reserveInventoryAtomically(quantityChanges);
       return;
@@ -13103,6 +13111,59 @@ export class OrdersService {
       quantityChanges,
       'decrement'
     );
+  }
+
+  /** Drops cooked-food inventory ids; their quantity is a visibility sentinel. */
+  private async filterStockTrackedQuantityChanges(
+    quantityChanges: Map<string, number>
+  ): Promise<Map<string, number>> {
+    if (quantityChanges.size === 0) return quantityChanges;
+    const stockedIds = await this.loadStockTrackedInventoryIds([
+      ...quantityChanges.keys(),
+    ]);
+    const filtered = new Map<string, number>();
+    for (const [id, qty] of quantityChanges) {
+      if (stockedIds.has(id)) filtered.set(id, qty);
+    }
+    return filtered;
+  }
+
+  private async loadStockTrackedInventoryIds(
+    inventoryIds: string[]
+  ): Promise<Set<string>> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      business_inventory: Array<{
+        id: string;
+        item?: {
+          item_sub_category?: {
+            item_category?: { name?: string | null } | null;
+          } | null;
+        } | null;
+      }>;
+    }>(
+      `query StockTrackedInventories($ids: [uuid!]!) {
+        business_inventory(where: { id: { _in: $ids } }) {
+          id
+          item {
+            item_sub_category {
+              item_category { name }
+            }
+          }
+        }
+      }`,
+      { ids: inventoryIds }
+    );
+    const stocked = new Set<string>();
+    for (const row of result.business_inventory ?? []) {
+      if (
+        !cookedFoodIgnoresStock(
+          row.item?.item_sub_category?.item_category?.name
+        )
+      ) {
+        stocked.add(row.id);
+      }
+    }
+    return stocked;
   }
 
   private async reserveInventoryAtomically(
@@ -13202,19 +13263,14 @@ export class OrdersService {
     orderItems: Order_Items[]
   ): Promise<void> {
     try {
-      for (const item of orderItems) {
-        const businessInventoryId = item.business_inventory_id;
-        const quantity = item.quantity;
-
-        if (!businessInventoryId || !quantity) {
-          this.logger.warn(
-            `Skipping inventory update for item with missing data: ${JSON.stringify(
-              item
-            )}`
-          );
-          continue;
-        }
-
+      const quantityChanges = await this.filterStockTrackedQuantityChanges(
+        this.getRequestedQuantitiesByInventory(
+          orderItems.filter(
+            (item) => item.business_inventory_id && item.quantity
+          )
+        )
+      );
+      for (const [businessInventoryId, quantity] of quantityChanges) {
         const updateMutation = `
           mutation UpdateInventoryOnCompletion($id: uuid!, $quantity: Int!, $reservedQuantity: Int!) {
             update_business_inventory_by_pk(
@@ -13233,8 +13289,8 @@ export class OrdersService {
 
         await this.hasuraSystemService.executeQuery(updateMutation, {
           id: businessInventoryId,
-          reservedQuantity: -quantity, // Decrement reserved quantity
-          quantity: -quantity, // Decrement total quantity
+          reservedQuantity: -quantity,
+          quantity: -quantity,
         });
 
         this.logger.log(

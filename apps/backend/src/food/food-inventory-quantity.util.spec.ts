@@ -1,26 +1,37 @@
-import { resolveInitialInventoryQuantity } from './food-inventory-quantity.util';
+import {
+  cookedFoodIgnoresStock,
+  resolveInitialInventoryQuantity,
+} from './food-inventory-quantity.util';
 import {
   FOOD_CATEGORY_NAME,
   FOOD_DEFAULT_INVENTORY_QUANTITY,
 } from './food.constants';
 
-describe('resolveInitialInventoryQuantity', () => {
-  it('seeds cooked food with a high quantity when none is given', () => {
-    const actual = resolveInitialInventoryQuantity({
-      requestedQuantity: 0,
-      categoryName: FOOD_CATEGORY_NAME,
-    });
-
-    expect(actual).toBe(FOOD_DEFAULT_INVENTORY_QUANTITY);
+describe('cookedFoodIgnoresStock', () => {
+  it('is true for the cooked-food category', () => {
+    expect(cookedFoodIgnoresStock(FOOD_CATEGORY_NAME)).toBe(true);
   });
 
-  it('keeps a stock count the merchant chose for cooked food', () => {
-    const actual = resolveInitialInventoryQuantity({
-      requestedQuantity: 12,
-      categoryName: FOOD_CATEGORY_NAME,
-    });
+  it('is false for groceries and unknown categories', () => {
+    expect(cookedFoodIgnoresStock('Food & Beverages')).toBe(false);
+    expect(cookedFoodIgnoresStock(null)).toBe(false);
+  });
+});
 
-    expect(actual).toBe(12);
+describe('resolveInitialInventoryQuantity', () => {
+  it('always stores quantity 1 for cooked food', () => {
+    expect(
+      resolveInitialInventoryQuantity({
+        requestedQuantity: 0,
+        categoryName: FOOD_CATEGORY_NAME,
+      })
+    ).toBe(FOOD_DEFAULT_INVENTORY_QUANTITY);
+    expect(
+      resolveInitialInventoryQuantity({
+        requestedQuantity: 12,
+        categoryName: FOOD_CATEGORY_NAME,
+      })
+    ).toBe(1);
   });
 
   it('leaves non-food items alone, including zero stock', () => {

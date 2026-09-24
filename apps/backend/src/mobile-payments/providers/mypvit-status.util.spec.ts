@@ -39,10 +39,35 @@ describe('buildMypvitStatusPath', () => {
 });
 
 describe('isNotFoundHttpError', () => {
-  it('is true only for HTTP 404 responses', () => {
+  it('is true for HTTP 404 responses', () => {
     expect(isNotFoundHttpError({ response: { status: 404 } })).toBe(true);
     expect(isNotFoundHttpError({ response: { status: 500 } })).toBe(false);
     expect(isNotFoundHttpError({})).toBe(false);
+  });
+
+  it('is true for MyPVit RESOURCE_NOT_FOUND / status_code 7011', () => {
+    expect(
+      isNotFoundHttpError({
+        response: {
+          status: 400,
+          data: {
+            status_code: 7011,
+            error: 'RESOURCE_NOT_FOUND',
+            message: 'This resource does not exist',
+          },
+        },
+      })
+    ).toBe(true);
+    expect(
+      isNotFoundHttpError({
+        response: { status: 200, data: { status_code: '7011' } },
+      })
+    ).toBe(true);
+    expect(
+      isNotFoundHttpError({
+        response: { status: 400, data: { error: 'CONSTRAINT_VIOLATION' } },
+      })
+    ).toBe(false);
   });
 });
 

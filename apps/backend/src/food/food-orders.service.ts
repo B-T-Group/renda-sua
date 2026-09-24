@@ -1,9 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import {
-  resolveQuantityForRemaining,
-  type FoodConfirmationStockUpdate,
-} from './food-confirmation-stock.util';
+import type { FoodConfirmationStockUpdate } from './food-confirmation-stock.util';
 import { isFoodCategoryName } from './food-item-availability.mapper';
 
 const GET_ORDER_ITEMS_FOR_STOCK = `
@@ -15,25 +12,12 @@ const GET_ORDER_ITEMS_FOR_STOCK = `
         id
         item_id
         business_location_id
-        quantity
-        reserved_quantity
         item {
           item_sub_category {
             item_category { name }
           }
         }
       }
-    }
-  }
-`;
-
-const SET_INVENTORY_QUANTITY = `
-  mutation SetFoodInventoryQuantity($inventoryId: uuid!, $quantity: Int!) {
-    update_business_inventory_by_pk(
-      pk_columns: { id: $inventoryId }
-      _set: { quantity: $quantity }
-    ) {
-      id
     }
   }
 `;
@@ -67,8 +51,6 @@ interface OrderItemStockRow {
     id: string;
     item_id: string;
     business_location_id: string;
-    quantity: number;
-    reserved_quantity: number;
     item?: {
       item_sub_category?: {
         item_category?: { name?: string | null } | null;
@@ -98,10 +80,9 @@ export class FoodOrdersService {
   }
 
   /**
-   * Stock corrections a merchant makes while confirming a food order, when
-   * they know how many portions are actually left.
+   * Sold-out flags a merchant sets while confirming a food order.
+   * Remaining-quantity stock writes are ignored; cooked food does not track stock.
    */
-
   async applyConfirmationUpdates(
     orderId: string,
     updates: FoodConfirmationStockUpdate[]
@@ -109,10 +90,14 @@ export class FoodOrdersService {
     if (!updates?.length) return;
     const rows = await this.loadOrderItems(orderId);
     for (const update of updates) {
+      if (!update.last_one) continue;
       const row = rows.find((item) => item.id === update.order_item_id);
       if (!row?.business_inventory) continue;
       if (!this.isFoodRow(row)) continue;
-      await this.applyOne(row, update);
+      await this.markSoldOut(
+        row.business_inventory.item_id,
+        row.business_inventory.business_location_id
+      );
     }
   }
 
@@ -122,28 +107,6 @@ export class FoodOrdersService {
     );
   }
 
-  private async applyOne(
-    row: OrderItemStockRow,
-    update: FoodConfirmationStockUpdate
-  ): Promise<void> {
-    const inventory = row.business_inventory!;
-    if (update.remaining_quantity != null) {
-      await this.setQuantity(
-        inventory.id,
-        resolveQuantityForRemaining({
-          remainingQuantity: update.remaining_quantity,
-          reservedQuantity: inventory.reserved_quantity ?? 0,
-        })
-      );
-    }
-    if (update.last_one) {
-      await this.markSoldOut(
-        inventory.item_id,
-        inventory.business_location_id
-      );
-    }
-  }
-
   private async loadOrderItems(
     orderId: string
   ): Promise<OrderItemStockRow[]> {
@@ -151,16 +114,6 @@ export class FoodOrdersService {
       order_items: OrderItemStockRow[];
     }>(GET_ORDER_ITEMS_FOR_STOCK, { orderId });
     return result.order_items ?? [];
-  }
-
-  private async setQuantity(
-    inventoryId: string,
-    quantity: number
-  ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(SET_INVENTORY_QUANTITY, {
-      inventoryId,
-      quantity,
-    });
   }
 
   private async markSoldOut(

@@ -351,7 +351,7 @@ export class MerchantEngagementService {
             country
             mobile_push_tokens_aggregate { aggregate { count } }
           }
-          business_payment_accounts(
+          payment_accounts(
             where: { provider: { _eq: "stripe" } }
             limit: 1
           ) { capability_status }
@@ -385,7 +385,7 @@ export class MerchantEngagementService {
     const nudge = resolvePaymentSetupNudge({
       isStripeRail,
       stripeVerified:
-        b.business_payment_accounts?.[0]?.capability_status === 'verified',
+        b.payment_accounts?.[0]?.capability_status === 'verified',
       locations,
     });
     return this.buildPaymentSetupCandidate(b, locations, nudge, isStripeRail);

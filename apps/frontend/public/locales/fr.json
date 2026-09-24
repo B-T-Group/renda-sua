@@ -3970,11 +3970,15 @@
       "soldOutToday": "Épuisé pour aujourd'hui",
       "onTheMenu": "Au menu aujourd'hui",
       "soldOutHelp": "En désactivant, le plat est masqué pour le reste de la journée. Il revient automatiquement le jour suivant où vous le servez.",
+      "soldOutTitle": "Ces plats sont-ils encore servis ?",
       "remainingTitle": "Combien de portions reste-t-il ?",
       "remainingHelp": "Facultatif. Utile uniquement si cette commande change ce que vous pouvez encore vendre aujourd'hui.",
       "remainingLabel": "Portions restantes après cette commande",
       "lastOne": "C'était la dernière",
-      "lastOneHelp": "Marque le plat comme épuisé pour le reste de la journée."
+      "lastOneHelp": "Marque le plat comme épuisé pour le reste de la journée.",
+      "stockNotTracked": "Le stock n'est pas suivi pour les plats cuisinés. Désactivez le plat à cet emplacement lorsqu'il n'est plus disponible.",
+      "locationDescription": "Gérez où ce plat est servi. Le stock n'est pas suivi — désactivez un emplacement lorsque le plat n'est plus disponible.",
+      "updateLocation": "Mettre à jour l'emplacement"
     }
   },
   "client": {

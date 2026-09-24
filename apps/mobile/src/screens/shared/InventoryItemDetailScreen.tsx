@@ -18,7 +18,7 @@ import { InventoryItemDetailViewsRow } from '../../components/browse/InventoryIt
 import { StatusPill } from '../../components/common/StatusPill';
 import { FoodAvailabilityChip } from '../../components/food/FoodAvailabilityChip';
 import { FoodScheduleList } from '../../components/food/FoodScheduleList';
-import { isFoodOrderBlocked } from '../../utils/foodAvailability';
+import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
 import { TrustBadge } from '../../components/common/TrustBadge';
 import { EntityRatingsSection } from '../../components/rating/EntityRatingsSection';
 import { StarRatingDisplay } from '../../components/rating/StarRatingDisplay';
@@ -479,15 +479,16 @@ function InventoryItemDetailScreen() {
   };
 
   const qty = item.computed_available_quantity;
-  const outOfStock = qty <= 0;
+  const isFood = isFoodCatalogItem(item);
+  const outOfStock = isFood ? false : qty <= 0;
   const foodBlocked = isFoodOrderBlocked(item.food_availability);
   const orderBlocked = outOfStock || foodBlocked;
   const variantSelectionReady = dbVariants.length === 0 || !!variantId;
   const acceptsOrders = merchantCanAcceptOrders(loc.business);
   const openingSoon = isOpeningSoonMerchant(loc.business);
   const paymentsEnabled = item.payments_enabled !== false;
-  const showLowStock = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
-  const showInStock = qty > LOW_STOCK_THRESHOLD;
+  const showLowStock = !isFood && qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+  const showInStock = !isFood && qty > LOW_STOCK_THRESHOLD;
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>

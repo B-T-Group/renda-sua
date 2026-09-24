@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BusinessItemsAccessService } from '../business-items/business-items-access.service';
+import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { CommerceConnectionService } from './commerce-connection.service';
 import {
@@ -147,6 +148,9 @@ export class CommerceInventorySyncService {
       params.variantId
     );
     if (!inventory) return false;
+    if (cookedFoodIgnoresStock(inventory.categoryName)) {
+      return false;
+    }
 
     const reserved = inventory.reserved_quantity || 0;
     const targetQuantity = Math.max(0, params.available) + reserved;
@@ -289,7 +293,12 @@ export class CommerceInventorySyncService {
   private async findInventoryForVariant(
     businessLocationId: string,
     variantId: string
-  ): Promise<{ id: string; quantity: number; reserved_quantity: number } | null> {
+  ): Promise<{
+    id: string;
+    quantity: number;
+    reserved_quantity: number;
+    categoryName?: string | null;
+  } | null> {
     const q = `
       query ($locationId: uuid!, $variantId: uuid!) {
         business_inventory(
@@ -300,6 +309,11 @@ export class CommerceInventorySyncService {
           limit: 1
         ) {
           id quantity reserved_quantity
+          item {
+            item_sub_category {
+              item_category { name }
+            }
+          }
         }
       }
     `;
@@ -308,9 +322,21 @@ export class CommerceInventorySyncService {
         id: string;
         quantity: number;
         reserved_quantity: number;
+        item?: {
+          item_sub_category?: {
+            item_category?: { name?: string | null } | null;
+          } | null;
+        } | null;
       }>;
     }>(q, { locationId: businessLocationId, variantId });
-    return res.business_inventory[0] ?? null;
+    const row = res.business_inventory[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      quantity: row.quantity,
+      reserved_quantity: row.reserved_quantity,
+      categoryName: row.item?.item_sub_category?.item_category?.name,
+    };
   }
 
   private async getInventoryWithContext(inventoryId: string): Promise<{

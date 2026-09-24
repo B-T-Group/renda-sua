@@ -76,6 +76,7 @@ import {
   fulfillmentNeedsAddress,
   fulfillmentNeedsWindow,
 } from '../../utils/fulfillmentMethod';
+import { isFoodCatalogItem } from '../../utils/foodAvailability';
 import {
   effectiveVariantUnitPrice,
   orderedVariantImages,
@@ -373,14 +374,30 @@ export default function PlaceOrderScreen() {
   useEffect(() => {
     if (!item) return;
     const minQ = Math.max(1, item.item.min_order_quantity ?? 1);
-    const cap = item.item.max_order_quantity ?? item.computed_available_quantity;
-    const maxQ = Math.max(minQ, Math.min(cap, item.computed_available_quantity));
+    const ignoresStock = isFoodCatalogItem(item);
+    const maxQ = ignoresStock
+      ? Math.max(minQ, item.item.max_order_quantity ?? 99)
+      : Math.max(
+          minQ,
+          Math.min(
+            item.item.max_order_quantity ?? item.computed_available_quantity,
+            item.computed_available_quantity
+          )
+        );
     setQuantity((q) => Math.min(Math.max(q, minQ), maxQ));
   }, [item]);
 
   const minQ = item ? Math.max(1, item.item.min_order_quantity ?? 1) : 1;
   const maxQ = item
-    ? Math.max(minQ, Math.min(item.item.max_order_quantity ?? item.computed_available_quantity, item.computed_available_quantity))
+    ? isFoodCatalogItem(item)
+      ? Math.max(minQ, item.item.max_order_quantity ?? 99)
+      : Math.max(
+          minQ,
+          Math.min(
+            item.item.max_order_quantity ?? item.computed_available_quantity,
+            item.computed_available_quantity
+          )
+        )
     : 1;
 
   const wizardPhase = useMemo((): 'loading' | 'address' | 'checkout' => {

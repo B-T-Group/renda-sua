@@ -47,6 +47,7 @@ interface LocationCardProps {
   currency: string;
   canSuperUserActions: boolean;
   showFoodHours?: boolean;
+  isFood?: boolean;
   onUpdateInventory: (inventory: AnyInventory) => void;
   onManageDeals: (inventory: AnyInventory) => void;
   onRemove: (inventory: ItemBusinessInventory) => void;
@@ -58,19 +59,25 @@ const LocationCard: React.FC<LocationCardProps> = ({
   currency,
   canSuperUserActions,
   showFoodHours = false,
+  isFood = false,
   onUpdateInventory,
   onManageDeals,
   onRemove,
 }) => {
   const { t } = useTranslation();
   const stockStatus = getStockStatus(inventory);
+  const borderColor = isFood
+    ? inventory.is_active === false
+      ? 'error'
+      : 'success'
+    : stockStatus.color;
 
   return (
     <Card
       variant="outlined"
       sx={{
         height: '100%',
-        borderColor: `${stockStatus.color}.main`,
+        borderColor: `${borderColor}.main`,
         borderWidth: 2,
         transition: 'all 0.3s ease',
         '&:hover': { boxShadow: 4, transform: 'translateY(-2px)' },
@@ -81,59 +88,83 @@ const LocationCard: React.FC<LocationCardProps> = ({
           <Typography variant="h6" fontWeight="bold" gutterBottom>
             {inventory.business_location?.name}
           </Typography>
-          <Chip
-            label={t(`business.inventory.status.${stockStatus.label}`)}
-            size="small"
-            color={stockStatus.color}
-            sx={{ fontWeight: 600 }}
-          />
+          {isFood ? (
+            <Chip
+              label={
+                inventory.is_active === false
+                  ? t('business.inventory.status.unavailable', 'Unavailable')
+                  : t('business.inventory.status.available', 'Available')
+              }
+              size="small"
+              color={inventory.is_active === false ? 'error' : 'success'}
+              sx={{ fontWeight: 600 }}
+            />
+          ) : (
+            <Chip
+              label={t(`business.inventory.status.${stockStatus.label}`)}
+              size="small"
+              color={stockStatus.color}
+              sx={{ fontWeight: 600 }}
+            />
+          )}
         </Box>
 
-        <Box sx={{ mb: 2 }}>
-          <Box
-            sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}
-          >
-            <Typography variant="caption" color="text.secondary">
-              {t('business.inventory.stockLevel', 'Stock Level')}
-            </Typography>
-            <Typography variant="caption" fontWeight="medium">
-              {Math.round(stockStatus.percentage)}%
-            </Typography>
-          </Box>
-          <LinearProgress
-            variant="determinate"
-            value={stockStatus.percentage}
-            color={stockStatus.color}
-            sx={{ height: 8, borderRadius: 1 }}
-          />
-        </Box>
+        {!isFood ? (
+          <>
+            <Box sx={{ mb: 2 }}>
+              <Box
+                sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  {t('business.inventory.stockLevel', 'Stock Level')}
+                </Typography>
+                <Typography variant="caption" fontWeight="medium">
+                  {Math.round(stockStatus.percentage)}%
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={stockStatus.percentage}
+                color={stockStatus.color}
+                sx={{ height: 8, borderRadius: 1 }}
+              />
+            </Box>
 
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid size={4}>
-            <Typography variant="caption" color="text.secondary">
-              {t('business.inventory.available', 'Available')}
-            </Typography>
-            <Typography variant="h5" fontWeight="bold" color="success.main">
-              {inventory.computed_available_quantity}
-            </Typography>
-          </Grid>
-          <Grid size={4}>
-            <Typography variant="caption" color="text.secondary">
-              {t('business.inventory.reserved', 'Reserved')}
-            </Typography>
-            <Typography variant="h5" fontWeight="bold" color="warning.main">
-              {inventory.reserved_quantity}
-            </Typography>
-          </Grid>
-          <Grid size={4}>
-            <Typography variant="caption" color="text.secondary">
-              {t('business.inventory.total', 'Total')}
-            </Typography>
-            <Typography variant="h5" fontWeight="bold">
-              {inventory.quantity}
-            </Typography>
-          </Grid>
-        </Grid>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid size={4}>
+                <Typography variant="caption" color="text.secondary">
+                  {t('business.inventory.available', 'Available')}
+                </Typography>
+                <Typography variant="h5" fontWeight="bold" color="success.main">
+                  {inventory.computed_available_quantity}
+                </Typography>
+              </Grid>
+              <Grid size={4}>
+                <Typography variant="caption" color="text.secondary">
+                  {t('business.inventory.reserved', 'Reserved')}
+                </Typography>
+                <Typography variant="h5" fontWeight="bold" color="warning.main">
+                  {inventory.reserved_quantity}
+                </Typography>
+              </Grid>
+              <Grid size={4}>
+                <Typography variant="caption" color="text.secondary">
+                  {t('business.inventory.total', 'Total')}
+                </Typography>
+                <Typography variant="h5" fontWeight="bold">
+                  {inventory.quantity}
+                </Typography>
+              </Grid>
+            </Grid>
+          </>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'business.food.stockNotTracked',
+              'Stock is not tracked for cooked food. Turn the dish off at this location when it is no longer available.'
+            )}
+          </Typography>
+        )}
 
         <Divider sx={{ my: 2 }} />
 
@@ -146,14 +177,16 @@ const LocationCard: React.FC<LocationCardProps> = ({
               {formatItemCurrency(inventory.selling_price, currency)}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Typography variant="body2" color="text.secondary">
-              {t('business.inventory.reorderPoint', 'Reorder Point')}:
-            </Typography>
-            <Typography variant="body2" fontWeight="600">
-              {inventory.reorder_point}
-            </Typography>
-          </Box>
+          {!isFood ? (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="text.secondary">
+                {t('business.inventory.reorderPoint', 'Reorder Point')}:
+              </Typography>
+              <Typography variant="body2" fontWeight="600">
+                {inventory.reorder_point}
+              </Typography>
+            </Box>
+          ) : null}
         </Stack>
 
         {showFoodHours && inventory.business_location_id ? (
@@ -174,7 +207,9 @@ const LocationCard: React.FC<LocationCardProps> = ({
               startIcon={<InventoryIcon />}
               sx={{ flex: 1 }}
             >
-              {t('business.inventory.updateStock', 'Update Stock')}
+              {isFood
+                ? t('business.food.updateLocation', 'Update location')
+                : t('business.inventory.updateStock', 'Update Stock')}
             </Button>
             {canSuperUserActions && (
               <Button
@@ -292,10 +327,15 @@ const ItemInventoryTab: React.FC<ItemInventoryTabProps> = ({
 
       <Box sx={{ p: 3 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          {t(
-            'business.inventory.locationDescription',
-            'Manage inventory levels for each business location. Customers can only order from locations with available stock.'
-          )}
+          {isFood
+            ? t(
+                'business.food.locationDescription',
+                'Manage where this dish is served. Stock is not tracked — turn a location off when the dish is unavailable.'
+              )
+            : t(
+                'business.inventory.locationDescription',
+                'Manage inventory levels for each business location. Customers can only order from locations with available stock.'
+              )}
         </Typography>
 
         {inventories.length > 0 ? (
@@ -311,6 +351,7 @@ const ItemInventoryTab: React.FC<ItemInventoryTabProps> = ({
                   currency={item.currency}
                   canSuperUserActions={canSuperUserActions}
                   showFoodHours={foodHoursInventoryIds.has(inventory.id)}
+                  isFood={isFood}
                   onUpdateInventory={onUpdateInventory}
                   onManageDeals={onManageDeals}
                   onRemove={setToRemove}

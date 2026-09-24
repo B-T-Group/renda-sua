@@ -29,7 +29,7 @@ import { CatalogOptionChips } from './CatalogOptionChips';
 import { ItemLikeButton } from './ItemLikeButton';
 import { FoodAvailabilityChip } from '../food/FoodAvailabilityChip';
 import { LOW_STOCK_THRESHOLD } from '../../constants/stock';
-import { isFoodOrderBlocked } from '../../utils/foodAvailability';
+import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -156,13 +156,15 @@ function InventoryCatalogCardInner({
   }, [hasDeal, item.discounted_price, item.original_price]);
   const showLowStock =
     !item.food_availability &&
+    !isFoodCatalogItem(item) &&
     item.computed_available_quantity > 0 &&
     item.computed_available_quantity <= LOW_STOCK_THRESHOLD;
   const loc = item.business_location;
   const acceptsOrders = merchantCanAcceptOrders(loc.business);
   const openingSoon = isOpeningSoonMerchant(loc.business);
   const paymentsEnabled = item.payments_enabled !== false;
-  const outOfStock = item.computed_available_quantity <= 0;
+  const outOfStock =
+    !isFoodCatalogItem(item) && item.computed_available_quantity <= 0;
   const foodBlocked = isFoodOrderBlocked(item.food_availability);
   const buyDisabled =
     outOfStock || foodBlocked || !acceptsOrders || !paymentsEnabled;

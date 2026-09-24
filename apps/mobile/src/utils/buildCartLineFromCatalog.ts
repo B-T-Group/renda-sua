@@ -15,6 +15,10 @@ import {
   SHOPPER_BASE_VARIANT_ID,
   toCartVariantId,
 } from './shopperVariantSelection';
+import { isFoodCatalogItem } from './foodAvailability';
+
+/** Soft upper bound when cooked food has no merchant max_order_quantity. */
+const FOOD_ORDER_SOFT_MAX = 99;
 
 export function catalogRequiresVariantSelection(
   item: CatalogInventoryItem
@@ -115,8 +119,17 @@ export function buildCartLineFromCatalog(
       : undefined;
   const variantImage = primaryVariantImageUrl(variant);
   const minQ = Math.max(1, item.item.min_order_quantity ?? 1);
-  const cap = item.item.max_order_quantity ?? item.computed_available_quantity;
-  const maxQ = Math.max(minQ, Math.min(cap, item.computed_available_quantity));
+  const ignoresStock = isFoodCatalogItem(item);
+  const merchantMax = item.item.max_order_quantity;
+  const maxQ = ignoresStock
+    ? Math.max(minQ, merchantMax ?? FOOD_ORDER_SOFT_MAX)
+    : Math.max(
+        minQ,
+        Math.min(
+          merchantMax ?? item.computed_available_quantity,
+          item.computed_available_quantity
+        )
+      );
   const qty = Math.min(Math.max(quantity, minQ), maxQ);
 
   const rawCountry = item.business_location?.address?.country;

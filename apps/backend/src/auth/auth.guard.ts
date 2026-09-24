@@ -89,9 +89,19 @@ export class AuthGuard implements CanActivate {
       request.user = payload;
       return true;
     } catch (error) {
-      this.logger.error('Token verification failed', (error as Error).message);
+      this.logTokenVerificationFailure(error);
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  private logTokenVerificationFailure(error: unknown): void {
+    const message = (error as Error)?.message || String(error);
+    const name = (error as { name?: string })?.name || '';
+    if (name === 'TokenExpiredError' || /jwt expired/i.test(message)) {
+      this.logger.warn('Token verification failed', message);
+      return;
+    }
+    this.logger.error('Token verification failed', message);
   }
 
   private stripAuthorizationHeader(request: Request): void {

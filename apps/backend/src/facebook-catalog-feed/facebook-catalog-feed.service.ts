@@ -52,6 +52,7 @@ const FEED_INVENTORY_GQL = `
         item_sub_category {
           google_product_category
           fb_product_category
+          item_category { name }
           google_product_category_row { id name_en name_fr }
           fb_product_category_row { id name_en name_fr }
         }
