@@ -8145,13 +8145,12 @@ export class OrdersService {
   private async finalizePayAtDeliveryPaymentAndComplete(
     order: Orders
   ): Promise<void> {
-    const totalDeliveryFees = this.orderDeliveryFeesTotal(order);
-    const subtotal = this.orderSubtotal(order);
+    const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
     await this.updateOrderHold(orderHold.id, {
-      client_hold_amount: subtotal,
-      delivery_fees: totalDeliveryFees,
+      client_hold_amount: itemAmount,
+      delivery_fees: deliveryAmount,
     });
 
     // Mark order as paid and complete it (settlement is idempotent)
@@ -8383,12 +8382,11 @@ export class OrdersService {
     accountId: string
   ): Promise<void> {
     const wasAuthorized = (order as any).payment_status === 'authorized';
-    const subtotal = this.orderSubtotal(order);
-    const totalDeliveryFees = this.orderDeliveryFeesTotal(order);
+    const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
 
     await this.accountsService.registerTransaction({
       accountId,
-      amount: subtotal,
+      amount: itemAmount,
       transactionType: 'hold',
       memo: `Hold for order ${order.order_number}`,
       referenceId: order.id,
@@ -8396,7 +8394,7 @@ export class OrdersService {
 
     await this.accountsService.registerTransaction({
       accountId,
-      amount: totalDeliveryFees,
+      amount: deliveryAmount,
       transactionType: 'hold',
       memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
       referenceId: order.id,
@@ -8404,8 +8402,8 @@ export class OrdersService {
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
     await this.updateOrderHold(orderHold.id, {
-      client_hold_amount: subtotal,
-      delivery_fees: totalDeliveryFees,
+      client_hold_amount: itemAmount,
+      delivery_fees: deliveryAmount,
     });
 
     await this.markOrderPaidAfterPaymentFinalize(
@@ -12528,6 +12526,35 @@ export class OrdersService {
   /** Order subtotal for holds/settlement (never NaN). */
   private orderSubtotal(order: { subtotal?: number | null }): number {
     return this.finiteHoldNumeric(order.subtotal);
+  }
+
+  /**
+   * Client wallet holds/debits must match `total_amount` (post credit/discount),
+   * not raw merchandise subtotal. Credits are consumed separately at create.
+   */
+  private clientLedgerPortions(order: {
+    subtotal?: number | null;
+    total_amount?: number | string | null;
+    base_delivery_fee?: number | null;
+    per_km_delivery_fee?: number | null;
+  }): { itemAmount: number; deliveryAmount: number } {
+    const delivery = this.orderDeliveryFeesTotal(order);
+    const netDue = this.clientNetDue(order, this.orderSubtotal(order) + delivery);
+    const itemAmount = this.finiteHoldNumeric(Math.max(0, netDue - delivery));
+    return {
+      itemAmount,
+      deliveryAmount: this.finiteHoldNumeric(Math.max(0, netDue - itemAmount)),
+    };
+  }
+
+  private clientNetDue(
+    order: { total_amount?: number | string | null },
+    fallback: number
+  ): number {
+    if (order.total_amount == null || order.total_amount === '') {
+      return this.finiteHoldNumeric(fallback);
+    }
+    return this.finiteHoldNumeric(Number(order.total_amount));
   }
 
   /** Coerce hold/payment numerics; GraphQL numeric rejects null/NaN. */
