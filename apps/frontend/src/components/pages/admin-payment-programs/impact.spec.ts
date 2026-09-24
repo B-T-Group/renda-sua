@@ -17,6 +17,21 @@ describe('payment program impact', () => {
     expect(text).toContain('assigned to an agent');
   });
 
+  it('adds objectives when they are provided', () => {
+    const text = scheduleImpact(t, {
+      amount: '10000',
+      currency: 'XAF',
+      frequency: 'weekly',
+      locale: 'en',
+      objectives: {
+        targetAgentRecruitments: '5',
+        targetItemSalesAmount: '20000',
+      },
+    });
+    expect(text).toContain('Objectives: 5 agent recruitments and');
+    expect(text).toContain('in item sales');
+  });
+
   it('names the agent and the duration', () => {
     const text = scheduleImpact(t, {
       amount: '500',

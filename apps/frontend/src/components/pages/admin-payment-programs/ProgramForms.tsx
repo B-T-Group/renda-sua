@@ -7,6 +7,7 @@ import { advanceImpact, creditImpact, scheduleImpact } from './impact';
 import {
   EMPTY_OBJECTIVES,
   ObjectiveFields,
+  objectivesFromRow,
   objectivesPayload,
   type ObjectiveValues,
 } from './ObjectiveFields';
@@ -53,7 +54,14 @@ export function ScheduleForm({ onDone }: { onDone: (message: string) => Promise<
   const [days, setDays] = useState('');
   const [objectives, setObjectives] = useState<ObjectiveValues>(EMPTY_OBJECTIVES);
   const ready = Boolean(name.trim()) && Number(amount) > 0;
-  const impact = scheduleImpact(t, { amount, currency, frequency, days, locale: i18n.language });
+  const impact = scheduleImpact(t, {
+    amount,
+    currency,
+    frequency,
+    days,
+    locale: i18n.language,
+    objectives,
+  });
 
   async function create() {
     await api.post('/admin/payment-programs/schedules', {
@@ -321,6 +329,7 @@ function assignmentSentence(
     days: selected.default_duration_days ? String(selected.default_duration_days) : '',
     name,
     locale,
+    objectives: objectivesFromRow(selected),
   });
 }
 

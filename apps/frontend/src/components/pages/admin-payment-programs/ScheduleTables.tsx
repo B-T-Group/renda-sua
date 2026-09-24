@@ -14,7 +14,9 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
-import { moneyText } from './impact';
+import { AssignScheduleDialog } from './AssignDialog';
+import { ImpactCard } from './fields';
+import { moneyText, scheduleImpact } from './impact';
 import {
   ObjectiveFields,
   objectivesFromRow,
@@ -196,8 +198,17 @@ function ScheduleActions({
   api: { post: (url: string, body: unknown) => Promise<unknown> };
 }) {
   const { t } = useTranslation();
+  const [assigning, setAssigning] = useState(false);
   return (
     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+      {row.is_active && (
+        <Button size="small" onClick={() => setAssigning(true)}>
+          {t('admin.paymentPrograms.assign', 'Assign')}
+        </Button>
+      )}
+      {assigning && (
+        <AssignScheduleDialog schedule={row} onClose={() => setAssigning(false)} onDone={onChanged} />
+      )}
       <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
       {row.is_active ? (
         <Button size="small" color="warning" onClick={() => onDeactivate(row)}>
@@ -343,12 +354,20 @@ function ScheduleDialog({
   onClose: () => void;
   onSave: (body: Record<string, unknown>) => Promise<void>;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [name, setName] = useState(row.name);
   const [frequency, setFrequency] = useState(row.frequency);
   const [amount, setAmount] = useState(String(row.default_amount));
   const [days, setDays] = useState(row.default_duration_days ? String(row.default_duration_days) : '');
   const [objectives, setObjectives] = useState<ObjectiveValues>(objectivesFromRow(row));
+  const impact = scheduleImpact(t, {
+    amount,
+    currency: row.currency,
+    frequency,
+    days,
+    locale: i18n.language,
+    objectives,
+  });
   return (
     <Dialog open onClose={onClose} fullWidth>
       <DialogTitle>{t('admin.paymentPrograms.editSchedule', 'Edit schedule')}</DialogTitle>
@@ -364,6 +383,7 @@ function ScheduleDialog({
           <TextField label={t('admin.paymentPrograms.durationDays', 'Duration (days)')} value={days} onChange={(e) => setDays(e.target.value)} />
           <Typography variant="body2" color="text.secondary">{row.currency}</Typography>
           <ObjectiveFields values={objectives} onChange={setObjectives} currency={row.currency} />
+          <ImpactCard text={impact} />
         </Stack>
       </DialogContent>
       <DialogActions>

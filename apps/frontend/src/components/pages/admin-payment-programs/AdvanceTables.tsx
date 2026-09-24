@@ -13,6 +13,7 @@ import {
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
+import { AssignAdvanceDialog } from './AssignDialog';
 import { moneyText } from './impact';
 import { fromLocalInput, personName, ProgramTable, programRowSx, StatusChip, toLocalInput, useConfirm } from './shared';
 
@@ -125,35 +126,79 @@ function ProgramList({
           <TableCell>{moneyText(row.default_limit, row.currency, i18n.language)}</TableCell>
           <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
           <TableCell align="right">
-            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-              <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
-              {row.is_active ? (
-                <Button
-                  size="small"
-                  color="warning"
-                  onClick={() =>
-                    ask({
-                      title: t('admin.paymentPrograms.deactivateProgramTitle', 'Deactivate this program?'),
-                      message: t(
-                        'admin.paymentPrograms.deactivateProgramMessage',
-                        'New facilities cannot be opened. Existing lines stay open until you close them.'
-                      ),
-                      run: () => setActive(row.id, false),
-                    })
-                  }
-                >
-                  {t('admin.paymentPrograms.deactivate', 'Deactivate')}
-                </Button>
-              ) : (
-                <Button size="small" onClick={() => void setActive(row.id, true)}>
-                  {t('admin.paymentPrograms.reactivate', 'Reactivate')}
-                </Button>
-              )}
-            </Stack>
+            <ProgramActions row={row} onEdit={onEdit} onChanged={onChanged} onActive={setActive} ask={ask} />
           </TableCell>
         </TableRow>
       ))}
     </ProgramTable>
+  );
+}
+
+function ProgramActions({
+  row,
+  onEdit,
+  onChanged,
+  onActive,
+  ask,
+}: {
+  row: Program;
+  onEdit: (row: Program) => void;
+  onChanged: (message: string) => Promise<void>;
+  onActive: (id: string, isActive: boolean) => Promise<void>;
+  ask: ReturnType<typeof useConfirm>['ask'];
+}) {
+  const { t } = useTranslation();
+  const [assigning, setAssigning] = useState(false);
+  return (
+    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+      {row.is_active && (
+        <Button size="small" onClick={() => setAssigning(true)}>
+          {t('admin.paymentPrograms.assign', 'Assign')}
+        </Button>
+      )}
+      {assigning && (
+        <AssignAdvanceDialog program={row} onClose={() => setAssigning(false)} onDone={onChanged} />
+      )}
+      <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
+      <ProgramActiveToggle row={row} onActive={onActive} ask={ask} />
+    </Stack>
+  );
+}
+
+function ProgramActiveToggle({
+  row,
+  onActive,
+  ask,
+}: {
+  row: Program;
+  onActive: (id: string, isActive: boolean) => Promise<void>;
+  ask: ReturnType<typeof useConfirm>['ask'];
+}) {
+  const { t } = useTranslation();
+  if (!row.is_active) {
+    return (
+      <Button size="small" onClick={() => void onActive(row.id, true)}>
+        {t('admin.paymentPrograms.reactivate', 'Reactivate')}
+      </Button>
+    );
+  }
+  return (
+    <Button
+      size="small"
+      color="warning"
+      onClick={() =>
+        ask({
+          title: t('admin.paymentPrograms.deactivateProgramTitle', 'Deactivate this program?'),
+          message: t(
+            'admin.paymentPrograms.deactivateProgramMessage',
+            'New facilities cannot be opened. Existing lines stay open until you close them.'
+          ),
+          run: () => onActive(row.id, false),
+        })
+      }
+    >
+      {t('admin.paymentPrograms.deactivate', 'Deactivate')}
+    </Button>
   );
 }
 
