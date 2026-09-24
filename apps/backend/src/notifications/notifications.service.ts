@@ -2149,6 +2149,55 @@ export class NotificationsService {
     }
   }
 
+  async notifySuperusersPaymentScheduleDecision(params: {
+    assignmentId: string;
+    scheduleName: string;
+    agentName: string;
+    decision: 'accepted' | 'rejected';
+    reason?: string | null;
+    note?: string | null;
+    path: string;
+  }): Promise<void> {
+    try {
+      const recipients = await this.listSuperuserRecipients();
+      const verb = params.decision === 'accepted' ? 'accepted' : 'rejected';
+      const title = `Payment plan ${verb}`;
+      const reasonBit = params.reason ? ` Reason: ${params.reason}.` : '';
+      const noteBit = params.note ? ` Note: ${params.note}` : '';
+      const body = `${params.agentName} ${verb} “${params.scheduleName}”.${reasonBit}${noteBit}`;
+      const safeName = escapeHtmlForEmail(params.agentName);
+      const safeSchedule = escapeHtmlForEmail(params.scheduleName);
+      const html = `
+        <p><strong>${safeName}</strong> ${verb} payment plan <strong>${safeSchedule}</strong>.</p>
+        ${params.reason ? `<p>Reason: ${escapeHtmlForEmail(params.reason)}</p>` : ''}
+        ${params.note ? `<p>Note: ${escapeHtmlForEmail(params.note)}</p>` : ''}
+        <p>Review in admin (<code>${escapeHtmlForEmail(params.path)}</code>).</p>
+      `;
+      for (const recipient of recipients) {
+        if (recipient.email) {
+          await this.sendSimpleLifecycleEmail({
+            to: recipient.email,
+            subject: title,
+            html,
+          });
+        }
+        await this.sendPaymentProgramNotice({
+          userId: recipient.userId,
+          title,
+          body,
+          messageType: 'PAYMENT_SCHEDULE_DECISION',
+          entityId: params.assignmentId,
+          path: params.path,
+          event: `wallet.schedule_${params.decision}`,
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `notifySuperusersPaymentScheduleDecision: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   private async insertPaymentProgramMessage(params: {
     userId: string;
     body: string;

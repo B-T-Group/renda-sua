@@ -1,10 +1,15 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { ScheduleFrequency } from './payment-schedule.periods';
+import { PaymentScheduleConsentService } from './payment-schedule-consent.service';
+import type { ScheduleObjectives } from './payment-schedule-progress.service';
 
 @Injectable()
 export class PaymentScheduleCatalogService {
-  constructor(private readonly hasura: HasuraSystemService) {}
+  constructor(
+    private readonly hasura: HasuraSystemService,
+    private readonly consent: PaymentScheduleConsentService
+  ) {}
 
   async createSchedule(input: CreateScheduleInput) {
     const result = await this.hasura.executeMutation(INSERT_SCHEDULE, {
@@ -15,6 +20,7 @@ export class PaymentScheduleCatalogService {
         default_amount: input.defaultAmount,
         default_duration_days: input.defaultDurationDays ?? null,
         created_by: input.createdBy ?? null,
+        ...objectivesToColumns(input),
       },
     });
     return result.insert_payment_schedules_one;
@@ -41,24 +47,39 @@ export class PaymentScheduleCatalogService {
 
   async assign(input: AssignInput) {
     const schedule = await this.requireSchedule(input.scheduleId);
-    await this.assertNoOtherActive(input.scheduleId, input.agentId, NIL_ID);
+    await this.assertNoOtherOpen(input.scheduleId, input.agentId, NIL_ID);
     const endsAt = input.endsAt ?? this.durationEnd(input.startsAt, schedule.default_duration_days);
     const result = await this.hasura.executeMutation(INSERT_ASSIGNMENT, {
       object: assignmentInsert(input, schedule, endsAt),
     });
-    return result.insert_payment_schedule_assignments_one;
+    const created = result.insert_payment_schedule_assignments_one;
+    if (created?.id) {
+      await this.consent.notifyAgentOfOffer(created.id);
+    }
+    return created;
   }
 
-  async updateAssignment(id: string, input: { amount?: number; endsAt?: string | null }) {
+  async updateAssignment(
+    id: string,
+    input: {
+      amount?: number;
+      endsAt?: string | null;
+    } & ScheduleObjectives
+  ) {
     const row = await this.assignmentById(id);
-    if (!row || !['active', 'paused'].includes(row.status)) {
-      throw new BadRequestException('Assignment amount can only change while active or paused');
+    if (!row) throw new BadRequestException('Assignment not found');
+    if (['active', 'paused'].includes(row.status)) {
+      return this.updateActiveTerms(id, input);
     }
-    const result = await this.hasura.executeMutation(UPDATE_ASSIGNMENT, {
-      id,
-      set: assignmentTerms(input),
-    });
-    return result.update_payment_schedule_assignments_by_pk;
+    if (
+      row.status === 'pending_acceptance' &&
+      ['pending', 'deferred'].includes(row.decision)
+    ) {
+      return this.updateOpenOffer(id, input);
+    }
+    throw new BadRequestException(
+      'Assignment can only change while active, paused, or awaiting a response'
+    );
   }
 
   async setAssignmentStatus(id: string, status: string) {
@@ -87,11 +108,41 @@ export class PaymentScheduleCatalogService {
     return (result.agents ?? []).map(mapAgentOption);
   }
 
+  private async updateActiveTerms(
+    id: string,
+    input: { amount?: number; endsAt?: string | null }
+  ) {
+    const result = await this.hasura.executeMutation(UPDATE_ASSIGNMENT, {
+      id,
+      set: assignmentTerms(input),
+    });
+    return result.update_payment_schedule_assignments_by_pk;
+  }
+
+  private async updateOpenOffer(
+    id: string,
+    input: {
+      amount?: number;
+      endsAt?: string | null;
+    } & ScheduleObjectives
+  ) {
+    const set = {
+      ...assignmentTerms(input),
+      ...objectivesToColumns(input),
+    };
+    const result = await this.hasura.executeMutation(UPDATE_ASSIGNMENT, {
+      id,
+      set,
+    });
+    await this.consent.notifyAgentOfOffer(id);
+    return result.update_payment_schedule_assignments_by_pk;
+  }
+
   private async requireSchedule(id: string) {
     const result = await this.hasura.executeQuery(SCHEDULE_BY_ID, { id });
     const schedule = result.payment_schedules_by_pk;
     if (!schedule?.is_active) throw new BadRequestException('Payment schedule is not active');
-    return schedule;
+    return schedule as ScheduleRow;
   }
 
   private durationEnd(startsAt: string, days?: number | null): string | null {
@@ -103,7 +154,7 @@ export class PaymentScheduleCatalogService {
 
   private async assignmentById(id: string) {
     const result = await this.hasura.executeQuery(ASSIGNMENT_BY_ID, { id });
-    return result.payment_schedule_assignments_by_pk;
+    return result.payment_schedule_assignments_by_pk as AssignmentRow | null;
   }
 
   private async assertCanResume(row: AssignmentRow) {
@@ -111,17 +162,19 @@ export class PaymentScheduleCatalogService {
     if (!canResumeAssignment(!!row.schedule?.is_active, endsAt)) {
       throw new BadRequestException('Assignment cannot resume');
     }
-    await this.assertNoOtherActive(row.schedule_id, row.agent_id, row.id);
+    await this.assertNoOtherOpen(row.schedule_id, row.agent_id, row.id);
   }
 
-  private async assertNoOtherActive(scheduleId: string, agentId: string, exceptId: string) {
-    const result = await this.hasura.executeQuery(ACTIVE_ASSIGNMENT, {
+  private async assertNoOtherOpen(scheduleId: string, agentId: string, exceptId: string) {
+    const result = await this.hasura.executeQuery(OPEN_ASSIGNMENT, {
       scheduleId,
       agentId,
       exceptId,
     });
     if (result.payment_schedule_assignments?.length) {
-      throw new BadRequestException('This agent already has an active assignment for this schedule');
+      throw new BadRequestException(
+        'This agent already has an open assignment for this schedule'
+      );
     }
   }
 }
@@ -145,18 +198,51 @@ export function canTransitionAssignment(from: string, to: string): boolean {
   return false;
 }
 
+export function objectivesToColumns(input: ScheduleObjectives) {
+  const set: Record<string, number | null> = {};
+  if (Object.prototype.hasOwnProperty.call(input, 'targetAgentRecruitments')) {
+    set.target_agent_recruitments = nullableInt(input.targetAgentRecruitments);
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'targetClientSignups')) {
+    set.target_client_signups = nullableInt(input.targetClientSignups);
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'targetMerchantRecruitments')) {
+    set.target_merchant_recruitments = nullableInt(
+      input.targetMerchantRecruitments
+    );
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'targetItemSalesAmount')) {
+    set.target_item_sales_amount = nullableAmount(input.targetItemSalesAmount);
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'targetRentalAmount')) {
+    set.target_rental_amount = nullableAmount(input.targetRentalAmount);
+  }
+  return set;
+}
+
+function nullableInt(value?: number | null) {
+  if (value == null || value <= 0) return null;
+  return Math.floor(value);
+}
+
+function nullableAmount(value?: number | null) {
+  if (value == null || value <= 0) return null;
+  return value;
+}
+
 function schedulePatch(input: UpdateScheduleInput) {
   return {
     name: input.name,
     frequency: input.frequency,
     default_amount: input.defaultAmount,
     default_duration_days: input.defaultDurationDays ?? null,
+    ...objectivesToColumns(input),
   };
 }
 
 function assignmentInsert(
   input: AssignInput,
-  schedule: { currency: string; default_amount: number },
+  schedule: ScheduleRow,
   endsAt: string | null
 ) {
   return {
@@ -166,7 +252,14 @@ function assignmentInsert(
     currency: schedule.currency,
     starts_at: input.startsAt,
     ends_at: endsAt,
+    status: 'pending_acceptance',
+    decision: 'pending',
     created_by: input.createdBy ?? null,
+    target_agent_recruitments: schedule.target_agent_recruitments,
+    target_client_signups: schedule.target_client_signups,
+    target_merchant_recruitments: schedule.target_merchant_recruitments,
+    target_item_sales_amount: schedule.target_item_sales_amount,
+    target_rental_amount: schedule.target_rental_amount,
   };
 }
 
@@ -177,7 +270,7 @@ function assignmentTerms(input: { amount?: number; endsAt?: string | null }) {
   return set;
 }
 
-export interface UpdateScheduleInput {
+export interface UpdateScheduleInput extends ScheduleObjectives {
   name: string;
   frequency: ScheduleFrequency;
   defaultAmount: number;
@@ -187,13 +280,27 @@ export interface UpdateScheduleInput {
 interface AssignmentRow {
   id: string;
   status: string;
+  decision: string;
   schedule_id: string;
   agent_id: string;
   ends_at?: string | null;
   schedule?: { is_active?: boolean };
 }
 
-export interface CreateScheduleInput {
+interface ScheduleRow {
+  id: string;
+  is_active: boolean;
+  currency: string;
+  default_amount: number;
+  default_duration_days?: number | null;
+  target_agent_recruitments?: number | null;
+  target_client_signups?: number | null;
+  target_merchant_recruitments?: number | null;
+  target_item_sales_amount?: number | null;
+  target_rental_amount?: number | null;
+}
+
+export interface CreateScheduleInput extends ScheduleObjectives {
   name: string;
   frequency: ScheduleFrequency;
   currency: string;
@@ -211,10 +318,16 @@ interface AssignInput {
   createdBy?: string | null;
 }
 
+const OBJECTIVE_FIELDS = `
+  target_agent_recruitments target_client_signups target_merchant_recruitments
+  target_item_sales_amount target_rental_amount
+`;
+
 const INSERT_SCHEDULE = `
   mutation InsertSchedule($object: payment_schedules_insert_input!) {
     insert_payment_schedules_one(object: $object) {
       id name frequency currency default_amount default_duration_days
+      ${OBJECTIVE_FIELDS}
     }
   }
 `;
@@ -223,8 +336,11 @@ const LIST_SCHEDULES = `
   query ListSchedules {
     payment_schedules(order_by: { created_at: desc }) {
       id name frequency currency default_amount default_duration_days is_active created_at
+      ${OBJECTIVE_FIELDS}
       assignments(order_by: { created_at: desc }) {
-        id agent_id amount currency starts_at ends_at status
+        id agent_id amount currency starts_at ends_at status decision
+        accepted_at reject_reason reject_note
+        ${OBJECTIVE_FIELDS}
         agent { agent_code user { first_name last_name email } }
       }
     }
@@ -235,6 +351,7 @@ const SCHEDULE_BY_ID = `
   query ScheduleById($id: uuid!) {
     payment_schedules_by_pk(id: $id) {
       id is_active currency default_amount default_duration_days
+      ${OBJECTIVE_FIELDS}
     }
   }
 `;
@@ -261,7 +378,7 @@ const DEACTIVATE_SCHEDULE = `
   mutation DeactivateSchedule($id: uuid!) {
     update_payment_schedules_by_pk(pk_columns: { id: $id }, _set: { is_active: false }) { id is_active }
     update_payment_schedule_assignments(
-      where: { schedule_id: { _eq: $id }, status: { _in: [active, paused] } }
+      where: { schedule_id: { _eq: $id }, status: { _in: [active, paused, pending_acceptance] } }
       _set: { status: ended }
     ) { affected_rows }
   }
@@ -276,18 +393,18 @@ const REACTIVATE_SCHEDULE = `
 const ASSIGNMENT_BY_ID = `
   query AssignmentById($id: uuid!) {
     payment_schedule_assignments_by_pk(id: $id) {
-      id status schedule_id agent_id ends_at
+      id status decision schedule_id agent_id ends_at
       schedule { is_active }
     }
   }
 `;
 
-const ACTIVE_ASSIGNMENT = `
-  query ActiveAssignment($scheduleId: uuid!, $agentId: uuid!, $exceptId: uuid!) {
+const OPEN_ASSIGNMENT = `
+  query OpenAssignment($scheduleId: uuid!, $agentId: uuid!, $exceptId: uuid!) {
     payment_schedule_assignments(where: {
       schedule_id: { _eq: $scheduleId }
       agent_id: { _eq: $agentId }
-      status: { _eq: active }
+      status: { _in: [active, pending_acceptance] }
       id: { _neq: $exceptId }
     }, limit: 1) { id }
   }
@@ -295,7 +412,10 @@ const ACTIVE_ASSIGNMENT = `
 
 const UPDATE_ASSIGNMENT = `
   mutation UpdateAssignment($id: uuid!, $set: payment_schedule_assignments_set_input!) {
-    update_payment_schedule_assignments_by_pk(pk_columns: { id: $id }, _set: $set) { id amount ends_at }
+    update_payment_schedule_assignments_by_pk(pk_columns: { id: $id }, _set: $set) {
+      id amount ends_at
+      ${OBJECTIVE_FIELDS}
+    }
   }
 `;
 
@@ -305,7 +425,9 @@ const LIST_FOR_USER = `
       where: { agent: { user_id: { _eq: $userId } } }
       order_by: { created_at: desc }
     ) {
-      id amount currency starts_at ends_at status
+      id amount currency starts_at ends_at status decision accepted_at
+      reject_reason reject_note
+      ${OBJECTIVE_FIELDS}
       schedule { name frequency }
       runs(order_by: { period_start: desc }, limit: 12) {
         id period_start period_end amount status failure_reason created_at

@@ -16,6 +16,13 @@ array_relationships:
         table:
           name: payment_schedule_runs
           schema: public
+  - name: decisions
+    using:
+      foreign_key_constraint_on:
+        column: assignment_id
+        table:
+          name: payment_schedule_assignment_decisions
+          schema: public
 select_permissions:
   - role: agent
     permission:
@@ -28,6 +35,15 @@ select_permissions:
         - starts_at
         - ends_at
         - status
+        - decision
+        - accepted_at
+        - reject_reason
+        - reject_note
+        - target_agent_recruitments
+        - target_client_signups
+        - target_merchant_recruitments
+        - target_item_sales_amount
+        - target_rental_amount
         - created_at
         - updated_at
       filter:

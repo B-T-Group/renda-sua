@@ -4887,7 +4887,32 @@
     },
     "schedules": {
       "title": "Payment schedules",
-      "empty": "No payment schedules."
+      "empty": "No payment schedules.",
+      "objectives": "Objectives",
+      "noObjectives": "This plan has no attached objectives.",
+      "salesCompletion": "Sales completion",
+      "progressAfterAccept": "Live progress starts after you accept.",
+      "agentRecruitments": "Agent recruitments",
+      "clientSignups": "Client signups",
+      "merchantRecruitments": "Merchant recruitments",
+      "itemSales": "Item sales",
+      "rentals": "Rentals",
+      "accept": "Accept",
+      "defer": "Decide later",
+      "reject": "Reject",
+      "rejectReason": "Reject reason",
+      "rejectNote": "Tell us more",
+      "accepted": "Payment plan accepted",
+      "deferred": "You can decide later",
+      "rejected": "Payment plan rejected",
+      "actionFailed": "Action failed",
+      "needsResponse": "Needs your response",
+      "reasons": {
+        "too_aggressive": "Too aggressive",
+        "not_ready_now": "Not ready to accept now",
+        "targets_unclear": "Targets are unclear",
+        "other": "Other"
+      }
     },
     "walletHub": {
       "title": "Wallet programs",
@@ -6335,6 +6360,10 @@
       "activeOrders": {
         "title": "Active deliveries",
         "subtitle": "{{count}} delivery(ies) in progress."
+      },
+      "paymentPlanPending": {
+        "title": "Payment plan awaiting response",
+        "subtitle": "Review and accept, defer, or reject this payment plan."
       }
     },
     "client": {

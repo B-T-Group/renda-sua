@@ -29,6 +29,8 @@ const TRANSIENT_MESSAGE_PATTERNS = [
 
 const RETRYABLE_HTTP_STATUSES = new Set([502, 503, 504]);
 
+export const DEFAULT_HASURA_RETRY_DELAY_MS = 400;
+
 export const HASURA_UNAVAILABLE_MESSAGE =
   'Temporarily unable to reach the data service';
 
@@ -119,7 +121,7 @@ export async function requestHasuraWithRetry<T>(
   options?: { maxAttempts?: number; delayMs?: number }
 ): Promise<T> {
   const maxAttempts = options?.maxAttempts ?? 3;
-  const delayMs = options?.delayMs ?? 100;
+  const delayMs = options?.delayMs ?? DEFAULT_HASURA_RETRY_DELAY_MS;
   return retryHasuraAttempt(request, logger, maxAttempts, delayMs, 1);
 }
 

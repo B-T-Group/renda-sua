@@ -112,6 +112,7 @@
 - "!include public_partners.yaml"
 - "!include public_payment_schedules.yaml"
 - "!include public_payment_schedule_assignments.yaml"
+- "!include public_payment_schedule_assignment_decisions.yaml"
 - "!include public_payment_schedule_runs.yaml"
 - "!include public_cash_advance_programs.yaml"
 - "!include public_cash_advance_facilities.yaml"

@@ -6,7 +6,9 @@ import { PartnerBusinessesService } from './partner-businesses.service';
 import { PaymentProgramsAdminController } from './payment-programs-admin.controller';
 import { PaymentProgramsUserController } from './payment-programs-user.controller';
 import { PaymentScheduleCatalogService } from './payment-schedule-catalog.service';
+import { PaymentScheduleConsentService } from './payment-schedule-consent.service';
 import { PaymentScheduleInternalController } from './payment-schedule-internal.controller';
+import { PaymentScheduleProgressService } from './payment-schedule-progress.service';
 import { PaymentScheduleRunnerService } from './payment-schedule-runner.service';
 import { CreditCampaignAdminController } from './credit-campaign-admin.controller';
 import { CreditCampaignInternalController } from './credit-campaign-internal.controller';
@@ -27,6 +29,8 @@ import { PurchaseCreditsService } from './purchase-credits.service';
   providers: [
     PurchaseCreditsService,
     CashAdvanceService,
+    PaymentScheduleProgressService,
+    PaymentScheduleConsentService,
     PaymentScheduleCatalogService,
     PaymentScheduleRunnerService,
     PartnerBusinessesService,
@@ -34,6 +38,6 @@ import { PurchaseCreditsService } from './purchase-credits.service';
     CreditCampaignRunnerService,
     CreditCampaignPublisher,
   ],
-  exports: [PurchaseCreditsService, CreditCampaignPublisher],
+  exports: [PurchaseCreditsService, CreditCampaignPublisher, PaymentScheduleConsentService],
 })
 export class PaymentProgramsModule {}

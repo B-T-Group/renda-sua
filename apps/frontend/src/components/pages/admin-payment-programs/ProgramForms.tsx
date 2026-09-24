@@ -4,6 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { CurrencyField, DirectorySearch, ImpactCard, type DirectoryOption } from './fields';
 import { advanceImpact, creditImpact, scheduleImpact } from './impact';
+import {
+  EMPTY_OBJECTIVES,
+  ObjectiveFields,
+  objectivesPayload,
+  type ObjectiveValues,
+} from './ObjectiveFields';
 import { fromLocalInput, toLocalInput } from './shared';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
@@ -16,6 +22,11 @@ interface ScheduleTemplate {
   currency: string;
   default_amount: number;
   default_duration_days?: number | null;
+  target_agent_recruitments?: number | null;
+  target_client_signups?: number | null;
+  target_merchant_recruitments?: number | null;
+  target_item_sales_amount?: number | null;
+  target_rental_amount?: number | null;
 }
 
 interface AdvanceTemplate {
@@ -40,11 +51,15 @@ export function ScheduleForm({ onDone }: { onDone: (message: string) => Promise<
   const [currency, setCurrency] = useState('XAF');
   const [amount, setAmount] = useState('10000');
   const [days, setDays] = useState('');
+  const [objectives, setObjectives] = useState<ObjectiveValues>(EMPTY_OBJECTIVES);
   const ready = Boolean(name.trim()) && Number(amount) > 0;
   const impact = scheduleImpact(t, { amount, currency, frequency, days, locale: i18n.language });
 
   async function create() {
-    await api.post('/admin/payment-programs/schedules', scheduleBody(name, frequency, currency, amount, days));
+    await api.post('/admin/payment-programs/schedules', {
+      ...scheduleBody(name, frequency, currency, amount, days),
+      ...objectivesPayload(objectives),
+    });
     await onDone(t('admin.paymentPrograms.scheduleCreated', 'Schedule created'));
   }
 
@@ -56,6 +71,7 @@ export function ScheduleForm({ onDone }: { onDone: (message: string) => Promise<
         <CurrencyField value={currency} onChange={setCurrency} />
         <TextField label={t('admin.paymentPrograms.amount', 'Amount')} value={amount} onChange={(e) => setAmount(e.target.value)} />
         <TextField label={t('admin.paymentPrograms.durationDays', 'Duration (days)')} value={days} onChange={(e) => setDays(e.target.value)} />
+        <ObjectiveFields values={objectives} onChange={setObjectives} currency={currency} />
         <Button variant="contained" disabled={!ready} onClick={() => void create()}>
           {t('admin.paymentPrograms.createSchedule', 'Create schedule')}
         </Button>

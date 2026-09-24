@@ -318,13 +318,24 @@ export function useNotificationNavigation(): (msg: UserMessage) => NotificationN
 
         case 'account': {
           const isCredit = message_type === 'PURCHASE_CREDIT';
+          const payload = msg.message_payload ?? {};
+          const isScheduleOffer =
+            message_type === 'PAYMENT_SCHEDULE_OFFER' ||
+            (typeof payload.path === 'string' &&
+              payload.path.includes('/accounts/schedules/'));
+          const assignmentId =
+            typeof entity_id === 'string' && isScheduleOffer ? entity_id : null;
           return {
             label: isCredit ? 'credits' : 'wallet',
-            navigate: withPersona(targetPersona, () =>
+            navigate: withPersona(targetPersona, () => {
+              if (assignmentId) {
+                navigation.navigate('PaymentScheduleDetail', { assignmentId });
+                return;
+              }
               navigation.navigate(
                 isCredit ? 'UserPurchaseCredits' : 'UserPaymentPrograms'
-              )
-            ),
+              );
+            }),
           };
         }
 

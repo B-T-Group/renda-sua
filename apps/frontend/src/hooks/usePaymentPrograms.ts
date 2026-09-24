@@ -30,6 +30,7 @@ export interface PaymentProgramSummary {
     starts_at: string;
     ends_at: string | null;
     status: string;
+    decision?: string;
     schedule?: { name: string; frequency: string };
     runs?: Array<{
       id: string;

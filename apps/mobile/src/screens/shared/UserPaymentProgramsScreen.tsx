@@ -35,6 +35,7 @@ interface Summary {
     amount: number;
     currency: string;
     status: string;
+    decision?: string;
     schedule?: { name?: string; frequency?: string };
   }>;
 }
@@ -300,9 +301,24 @@ export default function UserPaymentProgramsScreen() {
         </Text>
       ) : (
         (summary?.assignments || []).map((row) => (
-          <Text key={row.id}>
-            {row.schedule?.name} · {row.amount} {row.currency} · {row.status}
-          </Text>
+          <Button
+            key={row.id}
+            mode={
+              ['pending', 'deferred'].includes(row.decision || '')
+                ? 'contained'
+                : 'outlined'
+            }
+            onPress={() =>
+              navigation.navigate('PaymentScheduleDetail', {
+                assignmentId: row.id,
+              })
+            }
+          >
+            {row.schedule?.name} · {row.amount} {row.currency} ·{' '}
+            {['pending', 'deferred'].includes(row.decision || '')
+              ? t('accounts.schedules.needsResponse', 'Needs your response')
+              : row.status}
+          </Button>
         ))
       )}
     </ScrollView>

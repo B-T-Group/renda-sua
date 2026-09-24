@@ -4793,7 +4793,32 @@
     },
     "schedules": {
       "title": "Échéanciers de paiement",
-      "empty": "Aucun échéancier de paiement."
+      "empty": "Aucun échéancier de paiement.",
+      "objectives": "Objectifs",
+      "noObjectives": "Ce plan n'a pas d'objectifs associés.",
+      "salesCompletion": "Avancement des ventes",
+      "progressAfterAccept": "Le suivi commence après votre acceptation.",
+      "agentRecruitments": "Recrutements d'agents",
+      "clientSignups": "Inscriptions clients",
+      "merchantRecruitments": "Recrutements de commerçants",
+      "itemSales": "Ventes d'articles",
+      "rentals": "Locations",
+      "accept": "Accepter",
+      "defer": "Décider plus tard",
+      "reject": "Refuser",
+      "rejectReason": "Motif du refus",
+      "rejectNote": "Précisez",
+      "accepted": "Plan de paiement accepté",
+      "deferred": "Vous pourrez décider plus tard",
+      "rejected": "Plan de paiement refusé",
+      "actionFailed": "Action échouée",
+      "needsResponse": "Réponse requise",
+      "reasons": {
+        "too_aggressive": "Trop ambitieux",
+        "not_ready_now": "Pas prêt à accepter maintenant",
+        "targets_unclear": "Objectifs peu clairs",
+        "other": "Autre"
+      }
     },
     "walletHub": {
       "title": "Programmes portefeuille",
@@ -6256,6 +6281,10 @@
       "activeOrders": {
         "title": "Livraisons en cours",
         "subtitle": "{{count}} livraison(s) en cours."
+      },
+      "paymentPlanPending": {
+        "title": "Plan de paiement en attente",
+        "subtitle": "Examinez et acceptez, différez ou refusez ce plan."
       }
     },
     "client": {

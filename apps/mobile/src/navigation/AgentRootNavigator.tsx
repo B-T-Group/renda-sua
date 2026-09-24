@@ -35,6 +35,7 @@ import NotificationPermissionScreen from '../screens/shared/NotificationPermissi
 import AgentLocationTrackingScreen from '../screens/agent/AgentLocationTrackingScreen';
 import UserAccountsScreen from '../screens/shared/UserAccountsScreen';
 import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScreen';
+import PaymentScheduleDetailScreen from '../screens/shared/PaymentScheduleDetailScreen';
 import UserPurchaseCreditsScreen from '../screens/shared/UserPurchaseCreditsScreen';
 import CashAdvanceDrawSuccessScreen from '../screens/shared/CashAdvanceDrawSuccessScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
@@ -76,6 +77,7 @@ export type RootStackParamList = {
   AgentAccounts: undefined;
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
+  PaymentScheduleDetail: { assignmentId: string };
   CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
   AgentBusinessReferral: undefined;
   Profile: undefined;
@@ -261,6 +263,11 @@ export function AgentRootNavigator() {
             name="UserPaymentPrograms"
             component={UserPaymentProgramsScreen}
             options={{ title: t('accounts.cashAdvance.title', 'Cash advance') }}
+          />
+          <RootStack.Screen
+            name="PaymentScheduleDetail"
+            component={PaymentScheduleDetailScreen}
+            options={{ title: t('accounts.schedules.title', 'Payment schedules') }}
           />
           <RootStack.Screen
             name="CashAdvanceDrawSuccess"

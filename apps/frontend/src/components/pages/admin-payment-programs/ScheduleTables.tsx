@@ -15,6 +15,12 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { moneyText } from './impact';
+import {
+  ObjectiveFields,
+  objectivesFromRow,
+  objectivesPayload,
+  type ObjectiveValues,
+} from './ObjectiveFields';
 import { fromLocalInput, personName, ProgramTable, programRowSx, StatusChip, toLocalInput, useConfirm } from './shared';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
@@ -25,6 +31,14 @@ interface Assignment {
   currency: string;
   ends_at?: string | null;
   status: string;
+  decision?: string;
+  reject_reason?: string | null;
+  reject_note?: string | null;
+  target_agent_recruitments?: number | null;
+  target_client_signups?: number | null;
+  target_merchant_recruitments?: number | null;
+  target_item_sales_amount?: number | null;
+  target_rental_amount?: number | null;
   agent?: { user?: { first_name?: string; last_name?: string; email?: string } };
 }
 
@@ -36,6 +50,11 @@ interface Schedule {
   default_amount: number;
   default_duration_days?: number | null;
   is_active: boolean;
+  target_agent_recruitments?: number | null;
+  target_client_signups?: number | null;
+  target_merchant_recruitments?: number | null;
+  target_item_sales_amount?: number | null;
+  target_rental_amount?: number | null;
   assignments?: Assignment[];
 }
 
@@ -232,6 +251,7 @@ function AssignmentList({
         { label: t('admin.paymentPrograms.schedule', 'Schedule') },
         { label: t('admin.paymentPrograms.amount', 'Amount') },
         { label: t('admin.paymentPrograms.status', 'Status') },
+        { label: t('admin.paymentPrograms.decision', 'Decision') },
         { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
       ]}
     >
@@ -241,9 +261,12 @@ function AssignmentList({
           <TableCell>{row.schedule.name}</TableCell>
           <TableCell>{moneyText(row.amount, row.currency, i18n.language)}</TableCell>
           <TableCell><StatusChip status={row.status} /></TableCell>
+          <TableCell>
+            <DecisionCell decision={row.decision} reason={row.reject_reason} note={row.reject_note} />
+          </TableCell>
           <TableCell align="right">
             <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-              {['active', 'paused'].includes(row.status) && (
+              {['active', 'paused', 'pending_acceptance'].includes(row.status) && (
                 <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
               )}
               {row.status === 'active' && (
@@ -282,6 +305,35 @@ function AssignmentList({
   );
 }
 
+function DecisionCell({
+  decision,
+  reason,
+  note,
+}: {
+  decision?: string;
+  reason?: string | null;
+  note?: string | null;
+}) {
+  const { t } = useTranslation();
+  const label = decision
+    ? t(`admin.paymentPrograms.decision.${decision}`, decision)
+    : '—';
+  const detail = [reason, note].filter(Boolean).join(' · ');
+  return (
+    <Stack spacing={0.25}>
+      <StatusChip status={decision || 'pending'} />
+      {detail ? (
+        <Typography variant="caption" color="text.secondary">
+          {detail}
+        </Typography>
+      ) : null}
+      <Typography variant="caption" sx={{ display: 'none' }}>
+        {label}
+      </Typography>
+    </Stack>
+  );
+}
+
 function ScheduleDialog({
   row,
   onClose,
@@ -289,13 +341,14 @@ function ScheduleDialog({
 }: {
   row: Schedule;
   onClose: () => void;
-  onSave: (body: { name: string; frequency: string; defaultAmount: number; defaultDurationDays?: number }) => Promise<void>;
+  onSave: (body: Record<string, unknown>) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState(row.name);
   const [frequency, setFrequency] = useState(row.frequency);
   const [amount, setAmount] = useState(String(row.default_amount));
   const [days, setDays] = useState(row.default_duration_days ? String(row.default_duration_days) : '');
+  const [objectives, setObjectives] = useState<ObjectiveValues>(objectivesFromRow(row));
   return (
     <Dialog open onClose={onClose} fullWidth>
       <DialogTitle>{t('admin.paymentPrograms.editSchedule', 'Edit schedule')}</DialogTitle>
@@ -310,6 +363,7 @@ function ScheduleDialog({
           <TextField label={t('admin.paymentPrograms.amount', 'Amount')} value={amount} onChange={(e) => setAmount(e.target.value)} />
           <TextField label={t('admin.paymentPrograms.durationDays', 'Duration (days)')} value={days} onChange={(e) => setDays(e.target.value)} />
           <Typography variant="body2" color="text.secondary">{row.currency}</Typography>
+          <ObjectiveFields values={objectives} onChange={setObjectives} currency={row.currency} />
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -322,6 +376,7 @@ function ScheduleDialog({
               frequency,
               defaultAmount: Number(amount),
               defaultDurationDays: days ? Number(days) : undefined,
+              ...objectivesPayload(objectives),
             })
           }
         >
@@ -339,11 +394,13 @@ function AssignmentDialog({
 }: {
   row: Assignment;
   onClose: () => void;
-  onSave: (body: { amount: number; endsAt: string | null }) => Promise<void>;
+  onSave: (body: Record<string, unknown>) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [amount, setAmount] = useState(String(row.amount));
   const [endsAt, setEndsAt] = useState(toLocalInput(row.ends_at));
+  const [objectives, setObjectives] = useState<ObjectiveValues>(objectivesFromRow(row));
+  const canEditObjectives = row.status === 'pending_acceptance';
   return (
     <Dialog open onClose={onClose} fullWidth>
       <DialogTitle>{t('admin.paymentPrograms.editAssignment', 'Edit assignment')}</DialogTitle>
@@ -357,11 +414,23 @@ function AssignmentDialog({
             onChange={(e) => setEndsAt(e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
+          {canEditObjectives && (
+            <ObjectiveFields values={objectives} onChange={setObjectives} currency={row.currency} />
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('admin.paymentPrograms.cancel', 'Cancel')}</Button>
-        <Button variant="contained" onClick={() => void onSave({ amount: Number(amount), endsAt: fromLocalInput(endsAt) })}>
+        <Button
+          variant="contained"
+          onClick={() =>
+            void onSave({
+              amount: Number(amount),
+              endsAt: fromLocalInput(endsAt),
+              ...(canEditObjectives ? objectivesPayload(objectives) : {}),
+            })
+          }
+        >
           {t('admin.paymentPrograms.save', 'Save')}
         </Button>
       </DialogActions>

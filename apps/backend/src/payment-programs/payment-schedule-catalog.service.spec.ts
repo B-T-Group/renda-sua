@@ -5,8 +5,14 @@ import {
   canTransitionAssignment,
 } from './payment-schedule-catalog.service';
 
-function catalog(hasura: { executeQuery: jest.Mock; executeMutation: jest.Mock }) {
-  return new PaymentScheduleCatalogService(hasura as never);
+function catalog(
+  hasura: { executeQuery: jest.Mock; executeMutation: jest.Mock },
+  consent?: { notifyAgentOfOffer: jest.Mock }
+) {
+  return new PaymentScheduleCatalogService(
+    hasura as never,
+    (consent ?? { notifyAgentOfOffer: jest.fn() }) as never
+  );
 }
 
 describe('canResumeAssignment', () => {
@@ -33,7 +39,7 @@ describe('canTransitionAssignment', () => {
 });
 
 describe('PaymentScheduleCatalogService.assign', () => {
-  it('rejects assign when the agent already has an active assignment', async () => {
+  it('rejects assign when the agent already has an open assignment', async () => {
     const hasura = {
       executeQuery: jest.fn(async (query: string) => {
         if (query.includes('ScheduleById')) {
@@ -59,12 +65,13 @@ describe('PaymentScheduleCatalogService.assign', () => {
         startsAt: '2026-01-01T00:00:00.000Z',
       })
     ).rejects.toMatchObject({
-      message: 'This agent already has an active assignment for this schedule',
+      message: 'This agent already has an open assignment for this schedule',
     });
     expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
-  it('computes ends_at from default_duration_days when endsAt is omitted', async () => {
+  it('snapshots objectives and notifies the agent', async () => {
+    const consent = { notifyAgentOfOffer: jest.fn() };
     const hasura = {
       executeQuery: jest.fn(async (query: string) => {
         if (query.includes('ScheduleById')) {
@@ -75,6 +82,8 @@ describe('PaymentScheduleCatalogService.assign', () => {
               currency: 'XAF',
               default_amount: 1500,
               default_duration_days: 30,
+              target_agent_recruitments: 2,
+              target_item_sales_amount: 50000,
             },
           };
         }
@@ -86,7 +95,7 @@ describe('PaymentScheduleCatalogService.assign', () => {
     };
 
     await expect(
-      catalog(hasura).assign({
+      catalog(hasura, consent).assign({
         scheduleId: 's1',
         agentId: 'agent-1',
         startsAt: '2026-01-01T00:00:00.000Z',
@@ -102,9 +111,14 @@ describe('PaymentScheduleCatalogService.assign', () => {
           currency: 'XAF',
           starts_at: '2026-01-01T00:00:00.000Z',
           ends_at: '2026-01-31T00:00:00.000Z',
+          status: 'pending_acceptance',
+          decision: 'pending',
+          target_agent_recruitments: 2,
+          target_item_sales_amount: 50000,
         }),
       }
     );
+    expect(consent.notifyAgentOfOffer).toHaveBeenCalledWith('a1');
   });
 });
 
@@ -115,6 +129,7 @@ describe('PaymentScheduleCatalogService.setAssignmentStatus', () => {
         payment_schedule_assignments_by_pk: {
           id: 'a1',
           status: 'ended',
+          decision: 'accepted',
           schedule_id: 's1',
           agent_id: 'agent-1',
           ends_at: null,
@@ -136,6 +151,7 @@ describe('PaymentScheduleCatalogService.setAssignmentStatus', () => {
         payment_schedule_assignments_by_pk: {
           id: 'a1',
           status: 'paused',
+          decision: 'accepted',
           schedule_id: 's1',
           agent_id: 'agent-1',
           ends_at: '2020-01-01T00:00:00.000Z',
@@ -156,13 +172,18 @@ describe('PaymentScheduleCatalogService.updateAssignment', () => {
   it('rejects amount updates on an ended assignment', async () => {
     const hasura = {
       executeQuery: jest.fn(async () => ({
-        payment_schedule_assignments_by_pk: { id: 'a1', status: 'ended' },
+        payment_schedule_assignments_by_pk: {
+          id: 'a1',
+          status: 'ended',
+          decision: 'accepted',
+        },
       })),
       executeMutation: jest.fn(),
     };
 
     await expect(catalog(hasura).updateAssignment('a1', { amount: 2000 })).rejects.toMatchObject({
-      message: 'Assignment amount can only change while active or paused',
+      message:
+        'Assignment can only change while active, paused, or awaiting a response',
     });
     expect(hasura.executeMutation).not.toHaveBeenCalled();
   });

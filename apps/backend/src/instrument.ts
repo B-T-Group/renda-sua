@@ -16,5 +16,24 @@ export function initSentry(): void {
       process.env.DEPLOYMENT_ENV || process.env.NODE_ENV || 'development',
     release: process.env.GIT_SHA || process.env.GITHUB_SHA || undefined,
     tracesSampleRate: 0.1,
+    beforeSend(event, hint) {
+      return isExpectedUnavailable(hint?.originalException) ? null : event;
+    },
   });
+}
+
+const EXPECTED_UNAVAILABLE_MESSAGES = [
+  'Temporarily unable to reach the data service',
+  'Temporarily unable to load user profile',
+  'Temporarily unable to complete this request',
+];
+
+export function isExpectedUnavailable(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+  return EXPECTED_UNAVAILABLE_MESSAGES.some((text) => message.includes(text));
 }
