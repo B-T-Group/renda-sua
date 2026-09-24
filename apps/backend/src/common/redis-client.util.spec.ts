@@ -87,10 +87,10 @@ describe('redis-client.util', () => {
     expect(isRedisConnectionNoise(new Error('WRONGPASS'))).toBe(false);
   });
 
-  it('backs off reconnect then exhausts', () => {
+  it('backs off reconnect and keeps retrying after a long outage', () => {
     expect(redisReconnectDelay(0)).toBe(0);
     expect(redisReconnectDelay(5)).toBe(500);
-    expect(redisReconnectDelay(19)).toBe(1900);
-    expect(redisReconnectDelay(20)).toBeInstanceOf(Error);
+    expect(redisReconnectDelay(40)).toBe(3000);
+    expect(redisReconnectDelay(10_000)).toBe(3000);
   });
 });

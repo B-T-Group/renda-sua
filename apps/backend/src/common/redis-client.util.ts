@@ -9,7 +9,6 @@ export type RedisSocketConfig = {
 export const REDIS_READY_WAIT_MS = 2000;
 export const REDIS_CONNECT_RETRY_DELAYS_MS = [500, 1000, 2000, 4000] as const;
 const REDIS_RECONNECT_MAX_DELAY_MS = 3000;
-const REDIS_RECONNECT_MAX_ATTEMPTS = 20;
 
 const CONNECTION_NOISE_CODES = new Set([
   'ETIMEDOUT',
@@ -45,11 +44,11 @@ export function createAppRedisClient(
   });
 }
 
-/** Backoff for node-redis reconnect; stop after REDIS_RECONNECT_MAX_ATTEMPTS. */
-export function redisReconnectDelay(retries: number): number | Error {
-  if (retries >= REDIS_RECONNECT_MAX_ATTEMPTS) {
-    return new Error('Redis reconnect exhausted');
-  }
+/**
+ * Backoff for node-redis reconnect. Always return a delay: an Error closes
+ * the client for the process lifetime, and nothing dials it again.
+ */
+export function redisReconnectDelay(retries: number): number {
   return Math.min(retries * 100, REDIS_RECONNECT_MAX_DELAY_MS);
 }
 
