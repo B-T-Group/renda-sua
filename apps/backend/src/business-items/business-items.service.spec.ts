@@ -384,3 +384,84 @@ describe('BusinessItemsService getBusinessLocations', () => {
     ]);
   });
 });
+
+describe('BusinessItemsService cooked-food inventory writes', () => {
+  const inventoryRow = (categoryName: string | null) => ({
+    id: 'inv-1',
+    item_id: 'item-1',
+    business_location_id: 'loc-1',
+    business_location: { business_id: 'biz-1' },
+    item: {
+      export_available: false,
+      item_sub_category: categoryName
+        ? { item_category: { name: categoryName } }
+        : null,
+    },
+  });
+
+  function createWriter(categoryName: string | null) {
+    const executeQuery = jest.fn().mockResolvedValue({
+      business_inventory_by_pk: inventoryRow(categoryName),
+    });
+    const executeMutation = jest.fn().mockResolvedValue({
+      update_business_inventory_by_pk: {
+        id: 'inv-1',
+        item_id: 'item-1',
+        business_location_id: 'loc-1',
+      },
+    });
+    const service = new BusinessItemsService(
+      { executeQuery, executeMutation } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { recompute: jest.fn() } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { incrementGeneration: jest.fn().mockResolvedValue(undefined) } as any
+    );
+    return { service, executeMutation };
+  }
+
+  const updates = {
+    quantity: 40,
+    reserved_quantity: 3,
+    selling_price: 1500,
+    is_active: true,
+  };
+
+  it('forces cooked-food quantity to the sentinel and clears reserved', async () => {
+    const { service, executeMutation } = createWriter('Restaurant & Cooked Food');
+
+    await service.updateInventoryItem('biz-1', 'inv-1', updates);
+
+    expect(executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('UpdateInventoryItem'),
+      {
+        itemId: 'inv-1',
+        updates: {
+          quantity: 1,
+          reserved_quantity: 0,
+          selling_price: 1500,
+          is_active: true,
+        },
+      }
+    );
+  });
+
+  it('keeps the quantity a merchant sets on retail inventory', async () => {
+    const { service, executeMutation } = createWriter('Retail & Shopping');
+
+    await service.updateInventoryItem('biz-1', 'inv-1', updates);
+
+    expect(executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('UpdateInventoryItem'),
+      { itemId: 'inv-1', updates }
+    );
+  });
+});

@@ -106,6 +106,7 @@ const MONDAY_LUNCH = {
 function makeFoodInventoryRow(overrides: {
   id?: string;
   itemName?: string;
+  available?: number;
   markedUnavailableAt?: string | null;
   slots?: Array<{
     day_of_week: number;
@@ -116,6 +117,7 @@ function makeFoodInventoryRow(overrides: {
   const row = makeInventoryRow({
     id: overrides.id,
     itemName: overrides.itemName ?? 'Pizza',
+    available: overrides.available,
   });
   return {
     ...row,
@@ -864,6 +866,63 @@ describe('CheckoutPreflightService', () => {
       expect(result.blocking_errors.map((error) => error.code)).toEqual([
         FOOD_ITEM_CLOSED_CODE,
       ]);
+    });
+
+    it('does not block cooked food when the request exceeds the quantity sentinel', async () => {
+      mockInventory([makeFoodInventoryRow({ available: 1 })]);
+
+      const result = await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 5 }] },
+        false
+      );
+
+      expect(
+        result.blocking_errors.some((error) => error.code === 'INSUFFICIENT_STOCK')
+      ).toBe(false);
+      expect(result.can_proceed).toBe(true);
+    });
+
+    it('still enforces the merchant maximum on cooked food', async () => {
+      const food = makeFoodInventoryRow({ available: 1 });
+      food.item = { ...food.item, max_order_quantity: 3 };
+      mockInventory([food]);
+
+      const result = await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 5 }] },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        'MAX_ORDER_QUANTITY_EXCEEDED',
+      ]);
+    });
+
+    it('still blocks retail lines that exceed available stock', async () => {
+      mockInventory([
+        makeFoodInventoryRow({ id: 'inv-food', available: 1 }),
+        makeInventoryRow({
+          id: 'inv-retail',
+          itemName: 'Phone charger',
+          available: 1,
+        }),
+      ]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            { business_inventory_id: 'inv-food', quantity: 8 },
+            { business_inventory_id: 'inv-retail', quantity: 2 },
+          ],
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        'INSUFFICIENT_STOCK',
+      ]);
+      expect(result.blocking_errors[0]?.message).toContain('Phone charger');
     });
   });
 

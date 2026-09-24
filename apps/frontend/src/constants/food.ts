@@ -29,6 +29,28 @@ export function isFoodCatalogItem(item: FoodCatalogRow): boolean {
   return isFoodCategoryName(name);
 }
 
+/** Soft upper bound when cooked food has no merchant max_order_quantity. */
+export const FOOD_ORDER_SOFT_MAX = 99;
+
+type PlaceOrderQuantityItem = FoodCatalogRow & {
+  computed_available_quantity: number;
+  item?: { max_order_quantity?: number | null } | null;
+};
+
+/** Cooked food ignores the quantity-1 visibility sentinel. Retail stays stock-capped. */
+export function placeOrderMaxQuantity(item: PlaceOrderQuantityItem): number {
+  if (isFoodCatalogItem(item)) {
+    const merchantMax = item.item?.max_order_quantity ?? FOOD_ORDER_SOFT_MAX;
+    return Math.max(1, merchantMax);
+  }
+  const stockCap = Math.min(
+    item.computed_available_quantity,
+    item.item?.max_order_quantity ?? 10,
+    10
+  );
+  return Math.max(1, stockCap);
+}
+
 /** Drops non-food rows that leak into a Foods browse page and fixes paging. */
 export function applyFoodOnlyCatalogFilter<T extends FoodCatalogRow>(
   rawItems: T[],

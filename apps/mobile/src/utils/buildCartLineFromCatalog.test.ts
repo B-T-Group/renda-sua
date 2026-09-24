@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildCartLineFromCatalog } from './buildCartLineFromCatalog';
 import type { CatalogInventoryItem } from '../types/inventoryCatalog';
+import { FOOD_CATEGORY_NAME } from './foodAvailability';
 
 function makeCatalogItem(overrides: { country?: string } = {}): CatalogInventoryItem {
   return {
@@ -85,5 +86,35 @@ describe('buildCartLineFromCatalog', () => {
       { id: 'variant-2', name: 'Large', price: 6000 },
     ];
     expect(() => buildCartLineFromCatalog(item, 1)).toThrow('ITEM_VARIANT_REQUIRED');
+  });
+
+  it('lets cooked food exceed the quantity-1 sentinel up to the soft max', () => {
+    const item = makeCatalogItem();
+    item.computed_available_quantity = 1;
+    item.item = {
+      ...item.item,
+      item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
+    } as any;
+    const line = buildCartLineFromCatalog(item, 8, null);
+    expect(line.quantity).toBe(8);
+  });
+
+  it('caps cooked food at the merchant maximum', () => {
+    const item = makeCatalogItem();
+    item.computed_available_quantity = 1;
+    item.item = {
+      ...item.item,
+      max_order_quantity: 3,
+      item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
+    } as any;
+    const line = buildCartLineFromCatalog(item, 8, null);
+    expect(line.quantity).toBe(3);
+  });
+
+  it('caps retail quantity at available stock', () => {
+    const item = makeCatalogItem();
+    item.computed_available_quantity = 1;
+    const line = buildCartLineFromCatalog(item, 8, null);
+    expect(line.quantity).toBe(1);
   });
 });

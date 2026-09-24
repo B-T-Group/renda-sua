@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { FOOD_CATEGORY_NAME } from '../food/food.constants';
 import { isLocationPaymentsEnabled } from '../inventory-items/inventory-catalog-eligibility.util';
 import { OrderReorderService } from './order-reorder.service';
 
@@ -553,6 +554,60 @@ describe('OrderReorderService', () => {
     const result = await service.reorder('order-1');
     expect(result.lines[0].quantity).toBe(1);
     expect(result.lines[0].ordered_quantity).toBe(1);
+  });
+
+  it('reorders cooked food above the quantity-1 sentinel', async () => {
+    mockOrderAndInventory(
+      {
+        ...baseOrder,
+        order_items: [{ ...baseOrder.order_items[0], quantity: 8 }],
+      },
+      [
+        {
+          ...baseInventory,
+          computed_available_quantity: 0,
+          item: {
+            ...baseInventory.item,
+            item_sub_category: {
+              item_category: { name: FOOD_CATEGORY_NAME },
+            },
+          },
+        },
+      ]
+    );
+    const result = await service.reorder('order-1');
+    expect(result.lines).toHaveLength(1);
+    expect(result.lines[0].quantity).toBe(8);
+    expect(result.lines[0].ordered_quantity).toBe(8);
+    expect(result.skipped).toHaveLength(0);
+    expect(result.navigation_hint).toBe('checkout');
+  });
+
+  it('still caps cooked-food reorder quantity at the merchant maximum', async () => {
+    mockOrderAndInventory(
+      {
+        ...baseOrder,
+        order_items: [{ ...baseOrder.order_items[0], quantity: 8 }],
+      },
+      [
+        {
+          ...baseInventory,
+          computed_available_quantity: 1,
+          item: {
+            ...baseInventory.item,
+            max_order_quantity: 3,
+            item_sub_category: {
+              item_category: { name: ` ${FOOD_CATEGORY_NAME} ` },
+            },
+          },
+        },
+      ]
+    );
+    const result = await service.reorder('order-1');
+    expect(result.lines[0].quantity).toBe(3);
+    expect(result.lines[0].ordered_quantity).toBe(8);
+    expect(result.skipped).toHaveLength(0);
+    expect(result.navigation_hint).toBe('checkout');
   });
 
   it('loads each inventory id once when lines repeat it', async () => {
