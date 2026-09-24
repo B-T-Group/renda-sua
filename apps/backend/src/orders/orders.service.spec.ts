@@ -2102,6 +2102,127 @@ describe('OrdersService', () => {
       updateOrderHoldSpy.mockRestore();
     });
 
+    it('finalizeClientOrderPayment holds the post-credit total, not raw subtotal', async () => {
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest
+        .spyOn(service as any, 'updateOrderPaymentStatusOnly')
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          payment_status: 'authorized',
+          subtotal: 10000,
+          total_amount: 9000,
+          base_delivery_fee: 1000,
+          per_km_delivery_fee: 0,
+        },
+        'account-1'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ amount: 8000, transactionType: 'hold' })
+      );
+      expect(accountsService.registerTransaction).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ amount: 1000, transactionType: 'hold' })
+      );
+      expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
+        client_hold_amount: 8000,
+        delivery_fees: 1000,
+      });
+
+      updateOrderHoldSpy.mockRestore();
+    });
+
+    it('finalizeClientOrderPayment holds nothing when credits cover the order', async () => {
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest
+        .spyOn(service as any, 'updateOrderPaymentStatusOnly')
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          payment_status: 'authorized',
+          subtotal: 10000,
+          total_amount: 0,
+          base_delivery_fee: 1000,
+          per_km_delivery_fee: 0,
+        },
+        'account-1'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 0, transactionType: 'hold' })
+      );
+      expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
+        client_hold_amount: 0,
+        delivery_fees: 0,
+      });
+
+      updateOrderHoldSpy.mockRestore();
+    });
+
+    it('finalizePayAtDeliveryPaymentAndComplete settles the post-credit total', async () => {
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const itemSettle = jest
+        .spyOn(service, 'processOrderPayment')
+        .mockResolvedValue(undefined);
+      const deliverySettle = jest
+        .spyOn(service, 'processOrderDeliveryPayment')
+        .mockResolvedValue(undefined);
+      const completeSpy = jest
+        .spyOn(service as any, 'completeOrderWithSideEffects')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'updateOrderPaymentStatusOnly')
+        .mockResolvedValue(undefined);
+
+      await (service as any).finalizePayAtDeliveryPaymentAndComplete({
+        id: 'order-123',
+        order_number: 'ORD-1',
+        payment_status: 'pending',
+        subtotal: 10000,
+        total_amount: 9000,
+        base_delivery_fee: 1000,
+        per_km_delivery_fee: 0,
+      });
+
+      expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
+        client_hold_amount: 8000,
+        delivery_fees: 1000,
+      });
+      expect(itemSettle).toHaveBeenCalledWith('order-123');
+      expect(deliverySettle).toHaveBeenCalledWith('order-123');
+      expect(completeSpy).toHaveBeenCalled();
+
+      updateOrderHoldSpy.mockRestore();
+      itemSettle.mockRestore();
+      deliverySettle.mockRestore();
+      completeSpy.mockRestore();
+    });
+
     it('finalizeClientOrderPayment does not regress assigned_to_agent to pending', async () => {
       const updateOrderHoldSpy = jest
         .spyOn(service, 'updateOrderHold')
