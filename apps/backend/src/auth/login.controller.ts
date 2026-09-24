@@ -18,6 +18,7 @@ import { Public } from './public.decorator';
 import { LoginService } from './login.service';
 import { LoginStartDto } from './dto/login-start.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
+import { LoginRefreshDto } from './dto/login-refresh.dto';
 import type { ClientPlatform } from './platform.decorator';
 import { Platform } from './platform.decorator';
 import {
@@ -115,9 +116,12 @@ export class LoginController {
   @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid or expired session' })
   @ApiResponse({ status: 403, description: 'CSRF check failed' })
+  @ApiBody({ type: LoginRefreshDto, required: false })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async refreshSession(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
+    @Body() body: LoginRefreshDto = {},
     @Headers('x-requested-with') csrfHeader?: string
   ) {
     // CSRF protection: require X-Requested-With header
@@ -139,7 +143,8 @@ export class LoginController {
     const result = await this.loginService.refreshSession(
       sessionId,
       req.ip,
-      req.headers['user-agent']
+      req.headers['user-agent'],
+      body
     );
 
     if (result.newSessionId) {

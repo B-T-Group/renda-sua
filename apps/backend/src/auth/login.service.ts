@@ -16,6 +16,8 @@ import {
 } from './session-refresh.util';
 import { LoginStartDto } from './dto/login-start.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
+import type { LoginRefreshDto } from './dto/login-refresh.dto';
+import { extractHasuraClaimsFromToken } from './request-context.util';
 import type { ClientPlatform } from './platform.decorator';
 import {
   buildAvailableOtpChannels,
@@ -77,6 +79,11 @@ type RefreshResult = {
   newSessionId?: string;
   response: RefreshResponse;
 };
+
+export type LoginRefreshOpts = Pick<
+  LoginRefreshDto,
+  'active_persona' | 'force'
+>;
 
 interface LoginUserRow {
   id: string;
@@ -580,29 +587,31 @@ export class LoginService {
   async refreshSession(
     sessionId: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    opts?: LoginRefreshOpts
   ): Promise<RefreshResult> {
     const live = await this.requireLiveSession(sessionId);
-    const cached = this.cachedRefreshResponse(live.data);
+    const cached = this.cachedRefreshResponse(live.data, opts);
     if (cached) return this.withCookieIfRotated(sessionId, live.id, cached);
     const familyKey = live.data.familyId || live.id;
     return this.sessionStore.runExclusiveRefresh(familyKey, () =>
-      this.refreshLocked(sessionId, ipAddress, userAgent)
+      this.refreshLocked(sessionId, ipAddress, userAgent, opts)
     );
   }
 
   private async refreshLocked(
     sessionId: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    opts?: LoginRefreshOpts
   ) {
     const live = await this.requireLiveSession(sessionId);
-    const cached = this.cachedRefreshResponse(live.data);
+    const cached = this.cachedRefreshResponse(live.data, opts);
     if (cached) return this.withCookieIfRotated(sessionId, live.id, cached);
     try {
-      return await this.exchangeAndRotate(live, ipAddress, userAgent);
+      return await this.exchangeAndRotate(live, ipAddress, userAgent, opts);
     } catch (error: any) {
-      return this.recoverOrThrowRefreshError(sessionId, live.id, error);
+      return this.recoverOrThrowRefreshError(sessionId, live.id, error, opts);
     }
   }
 
@@ -619,7 +628,11 @@ export class LoginService {
     return live;
   }
 
-  private cachedRefreshResponse(session: SessionData) {
+  private cachedRefreshResponse(
+    session: SessionData,
+    opts?: LoginRefreshOpts
+  ): RefreshResponse | null {
+    if (this.shouldBypassCachedToken(session, opts)) return null;
     if (!canReuseAccessToken(session.auth0AccessToken)) return null;
     const expiresIn = accessTokenTtlSec(session.auth0AccessToken);
     if (expiresIn == null) return null;
@@ -630,6 +643,24 @@ export class LoginService {
       token_type: 'Bearer',
       expires_in: expiresIn,
     };
+  }
+
+  private shouldBypassCachedToken(
+    session: SessionData,
+    opts?: LoginRefreshOpts
+  ): boolean {
+    if (opts?.force) return true;
+    if (!opts?.active_persona || !session.auth0AccessToken) return false;
+    const role = this.accessTokenDefaultRole(session.auth0AccessToken);
+    return role !== opts.active_persona;
+  }
+
+  private accessTokenDefaultRole(token: string): string | null {
+    try {
+      return extractHasuraClaimsFromToken(token).defaultRole ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private withCookieIfRotated(
@@ -645,10 +676,14 @@ export class LoginService {
   private async exchangeAndRotate(
     live: { id: string; data: SessionData },
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    opts?: LoginRefreshOpts
   ) {
     const refreshed = await this.auth0Service.refreshAccessToken(
-      live.data.auth0RefreshToken
+      live.data.auth0RefreshToken,
+      opts?.active_persona
+        ? { activePersona: opts.active_persona }
+        : undefined
     );
     await this.persistRefreshedTokens(live.id, live.data, refreshed, ipAddress, userAgent);
     const newSessionId = await this.sessionStore.rotateSession(live.id);
@@ -695,9 +730,10 @@ export class LoginService {
   private async recoverOrThrowRefreshError(
     requestedId: string,
     liveId: string,
-    error: any
+    error: any,
+    opts?: LoginRefreshOpts
   ): Promise<RefreshResult> {
-    const recovered = await this.cachedAfterFailure(requestedId);
+    const recovered = await this.cachedAfterFailure(requestedId, opts);
     if (recovered) return recovered;
     this.logRefreshFailure(error);
     if (isInvalidGrantError(error)) {
@@ -712,10 +748,13 @@ export class LoginService {
     );
   }
 
-  private async cachedAfterFailure(sessionId: string) {
+  private async cachedAfterFailure(
+    sessionId: string,
+    opts?: LoginRefreshOpts
+  ) {
     try {
       const live = await this.requireLiveSession(sessionId);
-      const cached = this.cachedRefreshResponse(live.data);
+      const cached = this.cachedRefreshResponse(live.data, opts);
       return cached
         ? this.withCookieIfRotated(sessionId, live.id, cached)
         : null;
