@@ -1322,7 +1322,9 @@ export default function ItemDetailPage() {
               formatCurrency={formatCurrency}
             />
 
-            <ItemDetailScarcityBadge quantity={inventoryItem.computed_available_quantity} />
+            {!foodAvailability ? (
+              <ItemDetailScarcityBadge quantity={inventoryItem.computed_available_quantity} />
+            ) : null}
 
             <ItemDetailTrustStrip
               isVerifiedSeller={Boolean(business?.is_verified)}

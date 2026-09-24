@@ -114,6 +114,22 @@ import {
 } from '../common/CheckoutTaxSummaryLines';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
+import { isFoodCatalogItem } from '../../constants/food';
+
+const FOOD_ORDER_SOFT_MAX = 99;
+
+function placeOrderMaxQuantity(item: {
+  computed_available_quantity: number;
+  item?: { max_order_quantity?: number | null } | null;
+}): number {
+  if (isFoodCatalogItem(item)) {
+    return Math.max(1, item.item?.max_order_quantity ?? FOOD_ORDER_SOFT_MAX);
+  }
+  return Math.max(
+    1,
+    Math.min(item.computed_available_quantity, item.item?.max_order_quantity ?? 10, 10)
+  );
+}
 
 const confirmOrderPulse = keyframes`
   0%, 100% {
@@ -360,31 +376,49 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 
       <Divider sx={{ my: 2 }} />
 
-      {!isMobile && (
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel id="desktop-order-summary-quantity">
-            {t('orders.quantity', 'Quantity')}
-          </InputLabel>
-          <Select
-            labelId="desktop-order-summary-quantity"
-            value={quantity}
+      {!isMobile &&
+        (maxOrderQuantity > 10 ? (
+          <TextField
+            fullWidth
+            type="number"
+            sx={{ mb: 2 }}
             label={t('orders.quantity', 'Quantity')}
-            onChange={(e) => onQuantityChange(e.target.value as number)}
+            value={quantity}
+            onChange={(e) => {
+              const next = parseInt(e.target.value, 10);
+              if (Number.isNaN(next)) return;
+              onQuantityChange(
+                Math.min(maxOrderQuantity, Math.max(1, next))
+              );
+            }}
             disabled={loading}
-          >
-            {Array.from({ length: maxOrderQuantity }, (_, i) => i + 1).map(
-              (num) => (
-                <MenuItem key={num} value={num}>
-                  {num}{' '}
-                  {num === 1
-                    ? t('orders.unitSingular', 'unit')
-                    : t('orders.unitsPlural', 'units')}
-                </MenuItem>
-              )
-            )}
-          </Select>
-        </FormControl>
-      )}
+            inputProps={{ min: 1, max: maxOrderQuantity, step: 1 }}
+          />
+        ) : (
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel id="desktop-order-summary-quantity">
+              {t('orders.quantity', 'Quantity')}
+            </InputLabel>
+            <Select
+              labelId="desktop-order-summary-quantity"
+              value={quantity}
+              label={t('orders.quantity', 'Quantity')}
+              onChange={(e) => onQuantityChange(e.target.value as number)}
+              disabled={loading}
+            >
+              {Array.from({ length: maxOrderQuantity }, (_, i) => i + 1).map(
+                (num) => (
+                  <MenuItem key={num} value={num}>
+                    {num}{' '}
+                    {num === 1
+                      ? t('orders.unitSingular', 'unit')
+                      : t('orders.unitsPlural', 'units')}
+                  </MenuItem>
+                )
+              )}
+            </Select>
+          </FormControl>
+        ))}
 
       {/* Item Summary */}
       <Stack spacing={2}>
@@ -2498,35 +2532,53 @@ const PlaceOrderPage: React.FC = () => {
                     formatCurrency={formatCurrency}
                   />
 
-                  <FormControl fullWidth>
-                    <InputLabel id="place-order-review-quantity">
-                      {t('orders.quantity', 'Quantity')}
-                    </InputLabel>
-                    <Select
-                      labelId="place-order-review-quantity"
-                      value={quantity}
+                  {placeOrderMaxQuantity(selectedItem) > 10 ? (
+                    <TextField
+                      fullWidth
+                      type="number"
                       label={t('orders.quantity', 'Quantity')}
-                      onChange={(e) => setQuantity(e.target.value as number)}
+                      value={quantity}
+                      onChange={(e) => {
+                        const next = parseInt(e.target.value, 10);
+                        if (Number.isNaN(next)) return;
+                        const max = placeOrderMaxQuantity(selectedItem);
+                        setQuantity(Math.min(max, Math.max(1, next)));
+                      }}
                       disabled={loading}
-                    >
-                      {Array.from(
-                        {
-                          length: Math.min(
-                            selectedItem.computed_available_quantity,
-                            10
-                          ),
-                        },
-                        (_, i) => i + 1
-                      ).map((num) => (
-                        <MenuItem key={num} value={num}>
-                          {num}{' '}
-                          {num === 1
-                            ? t('orders.unitSingular', 'unit')
-                            : t('orders.unitsPlural', 'units')}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                      inputProps={{
+                        min: 1,
+                        max: placeOrderMaxQuantity(selectedItem),
+                        step: 1,
+                      }}
+                    />
+                  ) : (
+                    <FormControl fullWidth>
+                      <InputLabel id="place-order-review-quantity">
+                        {t('orders.quantity', 'Quantity')}
+                      </InputLabel>
+                      <Select
+                        labelId="place-order-review-quantity"
+                        value={quantity}
+                        label={t('orders.quantity', 'Quantity')}
+                        onChange={(e) => setQuantity(e.target.value as number)}
+                        disabled={loading}
+                      >
+                        {Array.from(
+                          {
+                            length: placeOrderMaxQuantity(selectedItem),
+                          },
+                          (_, i) => i + 1
+                        ).map((num) => (
+                          <MenuItem key={num} value={num}>
+                            {num}{' '}
+                            {num === 1
+                              ? t('orders.unitSingular', 'unit')
+                              : t('orders.unitsPlural', 'units')}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
 
                   {!isPickupOrder && deliveryWindow && selectedAddress && (
                     <Paper
@@ -3172,10 +3224,7 @@ const PlaceOrderPage: React.FC = () => {
               variantLabel={selectedVariant?.name ?? null}
               quantity={quantity}
               onQuantityChange={setQuantity}
-              maxOrderQuantity={Math.min(
-                selectedItem.computed_available_quantity,
-                10
-              )}
+              maxOrderQuantity={placeOrderMaxQuantity(selectedItem)}
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
@@ -3601,8 +3650,9 @@ const PlaceOrderPage: React.FC = () => {
                               fontWeight="medium"
                               color="success.main"
                             >
-                              {selectedItem.computed_available_quantity}{' '}
-                              {t('common.inStock', 'in stock')}
+                              {isFoodCatalogItem(selectedItem)
+                                ? t('orders.availableToOrder', 'Available to order')
+                                : `${selectedItem.computed_available_quantity} ${t('common.inStock', 'in stock')}`}
                             </Typography>
                           </Box>
                           {(specWeightDisplay != null || !!specDimensionsDisplay) && (
@@ -4080,10 +4130,7 @@ const PlaceOrderPage: React.FC = () => {
               variantLabel={selectedVariant?.name ?? null}
               quantity={quantity}
               onQuantityChange={setQuantity}
-              maxOrderQuantity={Math.min(
-                selectedItem.computed_available_quantity,
-                10
-              )}
+              maxOrderQuantity={placeOrderMaxQuantity(selectedItem)}
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}

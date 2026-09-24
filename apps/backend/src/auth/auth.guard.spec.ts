@@ -1,4 +1,4 @@
-import { ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { ClsService } from 'nestjs-cls';
@@ -73,5 +73,64 @@ describe('AuthGuard CLS refresh on public routes', () => {
     };
     expect(refreshed.userId).toBe('anonymous');
     expect(refreshed.authToken).toBeNull();
+  });
+});
+
+describe('AuthGuard protected route token logging', () => {
+  function buildGuard(verifyError: Error) {
+    const cls = {
+      get: () => undefined,
+      set: () => undefined,
+    } as unknown as ClsService;
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(false),
+    } as unknown as Reflector;
+    const configService = {
+      get: () => ({ domain: 'example.auth0.com', audience: 'api' }),
+    } as unknown as ConfigService;
+    const guard = new AuthGuard(configService, reflector, cls);
+    jest.spyOn(guard as any, 'verifyToken').mockRejectedValue(verifyError);
+    return guard;
+  }
+
+  function protectedContext() {
+    const request = {
+      headers: { authorization: 'Bearer token' },
+      user: undefined,
+    };
+    return {
+      getHandler: () => ({}),
+      getClass: () => ({}),
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+  }
+
+  it('logs jwt expired at warn', async () => {
+    const guard = buildGuard(
+      Object.assign(new Error('jwt expired'), { name: 'TokenExpiredError' })
+    );
+    const warn = jest.spyOn((guard as any).logger, 'warn').mockImplementation();
+    const error = jest.spyOn((guard as any).logger, 'error').mockImplementation();
+
+    await expect(guard.canActivate(protectedContext())).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+    expect(warn).toHaveBeenCalledWith('Token verification failed', 'jwt expired');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('logs invalid signature at error', async () => {
+    const guard = buildGuard(new Error('invalid signature'));
+    const warn = jest.spyOn((guard as any).logger, 'warn').mockImplementation();
+    const error = jest.spyOn((guard as any).logger, 'error').mockImplementation();
+
+    await expect(guard.canActivate(protectedContext())).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+    expect(error).toHaveBeenCalledWith(
+      'Token verification failed',
+      'invalid signature'
+    );
+    expect(warn).not.toHaveBeenCalled();
   });
 });

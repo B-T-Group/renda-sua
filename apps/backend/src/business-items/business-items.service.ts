@@ -26,7 +26,11 @@ import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 import { CollectionAutoAssignService } from '../collections/collection-auto-assign.service';
 import { resolveSaleItemRejectionReason } from '../common/moderation-rejection-reason';
 import { resolvePayOnDeliveryDefault } from './item-payment-defaults.util';
-import { resolveInitialInventoryQuantity } from '../food/food-inventory-quantity.util';
+import {
+  cookedFoodIgnoresStock,
+  resolveInitialInventoryQuantity,
+} from '../food/food-inventory-quantity.util';
+import { FOOD_DEFAULT_INVENTORY_QUANTITY } from '../food/food.constants';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
 
 const GET_ITEMS = `
@@ -666,6 +670,7 @@ const GET_ITEM_SUB_CATEGORY_IDS = `
   query GetItemSubCategoryIds {
     item_sub_categories {
       id
+      item_category { name }
     }
   }
 `;
@@ -931,12 +936,29 @@ export class BusinessItemsService {
   }
 
   async getItemSubCategoryIds(): Promise<Set<number>> {
+    const { ids } = await this.getItemSubCategoryCatalog();
+    return ids;
+  }
+
+  private async getItemSubCategoryCatalog(): Promise<{
+    ids: Set<number>;
+    categoryNameBySubId: Map<number, string>;
+  }> {
     const result =
       await this.hasuraUserService.executeQuery<{
-        item_sub_categories: { id: number }[];
+        item_sub_categories: Array<{
+          id: number;
+          item_category?: { name?: string | null } | null;
+        }>;
       }>(GET_ITEM_SUB_CATEGORY_IDS, {});
     const list = result?.item_sub_categories ?? [];
-    return new Set(list.map((s) => s.id));
+    const ids = new Set(list.map((s) => s.id));
+    const categoryNameBySubId = new Map<number, string>();
+    for (const row of list) {
+      const name = row.item_category?.name?.trim();
+      if (name) categoryNameBySubId.set(row.id, name);
+    }
+    return { ids, categoryNameBySubId };
   }
 
   async getBusinessLocations(businessId: string) {
@@ -1842,7 +1864,12 @@ export class BusinessItemsService {
         item_id: string;
         business_location_id: string;
         business_location: { business_id: string };
-        item?: { export_available?: boolean } | null;
+        item?: {
+          export_available?: boolean;
+          item_sub_category?: {
+            item_category?: { name?: string | null } | null;
+          } | null;
+        } | null;
       } | null;
     }>(
       `
@@ -1856,6 +1883,9 @@ export class BusinessItemsService {
           }
           item {
             export_available
+            item_sub_category {
+              item_category { name }
+            }
           }
         }
       }
@@ -1879,6 +1909,11 @@ export class BusinessItemsService {
       );
     }
 
+    const sanitized = this.sanitizeInventoryUpdatesForFood(
+      updates,
+      inv.item?.item_sub_category?.item_category?.name
+    );
+
     const result = await this.hasuraUserService.executeMutation<{
       update_business_inventory_by_pk: {
         id: string;
@@ -1887,13 +1922,35 @@ export class BusinessItemsService {
       } | null;
     }>(UPDATE_BUSINESS_INVENTORY, {
       itemId: inventoryId,
-      updates,
+      updates: sanitized,
     });
 
     const updated = result.update_business_inventory_by_pk;
     this.triggerLifecycleRecompute(businessId);
     void this.invalidateCatalogCache();
     return updated;
+  }
+
+  /** Cooked food quantity is a visibility sentinel; clients cannot change it. */
+  private sanitizeInventoryUpdatesForFood(
+    updates: {
+      quantity?: number;
+      reserved_quantity?: number;
+      reorder_point?: number;
+      reorder_quantity?: number;
+      unit_cost?: number;
+      selling_price?: number;
+      is_active?: boolean;
+      promotion?: Record<string, unknown> | null;
+    },
+    categoryName?: string | null
+  ) {
+    if (!cookedFoodIgnoresStock(categoryName)) return updates;
+    return {
+      ...updates,
+      quantity: FOOD_DEFAULT_INVENTORY_QUANTITY,
+      reserved_quantity: 0,
+    };
   }
 
   async createInventoryItem(
@@ -1959,6 +2016,11 @@ export class BusinessItemsService {
       requestedQuantity: data.quantity,
       categoryName: item.item_sub_category?.item_category?.name,
     });
+    const reservedQuantity = cookedFoodIgnoresStock(
+      item.item_sub_category?.item_category?.name
+    )
+      ? 0
+      : data.reserved_quantity;
 
     if (data.item_variant_id) {
       const variantRow = await this.hasuraUserService.executeQuery<{
@@ -1993,7 +2055,7 @@ export class BusinessItemsService {
         item_id: data.item_id,
         item_variant_id: data.item_variant_id ?? null,
         quantity,
-        reserved_quantity: data.reserved_quantity,
+        reserved_quantity: reservedQuantity,
         reorder_point: data.reorder_point,
         reorder_quantity: data.reorder_quantity,
         unit_cost: data.unit_cost,
@@ -2668,15 +2730,17 @@ export class BusinessItemsService {
     rowOffset = 0
   ): Promise<CsvUploadResultDto> {
     this.logger.log(`CSV upload: starting for businessId=${businessId} rows=${rows.length} rowOffset=${rowOffset}`);
-    const [items, locations, inventory, validSubCategoryIds, lockedCurrency, rail] =
+    const [items, locations, inventory, subCategoryCatalog, lockedCurrency, rail] =
       await Promise.all([
         this.getItems(businessId),
         this.getBusinessLocations(businessId),
         this.getBusinessInventory(businessId),
-        this.getItemSubCategoryIds(),
+        this.getItemSubCategoryCatalog(),
         this.hasuraSystemService.resolveBusinessCurrency(businessId),
         this.paymentRoutingService.resolveRailForBusiness(businessId),
       ]);
+    const validSubCategoryIds = subCategoryCatalog.ids;
+    const categoryNameBySubId = subCategoryCatalog.categoryNameBySubId;
     const defaultPayOnDelivery = resolvePayOnDeliveryDefault(rail);
 
     const details: CsvUploadResultDto['details'] = {
@@ -2828,11 +2892,25 @@ export class BusinessItemsService {
             inv.business_location_id === location.id
         );
 
+        const categoryName =
+          (existingItem as { item_sub_category?: { item_category?: { name?: string } } } | undefined)
+            ?.item_sub_category?.item_category?.name ??
+          (row.item_sub_category_id != null
+            ? categoryNameBySubId.get(row.item_sub_category_id)
+            : undefined);
+        const quantity = resolveInitialInventoryQuantity({
+          requestedQuantity: row.quantity,
+          categoryName,
+        });
+        const reserved_quantity = cookedFoodIgnoresStock(categoryName)
+          ? 0
+          : row.reserved_quantity;
+
         const inventoryPayload = {
           business_location_id: location.id,
           item_id: itemId,
-          quantity: row.quantity,
-          reserved_quantity: row.reserved_quantity,
+          quantity,
+          reserved_quantity,
           reorder_point: row.reorder_point,
           reorder_quantity: row.reorder_quantity,
           unit_cost: row.unit_cost,
@@ -2849,15 +2927,18 @@ export class BusinessItemsService {
         }
 
         if (existingInv) {
-          const updatePayload = {
-            quantity: row.quantity,
-            reserved_quantity: row.reserved_quantity,
-            reorder_point: row.reorder_point,
-            reorder_quantity: row.reorder_quantity,
-            unit_cost: row.unit_cost,
-            selling_price: row.selling_price,
-            is_active: row.is_active ?? true,
-          };
+          const updatePayload = this.sanitizeInventoryUpdatesForFood(
+            {
+              quantity,
+              reserved_quantity,
+              reorder_point: row.reorder_point,
+              reorder_quantity: row.reorder_quantity,
+              unit_cost: row.unit_cost,
+              selling_price: row.selling_price,
+              is_active: row.is_active ?? true,
+            },
+            categoryName
+          );
           await this.hasuraUserService.executeMutation(
             UPDATE_BUSINESS_INVENTORY,
             {

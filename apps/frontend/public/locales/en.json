@@ -4248,11 +4248,15 @@
       "soldOutToday": "Sold out for today",
       "onTheMenu": "On the menu today",
       "soldOutHelp": "Turning this off hides the dish for the rest of the day. It comes back automatically the next day you serve it.",
+      "soldOutTitle": "Still serving these dishes?",
       "remainingTitle": "How many portions are left?",
       "remainingHelp": "Optional. Only needed when this order changes what you can still sell today.",
       "remainingLabel": "Portions left after this order",
       "lastOne": "This was the last one",
-      "lastOneHelp": "Marks the dish sold out for the rest of today."
+      "lastOneHelp": "Marks the dish sold out for the rest of today.",
+      "stockNotTracked": "Stock is not tracked for cooked food. Turn the dish off at this location when it is no longer available.",
+      "locationDescription": "Manage where this dish is served. Stock is not tracked — turn a location off when the dish is unavailable.",
+      "updateLocation": "Update location"
     }
   },
   "client": {

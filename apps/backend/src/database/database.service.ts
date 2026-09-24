@@ -7,6 +7,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Pool, type QueryResultRow } from 'pg';
 
+export type DatabaseQuery = <T extends QueryResultRow = QueryResultRow>(
+  text: string,
+  params?: unknown[]
+) => Promise<T[]>;
+
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
@@ -35,6 +40,24 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const pool = this.requirePool();
     const result = await pool.query<T>(text, params);
     return result.rows;
+  }
+
+  async transaction<T>(fn: (query: DatabaseQuery) => Promise<T>): Promise<T> {
+    const client = await this.requirePool().connect();
+    try {
+      await client.query('BEGIN');
+      const result = await fn(async (text, params) => {
+        const res = await client.query(text, params);
+        return res.rows;
+      });
+      await client.query('COMMIT');
+      return result;
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private requirePool(): Pool {

@@ -126,6 +126,26 @@ describe('facebook-catalog-csv.util', () => {
     expect(rows[0].quantity_to_sell_on_facebook).toBe('2');
   });
 
+  it('omits sellable quantity for cooked food', () => {
+    const { rows } = buildFacebookCatalogRowsFromInventories({
+      inventories: [
+        sampleInventory({
+          computed_available_quantity: 1,
+          item: {
+            ...sampleInventory().item!,
+            item_sub_category: {
+              ...sampleInventory().item!.item_sub_category!,
+              item_category: { name: 'Restaurant & Cooked Food' },
+            },
+          },
+        }),
+      ],
+      webOrigin: 'https://rendasua.com',
+    });
+    expect(rows[0].availability).toBe('in stock');
+    expect(rows[0].quantity_to_sell_on_facebook).toBe('');
+  });
+
   it('uses image_url (full asset), not display_url/thumbnail', () => {
     const { rows } = buildFacebookCatalogRowsFromInventories({
       inventories: [

@@ -199,13 +199,22 @@ export class MyPVitService {
         return response;
       },
       (error) => {
-        this.logger.error(
-          'MyPVit API Error:',
-          error.response?.data || error.message
-        );
+        this.logMyPvitHttpError(error);
         return Promise.reject(error);
       }
     );
+  }
+
+  private logMyPvitHttpError(error: {
+    response?: { status?: number; data?: { error?: string; status_code?: number | string } };
+    message?: string;
+  }): void {
+    const payload = error.response?.data ?? error.message;
+    if (isNotFoundHttpError(error)) {
+      this.logger.debug('MyPVit resource not found (expected miss):', payload);
+      return;
+    }
+    this.logger.error('MyPVit API Error:', payload);
   }
 
   /**

@@ -2803,7 +2803,8 @@
       "onTheMenu": "Au menu aujourd'hui",
       "soldOutHelp": "En désactivant, le plat est masqué pour le reste de la journée. Il revient automatiquement le jour suivant où vous le servez.",
       "invalidHours": "Utilisez des heures au format HH:mm, par exemple 12:30.",
-      "loadHoursFailed": "Impossible de charger les heures de service."
+      "loadHoursFailed": "Impossible de charger les heures de service.",
+      "stockNotTracked": "Le stock n'est pas suivi pour les plats cuisinés. Désactivez le plat à cet emplacement lorsqu'il n'est plus disponible."
     },
     "listingPreview": {
       "title": "Aperçu de l’annonce",

@@ -1,4 +1,5 @@
 import type { BusinessCatalogItem, BusinessInventoryRow } from '../types/business/items';
+import { isCookedFoodItem } from './businessFood';
 
 /** Inventories from API (`business_inventories`). */
 export function getItemInventories(item: BusinessCatalogItem): BusinessInventoryRow[] {
@@ -20,6 +21,9 @@ export function itemThumbUrl(item: BusinessCatalogItem): string | null {
 export function itemIsOutOfStock(item: BusinessCatalogItem): boolean {
   const inv = getItemInventories(item);
   if (!inv.length) return true;
+  if (isCookedFoodItem(item)) {
+    return inv.every((r) => r.is_active === false);
+  }
   return inv.every((r) => {
     const avail = r.computed_available_quantity ?? r.quantity - (r.reserved_quantity ?? 0);
     return avail <= 0;
@@ -27,6 +31,7 @@ export function itemIsOutOfStock(item: BusinessCatalogItem): boolean {
 }
 
 export function itemHasLowStock(item: BusinessCatalogItem): boolean {
+  if (isCookedFoodItem(item)) return false;
   if (itemIsOutOfStock(item)) return false;
   return getItemInventories(item).some((r) => {
     const avail = r.computed_available_quantity ?? r.quantity - (r.reserved_quantity ?? 0);

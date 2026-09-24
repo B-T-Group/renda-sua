@@ -281,22 +281,30 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
     imageLightboxOpen && hasMultipleImages
   );
 
+  const isFoodItem = isFoodCategoryName(
+    item.item_sub_category?.item_category?.name
+  );
+
   // Count locations where item is available
   const locationCount = item.business_inventories?.length || 0;
 
-  // Check if item has any low stock across locations
-  const hasLowStock = item.business_inventories?.some(
-    (inv) =>
-      inv.computed_available_quantity <= inv.reorder_point &&
-      inv.computed_available_quantity > 0
-  );
+  // Check if item has any low stock across locations (not used for cooked food)
+  const hasLowStock =
+    !isFoodItem &&
+    item.business_inventories?.some(
+      (inv) =>
+        inv.computed_available_quantity <= inv.reorder_point &&
+        inv.computed_available_quantity > 0
+    );
 
   // Check if item is out of stock everywhere
-  const isOutOfStock =
-    locationCount === 0 ||
-    item.business_inventories?.every(
-      (inv) => inv.computed_available_quantity === 0
-    );
+  const isOutOfStock = isFoodItem
+    ? locationCount === 0 ||
+      item.business_inventories?.every((inv) => inv.is_active === false)
+    : locationCount === 0 ||
+      item.business_inventories?.every(
+        (inv) => inv.computed_available_quantity === 0
+      );
 
   // Check if item has images
   const hasImages = item.item_images && item.item_images.length > 0;

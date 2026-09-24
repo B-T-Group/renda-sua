@@ -307,12 +307,14 @@ export default function UpdateInventoryDialog({
         const ok = await updateInventoryItem(
           inventoryId,
           {
-            quantity: formData.quantity,
-            reserved_quantity: formData.reserved_quantity,
+            quantity: isFoodItem ? 1 : formData.quantity,
+            ...(isFoodItem
+              ? {}
+              : { reserved_quantity: formData.reserved_quantity }),
             selling_price: formData.selling_price,
             unit_cost: formData.unit_cost,
-            reorder_point: formData.reorder_point,
-            reorder_quantity: formData.reorder_quantity,
+            reorder_point: isFoodItem ? 0 : formData.reorder_point,
+            reorder_quantity: isFoodItem ? 0 : formData.reorder_quantity,
             is_active: true,
           },
           { skipFetchInventory }
@@ -325,12 +327,12 @@ export default function UpdateInventoryDialog({
           {
             item_id: item.id,
             business_location_id: formData.business_location_id,
-            quantity: formData.quantity,
-            reserved_quantity: formData.reserved_quantity,
+            quantity: isFoodItem ? 1 : formData.quantity,
+            reserved_quantity: isFoodItem ? 0 : formData.reserved_quantity,
             selling_price: formData.selling_price,
             unit_cost: formData.unit_cost,
-            reorder_point: formData.reorder_point,
-            reorder_quantity: formData.reorder_quantity,
+            reorder_point: isFoodItem ? 0 : formData.reorder_point,
+            reorder_quantity: isFoodItem ? 0 : formData.reorder_quantity,
             is_active: true,
           },
           { skipFetchInventory }
@@ -482,65 +484,76 @@ export default function UpdateInventoryDialog({
             </Alert>
           )}
 
-          {/* Quantities */}
-          <Typography variant="h6" gutterBottom>
-            {t('business.inventory.quantities')}
-          </Typography>
+          {/* Quantities — cooked food does not track stock */}
+          {isFoodItem ? (
+            <Alert severity="info" sx={{ mb: 1 }}>
+              {t(
+                'business.food.stockNotTracked',
+                'Stock is not tracked for cooked food. Turn the dish off at this location when it is no longer available.'
+              )}
+            </Alert>
+          ) : (
+            <>
+              <Typography variant="h6" gutterBottom>
+                {t('business.inventory.quantities')}
+              </Typography>
 
-          <TextField
-            fullWidth
-            type="number"
-            label={t('business.inventory.totalQuantity')}
-            value={formData.quantity}
-            onChange={(e) =>
-              handleInputChange('quantity', parseInt(e.target.value) || 0)
-            }
-            inputProps={{ min: 0 }}
-          />
+              <TextField
+                fullWidth
+                type="number"
+                label={t('business.inventory.totalQuantity')}
+                value={formData.quantity}
+                onChange={(e) =>
+                  handleInputChange('quantity', parseInt(e.target.value) || 0)
+                }
+                inputProps={{ min: 0 }}
+              />
 
-          <Stack direction="row" spacing={2}>
-            <TextField
-              fullWidth
-              type="number"
-              label={t('business.inventory.reservedQuantity')}
-              value={formData.reserved_quantity}
-              onChange={(e) =>
-                handleInputChange(
-                  'reserved_quantity',
-                  parseInt(e.target.value) || 0
-                )
-              }
-              inputProps={{ min: 0 }}
-            />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.reservedQuantity')}
+                  value={formData.reserved_quantity}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'reserved_quantity',
+                      parseInt(e.target.value) || 0
+                    )
+                  }
+                  inputProps={{ min: 0 }}
+                />
 
-            <TextField
-              fullWidth
-              type="number"
-              label={t('business.inventory.reorderPoint')}
-              value={formData.reorder_point}
-              onChange={(e) =>
-                handleInputChange(
-                  'reorder_point',
-                  parseInt(e.target.value) || 0
-                )
-              }
-              inputProps={{ min: 0 }}
-            />
-          </Stack>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label={t('business.inventory.reorderPoint')}
+                  value={formData.reorder_point}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'reorder_point',
+                      parseInt(e.target.value) || 0
+                    )
+                  }
+                  inputProps={{ min: 0 }}
+                />
+              </Stack>
 
-          <TextField
-            fullWidth
-            type="number"
-            label={t('business.inventory.reorderQuantity')}
-            value={formData.reorder_quantity}
-            onChange={(e) =>
-              handleInputChange(
-                'reorder_quantity',
-                parseInt(e.target.value) || 0
-              )
-            }
-            inputProps={{ min: 0 }}
-          />
+              <TextField
+                fullWidth
+                type="number"
+                label={t('business.inventory.reorderQuantity')}
+                value={formData.reorder_quantity}
+                onChange={(e) =>
+                  handleInputChange(
+                    'reorder_quantity',
+                    parseInt(e.target.value) || 0
+                  )
+                }
+                inputProps={{ min: 0 }}
+              />
+            </>
+          )}
 
           {/* Pricing */}
           <Typography variant="h6" gutterBottom>

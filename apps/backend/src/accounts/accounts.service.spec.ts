@@ -216,6 +216,61 @@ describe('AccountsService', () => {
       );
       expect(insert?.[1]).toMatchObject({ amount: 600, transactionType: 'deposit' });
     });
+
+    it('no-ops when repayment plus deposit already cover the reference', async () => {
+      executeQuery.mockResolvedValue({
+        account_transactions: [{ amount: 400 }, { amount: 600 }],
+      });
+
+      await expect(
+        service.registerDepositIfNotExists({
+          accountId,
+          amount: 1000,
+          memo: 'Mobile payment deposit - retry',
+          referenceId,
+        })
+      ).resolves.toEqual({ success: true, alreadyExists: true });
+
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('credits only the leftover after several applied rows', async () => {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('SumAppliedDeposit')) {
+          return {
+            account_transactions: [{ amount: 200 }, { amount: 350 }],
+          };
+        }
+        if (query.includes('GetAccountById')) {
+          return {
+            accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 },
+          };
+        }
+        return { account_transactions: [] };
+      });
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx-sum' } };
+        }
+        return { update_accounts_by_pk: { id: accountId } };
+      });
+
+      const result = await service.registerDepositIfNotExists({
+        accountId,
+        amount: 800,
+        memo: 'Mobile payment deposit - retry',
+        referenceId,
+      });
+
+      expect(result.success).toBe(true);
+      const insert = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('InsertTransaction')
+      );
+      expect(insert?.[1]).toMatchObject({
+        amount: 250,
+        transactionType: 'deposit',
+      });
+    });
   });
 
   describe('registerTransaction', () => {
@@ -374,24 +429,29 @@ describe('AccountsService', () => {
       expect(types).toEqual(['cash_advance_repayment', 'deposit']);
     });
 
-    it('does not re-credit a referenced deposit already applied as repayment', async () => {
-      executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('SumAppliedDeposit')) {
-          return { account_transactions: [{ amount: 5000 }] };
-        }
-        return { accounts_by_pk: activeAccount };
-      });
-
+    it('posts a later deposit that shares a reference instead of shrinking it', async () => {
       const result = await service.registerTransaction({
         accountId,
-        amount: 5000,
+        amount: 300,
         transactionType: 'deposit',
-        memo: 'Mobile payment deposit - retry',
+        memo: 'per-km delivery commission',
         referenceId,
       });
 
-      expect(result).toEqual({ success: true });
-      expect(executeMutation).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(
+        executeQuery.mock.calls.some(([query]) =>
+          String(query).includes('SumAppliedDeposit')
+        )
+      ).toBe(false);
+      const insert = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('InsertTransaction')
+      );
+      expect(insert?.[1]).toMatchObject({
+        amount: 300,
+        transactionType: 'deposit',
+        referenceId,
+      });
     });
 
     it('posts the full amount when a deposit has no payment reference', async () => {
@@ -429,32 +489,21 @@ describe('AccountsService', () => {
       });
     });
 
-    it('sums every deposit and repayment row before crediting a retry leftover', async () => {
+    it('posts the full referenced amount even when older rows share that reference', async () => {
       executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('SumAppliedDeposit')) {
-          return {
-            account_transactions: [{ amount: 200 }, { amount: 350 }],
-          };
-        }
         if (query.includes('GetAccountById')) {
           return {
             accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 },
           };
         }
-        return { account_transactions: [] };
-      });
-      executeMutation.mockImplementation(async (mutation: string) => {
-        if (mutation.includes('InsertTransaction')) {
-          return { insert_account_transactions_one: { id: 'tx-sum' } };
-        }
-        return { update_accounts_by_pk: { id: accountId } };
+        return { account_transactions: [{ amount: 1000 }] };
       });
 
       const result = await service.registerTransaction({
         accountId,
-        amount: 800,
+        amount: 1600,
         transactionType: 'deposit',
-        memo: 'Mobile payment deposit - retry',
+        memo: 'item commission',
         referenceId,
       });
 
@@ -463,44 +512,7 @@ describe('AccountsService', () => {
         String(mutation).includes('InsertTransaction')
       );
       expect(insert?.[1]).toMatchObject({
-        amount: 250,
-        transactionType: 'deposit',
-      });
-    });
-
-    it('credits only the leftover after a cash-advance repayment for the same reference', async () => {
-      executeQuery.mockImplementation(async (query: string) => {
-        if (query.includes('SumAppliedDeposit')) {
-          return { account_transactions: [{ amount: 400 }] };
-        }
-        if (query.includes('GetAccountById')) {
-          return {
-            accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 },
-          };
-        }
-        return { account_transactions: [] };
-      });
-      executeMutation.mockImplementation(async (mutation: string) => {
-        if (mutation.includes('InsertTransaction')) {
-          return { insert_account_transactions_one: { id: 'tx-rest' } };
-        }
-        return { update_accounts_by_pk: { id: accountId } };
-      });
-
-      const result = await service.registerTransaction({
-        accountId,
-        amount: 1000,
-        transactionType: 'deposit',
-        memo: 'Mobile payment deposit - retry',
-        referenceId,
-      });
-
-      expect(result.success).toBe(true);
-      const insert = executeMutation.mock.calls.find(([mutation]) =>
-        String(mutation).includes('InsertTransaction')
-      );
-      expect(insert?.[1]).toMatchObject({
-        amount: 600,
+        amount: 1600,
         transactionType: 'deposit',
       });
     });

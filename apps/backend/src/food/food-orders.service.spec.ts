@@ -8,8 +8,6 @@ const FOOD_LINE = {
     id: 'inv-1',
     item_id: 'item-1',
     business_location_id: 'loc-1',
-    quantity: 10,
-    reserved_quantity: 2,
     item: {
       item_sub_category: {
         item_category: { name: FOOD_CATEGORY_NAME },
@@ -44,19 +42,14 @@ describe('FoodOrdersService.applyConfirmationUpdates', () => {
     expect(executeMutation).not.toHaveBeenCalled();
   });
 
-  it('sets remaining quantity and does not swallow Hasura errors', async () => {
-    const { service, executeMutation } = createService({
-      executeMutation: jest
-        .fn()
-        .mockRejectedValue(new Error('Hasura write failed')),
-    });
+  it('ignores remaining_quantity and does not write stock', async () => {
+    const { service, executeMutation } = createService();
 
-    await expect(
-      service.applyConfirmationUpdates('order-1', [
-        { order_item_id: 'line-1', remaining_quantity: 4 },
-      ])
-    ).rejects.toThrow('Hasura write failed');
-    expect(executeMutation).toHaveBeenCalled();
+    await service.applyConfirmationUpdates('order-1', [
+      { order_item_id: 'line-1', remaining_quantity: 4 },
+    ]);
+
+    expect(executeMutation).not.toHaveBeenCalled();
   });
 
   it('marks the dish sold out and surfaces a failed upsert', async () => {
@@ -72,19 +65,6 @@ describe('FoodOrdersService.applyConfirmationUpdates', () => {
       ])
     ).rejects.toThrow('sold-out upsert failed');
     expect(executeMutation).toHaveBeenCalled();
-  });
-
-  it('writes remaining quantity when Hasura accepts the mutation', async () => {
-    const { service, executeMutation } = createService();
-
-    await service.applyConfirmationUpdates('order-1', [
-      { order_item_id: 'line-1', remaining_quantity: 4 },
-    ]);
-
-    expect(executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('SetFoodInventoryQuantity'),
-      { inventoryId: 'inv-1', quantity: 6 }
-    );
   });
 
   it('skips grocery lines so confirmation stock only touches cooked food', async () => {

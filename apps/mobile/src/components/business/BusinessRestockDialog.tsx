@@ -69,8 +69,9 @@ export function BusinessRestockDialog({ visible, item, loading, onDismiss, onSub
 
   const handleSubmit = async () => {
     if (!selectedId) return;
-    const quantity = parseInt(qty, 10);
-    if (Number.isNaN(quantity) || quantity < 0) return;
+    const isFood = !!item && isCookedFoodItem(item);
+    const quantity = isFood ? 1 : parseInt(qty, 10);
+    if (!isFood && (Number.isNaN(quantity) || quantity < 0)) return;
     const selling_price = parseFloat(price);
     await onSubmit(selectedId, {
       quantity,
@@ -113,15 +114,28 @@ export function BusinessRestockDialog({ visible, item, loading, onDismiss, onSub
                 {selectedRow.business_location?.name}
               </Text>
             ) : null}
-            <TextInput
-              label={t('business.items.quantity', 'Quantity')}
-              value={qty}
-              onChangeText={setQty}
-              keyboardType="number-pad"
-              mode="outlined"
-              dense
-              style={{ marginBottom: spacing.sm }}
-            />
+            {showServingHours ? null : (
+              <TextInput
+                label={t('business.items.quantity', 'Quantity')}
+                value={qty}
+                onChangeText={setQty}
+                keyboardType="number-pad"
+                mode="outlined"
+                dense
+                style={{ marginBottom: spacing.sm }}
+              />
+            )}
+            {showServingHours ? (
+              <Text
+                variant="bodySmall"
+                style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+              >
+                {t(
+                  'business.food.stockNotTracked',
+                  'Stock is not tracked for cooked food. Turn the dish off at this location when it is no longer available.'
+                )}
+              </Text>
+            ) : null}
             <TextInput
               label={t('business.items.sellingPrice', 'Selling price')}
               value={price}

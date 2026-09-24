@@ -8,12 +8,11 @@ export const FOOD_CATEGORY_NAME = 'Restaurant & Cooked Food';
 export const FOOD_SUB_CATEGORY_NAME = 'Local Dishes';
 
 /**
- * Restaurants cook to order rather than counting stock, so food inventory is
- * seeded with a high quantity. Storefront visibility requires available
- * quantity above zero, and the sold-out toggle is what takes a dish off the
- * menu for the day.
+ * Cooked food does not track stock. Quantity stays at 1 so storefront
+ * visibility filters that require available quantity above zero still pass.
+ * Merchants take a dish off the menu with location is_active or sold-out-today.
  */
-export const FOOD_DEFAULT_INVENTORY_QUANTITY = 9999;
+export const FOOD_DEFAULT_INVENTORY_QUANTITY = 1;
 
 /** Hot food should not sit unconfirmed the way a retail order can. */
 export const FOOD_ORDER_CONFIRMATION_TIMEOUT_MINUTES = 30;

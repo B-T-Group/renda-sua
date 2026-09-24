@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import FormData from 'form-data';
+import sharp from 'sharp';
 import { normalizeWeightUnit } from '../common/weight-units';
 import {
   applyCookedFoodCategories,
@@ -139,6 +140,7 @@ export class AiService {
   private readonly openaiImagesEditsUrl = 'https://api.openai.com/v1/images/edits';
   private static readonly IMAGE_ITEM_VISION_MAX_IMAGES = 10;
   private static readonly IMAGE_FETCH_MAX_BYTES = 10 * 1024 * 1024;
+  private static readonly IMAGE_SOURCE_HARD_MAX_BYTES = 25 * 1024 * 1024;
 
   constructor(
     private readonly configService: ConfigService,
@@ -398,32 +400,129 @@ export class AiService {
     mimeType: string;
     filename: string;
   }> {
-    const { data, headers, status } = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 25000,
-      maxContentLength: AiService.IMAGE_FETCH_MAX_BYTES,
-      maxBodyLength: AiService.IMAGE_FETCH_MAX_BYTES,
-      validateStatus: (s) => s === 200,
-    });
-    if (status !== 200 || !data) {
-      throw new HttpException(
-        'Could not download image for cleanup',
-        HttpStatus.BAD_REQUEST
+    await this.assertCleanupImageSourceSize(url);
+    try {
+      const { data, headers, status } = await axios.get<ArrayBuffer>(url, {
+        responseType: 'arraybuffer',
+        timeout: 25000,
+        maxContentLength: AiService.IMAGE_SOURCE_HARD_MAX_BYTES,
+        maxBodyLength: AiService.IMAGE_SOURCE_HARD_MAX_BYTES,
+        validateStatus: (s) => s === 200,
+      });
+      if (status !== 200 || !data) {
+        throw new HttpException(
+          'Could not download image for cleanup',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return this.normalizeCleanupImageBuffer(Buffer.from(data), headers);
+    } catch (error: unknown) {
+      this.rethrowCleanupImageFetchError(error);
+    }
+  }
+
+  private async assertCleanupImageSourceSize(url: string): Promise<void> {
+    try {
+      const head = await axios.head(url, {
+        timeout: 10000,
+        validateStatus: (s) => s === 200 || s === 403 || s === 405,
+      });
+      if (head.status !== 200) return;
+      this.rejectIfContentLengthTooLarge(head.headers['content-length']);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) throw error;
+      this.logger.debug(
+        `Cleanup image HEAD skipped: ${(error as Error)?.message || error}`
       );
     }
-    const mimeType =
-      headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
-    if (!mimeType.startsWith('image/')) {
+  }
+
+  private rejectIfContentLengthTooLarge(raw: unknown): void {
+    const length = typeof raw === 'string' || typeof raw === 'number'
+      ? Number(raw)
+      : NaN;
+    if (!Number.isFinite(length) || length <= 0) return;
+    if (length > AiService.IMAGE_SOURCE_HARD_MAX_BYTES) {
+      throw this.imageTooLargeError(length);
+    }
+  }
+
+  private async normalizeCleanupImageBuffer(
+    buffer: Buffer,
+    headers: { [key: string]: unknown }
+  ): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
+    const mimeType = this.cleanupMimeFromHeaders(headers);
+    if (buffer.byteLength > AiService.IMAGE_SOURCE_HARD_MAX_BYTES) {
+      throw this.imageTooLargeError(buffer.byteLength);
+    }
+    if (buffer.byteLength <= AiService.IMAGE_FETCH_MAX_BYTES) {
+      return {
+        buffer,
+        mimeType,
+        filename: this.filenameForMime(mimeType),
+      };
+    }
+    return this.downscaleCleanupImage(buffer);
+  }
+
+  private cleanupMimeFromHeaders(headers: {
+    [key: string]: unknown;
+  }): string {
+    const raw = headers['content-type'];
+    const headerType =
+      typeof raw === 'string' ? raw.split(';')[0]?.trim() : '';
+    if (headerType && !headerType.startsWith('image/')) {
       throw new HttpException(
         'Cleanup source is not an image',
         HttpStatus.BAD_REQUEST
       );
     }
+    return headerType || 'image/jpeg';
+  }
+
+  private async downscaleCleanupImage(buffer: Buffer): Promise<{
+    buffer: Buffer;
+    mimeType: string;
+    filename: string;
+  }> {
+    this.logger.warn(
+      `Downscaling cleanup image from ${buffer.byteLength} bytes to fit OpenAI limit`
+    );
+    const downscaled = await sharp(buffer)
+      .rotate()
+      .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    if (downscaled.byteLength > AiService.IMAGE_FETCH_MAX_BYTES) {
+      throw this.imageTooLargeError(buffer.byteLength);
+    }
     return {
-      buffer: Buffer.from(data),
-      mimeType,
-      filename: this.filenameForMime(mimeType),
+      buffer: downscaled,
+      mimeType: 'image/jpeg',
+      filename: 'product.jpg',
     };
+  }
+
+  private imageTooLargeError(bytes: number): HttpException {
+    const mb = (bytes / (1024 * 1024)).toFixed(1);
+    return new HttpException(
+      {
+        message: 'Failed to cleanup image',
+        error: `Image is too large (${mb} MB). Use an image under 25 MB.`,
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private rethrowCleanupImageFetchError(error: unknown): never {
+    if (error instanceof HttpException) throw error;
+    if (axios.isAxiosError(error) && error.code === 'ERR_BAD_RESPONSE') {
+      const msg = error.message || '';
+      if (/maxContentLength/i.test(msg)) {
+        throw this.imageTooLargeError(AiService.IMAGE_SOURCE_HARD_MAX_BYTES + 1);
+      }
+    }
+    throw error;
   }
 
   private filenameForMime(mimeType: string): string {
@@ -433,8 +532,30 @@ export class AiService {
   }
 
   private throwCleanupImageError(error: unknown): never {
-    this.logger.error('Failed to cleanup product image', error);
-    if (error instanceof HttpException) throw error;
+    if (error instanceof HttpException) {
+      this.logCleanupHttpException(error);
+      throw error;
+    }
+    if (axios.isAxiosError(error) && /maxContentLength/i.test(error.message)) {
+      throw this.imageTooLargeError(AiService.IMAGE_SOURCE_HARD_MAX_BYTES + 1);
+    }
+    this.logger.error(
+      'Failed to cleanup product image',
+      error instanceof Error ? error.message : error
+    );
+    this.throwMappedCleanupAxiosError(error);
+  }
+
+  private logCleanupHttpException(error: HttpException): void {
+    const response = error.getResponse();
+    const detail =
+      typeof response === 'string'
+        ? response
+        : (response as { error?: string })?.error || error.message;
+    this.logger.error('Failed to cleanup product image', detail);
+  }
+
+  private throwMappedCleanupAxiosError(error: unknown): never {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const apiMessage = this.openAiErrorMessage(error.response?.data);

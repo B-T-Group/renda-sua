@@ -46,6 +46,25 @@ export function unindexedMypvitStatusBody(transactionId: string): {
   };
 }
 
-export function isNotFoundHttpError(error: { response?: { status?: number } }): boolean {
-  return error?.response?.status === 404;
+const MYP_VIT_RESOURCE_NOT_FOUND_CODE = 7011;
+
+type MypvitErrorBody = {
+  error?: string;
+  status_code?: number | string;
+};
+
+/** HTTP 404 or MyPVit provider miss (7011 / RESOURCE_NOT_FOUND). */
+export function isNotFoundHttpError(error: {
+  response?: { status?: number; data?: MypvitErrorBody };
+}): boolean {
+  if (error?.response?.status === 404) return true;
+  return isMypvitResourceNotFound(error?.response?.data);
+}
+
+export function isMypvitResourceNotFound(
+  data: MypvitErrorBody | undefined
+): boolean {
+  if (!data) return false;
+  if (data.error === 'RESOURCE_NOT_FOUND') return true;
+  return Number(data.status_code) === MYP_VIT_RESOURCE_NOT_FOUND_CODE;
 }

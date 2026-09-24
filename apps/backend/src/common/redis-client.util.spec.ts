@@ -1,5 +1,7 @@
 import {
   connectRedisWithRetry,
+  isRedisConnectionNoise,
+  redisReconnectDelay,
   waitForRedisReady,
 } from './redis-client.util';
 
@@ -68,5 +70,27 @@ describe('redis-client.util', () => {
         timeoutMs: 10,
       })
     ).resolves.toBe(false);
+  });
+
+  it('classifies connection timeouts as noise', () => {
+    expect(isRedisConnectionNoise(new Error('Connection timeout'))).toBe(true);
+    expect(
+      isRedisConnectionNoise({
+        message: 'Connection timeout',
+        code: 'ETIMEDOUT',
+      })
+    ).toBe(true);
+    expect(
+      isRedisConnectionNoise({ name: 'ConnectionTimeoutError' })
+    ).toBe(true);
+    expect(isRedisConnectionNoise({ code: 'ECONNRESET' })).toBe(true);
+    expect(isRedisConnectionNoise(new Error('WRONGPASS'))).toBe(false);
+  });
+
+  it('backs off reconnect then exhausts', () => {
+    expect(redisReconnectDelay(0)).toBe(0);
+    expect(redisReconnectDelay(5)).toBe(500);
+    expect(redisReconnectDelay(19)).toBe(1900);
+    expect(redisReconnectDelay(20)).toBeInstanceOf(Error);
   });
 });

@@ -85,6 +85,38 @@ describe('MyPVitService.checkTransactionStatus', () => {
     expect(result.status).toBe('SUCCESS');
   });
 
+  it('falls back when path-style returns RESOURCE_NOT_FOUND (7011)', async () => {
+    const { service, httpGet } = buildService();
+    httpGet
+      .mockRejectedValueOnce({
+        response: {
+          status: 400,
+          data: {
+            status_code: 7011,
+            error: 'RESOURCE_NOT_FOUND',
+            message: 'This resource does not exist',
+            path: '/STATUSCODE1/status/GCH260226746766',
+          },
+        },
+      })
+      .mockResolvedValueOnce({ data: successBody });
+
+    const result = await service.checkTransactionStatus(
+      'GCH260226746766',
+      '+24174123456'
+    );
+
+    expect(httpGet).toHaveBeenNthCalledWith(2, '/STATUSCODE1/status', {
+      params: {
+        transactionId: 'GCH260226746766',
+        accountOperationCode: AIRTEL_ACCOUNT,
+        transactionOperation: 'PAYMENT',
+      },
+      headers: { 'X-Secret': 'test-secret' },
+    });
+    expect(result.status).toBe('SUCCESS');
+  });
+
   it('uses the MOOV account code for E.164 MOOV numbers on query fallback', async () => {
     const { service, httpGet } = buildService();
     httpGet

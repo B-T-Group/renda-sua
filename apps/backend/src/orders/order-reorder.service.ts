@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import {
@@ -107,6 +108,9 @@ const INVENTORY_FOR_REORDER_QUERY = `
         min_order_quantity
         pay_on_delivery_enabled
         export_available
+        item_sub_category {
+          item_category { name }
+        }
         item_images(order_by: { display_order: asc }, limit: 1) {
           image_url
         }
@@ -412,8 +416,13 @@ export class OrderReorderService {
     }
     const foodBlock = checkFoodOrderable(inv);
     if (foodBlock) return 'not_orderable';
-    const available = Number(inv.computed_available_quantity ?? 0);
-    if (available <= 0) return 'out_of_stock';
+    const ignoresStock = cookedFoodIgnoresStock(
+      inv.item?.item_sub_category?.item_category?.name
+    );
+    if (!ignoresStock) {
+      const available = Number(inv.computed_available_quantity ?? 0);
+      if (available <= 0) return 'out_of_stock';
+    }
     return null;
   }
 
@@ -424,11 +433,21 @@ export class OrderReorderService {
     accepting: boolean
   ): ReorderLineDto {
     const ordered = Math.max(1, Number(item.quantity) || 1);
-    const stock = Number(inv.computed_available_quantity ?? 0);
+    const ignoresStock = cookedFoodIgnoresStock(
+      inv.item?.item_sub_category?.item_category?.name
+    );
+    const stock = ignoresStock
+      ? ordered
+      : Number(inv.computed_available_quantity ?? 0);
     const maxQty = inv.item?.max_order_quantity
       ? Number(inv.item.max_order_quantity)
-      : stock;
-    const quantity = Math.max(1, Math.min(ordered, stock, maxQty));
+      : ignoresStock
+        ? ordered
+        : stock;
+    const quantity = Math.max(
+      1,
+      Math.min(ordered, ignoresStock ? ordered : stock, maxQty)
+    );
     const unitPrice = resolveEffectiveUnitPrice({
       inventorySellingPrice: inv.selling_price,
       variant,

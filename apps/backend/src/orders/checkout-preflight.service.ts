@@ -52,6 +52,7 @@ import {
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 
@@ -645,7 +646,12 @@ export class CheckoutPreflightService {
       }
       for (const inv of group.inventoryRows) {
         const requested = quantityByInv.get(inv.id) ?? 0;
-        if (requested > inv.computed_available_quantity) {
+        if (
+          !cookedFoodIgnoresStock(
+            inv.item?.item_sub_category?.item_category?.name
+          ) &&
+          requested > inv.computed_available_quantity
+        ) {
           blockers.push({
             code: 'INSUFFICIENT_STOCK',
             message: `Insufficient stock for ${inv.item?.name ?? inv.id}. Available: ${inv.computed_available_quantity}, requested: ${requested}.`,

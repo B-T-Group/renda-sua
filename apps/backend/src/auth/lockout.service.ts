@@ -5,6 +5,8 @@ import { Configuration } from '../config/configuration';
 import {
   connectRedisWithRetry,
   createAppRedisClient,
+  formatRedisHostLabel,
+  isRedisConnectionNoise,
   waitForRedisReady,
 } from '../common/redis-client.util';
 import { redisCommandOrFallback } from '../common/redis-error.util';
@@ -145,9 +147,12 @@ export class LockoutService implements OnModuleDestroy {
     err: any,
     redis: { host: string; port: number }
   ): void {
-    this.logger.error(
-      `Redis client error: ${err?.message || String(err)} (host=${redis.host}:${redis.port})`
-    );
+    const detail = `${err?.message || String(err)} (${formatRedisHostLabel(redis)})`;
+    if (isRedisConnectionNoise(err)) {
+      this.logger.warn(`Redis client error: ${detail}`);
+      return;
+    }
+    this.logger.error(`Redis client error: ${detail}`);
   }
 
   private handleConnectFailure(error: any): void {

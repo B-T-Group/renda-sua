@@ -8,6 +8,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { StockAvailabilityPayloadV1 } from '../messaging/structured/structured-message.types';
+import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { isActivePersona } from '../users/persona.util';
 
 export const LOW_STOCK_THRESHOLD = 5;
@@ -35,6 +36,9 @@ type InventoryRow = {
   item: {
     id: string;
     name: string;
+    item_sub_category?: {
+      item_category?: { name?: string | null } | null;
+    } | null;
     item_images?: Array<{
       image_url?: string | null;
       image_type?: string | null;
@@ -77,6 +81,12 @@ export class StockAvailabilityService {
       throw new HttpException('Only clients can check availability', HttpStatus.FORBIDDEN);
     }
     const inv = await this.loadInventory(inventoryId);
+    if (cookedFoodIgnoresStock(inv.item?.item_sub_category?.item_category?.name)) {
+      throw new HttpException(
+        'Availability check is not available for cooked food',
+        HttpStatus.BAD_REQUEST
+      );
+    }
     const available = this.availableQty(inv);
     if (available <= 0 || available > LOW_STOCK_THRESHOLD) {
       throw new HttpException(
@@ -301,6 +311,9 @@ export class StockAvailabilityService {
           }
           item {
             id name
+            item_sub_category {
+              item_category { name }
+            }
             item_images(limit: 5, order_by: { display_order: asc }) {
               image_url
               image_type
