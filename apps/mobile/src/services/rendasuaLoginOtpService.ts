@@ -6,6 +6,7 @@
 
 import { getEnv } from '../config/auth0';
 import Auth0DirectService, { type Auth0Response, type Auth0Tokens } from './auth0DirectService';
+import { CLIENT_PLATFORM_HEADERS } from './clientPlatformHeaders';
 
 const START_OTP_PATH = '/auth/login/start-otp';
 const OTP_OPTIONS_PATH = '/auth/login/otp-options';
@@ -45,7 +46,10 @@ async function postJson(
   try {
     const res = await fetch(`${apiBase()}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...CLIENT_PLATFORM_HEADERS,
+      },
       body: JSON.stringify(body),
     });
     const text = await res.text();
@@ -184,7 +188,10 @@ async function verifyLoginOtp(
   try {
     const res = await fetch(`${apiBase()}${VERIFY_OTP_PATH}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...CLIENT_PLATFORM_HEADERS,
+      },
       body: JSON.stringify({ ...contact, otp, ...(channel ? { channel } : {}) }),
     });
     const text = await res.text();
