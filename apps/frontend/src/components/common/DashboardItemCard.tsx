@@ -31,6 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
+import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useProductInterest } from '../../hooks/useProductInterest';
@@ -119,6 +120,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const [interestSubmitting, setInterestSubmitting] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
+  const { flagOn, requireAuth } = useAuthGate();
   const { loginWithRedirectTracked } = useAuthFunnelTracking('dashboard_item');
   const { isAuthenticated } = useSessionAuth();
   const { enqueueSnackbar } = useSnackbar();
@@ -1143,6 +1145,14 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               sx={{ width: '75%', alignSelf: 'center' }}
               onClick={() => {
                 if (!isAuthenticated) {
+                  if (flagOn) {
+                    void requireAuth({
+                      context: 'interest',
+                      entry: 'interest_card',
+                      run: () => setInterestOpen(true),
+                    });
+                    return;
+                  }
                   void loginWithRedirectTracked('dashboard_export_interest', {
                     appState: { returnTo: window.location.pathname },
                   });

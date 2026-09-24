@@ -15,6 +15,7 @@ import { environment } from './config/environment';
 import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
 import { MarketProvider } from './contexts/MarketContext';
+import { AuthGateProvider } from './contexts/AuthGateContext';
 import { SessionAuthProvider } from './contexts/SessionAuthContext';
 import { UserProfileProvider } from './contexts/UserProfileContext';
 import { ImageEnhancementsProvider } from './hooks/useImageEnhancements';
@@ -89,6 +90,7 @@ async function bootstrap() {
             <AnalyticsInit />
             <LoadingProvider>
               <SessionAuthProvider>
+                <AuthGateProvider>
                 <AuthSessionObservedTracker />
                 <UserProfileProvider>
                   <MarketProvider>
@@ -103,6 +105,7 @@ async function bootstrap() {
                     </CartProvider>
                   </MarketProvider>
                 </UserProfileProvider>
+                </AuthGateProvider>
               </SessionAuthProvider>
             </LoadingProvider>
           </Auth0ProviderWithNavigate>

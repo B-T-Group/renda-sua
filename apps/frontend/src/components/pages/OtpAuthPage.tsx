@@ -12,9 +12,11 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import { validateReturnTo } from '../../utils/returnToValidator';
 import LaunchPromoCongrats, {
   LaunchPromoCongratsData,
@@ -66,6 +68,9 @@ function clearSignupSessionKeys(): void {
 const OtpAuthPage: React.FC = () => {
   const apiClient = useApiClient();
   const { trackAuthGateDismissed } = useAuthFunnelTracking('otp_auth_page');
+  const { flags } = useClientFlags();
+  const inappGates = flags.auth_web_inapp_gates ?? false;
+  const { openGenericGate } = useAuthGate();
   const { setPasswordlessSession } = useSessionAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -148,6 +153,24 @@ const OtpAuthPage: React.FC = () => {
   });
 
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const genericGateOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (genericGateOpenedRef.current || isSignup) return;
+    if (loginEmail || loginPhone) return;
+    if (!inappGates) return;
+    genericGateOpenedRef.current = true;
+    openGenericGate();
+    navigate(returnTo, { replace: true });
+  }, [
+    inappGates,
+    isSignup,
+    loginEmail,
+    loginPhone,
+    navigate,
+    openGenericGate,
+    returnTo,
+  ]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {

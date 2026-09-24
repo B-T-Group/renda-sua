@@ -1865,6 +1865,30 @@
       "verificationTitle": "Entrez le code de vérification",
       "digitLabel": "Chiffre {{n}}"
     },
+    "gate": {
+      "favorites": {
+        "title": "Connectez-vous pour enregistrer vos favoris",
+        "body": "Gardez vos coups de cœur et recevez des alertes de retour en stock."
+      },
+      "interest": {
+        "title": "Connectez-vous pour montrer votre intérêt",
+        "body": "Prévenez le vendeur que vous voulez cet article — nous vous tiendrons informé."
+      },
+      "generic": {
+        "title": "Connectez-vous pour continuer",
+        "body": "Entrez votre téléphone ou e-mail et nous vous enverrons un code à usage unique."
+      },
+      "hintPhone": "Nous vous enverrons un code à {{count}} chiffres par SMS.",
+      "hintEmail": "Nous vous enverrons un code à {{count}} chiffres par e-mail.",
+      "codeSentSms": "Nous avons envoyé un code au {{phone}}.",
+      "codeSentEmail": "Nous avons envoyé un code à {{email}}.",
+      "resendIn": "Renvoyer dans {{time}}",
+      "requestFailed": "Impossible de traiter cette demande. Veuillez réessayer.",
+      "genericError": "Une erreur s’est produite. Veuillez réessayer.",
+      "invalidCode": "Ce code n’a pas fonctionné. Veuillez réessayer.",
+      "tooManyAttempts": "Trop de tentatives. Veuillez patienter un instant.",
+      "finishAccountPending": "Vérifiez votre code, puis terminez la création du compte pour continuer."
+    },
     "otpLogin": {
       "continue": "Continuer avec OTP",
       "createAccount": "Créer un nouveau compte",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { readBootstrapCountryCode } from '../utils/marketStorage';
 import { useApiClient } from './useApiClient';
 
 export type ClientFlagKey =
@@ -27,8 +28,12 @@ export function useClientFlags() {
   useEffect(() => {
     if (!apiClient) return;
     let cancelled = false;
+    const country = readBootstrapCountryCode();
+    const path = country
+      ? `/app-config/client-flags?country=${encodeURIComponent(country)}`
+      : '/app-config/client-flags';
     void apiClient
-      .get<{ success: boolean; data: ClientFlags }>('/app-config/client-flags')
+      .get<{ success: boolean; data: ClientFlags }>(path)
       .then((res) => {
         if (cancelled) return;
         setFlags({ ...DEFAULT_FLAGS, ...(res.data?.data ?? {}) });
