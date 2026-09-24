@@ -22,6 +22,7 @@ import { SignupController } from './signup.controller';
 import { SignupService } from './signup.service';
 import { SignupAttemptCleanupService } from './signup-attempt-cleanup.service';
 import { SessionStoreService } from './session-store.service';
+import { AuthAvailabilityLimiterService } from './auth-availability-limiter.service';
 import { LockoutService } from './lockout.service';
 import { OtpSendLimiterService } from './otp-send-limiter.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
@@ -51,6 +52,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     SessionStoreService,
     LockoutService,
     OtpSendLimiterService,
+    AuthAvailabilityLimiterService,
     PermissionService,
     SignupService,
     SignupAttemptCleanupService,
@@ -71,6 +73,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     SessionStoreService,
     LockoutService,
     OtpSendLimiterService,
+    AuthAvailabilityLimiterService,
     RbacModule,
   ],
 })

@@ -28,6 +28,7 @@ import { CurrentUser } from './user.decorator';
 import { Public } from './public.decorator';
 import type { ClientPlatform } from './platform.decorator';
 import { Platform } from './platform.decorator';
+import { AuthAvailabilityLimiterService } from './auth-availability-limiter.service';
 import { SignupAttemptStartResult, SignupService } from './signup.service';
 import { SignupStartDto } from './dto/signup-start.dto';
 import { SignupResendOtpDto, SignupVerifyOtpDto } from './dto/signup-otp.dto';
@@ -36,17 +37,28 @@ import { sessionCookieOptions } from './session-cookie';
 @ApiTags('auth')
 @Controller('auth')
 export class SignupController {
-  constructor(private readonly signupService: SignupService) {}
+  constructor(
+    private readonly signupService: SignupService,
+    private readonly availabilityLimiter: AuthAvailabilityLimiterService
+  ) {}
 
   @Public()
   @Get('email-availability')
   @Throttle({ short: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Check if email is already taken' })
+  @ApiOperation({
+    summary: 'Check if email is already taken',
+    deprecated: true,
+    description:
+      'Deprecated: prefer in-flow auth (flow_version 2). Subject to per-IP daily caps.',
+  })
   @ApiQuery({ name: 'email', required: true, type: String })
   @ApiResponse({ status: 200, description: 'Email availability status' })
+  @ApiResponse({ status: 429, description: 'Daily per-IP availability cap exceeded' })
   async emailAvailability(
-    @Query('email') email: string
+    @Query('email') email: string,
+    @Req() req: { ip?: string }
   ): Promise<{ taken: boolean }> {
+    await this.availabilityLimiter.assertAndRecordCheck(req.ip);
     if (!email || !email.trim()) {
       return { taken: false };
     }
@@ -57,12 +69,20 @@ export class SignupController {
   @Public()
   @Get('phone-availability')
   @Throttle({ short: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Check if phone number is already taken' })
+  @ApiOperation({
+    summary: 'Check if phone number is already taken',
+    deprecated: true,
+    description:
+      'Deprecated: prefer in-flow auth (flow_version 2). Subject to per-IP daily caps.',
+  })
   @ApiQuery({ name: 'phone_number', required: true, type: String })
   @ApiResponse({ status: 200, description: 'Phone availability status' })
+  @ApiResponse({ status: 429, description: 'Daily per-IP availability cap exceeded' })
   async phoneAvailability(
-    @Query('phone_number') phoneNumber: string
+    @Query('phone_number') phoneNumber: string,
+    @Req() req: { ip?: string }
   ): Promise<{ taken: boolean }> {
+    await this.availabilityLimiter.assertAndRecordCheck(req.ip);
     if (!phoneNumber || !phoneNumber.trim()) {
       return { taken: false };
     }

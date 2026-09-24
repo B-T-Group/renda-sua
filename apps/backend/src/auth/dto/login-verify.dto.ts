@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsEmail,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Length,
@@ -52,4 +54,16 @@ export class LoginVerifyDto {
   @IsOptional()
   @IsIn(['email', 'sms'])
   channel?: 'email' | 'sms';
+
+  @ApiPropertyOptional({
+    description:
+      'Auth flow version. When set to 2, responses avoid account-enumeration oracles.',
+    enum: [2],
+    example: 2,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([2])
+  flow_version?: number;
 }

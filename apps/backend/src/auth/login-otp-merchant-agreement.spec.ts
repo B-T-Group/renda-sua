@@ -57,6 +57,11 @@ describe('LoginService OTP merchant agreement gating', () => {
     generateSessionId: jest.fn().mockReturnValue('sid-1'),
     createSession: jest.fn().mockResolvedValue(undefined),
   };
+  const otpSendLimiter = {
+    assertCanSend: jest.fn().mockResolvedValue(undefined),
+    recordSend: jest.fn().mockResolvedValue(undefined),
+    isEnforcementEnabled: jest.fn().mockReturnValue(false),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -82,7 +87,8 @@ describe('LoginService OTP merchant agreement gating', () => {
       auth0Service as never,
       businessProvisioning as never,
       sessionStore as never,
-      lockout as never
+      lockout as never,
+      otpSendLimiter as never
     );
   });
 

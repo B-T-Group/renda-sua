@@ -15,6 +15,8 @@ jest.mock('../addresses/addresses.service', () => ({
 }));
 
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { AUTH_REQUEST_FAILED_CODE } from './auth-flow.util';
+import { buildIdentifierLockoutKey } from './auth-lockout.util';
 import { LoginService } from './login.service';
 
 function unsignedJwt(payload: Record<string, unknown>): string {
@@ -156,6 +158,19 @@ describe('LoginService start, lockout, and session gates', () => {
       ).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
     });
 
+    it('returns a neutral error for flow v2 when the user is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      await expect(
+        service.getLoginOtpOptions({
+          email: 'missing@example.com',
+          flow_version: 2,
+        })
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: { code: AUTH_REQUEST_FAILED_CODE },
+      });
+    });
+
     it('defaults to email when the identifier is an email', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         users: [userWithBoth],
@@ -186,6 +201,20 @@ describe('LoginService start, lockout, and session gates', () => {
       await expect(
         service.startLoginOtp({ email: ' Missing@Example.COM ' })
       ).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
+    });
+
+    it('returns a neutral error for flow v2 start when the user is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      await expect(
+        service.startLoginOtp({
+          email: 'missing@example.com',
+          flow_version: 2,
+        })
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: { code: AUTH_REQUEST_FAILED_CODE },
+      });
       expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
     });
 
@@ -363,7 +392,53 @@ describe('LoginService start, lockout, and session gates', () => {
       ).rejects.toBeTruthy();
       expect(lockout.recordFailure).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordFailure).toHaveBeenCalledWith('shop@example.com');
+      expect(lockout.recordFailure).toHaveBeenCalledWith(
+        buildIdentifierLockoutKey({ email: 'shop@example.com' })
+      );
       expect(lockout.recordSuccess).not.toHaveBeenCalled();
+    });
+
+    it('records identifier lockout for flow v2 verify when the user is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      auth0Service.verifyEmailOtp.mockRejectedValue(new Error('bad otp'));
+
+      await expect(
+        service.verifyLoginOtp(
+          {
+            email: 'missing@example.com',
+            otp: '0000',
+            flow_version: 2,
+          },
+          'mobile'
+        )
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: { code: AUTH_REQUEST_FAILED_CODE },
+      });
+
+      expect(lockout.recordFailure).toHaveBeenCalledWith(
+        buildIdentifierLockoutKey({ email: 'missing@example.com' })
+      );
+    });
+
+    it('returns 429 for flow v2 verify when the identifier is locked out', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      lockout.isLockedOut.mockImplementation(async (key: string) =>
+        key.startsWith('identifier:')
+      );
+      lockout.getRemainingLockoutMs.mockResolvedValue(60_000);
+
+      await expect(
+        service.verifyLoginOtp(
+          {
+            email: 'missing@example.com',
+            otp: '1234',
+            flow_version: 2,
+          },
+          'mobile'
+        )
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
     });
 
     it('creates a web session and omits the refresh token from the JSON body', async () => {
@@ -403,6 +478,9 @@ describe('LoginService start, lockout, and session gates', () => {
       );
       expect(lockout.recordSuccess).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordSuccess).toHaveBeenCalledWith('shop@example.com');
+      expect(lockout.recordSuccess).toHaveBeenCalledWith(
+        buildIdentifierLockoutKey({ email: 'shop@example.com' })
+      );
     });
 
     it('returns refresh_token to mobile clients without creating a cookie session', async () => {

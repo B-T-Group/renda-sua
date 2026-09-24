@@ -19,6 +19,11 @@ import {
   isInvalidGrantError,
   requireRefreshToken,
 } from './session-refresh.util';
+import {
+  AUTH_REQUEST_FAILED_CODE,
+  isAuthFlowV2,
+} from './auth-flow.util';
+import { buildIdentifierLockoutKey } from './auth-lockout.util';
 import { LoginStartDto } from './dto/login-start.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
 import type { ClientPlatform } from './platform.decorator';
@@ -210,18 +215,31 @@ export class LoginService {
 
   private async findUserByIdentifier(
     email: string,
-    phone: string
-  ): Promise<LoginUserRow> {
+    phone: string,
+    options?: { allowMissing?: boolean }
+  ): Promise<LoginUserRow | null> {
     const user = email
       ? await this.getUserByEmail(email)
       : await this.getUserByPhoneNumber(phone);
     if (!user) {
+      if (options?.allowMissing) return null;
       throw new HttpException(
         { success: false, error: 'User not found' },
         HttpStatus.NOT_FOUND
       );
     }
     return user;
+  }
+
+  private throwAuthRequestFailed(): never {
+    throw new HttpException(
+      {
+        success: false,
+        error: 'Unable to process request',
+        code: AUTH_REQUEST_FAILED_CODE,
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   private buildOptionsFromUser(
@@ -242,7 +260,13 @@ export class LoginService {
 
   async getLoginOtpOptions(body: LoginStartDto): Promise<LoginOtpOptionsResult> {
     const { email, phone } = this.parseIdentifier(body);
-    const user = await this.findUserByIdentifier(email, phone);
+    const flowV2 = isAuthFlowV2(body.flow_version);
+    const user = await this.findUserByIdentifier(email, phone, {
+      allowMissing: flowV2,
+    });
+    if (!user) {
+      this.throwAuthRequestFailed();
+    }
     return this.buildOptionsFromUser(user, email ? 'email' : 'sms');
   }
 
@@ -291,7 +315,16 @@ export class LoginService {
     ip?: string
   ): Promise<LoginOtpStartResult> {
     const { email, phone } = this.parseIdentifier(body);
-    const user = await this.findUserByIdentifier(email, phone);
+    const flowV2 = isAuthFlowV2(body.flow_version);
+    const user = await this.findUserByIdentifier(email, phone, {
+      allowMissing: flowV2,
+    });
+    if (!user) {
+      await this.ensureNotLockedOut(
+        this.lockoutKeysForParsedIdentifier(email, phone)
+      );
+      this.throwAuthRequestFailed();
+    }
     const defaultChannel: OtpChannel = email ? 'email' : 'sms';
     const channel = this.resolveDeliveryChannel(
       user,
@@ -301,7 +334,7 @@ export class LoginService {
     const destination = this.otpDestinationForChannel(user, channel);
     const identifier = buildOtpIdentifier({ email, phone });
     await this.ensureNotLockedOut(
-      this.lockoutKeysForUser(user, destination)
+      this.lockoutKeysForUser(user, destination, email, phone)
     );
     await this.otpSendLimiter.assertCanSend({
       destination,
@@ -405,11 +438,27 @@ export class LoginService {
     }
   }
 
+  private lockoutKeysForParsedIdentifier(
+    email: string,
+    phone: string
+  ): string[] {
+    return [buildIdentifierLockoutKey({ email, phone })];
+  }
+
   private lockoutKeysForUser(
     user: LoginUserRow,
-    destination: string
+    destination: string,
+    parsedEmail: string,
+    parsedPhone: string
   ): string[] {
-    const keys = [`user:${user.id}`, destination];
+    const keys = [
+      `user:${user.id}`,
+      destination,
+      buildIdentifierLockoutKey({
+        email: parsedEmail || user.email,
+        phone: parsedPhone || user.phone_number,
+      }),
+    ];
     const email = this.normalizeEmail(user.email || '');
     const phone = this.normalizePhone(user.phone_number || '');
     if (email) keys.push(email);
@@ -431,7 +480,21 @@ export class LoginService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const user = await this.findUserByIdentifier(email, phone);
+    const flowV2 = isAuthFlowV2(body.flow_version);
+    const identifierKeys = this.lockoutKeysForParsedIdentifier(email, phone);
+    await this.ensureNotLockedOut(identifierKeys);
+
+    const user = await this.findUserByIdentifier(email, phone, {
+      allowMissing: flowV2,
+    });
+    if (!user) {
+      return await this.verifyLoginOtpUnknownIdentifier(
+        email,
+        phone,
+        otp,
+        identifierKeys
+      );
+    }
     const defaultChannel: OtpChannel = email ? 'email' : 'sms';
     const channel = body.channel
       ? this.resolveDeliveryChannel(user, body.channel, defaultChannel)
@@ -443,7 +506,9 @@ export class LoginService {
         platform,
         ipAddress,
         userAgent,
-        user
+        user,
+        email,
+        phone
       );
     }
     return this.verifyLoginOtpWithPhone(
@@ -452,8 +517,34 @@ export class LoginService {
       platform,
       ipAddress,
       userAgent,
-      user
+      user,
+      email,
+      phone
     );
+  }
+
+  private async verifyLoginOtpUnknownIdentifier(
+    email: string,
+    phone: string,
+    otp: string,
+    lockoutKeys: string[]
+  ): Promise<never> {
+    try {
+      if (email) {
+        await (this.isTestUser(email, false)
+          ? this.auth0Service.verifyTestUserEmail(email)
+          : this.auth0Service.verifyEmailOtp(email, otp));
+      } else {
+        await (this.isTestUser(phone, true)
+          ? this.auth0Service.verifyTestUserPhone(phone)
+          : this.auth0Service.verifySmsOtp(phone, otp));
+      }
+      await this.recordLockoutSuccess(lockoutKeys);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      await this.recordLockoutFailure(lockoutKeys);
+    }
+    this.throwAuthRequestFailed();
   }
 
   private async verifyLoginOtpWithEmail(
@@ -462,7 +553,9 @@ export class LoginService {
     platform: ClientPlatform,
     ipAddress?: string,
     userAgent?: string,
-    knownUser?: LoginUserRow
+    knownUser?: LoginUserRow,
+    parsedEmail = '',
+    parsedPhone = ''
   ): Promise<LoginResult> {
     const user = knownUser || (await this.getUserByEmail(email));
     if (!user) {
@@ -471,7 +564,12 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
-    const lockoutKeys = this.lockoutKeysForUser(user, email);
+    const lockoutKeys = this.lockoutKeysForUser(
+      user,
+      email,
+      parsedEmail || email,
+      parsedPhone
+    );
     await this.ensureNotLockedOut(lockoutKeys);
 
     let tokenData: TokenData;
@@ -497,7 +595,9 @@ export class LoginService {
     platform: ClientPlatform,
     ipAddress?: string,
     userAgent?: string,
-    knownUser?: LoginUserRow
+    knownUser?: LoginUserRow,
+    parsedEmail = '',
+    parsedPhone = ''
   ): Promise<LoginResult> {
     const user = knownUser || (await this.getUserByPhoneNumber(phoneNumber));
     if (!user) {
@@ -506,7 +606,12 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
-    const lockoutKeys = this.lockoutKeysForUser(user, phoneNumber);
+    const lockoutKeys = this.lockoutKeysForUser(
+      user,
+      phoneNumber,
+      parsedEmail,
+      parsedPhone || phoneNumber
+    );
     await this.ensureNotLockedOut(lockoutKeys);
 
     let tokenData: TokenData;
