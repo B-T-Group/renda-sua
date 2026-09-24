@@ -12,6 +12,7 @@ import { MetaConversionsModule } from '../meta-conversions/meta-conversions.modu
 import { MobilePaymentPhoneSeedModule } from '../mobile-payment-phones/mobile-payment-phone-seed.module';
 import { PaymentProgramsModule } from '../payment-programs/payment-programs.module';
 import { RbacModule } from '../rbac/rbac.module';
+import { SiteEventsModule } from '../site-events/site-events.module';
 import { AuthGuard } from './auth.guard';
 import { Auth0Service } from './auth0.service';
 import { Auth0ActionsController } from './auth0-actions.controller';
@@ -41,6 +42,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     MobilePaymentPhoneSeedModule,
     MetaConversionsModule,
     forwardRef(() => PaymentProgramsModule),
+    SiteEventsModule,
   ],
   controllers: [SignupController, LoginController, Auth0ActionsController],
   providers: [

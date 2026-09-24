@@ -9,6 +9,8 @@ import './styles/apple-fonts.css';
 
 import App from './app/app';
 import { AnalyticsInit } from './components/analytics/AnalyticsInit';
+import AuthSessionObservedTracker from './components/analytics/AuthSessionObservedTracker';
+import { completeAuthIntentFromPendingStorage } from './utils/authFunnelTracking';
 import { environment } from './config/environment';
 import { CartProvider } from './contexts/CartContext';
 import { LoadingProvider } from './contexts/LoadingContext';
@@ -61,6 +63,7 @@ const Auth0ProviderWithNavigate: React.FC<{ children: React.ReactNode }> = ({
     <Auth0Provider
       {...auth0Config}
       onRedirectCallback={(appState) => {
+        void completeAuthIntentFromPendingStorage();
         const target = (appState as any)?.returnTo || '/';
         navigate(target, { replace: true });
       }}
@@ -86,6 +89,7 @@ async function bootstrap() {
             <AnalyticsInit />
             <LoadingProvider>
               <SessionAuthProvider>
+                <AuthSessionObservedTracker />
                 <UserProfileProvider>
                   <MarketProvider>
                     <CartProvider>

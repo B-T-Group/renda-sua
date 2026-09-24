@@ -83,6 +83,21 @@ export const SITE_EVENT_ORDERS_REORDER_TAP = 'orders.reorder.tap' as const;
 export const SITE_EVENT_ORDERS_REORDER_RESULT =
   'orders.reorder.result' as const;
 
+export const SITE_EVENT_AUTH_GATE_SHOWN = 'auth_gate_shown' as const;
+export const SITE_EVENT_AUTH_GATE_DISMISSED = 'auth_gate_dismissed' as const;
+export const SITE_EVENT_AUTH_CODE_SENT = 'auth_code_sent' as const;
+export const SITE_EVENT_AUTH_CODE_SEND_FAILED = 'auth_code_send_failed' as const;
+export const SITE_EVENT_AUTH_CODE_FAILED = 'auth_code_failed' as const;
+export const SITE_EVENT_AUTH_LOCKED = 'auth_locked' as const;
+export const SITE_EVENT_AUTH_CODE_VERIFIED = 'auth_code_verified' as const;
+export const SITE_EVENT_AUTH_INTENT_COMPLETED = 'auth_intent_completed' as const;
+export const SITE_EVENT_AUTH_PASSWORD_USED = 'auth_password_used' as const;
+export const SITE_EVENT_AUTH_REAUTH_NOTICE_SHOWN =
+  'auth_reauth_notice_shown' as const;
+export const SITE_EVENT_AUTH_REAUTH_NOTICE_ACTION =
+  'auth_reauth_notice_action' as const;
+export const SITE_EVENT_AUTH_SESSION_OBSERVED = 'auth_session_observed' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -109,7 +124,19 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_DELIVERY_CARD_ESTIMATE_READY
   | typeof SITE_EVENT_ORDERS_REORDER_IMPRESSION
   | typeof SITE_EVENT_ORDERS_REORDER_TAP
-  | typeof SITE_EVENT_ORDERS_REORDER_RESULT;
+  | typeof SITE_EVENT_ORDERS_REORDER_RESULT
+  | typeof SITE_EVENT_AUTH_GATE_SHOWN
+  | typeof SITE_EVENT_AUTH_GATE_DISMISSED
+  | typeof SITE_EVENT_AUTH_CODE_SENT
+  | typeof SITE_EVENT_AUTH_CODE_SEND_FAILED
+  | typeof SITE_EVENT_AUTH_CODE_FAILED
+  | typeof SITE_EVENT_AUTH_LOCKED
+  | typeof SITE_EVENT_AUTH_CODE_VERIFIED
+  | typeof SITE_EVENT_AUTH_INTENT_COMPLETED
+  | typeof SITE_EVENT_AUTH_PASSWORD_USED
+  | typeof SITE_EVENT_AUTH_REAUTH_NOTICE_SHOWN
+  | typeof SITE_EVENT_AUTH_REAUTH_NOTICE_ACTION
+  | typeof SITE_EVENT_AUTH_SESSION_OBSERVED;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

@@ -28,10 +28,10 @@ import {
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
 import { useSnackbar } from 'notistack';
 import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useProductInterest } from '../../hooks/useProductInterest';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
@@ -119,7 +119,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const [interestSubmitting, setInterestSubmitting] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const { t } = useTranslation();
-  const { loginWithRedirect } = useAuth0();
+  const { loginWithRedirectTracked } = useAuthFunnelTracking('dashboard_item');
   const { isAuthenticated } = useSessionAuth();
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
@@ -1143,7 +1143,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
               sx={{ width: '75%', alignSelf: 'center' }}
               onClick={() => {
                 if (!isAuthenticated) {
-                  void loginWithRedirect({
+                  void loginWithRedirectTracked('dashboard_export_interest', {
                     appState: { returnTo: window.location.pathname },
                   });
                   return;

@@ -1,4 +1,10 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { Auth0Service, Auth0TokenResponse } from './auth0.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -23,6 +29,12 @@ import {
   maskPhoneForOtp,
   type OtpChannel,
 } from './otp-channel.util';
+import { SiteEventsService } from '../site-events/site-events.service';
+import {
+  authSendFailReason,
+  emitAuthSiteEvent,
+  serverAuthViewer,
+} from './auth-site-events.helper';
 
 interface Auth0IdTokenClaims {
   sub?: string;
@@ -106,7 +118,8 @@ export class LoginService {
     private readonly auth0Service: Auth0Service,
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly sessionStore: SessionStoreService,
-    private readonly lockout: LockoutService
+    private readonly lockout: LockoutService,
+    @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
 
   private normalizeEmail(email: string): string {
@@ -277,7 +290,10 @@ export class LoginService {
     await this.auth0Service.startSmsOtp(phone);
   }
 
-  async startLoginOtp(body: LoginStartDto): Promise<LoginOtpStartResult> {
+  async startLoginOtp(
+    body: LoginStartDto,
+    platform: ClientPlatform = 'web'
+  ): Promise<LoginOtpStartResult> {
     const { email, phone } = this.parseIdentifier(body);
     const user = await this.findUserByIdentifier(email, phone);
     const defaultChannel: OtpChannel = email ? 'email' : 'sms';
@@ -286,7 +302,29 @@ export class LoginService {
       body.channel,
       defaultChannel
     );
-    await this.sendOtpToChannel(user, channel);
+    try {
+      await this.sendOtpToChannel(user, channel);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_sent',
+        platform,
+        { channel, context: 'login' },
+        serverAuthViewer(user.id)
+      );
+    } catch (error: any) {
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_send_failed',
+        platform,
+        {
+          channel,
+          context: 'login',
+          fail_reason: authSendFailReason(error),
+        },
+        serverAuthViewer(user.id)
+      );
+      throw error;
+    }
     return {
       channel,
       ...this.buildOptionsFromUser(user, defaultChannel),
@@ -340,11 +378,14 @@ export class LoginService {
     );
   }
 
-  private async ensureNotLockedOut(keys: string[]): Promise<void> {
+  private async ensureNotLockedOut(
+    keys: string[],
+    platform: ClientPlatform
+  ): Promise<void> {
     for (const key of keys) {
       if (!key) continue;
       if (await this.lockout.isLockedOut(key)) {
-        await this.throwLockout(key);
+        await this.throwLockout(key, platform);
       }
     }
   }
@@ -430,7 +471,7 @@ export class LoginService {
       );
     }
     const lockoutKeys = this.lockoutKeysForUser(user, email);
-    await this.ensureNotLockedOut(lockoutKeys);
+    await this.ensureNotLockedOut(lockoutKeys, platform);
 
     let tokenData: TokenData;
     try {
@@ -439,6 +480,13 @@ export class LoginService {
         : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_failed',
+        platform,
+        { channel: 'email', context: 'login' },
+        serverAuthViewer(user.id)
+      );
       throw error;
     }
 
@@ -446,6 +494,13 @@ export class LoginService {
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     await this.afterSuccessfulVerify(user, 'email');
+    emitAuthSiteEvent(
+      this.siteEvents,
+      'auth_code_verified',
+      platform,
+      { channel: 'email', is_new_account: false, context: 'login' },
+      serverAuthViewer(user.id)
+    );
     return this.buildLoginResult(user, tokenData, platform, ipAddress, userAgent);
   }
 
@@ -465,7 +520,7 @@ export class LoginService {
       );
     }
     const lockoutKeys = this.lockoutKeysForUser(user, phoneNumber);
-    await this.ensureNotLockedOut(lockoutKeys);
+    await this.ensureNotLockedOut(lockoutKeys, platform);
 
     let tokenData: TokenData;
     try {
@@ -474,6 +529,13 @@ export class LoginService {
         : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_failed',
+        platform,
+        { channel: 'sms', context: 'login' },
+        serverAuthViewer(user.id)
+      );
       throw error;
     }
 
@@ -481,10 +543,27 @@ export class LoginService {
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     await this.afterSuccessfulVerify(user, 'sms');
+    emitAuthSiteEvent(
+      this.siteEvents,
+      'auth_code_verified',
+      platform,
+      { channel: 'sms', is_new_account: false, context: 'login' },
+      serverAuthViewer(user.id)
+    );
     return this.buildLoginResult(user, tokenData, platform, ipAddress, userAgent);
   }
 
-  private async throwLockout(identifier: string): Promise<never> {
+  private async throwLockout(
+    identifier: string,
+    platform: ClientPlatform
+  ): Promise<never> {
+    emitAuthSiteEvent(
+      this.siteEvents,
+      'auth_locked',
+      platform,
+      { context: 'login' },
+      serverAuthViewer()
+    );
     const remainingMs = await this.lockout.getRemainingLockoutMs(identifier);
     const remainingMin = Math.ceil(remainingMs / 60000);
     throw new HttpException(

@@ -1,4 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import ArrowForwardRounded from '@mui/icons-material/ArrowForwardRounded';
 import EmailOutlined from '@mui/icons-material/EmailOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
@@ -104,6 +105,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const navigate = useNavigate();
   const { loginWithRedirect } = useAuth0();
   const { trackSiteEvent } = useTrackSiteEvent();
+  const { trackAuthGateShown } = useAuthFunnelTracking('anonymous_buy_now');
   const { selectedMarket } = useMarket();
 
   const [contactMethod, setContactMethod] = useState<'phone' | 'email'>('phone');
@@ -181,9 +183,6 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           metadata: {
             screenHint,
             contactMethod,
-            loginHint: loginHint || null,
-            email: emailNormalized || null,
-            phone: phoneE164 || null,
           },
         });
         if (screenHint === 'signup' && attemptId) {
@@ -203,6 +202,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           navigate(`/auth/otp?flow=signup`);
           return;
         }
+        trackAuthGateShown('anonymous_buy_now_login');
         await loginWithRedirect({
           authorizationParams: {
             connection,
@@ -234,6 +234,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
       phoneE164,
       returnToPathWithAnon,
       t,
+      trackAuthGateShown,
       trackSiteEvent,
     ]
   );

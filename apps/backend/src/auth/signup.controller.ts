@@ -85,16 +85,20 @@ export class SignupController {
   @ApiResponse({ status: 409, description: 'Email or phone already taken' })
   async signupStart(
     @Body() body: SignupStartDto,
+    @Platform() clientPlatform: ClientPlatform,
     @Req() req: { ip?: string; headers?: Record<string, unknown> },
     @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ): Promise<{ success: boolean } & SignupAttemptStartResult> {
     const ua = req.headers?.['user-agent'];
-    const result = await this.signupService.startSignup({
-      ...body,
-      actionSource: resolveMetaActionSource(platform),
-      clientIpAddress: req.ip,
-      clientUserAgent: typeof ua === 'string' ? ua : undefined,
-    });
+    const result = await this.signupService.startSignup(
+      {
+        ...body,
+        actionSource: resolveMetaActionSource(platform),
+        clientIpAddress: req.ip,
+        clientUserAgent: typeof ua === 'string' ? ua : undefined,
+      },
+      clientPlatform
+    );
     return {
       success: true,
       ...result,
@@ -111,11 +115,13 @@ export class SignupController {
   @ApiResponse({ status: 200, description: 'OTP resent' })
   @ApiResponse({ status: 429, description: 'Resend cooldown active' })
   async signupResendOtp(
-    @Body() body: SignupResendOtpDto
+    @Body() body: SignupResendOtpDto,
+    @Platform() platform: ClientPlatform
   ): Promise<{ success: boolean } & SignupAttemptStartResult> {
     const result = await this.signupService.resendSignupOtp(
       body.attemptId,
-      body.channel
+      body.channel,
+      platform
     );
     return { success: true, ...result };
   }

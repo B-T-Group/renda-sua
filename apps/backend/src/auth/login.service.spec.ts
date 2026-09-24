@@ -66,6 +66,7 @@ describe('LoginService start, lockout, and session gates', () => {
     recordFailure: jest.Mock;
     recordSuccess: jest.Mock;
   };
+  let siteEvents: { trackEvent: jest.Mock };
   let service: LoginService;
 
   beforeEach(() => {
@@ -102,12 +103,14 @@ describe('LoginService start, lockout, and session gates', () => {
       recordFailure: jest.fn().mockResolvedValue(undefined),
       recordSuccess: jest.fn().mockResolvedValue(undefined),
     };
+    siteEvents = { trackEvent: jest.fn().mockResolvedValue(undefined) };
     service = new LoginService(
       hasuraSystemService as never,
       auth0Service as never,
       { ensureContractForUser: jest.fn().mockResolvedValue(undefined) } as never,
       sessionStore as never,
-      lockout as never
+      lockout as never,
+      siteEvents as never
     );
   });
 
@@ -198,6 +201,17 @@ describe('LoginService start, lockout, and session gates', () => {
       );
       expect(result.channel).toBe('email');
       expect(result.availableChannels).toEqual(['email']);
+      expect(siteEvents.trackEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'auth_code_sent',
+          metadata: expect.objectContaining({
+            channel: 'email',
+            context: 'login',
+            source: 'server',
+          }),
+        }),
+        expect.objectContaining({ viewerType: 'user', viewerId: 'user-1' })
+      );
     });
 
     it('sends OTP to the alternate channel when requested', async () => {

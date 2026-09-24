@@ -1,4 +1,10 @@
-import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { AddressesService } from '../addresses/addresses.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -29,6 +35,12 @@ import {
   maskEmailForOtp,
   maskPhoneForOtp,
 } from './otp-channel.util';
+import { SiteEventsService } from '../site-events/site-events.service';
+import {
+  authSendFailReason,
+  emitAuthSiteEvent,
+  serverAuthViewer,
+} from './auth-site-events.helper';
 
 const ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 120 * 1000;
@@ -167,7 +179,8 @@ export class SignupService {
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly referralProvisioning: ReferralProvisioningService,
     private readonly metaConversionsService: MetaConversionsService,
-    @Optional() private readonly campaigns?: CreditCampaignPublisher
+    @Optional() private readonly campaigns?: CreditCampaignPublisher,
+    @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -210,7 +223,8 @@ export class SignupService {
   }
 
   async startSignup(
-    payload: SignupStartPayload
+    payload: SignupStartPayload,
+    platform: ClientPlatform = 'web'
   ): Promise<SignupAttemptStartResult> {
     void this.cleanupExpiredAttempts();
     const email = this.normalizeEmail(payload.email);
@@ -228,13 +242,17 @@ export class SignupService {
       payload: { ...payload, email: email || null, phone_number: phoneNumber || null, personas },
       expires_at: expiresAt,
     });
-    await this.sendOtpForAttempt(attempt);
+    await this.sendSignupOtpWithTracking(attempt, platform, {
+      is_resend: false,
+      is_channel_switch: false,
+    });
     return this.toStartResult(attempt);
   }
 
   async resendSignupOtp(
     attemptId: string,
-    preferredChannel?: SignupOtpChannel
+    preferredChannel?: SignupOtpChannel,
+    platform: ClientPlatform = 'web'
   ): Promise<SignupAttemptStartResult> {
     let attempt = await this.loadAttempt(attemptId);
     this.assertAttemptResendable(attempt);
@@ -245,14 +263,37 @@ export class SignupService {
       const previousChannel = attempt.channel;
       attempt = await this.updateAttemptChannel(attempt.id, preferredChannel);
       try {
-        await this.sendOtpForAttempt(attempt);
+        await this.sendSignupOtpWithTracking(attempt, platform, {
+          is_resend: true,
+          is_channel_switch: true,
+        });
       } catch (error: any) {
         await this.updateAttemptChannel(attempt.id, previousChannel);
         throw error;
       }
     } else {
-      this.assertResendCooldown(attempt);
-      await this.sendOtpForAttempt(attempt);
+      try {
+        this.assertResendCooldown(attempt);
+      } catch (error: any) {
+        emitAuthSiteEvent(
+          this.siteEvents,
+          'auth_code_send_failed',
+          platform,
+          {
+            channel: attempt.channel,
+            context: 'signup',
+            fail_reason: authSendFailReason(error),
+            is_resend: true,
+            is_channel_switch: false,
+          },
+          serverAuthViewer()
+        );
+        throw error;
+      }
+      await this.sendSignupOtpWithTracking(attempt, platform, {
+        is_resend: true,
+        is_channel_switch: false,
+      });
     }
     const updated = await this.touchOtpSent(attempt.id);
     return this.toStartResult(updated);
@@ -377,7 +418,7 @@ export class SignupService {
         },
       };
     }
-    this.assertAttemptVerifiable(attempt);
+    this.assertAttemptVerifiable(attempt, platform);
     if (attempt.status === 'otp_verified' || attempt.status === 'provisioning') {
       const result = await this.provisionFromVerifiedAttempt(attempt);
       if (platform === 'web') {
@@ -427,6 +468,17 @@ export class SignupService {
       tokens = await this.verifyOtpAgainstAuth0(attempt, otp);
     } catch (error: any) {
       await this.incrementVerifyAttempts(attempt);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_failed',
+        platform,
+        {
+          channel: attempt.channel,
+          context: 'signup',
+          attempt_n: attempt.verify_attempts + 1,
+        },
+        serverAuthViewer()
+      );
       throw error;
     }
     this.assertTokenMatchesAttempt(tokens, attempt);
@@ -450,6 +502,17 @@ export class SignupService {
       },
     };
     const result = await this.provisionFromVerifiedAttempt(verified, tokens);
+    emitAuthSiteEvent(
+      this.siteEvents,
+      'auth_code_verified',
+      platform,
+      {
+        channel: attempt.channel,
+        is_new_account: true,
+        context: 'signup',
+      },
+      serverAuthViewer(result.user.id)
+    );
 
     if (platform === 'web') {
       const sessionId = this.sessionStore.generateSessionId();
@@ -729,7 +792,10 @@ export class SignupService {
     }
   }
 
-  private assertAttemptVerifiable(attempt: SignupAttemptRow): void {
+  private assertAttemptVerifiable(
+    attempt: SignupAttemptRow,
+    platform: ClientPlatform
+  ): void {
     if (attempt.status === 'failed' || attempt.status === 'expired') {
       throw new HttpException(
         {
@@ -754,6 +820,13 @@ export class SignupService {
       attempt.verify_attempts >= MAX_VERIFY_ATTEMPTS
     ) {
       void this.markAttemptFailed(attempt.id);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_locked',
+        platform,
+        { context: 'signup', attempts: MAX_VERIFY_ATTEMPTS },
+        serverAuthViewer()
+      );
       throw new HttpException(
         {
           success: false,
@@ -781,6 +854,41 @@ export class SignupService {
     const phone = this.normalizePhone(attempt.phone_number);
     if (this.isTestUser(phone, true)) return;
     await this.auth0Service.startSmsOtp(phone);
+  }
+
+  private async sendSignupOtpWithTracking(
+    attempt: SignupAttemptRow,
+    platform: ClientPlatform,
+    flags: { is_resend: boolean; is_channel_switch: boolean }
+  ): Promise<void> {
+    try {
+      await this.sendOtpForAttempt(attempt);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_sent',
+        platform,
+        {
+          channel: attempt.channel,
+          context: 'signup',
+          ...flags,
+        },
+        serverAuthViewer()
+      );
+    } catch (error: any) {
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_send_failed',
+        platform,
+        {
+          channel: attempt.channel,
+          context: 'signup',
+          fail_reason: authSendFailReason(error),
+          ...flags,
+        },
+        serverAuthViewer()
+      );
+      throw error;
+    }
   }
 
   private async touchOtpSent(attemptId: string): Promise<SignupAttemptRow> {

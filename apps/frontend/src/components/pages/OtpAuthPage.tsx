@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { validateReturnTo } from '../../utils/returnToValidator';
 import LaunchPromoCongrats, {
   LaunchPromoCongratsData,
@@ -64,6 +65,7 @@ function clearSignupSessionKeys(): void {
 
 const OtpAuthPage: React.FC = () => {
   const apiClient = useApiClient();
+  const { trackAuthGateDismissed } = useAuthFunnelTracking('otp_auth_page');
   const { setPasswordlessSession } = useSessionAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -583,7 +585,12 @@ const OtpAuthPage: React.FC = () => {
           ) : null}
           <Button
             color="inherit"
-            onClick={() => navigate(isSignup ? '/signup' : '/')}
+            onClick={() => {
+              trackAuthGateDismissed(
+                isSignup ? 'otp_signup_abandon' : 'otp_login_abandon'
+              );
+              navigate(isSignup ? '/signup' : '/');
+            }}
           >
             {isSignup
               ? t('auth.otp.changeContact', 'Use a different email or phone')

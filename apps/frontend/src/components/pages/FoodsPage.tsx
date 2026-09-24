@@ -11,7 +11,7 @@ import Typography from '@mui/material/Typography';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import SEOHead from '../seo/SEOHead';
 import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -58,7 +58,7 @@ const FOODS_GRID_SX = {
  */
 const FoodsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { loginWithRedirect } = useAuth0();
+  const { loginWithRedirectTracked } = useAuthFunnelTracking('foods_page');
   const { isAuthenticated } = useSessionAuth();
   const { selectedMarket } = useMarket();
   const { profile } = useUserProfileContext();
@@ -119,7 +119,7 @@ const FoodsPage: React.FC = () => {
     onCartBuilt: (cartItem) => addToCart(cartItem),
     requireAuth: () => {
       if (!isAuthenticated) {
-        void loginWithRedirect();
+        void loginWithRedirectTracked('foods_order');
         return false;
       }
       return true;
