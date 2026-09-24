@@ -1,7 +1,9 @@
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import FavoriteBorderRounded from '@mui/icons-material/FavoriteBorderRounded';
-import NotificationsActiveOutlined from '@mui/icons-material/NotificationsActiveOutlined';
+import LockOutlined from '@mui/icons-material/LockOutlined';
 import LoginRounded from '@mui/icons-material/LoginRounded';
+import PanToolAltOutlined from '@mui/icons-material/PanToolAltOutlined';
+import ShoppingBagOutlined from '@mui/icons-material/ShoppingBagOutlined';
 import {
   Box,
   Dialog,
@@ -12,12 +14,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuthGateOtp } from '../../hooks/useAuthGateOtp';
 import type { AuthGateIntent, AuthGateStep } from '../../types/authGate';
 import { getAuthGateContextCopy } from '../../utils/authGateContextCopy';
 import AuthGateCodeStep from './AuthGateCodeStep';
+import AuthGateFinishStep from './AuthGateFinishStep';
 import AuthGateIdentifierStep from './AuthGateIdentifierStep';
 
 export interface AuthGateProps {
@@ -32,12 +35,13 @@ export interface AuthGateProps {
     token_type: string;
     expires_in: number;
   }) => void;
-  onFinishAccountPending: () => void;
 }
 
 function ContextIcon({ context }: { context: AuthGateIntent['context'] }) {
   if (context === 'favorites') return <FavoriteBorderRounded color="error" />;
-  if (context === 'interest') return <NotificationsActiveOutlined color="primary" />;
+  if (context === 'checkout') return <LockOutlined color="primary" />;
+  if (context === 'interest') return <PanToolAltOutlined color="primary" />;
+  if (context === 'foods_cart') return <ShoppingBagOutlined color="primary" />;
   return <LoginRounded color="primary" />;
 }
 
@@ -48,7 +52,6 @@ const AuthGate: React.FC<AuthGateProps> = ({
   onStepChange,
   onDismiss,
   onAuthSuccess,
-  onFinishAccountPending,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -56,10 +59,16 @@ const AuthGate: React.FC<AuthGateProps> = ({
   const otp = useAuthGateOtp();
   const verifyRef = useRef(otp.verifyOtp);
   verifyRef.current = otp.verifyOtp;
+  const finishRef = useRef(otp.finishAccount);
+  finishRef.current = otp.finishAccount;
+  const [finishFlowId, setFinishFlowId] = useState<string | null>(null);
 
   const { resetFlow } = otp;
   useEffect(() => {
-    if (!open) resetFlow();
+    if (!open) {
+      resetFlow();
+      setFinishFlowId(null);
+    }
   }, [open, resetFlow]);
 
   const copy = getAuthGateContextCopy(intent?.context ?? 'generic');
@@ -71,17 +80,30 @@ const AuthGate: React.FC<AuthGateProps> = ({
         onAuthSuccess(result.session);
         return;
       }
-      if (result.finishAccount) {
-        otp.setError(
-          t(
-            'auth.gate.finishAccountPending',
-            'Verify your code first, then complete account setup to continue.'
-          )
-        );
-        onFinishAccountPending();
+      if (result.finishAccount && result.flowId) {
+        setFinishFlowId(result.flowId);
+        onStepChange('finish');
       }
     },
-    [onAuthSuccess, onFinishAccountPending, otp, t]
+    [onAuthSuccess, onStepChange, otp]
+  );
+
+  const handleFinish = useCallback(
+    async (payload: {
+      first_name: string;
+      last_name: string;
+      accept_terms: boolean;
+    }) => {
+      if (!finishFlowId) return;
+      const result = await finishRef.current({
+        flowId: finishFlowId,
+        ...payload,
+      });
+      if (result.ok && result.session) {
+        onAuthSuccess(result.session);
+      }
+    },
+    [finishFlowId, onAuthSuccess]
   );
 
   const handleStart = useCallback(
@@ -122,7 +144,14 @@ const AuthGate: React.FC<AuthGateProps> = ({
           </Typography>
         </Box>
       </Stack>
-      {step === 'identifier' || !otp.flow ? (
+      {step === 'finish' && finishFlowId ? (
+        <AuthGateFinishStep
+          busy={otp.busy}
+          error={otp.error}
+          onClearError={() => otp.setError(null)}
+          onSubmit={handleFinish}
+        />
+      ) : step === 'identifier' || !otp.flow ? (
         <AuthGateIdentifierStep
           disabled={otp.busy}
           error={otp.error}

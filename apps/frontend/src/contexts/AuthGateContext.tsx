@@ -1,3 +1,4 @@
+import { useSnackbar } from 'notistack';
 import React, {
   createContext,
   useCallback,
@@ -7,12 +8,17 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSessionAuth } from './SessionAuthContext';
 import { useClientFlags } from '../hooks/useClientFlags';
 import { useAuthFunnelTracking } from '../hooks/useAuthFunnelTracking';
 import { completeAuthIntentFromPendingStorage } from '../utils/authFunnelTracking';
 import AuthGate from '../components/auth/AuthGate';
 import type { AuthGateIntent, AuthGateStep } from '../types/authGate';
+import {
+  getAuthGateIntentErrorMessage,
+  getAuthGateSuccessToast,
+} from '../utils/authGateIntentMessages';
 
 type AuthGateContextValue = {
   flagOn: boolean;
@@ -29,6 +35,8 @@ export const AuthGateProvider: React.FC<{ children: ReactNode }> = ({
   const { flags } = useClientFlags();
   const flagOn = flags.auth_web_inapp_gates ?? false;
   const funnel = useAuthFunnelTracking('auth_gate');
+  const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<AuthGateStep>('identifier');
   const [intent, setIntent] = useState<AuthGateIntent | null>(null);
@@ -52,11 +60,26 @@ export const AuthGateProvider: React.FC<{ children: ReactNode }> = ({
     [flagOn, funnel, settle]
   );
 
-  const runIntentOnce = useCallback(async (active: AuthGateIntent | null) => {
-    if (!active?.run || intentRanRef.current) return;
-    intentRanRef.current = true;
-    await active.run();
-  }, []);
+  const runIntentOnce = useCallback(
+    async (active: AuthGateIntent | null) => {
+      if (!active?.run || intentRanRef.current) return;
+      intentRanRef.current = true;
+      try {
+        await active.run();
+        const toast = getAuthGateSuccessToast(active.context);
+        if (toast) {
+          enqueueSnackbar(t(toast.key, toast.defaultValue), {
+            variant: 'success',
+          });
+        }
+      } catch (error: unknown) {
+        enqueueSnackbar(getAuthGateIntentErrorMessage(error, t), {
+          variant: 'error',
+        });
+      }
+    },
+    [enqueueSnackbar, t]
+  );
 
   const completeSuccess = useCallback(
     async (active: AuthGateIntent | null) => {
@@ -110,9 +133,6 @@ export const AuthGateProvider: React.FC<{ children: ReactNode }> = ({
           onAuthSuccess={(session) => {
             setPasswordlessSession(session);
             void completeSuccess(intent);
-          }}
-          onFinishAccountPending={() => {
-            dismiss(intent?.entry ?? 'auth_gate');
           }}
         />
       )}

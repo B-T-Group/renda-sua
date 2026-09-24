@@ -2139,17 +2139,41 @@
     },
     "gate": {
       "favorites": {
-        "title": "Sign in to save favorites",
-        "body": "Keep your likes and get restock alerts with a free account."
+        "title": "Save your favorites",
+        "body": "Sign in to keep this item and find it on any device."
       },
       "interest": {
-        "title": "Sign in to show interest",
-        "body": "Tell the seller you want this item — we’ll notify you when it’s available."
+        "title": "Tell the seller you're interested",
+        "body": "Sign in so the seller can get back to you about this item."
+      },
+      "checkout": {
+        "title": "Sign in to check out",
+        "body": "We'll send you a code to confirm it's you. Your cart stays as it is."
+      },
+      "foodsCart": {
+        "title": "Sign in to add to your cart",
+        "body": "Your cart is saved to your account, so you can check out on any device."
       },
       "generic": {
         "title": "Sign in to continue",
-        "body": "Enter your phone or email and we’ll send you a one-time code."
+        "body": "We'll send you a code. No password needed."
       },
+      "finish": {
+        "title": "Finish your account",
+        "body": "Add your name and accept the terms to continue.",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "acceptTermsPrefix": "I accept the",
+        "termsLink": "Terms of Service",
+        "continue": "Continue"
+      },
+      "success": {
+        "favorites": "Saved to favorites",
+        "interest": "The seller knows you're interested",
+        "foodsCart": "Added to cart"
+      },
+      "intentSoldOut": "This item is no longer available.",
+      "intentFailed": "Signed in, but we couldn't finish that. Please try again.",
       "hintPhone": "We’ll text you a {{count}}-digit code.",
       "hintEmail": "We’ll email you a {{count}}-digit code.",
       "codeSentSms": "We sent a code to {{phone}}.",

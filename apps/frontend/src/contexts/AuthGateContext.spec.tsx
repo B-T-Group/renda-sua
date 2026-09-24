@@ -15,6 +15,14 @@ jest.mock('../hooks/useAuthFunnelTracking', () => ({
   }),
 }));
 
+jest.mock('notistack', () => ({
+  useSnackbar: () => ({ enqueueSnackbar: jest.fn() }),
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string, def: string) => def }),
+}));
+
 jest.mock('../components/auth/AuthGate', () => ({
   __esModule: true,
   default: () => null,

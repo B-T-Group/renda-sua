@@ -118,6 +118,46 @@ export function useAuthGateOtp() {
     [apiClient, flow, t]
   );
 
+  const finishAccount = useCallback(
+    async (payload: {
+      flowId: string;
+      first_name: string;
+      last_name: string;
+      accept_terms: boolean;
+    }) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const { data } = await apiClient.post(
+          '/auth/signup/finish',
+          {
+            flowId: payload.flowId,
+            first_name: payload.first_name,
+            last_name: payload.last_name,
+            accept_terms: payload.accept_terms,
+            user_type_id: 'client',
+            personas: ['client'],
+            profile: {},
+          },
+          { headers: { 'X-Client-Platform': 'web' } }
+        );
+        if (data?.access_token) {
+          return { ok: true as const, session: data };
+        }
+        setError(
+          t('auth.gate.genericError', 'Something went wrong. Please try again.')
+        );
+        return { ok: false as const };
+      } catch (err: any) {
+        setError(mapAuthGateApiError(err, t));
+        return { ok: false as const };
+      } finally {
+        setBusy(false);
+      }
+    },
+    [apiClient, t]
+  );
+
   const resetFlow = useCallback(() => {
     setFlow(null);
     setError(null);
@@ -132,6 +172,7 @@ export function useAuthGateOtp() {
     startFlow,
     resendFlow,
     verifyOtp,
+    finishAccount,
     resetFlow,
   };
 }

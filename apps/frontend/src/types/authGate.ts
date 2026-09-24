@@ -1,6 +1,8 @@
 export type AuthGateContextKey =
   | 'favorites'
+  | 'checkout'
   | 'interest'
+  | 'foods_cart'
   | 'generic';
 
 export type AuthGateIntent = {
@@ -10,4 +12,4 @@ export type AuthGateIntent = {
   run?: () => void | Promise<void>;
 };
 
-export type AuthGateStep = 'identifier' | 'code';
+export type AuthGateStep = 'identifier' | 'code' | 'finish';

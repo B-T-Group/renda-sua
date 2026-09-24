@@ -11,6 +11,7 @@ import Typography from '@mui/material/Typography';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
+import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import SEOHead from '../seo/SEOHead';
 import { useCart } from '../../contexts/CartContext';
@@ -59,6 +60,7 @@ const FOODS_GRID_SX = {
 const FoodsPage: React.FC = () => {
   const { t } = useTranslation();
   const { loginWithRedirectTracked } = useAuthFunnelTracking('foods_page');
+  const { flagOn, requireAuth } = useAuthGate();
   const { isAuthenticated } = useSessionAuth();
   const { selectedMarket } = useMarket();
   const { profile } = useUserProfileContext();
@@ -117,12 +119,15 @@ const FoodsPage: React.FC = () => {
 
   const variantFlow = useCatalogVariantFlow({
     onCartBuilt: (cartItem) => addToCart(cartItem),
-    requireAuth: () => {
-      if (!isAuthenticated) {
-        void loginWithRedirectTracked('foods_order');
-        return false;
+    requireAuth: (run) => {
+      if (isAuthenticated) {
+        return requireAuth({ context: 'foods_cart', entry: 'foods_order', run });
       }
-      return true;
+      if (flagOn) {
+        return requireAuth({ context: 'foods_cart', entry: 'foods_order', run });
+      }
+      void loginWithRedirectTracked('foods_order');
+      return false;
     },
   });
 

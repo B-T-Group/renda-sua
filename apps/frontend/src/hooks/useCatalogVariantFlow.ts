@@ -17,7 +17,7 @@ type PendingAction = 'cart' | 'order';
  */
 export function useCatalogVariantFlow(params: {
   onCartBuilt: (cartItem: CartItem, item: InventoryItem) => void;
-  requireAuth?: () => boolean;
+  requireAuth?: (run: () => void | Promise<void>) => boolean | Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -59,44 +59,71 @@ export function useCatalogVariantFlow(params: {
     [baseLabel, closePicker, navigate]
   );
 
+  const guardAuth = useCallback(
+    async (run: () => void | Promise<void>): Promise<boolean> => {
+      const guard = requireAuthRef.current;
+      if (!guard) {
+        await run();
+        return true;
+      }
+      const result = guard(run);
+      return result instanceof Promise ? result : result;
+    },
+    []
+  );
+
   const requestOrder = useCallback(
-    (item: InventoryItem, selectionId?: string | null) => {
-      if (requireAuthRef.current && !requireAuthRef.current()) return;
-      if (catalogRequiresVariantSelection(item)) {
-        if (selectionId) {
-          completeWithSelection(item, selectionId, 'order');
+    async (item: InventoryItem, selectionId?: string | null) => {
+      const execute = () => {
+        if (catalogRequiresVariantSelection(item)) {
+          if (selectionId) {
+            completeWithSelection(item, selectionId, 'order');
+            return;
+          }
+          setPendingAction('order');
+          setPickerItem(item);
           return;
         }
-        setPendingAction('order');
-        setPickerItem(item);
+        navigate(`/items/${item.id}/place_order`);
+      };
+      if (requireAuthRef.current) {
+        const ok = await guardAuth(execute);
+        if (!ok) return;
         return;
       }
-      navigate(`/items/${item.id}/place_order`);
+      execute();
     },
-    [completeWithSelection, navigate]
+    [completeWithSelection, guardAuth, navigate]
   );
 
   const requestAddToCart = useCallback(
-    (item: InventoryItem, selectionId?: string | null) => {
-      if (requireAuthRef.current && !requireAuthRef.current()) return;
-      if (catalogRequiresVariantSelection(item)) {
-        if (selectionId) {
-          completeWithSelection(item, selectionId, 'cart');
+    async (item: InventoryItem, selectionId?: string | null) => {
+      const execute = () => {
+        if (catalogRequiresVariantSelection(item)) {
+          if (selectionId) {
+            completeWithSelection(item, selectionId, 'cart');
+            return;
+          }
+          setPendingAction('cart');
+          setPickerItem(item);
           return;
         }
-        setPendingAction('cart');
-        setPickerItem(item);
+        const cartItem = buildCartItemFromInventory(item, 1, null, baseLabel);
+        if (cartItem === 'needs_variant') {
+          setPendingAction('cart');
+          setPickerItem(item);
+          return;
+        }
+        onCartBuiltRef.current(cartItem, item);
+      };
+      if (requireAuthRef.current) {
+        const ok = await guardAuth(execute);
+        if (!ok) return;
         return;
       }
-      const cartItem = buildCartItemFromInventory(item, 1, null, baseLabel);
-      if (cartItem === 'needs_variant') {
-        setPendingAction('cart');
-        setPickerItem(item);
-        return;
-      }
-      onCartBuiltRef.current(cartItem, item);
+      execute();
     },
-    [baseLabel, completeWithSelection]
+    [baseLabel, completeWithSelection, guardAuth]
   );
 
   const onPickerConfirm = useCallback(

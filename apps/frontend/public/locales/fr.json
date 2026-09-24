@@ -1867,17 +1867,41 @@
     },
     "gate": {
       "favorites": {
-        "title": "Connectez-vous pour enregistrer vos favoris",
-        "body": "Gardez vos coups de cœur et recevez des alertes de retour en stock."
+        "title": "Enregistrez vos favoris",
+        "body": "Connectez-vous pour garder cet article et le retrouver sur tous vos appareils."
       },
       "interest": {
-        "title": "Connectez-vous pour montrer votre intérêt",
-        "body": "Prévenez le vendeur que vous voulez cet article — nous vous tiendrons informé."
+        "title": "Montrez votre intérêt au vendeur",
+        "body": "Connectez-vous pour que le vendeur puisse vous recontacter à propos de cet article."
+      },
+      "checkout": {
+        "title": "Connectez-vous pour commander",
+        "body": "Nous vous envoyons un code pour confirmer que c'est bien vous. Votre panier reste intact."
+      },
+      "foodsCart": {
+        "title": "Connectez-vous pour ajouter au panier",
+        "body": "Votre panier est enregistré sur votre compte pour commander depuis n'importe quel appareil."
       },
       "generic": {
         "title": "Connectez-vous pour continuer",
-        "body": "Entrez votre téléphone ou e-mail et nous vous enverrons un code à usage unique."
+        "body": "Nous vous envoyons un code. Aucun mot de passe nécessaire."
       },
+      "finish": {
+        "title": "Terminez votre compte",
+        "body": "Indiquez votre nom et acceptez les conditions pour continuer.",
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "acceptTermsPrefix": "J'accepte les",
+        "termsLink": "Conditions d'utilisation",
+        "continue": "Continuer"
+      },
+      "success": {
+        "favorites": "Ajouté aux favoris",
+        "interest": "Le vendeur sait que vous êtes intéressé(e)",
+        "foodsCart": "Ajouté au panier"
+      },
+      "intentSoldOut": "Cet article n'est plus disponible.",
+      "intentFailed": "Vous êtes connecté(e), mais l'action n'a pas abouti. Veuillez réessayer.",
       "hintPhone": "Nous vous enverrons un code à {{count}} chiffres par SMS.",
       "hintEmail": "Nous vous enverrons un code à {{count}} chiffres par e-mail.",
       "codeSentSms": "Nous avons envoyé un code au {{phone}}.",
