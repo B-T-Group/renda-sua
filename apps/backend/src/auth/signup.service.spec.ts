@@ -26,6 +26,7 @@ import { ReferralProvisioningService } from './provisioning/referral-provisionin
 import { UserProvisioningService } from './provisioning/user-provisioning.service';
 import { SessionStoreService } from './session-store.service';
 import { SignupService } from './signup.service';
+import { OtpSendLimiterService } from './otp-send-limiter.service';
 
 describe('SignupService', () => {
   let service: SignupService;
@@ -37,6 +38,12 @@ describe('SignupService', () => {
   let referralProvisioning: jest.Mocked<ReferralProvisioningService>;
   let sessionStore: jest.Mocked<SessionStoreService>;
   let metaConversionsService: { trackCompleteRegistrationSafe: jest.Mock };
+  let otpSendLimiter: jest.Mocked<
+    Pick<
+      OtpSendLimiterService,
+      'assertCanSend' | 'recordSend' | 'isEnforcementEnabled'
+    >
+  >;
 
   const insertedUser = {
     id: 'user-123',
@@ -147,6 +154,17 @@ describe('SignupService', () => {
               .mockResolvedValue(undefined),
           },
         },
+        {
+          provide: OtpSendLimiterService,
+          useValue: {
+            assertCanSend: jest.fn().mockResolvedValue(undefined),
+            recordSend: jest.fn().mockResolvedValue({
+              codeExpiresAt: '2026-01-01T12:10:00.000Z',
+              resendAvailableAt: '2026-01-01T12:02:00.000Z',
+            }),
+            isEnforcementEnabled: jest.fn().mockReturnValue(false),
+          },
+        },
       ],
     }).compile();
 
@@ -159,6 +177,7 @@ describe('SignupService', () => {
     referralProvisioning = module.get(ReferralProvisioningService);
     sessionStore = module.get(SessionStoreService);
     metaConversionsService = module.get(MetaConversionsService);
+    otpSendLimiter = module.get(OtpSendLimiterService);
   });
 
   describe('availability checks', () => {
@@ -476,6 +495,32 @@ describe('SignupService', () => {
         expect.objectContaining({ channel: 'email' }),
         expect.objectContaining({ channel: 'sms' }),
       ]);
+    });
+
+    it('blocks alternating channels when OTP send caps are enforced', async () => {
+      otpSendLimiter.isEnforcementEnabled.mockReturnValue(true);
+      otpSendLimiter.assertCanSend.mockRejectedValue(
+        new HttpException(
+          {
+            success: false,
+            code: 'OTP_RESEND_COOLDOWN',
+            resendAvailableAt: '2026-01-01T12:02:00.000Z',
+          },
+          HttpStatus.TOO_MANY_REQUESTS
+        )
+      );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...pendingAttempt,
+          channel: 'sms',
+          last_otp_sent_at: new Date().toISOString(),
+        },
+      });
+
+      await expect(
+        service.resendSignupOtp('attempt-123', 'email', '9.9.9.9')
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
     });
 
     it('rejects channel switch when the attempt has no phone for SMS', async () => {
@@ -1007,7 +1052,10 @@ describe('SignupService', () => {
         ([mutation]) => String(mutation).includes('CleanupExpiredSignupAttempts')
       );
       expect(cleanupCall).toBeDefined();
-      expect(String(cleanupCall?.[0])).toContain('status: { _eq: "pending" }');
+      expect(String(cleanupCall?.[0])).toContain(
+        'status: { _in: ["pending", "otp_verified"] }'
+      );
+      expect(String(cleanupCall?.[0])).toContain('completion_result: null');
       expect(String(cleanupCall?.[0])).toContain('expires_at: { _lt: $now }');
       expect(String(cleanupCall?.[0])).toContain('email: null');
       expect(String(cleanupCall?.[0])).toContain('phone_number: null');
@@ -1021,6 +1069,152 @@ describe('SignupService', () => {
       );
 
       await expect(service.purgeExpiredAttempts()).resolves.toBe(0);
+    });
+  });
+
+  describe('auth flow v2 finish', () => {
+    const v2VerifiedIdToken =
+      'eyJhbGciOiJub25lIn0.' +
+      Buffer.from(
+        JSON.stringify({ sub: 'email|abc', email: 'new@example.com' })
+      ).toString('base64url') +
+      '.';
+    const otpVerifiedAttempt = {
+      ...pendingAttempt,
+      payload: {},
+      status: 'otp_verified' as const,
+      completion_result: {
+        tokens: {
+          access_token: 'access',
+          refresh_token: 'refresh',
+          id_token: v2VerifiedIdToken,
+          token_type: 'Bearer',
+          expires_in: 3600,
+        },
+        completedAt: new Date().toISOString(),
+        pendingProvision: true,
+      },
+    };
+
+    it('rejects finish when the attempt is not otp_verified', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: pendingAttempt,
+      });
+      await expect(
+        service.finishSignupAccount(
+          {
+            flowId: 'attempt-123',
+            accept_terms: true,
+            first_name: 'New',
+            last_name: 'User',
+            personas: ['client'],
+            profile: {},
+          },
+          'mobile'
+        )
+      ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+    });
+
+    it('rejects finish when the attempt is expired', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...otpVerifiedAttempt,
+          expires_at: new Date(Date.now() - 1000).toISOString(),
+        },
+      });
+      await expect(
+        service.finishSignupAccount(
+          {
+            flowId: 'attempt-123',
+            accept_terms: true,
+            first_name: 'New',
+            last_name: 'User',
+            personas: ['client'],
+            profile: {},
+          },
+          'mobile'
+        )
+      ).rejects.toMatchObject({ status: HttpStatus.GONE });
+    });
+
+    it('provisions on finish after v2 OTP verify and clears interim tokens', async () => {
+      const finishToken = {
+        access_token: 'access',
+        refresh_token: 'refresh',
+        id_token: v2VerifiedIdToken,
+        token_type: 'Bearer',
+        expires_in: 3600,
+      };
+      (auth0Service as any).setRendasuaUserMetadata = jest
+        .fn()
+        .mockResolvedValue(undefined);
+      (auth0Service as any).refreshTokensForNewUser = jest
+        .fn()
+        .mockResolvedValue(finishToken);
+      userProvisioning.createPendingUser.mockResolvedValue({
+        user: insertedUser,
+        entities: [{ id: 'client-123', type: 'client' }],
+      });
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('signup_attempts_by_pk')) {
+          return { signup_attempts_by_pk: otpVerifiedAttempt };
+        }
+        return { users: [] };
+      });
+      hasuraSystemService.executeMutation.mockImplementation(
+        async (mutation: string) => {
+          if (mutation.includes('ClaimSignupAttempt')) {
+            return { update_signup_attempts: { affected_rows: 1 } };
+          }
+          return { update_signup_attempts_by_pk: { id: 'attempt-123' } };
+        }
+      );
+
+      const result = await service.finishSignupAccount(
+        {
+          flowId: 'attempt-123',
+          accept_terms: true,
+          first_name: 'New',
+          last_name: 'User',
+          personas: ['client'],
+          profile: {},
+          country: 'CM',
+        },
+        'mobile'
+      );
+
+      expect(userProvisioning.createPendingUser).toHaveBeenCalled();
+      expect(result.response.user.id).toBe('user-123');
+      expect(
+        hasuraSystemService.executeMutation.mock.calls.some(([m]) =>
+          String(m).includes('ClearSignupInterimTokens')
+        )
+      ).toBe(true);
+    });
+
+    it('verifyOtpForAuthFlowV2 marks otp_verified without provisioning', async () => {
+      auth0Service.verifyEmailOtp.mockResolvedValue({
+        access_token: 'access',
+        id_token:
+          'eyJhbGciOiJub25lIn0.' +
+          Buffer.from(
+            JSON.stringify({ sub: 'email|abc', email: 'new@example.com' })
+          ).toString('base64url') +
+          '.',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      });
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: pendingAttempt,
+      });
+
+      await service.verifyOtpForAuthFlowV2('attempt-123', '1234');
+
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('MarkSignupOtpVerified'),
+        expect.any(Object)
+      );
     });
   });
 

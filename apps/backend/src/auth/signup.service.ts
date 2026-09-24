@@ -41,6 +41,11 @@ import {
   emitAuthSiteEvent,
   serverAuthViewer,
 } from './auth-site-events.helper';
+import {
+  buildOtpIdentifier,
+  normalizeOtpDestination,
+  OtpSendLimiterService,
+} from './otp-send-limiter.service';
 
 const ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 120 * 1000;
@@ -121,6 +126,7 @@ export interface SignupAttemptStartResult {
   attemptId: string;
   channel: SignupOtpChannel;
   expiresAt: string;
+  codeExpiresAt: string;
   resendAvailableAt: string;
   availableChannels: SignupOtpChannel[];
   maskedEmail?: string;
@@ -179,6 +185,7 @@ export class SignupService {
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly referralProvisioning: ReferralProvisioningService,
     private readonly metaConversionsService: MetaConversionsService,
+    private readonly otpSendLimiter: OtpSendLimiterService,
     @Optional() private readonly campaigns?: CreditCampaignPublisher,
     @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
@@ -222,6 +229,57 @@ export class SignupService {
     return (result.users?.length || 0) > 0;
   }
 
+  /**
+   * Auth flow v2: identifier-only attempt (payload {}) for unknown accounts.
+   * Auth0 tokens after OTP live in completion_result until finish or expiry;
+   * they are cleared on completion and when the attempt expires (see cleanup).
+   */
+  async startIdentifierOnlyOtp(
+    email: string,
+    phoneNumber: string,
+    ip?: string
+  ): Promise<SignupAttemptStartResult> {
+    void this.cleanupExpiredAttempts();
+    this.assertHasContact(email, phoneNumber);
+    const channel: SignupOtpChannel = email ? 'email' : 'sms';
+    const destination = this.signupDestination(
+      channel,
+      email || null,
+      phoneNumber || null
+    );
+    const identifier = buildOtpIdentifier({ email, phone: phoneNumber });
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
+    const expiresAt = new Date(Date.now() + ATTEMPT_TTL_MS).toISOString();
+    const attempt = await this.insertAttempt({
+      channel,
+      email: email || null,
+      phone_number: phoneNumber || null,
+      payload: this.emptyIdentifierPayload(),
+      expires_at: expiresAt,
+    });
+    await this.sendOtpForAttempt(attempt);
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
+    return this.toStartResult(attempt, timing);
+  }
+
+  private emptyIdentifierPayload(): SignupStartPayload {
+    return {
+      first_name: '',
+      last_name: '',
+      profile: {},
+    };
+  }
+
   async startSignup(
     payload: SignupStartPayload,
     platform: ClientPlatform = 'web'
@@ -234,6 +292,14 @@ export class SignupService {
     const personas = this.normalizeSignupPersonas(payload);
     this.assertStoreLocationCountry(payload);
     const channel = this.resolveChannel(payload, email, phoneNumber);
+    const destination = this.signupDestination(channel, email, phoneNumber);
+    const identifier = buildOtpIdentifier({ email, phone: phoneNumber });
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip: payload.clientIpAddress,
+      isChannelSwitch: false,
+    });
     const expiresAt = new Date(Date.now() + ATTEMPT_TTL_MS).toISOString();
     const attempt = await this.insertAttempt({
       channel,
@@ -246,18 +312,43 @@ export class SignupService {
       is_resend: false,
       is_channel_switch: false,
     });
-    return this.toStartResult(attempt);
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip: payload.clientIpAddress,
+      isChannelSwitch: false,
+    });
+    return this.toStartResult(attempt, timing);
   }
 
   async resendSignupOtp(
     attemptId: string,
     preferredChannel?: SignupOtpChannel,
-    platform: ClientPlatform = 'web'
+    platform: ClientPlatform = 'web',
+    ip?: string
   ): Promise<SignupAttemptStartResult> {
     let attempt = await this.loadAttempt(attemptId);
     this.assertAttemptResendable(attempt);
     const switching =
       !!preferredChannel && preferredChannel !== attempt.channel;
+    if (!switching && !this.otpSendLimiter.isEnforcementEnabled()) {
+      this.assertResendCooldown(attempt);
+    }
+    const destination = this.signupDestination(
+      switching ? preferredChannel! : attempt.channel,
+      attempt.email,
+      attempt.phone_number
+    );
+    const identifier = buildOtpIdentifier({
+      email: attempt.email,
+      phone: attempt.phone_number,
+    });
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: switching,
+    });
     if (switching) {
       this.assertChannelAvailable(attempt, preferredChannel);
       const previousChannel = attempt.channel;
@@ -272,23 +363,25 @@ export class SignupService {
         throw error;
       }
     } else {
-      try {
-        this.assertResendCooldown(attempt);
-      } catch (error: any) {
-        emitAuthSiteEvent(
-          this.siteEvents,
-          'auth_code_send_failed',
-          platform,
-          {
-            channel: attempt.channel,
-            context: 'signup',
-            fail_reason: authSendFailReason(error),
-            is_resend: true,
-            is_channel_switch: false,
-          },
-          serverAuthViewer()
-        );
-        throw error;
+      if (!this.otpSendLimiter.isEnforcementEnabled()) {
+        try {
+          this.assertResendCooldown(attempt);
+        } catch (error: any) {
+          emitAuthSiteEvent(
+            this.siteEvents,
+            'auth_code_send_failed',
+            platform,
+            {
+              channel: attempt.channel,
+              context: 'signup',
+              fail_reason: authSendFailReason(error),
+              is_resend: true,
+              is_channel_switch: false,
+            },
+            serverAuthViewer()
+          );
+          throw error;
+        }
       }
       await this.sendSignupOtpWithTracking(attempt, platform, {
         is_resend: true,
@@ -296,7 +389,24 @@ export class SignupService {
       });
     }
     const updated = await this.touchOtpSent(attempt.id);
-    return this.toStartResult(updated);
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: switching,
+    });
+    return this.toStartResult(updated, timing);
+  }
+
+  private signupDestination(
+    channel: SignupOtpChannel,
+    email: string | null,
+    phoneNumber: string | null
+  ): string {
+    if (channel === 'email') {
+      return normalizeOtpDestination(this.normalizeEmail(email || ''), 'email');
+    }
+    return normalizeOtpDestination(this.normalizePhone(phoneNumber || ''), 'phone');
   }
 
   private assertResendCooldown(attempt: SignupAttemptRow): void {
@@ -333,6 +443,83 @@ export class SignupService {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  async verifyOtpForAuthFlowV2(
+    flowId: string,
+    otp: string
+  ): Promise<{ flowId: string }> {
+    const code = String(otp || '').trim();
+    if (!code) {
+      throw new HttpException(
+        { success: false, error: 'OTP is required' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const attempt = await this.loadAttempt(flowId);
+    this.assertAttemptVerifiable(attempt);
+    if (attempt.status === 'otp_verified') {
+      return { flowId };
+    }
+    let tokens: Auth0TokenResponse;
+    try {
+      tokens = await this.verifyOtpAgainstAuth0(attempt, code);
+    } catch (error: any) {
+      await this.incrementVerifyAttempts(attempt);
+      throw error;
+    }
+    this.assertTokenMatchesAttempt(tokens, attempt);
+    await this.markOtpVerified(attempt.id, tokens);
+    return { flowId };
+  }
+
+  async finishSignupAccount(
+    input: SignupStartPayload & { flowId: string; accept_terms: boolean },
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<{
+    sessionId?: string;
+    response: {
+      success: boolean;
+      verified: true;
+      flowId: string;
+      user: SignupCreatedUser;
+      launchPromo: SignupLaunchPromoResult | null;
+      access_token?: string;
+      id_token?: string;
+      refresh_token?: string;
+      token_type?: string;
+      expires_in?: number;
+    };
+  }> {
+    if (!input.accept_terms) {
+      throw new HttpException(
+        { success: false, error: 'accept_terms must be true' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const attempt = await this.loadAttempt(input.flowId);
+    if (attempt.status === 'completed' && attempt.completion_result?.user?.id) {
+      return this.replayFinishedSignup(attempt, input.flowId, platform);
+    }
+    this.assertAttemptFinishable(attempt);
+    const merged = this.mergeFinishPayload(attempt, input);
+    await this.persistAttemptPayload(attempt.id, merged);
+    const verified: SignupAttemptRow = {
+      ...attempt,
+      payload: merged,
+      status: 'otp_verified',
+    };
+    const result = await this.provisionFromVerifiedAttempt(verified);
+    await this.stripInterimTokens(attempt.id);
+    return this.issueFinishSession(
+      input.flowId,
+      result,
+      platform,
+      ipAddress,
+      userAgent
+    );
   }
 
   async verifySignupOtp(
@@ -644,14 +831,19 @@ export class SignupService {
     }
   }
 
-  private toStartResult(attempt: SignupAttemptRow): SignupAttemptStartResult {
+  private toStartResult(
+    attempt: SignupAttemptRow,
+    timing?: { codeExpiresAt: string; resendAvailableAt: string }
+  ): SignupAttemptStartResult {
+    const fallbackResend = this.resendAvailableAt(
+      attempt.last_otp_sent_at
+    ).toISOString();
     return {
       attemptId: attempt.id,
       channel: attempt.channel,
       expiresAt: attempt.expires_at,
-      resendAvailableAt: this.resendAvailableAt(
-        attempt.last_otp_sent_at
-      ).toISOString(),
+      codeExpiresAt: timing?.codeExpiresAt || fallbackResend,
+      resendAvailableAt: timing?.resendAvailableAt || fallbackResend,
       availableChannels: buildAvailableOtpChannels({
         email: attempt.email,
         phoneNumber: attempt.phone_number,
@@ -794,7 +986,7 @@ export class SignupService {
 
   private assertAttemptVerifiable(
     attempt: SignupAttemptRow,
-    platform: ClientPlatform
+    platform: ClientPlatform = 'web'
   ): void {
     if (attempt.status === 'failed' || attempt.status === 'expired') {
       throw new HttpException(
@@ -842,6 +1034,212 @@ export class SignupService {
       attempt.status === 'expired' ||
       new Date(attempt.expires_at).getTime() <= Date.now()
     );
+  }
+
+  private assertAttemptFinishable(attempt: SignupAttemptRow): void {
+    if (attempt.status !== 'otp_verified') {
+      throw new HttpException(
+        { success: false, error: 'Verify the code before finishing signup' },
+        HttpStatus.CONFLICT
+      );
+    }
+    if (this.isExpired(attempt)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Signup attempt expired. Please start again.',
+        },
+        HttpStatus.GONE
+      );
+    }
+    if (!attempt.completion_result?.tokens?.access_token) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Verification expired. Please start again.',
+        },
+        HttpStatus.GONE
+      );
+    }
+  }
+
+  private mergeFinishPayload(
+    attempt: SignupAttemptRow,
+    input: SignupStartPayload
+  ): SignupStartPayload {
+    return {
+      ...attempt.payload,
+      ...input,
+      email: attempt.email,
+      phone_number: attempt.phone_number,
+      profile: {
+        ...(attempt.payload.profile || {}),
+        ...(input.profile || {}),
+      },
+    };
+  }
+
+  private async persistAttemptPayload(
+    attemptId: string,
+    payload: SignupStartPayload
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation UpdateSignupAttemptPayload(
+        $id: uuid!
+        $payload: jsonb!
+        $updatedAt: timestamptz!
+      ) {
+        update_signup_attempts_by_pk(
+          pk_columns: { id: $id }
+          _set: { payload: $payload, updated_at: $updatedAt }
+        ) { id }
+      }
+    `,
+      {
+        id: attemptId,
+        payload,
+        updatedAt: new Date().toISOString(),
+      }
+    );
+  }
+
+  private async stripInterimTokens(attemptId: string): Promise<void> {
+    const attempt = await this.loadAttempt(attemptId);
+    if (!attempt.completion_result) return;
+    const cleared = { ...attempt.completion_result, tokens: null };
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation ClearSignupInterimTokens(
+        $id: uuid!
+        $result: jsonb!
+        $updatedAt: timestamptz!
+      ) {
+        update_signup_attempts_by_pk(
+          pk_columns: { id: $id }
+          _set: { completion_result: $result, updated_at: $updatedAt }
+        ) { id }
+      }
+    `,
+      {
+        id: attemptId,
+        result: cleared,
+        updatedAt: new Date().toISOString(),
+      }
+    );
+  }
+
+  private async issueFinishSession(
+    flowId: string,
+    result: {
+      tokens: Auth0TokenResponse;
+      user: SignupCreatedUser;
+      launchPromo: SignupLaunchPromoResult | null;
+    },
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ) {
+    const base = {
+      success: true as const,
+      verified: true as const,
+      flowId,
+      user: result.user,
+      launchPromo: result.launchPromo,
+    };
+    if (platform === 'web') {
+      const sessionId = this.sessionStore.generateSessionId();
+      await this.sessionStore.createSession(sessionId, {
+        userId: result.user.id,
+        auth0RefreshToken: requireRefreshToken(result.tokens.refresh_token),
+        auth0AccessToken: result.tokens.access_token,
+        auth0IdToken: result.tokens.id_token,
+        createdAt: Date.now(),
+        lastRefreshedAt: Date.now(),
+        userAgent,
+        ipAddress,
+      });
+      await this.updateCompletionSessionId(flowId, sessionId);
+      return {
+        sessionId,
+        response: {
+          ...base,
+          access_token: result.tokens.access_token,
+          id_token: result.tokens.id_token,
+          token_type: result.tokens.token_type,
+          expires_in: result.tokens.expires_in,
+        },
+      };
+    }
+    return {
+      response: {
+        ...base,
+        ...result.tokens,
+      },
+    };
+  }
+
+  private async replayFinishedSignup(
+    attempt: SignupAttemptRow,
+    flowId: string,
+    platform: ClientPlatform
+  ) {
+    const snapshot = attempt.completion_result!;
+    const user = snapshot.user;
+    const launchPromo = snapshot.launchPromo;
+    const base = {
+      success: true as const,
+      verified: true as const,
+      flowId,
+      user,
+      launchPromo,
+    };
+    if (platform === 'web') {
+      if (!snapshot.sessionId) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Signup session expired. Please log in to continue.',
+          },
+          HttpStatus.GONE
+        );
+      }
+      const existing = await this.sessionStore.getSession(snapshot.sessionId);
+      if (!existing) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Signup session expired. Please log in to continue.',
+          },
+          HttpStatus.GONE
+        );
+      }
+      return {
+        sessionId: snapshot.sessionId,
+        response: {
+          ...base,
+          access_token: existing.auth0AccessToken || '',
+          id_token: existing.auth0IdToken,
+          token_type: 'Bearer',
+          expires_in: 3600,
+        },
+      };
+    }
+    if (!snapshot.tokens?.access_token) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Signup already completed. Please log in.',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    return {
+      response: {
+        ...base,
+        ...snapshot.tokens,
+      },
+    };
   }
 
   private async sendOtpForAttempt(attempt: SignupAttemptRow): Promise<void> {
@@ -1095,7 +1493,7 @@ export class SignupService {
     sessionId?: string;
   } {
     const age = Date.now() - new Date(snapshot.completedAt).getTime();
-    if (age > COMPLETION_TOKEN_TTL_MS || !snapshot.tokens?.access_token) {
+    if (age > COMPLETION_TOKEN_TTL_MS) {
       throw new HttpException(
         {
           success: false,
@@ -1103,6 +1501,27 @@ export class SignupService {
         },
         HttpStatus.CONFLICT
       );
+    }
+    if (!snapshot.user?.id) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Signup already completed. Please log in.',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    if (!snapshot.tokens?.access_token) {
+      return {
+        tokens: {
+          access_token: '',
+          token_type: 'Bearer',
+          expires_in: 0,
+        },
+        user: snapshot.user,
+        launchPromo: snapshot.launchPromo,
+        sessionId: snapshot.sessionId,
+      };
     }
     return {
       tokens: snapshot.tokens,
@@ -1818,7 +2237,7 @@ export class SignupService {
         mutation CleanupExpiredSignupAttempts($now: timestamptz!) {
           update_signup_attempts(
             where: {
-              status: { _eq: "pending" }
+              status: { _in: ["pending", "otp_verified"] }
               expires_at: { _lt: $now }
             }
             _set: {
@@ -1826,6 +2245,7 @@ export class SignupService {
               payload: {}
               email: null
               phone_number: null
+              completion_result: null
               updated_at: $now
             }
           ) { affected_rows }

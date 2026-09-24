@@ -52,7 +52,14 @@ describe('LoginController session cookie and CSRF gates', () => {
   });
 
   it('returns channel metadata from start-otp', async () => {
-    const body = await controller.startOtp({ email: 'a@b.com' });
+    const body = await controller.startOtp(
+      { email: 'a@b.com' },
+      { ip: '9.9.9.9' } as never
+    );
+    expect(loginService.startLoginOtp).toHaveBeenCalledWith(
+      { email: 'a@b.com' },
+      '9.9.9.9'
+    );
     expect(body).toEqual({
       success: true,
       channel: 'email',

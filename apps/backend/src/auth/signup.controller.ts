@@ -28,25 +28,38 @@ import { CurrentUser } from './user.decorator';
 import { Public } from './public.decorator';
 import type { ClientPlatform } from './platform.decorator';
 import { Platform } from './platform.decorator';
+import { AuthAvailabilityLimiterService } from './auth-availability-limiter.service';
 import { SignupAttemptStartResult, SignupService } from './signup.service';
 import { SignupStartDto } from './dto/signup-start.dto';
 import { SignupResendOtpDto, SignupVerifyOtpDto } from './dto/signup-otp.dto';
+import { SignupFinishDto } from './dto/signup-finish.dto';
 import { sessionCookieOptions } from './session-cookie';
 
 @ApiTags('auth')
 @Controller('auth')
 export class SignupController {
-  constructor(private readonly signupService: SignupService) {}
+  constructor(
+    private readonly signupService: SignupService,
+    private readonly availabilityLimiter: AuthAvailabilityLimiterService
+  ) {}
 
   @Public()
   @Get('email-availability')
   @Throttle({ short: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Check if email is already taken' })
+  @ApiOperation({
+    summary: 'Check if email is already taken',
+    deprecated: true,
+    description:
+      'Deprecated: prefer in-flow auth (flow_version 2). Subject to per-IP daily caps.',
+  })
   @ApiQuery({ name: 'email', required: true, type: String })
   @ApiResponse({ status: 200, description: 'Email availability status' })
+  @ApiResponse({ status: 429, description: 'Daily per-IP availability cap exceeded' })
   async emailAvailability(
-    @Query('email') email: string
+    @Query('email') email: string,
+    @Req() req: { ip?: string }
   ): Promise<{ taken: boolean }> {
+    await this.availabilityLimiter.assertAndRecordCheck(req.ip);
     if (!email || !email.trim()) {
       return { taken: false };
     }
@@ -57,12 +70,20 @@ export class SignupController {
   @Public()
   @Get('phone-availability')
   @Throttle({ short: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Check if phone number is already taken' })
+  @ApiOperation({
+    summary: 'Check if phone number is already taken',
+    deprecated: true,
+    description:
+      'Deprecated: prefer in-flow auth (flow_version 2). Subject to per-IP daily caps.',
+  })
   @ApiQuery({ name: 'phone_number', required: true, type: String })
   @ApiResponse({ status: 200, description: 'Phone availability status' })
+  @ApiResponse({ status: 429, description: 'Daily per-IP availability cap exceeded' })
   async phoneAvailability(
-    @Query('phone_number') phoneNumber: string
+    @Query('phone_number') phoneNumber: string,
+    @Req() req: { ip?: string }
   ): Promise<{ taken: boolean }> {
+    await this.availabilityLimiter.assertAndRecordCheck(req.ip);
     if (!phoneNumber || !phoneNumber.trim()) {
       return { taken: false };
     }
@@ -116,12 +137,14 @@ export class SignupController {
   @ApiResponse({ status: 429, description: 'Resend cooldown active' })
   async signupResendOtp(
     @Body() body: SignupResendOtpDto,
-    @Platform() platform: ClientPlatform
+    @Platform() platform: ClientPlatform,
+    @Req() req: { ip?: string }
   ): Promise<{ success: boolean } & SignupAttemptStartResult> {
     const result = await this.signupService.resendSignupOtp(
       body.attemptId,
       body.channel,
-      platform
+      platform,
+      req.ip
     );
     return { success: true, ...result };
   }
@@ -136,6 +159,50 @@ export class SignupController {
   @ApiResponse({ status: 410, description: 'Endpoint retired' })
   async signupUpdateContact(): Promise<never> {
     return this.signupService.updateContact();
+  }
+
+  @Public()
+  @Post('signup/finish')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { limit: 10, ttl: 60000 } })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({
+    summary:
+      'Auth flow v2: finish account after OTP verify (name, terms, optional persona/country)',
+  })
+  @ApiBody({ type: SignupFinishDto })
+  @ApiResponse({ status: 200, description: 'Account provisioned and session issued' })
+  @ApiResponse({ status: 409, description: 'Attempt not ready or already completed' })
+  @ApiResponse({ status: 410, description: 'Attempt expired' })
+  async signupFinish(
+    @Body() body: SignupFinishDto,
+    @Platform() platform: ClientPlatform,
+    @Req() req: { ip?: string; headers?: Record<string, unknown> },
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const ua = req.headers?.['user-agent'];
+    const result = await this.signupService.finishSignupAccount(
+      {
+        flowId: body.flowId,
+        accept_terms: body.accept_terms,
+        first_name: body.first_name,
+        last_name: body.last_name,
+        user_type_id: body.user_type_id,
+        personas: body.personas,
+        country: body.country,
+        profile: body.profile ?? {},
+        referral_agent_code: body.referral_agent_code,
+      },
+      platform,
+      req.ip,
+      typeof ua === 'string' ? ua : undefined
+    );
+
+    if (platform === 'web' && result.sessionId) {
+      res.cookie('rs_session', result.sessionId, sessionCookieOptions(req));
+    }
+
+    return result.response;
   }
 
   @Public()
