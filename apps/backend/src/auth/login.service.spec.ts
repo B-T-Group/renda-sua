@@ -15,6 +15,8 @@ jest.mock('../addresses/addresses.service', () => ({
 }));
 
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { AUTH_REQUEST_FAILED_CODE } from './auth-flow.util';
+import { buildIdentifierLockoutKey } from './auth-lockout.util';
 import { LoginService } from './login.service';
 
 function unsignedJwt(payload: Record<string, unknown>): string {
@@ -77,6 +79,21 @@ describe('LoginService start, lockout, and session gates', () => {
     recordFailure: jest.Mock;
     recordSuccess: jest.Mock;
   };
+  let siteEvents: { trackEvent: jest.Mock };
+  let otpSendLimiter: {
+    assertCanSend: jest.Mock;
+    recordSend: jest.Mock;
+    isEnforcementEnabled: jest.Mock;
+  };
+  let authFlowV2Store: {
+    save: jest.Mock;
+    get: jest.Mock;
+    delete: jest.Mock;
+  };
+  let signupService: {
+    startIdentifierOnlyOtp: jest.Mock;
+    verifyOtpForAuthFlowV2: jest.Mock;
+  };
   let service: LoginService;
 
   beforeEach(() => {
@@ -113,12 +130,39 @@ describe('LoginService start, lockout, and session gates', () => {
       recordFailure: jest.fn().mockResolvedValue(undefined),
       recordSuccess: jest.fn().mockResolvedValue(undefined),
     };
+    siteEvents = { trackEvent: jest.fn().mockResolvedValue(undefined) };
+    otpSendLimiter = {
+      assertCanSend: jest.fn().mockResolvedValue(undefined),
+      recordSend: jest.fn().mockResolvedValue({
+        codeExpiresAt: '2026-01-01T12:10:00.000Z',
+        resendAvailableAt: '2026-01-01T12:02:00.000Z',
+      }),
+      isEnforcementEnabled: jest.fn().mockReturnValue(false),
+    };
+    authFlowV2Store = {
+      save: jest.fn().mockResolvedValue(undefined),
+      get: jest.fn().mockResolvedValue(null),
+      delete: jest.fn().mockResolvedValue(undefined),
+    };
+    signupService = {
+      startIdentifierOnlyOtp: jest.fn().mockResolvedValue({
+        attemptId: 'attempt-v2',
+        channel: 'email',
+        codeExpiresAt: '2026-01-01T12:10:00.000Z',
+        resendAvailableAt: '2026-01-01T12:02:00.000Z',
+      }),
+      verifyOtpForAuthFlowV2: jest.fn().mockResolvedValue({ flowId: 'attempt-v2' }),
+    };
     service = new LoginService(
       hasuraSystemService as never,
       auth0Service as never,
       { ensureContractForUser: jest.fn().mockResolvedValue(undefined) } as never,
       sessionStore as never,
-      lockout as never
+      lockout as never,
+      otpSendLimiter as never,
+      authFlowV2Store as never,
+      signupService as never,
+      siteEvents as never
     );
   });
 
@@ -151,6 +195,19 @@ describe('LoginService start, lockout, and session gates', () => {
       await expect(
         service.getLoginOtpOptions({ email: 'missing@example.com' })
       ).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
+    });
+
+    it('returns typed-channel options for flow v2 without a user lookup', async () => {
+      const result = await service.getLoginOtpOptions({
+        email: 'missing@example.com',
+        flow_version: 2,
+      });
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        defaultChannel: 'email',
+        availableChannels: ['email'],
+        maskedEmail: 'mi***@example.com',
+      });
     });
 
     it('defaults to email when the identifier is an email', async () => {
@@ -186,6 +243,50 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
     });
 
+    it('starts identifier-only signup OTP for flow v2 when the user is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      const result = await service.startLoginOtp(
+        {
+          email: 'missing@example.com',
+          flow_version: 2,
+        },
+        'web',
+        '9.9.9.9'
+      );
+      expect(signupService.startIdentifierOnlyOtp).toHaveBeenCalledWith(
+        'missing@example.com',
+        '',
+        '9.9.9.9'
+      );
+      expect(result).toMatchObject({
+        flowId: 'attempt-v2',
+        channel: 'email',
+        availableChannels: ['email'],
+        maskedEmail: 'mi***@example.com',
+        codeExpiresAt: '2026-01-01T12:10:00.000Z',
+      });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
+    });
+
+    it('uses the same response keys for flow v2 known and unknown starts', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number: null }],
+      });
+      const known = await service.startLoginOtp({
+        email: 'shop@example.com',
+        flow_version: 2,
+      });
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      const unknown = await service.startLoginOtp({
+        email: 'new@example.com',
+        flow_version: 2,
+      });
+      expect(Object.keys(known).sort()).toEqual(Object.keys(unknown).sort());
+      expect(known.availableChannels).toEqual(['email']);
+      expect(unknown.availableChannels).toEqual(['email']);
+      expect(authFlowV2Store.save).toHaveBeenCalled();
+    });
+
     it('skips Auth0 for enabled test users', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         users: [{ ...userWithBoth, email: 'qa@example.com', phone_number: null }],
@@ -201,14 +302,62 @@ describe('LoginService start, lockout, and session gates', () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         users: [{ ...userWithBoth, phone_number: null }],
       });
-      const result = await service.startLoginOtp({
-        email: ' Shop@Example.COM ',
-      });
+      const result = await service.startLoginOtp(
+        {
+          email: ' Shop@Example.COM ',
+        },
+        'web'
+      );
       expect(auth0Service.startEmailOtp).toHaveBeenCalledWith(
         'shop@example.com'
       );
       expect(result.channel).toBe('email');
       expect(result.availableChannels).toEqual(['email']);
+      expect(siteEvents.trackEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'auth_code_sent',
+          metadata: expect.objectContaining({
+            channel: 'email',
+            context: 'login',
+            source: 'server',
+          }),
+        }),
+        expect.objectContaining({ viewerType: 'user', viewerId: 'user-1' })
+      );
+      expect(result.codeExpiresAt).toBe('2026-01-01T12:10:00.000Z');
+      expect(result.resendAvailableAt).toBe('2026-01-01T12:02:00.000Z');
+      expect(result.expiresAt).toBe(result.codeExpiresAt);
+    });
+
+    it('does not send OTP when the identifier is locked out', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number: null }],
+      });
+      lockout.isLockedOut.mockResolvedValue(true);
+      lockout.getRemainingLockoutMs.mockResolvedValue(120_000);
+
+      await expect(
+        service.startLoginOtp({ email: 'shop@example.com' }, 'web', '9.9.9.9')
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
+      expect(otpSendLimiter.assertCanSend).not.toHaveBeenCalled();
+    });
+
+    it('does not send OTP when the send limiter blocks', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [{ ...userWithBoth, phone_number: null }],
+      });
+      otpSendLimiter.assertCanSend.mockRejectedValue(
+        new HttpException(
+          { success: false, code: 'OTP_RESEND_COOLDOWN' },
+          HttpStatus.TOO_MANY_REQUESTS
+        )
+      );
+
+      await expect(
+        service.startLoginOtp({ email: 'shop@example.com' }, 'web', '9.9.9.9')
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.startEmailOtp).not.toHaveBeenCalled();
     });
 
     it('sends OTP to the alternate channel when requested', async () => {
@@ -326,7 +475,53 @@ describe('LoginService start, lockout, and session gates', () => {
       ).rejects.toBeTruthy();
       expect(lockout.recordFailure).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordFailure).toHaveBeenCalledWith('shop@example.com');
+      expect(lockout.recordFailure).toHaveBeenCalledWith(
+        buildIdentifierLockoutKey({ email: 'shop@example.com' })
+      );
       expect(lockout.recordSuccess).not.toHaveBeenCalled();
+    });
+
+    it('records identifier lockout for flow v2 verify when the user is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      auth0Service.verifyEmailOtp.mockRejectedValue(new Error('bad otp'));
+
+      await expect(
+        service.verifyLoginOtp(
+          {
+            email: 'missing@example.com',
+            otp: '0000',
+            flow_version: 2,
+          },
+          'mobile'
+        )
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: { code: AUTH_REQUEST_FAILED_CODE },
+      });
+
+      expect(lockout.recordFailure).toHaveBeenCalledWith(
+        buildIdentifierLockoutKey({ email: 'missing@example.com' })
+      );
+    });
+
+    it('returns 429 for flow v2 verify when the identifier is locked out', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
+      lockout.isLockedOut.mockImplementation(async (key: string) =>
+        key.startsWith('identifier:')
+      );
+      lockout.getRemainingLockoutMs.mockResolvedValue(60_000);
+
+      await expect(
+        service.verifyLoginOtp(
+          {
+            email: 'missing@example.com',
+            otp: '1234',
+            flow_version: 2,
+          },
+          'mobile'
+        )
+      ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
     });
 
     it('creates a web session and omits the refresh token from the JSON body', async () => {
@@ -366,6 +561,9 @@ describe('LoginService start, lockout, and session gates', () => {
       );
       expect(lockout.recordSuccess).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordSuccess).toHaveBeenCalledWith('shop@example.com');
+      expect(lockout.recordSuccess).toHaveBeenCalledWith(
+        buildIdentifierLockoutKey({ email: 'shop@example.com' })
+      );
     });
 
     it('returns refresh_token to mobile clients without creating a cookie session', async () => {
@@ -478,6 +676,74 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
       expect(lockout.recordSuccess).toHaveBeenCalledWith('user:user-1');
       expect(lockout.recordSuccess).toHaveBeenCalledWith('+237670000000');
+    });
+
+    it('routes flow v2 verify with flowId to signup finish for unknown accounts', async () => {
+      signupService.verifyOtpForAuthFlowV2.mockResolvedValue({
+        flowId: 'attempt-v2',
+      });
+      const result = await service.verifyLoginOtp(
+        { flowId: 'attempt-v2', otp: '1234', flow_version: 2 },
+        'mobile'
+      );
+      expect(signupService.verifyOtpForAuthFlowV2).toHaveBeenCalledWith(
+        'attempt-v2',
+        '1234'
+      );
+      expect(result.response).toEqual({
+        success: true,
+        verified: true,
+        next: 'finish_account',
+        flowId: 'attempt-v2',
+      });
+    });
+
+    it('routes flow v2 verify with flowId to login for known accounts', async () => {
+      signupService.verifyOtpForAuthFlowV2.mockRejectedValue(
+        new HttpException(
+          { success: false, error: 'Signup attempt not found' },
+          HttpStatus.NOT_FOUND
+        )
+      );
+      authFlowV2Store.get.mockResolvedValue({
+        userId: 'user-1',
+        channel: 'email',
+        email: 'shop@example.com',
+        phone: '',
+      });
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          users_by_pk: {
+            id: 'user-1',
+            email: 'shop@example.com',
+            phone_number: null,
+            email_verified: true,
+            phone_number_verified: null,
+          },
+        })
+        .mockResolvedValue({
+          users: [
+            {
+              id: 'user-1',
+              email: 'shop@example.com',
+              phone_number: null,
+              email_verified: true,
+              phone_number_verified: null,
+            },
+          ],
+        });
+
+      const result = await service.verifyLoginOtp(
+        { flowId: 'flow-known', otp: '1234', flow_version: 2 },
+        'mobile'
+      );
+
+      expect(result.response).toMatchObject({
+        success: true,
+        verified: true,
+        access_token: 'access',
+      });
+      expect(authFlowV2Store.delete).toHaveBeenCalledWith('flow-known');
     });
 
     it('marks the phone verified after a successful SMS login', async () => {

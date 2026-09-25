@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { readBootstrapCountryCode } from '../utils/marketStorage';
 import { useApiClient } from './useApiClient';
 
 export type ClientFlagKey =
@@ -6,7 +7,8 @@ export type ClientFlagKey =
   | 'reels_comments_enabled'
   | 'reels_merchant_allowlist_only'
   | 'floating_nav_enabled'
-  | 'reorder_v1';
+  | 'reorder_v1'
+  | 'auth_web_inapp_gates';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -16,6 +18,7 @@ const DEFAULT_FLAGS: ClientFlags = {
   reels_merchant_allowlist_only: false,
   floating_nav_enabled: false,
   reorder_v1: false,
+  auth_web_inapp_gates: false,
 };
 
 export function useClientFlags() {
@@ -25,8 +28,12 @@ export function useClientFlags() {
   useEffect(() => {
     if (!apiClient) return;
     let cancelled = false;
+    const country = readBootstrapCountryCode();
+    const path = country
+      ? `/app-config/client-flags?country=${encodeURIComponent(country)}`
+      : '/app-config/client-flags';
     void apiClient
-      .get<{ success: boolean; data: ClientFlags }>('/app-config/client-flags')
+      .get<{ success: boolean; data: ClientFlags }>(path)
       .then((res) => {
         if (cancelled) return;
         setFlags({ ...DEFAULT_FLAGS, ...(res.data?.data ?? {}) });

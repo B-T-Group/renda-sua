@@ -34,7 +34,8 @@ import {
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuthGate } from '../../contexts/AuthGateContext';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { useSnackbar } from 'notistack';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -421,7 +422,8 @@ export default function ItemDetailPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { loginWithRedirect } = useAuth0();
+  const { flagOn, requireAuth } = useAuthGate();
+  const { loginWithRedirectTracked } = useAuthFunnelTracking('item_detail');
   const { isAuthenticated } = useSessionAuth();
   const { profile } = useUserProfileContext();
   const { addToCart, getLineQuantityInCart, getListingQuantityInCart } = useCart();
@@ -1486,7 +1488,15 @@ export default function ItemDetailPage() {
                     fullWidth
                     onClick={() => {
                       if (!isAuthenticated) {
-                        void loginWithRedirect({
+                        if (flagOn) {
+                          void requireAuth({
+                            context: 'interest',
+                            entry: 'interest_pdp',
+                            run: () => setInterestOpen(true),
+                          });
+                          return;
+                        }
+                        void loginWithRedirectTracked('item_detail_export_interest', {
                           appState: { returnTo: window.location.pathname },
                         });
                         return;

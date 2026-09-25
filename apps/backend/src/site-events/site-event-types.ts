@@ -82,6 +82,19 @@ export const SITE_EVENT_TYPES_V1 = [
   'reels.feed.exhausted',
   'reels.composer.opened',
   'reels.composer.submitted',
+  // Auth funnel (web UX section 6)
+  'auth_gate_shown',
+  'auth_gate_dismissed',
+  'auth_code_sent',
+  'auth_code_send_failed',
+  'auth_code_failed',
+  'auth_locked',
+  'auth_code_verified',
+  'auth_intent_completed',
+  'auth_password_used',
+  'auth_reauth_notice_shown',
+  'auth_reauth_notice_action',
+  'auth_session_observed',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];

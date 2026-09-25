@@ -9,7 +9,8 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuthGate } from '../../contexts/AuthGateContext';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 
 export interface SaveFavoritesDrawerProps {
   open: boolean;
@@ -24,12 +25,18 @@ const SaveFavoritesDrawer: React.FC<SaveFavoritesDrawerProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { loginWithRedirect } = useAuth0();
+  const { flagOn, requireAuth } = useAuthGate();
+  const { loginWithRedirectTracked, trackAuthGateDismissed } =
+    useAuthFunnelTracking('save_favorites');
 
   const handleLogin = async () => {
     onBeginAuth();
+    if (flagOn) {
+      await requireAuth({ context: 'favorites', entry: 'save_favorites' });
+      return;
+    }
     try {
-      await loginWithRedirect({
+      await loginWithRedirectTracked('save_favorites', {
         appState: { returnTo: window.location.pathname + window.location.search },
       });
     } catch {
@@ -46,7 +53,10 @@ const SaveFavoritesDrawer: React.FC<SaveFavoritesDrawerProps> = ({
     <Drawer
       anchor="bottom"
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        trackAuthGateDismissed('save_favorites');
+        onClose();
+      }}
       PaperProps={{
         sx: {
           borderTopLeftRadius: 16,
@@ -91,7 +101,14 @@ const SaveFavoritesDrawer: React.FC<SaveFavoritesDrawerProps> = ({
             {t('auth.signup', 'Sign up')}
           </Button>
         </Stack>
-        <Button fullWidth color="inherit" onClick={onClose}>
+        <Button
+          fullWidth
+          color="inherit"
+          onClick={() => {
+            trackAuthGateDismissed('save_favorites');
+            onClose();
+          }}
+        >
           {t('common.cancel', 'Cancel')}
         </Button>
       </Stack>

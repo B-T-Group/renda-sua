@@ -66,8 +66,16 @@ export class LoginController {
   })
   @ApiResponse({ status: 404, description: 'User not found for email or phone' })
   @ApiResponse({ status: 429, description: 'Too many OTP start attempts' })
-  async startOtp(@Body() body: LoginStartDto) {
-    const result = await this.loginService.startLoginOtp(body);
+  async startOtp(
+    @Body() body: LoginStartDto,
+    @Platform() platform: ClientPlatform,
+    @Req() req: Request
+  ) {
+    const result = await this.loginService.startLoginOtp(
+      body,
+      platform,
+      req.ip
+    );
     return { success: true, ...result };
   }
 

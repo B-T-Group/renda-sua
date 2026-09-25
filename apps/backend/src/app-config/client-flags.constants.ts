@@ -5,6 +5,7 @@ export const CLIENT_FLAG_KEYS = [
   'reels_merchant_allowlist_only',
   'floating_nav_enabled',
   'reorder_v1',
+  'auth_web_inapp_gates',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -20,4 +21,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   floating_nav_enabled: false,
   /** On in non-production when no DB row exists; off in production until configured. */
   reorder_v1: isNonProduction,
+  /** Off by default for a 2-week baseline before enabling in-app auth gates. */
+  auth_web_inapp_gates: false,
 };

@@ -1,4 +1,11 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import { Auth0Service, Auth0TokenResponse } from './auth0.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -9,11 +16,25 @@ import {
 } from './session-store.service';
 import { LockoutService } from './lockout.service';
 import {
+  buildOtpIdentifier,
+  normalizeOtpDestination,
+  OtpSendLimiterService,
+} from './otp-send-limiter.service';
+import {
   accessTokenTtlSec,
   canReuseAccessToken,
   isInvalidGrantError,
   requireRefreshToken,
 } from './session-refresh.util';
+import {
+  AUTH_REQUEST_FAILED_CODE,
+  buildTypedIdentifierOtpOptions,
+  isAuthFlowV2,
+  toUniformFlowStartResult,
+} from './auth-flow.util';
+import { AuthFlowV2StoreService } from './auth-flow-v2-store.service';
+import { SignupService } from './signup.service';
+import { buildIdentifierLockoutKey } from './auth-lockout.util';
 import { LoginStartDto } from './dto/login-start.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
 import type { LoginRefreshDto } from './dto/login-refresh.dto';
@@ -25,6 +46,12 @@ import {
   maskPhoneForOtp,
   type OtpChannel,
 } from './otp-channel.util';
+import { SiteEventsService } from '../site-events/site-events.service';
+import {
+  authSendFailReason,
+  emitAuthSiteEvent,
+  serverAuthViewer,
+} from './auth-site-events.helper';
 
 interface Auth0IdTokenClaims {
   sub?: string;
@@ -102,7 +129,22 @@ export interface LoginOtpOptionsResult {
 
 export interface LoginOtpStartResult extends LoginOtpOptionsResult {
   channel: OtpChannel;
+  expiresAt: string;
+  codeExpiresAt: string;
+  resendAvailableAt: string;
+  flowId?: string;
 }
+
+export interface AuthFlowV2FinishVerifyResponse {
+  success: boolean;
+  verified: true;
+  next: 'finish_account';
+  flowId: string;
+}
+
+export type LoginVerifyServiceResult =
+  | LoginResult
+  | { sessionId?: never; response: AuthFlowV2FinishVerifyResponse };
 
 @Injectable()
 export class LoginService {
@@ -113,7 +155,11 @@ export class LoginService {
     private readonly auth0Service: Auth0Service,
     private readonly businessProvisioning: BusinessProvisioningService,
     private readonly sessionStore: SessionStoreService,
-    private readonly lockout: LockoutService
+    private readonly lockout: LockoutService,
+    private readonly otpSendLimiter: OtpSendLimiterService,
+    private readonly authFlowV2Store: AuthFlowV2StoreService,
+    private readonly signupService: SignupService,
+    @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
 
   private normalizeEmail(email: string): string {
@@ -208,18 +254,31 @@ export class LoginService {
 
   private async findUserByIdentifier(
     email: string,
-    phone: string
-  ): Promise<LoginUserRow> {
+    phone: string,
+    options?: { allowMissing?: boolean }
+  ): Promise<LoginUserRow | null> {
     const user = email
       ? await this.getUserByEmail(email)
       : await this.getUserByPhoneNumber(phone);
     if (!user) {
+      if (options?.allowMissing) return null;
       throw new HttpException(
         { success: false, error: 'User not found' },
         HttpStatus.NOT_FOUND
       );
     }
     return user;
+  }
+
+  private throwAuthRequestFailed(): never {
+    throw new HttpException(
+      {
+        success: false,
+        error: 'Unable to process request',
+        code: AUTH_REQUEST_FAILED_CODE,
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   private buildOptionsFromUser(
@@ -240,7 +299,16 @@ export class LoginService {
 
   async getLoginOtpOptions(body: LoginStartDto): Promise<LoginOtpOptionsResult> {
     const { email, phone } = this.parseIdentifier(body);
+    if (isAuthFlowV2(body.flow_version)) {
+      return buildTypedIdentifierOtpOptions(email, phone);
+    }
     const user = await this.findUserByIdentifier(email, phone);
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
     return this.buildOptionsFromUser(user, email ? 'email' : 'sms');
   }
 
@@ -284,20 +352,86 @@ export class LoginService {
     await this.auth0Service.startSmsOtp(phone);
   }
 
-  async startLoginOtp(body: LoginStartDto): Promise<LoginOtpStartResult> {
+  async startLoginOtp(
+    body: LoginStartDto,
+    platform: ClientPlatform = 'web',
+    ip?: string
+  ): Promise<LoginOtpStartResult> {
     const { email, phone } = this.parseIdentifier(body);
+    if (isAuthFlowV2(body.flow_version)) {
+      return this.startLoginOtpV2(body, email, phone, platform, ip);
+    }
     const user = await this.findUserByIdentifier(email, phone);
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
     const defaultChannel: OtpChannel = email ? 'email' : 'sms';
     const channel = this.resolveDeliveryChannel(
       user,
       body.channel,
       defaultChannel
     );
-    await this.sendOtpToChannel(user, channel);
+    const destination = this.otpDestinationForChannel(user, channel);
+    const identifier = buildOtpIdentifier({ email, phone });
+    await this.ensureNotLockedOut(
+      this.lockoutKeysForUser(user, destination, email, phone),
+      platform
+    );
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
+    try {
+      await this.sendOtpToChannel(user, channel);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_sent',
+        platform,
+        { channel, context: 'login' },
+        serverAuthViewer(user.id)
+      );
+    } catch (error: any) {
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_send_failed',
+        platform,
+        {
+          channel,
+          context: 'login',
+          fail_reason: authSendFailReason(error),
+        },
+        serverAuthViewer(user.id)
+      );
+      throw error;
+    }
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
     return {
       channel,
       ...this.buildOptionsFromUser(user, defaultChannel),
+      expiresAt: timing.codeExpiresAt,
+      codeExpiresAt: timing.codeExpiresAt,
+      resendAvailableAt: timing.resendAvailableAt,
     };
+  }
+
+  private otpDestinationForChannel(
+    user: LoginUserRow,
+    channel: OtpChannel
+  ): string {
+    if (channel === 'email') {
+      return normalizeOtpDestination(this.normalizeEmail(user.email || ''), 'email');
+    }
+    return normalizeOtpDestination(this.normalizePhone(user.phone_number || ''), 'phone');
   }
 
   private isTestUser(identifier: string, isPhone: boolean): boolean {
@@ -347,11 +481,14 @@ export class LoginService {
     );
   }
 
-  private async ensureNotLockedOut(keys: string[]): Promise<void> {
+  private async ensureNotLockedOut(
+    keys: string[],
+    platform: ClientPlatform
+  ): Promise<void> {
     for (const key of keys) {
       if (!key) continue;
       if (await this.lockout.isLockedOut(key)) {
-        await this.throwLockout(key);
+        await this.throwLockout(key, platform);
       }
     }
   }
@@ -370,11 +507,27 @@ export class LoginService {
     }
   }
 
+  private lockoutKeysForParsedIdentifier(
+    email: string,
+    phone: string
+  ): string[] {
+    return [buildIdentifierLockoutKey({ email, phone })];
+  }
+
   private lockoutKeysForUser(
     user: LoginUserRow,
-    destination: string
+    destination: string,
+    parsedEmail: string,
+    parsedPhone: string
   ): string[] {
-    const keys = [`user:${user.id}`, destination];
+    const keys = [
+      `user:${user.id}`,
+      destination,
+      buildIdentifierLockoutKey({
+        email: parsedEmail || user.email,
+        phone: parsedPhone || user.phone_number,
+      }),
+    ];
     const email = this.normalizeEmail(user.email || '');
     const phone = this.normalizePhone(user.phone_number || '');
     if (email) keys.push(email);
@@ -387,8 +540,7 @@ export class LoginService {
     platform: ClientPlatform,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<LoginResult> {
-    const { email, phone } = this.parseIdentifier(body);
+  ): Promise<LoginVerifyServiceResult> {
     const otp = body.otp?.trim() || '';
     if (!otp) {
       throw new HttpException(
@@ -396,7 +548,25 @@ export class LoginService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const user = await this.findUserByIdentifier(email, phone);
+    if (isAuthFlowV2(body.flow_version) && body.flowId?.trim()) {
+      return this.verifyLoginOtpFlowV2(body.flowId.trim(), otp, platform, ipAddress, userAgent);
+    }
+    const { email, phone } = this.parseIdentifier(body);
+    const flowV2 = isAuthFlowV2(body.flow_version);
+    const identifierKeys = this.lockoutKeysForParsedIdentifier(email, phone);
+    await this.ensureNotLockedOut(identifierKeys, platform);
+
+    const user = await this.findUserByIdentifier(email, phone, {
+      allowMissing: flowV2,
+    });
+    if (!user) {
+      return await this.verifyLoginOtpUnknownIdentifier(
+        email,
+        phone,
+        otp,
+        identifierKeys
+      );
+    }
     const defaultChannel: OtpChannel = email ? 'email' : 'sms';
     const channel = body.channel
       ? this.resolveDeliveryChannel(user, body.channel, defaultChannel)
@@ -408,7 +578,9 @@ export class LoginService {
         platform,
         ipAddress,
         userAgent,
-        user
+        user,
+        email,
+        phone
       );
     }
     return this.verifyLoginOtpWithPhone(
@@ -417,8 +589,34 @@ export class LoginService {
       platform,
       ipAddress,
       userAgent,
-      user
+      user,
+      email,
+      phone
     );
+  }
+
+  private async verifyLoginOtpUnknownIdentifier(
+    email: string,
+    phone: string,
+    otp: string,
+    lockoutKeys: string[]
+  ): Promise<never> {
+    try {
+      if (email) {
+        await (this.isTestUser(email, false)
+          ? this.auth0Service.verifyTestUserEmail(email)
+          : this.auth0Service.verifyEmailOtp(email, otp));
+      } else {
+        await (this.isTestUser(phone, true)
+          ? this.auth0Service.verifyTestUserPhone(phone)
+          : this.auth0Service.verifySmsOtp(phone, otp));
+      }
+      await this.recordLockoutSuccess(lockoutKeys);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      await this.recordLockoutFailure(lockoutKeys);
+    }
+    this.throwAuthRequestFailed();
   }
 
   private async verifyLoginOtpWithEmail(
@@ -427,7 +625,9 @@ export class LoginService {
     platform: ClientPlatform,
     ipAddress?: string,
     userAgent?: string,
-    knownUser?: LoginUserRow
+    knownUser?: LoginUserRow,
+    parsedEmail = '',
+    parsedPhone = ''
   ): Promise<LoginResult> {
     const user = knownUser || (await this.getUserByEmail(email));
     if (!user) {
@@ -436,8 +636,13 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
-    const lockoutKeys = this.lockoutKeysForUser(user, email);
-    await this.ensureNotLockedOut(lockoutKeys);
+    const lockoutKeys = this.lockoutKeysForUser(
+      user,
+      email,
+      parsedEmail || email,
+      parsedPhone
+    );
+    await this.ensureNotLockedOut(lockoutKeys, platform);
 
     let tokenData: TokenData;
     try {
@@ -446,6 +651,13 @@ export class LoginService {
         : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_failed',
+        platform,
+        { channel: 'email', context: 'login' },
+        serverAuthViewer(user.id)
+      );
       throw error;
     }
 
@@ -453,6 +665,13 @@ export class LoginService {
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     await this.afterSuccessfulVerify(user, 'email');
+    emitAuthSiteEvent(
+      this.siteEvents,
+      'auth_code_verified',
+      platform,
+      { channel: 'email', is_new_account: false, context: 'login' },
+      serverAuthViewer(user.id)
+    );
     return this.buildLoginResult(user, tokenData, platform, ipAddress, userAgent);
   }
 
@@ -462,7 +681,9 @@ export class LoginService {
     platform: ClientPlatform,
     ipAddress?: string,
     userAgent?: string,
-    knownUser?: LoginUserRow
+    knownUser?: LoginUserRow,
+    parsedEmail = '',
+    parsedPhone = ''
   ): Promise<LoginResult> {
     const user = knownUser || (await this.getUserByPhoneNumber(phoneNumber));
     if (!user) {
@@ -471,8 +692,13 @@ export class LoginService {
         HttpStatus.NOT_FOUND
       );
     }
-    const lockoutKeys = this.lockoutKeysForUser(user, phoneNumber);
-    await this.ensureNotLockedOut(lockoutKeys);
+    const lockoutKeys = this.lockoutKeysForUser(
+      user,
+      phoneNumber,
+      parsedEmail,
+      parsedPhone || phoneNumber
+    );
+    await this.ensureNotLockedOut(lockoutKeys, platform);
 
     let tokenData: TokenData;
     try {
@@ -481,6 +707,13 @@ export class LoginService {
         : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);
+      emitAuthSiteEvent(
+        this.siteEvents,
+        'auth_code_failed',
+        platform,
+        { channel: 'sms', context: 'login' },
+        serverAuthViewer(user.id)
+      );
       throw error;
     }
 
@@ -488,10 +721,27 @@ export class LoginService {
     this.assertTokenPayload(tokenData);
     this.decodeClaimsFromIdToken(tokenData.id_token!);
     await this.afterSuccessfulVerify(user, 'sms');
+    emitAuthSiteEvent(
+      this.siteEvents,
+      'auth_code_verified',
+      platform,
+      { channel: 'sms', is_new_account: false, context: 'login' },
+      serverAuthViewer(user.id)
+    );
     return this.buildLoginResult(user, tokenData, platform, ipAddress, userAgent);
   }
 
-  private async throwLockout(identifier: string): Promise<never> {
+  private async throwLockout(
+    identifier: string,
+    platform: ClientPlatform
+  ): Promise<never> {
+    emitAuthSiteEvent(
+      this.siteEvents,
+      'auth_locked',
+      platform,
+      { context: 'login' },
+      serverAuthViewer()
+    );
     const remainingMs = await this.lockout.getRemainingLockoutMs(identifier);
     const remainingMin = Math.ceil(remainingMs / 60000);
     throw new HttpException(
@@ -770,5 +1020,186 @@ export class LoginService {
 
   async destroySession(sessionId: string): Promise<void> {
     await this.sessionStore.deleteSession(sessionId);
+  }
+
+  private async startLoginOtpV2(
+    body: LoginStartDto,
+    email: string,
+    phone: string,
+    platform: ClientPlatform,
+    ip?: string
+  ): Promise<LoginOtpStartResult> {
+    const identifierKeys = this.lockoutKeysForParsedIdentifier(email, phone);
+    await this.ensureNotLockedOut(identifierKeys, platform);
+    const user = await this.findUserByIdentifier(email, phone, {
+      allowMissing: true,
+    });
+    if (user) {
+      return this.startKnownAuthFlowV2(user, email, phone, platform, ip);
+    }
+    const attempt = await this.signupService.startIdentifierOnlyOtp(
+      email,
+      phone,
+      ip
+    );
+    return toUniformFlowStartResult(
+      attempt.attemptId,
+      email,
+      phone,
+      {
+        codeExpiresAt: attempt.codeExpiresAt,
+        resendAvailableAt: attempt.resendAvailableAt,
+      }
+    );
+  }
+
+  private async startKnownAuthFlowV2(
+    user: LoginUserRow,
+    email: string,
+    phone: string,
+    platform: ClientPlatform,
+    ip?: string
+  ): Promise<LoginOtpStartResult> {
+    const channel: OtpChannel = email ? 'email' : 'sms';
+    const destination = email
+      ? normalizeOtpDestination(email, 'email')
+      : normalizeOtpDestination(phone, 'phone');
+    const identifier = buildOtpIdentifier({ email, phone });
+    await this.ensureNotLockedOut(
+      this.lockoutKeysForUser(user, destination, email, phone),
+      platform
+    );
+    await this.otpSendLimiter.assertCanSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
+    await this.sendOtpToChannel(user, channel);
+    const timing = await this.otpSendLimiter.recordSend({
+      destination,
+      identifier,
+      ip,
+      isChannelSwitch: false,
+    });
+    const flowId = randomUUID();
+    await this.authFlowV2Store.save(flowId, {
+      userId: user.id,
+      channel,
+      email,
+      phone,
+    });
+    return toUniformFlowStartResult(flowId, email, phone, timing);
+  }
+
+  private async verifyLoginOtpFlowV2(
+    flowId: string,
+    otp: string,
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<LoginVerifyServiceResult> {
+    const signupResult = await this.tryVerifySignupFlowV2(flowId, otp);
+    if (signupResult) return signupResult;
+    return this.verifyKnownAuthFlowV2(
+      flowId,
+      otp,
+      platform,
+      ipAddress,
+      userAgent
+    );
+  }
+
+  private async tryVerifySignupFlowV2(
+    flowId: string,
+    otp: string
+  ): Promise<LoginVerifyServiceResult | null> {
+    try {
+      await this.signupService.verifyOtpForAuthFlowV2(flowId, otp);
+      return {
+        response: {
+          success: true,
+          verified: true,
+          next: 'finish_account',
+          flowId,
+        },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        const status = error.getStatus();
+        if (status === HttpStatus.NOT_FOUND) return null;
+        throw error;
+      }
+      return null;
+    }
+  }
+
+  private async verifyKnownAuthFlowV2(
+    flowId: string,
+    otp: string,
+    platform: ClientPlatform,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<LoginResult> {
+    const record = await this.authFlowV2Store.get(flowId);
+    if (!record) {
+      this.throwAuthRequestFailed();
+    }
+    const user = await this.loadUserById(record.userId);
+    const identifierKeys = this.lockoutKeysForParsedIdentifier(
+      record.email,
+      record.phone
+    );
+    await this.ensureNotLockedOut(identifierKeys, platform);
+    if (record.channel === 'email') {
+      const result = await this.verifyLoginOtpWithEmail(
+        this.normalizeEmail(user.email || record.email),
+        otp,
+        platform,
+        ipAddress,
+        userAgent,
+        user,
+        record.email,
+        record.phone
+      );
+      await this.authFlowV2Store.delete(flowId);
+      return result;
+    }
+    const result = await this.verifyLoginOtpWithPhone(
+      this.normalizePhone(user.phone_number || record.phone),
+      otp,
+      platform,
+      ipAddress,
+      userAgent,
+      user,
+      record.email,
+      record.phone
+    );
+    await this.authFlowV2Store.delete(flowId);
+    return result;
+  }
+
+  private async loadUserById(userId: string): Promise<LoginUserRow> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      users_by_pk: LoginUserRow | null;
+    }>(
+      `
+      query LoginUserById($id: uuid!) {
+        users_by_pk(id: $id) {
+          id
+          email
+          phone_number
+          email_verified
+          phone_number_verified
+        }
+      }
+    `,
+      { id: userId }
+    );
+    const user = result.users_by_pk;
+    if (!user) {
+      this.throwAuthRequestFailed();
+    }
+    return user;
   }
 }

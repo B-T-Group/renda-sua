@@ -8,6 +8,7 @@ export interface PinCodeFieldsProps {
   length?: number;
   disabled?: boolean;
   autoFocus?: boolean;
+  autoCompleteOneTimeCode?: boolean;
 }
 
 function clampDigits(value: string, length: number): string {
@@ -21,6 +22,7 @@ export const PinCodeFields: React.FC<PinCodeFieldsProps> = ({
   length = 4,
   disabled = false,
   autoFocus = false,
+  autoCompleteOneTimeCode = false,
 }) => {
   const { t } = useTranslation();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -100,7 +102,8 @@ export const PinCodeFields: React.FC<PinCodeFieldsProps> = ({
             maxLength: 1,
             inputMode: 'numeric',
             pattern: '[0-9]*',
-            'aria-label': `${t('orders.completeDelivery.pinLabel', 'Digit')} ${i + 1}`,
+            autoComplete: autoCompleteOneTimeCode && i === 0 ? 'one-time-code' : 'off',
+            'aria-label': `${t('auth.otp.digitLabel', 'Digit {{n}}', { n: i + 1 })}`,
           }}
           sx={{
             width: 56,
