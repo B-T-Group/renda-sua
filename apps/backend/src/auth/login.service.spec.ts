@@ -25,6 +25,17 @@ function unsignedJwt(payload: Record<string, unknown>): string {
   return `${header}.${body}.`;
 }
 
+function accessWithDefaultRole(role: string, expOffsetSec = 3600): string {
+  return unsignedJwt({
+    exp: Math.floor(Date.now() / 1000) + expOffsetSec,
+    'https://hasura.io/jwt/claims': {
+      'x-hasura-user-id': 'user-1',
+      'x-hasura-default-role': role,
+      'x-hasura-allowed-roles': [role],
+    },
+  });
+}
+
 describe('LoginService start, lockout, and session gates', () => {
   const tokenData = {
     access_token: 'access',
@@ -505,19 +516,65 @@ describe('LoginService start, lockout, and session gates', () => {
     });
 
     it('returns the stored access token without calling Auth0 when it is still valid', async () => {
-      const access = unsignedJwt({
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      });
+      const access = accessWithDefaultRole('client');
       sessionStore.resolveLiveSession.mockResolvedValue(
         liveSession({ auth0AccessToken: access, auth0IdToken: 'id' })
       );
 
-      const result = await service.refreshSession('sid-1');
+      const result = await service.refreshSession('sid-1', undefined, undefined, {
+        active_persona: 'client',
+      });
 
       expect(auth0Service.refreshAccessToken).not.toHaveBeenCalled();
       expect(sessionStore.rotateSession).not.toHaveBeenCalled();
       expect(result.newSessionId).toBeUndefined();
       expect(result.response.access_token).toBe(access);
+    });
+
+    it('refreshes from Auth0 when active_persona differs from the cached JWT role', async () => {
+      const access = accessWithDefaultRole('client');
+      sessionStore.resolveLiveSession.mockResolvedValue(
+        liveSession({ auth0AccessToken: access, auth0IdToken: 'id' })
+      );
+      auth0Service.refreshAccessToken.mockResolvedValue({
+        access_token: 'business-access',
+        id_token: 'new-id',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      });
+      sessionStore.rotateSession.mockResolvedValue('sid-2');
+
+      const result = await service.refreshSession('sid-1', undefined, undefined, {
+        active_persona: 'business',
+      });
+
+      expect(auth0Service.refreshAccessToken).toHaveBeenCalledWith('refresh', {
+        activePersona: 'business',
+      });
+      expect(result.response.access_token).toBe('business-access');
+    });
+
+    it('refreshes from Auth0 when force is true even if the cached token matches', async () => {
+      const access = accessWithDefaultRole('client');
+      sessionStore.resolveLiveSession.mockResolvedValue(
+        liveSession({ auth0AccessToken: access, auth0IdToken: 'id' })
+      );
+      auth0Service.refreshAccessToken.mockResolvedValue({
+        access_token: 'forced-access',
+        id_token: 'new-id',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      });
+      sessionStore.rotateSession.mockResolvedValue('sid-2');
+
+      await service.refreshSession('sid-1', undefined, undefined, {
+        active_persona: 'client',
+        force: true,
+      });
+
+      expect(auth0Service.refreshAccessToken).toHaveBeenCalledWith('refresh', {
+        activePersona: 'client',
+      });
     });
 
     it('persists a rotated Auth0 refresh token on success', async () => {
@@ -635,7 +692,10 @@ describe('LoginService start, lockout, and session gates', () => {
 
       const result = await service.refreshSession('sid-1');
 
-      expect(auth0Service.refreshAccessToken).toHaveBeenCalledWith('refresh');
+      expect(auth0Service.refreshAccessToken).toHaveBeenCalledWith(
+        'refresh',
+        undefined
+      );
       expect(result.newSessionId).toBe('sid-2');
     });
 

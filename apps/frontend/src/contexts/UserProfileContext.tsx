@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import React, {
   createContext,
   ReactNode,
@@ -379,8 +378,8 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     null
   );
 
-  const { getAccessTokenSilently } = useAuth0();
-  const { isAuthenticated, isSessionReady, isLoading } = useSessionAuth();
+  const { isAuthenticated, isSessionReady, isLoading, getAccessToken } =
+    useSessionAuth();
   const apiClient = useApiClient();
   const { i18n } = useTranslation();
 
@@ -648,10 +647,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
           prev ? { ...prev, user_type_id: context.persona } : null
         );
         try {
-          await getAccessTokenSilently({
-            cacheMode: 'off',
-            authorizationParams: { active_persona: context.persona },
-          });
+          await getAccessToken({ force: true, persona: context.persona });
         } catch (err) {
           console.warn('Token refresh with active_persona:', err);
         }
@@ -662,15 +658,13 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
         setUserType(null);
         setActiveContextState(context);
         try {
-          await getAccessTokenSilently({
-            cacheMode: 'off',
-          });
+          await getAccessToken({ force: true });
         } catch (err) {
           console.warn('Token refresh for delegation context:', err);
         }
       }
     },
-    [apiClient, profile?.id, getAccessTokenSilently]
+    [apiClient, profile?.id, getAccessToken]
   );
 
   const setActivePersona = useCallback(

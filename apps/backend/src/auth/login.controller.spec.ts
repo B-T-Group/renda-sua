@@ -153,6 +153,7 @@ describe('LoginController session cookie and CSRF gates', () => {
       controller.refreshSession(
         { cookies: {}, headers: {}, ip: '1.1.1.1' } as never,
         mockRes() as never,
+        {},
         'XMLHttpRequest'
       )
     ).rejects.toMatchObject({ status: HttpStatus.UNAUTHORIZED });
@@ -171,6 +172,7 @@ describe('LoginController session cookie and CSRF gates', () => {
         ip: '1.1.1.1',
       } as never,
       res as never,
+      {},
       'XMLHttpRequest'
     );
     expect(body).toEqual({ success: true, access_token: 'new' });
@@ -178,6 +180,29 @@ describe('LoginController session cookie and CSRF gates', () => {
       'rs_session',
       'sid-2',
       expect.objectContaining({ httpOnly: true })
+    );
+  });
+
+  it('forwards refresh DTO fields to the login service', async () => {
+    loginService.refreshSession.mockResolvedValue({
+      response: { success: true, access_token: 'new' },
+    });
+    const req = {
+      cookies: { rs_session: 'sid-1' },
+      headers: { 'user-agent': 'jest' },
+      ip: '1.1.1.1',
+    };
+    await controller.refreshSession(
+      req as never,
+      mockRes() as never,
+      { active_persona: 'agent', force: true },
+      'XMLHttpRequest'
+    );
+    expect(loginService.refreshSession).toHaveBeenCalledWith(
+      'sid-1',
+      '1.1.1.1',
+      'jest',
+      { active_persona: 'agent', force: true }
     );
   });
 
@@ -193,6 +218,7 @@ describe('LoginController session cookie and CSRF gates', () => {
         ip: '1.1.1.1',
       } as never,
       res as never,
+      {},
       'XMLHttpRequest'
     );
     expect(body).toEqual({ success: true, access_token: 'cached' });

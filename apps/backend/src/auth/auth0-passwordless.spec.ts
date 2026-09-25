@@ -92,6 +92,38 @@ describe('Auth0Service passwordless error mapping', () => {
     });
   });
 
+  it('includes active_persona on refresh_token grant when provided', async () => {
+    axiosPost.mockResolvedValue({
+      data: { access_token: 'tok', token_type: 'Bearer', expires_in: 60 },
+    });
+
+    await createService().refreshAccessToken('rt-1', {
+      activePersona: 'business',
+    });
+
+    expect(axiosPost).toHaveBeenCalledWith(
+      'https://example.auth0.com/oauth/token',
+      expect.objectContaining({
+        grant_type: 'refresh_token',
+        refresh_token: 'rt-1',
+        active_persona: 'business',
+      })
+    );
+  });
+
+  it('omits active_persona on refresh when not provided', async () => {
+    axiosPost.mockResolvedValue({
+      data: { access_token: 'tok', token_type: 'Bearer', expires_in: 60 },
+    });
+
+    await createService().refreshAccessToken('rt-1');
+
+    expect(axiosPost).toHaveBeenCalledWith(
+      'https://example.auth0.com/oauth/token',
+      expect.not.objectContaining({ active_persona: expect.anything() })
+    );
+  });
+
   it('returns tokens when passwordless verify succeeds', async () => {
     axiosPost.mockResolvedValue({
       data: { access_token: 'tok', token_type: 'Bearer', expires_in: 60 },

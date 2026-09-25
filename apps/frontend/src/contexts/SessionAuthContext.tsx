@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import { environment } from '../config/environment';
 import { personaAuthorizationParams } from '../services/tokenService';
+import { readStoredActivePersonaSlug } from '../utils/activePersonaStorage';
 
 type JwtPayload = Record<string, any>;
 
@@ -32,7 +33,11 @@ interface SessionAuthContextType {
   isSessionReady: boolean;
   isLoading: boolean;
   user: SessionAuthUser | undefined;
-  getAccessToken: (options?: { refresh?: boolean }) => Promise<string | null>;
+  getAccessToken: (options?: {
+    refresh?: boolean;
+    force?: boolean;
+    persona?: string | null;
+  }) => Promise<string | null>;
   logout: () => Promise<void>;
   setPasswordlessSession: (data: {
     access_token: string;
@@ -56,22 +61,31 @@ function decodeJwtPayload(token: string): JwtPayload | null {
   }
 }
 
-async function refreshWithBackend(): Promise<{
-  access_token: string;
-  id_token?: string;
-  token_type: string;
-  expires_in: number;
-} | null> {
-  try {
-    const res = await fetchRefresh(false);
-    if (!res) return null;
-    return (await res.json()) as any;
-  } catch {
-    return null;
-  }
+type RefreshBackendOpts = { force?: boolean; persona?: string | null };
+
+function buildRefreshBodyJson(opts?: RefreshBackendOpts): string | undefined {
+  const stored = readStoredActivePersonaSlug();
+  const persona =
+    opts?.persona !== undefined ? opts.persona ?? stored : stored;
+  const payload: Record<string, unknown> = {};
+  if (persona) payload.active_persona = persona;
+  if (opts?.force || opts?.persona !== undefined) payload.force = true;
+  if (!Object.keys(payload).length) return undefined;
+  return JSON.stringify(payload);
 }
 
-async function fetchRefresh(retried: boolean): Promise<Response | null> {
+function refreshInflightKey(opts?: RefreshBackendOpts): string {
+  const stored = readStoredActivePersonaSlug() ?? '';
+  const persona =
+    opts?.persona !== undefined ? opts.persona ?? stored : stored;
+  const force = opts?.force || opts?.persona !== undefined ? '1' : '0';
+  return `${persona}:${force}`;
+}
+
+async function fetchRefresh(
+  retried: boolean,
+  bodyJson?: string
+): Promise<Response | null> {
   const res = await fetch(`${environment.apiUrl}/auth/login/refresh`, {
     method: 'POST',
     credentials: 'include',
@@ -80,25 +94,53 @@ async function fetchRefresh(retried: boolean): Promise<Response | null> {
       'X-Client-Platform': 'web',
       'X-Requested-With': 'XMLHttpRequest',
     },
+    ...(bodyJson ? { body: bodyJson } : {}),
   });
   if (res.ok) return res;
   if ((res.status === 429 || res.status === 503) && !retried) {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    return fetchRefresh(true);
+    return fetchRefresh(true, bodyJson);
   }
   if (res.status === 401) return null;
   throw new Error('Failed to refresh token');
 }
 
-let inflightRefresh: ReturnType<typeof refreshWithBackend> | null = null;
+const inflightRefreshes = new Map<
+  string,
+  Promise<{
+    access_token: string;
+    id_token?: string;
+    token_type: string;
+    expires_in: number;
+  } | null>
+>();
 
-function refreshSessionOnce() {
-  if (!inflightRefresh) {
-    inflightRefresh = refreshWithBackend().finally(() => {
-      inflightRefresh = null;
-    });
+async function refreshWithBackend(opts?: RefreshBackendOpts) {
+  const bodyJson = buildRefreshBodyJson(opts);
+  try {
+    const res = await fetchRefresh(false, bodyJson);
+    if (!res) return null;
+    return (await res.json()) as {
+      access_token: string;
+      id_token?: string;
+      token_type: string;
+      expires_in: number;
+    };
+  } catch {
+    return null;
   }
-  return inflightRefresh;
+}
+
+function refreshSessionOnce(opts?: RefreshBackendOpts) {
+  const key = refreshInflightKey(opts);
+  let inflight = inflightRefreshes.get(key);
+  if (!inflight) {
+    inflight = refreshWithBackend(opts).finally(() => {
+      inflightRefreshes.delete(key);
+    });
+    inflightRefreshes.set(key, inflight);
+  }
+  return inflight;
 }
 
 export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
@@ -196,19 +238,45 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   const getAccessToken = useCallback(
-    async (options?: { refresh?: boolean }) => {
+    async (options?: {
+      refresh?: boolean;
+      force?: boolean;
+      persona?: string | null;
+    }) => {
       if (auth0.isAuthenticated && auth0.getAccessTokenSilently) {
+        const storedPersona = readStoredActivePersonaSlug();
+        const persona =
+          options?.persona !== undefined
+            ? options.persona ?? storedPersona
+            : storedPersona;
+        if (options?.force || options?.persona !== undefined) {
+          return await auth0.getAccessTokenSilently({
+            cacheMode: 'off',
+            ...(persona
+              ? { authorizationParams: { active_persona: persona } }
+              : {}),
+          });
+        }
         return await auth0.getAccessTokenSilently(personaAuthorizationParams());
       }
 
       const token = passwordlessAccessTokenRef.current;
       const expiresAtMs = passwordlessExpiresAtMsRef.current;
-      if (token && expiresAtMs > Date.now() + 30_000) {
+      const needsForcedRefresh =
+        options?.force === true || options?.persona !== undefined;
+      if (
+        token &&
+        expiresAtMs > Date.now() + 30_000 &&
+        !needsForcedRefresh
+      ) {
         return token;
       }
       if (options?.refresh === false) return null;
 
-      const refreshed = await refreshSessionOnce();
+      const refreshed = await refreshSessionOnce({
+        force: options?.force,
+        persona: options?.persona,
+      });
       if (!refreshed) {
         clearPasswordlessSession();
         return null;
@@ -272,4 +340,3 @@ export const useSessionAuth = (): SessionAuthContextType => {
   }
   return ctx;
 };
-
