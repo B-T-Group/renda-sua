@@ -96,12 +96,12 @@ const LocationCard: React.FC<LocationCardProps> = ({
     !isStripeRail &&
     (!linkedPhone || !phoneVerified);
   const phoneActionLabel = !linkedPhone
-    ? t('mobilePaymentPhone.addCta', 'Add mobile money number')
+    ? t('mobilePaymentPhone.addOrLinkCta', 'Add or link mobile money number')
     : t('mobilePaymentPhone.verifyCta', 'Verify mobile money number');
   const locationPaymentMessage = !linkedPhone
     ? t(
-        'mobilePaymentPhone.locationAddCta',
-        'Add and verify a mobile money number so customers can purchase from this location.'
+        'mobilePaymentPhone.locationAddOrLinkCta',
+        'Link a verified mobile money number, or add a new one, so customers can purchase from this location.'
       )
     : t(
         'mobilePaymentPhone.locationVerifyCta',

@@ -70,20 +70,32 @@ export const BusinessGoLiveCelebration: React.FC<
       <DialogActions
         sx={{
           flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: 'stretch',
           px: 3,
           pb: 3,
           gap: 1,
+          '& .MuiButton-root': {
+            m: 0,
+            flex: { sm: 1 },
+            width: { xs: '100%', sm: 'auto' },
+            minHeight: 48,
+            px: 1.5,
+            py: 1.25,
+            whiteSpace: 'normal',
+            lineHeight: 1.25,
+            textAlign: 'center',
+          },
         }}
       >
-        <Button variant="outlined" onClick={goPreview} fullWidth>
+        <Button variant="outlined" onClick={goPreview}>
           {t('stores.previewCtaButton', 'Preview store')}
         </Button>
-        <Button variant="outlined" onClick={goAddProduct} fullWidth>
+        <Button variant="outlined" onClick={goAddProduct}>
           {isRental
             ? t('business.goLive.ctaAddRental', 'Add a rental')
             : t('business.goLive.ctaAddProduct', 'Add a product')}
         </Button>
-        <Button variant="contained" onClick={onDismiss} fullWidth>
+        <Button variant="contained" onClick={onDismiss}>
           {t('business.goLive.ctaContinue', 'Continue to dashboard')}
         </Button>
       </DialogActions>

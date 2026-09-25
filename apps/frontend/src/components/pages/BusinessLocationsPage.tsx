@@ -9,6 +9,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Container,
   Dialog,
   DialogActions,
@@ -72,7 +73,7 @@ const BusinessLocationsPage: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
-  const { profile, refetch: refetchProfile, addAddress } =
+  const { profile, loading: profileLoading, refetch: refetchProfile, addAddress } =
     useUserProfileContext();
   const { businessQueryParams } = useBusinessCatalogScope();
   const { isStripeRail } = useIsStripeRail();
@@ -445,6 +446,14 @@ const BusinessLocationsPage: React.FC = () => {
 
   const activeLocations = locations.filter((location) => location.is_active);
   const inactiveLocations = locations.filter((location) => !location.is_active);
+
+  if (profileLoading) {
+    return (
+      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 }, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
 
   if (!profile?.business) {
     return (

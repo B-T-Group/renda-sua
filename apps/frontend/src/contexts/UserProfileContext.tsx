@@ -365,6 +365,8 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
 }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
+  /** False until the first /users/me attempt finishes for this session. */
+  const [profileHydrated, setProfileHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userType, setUserType] = useState<UserType | null>(null);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
@@ -506,6 +508,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
       }
     } finally {
       setLoading(false);
+      setProfileHydrated(true);
     }
   }, [apiClient, isAuthenticated, i18n]);
 
@@ -553,6 +556,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     setAccountsError(null);
     setDelegations([]);
     setActiveContextState(null);
+    setProfileHydrated(false);
     clearStoredActivePersona();
   };
 
@@ -827,9 +831,11 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     if (gate === 'wait') return;
     if (gate === 'clear') {
       clearProfile();
+      setLoading(false);
       return;
     }
     let cancelled = false;
+    setProfileHydrated(false);
     void (async () => {
       await checkProfile();
       if (!cancelled) {
@@ -841,9 +847,12 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     };
   }, [isAuthenticated, isLoading, isSessionReady, checkProfile, checkAccounts]);
 
+  const awaitingProfile =
+    isAuthenticated && isSessionReady && !profileHydrated;
+
   const value: UserProfileContextType = {
     profile,
-    loading: loading || isLoading,
+    loading: loading || isLoading || awaitingProfile,
     error,
     userType,
     personas,
