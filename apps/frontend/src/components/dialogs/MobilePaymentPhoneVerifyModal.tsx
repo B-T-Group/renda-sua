@@ -21,6 +21,10 @@ import {
   parseE164Parts,
   useMobilePaymentPhones,
 } from '../../hooks/useMobilePaymentPhones';
+import {
+  nationalDigitsForMobilePayment,
+  resolveMobilePaymentPhoneFormAction,
+} from '../../utils/resolveMobilePaymentPhoneFormAction';
 
 export type MobilePaymentPhoneModalMode = 'add' | 'edit' | 'verify';
 
@@ -77,12 +81,14 @@ export function MobilePaymentPhoneVerifyModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preferNew, setPreferNew] = useState(false);
+  const [selectedExisting, setSelectedExisting] = useState(false);
 
   useEffect(() => {
     if (!open || !methodReady) return;
     setError(null);
     setBusy(false);
     setPreferNew(false);
+    setSelectedExisting(false);
     setActivePhone(initialPhone ?? null);
     setPhoneValue(initialPhone?.phone_e164 ?? '');
     if (initialPhone) {
@@ -108,18 +114,26 @@ export function MobilePaymentPhoneVerifyModal({
     onCompleted?.(verified);
   };
 
+  const beginAddNewNumber = () => {
+    setPreferNew(true);
+    setSelectedExisting(false);
+    setActivePhone(null);
+    setPhoneValue('');
+    setStep('form');
+  };
+
   const resolvePhoneForForm = async (): Promise<MobilePaymentPhone> => {
-    const digits = phoneValue.replace(/\D/g, '');
-    const national = digits.startsWith(countryCode)
-      ? digits.slice(countryCode.length)
-      : digits.replace(/^237|^241/, '');
-    if (mode === 'edit' && initialPhone) {
-      return updatePhone(initialPhone.id, countryCode, national);
+    const national = nationalDigitsForMobilePayment(phoneValue, countryCode);
+    const action = resolveMobilePaymentPhoneFormAction({
+      mode,
+      mustCreateNew: preferNew || selectedExisting,
+      activePhoneId: activePhone?.id,
+      initialPhoneId: initialPhone?.id,
+    });
+    if (action.type === 'update') {
+      return updatePhone(action.phoneId, countryCode, national);
     }
-    if (mode === 'add' && activePhone) {
-      return updatePhone(activePhone.id, countryCode, national);
-    }
-    if (mode === 'verify' && initialPhone) return initialPhone;
+    if (action.type === 'reuse' && initialPhone) return initialPhone;
     return createPhone(countryCode, national);
   };
 
@@ -133,6 +147,8 @@ export function MobilePaymentPhoneVerifyModal({
   const selectExisting = async (phone: MobilePaymentPhone) => {
     setError(null);
     setBusy(true);
+    setSelectedExisting(true);
+    setPreferNew(false);
     setActivePhone(phone);
     try {
       if (phone.is_verified) {
@@ -158,6 +174,8 @@ export function MobilePaymentPhoneVerifyModal({
     try {
       const phone = await resolvePhoneForForm();
       setActivePhone(phone);
+      setPreferNew(false);
+      setSelectedExisting(false);
       if (isQuestion) {
         setStep('question');
         return;
@@ -226,10 +244,7 @@ export function MobilePaymentPhoneVerifyModal({
                 phones={phones}
                 busy={busy}
                 onSelect={(phone) => void selectExisting(phone)}
-                onAddNew={() => {
-                  setPreferNew(true);
-                  setStep('form');
-                }}
+                onAddNew={beginAddNewNumber}
               />
             ) : null}
             {step === 'form' ? (
@@ -246,6 +261,7 @@ export function MobilePaymentPhoneVerifyModal({
                 }}
                 onBackToChoose={() => {
                   setPreferNew(false);
+                  setSelectedExisting(false);
                   setStep('choose');
                 }}
               />
@@ -268,7 +284,9 @@ export function MobilePaymentPhoneVerifyModal({
         isQuestion={isQuestion}
         phoneValue={phoneValue}
         onClose={onClose}
-        onBackToForm={() => setStep('form')}
+        onBackToForm={() =>
+          selectedExisting ? beginAddNewNumber() : setStep('form')
+        }
         onConfirmYes={() => void handleConfirmYes()}
         onFormContinue={() =>
           void (mode === 'verify' && !isQuestion
