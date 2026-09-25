@@ -365,7 +365,7 @@ describe('SignupService', () => {
       expect(supersedeCall?.[1]).toEqual(
         expect.objectContaining({
           where: {
-            status: { _in: ['pending', 'otp_verified'] },
+            status: { _in: ['pending'] },
             _or: [
               { email: { _eq: 'new@example.com' } },
               { phone_number: { _eq: '+237600000001' } },
