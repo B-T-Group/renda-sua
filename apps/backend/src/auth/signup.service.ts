@@ -149,7 +149,7 @@ interface SignupAttemptContactFilter {
 }
 
 interface SignupAttemptContactWhere {
-  status: { _in: Array<'pending' | 'otp_verified'> };
+  status: { _in: Array<'pending'> };
   _or: SignupAttemptContactFilter[];
 }
 
@@ -857,7 +857,9 @@ export class SignupService {
     if (email) contacts.push({ email: { _eq: email } });
     if (phoneNumber) contacts.push({ phone_number: { _eq: phoneNumber } });
     if (!contacts.length) return null;
-    return { status: { _in: ['pending', 'otp_verified'] }, _or: contacts };
+    // Only supersede pending starts. Leaving otp_verified intact so a
+    // later start-otp cannot invalidate a verified flow before finish.
+    return { status: { _in: ['pending'] }, _or: contacts };
   }
 
   private async loadAttempt(attemptId: string): Promise<SignupAttemptRow> {
