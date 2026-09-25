@@ -27,14 +27,39 @@ const EVERY: Record<string, [string, string]> = {
   monthly: ['admin.paymentPrograms.every.monthly', 'every month'],
 };
 
+export interface ImpactObjectives {
+  targetAgentRecruitments?: string;
+  targetClientSignups?: string;
+  targetMerchantRecruitments?: string;
+  targetItemSalesAmount?: string;
+  targetRentalAmount?: string;
+}
+
 export function scheduleImpact(
   t: Translate,
-  input: { amount: string; currency: string; frequency: string; days?: string; name?: string; locale: string }
+  input: {
+    amount: string;
+    currency: string;
+    frequency: string;
+    days?: string;
+    name?: string;
+    locale: string;
+  }
 ): string {
   const money = formatProgramMoney(input.amount, input.currency, input.locale);
   if (!money) return t('admin.paymentPrograms.needAmount', 'Enter an amount to see what an agent would receive.');
   const copy = scheduleCopy(input);
   return t(copy.key, copy.fallback, scheduleVars(t, input, money));
+}
+
+/** One readable line per filled objective target. */
+export function impactObjectiveLines(
+  t: Translate,
+  objectives: ImpactObjectives | undefined,
+  currency: string,
+  locale: string
+): string[] {
+  return objectiveParts(t, objectives, currency, locale);
 }
 
 function scheduleCopy(input: { days?: string; name?: string }): { key: string; fallback: string } {
@@ -193,6 +218,40 @@ function formatZero(currency: string, locale: string): string {
   } catch {
     return `0 ${currency}`;
   }
+}
+
+function objectiveParts(
+  t: Translate,
+  objectives: ImpactObjectives | undefined,
+  currency: string,
+  locale: string
+): string[] {
+  if (!objectives) return [];
+  return [
+    countObjective(t, 'admin.paymentPrograms.objectiveAgents', '{{count}} agent recruitments', objectives.targetAgentRecruitments),
+    countObjective(t, 'admin.paymentPrograms.objectiveClients', '{{count}} client signups', objectives.targetClientSignups),
+    countObjective(t, 'admin.paymentPrograms.objectiveMerchants', '{{count}} merchant recruitments', objectives.targetMerchantRecruitments),
+    moneyObjective(t, 'admin.paymentPrograms.objectiveItemSales', '{{money}} in item sales', objectives.targetItemSalesAmount, currency, locale),
+    moneyObjective(t, 'admin.paymentPrograms.objectiveRentals', '{{money}} in rentals', objectives.targetRentalAmount, currency, locale),
+  ].filter((part): part is string => Boolean(part));
+}
+
+function countObjective(t: Translate, key: string, fallback: string, raw?: string): string | null {
+  const count = Number(raw);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return t(key, fallback, { count: String(count) });
+}
+
+function moneyObjective(
+  t: Translate,
+  key: string,
+  fallback: string,
+  raw: string | undefined,
+  currency: string,
+  locale: string
+): string | null {
+  const money = raw ? formatProgramMoney(raw, currency, locale) : null;
+  return money ? t(key, fallback, { money }) : null;
 }
 
 function everyLabel(t: Translate, frequency: string): string {

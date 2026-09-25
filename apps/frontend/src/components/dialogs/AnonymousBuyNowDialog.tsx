@@ -1,4 +1,5 @@
 import { useAuth0 } from '@auth0/auth0-react';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import ArrowForwardRounded from '@mui/icons-material/ArrowForwardRounded';
 import EmailOutlined from '@mui/icons-material/EmailOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
@@ -31,6 +32,7 @@ import {
   getDialCodeForActiveCountry,
   isActivePhoneCountry,
 } from '../../constants/activeCountries';
+import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from '../../hooks/useDetectedCountry';
 import { getMetaBrowserContext } from '../../utils/metaBrowserIds';
@@ -104,6 +106,8 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
   const navigate = useNavigate();
   const { loginWithRedirect } = useAuth0();
   const { trackSiteEvent } = useTrackSiteEvent();
+  const { trackAuthGateShown } = useAuthFunnelTracking('anonymous_buy_now');
+  const { flagOn, requireAuth } = useAuthGate();
   const { selectedMarket } = useMarket();
 
   const [contactMethod, setContactMethod] = useState<'phone' | 'email'>('phone');
@@ -181,9 +185,6 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           metadata: {
             screenHint,
             contactMethod,
-            loginHint: loginHint || null,
-            email: emailNormalized || null,
-            phone: phoneE164 || null,
           },
         });
         if (screenHint === 'signup' && attemptId) {
@@ -203,6 +204,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
           navigate(`/auth/otp?flow=signup`);
           return;
         }
+        trackAuthGateShown('anonymous_buy_now_login');
         await loginWithRedirect({
           authorizationParams: {
             connection,
@@ -234,6 +236,7 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
       phoneE164,
       returnToPathWithAnon,
       t,
+      trackAuthGateShown,
       trackSiteEvent,
     ]
   );
@@ -254,6 +257,31 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
 
   const handleContinue = useCallback(async () => {
     if (submitting) return;
+    if (flagOn) {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await requireAuth({
+          context: 'checkout',
+          entry: 'anonymous_buy_now',
+          run: () => {
+            navigate(returnToPathWithAnon);
+            onClose();
+          },
+        });
+      } catch (redirectErr: unknown) {
+        console.error('Auth gate checkout failed:', redirectErr);
+        setError(
+          t(
+            'auth.gate.genericError',
+            'Something went wrong. Please try again.'
+          )
+        );
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (contactMethod === 'email' && !isEmailValid) return;
     if (contactMethod === 'phone' && !isPhoneValid) return;
     if (!firstNameTrimmed || !lastNameTrimmed) return;
@@ -357,6 +385,9 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     submitting,
     t,
     trackSiteEvent,
+    flagOn,
+    onClose,
+    requireAuth,
   ]);
 
   const handleClose = useCallback(() => {
@@ -380,11 +411,12 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
     [secondaryCtaLabel, t]
   );
 
-  const canSubmit =
-    (contactMethod === 'email' ? isEmailValid : isPhoneValid) &&
-    !!firstNameTrimmed &&
-    !!lastNameTrimmed &&
-    !submitting;
+  const canSubmit = flagOn
+    ? !submitting
+    : (contactMethod === 'email' ? isEmailValid : isPhoneValid) &&
+      !!firstNameTrimmed &&
+      !!lastNameTrimmed &&
+      !submitting;
 
   const handleSecondaryAction = useCallback(() => {
     if (openLoginDialogOnSecondaryCta) {

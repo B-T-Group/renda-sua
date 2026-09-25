@@ -14,6 +14,7 @@ describe('SignupController OTP channel and session cookie gates', () => {
     resendSignupOtp: jest.Mock;
     verifySignupOtp: jest.Mock;
   };
+  let availabilityLimiter: { assertAndRecordCheck: jest.Mock };
   let controller: SignupController;
 
   beforeEach(() => {
@@ -27,14 +28,24 @@ describe('SignupController OTP channel and session cookie gates', () => {
       }),
       verifySignupOtp: jest.fn(),
     };
-    controller = new SignupController(signupService as never);
+    availabilityLimiter = {
+      assertAndRecordCheck: jest.fn().mockResolvedValue(undefined),
+    };
+    controller = new SignupController(
+      signupService as never,
+      availabilityLimiter as never
+    );
   });
 
   it('returns taken false for blank availability queries without hitting Hasura', async () => {
-    await expect(controller.emailAvailability('   ')).resolves.toEqual({
+    await expect(
+      controller.emailAvailability('   ', { ip: '1.2.3.4' })
+    ).resolves.toEqual({
       taken: false,
     });
-    await expect(controller.phoneAvailability('')).resolves.toEqual({
+    await expect(
+      controller.phoneAvailability('', { ip: '1.2.3.4' })
+    ).resolves.toEqual({
       taken: false,
     });
     expect(signupService.isEmailTaken).not.toHaveBeenCalled();
@@ -47,13 +58,17 @@ describe('SignupController OTP channel and session cookie gates', () => {
       channel: 'sms',
       availableChannels: ['email', 'sms'],
     });
-    const body = await controller.signupResendOtp({
-      attemptId: 'attempt-123',
-      channel: 'sms',
-    });
+    const body = await controller.signupResendOtp(
+      {
+        attemptId: 'attempt-123',
+        channel: 'sms',
+      },
+      { ip: '9.9.9.9' }
+    );
     expect(signupService.resendSignupOtp).toHaveBeenCalledWith(
       'attempt-123',
-      'sms'
+      'sms',
+      '9.9.9.9'
     );
     expect(body).toEqual({
       success: true,

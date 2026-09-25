@@ -2,14 +2,27 @@ import { Button, MenuItem, Stack, TextField } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
-import { CurrencyField, DirectorySearch, ImpactCard, type DirectoryOption } from './fields';
-import { advanceImpact, creditImpact, scheduleImpact } from './impact';
+import {
+  CurrencyField,
+  DirectorySearch,
+  FormGrid,
+  ImpactCard,
+  type DirectoryOption,
+} from './fields';
+import { advanceImpact, creditImpact, impactObjectiveLines, scheduleImpact } from './impact';
 import {
   EMPTY_OBJECTIVES,
   ObjectiveFields,
+  objectivesFromRow,
   objectivesPayload,
   type ObjectiveValues,
 } from './ObjectiveFields';
+import {
+  AdvanceArt,
+  AssignmentArt,
+  CreditArt,
+  ScheduleArt,
+} from './ProgramArt';
 import { fromLocalInput, toLocalInput } from './shared';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
@@ -53,7 +66,14 @@ export function ScheduleForm({ onDone }: { onDone: (message: string) => Promise<
   const [days, setDays] = useState('');
   const [objectives, setObjectives] = useState<ObjectiveValues>(EMPTY_OBJECTIVES);
   const ready = Boolean(name.trim()) && Number(amount) > 0;
-  const impact = scheduleImpact(t, { amount, currency, frequency, days, locale: i18n.language });
+  const impact = scheduleImpact(t, {
+    amount,
+    currency,
+    frequency,
+    days,
+    locale: i18n.language,
+  });
+  const objectiveLines = impactObjectiveLines(t, objectives, currency, i18n.language);
 
   async function create() {
     await api.post('/admin/payment-programs/schedules', {
@@ -64,19 +84,32 @@ export function ScheduleForm({ onDone }: { onDone: (message: string) => Promise<
   }
 
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-      <Stack spacing={2} sx={{ flex: 1 }}>
+    <Stack spacing={2.5}>
+      <FormGrid>
         <TextField label={t('admin.paymentPrograms.name', 'Name')} value={name} onChange={(e) => setName(e.target.value)} />
         <FrequencyField value={frequency} onChange={setFrequency} />
         <CurrencyField value={currency} onChange={setCurrency} />
         <TextField label={t('admin.paymentPrograms.amount', 'Amount')} value={amount} onChange={(e) => setAmount(e.target.value)} />
         <TextField label={t('admin.paymentPrograms.durationDays', 'Duration (days)')} value={days} onChange={(e) => setDays(e.target.value)} />
-        <ObjectiveFields values={objectives} onChange={setObjectives} currency={currency} />
-        <Button variant="contained" disabled={!ready} onClick={() => void create()}>
-          {t('admin.paymentPrograms.createSchedule', 'Create schedule')}
-        </Button>
-      </Stack>
-      <ImpactCard text={impact} />
+      </FormGrid>
+      <ObjectiveFields values={objectives} onChange={setObjectives} currency={currency} />
+      <ImpactCard
+        text={impact}
+        objectives={objectiveLines}
+        art={
+          <ScheduleArt
+            label={t('admin.paymentPrograms.whatThisDoes', 'What this does')}
+          />
+        }
+      />
+      <Button
+        variant="contained"
+        disabled={!ready}
+        onClick={() => void create()}
+        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+      >
+        {t('admin.paymentPrograms.createSchedule', 'Create schedule')}
+      </Button>
     </Stack>
   );
 }
@@ -96,16 +129,28 @@ export function AdvanceForm({ onDone }: { onDone: (message: string) => Promise<v
   }
 
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-      <Stack spacing={2} sx={{ flex: 1 }}>
+    <Stack spacing={2.5}>
+      <FormGrid>
         <TextField label={t('admin.paymentPrograms.name', 'Name')} value={name} onChange={(e) => setName(e.target.value)} />
         <CurrencyField value={currency} onChange={setCurrency} />
         <TextField label={t('admin.paymentPrograms.limit', 'Limit')} value={limit} onChange={(e) => setLimit(e.target.value)} />
-        <Button variant="contained" disabled={!ready} onClick={() => void create()}>
-          {t('admin.paymentPrograms.createProgram', 'Create program')}
-        </Button>
-      </Stack>
-      <ImpactCard text={impact} />
+      </FormGrid>
+      <ImpactCard
+        text={impact}
+        art={
+          <AdvanceArt
+            label={t('admin.paymentPrograms.whatThisDoes', 'What this does')}
+          />
+        }
+      />
+      <Button
+        variant="contained"
+        disabled={!ready}
+        onClick={() => void create()}
+        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+      >
+        {t('admin.paymentPrograms.createProgram', 'Create program')}
+      </Button>
     </Stack>
   );
 }
@@ -143,8 +188,8 @@ export function CreditForm({ partners, onDone }: { partners: PartnerRow[]; onDon
   }
 
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-      <Stack spacing={2} sx={{ flex: 1 }}>
+    <Stack spacing={2.5}>
+      <FormGrid>
         <DirectorySearch
           label={t('admin.paymentPrograms.client', 'Client')}
           placeholder={t('admin.paymentPrograms.clientSearch', 'Name, email, or phone number')}
@@ -155,14 +200,26 @@ export function CreditForm({ partners, onDone }: { partners: PartnerRow[]; onDon
         <TextField label={t('admin.paymentPrograms.amount', 'Amount')} value={amount} onChange={(e) => setAmount(e.target.value)} />
         <CurrencyField value={currency} onChange={setCurrency} />
         <ScopeField value={applicability} onChange={setApplicability} />
-        {applicability === 'specific_business' && (
+        {applicability === 'specific_business' ? (
           <PartnerPicker partners={active} value={businessId} onChange={setBusinessId} />
-        )}
-        <Button variant="contained" disabled={blocked} onClick={() => void grant()}>
-          {t('admin.paymentPrograms.grantCredits', 'Grant credits')}
-        </Button>
-      </Stack>
-      <ImpactCard text={impact} />
+        ) : null}
+      </FormGrid>
+      <ImpactCard
+        text={impact}
+        art={
+          <CreditArt
+            label={t('admin.paymentPrograms.whatThisDoes', 'What this does')}
+          />
+        }
+      />
+      <Button
+        variant="contained"
+        disabled={blocked}
+        onClick={() => void grant()}
+        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+      >
+        {t('admin.paymentPrograms.grantCredits', 'Grant credits')}
+      </Button>
     </Stack>
   );
 }
@@ -185,6 +242,7 @@ export function AssignmentForm({
   const templates = kind === 'schedule' ? schedules.filter((row) => row.is_active) : programs.filter((row) => row.is_active);
   const selected = templates.find((row) => row.id === templateId);
   const ready = Boolean(templateId && agent && (kind === 'advance' ? agent.userId : fromLocalInput(startsAt)));
+  const impact = assignmentImpact(t, i18n.language, selected, agent?.name);
 
   async function apply() {
     await postAssignment(api, kind, templateId, agent, startsAt, programs);
@@ -192,8 +250,8 @@ export function AssignmentForm({
   }
 
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-      <Stack spacing={2} sx={{ flex: 1 }}>
+    <Stack spacing={2.5}>
+      <FormGrid>
         <TextField select label={t('admin.paymentPrograms.assignKind', 'Apply')} value={kind} onChange={(e) => { setKind(e.target.value); setTemplateId(''); }}>
           <MenuItem value="schedule">{t('admin.paymentPrograms.schedules', 'Schedules')}</MenuItem>
           <MenuItem value="advance">{t('admin.paymentPrograms.advances', 'Cash advances')}</MenuItem>
@@ -208,14 +266,27 @@ export function AssignmentForm({
           value={agent}
           onChange={setAgent}
         />
-        {kind === 'schedule' && (
+        {kind === 'schedule' ? (
           <TextField type="datetime-local" label={t('admin.paymentPrograms.startsAt', 'Starts at')} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} InputLabelProps={{ shrink: true }} />
-        )}
-        <Button variant="contained" disabled={!ready} onClick={() => void apply()}>
-          {t('admin.paymentPrograms.assign', 'Assign')}
-        </Button>
-      </Stack>
-      <ImpactCard text={assignmentSentence(t, i18n.language, kind, selected, agent?.name)} />
+        ) : null}
+      </FormGrid>
+      <ImpactCard
+        text={impact.text}
+        objectives={impact.objectives}
+        art={
+          <AssignmentArt
+            label={t('admin.paymentPrograms.whatThisDoes', 'What this does')}
+          />
+        }
+      />
+      <Button
+        variant="contained"
+        disabled={!ready}
+        onClick={() => void apply()}
+        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+      >
+        {t('admin.paymentPrograms.assign', 'Assign')}
+      </Button>
     </Stack>
   );
 }
@@ -303,25 +374,36 @@ function scheduleBody(name: string, frequency: string, currency: string, amount:
   };
 }
 
-function assignmentSentence(
+function assignmentImpact(
   t: (key: string, fallback: string, options?: Record<string, string>) => string,
   locale: string,
-  kind: string,
   selected: ScheduleTemplate | AdvanceTemplate | undefined,
   name?: string
-): string {
-  if (!selected) return t('admin.paymentPrograms.pickTemplate', 'Choose a template to see what the agent will receive.');
-  if ('default_limit' in selected) {
-    return advanceImpact(t, { amount: String(selected.default_limit), currency: selected.currency, name, locale });
+): { text: string; objectives: string[] } {
+  if (!selected) {
+    return {
+      text: t('admin.paymentPrograms.pickTemplate', 'Choose a template to see what the agent will receive.'),
+      objectives: [],
+    };
   }
-  return scheduleImpact(t, {
-    amount: String(selected.default_amount),
-    currency: selected.currency,
-    frequency: selected.frequency,
-    days: selected.default_duration_days ? String(selected.default_duration_days) : '',
-    name,
-    locale,
-  });
+  if ('default_limit' in selected) {
+    return {
+      text: advanceImpact(t, { amount: String(selected.default_limit), currency: selected.currency, name, locale }),
+      objectives: [],
+    };
+  }
+  const objectives = objectivesFromRow(selected);
+  return {
+    text: scheduleImpact(t, {
+      amount: String(selected.default_amount),
+      currency: selected.currency,
+      frequency: selected.frequency,
+      days: selected.default_duration_days ? String(selected.default_duration_days) : '',
+      name,
+      locale,
+    }),
+    objectives: impactObjectiveLines(t, objectives, selected.currency, locale),
+  };
 }
 
 async function postAssignment(

@@ -1,49 +1,52 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type {
   ThrottlerModuleOptions,
   ThrottlerStorage,
 } from '@nestjs/throttler';
-import { ClsService } from 'nestjs-cls';
-import {
-  REQUEST_CONTEXT_CLS_KEY,
-  RequestContext,
-} from '../../auth/request-context';
+import type { ThrottlerRequest } from '@nestjs/throttler/dist/throttler.guard.interface';
+import { IS_PUBLIC_KEY } from '../../auth/public.decorator';
 
 /**
- * Custom throttler guard that tracks rate limits by user ID when authenticated,
- * falling back to IP address for anonymous requests.
+ * Rate limits by authenticated user id on protected routes; public routes
+ * and anonymous callers are tracked by IP (including Bearer on @Public()).
  */
 @Injectable()
 export class UserThrottlerGuard extends ThrottlerGuard {
-  private readonly logger = new Logger(UserThrottlerGuard.name);
-  private readonly cls: ClsService;
-
   constructor(
     options: ThrottlerModuleOptions,
     storageService: ThrottlerStorage,
-    reflector: Reflector,
-    cls: ClsService
+    reflector: Reflector
   ) {
     super(options, storageService, reflector);
-    this.cls = cls;
   }
 
-  protected override async getTracker(
-    req: Record<string, any>
+  protected override async handleRequest(
+    requestProps: ThrottlerRequest
+  ): Promise<boolean> {
+    const { context } = requestProps;
+    return super.handleRequest({
+      ...requestProps,
+      getTracker: async (req) => this.resolveTracker(req, context),
+    });
+  }
+
+  private async resolveTracker(
+    req: Record<string, any>,
+    context: ExecutionContext
   ): Promise<string> {
-    const ctx = this.cls.get<RequestContext>(REQUEST_CONTEXT_CLS_KEY);
-
-    if (ctx?.userId && ctx.userId !== 'anonymous') {
-      const tracker = `user-${ctx.userId}`;
-      this.logger.debug(`Throttle tracker: ${tracker}`);
-      return tracker;
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      return `ip-${req.ip}`;
     }
-
-    const ip = req.ips?.length ? req.ips[0] : req.ip;
-    const tracker = `ip-${ip}`;
-    this.logger.debug(`Throttle tracker: ${tracker}`);
-    return tracker;
+    const sub = req.user?.sub;
+    if (sub) {
+      return `user-${sub}`;
+    }
+    return `ip-${req.ip}`;
   }
 }

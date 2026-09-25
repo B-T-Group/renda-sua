@@ -19,7 +19,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
-import { json, raw, urlencoded } from 'express';
+import { json, raw, urlencoded, type NextFunction, type Request, type Response } from 'express';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { join } from 'path';
 import { AppModule } from './app/app.module';
@@ -29,6 +29,7 @@ import {
   isCorsOriginAllowed,
   parseCorsOrigins,
 } from './config/cors-origin';
+import { resolveTrustProxy } from './common/utils/resolve-trust-proxy';
 import { initSentry } from './instrument';
 
 /** Load apps/backend .env files before Secrets Manager so local overrides can win. */
@@ -151,9 +152,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
-  // Behind ALB/CloudFront: resolve the real client IP from X-Forwarded-For
-  // so Meta CAPI receives client_ip_address (Event Match Quality).
-  app.set('trust proxy', true);
+  // Lightsail container HTTPS endpoint (1 hop): honor X-Forwarded-For for
+  // client IP (e.g. Meta CAPI Event Match Quality). Override via TRUST_PROXY.
+  app.set('trust proxy', resolveTrustProxy(process.env.TRUST_PROXY));
   // Stripe webhooks require the raw, unparsed request body for signature
   // verification, so they must be registered BEFORE the global JSON parser.
   app.use('/api/stripe-payments/webhook', raw({ type: '*/*' }));
@@ -167,6 +168,21 @@ async function bootstrap() {
 
   // Use Winston as the NestJS logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+
+  if (process.env.LOG_FORWARDED_CHAIN === 'true') {
+    let forwardedChainLogged = false;
+    const chainLogger = app.get(WINSTON_MODULE_NEST_PROVIDER);
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      if (!forwardedChainLogged) {
+        forwardedChainLogged = true;
+        const xff = req.headers['x-forwarded-for'];
+        const remote = req.socket.remoteAddress ?? '(unknown)';
+        const message = `Forwarded chain probe: remote=${remote} x-forwarded-for=${xff ?? '(none)'}`;
+        chainLogger.log(message, 'Bootstrap');
+      }
+      next();
+    });
+  }
 
   // CORS: CORS_ORIGIN is a comma list, or * to reflect any browser Origin.
   // Deny unknown origins without throwing — an Error becomes a 500 and a Sentry event.

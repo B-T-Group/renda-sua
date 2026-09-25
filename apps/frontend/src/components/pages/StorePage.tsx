@@ -23,7 +23,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useCart } from '../../contexts/CartContext';
 import type { CartItem } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -62,7 +62,7 @@ const StorePage: React.FC = () => {
     [location.search]
   );
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
@@ -160,11 +160,12 @@ const StorePage: React.FC = () => {
 
   const variantFlow = useCatalogVariantFlow({
     onCartBuilt,
-    requireAuth: () => {
+    requireAuth: (run) => {
       if (!isAuthenticated) {
         openLoginDialog();
         return false;
       }
+      void run();
       return true;
     },
   });

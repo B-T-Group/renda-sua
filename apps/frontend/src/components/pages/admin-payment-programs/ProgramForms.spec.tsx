@@ -28,6 +28,13 @@ describe('payment program forms', () => {
     expect((screen.getByRole('button', { name: 'Create schedule' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('includes objectives in the schedule summary', () => {
+    render(<ScheduleForm onDone={jest.fn()} />);
+    fireEvent.change(screen.getByLabelText('Agent recruitments'), { target: { value: '5' } });
+    expect(screen.getByText('Objectives')).toBeTruthy();
+    expect(screen.getByText('5 agent recruitments')).toBeTruthy();
+  });
+
   it('states the cash-advance limit without opening a facility', () => {
     render(<AdvanceForm onDone={jest.fn()} />);
     expect(screen.getByText(/Deposits repay that debt first/)).toBeTruthy();

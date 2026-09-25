@@ -11,6 +11,7 @@ import {
   ListItemText,
   ListSubheader,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import React, { cloneElement, isValidElement } from 'react';
@@ -128,24 +129,35 @@ const AdminToolsNav: React.FC<AdminToolsNavProps> = ({
                   {t(labels.key, labels.fallback)}
                 </ListSubheader>
                 {group.modules.map((mod) => (
-                  <ListItemButton
+                  <Tooltip
                     key={mod.path}
-                    component={Link}
-                    to={mod.path}
-                    selected={selectedPath === mod.path}
-                    onClick={onNavigate}
+                    title={mod.title}
+                    placement="right"
+                    enterDelay={600}
                   >
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <NavIcon icon={mod.icon} color={mod.color} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={mod.title}
-                      primaryTypographyProps={{
-                        variant: 'body2',
-                        noWrap: true,
-                      }}
-                    />
-                  </ListItemButton>
+                    <ListItemButton
+                      component={Link}
+                      to={mod.path}
+                      selected={selectedPath === mod.path}
+                      onClick={onNavigate}
+                      sx={{ alignItems: 'flex-start', py: 0.75 }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 36, mt: 0.25 }}>
+                        <NavIcon icon={mod.icon} color={mod.color} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={mod.title}
+                        primaryTypographyProps={{
+                          variant: 'body2',
+                          sx: {
+                            whiteSpace: 'normal',
+                            wordBreak: 'break-word',
+                            lineHeight: 1.35,
+                          },
+                        }}
+                      />
+                    </ListItemButton>
+                  </Tooltip>
                 ))}
               </React.Fragment>
             );

@@ -14,7 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-const PERSONA_IDS = ['client', 'agent', 'business'] as const;
+export const PERSONA_IDS = ['client', 'agent', 'business'] as const;
 const MAIN_INTERESTS = ['sell_items', 'rent_items'] as const;
 const AGENT_FOCUSES = ['delivery', 'commercial', 'both'] as const;
 

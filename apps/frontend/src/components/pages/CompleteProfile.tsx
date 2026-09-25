@@ -1,4 +1,4 @@
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import {
   ArrowForward,
   CameraAlt as CameraAltIcon,
@@ -175,7 +175,7 @@ const CompleteProfile: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { module: countryStateCity } = useCountryStateCity();
-  const { user, getAccessTokenSilently } = useAuth0();
+  const { user, getAccessToken } = useSessionAuth();
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { refetch, updateProfilePicture } = useUserProfileContext();
@@ -461,7 +461,7 @@ const CompleteProfile: React.FC = () => {
       const userId = createResponse.user.id;
 
       try {
-        await getAccessTokenSilently({ cacheMode: 'off' });
+        await getAccessToken({ force: true });
       } catch (tokenError) {
         console.warn('Failed to refresh Auth0 token:', tokenError);
       }

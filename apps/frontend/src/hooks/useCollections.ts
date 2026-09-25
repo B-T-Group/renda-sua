@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from './useApiClient';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 import type { PublicBrowserGeo } from './usePublicBrowserGeo';
 import { enrichCollectionsWithPreviewImages } from '../utils/collectionPreviewImages';
 import {
@@ -30,7 +30,7 @@ export interface UseCollectionsOptions {
 
 export function useCollections(options: UseCollectionsOptions = {}) {
   const { i18n } = useTranslation();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const catalogGeo = useCatalogGeoParams();
   const apiClient = useApiClient();
   const [collections, setCollections] = useState<CollectionSummary[]>([]);

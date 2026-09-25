@@ -22,7 +22,8 @@ import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardMod
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import AdminToolsNav from './AdminToolsNav';
 
-const NAV_WIDTH = 240;
+/** Wide enough for FR admin labels without ellipsis on a single line. */
+const NAV_WIDTH = 300;
 
 function AccessDenied() {
   const { t } = useTranslation();
@@ -112,7 +113,7 @@ function MobileNavDrawer({
       sx={{
         display: { xs: 'block', md: 'none' },
         '& .MuiDrawer-paper': {
-          width: Math.min(NAV_WIDTH + 40, 320),
+          width: Math.min(NAV_WIDTH + 24, 340),
           p: 2,
           boxSizing: 'border-box',
         },

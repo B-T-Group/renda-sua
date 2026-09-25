@@ -147,19 +147,27 @@ export class Auth0Service {
     return this.exchangePasswordlessOtp(phoneNumber, otp, 'sms');
   }
 
-  async refreshAccessToken(refreshToken: string): Promise<Auth0TokenResponse> {
+  async refreshAccessToken(
+    refreshToken: string,
+    options?: { activePersona?: string }
+  ): Promise<Auth0TokenResponse> {
     const { domain, clientId, clientSecret } = this.getPasswordlessApp();
     if (!clientSecret) {
       throw new Error('Auth0 refresh token configuration is missing');
     }
 
+    const body: Record<string, string> = {
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+    };
+    if (options?.activePersona) {
+      body.active_persona = options.activePersona;
+    }
+
     try {
-      const { data } = await axios.post(`https://${domain}/oauth/token`, {
-        grant_type: 'refresh_token',
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-      });
+      const { data } = await axios.post(`https://${domain}/oauth/token`, body);
       return data;
     } catch (error: any) {
       this.throwMappedAuth0Error(error, 'Failed to refresh access token');

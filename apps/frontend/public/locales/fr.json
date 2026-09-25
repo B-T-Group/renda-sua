@@ -424,6 +424,14 @@
       "scheduleImpactDuration": "Si ce calendrier est attribué à un agent, il recevra {{money}} {{every}}, pendant {{days}} jours.",
       "scheduleImpactNamed": "Si ce calendrier est attribué à {{name}}, cette personne recevra {{money}} {{every}}.",
       "scheduleImpactNamedDuration": "Si ce calendrier est attribué à {{name}}, cette personne recevra {{money}} {{every}}, pendant {{days}} jours.",
+      "scheduleObjectives": "Objectifs : {{list}}.",
+      "and": "et",
+      "objectiveAgents": "{{count}} recrutements d'agents",
+      "objectiveClients": "{{count}} inscriptions clients",
+      "objectiveMerchants": "{{count}} recrutements de commerçants",
+      "objectiveItemSales": "{{money}} de ventes d'articles",
+      "objectiveRentals": "{{money}} de locations",
+      "assignAgentTitle": "Affecter un agent à {{name}}",
       "advanceImpact": "Un agent sur ce programme peut tirer jusqu'à {{money}}. Les dépôts remboursent d'abord cette dette.",
       "advanceImpactNamed": "{{name}} peut tirer jusqu'à {{money}}. Les dépôts remboursent d'abord cette dette.",
       "creditImpact": "{{who}} reçoit {{money}} de crédit magasin {{where}}. Ce crédit ne peut pas être retiré et ne couvre pas l'acompte de réservation.",
@@ -445,6 +453,10 @@
       "assignmentCreated": "Attribution créée",
       "partnerMarked": "Partenaire enregistré",
       "existingSchedules": "Calendriers existants",
+      "assignedUsers": "Assignés",
+      "details": "Détails",
+      "objectivesHeading": "Objectifs",
+      "currencyFromMarket": "Définie par le marché sélectionné",
       "existingPrograms": "Programmes existants",
       "existingFacilities": "Lignes ouvertes",
       "existingGrants": "Crédits existants",
@@ -1856,6 +1868,63 @@
       "loginCodeEmail": "Nous avons envoyé un code à 4 chiffres à {{email}}.",
       "verificationTitle": "Entrez le code de vérification",
       "digitLabel": "Chiffre {{n}}"
+    },
+    "gate": {
+      "favorites": {
+        "title": "Enregistrez vos favoris",
+        "body": "Connectez-vous pour garder cet article et le retrouver sur tous vos appareils."
+      },
+      "interest": {
+        "title": "Montrez votre intérêt au vendeur",
+        "body": "Connectez-vous pour que le vendeur puisse vous recontacter à propos de cet article."
+      },
+      "checkout": {
+        "title": "Connectez-vous pour commander",
+        "body": "Nous vous envoyons un code pour confirmer que c'est bien vous. Votre panier reste intact."
+      },
+      "foodsCart": {
+        "title": "Connectez-vous pour ajouter au panier",
+        "body": "Votre panier est enregistré sur votre compte pour commander depuis n'importe quel appareil."
+      },
+      "generic": {
+        "title": "Connectez-vous pour continuer",
+        "body": "Nous vous envoyons un code. Aucun mot de passe nécessaire."
+      },
+      "finish": {
+        "title": "Terminez votre compte",
+        "body": "Indiquez votre nom et acceptez les conditions pour continuer.",
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "acceptTermsPrefix": "J'accepte les",
+        "termsLink": "Conditions d'utilisation",
+        "continue": "Continuer"
+      },
+      "success": {
+        "favorites": "Ajouté aux favoris",
+        "interest": "Le vendeur sait que vous êtes intéressé(e)",
+        "foodsCart": "Ajouté au panier"
+      },
+      "intentSoldOut": "Cet article n'est plus disponible.",
+      "intentFailed": "Vous êtes connecté(e), mais l'action n'a pas abouti. Veuillez réessayer.",
+      "hintPhone": "Nous vous enverrons un code à {{count}} chiffres par SMS.",
+      "hintEmail": "Nous vous enverrons un code à {{count}} chiffres par e-mail.",
+      "codeSentSms": "Nous avons envoyé un code au {{phone}}.",
+      "codeSentEmail": "Nous avons envoyé un code à {{email}}.",
+      "resendIn": "Renvoyer dans {{time}}",
+      "requestFailed": "Impossible de traiter cette demande. Veuillez réessayer.",
+      "genericError": "Une erreur s’est produite. Veuillez réessayer.",
+      "invalidCode": "Ce code n’a pas fonctionné. Veuillez réessayer.",
+      "tooManyAttempts": "Trop de tentatives. Veuillez patienter un instant.",
+      "tooManyAttemptsCooldown": "Trop de codes demandés. Réessayez dans {{minutes}} min.",
+      "finishAccountPending": "Vérifiez votre code, puis terminez la création du compte pour continuer.",
+      "usePasswordInstead": "Utiliser un mot de passe",
+      "signInWithCodeInstead": "Se connecter avec un code",
+      "passwordPlaceholder": "Mot de passe",
+      "wrongPassword": "E-mail ou mot de passe incorrect.",
+      "passwordTip": "Astuce : la prochaine fois, connectez-vous avec un code, sans mot de passe.",
+      "lockoutMessage": "Trop de tentatives. Par sécurité, veuillez patienter {{minutes}} min avant de réessayer.",
+      "lockoutCountdown": "{{minutes}} min restantes",
+      "useDifferentIdentifier": "Utiliser un autre e-mail ou numéro"
     },
     "otpLogin": {
       "continue": "Continuer avec OTP",

@@ -1,27 +1,45 @@
+import { ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { IS_PUBLIC_KEY } from '../../auth/public.decorator';
 import { UserThrottlerGuard } from './user-throttler.guard';
 
 describe('UserThrottlerGuard tracker', () => {
-  function trackerFor(clsValue: unknown, req: Record<string, any>) {
+  const mockContext = {
+    getHandler: () => jest.fn(),
+    getClass: () => class MockController {},
+  } as unknown as ExecutionContext;
+
+  function trackerFor(isPublic: boolean, req: Record<string, any>) {
+    const reflector = {
+      getAllAndOverride: jest.fn((key: string) =>
+        key === IS_PUBLIC_KEY ? isPublic : undefined
+      ),
+    } as unknown as Reflector;
     const guard = new UserThrottlerGuard(
       {} as never,
       {} as never,
-      {} as never,
-      { get: jest.fn().mockReturnValue(clsValue) } as never
+      reflector
     );
-    return (guard as any).getTracker(req);
+    return (guard as any).resolveTracker(req, mockContext);
   }
 
-  it('tracks authenticated users by user id', async () => {
+  it('tracks @Public() routes by IP even with Bearer', async () => {
     await expect(
-      trackerFor({ userId: 'user-42' }, { ip: '8.8.8.8' })
-    ).resolves.toBe('user-user-42');
+      trackerFor(true, {
+        ip: '8.8.8.8',
+        headers: { authorization: 'Bearer token' },
+      })
+    ).resolves.toBe('ip-8.8.8.8');
   });
 
-  it('falls back to the first forwarded IP for anonymous callers', async () => {
+  it('tracks protected routes with req.user by Auth0 sub', async () => {
     await expect(
-      trackerFor({ userId: 'anonymous' }, { ip: '1.1.1.1', ips: ['9.9.9.9'] })
-    ).resolves.toBe('ip-9.9.9.9');
-    await expect(trackerFor(undefined, { ip: '2.2.2.2' })).resolves.toBe(
+      trackerFor(false, { ip: '8.8.8.8', user: { sub: 'auth0|42' } })
+    ).resolves.toBe('user-auth0|42');
+  });
+
+  it('falls back to IP on protected routes without req.user', async () => {
+    await expect(trackerFor(false, { ip: '2.2.2.2' })).resolves.toBe(
       'ip-2.2.2.2'
     );
   });

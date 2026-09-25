@@ -122,6 +122,17 @@ export interface Auth0Config {
   testUsers: Auth0TestUsersConfig;
 }
 
+export interface AuthOtpConfig {
+  sendCapsEnabled: boolean;
+  codeTtlSeconds: number;
+  resendCooldownSeconds: number;
+  destinationCap10Min: number;
+  destinationCap24H: number;
+  identifierCap10Min: number;
+  identifierCap24H: number;
+  ipCap1Hour: number;
+}
+
 export interface OrderConfig {
   /** Minutes to wait before payment timeout cancellation (default 10). Used by wait-and-execute state machine. */
   paymentTimeoutWaitMinutes?: number;
@@ -584,6 +595,7 @@ export interface Configuration {
   order: OrderConfig;
   agentTracking: AgentTrackingConfig;
   auth0: Auth0Config;
+  authOtp: AuthOtpConfig;
   googleCache: GoogleCacheConfig;
   openai: OpenAIConfig;
   gemini: GeminiConfig;
@@ -963,6 +975,19 @@ export default (): Configuration => {
         process.env.AGENT_TRACKING_INTERVAL_ACTIVE_MS || '60000',
         10
       ),
+    },
+    authOtp: {
+      sendCapsEnabled: process.env.AUTH_OTP_SEND_CAPS_ENABLED === 'true',
+      codeTtlSeconds: parseInt(process.env.AUTH_OTP_CODE_TTL_SECONDS || '600', 10),
+      resendCooldownSeconds: parseInt(
+        process.env.AUTH_OTP_RESEND_COOLDOWN_SECONDS || '120',
+        10
+      ),
+      destinationCap10Min: 3,
+      destinationCap24H: 10,
+      identifierCap10Min: 3,
+      identifierCap24H: 10,
+      ipCap1Hour: 30,
     },
     auth0: {
       domain: process.env.AUTH0_DOMAIN || 'rendasua.ca.auth0.com',

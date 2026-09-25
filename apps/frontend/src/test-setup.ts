@@ -27,11 +27,21 @@ jest.mock('@auth0/auth0-react', () => ({
   }),
 }));
 
+jest.mock('./contexts/AuthGateContext', () => ({
+  AuthGateProvider: ({ children }: { children: unknown }) => children,
+  useAuthGate: () => ({
+    flagOn: false,
+    requireAuth: jest.fn().mockResolvedValue(false),
+    openGenericGate: jest.fn(),
+  }),
+}));
+
 jest.mock('./contexts/SessionAuthContext', () => ({
   SessionAuthProvider: ({ children }: { children: unknown }) => children,
   useSessionAuth: () => ({
     isAuthenticated: true,
     isSessionReady: true,
+    isLoading: false,
     user: { sub: 'auth0|test-user', email: 'test@example.com' },
     getAccessToken: jest.fn().mockResolvedValue('test-token'),
     logout: jest.fn().mockResolvedValue(undefined),

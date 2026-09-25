@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../contexts/SessionAuthContext';
 
 export const DETECTED_COUNTRY_STORAGE_KEY = 'rendasua_detected_country_code';
 export const DETECTED_COUNTRY_EVENT = 'rendasua-detected-country';
@@ -20,7 +20,7 @@ function persistDetectedCountry(code: string): void {
  * Used to bootstrap market selection for guests.
  */
 export function useDetectedCountry(): void {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
 
   useEffect(() => {
     if (isAuthenticated) return;

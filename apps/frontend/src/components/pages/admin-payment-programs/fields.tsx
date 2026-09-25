@@ -1,4 +1,11 @@
-import { Autocomplete, MenuItem, Paper, TextField, Typography } from '@mui/material';
+import {
+  Autocomplete,
+  Box,
+  MenuItem,
+  Paper,
+  TextField,
+  Typography,
+} from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CURRENCIES } from '../../../constants/enums';
@@ -16,6 +23,22 @@ export interface DirectoryOption {
 function optionLabel(option: DirectoryOption): string {
   const extra = option.phone || option.referralCode;
   return `${option.name} · ${option.email}${extra ? ` · ${extra}` : ''}`;
+}
+
+/** Two fields per row on sm+, full width on xs. */
+export function FormGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+        gap: 2,
+        '& .MuiFormControl-root': { width: '100%' },
+      }}
+    >
+      {children}
+    </Box>
+  );
 }
 
 export function CurrencyField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -81,14 +104,68 @@ export function DirectorySearch({
   );
 }
 
-export function ImpactCard({ text }: { text: string }) {
+export function ImpactCard({
+  text,
+  objectives,
+  art,
+}: {
+  text: string;
+  objectives?: string[];
+  art?: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const lines = objectives?.filter(Boolean) ?? [];
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2,
+        display: 'flex',
+        gap: 2,
+        alignItems: 'flex-start',
+        bgcolor: 'action.hover',
+        borderRadius: 2,
+      }}
+    >
+      {art ? (
+        <Box sx={{ flexShrink: 0, display: { xs: 'none', sm: 'block' } }}>
+          {art}
+        </Box>
+      ) : null}
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography
+          variant="overline"
+          color="primary"
+          sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.08, lineHeight: 1.2 }}
+        >
+          {t('admin.paymentPrograms.whatThisDoes', 'What this does')}
+        </Typography>
+        <Typography variant="body1" sx={{ mt: 0.75, fontWeight: 500, lineHeight: 1.5 }}>
+          {text}
+        </Typography>
+        {lines.length > 0 ? <ImpactObjectives lines={lines} /> : null}
+      </Box>
+    </Paper>
+  );
+}
+
+function ImpactObjectives({ lines }: { lines: string[] }) {
   const { t } = useTranslation();
   return (
-    <Paper variant="outlined" sx={{ p: 2.5, flex: 1, alignSelf: 'stretch', bgcolor: 'action.hover' }}>
-      <Typography variant="overline" color="text.secondary">
-        {t('admin.paymentPrograms.whatThisDoes', 'What this does')}
+    <Box sx={{ mt: 1.5 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+        {t('admin.paymentPrograms.objectivesHeading', 'Objectives')}
       </Typography>
-      <Typography variant="body1" sx={{ mt: 1 }}>{text}</Typography>
-    </Paper>
+      <Box
+        component="ul"
+        sx={{ m: 0, mt: 0.5, pl: 2.25, '& li': { mt: 0.35 } }}
+      >
+        {lines.map((line) => (
+          <Typography component="li" key={line} variant="body2" color="text.secondary">
+            {line}
+          </Typography>
+        ))}
+      </Box>
+    </Box>
   );
 }

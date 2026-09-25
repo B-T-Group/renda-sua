@@ -19,6 +19,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import {
   getBrowserDefaultCountryCode,
   getDefaultLoginMethod,
@@ -115,6 +116,7 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
   const theme = useTheme();
   const navigate = useNavigate();
   const apiClient = useApiClient();
+  const { trackAuthGateDismissed } = useAuthFunnelTracking('login_method_dialog');
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const resolvedReturnTo = resolveReturnTo(returnTo);
 
@@ -263,6 +265,11 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
     resetChannelStep();
   }, [resetChannelStep]);
 
+  const handleDismiss = useCallback(() => {
+    trackAuthGateDismissed('login_method_dialog');
+    onClose();
+  }, [onClose, trackAuthGateDismissed]);
+
   const handleSignup = useCallback(() => {
     onClose();
     navigate('/signup');
@@ -299,7 +306,7 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
   return (
     <Dialog
       open={open}
-      onClose={submitting ? undefined : onClose}
+      onClose={submitting ? undefined : handleDismiss}
       fullWidth
       maxWidth="xs"
       fullScreen={fullScreen}
@@ -327,7 +334,7 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
       >
         <IconButton
           aria-label={t('common.close', 'Close')}
-          onClick={onClose}
+          onClick={handleDismiss}
           disabled={submitting}
           size="small"
           sx={{

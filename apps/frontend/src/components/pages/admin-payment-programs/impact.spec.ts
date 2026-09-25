@@ -1,4 +1,4 @@
-import { formatProgramMoney, advanceImpact, campaignImpact, creditImpact, scheduleImpact } from './impact';
+import { formatProgramMoney, advanceImpact, campaignImpact, creditImpact, impactObjectiveLines, scheduleImpact } from './impact';
 
 const t = (key: string, fallback: string, options?: Record<string, string>) => {
   return fallback.replace(/\{\{(\w+)\}\}/g, (_, name) => options?.[name] ?? '');
@@ -15,6 +15,30 @@ describe('payment program impact', () => {
     expect(text).toContain(formatProgramMoney('10000', 'XAF', 'en'));
     expect(text).toContain('every day');
     expect(text).toContain('assigned to an agent');
+  });
+
+  it('lists objectives as separate lines when they are provided', () => {
+    const lines = impactObjectiveLines(
+      t,
+      {
+        targetAgentRecruitments: '5',
+        targetItemSalesAmount: '20000',
+      },
+      'XAF',
+      'en'
+    );
+    expect(lines).toEqual([
+      '5 agent recruitments',
+      expect.stringContaining('in item sales'),
+    ]);
+    expect(
+      scheduleImpact(t, {
+        amount: '10000',
+        currency: 'XAF',
+        frequency: 'weekly',
+        locale: 'en',
+      })
+    ).not.toContain('Objectives:');
   });
 
   it('names the agent and the duration', () => {

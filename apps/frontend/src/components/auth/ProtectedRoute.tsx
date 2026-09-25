@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { Lock } from '@mui/icons-material';
 import { Box, Typography } from '@mui/material';
 import React from 'react';
@@ -11,8 +10,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isLoading } = useAuth0();
-  const { isAuthenticated, isSessionReady, user } = useSessionAuth();
+  const { isAuthenticated, isSessionReady, isLoading, user } = useSessionAuth();
 
   if (isLoading || !isSessionReady) {
     return <LoadingPage message="Authenticating" />;

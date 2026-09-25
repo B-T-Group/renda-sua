@@ -2,7 +2,7 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useTranslation } from 'react-i18next';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useMarket } from '../../hooks/useMarket';
@@ -25,7 +25,7 @@ function countryUsesStripe(
  */
 export default function FoodsMenuHero() {
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useSessionAuth();
   const { isStripeRail, status } = useIsStripeRail();
   const { countries } = useSupportedCountries();
   const { selectedMarket } = useMarket();
