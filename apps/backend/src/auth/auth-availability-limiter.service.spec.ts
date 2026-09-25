@@ -39,4 +39,29 @@ describe('AuthAvailabilityLimiterService (in-memory)', () => {
     }
     await expect(service.assertAndRecordCheck('2.2.2.2')).resolves.toBeUndefined();
   });
+
+  it('drops checks older than 24 hours from the cap', async () => {
+    const service = track(createService());
+    const ip = '203.0.113.50';
+    const stale = Date.now() - 25 * 60 * 60 * 1000;
+    (service as unknown as { counters: Map<string, number[]> }).counters.set(
+      `auth:availability:ip:${ip}:24h`,
+      Array.from({ length: 50 }, () => stale)
+    );
+    await expect(service.assertAndRecordCheck(ip)).resolves.toBeUndefined();
+  });
+
+  it('shares one daily bucket for missing and blank IPs', async () => {
+    const service = track(createService());
+    for (let i = 0; i < 50; i += 1) {
+      await service.assertAndRecordCheck(i % 2 === 0 ? '   ' : null);
+    }
+    await expect(service.assertAndRecordCheck('')).rejects.toMatchObject({
+      status: HttpStatus.TOO_MANY_REQUESTS,
+      response: { code: 'AVAILABILITY_RATE_LIMITED' },
+    });
+    await expect(
+      service.assertAndRecordCheck('198.51.100.8')
+    ).resolves.toBeUndefined();
+  });
 });
