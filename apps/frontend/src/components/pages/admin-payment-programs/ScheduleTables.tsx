@@ -4,6 +4,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   Stack,
   TableCell,
@@ -11,12 +15,18 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutline';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { AssignScheduleDialog } from './AssignDialog';
 import { ImpactCard } from './fields';
-import { moneyText, scheduleImpact } from './impact';
+import { impactObjectiveLines, moneyText, scheduleImpact } from './impact';
 import {
   ObjectiveFields,
   objectivesFromRow,
@@ -146,8 +156,9 @@ function ScheduleList({
         { label: t('admin.paymentPrograms.name', 'Name') },
         { label: t('admin.paymentPrograms.frequency', 'Frequency') },
         { label: t('admin.paymentPrograms.amount', 'Amount') },
-        { label: t('admin.paymentPrograms.status', 'Status') },
-        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right' },
+        { label: t('admin.paymentPrograms.assignedUsers', 'Assigned'), width: '10%' },
+        { label: t('admin.paymentPrograms.status', 'Status'), width: '12%' },
+        { label: t('admin.paymentPrograms.actions', 'Actions'), align: 'right', width: '8%' },
       ]}
     >
       {schedules.map((row) => (
@@ -176,12 +187,19 @@ function ScheduleRow({
       <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
       <TableCell>{t(`admin.paymentPrograms.${row.frequency}`, row.frequency)}</TableCell>
       <TableCell>{money}</TableCell>
+      <TableCell>{openAssignmentCount(row)}</TableCell>
       <TableCell><StatusChip status={row.is_active ? 'active' : 'inactive'} /></TableCell>
       <TableCell align="right">
         <ScheduleActions row={row} onEdit={onEdit} onDeactivate={onDeactivate} onChanged={onChanged} api={api} />
       </TableCell>
     </TableRow>
   );
+}
+
+function openAssignmentCount(row: Schedule): number {
+  return (row.assignments || []).filter((item) =>
+    ['active', 'paused', 'pending_acceptance'].includes(item.status)
+  ).length;
 }
 
 function ScheduleActions({
@@ -198,35 +216,161 @@ function ScheduleActions({
   api: { post: (url: string, body: unknown) => Promise<unknown> };
 }) {
   const { t } = useTranslation();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [assigning, setAssigning] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   return (
-    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-      {row.is_active && (
-        <Button size="small" onClick={() => setAssigning(true)}>
-          {t('admin.paymentPrograms.assign', 'Assign')}
-        </Button>
-      )}
+    <>
+      <IconButton
+        size="small"
+        aria-label={t('admin.paymentPrograms.actions', 'Actions')}
+        onClick={(event) => setAnchor(event.currentTarget)}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+      <ScheduleActionsMenu
+        row={row}
+        anchor={anchor}
+        onClose={() => setAnchor(null)}
+        onDetails={() => setDetailsOpen(true)}
+        onAssign={() => setAssigning(true)}
+        onEdit={() => onEdit(row)}
+        onDeactivate={onDeactivate}
+        onChanged={onChanged}
+        api={api}
+      />
+      {detailsOpen && <ScheduleDetailsDialog row={row} onClose={() => setDetailsOpen(false)} />}
       {assigning && (
         <AssignScheduleDialog schedule={row} onClose={() => setAssigning(false)} onDone={onChanged} />
       )}
-      <Button size="small" onClick={() => onEdit(row)}>{t('admin.paymentPrograms.edit', 'Edit')}</Button>
+    </>
+  );
+}
+
+function ScheduleActionsMenu({
+  row,
+  anchor,
+  onClose,
+  onDetails,
+  onAssign,
+  onEdit,
+  onDeactivate,
+  onChanged,
+  api,
+}: {
+  row: Schedule;
+  anchor: HTMLElement | null;
+  onClose: () => void;
+  onDetails: () => void;
+  onAssign: () => void;
+  onEdit: () => void;
+  onDeactivate: (row: Schedule) => void;
+  onChanged: (message: string) => Promise<void>;
+  api: { post: (url: string, body: unknown) => Promise<unknown> };
+}) {
+  const { t } = useTranslation();
+  function pick(action: () => void) {
+    onClose();
+    action();
+  }
+  return (
+    <Menu
+      anchorEl={anchor}
+      open={Boolean(anchor)}
+      onClose={onClose}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+    >
+      <MenuItem onClick={() => pick(onDetails)}>
+        <ListItemIcon><InfoOutlinedIcon fontSize="small" /></ListItemIcon>
+        <ListItemText>{t('admin.paymentPrograms.details', 'Details')}</ListItemText>
+      </MenuItem>
       {row.is_active ? (
-        <Button size="small" color="warning" onClick={() => onDeactivate(row)}>
-          {t('admin.paymentPrograms.deactivate', 'Deactivate')}
-        </Button>
-      ) : (
-        <Button
-          size="small"
-          onClick={() =>
-            void api
-              .post(`/admin/payment-programs/schedules/${row.id}/active`, { isActive: true })
-              .then(() => onChanged(t('admin.paymentPrograms.active', 'Active')))
-          }
-        >
-          {t('admin.paymentPrograms.reactivate', 'Reactivate')}
-        </Button>
-      )}
-    </Stack>
+        <MenuItem onClick={() => pick(onAssign)}>
+          <ListItemIcon><PersonAddAlt1OutlinedIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('admin.paymentPrograms.assign', 'Assign')}</ListItemText>
+        </MenuItem>
+      ) : null}
+      <MenuItem onClick={() => pick(onEdit)}>
+        <ListItemIcon><EditOutlinedIcon fontSize="small" /></ListItemIcon>
+        <ListItemText>{t('admin.paymentPrograms.edit', 'Edit')}</ListItemText>
+      </MenuItem>
+      <ScheduleActiveMenuItem
+        row={row}
+        onDeactivate={onDeactivate}
+        onChanged={onChanged}
+        api={api}
+        onDone={onClose}
+      />
+    </Menu>
+  );
+}
+
+function ScheduleActiveMenuItem({
+  row,
+  onDeactivate,
+  onChanged,
+  api,
+  onDone,
+}: {
+  row: Schedule;
+  onDeactivate: (row: Schedule) => void;
+  onChanged: (message: string) => Promise<void>;
+  api: { post: (url: string, body: unknown) => Promise<unknown> };
+  onDone: () => void;
+}) {
+  const { t } = useTranslation();
+  if (row.is_active) {
+    return (
+      <MenuItem
+        onClick={() => {
+          onDone();
+          onDeactivate(row);
+        }}
+      >
+        <ListItemIcon><PauseCircleOutlineIcon fontSize="small" color="warning" /></ListItemIcon>
+        <ListItemText>{t('admin.paymentPrograms.deactivate', 'Deactivate')}</ListItemText>
+      </MenuItem>
+    );
+  }
+  return (
+    <MenuItem
+      onClick={() => {
+        onDone();
+        void api
+          .post(`/admin/payment-programs/schedules/${row.id}/active`, { isActive: true })
+          .then(() => onChanged(t('admin.paymentPrograms.active', 'Active')));
+      }}
+    >
+      <ListItemIcon><PlayCircleOutlineIcon fontSize="small" /></ListItemIcon>
+      <ListItemText>{t('admin.paymentPrograms.reactivate', 'Reactivate')}</ListItemText>
+    </MenuItem>
+  );
+}
+
+function ScheduleDetailsDialog({ row, onClose }: { row: Schedule; onClose: () => void }) {
+  const { t, i18n } = useTranslation();
+  const objectives = objectivesFromRow(row);
+  const text = scheduleImpact(t, {
+    amount: String(row.default_amount),
+    currency: row.currency,
+    frequency: row.frequency,
+    days: row.default_duration_days ? String(row.default_duration_days) : '',
+    locale: i18n.language,
+  });
+  const lines = impactObjectiveLines(t, objectives, row.currency, i18n.language);
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{row.name}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <ImpactCard text={text} objectives={lines} />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>{t('admin.paymentPrograms.cancel', 'Cancel')}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -366,8 +510,8 @@ function ScheduleDialog({
     frequency,
     days,
     locale: i18n.language,
-    objectives,
   });
+  const objectiveLines = impactObjectiveLines(t, objectives, row.currency, i18n.language);
   return (
     <Dialog open onClose={onClose} fullWidth>
       <DialogTitle>{t('admin.paymentPrograms.editSchedule', 'Edit schedule')}</DialogTitle>
@@ -383,7 +527,7 @@ function ScheduleDialog({
           <TextField label={t('admin.paymentPrograms.durationDays', 'Duration (days)')} value={days} onChange={(e) => setDays(e.target.value)} />
           <Typography variant="body2" color="text.secondary">{row.currency}</Typography>
           <ObjectiveFields values={objectives} onChange={setObjectives} currency={row.currency} />
-          <ImpactCard text={impact} />
+          <ImpactCard text={impact} objectives={objectiveLines} />
         </Stack>
       </DialogContent>
       <DialogActions>

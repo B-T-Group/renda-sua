@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../../hooks/useApiClient';
 import { DirectorySearch, ImpactCard, type DirectoryOption } from './fields';
-import { advanceImpact, scheduleImpact } from './impact';
+import { advanceImpact, impactObjectiveLines, scheduleImpact } from './impact';
 import { objectivesFromRow } from './ObjectiveFields';
 import { fromLocalInput, toLocalInput } from './shared';
 
@@ -42,6 +42,21 @@ export function AssignScheduleDialog({
   const [agent, setAgent] = useState<DirectoryOption | null>(null);
   const [startsAt, setStartsAt] = useState(toLocalInput(new Date().toISOString()));
   const ready = Boolean(agent && fromLocalInput(startsAt));
+  const objectives = objectivesFromRow(schedule);
+  const impactText = scheduleImpact(t, {
+    amount: String(schedule.default_amount),
+    currency: schedule.currency,
+    frequency: schedule.frequency,
+    days: schedule.default_duration_days ? String(schedule.default_duration_days) : '',
+    name: agent?.name,
+    locale: i18n.language,
+  });
+  const objectiveLines = impactObjectiveLines(
+    t,
+    objectives,
+    schedule.currency,
+    i18n.language
+  );
 
   async function apply() {
     await api.post(`/admin/payment-programs/schedules/${schedule.id}/assignments`, {
@@ -65,7 +80,7 @@ export function AssignScheduleDialog({
             onChange={(e) => setStartsAt(e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
-          <ImpactCard text={scheduleSummary(t, i18n.language, schedule, agent?.name)} />
+          <ImpactCard text={impactText} objectives={objectiveLines} />
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -138,21 +153,4 @@ function AgentField({
       onChange={onChange}
     />
   );
-}
-
-function scheduleSummary(
-  t: (key: string, fallback: string, options?: Record<string, string>) => string,
-  locale: string,
-  schedule: ScheduleTarget,
-  name?: string
-): string {
-  return scheduleImpact(t, {
-    amount: String(schedule.default_amount),
-    currency: schedule.currency,
-    frequency: schedule.frequency,
-    days: schedule.default_duration_days ? String(schedule.default_duration_days) : '',
-    name,
-    locale,
-    objectives: objectivesFromRow(schedule),
-  });
 }

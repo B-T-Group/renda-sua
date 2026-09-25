@@ -1,4 +1,4 @@
-import { Stack, TextField, Typography } from '@mui/material';
+import { Box, Stack, TextField, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -64,44 +64,53 @@ export function ObjectiveFields({
       <Typography variant="subtitle2">
         {t('admin.paymentPrograms.objectives', 'Objectives (optional)')}
       </Typography>
-      <TextField
-        label={t('admin.paymentPrograms.targetAgentRecruitments', 'Agent recruitments')}
-        value={values.targetAgentRecruitments}
-        onChange={(e) => set('targetAgentRecruitments', e.target.value)}
-        type="number"
-      />
-      <TextField
-        label={t('admin.paymentPrograms.targetClientSignups', 'Client signups')}
-        value={values.targetClientSignups}
-        onChange={(e) => set('targetClientSignups', e.target.value)}
-        type="number"
-      />
-      <TextField
-        label={t('admin.paymentPrograms.targetMerchantRecruitments', 'Merchant recruitments')}
-        value={values.targetMerchantRecruitments}
-        onChange={(e) => set('targetMerchantRecruitments', e.target.value)}
-        type="number"
-      />
-      <TextField
-        label={t(
-          'admin.paymentPrograms.targetItemSalesAmount',
-          'Item sales amount{{currency}}',
-          { currency: currency ? ` (${currency})` : '' }
-        )}
-        value={values.targetItemSalesAmount}
-        onChange={(e) => set('targetItemSalesAmount', e.target.value)}
-        type="number"
-      />
-      <TextField
-        label={t(
-          'admin.paymentPrograms.targetRentalAmount',
-          'Rental amount{{currency}}',
-          { currency: currency ? ` (${currency})` : '' }
-        )}
-        value={values.targetRentalAmount}
-        onChange={(e) => set('targetRentalAmount', e.target.value)}
-        type="number"
-      />
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+          gap: 2,
+          '& .MuiFormControl-root': { width: '100%' },
+        }}
+      >
+        <TextField
+          label={t('admin.paymentPrograms.targetAgentRecruitments', 'Agent recruitments')}
+          value={values.targetAgentRecruitments}
+          onChange={(e) => set('targetAgentRecruitments', e.target.value)}
+          type="number"
+        />
+        <TextField
+          label={t('admin.paymentPrograms.targetClientSignups', 'Client signups')}
+          value={values.targetClientSignups}
+          onChange={(e) => set('targetClientSignups', e.target.value)}
+          type="number"
+        />
+        <TextField
+          label={t('admin.paymentPrograms.targetMerchantRecruitments', 'Merchant recruitments')}
+          value={values.targetMerchantRecruitments}
+          onChange={(e) => set('targetMerchantRecruitments', e.target.value)}
+          type="number"
+        />
+        <TextField
+          label={t(
+            'admin.paymentPrograms.targetItemSalesAmount',
+            'Item sales amount{{currency}}',
+            { currency: currency ? ` (${currency})` : '' }
+          )}
+          value={values.targetItemSalesAmount}
+          onChange={(e) => set('targetItemSalesAmount', e.target.value)}
+          type="number"
+        />
+        <TextField
+          label={t(
+            'admin.paymentPrograms.targetRentalAmount',
+            'Rental amount{{currency}}',
+            { currency: currency ? ` (${currency})` : '' }
+          )}
+          value={values.targetRentalAmount}
+          onChange={(e) => set('targetRentalAmount', e.target.value)}
+          type="number"
+        />
+      </Box>
     </Stack>
   );
 }

@@ -44,14 +44,22 @@ export function scheduleImpact(
     days?: string;
     name?: string;
     locale: string;
-    objectives?: ImpactObjectives;
   }
 ): string {
   const money = formatProgramMoney(input.amount, input.currency, input.locale);
   if (!money) return t('admin.paymentPrograms.needAmount', 'Enter an amount to see what an agent would receive.');
   const copy = scheduleCopy(input);
-  const base = t(copy.key, copy.fallback, scheduleVars(t, input, money));
-  return withObjectives(t, base, input);
+  return t(copy.key, copy.fallback, scheduleVars(t, input, money));
+}
+
+/** One readable line per filled objective target. */
+export function impactObjectiveLines(
+  t: Translate,
+  objectives: ImpactObjectives | undefined,
+  currency: string,
+  locale: string
+): string[] {
+  return objectiveParts(t, objectives, currency, locale);
 }
 
 function scheduleCopy(input: { days?: string; name?: string }): { key: string; fallback: string } {
@@ -210,32 +218,6 @@ function formatZero(currency: string, locale: string): string {
   } catch {
     return `0 ${currency}`;
   }
-}
-
-function withObjectives(
-  t: Translate,
-  base: string,
-  input: { objectives?: ImpactObjectives; currency: string; locale: string }
-): string {
-  const extra = objectivesSentence(t, input.objectives, input.currency, input.locale);
-  return extra ? `${base} ${extra}` : base;
-}
-
-function objectivesSentence(
-  t: Translate,
-  objectives: ImpactObjectives | undefined,
-  currency: string,
-  locale: string
-): string {
-  const list = joinObjectives(t, objectiveParts(t, objectives, currency, locale));
-  if (!list) return '';
-  return t('admin.paymentPrograms.scheduleObjectives', 'Objectives: {{list}}.', { list });
-}
-
-function joinObjectives(t: Translate, parts: string[]): string {
-  if (parts.length < 2) return parts[0] || '';
-  const and = t('admin.paymentPrograms.and', 'and');
-  return `${parts.slice(0, -1).join(', ')} ${and} ${parts[parts.length - 1]}`;
 }
 
 function objectiveParts(

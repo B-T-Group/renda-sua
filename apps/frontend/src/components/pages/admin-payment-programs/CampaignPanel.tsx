@@ -9,8 +9,10 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CURRENCIES } from '../../../constants/enums';
+import { AFRICAN_MARKET_COUNTRY_CODES } from '../../../constants/marketCountries';
 import { useApiClient } from '../../../hooks/useApiClient';
+import { useSupportedCountries } from '../../../hooks/useSupportedCountries';
+import { resolveCurrencyForCountry } from '../../../utils/resolveCurrencyForCountry';
 import { ImpactCard } from './fields';
 import { campaignImpact, moneyText } from './impact';
 import { ProgramTable, programRowSx, StatusChip, fromLocalInput, useConfirm } from './shared';
@@ -158,40 +160,117 @@ function CampaignForm({
     hasWindow: Boolean(form.startsAt && form.endsAt),
   });
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2.5}>
       <Typography variant="h6">{t('admin.paymentPrograms.campaigns', 'Credit campaigns')}</Typography>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="stretch">
-        <Stack spacing={2} sx={{ flex: 1.4 }}>
-          <TextField label={t('admin.paymentPrograms.name', 'Name')} value={form.name} onChange={(e) => set('name', e.target.value)} />
-          <CampaignBasics form={form} onChange={set} />
-          <CampaignWindow form={form} onChange={set} />
-          <ScopeFields form={form} partners={partners} onChange={set} />
-          <AmountFields form={form} onChange={set} />
-          <Button variant="contained" onClick={onSubmit} disabled={blocked}>
-            {t('admin.paymentPrograms.createCampaign', 'Create campaign')}
-          </Button>
-        </Stack>
-        <ImpactCard text={impact} />
-      </Stack>
+      <TextField label={t('admin.paymentPrograms.name', 'Name')} value={form.name} onChange={(e) => set('name', e.target.value)} />
+      <CampaignBasics form={form} onChange={onChange} />
+      <CampaignWindow form={form} onChange={set} />
+      <ScopeFields form={form} partners={partners} onChange={set} />
+      <AmountFields form={form} onChange={set} />
+      <ImpactCard text={impact} />
+      <Button
+        variant="contained"
+        onClick={onSubmit}
+        disabled={blocked}
+        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+      >
+        {t('admin.paymentPrograms.createCampaign', 'Create campaign')}
+      </Button>
     </Stack>
   );
 }
 
-function CampaignBasics({ form, onChange }: { form: typeof emptyForm; onChange: (key: keyof typeof emptyForm, value: string) => void }) {
+function CampaignBasics({
+  form,
+  onChange,
+}: {
+  form: typeof emptyForm;
+  onChange: (next: typeof emptyForm) => void;
+}) {
   const { t } = useTranslation();
+  const { countries } = useSupportedCountries();
+
+  function setMarket(countryCode: string) {
+    onChange({
+      ...form,
+      countryCode,
+      currency: resolveCurrencyForCountry(countryCode, countries),
+    });
+  }
+
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-      <TextField label={t('admin.paymentPrograms.market', 'Market')} value={form.countryCode} onChange={(e) => onChange('countryCode', e.target.value.toUpperCase())} />
-      <TextField select label={t('admin.paymentPrograms.persona', 'Persona')} value={form.persona} onChange={(e) => onChange('persona', e.target.value)}>
+    <Stack spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <MarketField value={form.countryCode} onChange={setMarket} countries={countries} />
+        <TextField
+          label={t('admin.paymentPrograms.currency', 'Currency')}
+          value={form.currency}
+          disabled
+          helperText={t(
+            'admin.paymentPrograms.currencyFromMarket',
+            'Set by the selected market'
+          )}
+          sx={{ flex: 1 }}
+        />
+      </Stack>
+      <TextField
+        select
+        label={t('admin.paymentPrograms.persona', 'Persona')}
+        value={form.persona}
+        onChange={(e) => onChange({ ...form, persona: e.target.value })}
+      >
         {['client', 'agent', 'business', 'any'].map((persona) => (
-          <MenuItem key={persona} value={persona}>{t(`admin.paymentPrograms.${persona}`, persona)}</MenuItem>
+          <MenuItem key={persona} value={persona}>
+            {t(`admin.paymentPrograms.${persona}`, persona)}
+          </MenuItem>
         ))}
-      </TextField>
-      <TextField select label={t('admin.paymentPrograms.currency', 'Currency')} value={form.currency} onChange={(e) => onChange('currency', e.target.value)}>
-        {CURRENCIES.map((code) => <MenuItem key={code} value={code}>{code}</MenuItem>)}
       </TextField>
     </Stack>
   );
+}
+
+function MarketField({
+  value,
+  onChange,
+  countries,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  countries: Array<{ code: string; name: string }>;
+}) {
+  const { t } = useTranslation();
+  const options = marketOptions(countries, value);
+  return (
+    <TextField
+      select
+      label={t('admin.paymentPrograms.market', 'Market')}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      sx={{ flex: 1 }}
+    >
+      {options.map((country) => (
+        <MenuItem key={country.code} value={country.code}>
+          {country.name} ({country.code})
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}
+
+function marketOptions(
+  countries: Array<{ code: string; name: string }>,
+  current: string
+): Array<{ code: string; name: string }> {
+  const list = countries.length
+    ? countries.map((country) => ({
+        code: country.code.toUpperCase(),
+        name: country.name,
+      }))
+    : AFRICAN_MARKET_COUNTRY_CODES.map((code) => ({ code, name: code }));
+  if (current && !list.some((row) => row.code === current)) {
+    return [{ code: current, name: current }, ...list];
+  }
+  return list;
 }
 
 function CampaignWindow({ form, onChange }: { form: typeof emptyForm; onChange: (key: keyof typeof emptyForm, value: string) => void }) {

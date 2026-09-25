@@ -31,7 +31,8 @@ describe('payment program forms', () => {
   it('includes objectives in the schedule summary', () => {
     render(<ScheduleForm onDone={jest.fn()} />);
     fireEvent.change(screen.getByLabelText('Agent recruitments'), { target: { value: '5' } });
-    expect(screen.getByText(/Objectives: 5 agent recruitments/)).toBeTruthy();
+    expect(screen.getByText('Objectives')).toBeTruthy();
+    expect(screen.getByText('5 agent recruitments')).toBeTruthy();
   });
 
   it('states the cash-advance limit without opening a facility', () => {
