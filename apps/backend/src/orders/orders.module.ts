@@ -26,6 +26,8 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
+import { FailedPickupsController } from './failed-pickups.controller';
+import { FailedPickupsService } from './failed-pickups.service';
 import { BusinessAvailabilityController } from './business-availability.controller';
 import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
 import { OrderAcceptanceService } from './order-acceptance.service';
@@ -105,6 +107,7 @@ import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
     AdminPickupOpsController,
     AdminOrdersController,
     FailedDeliveriesController,
+    FailedPickupsController,
     OrderNotificationsInternalController,
     OrderAcceptanceInternalController,
     OrderMarkReadyInternalController,
@@ -126,6 +129,7 @@ import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
     OrderOffersService,
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,
+    FailedPickupsService,
     OrderPaymentCallbackHandler,
     CheckoutPreflightService,
     CancellationPolicyService,
@@ -168,6 +172,7 @@ import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
     OrderRiskIncidentsService,
     OrderRiskMonitorService,
     FailedDeliveriesService,
+    FailedPickupsService,
     WhatsAppOrderActionService,
     DepositCalculationService,
     DepositLedgerService,

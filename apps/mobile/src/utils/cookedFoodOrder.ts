@@ -97,6 +97,39 @@ export function isCookedFoodAwaitingClientPayment(
   return payment !== 'paid' && payment !== 'authorized';
 }
 
+/** Paid (or authorized) cooked-food pay-after order — cooking / ready stages. */
+export function isCookedFoodPayAfterPaid(
+  order: CookedFoodOrderLike
+): boolean {
+  if (order.pay_after_merchant_confirm !== true) return false;
+  const payment = order.payment_status;
+  return payment === 'paid' || payment === 'authorized';
+}
+
+/**
+ * Business may open Fail pickup/handoff from ready_for_pickup for cooked food
+ * (pickup, or delivery before an agent is assigned).
+ */
+export function isCookedFoodReadyFailEligible(
+  order: CookedFoodOrderLike & {
+    assigned_agent_id?: string | null;
+  }
+): boolean {
+  if (order.current_status !== 'ready_for_pickup') return false;
+  const cooked =
+    order.is_cooked_food_pickup === true ||
+    order.pay_after_merchant_confirm === true ||
+    shouldUseCookedFoodConfirmModal(order);
+  if (!cooked) return false;
+  const paid =
+    order.payment_status === 'paid' || order.payment_status === 'authorized';
+  if (!paid) return false;
+  if (order.fulfillment_method === 'delivery' && order.assigned_agent_id) {
+    return false;
+  }
+  return true;
+}
+
 export function isCookedFoodStartCookingPriority(
   order: CookedFoodOrderLike
 ): boolean {

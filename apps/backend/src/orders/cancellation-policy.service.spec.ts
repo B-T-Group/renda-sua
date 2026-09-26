@@ -124,6 +124,35 @@ describe('CancellationPolicyService', () => {
       expect(policy.refundAmount).toBe(4500);
     });
 
+    it('filters quick reasons for cooked food cancel at ready', async () => {
+      configurationsService.getConfigurationByKey.mockResolvedValue({
+        number_value: 500,
+      } as any);
+      hasuraService.executeQuery.mockResolvedValue({
+        order_cancellation_reasons: [
+          { id: 22, value: 'wont_make_it', display: "Won't make it" },
+          { id: 2, value: 'changed_mind', display: 'Changed my mind' },
+          { id: 1, value: 'other', display: 'Other' },
+        ],
+      });
+
+      const order = {
+        ...baseOrder,
+        current_status: 'ready_for_pickup',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+        is_cooked_food_pickup: true,
+      };
+      const policy = await service.getPolicy(order, 'client');
+
+      expect(policy.canCancel).toBe(true);
+      expect(policy.cancellationFee).toBe(500);
+      expect(policy.availableCancellationReasons.map((r) => r.value)).toEqual([
+        'wont_make_it',
+        'other',
+      ]);
+    });
+
     it('returns none when fee equals total', async () => {
       configurationsService.getConfigurationByKey.mockResolvedValue({
         number_value: 5000,
@@ -176,6 +205,31 @@ describe('CancellationPolicyService', () => {
       expect(policy.canCancel).toBe(true);
       expect(policy.refundType).toBe('full');
       expect(policy.cancellationFee).toBe(0);
+    });
+
+    it('blocks cancel for paid cooked-food pay-after while preparing', async () => {
+      const order = {
+        ...baseOrder,
+        current_status: 'preparing',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+      };
+      const policy = await service.getPolicy(order, 'business');
+
+      expect(policy.canCancel).toBe(false);
+      expect(policy.reasonIfBlocked).toBe('blocked.cookedFoodPayAfterPaid');
+    });
+
+    it('allows cancel for unpaid cooked-food pay-after while confirmed', async () => {
+      const order = {
+        ...baseOrder,
+        current_status: 'confirmed',
+        payment_status: 'pending',
+        pay_after_merchant_confirm: true,
+      };
+      const policy = await service.getPolicy(order, 'business');
+
+      expect(policy.canCancel).toBe(true);
     });
 
     it('cannot cancel terminal orders', async () => {

@@ -7,6 +7,8 @@ import {
 import { isCarrierShipping } from './fulfillmentMethod';
 import {
   isCookedFoodAwaitingClientPayment,
+  isCookedFoodPayAfterPaid,
+  isCookedFoodReadyFailEligible,
 } from './cookedFoodOrder';
 
 export type BusinessOrderActionId =
@@ -19,6 +21,7 @@ export type BusinessOrderActionId =
   | 'generateOverwriteCode'
   | 'requestPickupPayment'
   | 'confirmClientPickup'
+  | 'failPickup'
   | 'printLabel'
   | 'markShipped'
   | 'updateTracking';
@@ -110,12 +113,26 @@ function shippedTrackingActions(): BusinessOrderAction[] {
 }
 
 function pickupPaymentNeedsCollection(order: BusinessOrder): boolean {
+  if (order.pay_after_merchant_confirm === true) return false;
   return (
     order.fulfillment_method === 'pickup' &&
     order.payment_timing === 'pay_at_pickup' &&
     order.payment_status !== 'paid' &&
     order.payment_status !== 'authorized'
   );
+}
+
+function pushCancelIfAllowed(
+  actions: BusinessOrderAction[],
+  order: BusinessOrder
+): void {
+  if (!businessMayCancelOrder(order)) return;
+  actions.push({
+    id: 'cancel',
+    labelKey: 'orderActions.cancelOrder',
+    defaultLabel: 'Cancel order',
+    destructive: true,
+  });
 }
 
 function standardOrderActions(
@@ -154,39 +171,31 @@ function standardOrderActions(
       );
       break;
     case 'confirmed':
-      if (!isCookedFoodAwaitingClientPayment(order)) {
-        actions.push({
-          id: 'completePreparation',
-          labelKey: 'orderActions.readyForPickup',
-          defaultLabel: 'Set as ready',
-          primary: true,
-        });
+      if (isCookedFoodAwaitingClientPayment(order)) {
+        pushCancelIfAllowed(actions, order);
+        break;
       }
-      if (businessMayCancelOrder(order)) {
-        actions.push({
-          id: 'cancel',
-          labelKey: 'orderActions.cancelOrder',
-          defaultLabel: 'Cancel order',
-          destructive: true,
-        });
-      }
+      actions.push({
+        id: 'completePreparation',
+        labelKey: 'orderActions.readyForPickup',
+        defaultLabel: 'Set as ready',
+        primary: true,
+      });
+      pushCancelIfAllowed(actions, order);
       break;
     case 'preparing':
-      if (!isCookedFoodAwaitingClientPayment(order)) {
-        actions.push({
-          id: 'completePreparation',
-          labelKey: 'orderActions.completePreparation',
-          defaultLabel: 'Complete preparation',
-          primary: true,
-        });
+      if (isCookedFoodAwaitingClientPayment(order)) {
+        pushCancelIfAllowed(actions, order);
+        break;
       }
-      if (businessMayCancelOrder(order)) {
-        actions.push({
-          id: 'cancel',
-          labelKey: 'orderActions.cancelOrder',
-          defaultLabel: 'Cancel order',
-          destructive: true,
-        });
+      actions.push({
+        id: 'completePreparation',
+        labelKey: 'orderActions.completePreparation',
+        defaultLabel: 'Complete preparation',
+        primary: true,
+      });
+      if (!isCookedFoodPayAfterPaid(order)) {
+        pushCancelIfAllowed(actions, order);
       }
       break;
     case 'out_for_delivery':
@@ -199,6 +208,16 @@ function standardOrderActions(
       }
       break;
     case 'ready_for_pickup':
+      if (isCookedFoodReadyFailEligible(order)) {
+        actions.push({
+          id: 'failPickup',
+          labelKey: 'orderActions.failPickup',
+          defaultLabel: 'Mark pickup failed',
+          destructive: true,
+          primary: true,
+        });
+        break;
+      }
       if (pickupPaymentNeedsCollection(order)) {
         actions.push({
           id: 'requestPickupPayment',

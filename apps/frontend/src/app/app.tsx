@@ -971,10 +971,10 @@ function App() {
               }
             />
             <Route
-              path="/business/failed-deliveries"
+              path="/business/failed-pickups"
               element={
                 <ProtectedRoute>
-                  <LazyPages.FailedDeliveriesPage />
+                  <LazyPages.FailedPickupsPage />
                 </ProtectedRoute>
               }
             />

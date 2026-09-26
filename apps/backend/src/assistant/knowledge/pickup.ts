@@ -8,6 +8,7 @@ const EN = `In-store pickup on Rendasua:
 - Prepaid pickup (card or pay-now) uses a pickup PIN instead of a payment request.
 - The order shows pickup instructions and timing in the app.
 - Cooked-food pickup is ASAP only (no future pickup slot). Place the order when the kitchen is open.
+- Cooked-food pay-after flow: merchant confirms → you pay → kitchen prepares → ready. Complete pickup in the app when ready (primary). Cancelling at ready keeps a cancellation fee and refunds the rest. Merchants may mark failed pickup (no-show) with the same fee rule.
 - Pickup is not available for every listing; availability depends on the business location.`;
 
 const FR = `Retrait en magasin sur Rendasua :
@@ -18,6 +19,7 @@ const FR = `Retrait en magasin sur Rendasua :
 - Un retrait déjà payé (carte ou paiement immédiat) utilise un code PIN de retrait, pas une demande de paiement.
 - La commande affiche les instructions et horaires de retrait dans l'application.
 - Le retrait de plats cuisinés est ASAP uniquement (pas de créneau futur). Passez commande lorsque la cuisine est ouverte.
+- Flux plats cuisinés (paiement après confirmation) : le commerçant confirme → vous payez → préparation → prêt. Finalisez le retrait dans l'application (action principale). Une annulation une fois prêt conserve des frais d'annulation et rembourse le reste. Le commerçant peut marquer un échec de retrait (absence) avec la même règle de frais.
 - Le retrait n'est pas disponible pour tous les articles ; cela dépend de l'emplacement du commerce.`;
 
 export function getPickupKnowledge(locale: KnowledgeLocale): string {

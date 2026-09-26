@@ -845,6 +845,34 @@ export class OrdersController {
     return this.ordersService.getCancellationPreview(orderId);
   }
 
+  @Post(':orderId/fail-pickup')
+  @ApiOperation({
+    summary: 'Mark cooked-food pickup as failed',
+    description:
+      'Business marks a ready cooked-food order as failed. Retains country cancellation fee and enqueues partial client refund.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['failure_reason_id'],
+      properties: {
+        failure_reason_id: { type: 'string', format: 'uuid' },
+        notes: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Pickup marked as failed' })
+  async failPickup(
+    @Param('orderId') orderId: string,
+    @Body() body: { failure_reason_id: string; notes?: string }
+  ) {
+    return this.ordersService.failPickup({
+      orderId,
+      failure_reason_id: body.failure_reason_id,
+      notes: body.notes,
+    });
+  }
+
   @Post('cancel')
   @ApiOperation({
     summary: 'Cancel an order',

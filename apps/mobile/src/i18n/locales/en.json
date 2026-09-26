@@ -1023,6 +1023,7 @@
     "askIfReadyError": "Could not send the reminder",
     "printLabel": "Print label",
     "markAsFailed": "Mark as failed",
+    "failPickup": "Mark pickup failed",
     "switchToPickupFailed": "Could not switch to store pickup."
   },
   "cancellation": {
@@ -2282,6 +2283,8 @@
       "cashReconciliationDescription": "Pay-at-delivery orders with a cash exception—collect mobile payment per order.",
       "failedDeliveries": "Failed deliveries",
       "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business.",
+      "failedPickups": "Failed pickups",
+      "failedPickupsDescription": "Cooked-food pickups marked as failed with partial refunds.",
       "itemsTitle": "Items",
       "itemsDescription": "Manage your product catalog and update product information.",
       "locationsTitle": "Locations",
@@ -2735,6 +2738,12 @@
         "client_fault": "Client and agent holds are released. Client is charged the failed-delivery fee (split with the agent).",
         "item_fault": "Client and agent are refunded. You can restore inventory."
       }
+    },
+    "failedPickups": {
+      "title": "Failed pickups",
+      "empty": "No failed pickups",
+      "loadError": "Unable to load failed pickups.",
+      "refundSummary": "Refund {{refund}} {{currency}} (fee {{fee}})"
     },
     "locations": {
       "title": "Locations",
@@ -6516,6 +6525,7 @@
     "confirmHint": "The customer will be notified. You will then prepare the order and mark it ready — a courier is not sent until then.",
     "confirmHintPickup": "The customer will be notified. You will then prepare the order and mark it ready for in-store pickup.",
     "confirmHintShipping": "The customer will be notified. You will then prepare the order and mark it shipped when ready.",
+    "confirmHintPayAfterConfirm": "Once you confirm, the customer will receive a Mobile Money payment request. Wait until they pay before you start preparing.",
     "firstOrderTitle": "Your first order!",
     "firstOrderStrip": "Review the items, then confirm. We will guide you through packing and delivery step by step.",
     "slotPassed": "This delivery window has already passed.",

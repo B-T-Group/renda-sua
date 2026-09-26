@@ -2612,6 +2612,8 @@
       "adminAccessDenied": "Vous n'avez pas accès aux outils administrateur.",
       "failedDeliveries": "Livraisons échouées",
       "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise",
+      "failedPickups": "Retraits échoués",
+      "failedPickupsDescription": "Retraits de plats cuisinés marqués comme échoués avec remboursement partiel.",
       "cashReconciliationTitle": "Rapprochement espèces",
       "cashReconciliationDescription": "Commandes payées à la livraison avec exception espèces : ouvrez la liste et encaissez le paiement mobile par commande.",
       "refundsTitle": "Demandes de remboursement",
@@ -3112,6 +3114,14 @@
       "resolveDialog": {
         "title": "Résoudre la livraison échouée"
       }
+    },
+    "failedPickups": {
+      "title": "Retraits échoués",
+      "description": "Retraits de plats cuisinés marqués comme échoués par votre commerce",
+      "empty": "Aucun retrait échoué",
+      "fetchError": "Échec de la récupération des retraits échoués",
+      "refundChip": "Remboursement {{amount}} {{currency}}",
+      "feeRetained": "Frais retenus : {{amount}} {{currency}}"
     },
     "inventory": {
       "active": "Actif",
@@ -4646,6 +4656,7 @@
     "markAsShipped": "Marquer comme expédié",
     "markAsDelivered": "Marquer comme Livré",
     "markAsFailed": "Marquer comme Échoué",
+    "failPickup": "Marquer le retrait échoué",
     "markAsInTransit": "Marquer comme En Transit",
     "markAsOutForDelivery": "Marquer comme En Livraison",
     "pickUp": "Récupérer",
@@ -5383,6 +5394,19 @@
       "selectReasonRequired": "Veuillez sélectionner une raison d'échec",
       "loadReasonsError": "Échec du chargement des raisons d'échec",
       "noReasonsAvailable": "Aucune raison d'échec disponible. Veuillez réessayer plus tard."
+    },
+    "failPickup": {
+      "title": "Marquer le retrait comme échoué",
+      "orderNumber": "Commande #{{orderNumber}}",
+      "feeNote": "Le client reçoit un remboursement partiel après rétention des frais d'annulation standard.",
+      "reasonLabel": "Pourquoi le retrait a-t-il échoué ?",
+      "notesLabel": "Veuillez décrire la raison",
+      "notesOptional": "Notes (optionnel)",
+      "confirm": "Marquer comme échoué",
+      "success": "Retrait marqué comme échoué",
+      "error": "Échec du marquage du retrait",
+      "selectReasonRequired": "Veuillez sélectionner une raison d'échec",
+      "loadReasonsError": "Échec du chargement des raisons d'échec"
     },
     "filters": {
       "allStatuses": "Tous les Statuts",

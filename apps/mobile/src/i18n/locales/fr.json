@@ -1008,6 +1008,7 @@
     "askIfReadyError": "Impossible d’envoyer le rappel",
     "printLabel": "Imprimer l’étiquette",
     "markAsFailed": "Marquer comme échoué",
+    "failPickup": "Marquer le retrait échoué",
     "switchToPickupFailed": "Impossible de passer au retrait en magasin."
   },
   "profile": {
@@ -2214,6 +2215,8 @@
       "cashReconciliationDescription": "Commandes avec exception espèces — encaissez le paiement mobile par commande.",
       "failedDeliveries": "Livraisons échouées",
       "failedDeliveriesDescription": "Gérez et résolvez les livraisons échouées pour votre commerce.",
+      "failedPickups": "Retraits échoués",
+      "failedPickupsDescription": "Retraits de plats cuisinés marqués comme échoués avec remboursement partiel.",
       "itemsTitle": "Articles",
       "itemsDescription": "Gérez votre catalogue et les informations produits.",
       "locationsTitle": "Points de vente",
@@ -2641,6 +2644,12 @@
         "client_fault": "Les cautions client et agent sont libérées. Le client est facturé les frais d'échec (partagés avec l'agent).",
         "item_fault": "Le client et l'agent sont remboursés. Vous pouvez restaurer le stock."
       }
+    },
+    "failedPickups": {
+      "title": "Retraits échoués",
+      "empty": "Aucun retrait échoué",
+      "loadError": "Impossible de charger les retraits échoués.",
+      "refundSummary": "Remboursement {{refund}} {{currency}} (frais {{fee}})"
     },
     "locations": {
       "title": "Points de vente",
@@ -6437,6 +6446,7 @@
     "confirmHint": "Le client sera informé. Vous préparerez ensuite la commande et la marquerez prête — aucun livreur n’est envoyé avant.",
     "confirmHintPickup": "Le client sera informé. Vous préparerez ensuite la commande et la marquerez prête pour un retrait en magasin.",
     "confirmHintShipping": "Le client sera informé. Vous préparerez ensuite la commande et la marquerez expédiée lorsqu’elle sera prête.",
+    "confirmHintPayAfterConfirm": "Dès que vous confirmez, le client recevra une demande de paiement Mobile Money. Attendez qu’il paie avant de commencer à préparer.",
     "firstOrderTitle": "Votre première commande !",
     "firstOrderStrip": "Vérifiez les articles, puis confirmez. Nous vous guiderons étape par étape pour la préparation et la livraison.",
     "slotPassed": "Ce créneau de livraison est déjà passé.",

@@ -263,9 +263,13 @@ export class IncomingOrderStore {
     }
   }
 
-  async confirm(): Promise<void> {
-    if (!this.orderId || !this.details || this.uiState === 'confirming') return;
-    if (isDeliverySlotPast(this.details)) return;
+  async confirm(opts?: {
+    ready_in_minutes?: number;
+  }): Promise<{ success: boolean; pay_after_merchant_confirm?: boolean; message?: string }> {
+    if (!this.orderId || !this.details || this.uiState === 'confirming') {
+      return { success: false };
+    }
+    if (isDeliverySlotPast(this.details)) return { success: false };
     const orderId = this.orderId;
     const windowId = this.details.delivery_time_windows?.[0]?.id;
     runInAction(() => {
@@ -274,14 +278,34 @@ export class IncomingOrderStore {
     });
     this.stopReminderLoop();
     try {
-      await businessApi.orders.confirm(
+      const res = await businessApi.orders.confirm(
         {
           orderId,
           ...(windowId ? { delivery_time_window_id: windowId } : {}),
+          ...(opts?.ready_in_minutes != null
+            ? { ready_in_minutes: opts.ready_in_minutes }
+            : {}),
         },
         BUSINESS_PERSONA_HEADERS
       );
+      // Keep overlay until the ready-in dialog finishes (pay-after wait step).
+      if (this.showConfirmDialog) {
+        runInAction(() => {
+          this.uiState = 'resolved';
+          this.message = res.message ?? null;
+        });
+        return {
+          success: true,
+          pay_after_merchant_confirm: res.pay_after_merchant_confirm,
+          message: res.message,
+        };
+      }
       this.onConfirmed();
+      return {
+        success: true,
+        pay_after_merchant_confirm: res.pay_after_merchant_confirm,
+        message: res.message,
+      };
     } catch (e: unknown) {
       runInAction(() => {
         this.uiState = 'active';

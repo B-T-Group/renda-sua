@@ -111,6 +111,19 @@ describe('getBusinessOrderActions cooked-food pay-after', () => {
       })
     );
     expect(actions.map((a) => a.id)).toContain('completePreparation');
+    expect(actions.find((a) => a.id === 'cancel')).toBeUndefined();
+  });
+
+  it('hides cancel while preparing after pay', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        ...awaiting,
+        current_status: 'preparing',
+        payment_status: 'paid',
+      })
+    );
+    expect(actions.map((a) => a.id)).toContain('completePreparation');
+    expect(actions.find((a) => a.id === 'cancel')).toBeUndefined();
   });
 
   it('hides complete preparation while a preparing order is still unpaid', () => {
@@ -122,5 +135,20 @@ describe('getBusinessOrderActions cooked-food pay-after', () => {
     );
     expect(actions.find((a) => a.id === 'completePreparation')).toBeUndefined();
     expect(actions.map((a) => a.id)).toContain('cancel');
+  });
+
+  it('offers failPickup when ready and paid', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        ...awaiting,
+        current_status: 'ready_for_pickup',
+        payment_status: 'paid',
+      })
+    );
+    expect(actions.map((a) => a.id)).toEqual(
+      expect.arrayContaining(['failPickup'])
+    );
+    expect(actions.find((a) => a.id === 'cancel')).toBeUndefined();
+    expect(actions.find((a) => a.id === 'requestPickupPayment')).toBeUndefined();
   });
 });

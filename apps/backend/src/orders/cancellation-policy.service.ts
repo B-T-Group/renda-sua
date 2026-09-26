@@ -63,8 +63,16 @@ interface OrderForPolicy {
   payment_status?: string | null;
   payment_timing?: string | null;
   pay_after_merchant_confirm?: boolean | null;
+  is_cooked_food_pickup?: boolean | null;
   business_location?: { country_code?: string | null } | null;
 }
+
+const COOKED_READY_CLIENT_REASON_VALUES = new Set([
+  'wont_make_it',
+  'something_came_up',
+  'momo_payment_issues',
+  'other',
+]);
 
 @Injectable()
 export class CancellationPolicyService {
@@ -138,7 +146,12 @@ export class CancellationPolicyService {
     );
 
     const consequences = this.buildConsequences(order, 'client');
-    const reasons = await this.fetchReasons('client');
+    let reasons = await this.fetchReasons('client');
+    if (this.isCookedFoodReadyCancel(order)) {
+      reasons = reasons.filter((r) =>
+        COOKED_READY_CLIENT_REASON_VALUES.has(r.value)
+      );
+    }
 
     return {
       canCancel: true,
@@ -156,6 +169,14 @@ export class CancellationPolicyService {
     };
   }
 
+  private isCookedFoodReadyCancel(order: OrderForPolicy): boolean {
+    if (order.current_status !== 'ready_for_pickup') return false;
+    return (
+      order.is_cooked_food_pickup === true ||
+      order.pay_after_merchant_confirm === true
+    );
+  }
+
   private async getBusinessPolicy(
     order: OrderForPolicy
   ): Promise<CancellationPolicy> {
@@ -169,6 +190,16 @@ export class CancellationPolicyService {
 
     if (!earlyStatuses.includes(order.current_status) && !isDeferredUncollected) {
       return this.blockedPolicy(order, 'blocked.terminalStatus', 'business');
+    }
+
+    // Paid cooked-food pay-after: business cannot cancel once cooking starts
+    // (or confirmed+paid race). Use fail-pickup after ready instead.
+    if (this.businessBlockedForCookedFoodPayAfter(order)) {
+      return this.blockedPolicy(
+        order,
+        'blocked.cookedFoodPayAfterPaid',
+        'business'
+      );
     }
 
     const consequences = this.buildConsequences(order, 'business');
@@ -188,6 +219,17 @@ export class CancellationPolicyService {
       cancellationConsequences: consequences,
       availableCancellationReasons: reasons,
     };
+  }
+
+  private businessBlockedForCookedFoodPayAfter(order: OrderForPolicy): boolean {
+    if (order.pay_after_merchant_confirm !== true) return false;
+    const payment = (order.payment_status || '').toLowerCase();
+    if (payment !== 'paid' && payment !== 'authorized') return false;
+    return (
+      order.current_status === 'confirmed' ||
+      order.current_status === 'preparing' ||
+      order.current_status === 'ready_for_pickup'
+    );
   }
 
   private async blockedPolicy(

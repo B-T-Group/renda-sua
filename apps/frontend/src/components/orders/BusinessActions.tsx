@@ -35,15 +35,18 @@ import {
 import type { OrderData } from '../../hooks/useOrderById';
 import {
   businessMayCancelDeferredUncollectedOrder,
+  businessMayCancelOrder,
 } from '../../utils/orderUtils';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrderModal';
 import {
   isCookedFoodAwaitingClientPayment,
+  isCookedFoodReadyFailEligible,
   shouldUseCookedFoodConfirmModal,
 } from '../../utils/cookedFoodOrder';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+import FailPickupDialog from '../dialogs/FailPickupDialog';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 
 /** ISO 3166-1 alpha-2 from order addresses; falls back when missing or not a 2-letter code. */
@@ -290,6 +293,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [overwriteCodeDialogOpen, setOverwriteCodeDialogOpen] = useState(false);
   const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
   const [pickupPaymentDialogOpen, setPickupPaymentDialogOpen] = useState(false);
+  const [failPickupDialogOpen, setFailPickupDialogOpen] = useState(false);
 
   const handleGenerateOverwriteCode = async () => {
     setLoading(true);
@@ -410,6 +414,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           isCookedFoodAwaitingClientPayment(order) &&
           ['confirmed', 'preparing'].includes(order.current_status || '')
         ) {
+          actions.push({
+            label: t('orderActions.cancelOrder', 'Cancel Order'),
+            action: handleCancelClick,
+            color: 'error' as const,
+            icon: <Cancel />,
+          });
           break;
         }
         if (order.fulfillment_method === 'shipping') {
@@ -430,12 +440,14 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             icon: <CheckCircle />,
           });
         }
-        actions.push({
-          label: t('orderActions.cancelOrder', 'Cancel Order'),
-          action: handleCancelClick,
-          color: 'error' as const,
-          icon: <Cancel />,
-        });
+        if (businessMayCancelOrder(order)) {
+          actions.push({
+            label: t('orderActions.cancelOrder', 'Cancel Order'),
+            action: handleCancelClick,
+            color: 'error' as const,
+            icon: <Cancel />,
+          });
+        }
         break;
 
       case 'out_for_delivery':
@@ -459,9 +471,19 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           });
           break;
         }
+        if (isCookedFoodReadyFailEligible(order as any)) {
+          actions.push({
+            label: t('orderActions.failPickup', 'Mark pickup failed'),
+            action: () => setFailPickupDialogOpen(true),
+            color: 'error' as const,
+            icon: <Cancel />,
+          });
+          break;
+        }
         if (
           order.fulfillment_method === 'pickup' &&
           order.payment_timing === 'pay_at_pickup' &&
+          order.pay_after_merchant_confirm !== true &&
           order.payment_status !== 'paid' &&
           order.payment_status !== 'authorized'
         ) {
@@ -761,6 +783,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <FailPickupDialog
+        open={failPickupDialogOpen}
+        order={order}
+        onClose={() => setFailPickupDialogOpen(false)}
+        onSuccess={() => {
+          onActionComplete?.();
+        }}
+      />
     </>
   );
 };

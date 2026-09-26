@@ -158,6 +158,34 @@ describe('OrderStatusService', () => {
         'Invalid status transition from ready_for_pickup to complete'
       );
     });
+
+    it('rejects business fail pickup via generic status path', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: baseOrder,
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'failed')
+      ).rejects.toThrow(
+        'Fail pickup must use POST /orders/:id/fail-pickup'
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('allows ready_for_pickup → failed via dedicated fail-pickup endpoint', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: baseOrder,
+      });
+      mockSuccessfulUpdate('failed');
+
+      const result = await service.updateOrderStatus('order-123', 'failed', {
+        viaFailPickupEndpoint: true,
+      });
+
+      expect(result.current_status).toBe('failed');
+    });
   });
 
   describe('updateOrderStatus shipping backdoor', () => {

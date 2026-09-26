@@ -21,6 +21,7 @@ import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
 import { BusinessPickupPaymentDialog } from './BusinessPickupPaymentDialog';
+import { FailPickupSheet } from './FailPickupSheet';
 import { ReconcileCashDialog } from './ReconcileCashDialog';
 import type { BusinessRootStackParamList } from '@/navigation/types';
 
@@ -78,6 +79,7 @@ export function ActiveOrderCtaHost({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cookedConfirmOpen, setCookedConfirmOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
+  const [failPickupOpen, setFailPickupOpen] = useState(false);
   const [pickupPinOpen, setPickupPinOpen] = useState(false);
   const [pickupPinError, setPickupPinError] = useState<string | null>(null);
   const {
@@ -139,6 +141,10 @@ export function ActiveOrderCtaHost({
       }
       if (actionId === 'requestPickupPayment') {
         setPickupOpen(true);
+        return;
+      }
+      if (actionId === 'failPickup') {
+        setFailPickupOpen(true);
         return;
       }
       if (actionId === 'manageRefunds') {
@@ -344,6 +350,17 @@ export function ActiveOrderCtaHost({
           });
         }}
       />
+      {order ? (
+        <FailPickupSheet
+          visible={failPickupOpen}
+          order={order}
+          onDismiss={() => setFailPickupOpen(false)}
+          onSuccess={() => {
+            setFailPickupOpen(false);
+            onSuccess?.();
+          }}
+        />
+      ) : null}
       <BusinessConfirmPickupPinDialog
         visible={pickupPinOpen}
         onDismiss={() => {

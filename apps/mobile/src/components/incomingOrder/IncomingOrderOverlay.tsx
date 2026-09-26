@@ -8,9 +8,12 @@ import { useDashboardAggregates } from '../../hooks/business/useDashboardAggrega
 import { useStore } from '../../stores/RootStore';
 import { AppModal } from '../common/AppModal';
 import { BusinessCancelOrderDialog } from '../business/BusinessCancelOrderDialog';
+import { CookedFoodConfirmOrderDialog } from '../business/CookedFoodConfirmOrderDialog';
 import { IncomingOrderView } from './IncomingOrderView';
 import type { BusinessOrder } from '../../types/business/orders';
+import type { ConfirmOrderPayload } from '../../types/business/orders';
 import { resolveAcceptanceDeadline } from '../../utils/resolveAcceptanceDeadline';
+import { shouldUseCookedFoodConfirmModal } from '../../utils/cookedFoodOrder';
 import {
   FIRST_ORDER_ONBOARDING_NUDGE_ID,
   shouldShowFirstOrderOverlayGuidance,
@@ -42,6 +45,12 @@ function IncomingOrderOverlayBase() {
     return incomingOrder.details as unknown as BusinessOrder;
   }, [incomingOrder.details]);
 
+  const needsReadyInConfirm = useMemo(
+    () =>
+      orderForDialog != null && shouldUseCookedFoodConfirmModal(orderForDialog),
+    [orderForDialog]
+  );
+
   const legacyConverted = !ftue.isNudgeEligible(FIRST_ORDER_ONBOARDING_NUDGE_ID);
   const showFirstOrderGuidance = useMemo(() => {
     if (!incomingOrder.details || !incomingOrder.orderId) return false;
@@ -59,41 +68,74 @@ function IncomingOrderOverlayBase() {
   ]);
 
   const showInterrupt =
-    incomingOrder.visible && !incomingOrder.showCancelDialog;
+    incomingOrder.visible &&
+    !incomingOrder.showCancelDialog &&
+    !incomingOrder.showConfirmDialog;
   const slotPast = useActionableDeliverySlotPast(
     incomingOrder.visible ? incomingOrder.details : null,
     incomingOrder.uiState
   );
 
+  const finishFirstOrderGuidance = useCallback(
+    async (orderId: string, order: BusinessOrder) => {
+      if (!showFirstOrderGuidance) return;
+      await ensureFirstOrderPinForOrder(order, {
+        businessId: order.business_id,
+        ordersTotal: aggregates?.ordersTotal,
+        isLegacyNudgeConverted: legacyConverted,
+        source: 'overlay',
+      });
+      trackFirstOrderConfirmed({ order_id: orderId });
+    },
+    [aggregates?.ordersTotal, legacyConverted, showFirstOrderGuidance]
+  );
+
   const handleConfirm = useCallback(() => {
     const orderId = incomingOrder.orderId;
     const order = orderForDialog;
+    if (showFirstOrderGuidance && orderId) {
+      trackFirstOrderConfirmStarted({ order_id: orderId });
+    }
+    if (needsReadyInConfirm) {
+      incomingOrder.openConfirm();
+      return;
+    }
     void (async () => {
-      if (showFirstOrderGuidance && orderId) {
-        trackFirstOrderConfirmStarted({ order_id: orderId });
-      }
       try {
         await incomingOrder.confirm();
-        if (showFirstOrderGuidance && orderId && order) {
-          await ensureFirstOrderPinForOrder(order, {
-            businessId: order.business_id,
-            ordersTotal: aggregates?.ordersTotal,
-            isLegacyNudgeConverted: legacyConverted,
-            source: 'overlay',
-          });
-          trackFirstOrderConfirmed({ order_id: orderId });
+        if (orderId && order) {
+          await finishFirstOrderGuidance(orderId, order);
         }
       } catch {
         // IncomingOrderStore surfaces the error message.
       }
     })();
   }, [
-    aggregates?.ordersTotal,
+    finishFirstOrderGuidance,
     incomingOrder,
-    legacyConverted,
+    needsReadyInConfirm,
     orderForDialog,
     showFirstOrderGuidance,
   ]);
+
+  const handleCookedConfirm = useCallback(
+    async (payload: ConfirmOrderPayload) => {
+      const orderId = incomingOrder.orderId;
+      const order = orderForDialog;
+      const res = await incomingOrder.confirm({
+        ready_in_minutes: payload.ready_in_minutes,
+      });
+      if (res.success && orderId && order) {
+        await finishFirstOrderGuidance(orderId, order);
+      }
+      return {
+        success: res.success,
+        message: res.message,
+        pay_after_merchant_confirm: res.pay_after_merchant_confirm,
+      };
+    },
+    [finishFirstOrderGuidance, incomingOrder, orderForDialog]
+  );
 
   if (!incomingOrder.visible) return null;
 
@@ -123,6 +165,20 @@ function IncomingOrderOverlayBase() {
           />
         </View>
       </AppModal>
+      {orderForDialog ? (
+        <CookedFoodConfirmOrderDialog
+          visible={incomingOrder.showConfirmDialog}
+          order={orderForDialog}
+          onDismiss={() => {
+            if (incomingOrder.uiState === 'resolved') {
+              incomingOrder.onConfirmed();
+              return;
+            }
+            incomingOrder.closeConfirm();
+          }}
+          onConfirm={handleCookedConfirm}
+        />
+      ) : null}
       {orderForDialog ? (
         <BusinessCancelOrderDialog
           visible={incomingOrder.showCancelDialog}

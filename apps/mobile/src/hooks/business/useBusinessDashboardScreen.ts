@@ -170,7 +170,22 @@ export function useBusinessDashboardScreen() {
       showBadge: true,
       onPress: () => navigation.navigate('BusinessFailedDeliveriesList'),
     }),
-    [t, data, navigation]
+    [t, data, navigation, colors.error.dark]
+  );
+
+  const failedPickupsModule: BusinessModuleCardModel = useMemo(
+    () => ({
+      id: 'failedPickups',
+      title: t('business.dashboard.failedPickups', 'Failed pickups'),
+      description: t(
+        'business.dashboard.failedPickupsDescription',
+        'Cooked-food pickups marked as failed with partial refunds.'
+      ),
+      icon: 'food-off-outline',
+      count: null,
+      onPress: () => navigation.navigate('BusinessFailedPickupsList'),
+    }),
+    [t, navigation]
   );
 
   const itemsModule: BusinessModuleCardModel = useMemo(
@@ -432,8 +447,9 @@ export function useBusinessDashboardScreen() {
     const modules: BusinessModuleCardModel[] = [];
     if ((cashModule.count ?? 0) > 0) modules.push(cashModule);
     if ((failedModule.count ?? 0) > 0) modules.push(failedModule);
+    modules.push(failedPickupsModule);
     return modules;
-  }, [cashModule, failedModule]);
+  }, [cashModule, failedModule, failedPickupsModule]);
   const { isSuperuser, can } = usePermissions(me);
   const canManageBusinesses =
     isSuperuser || can(PlatformPermissions.MANAGE_BUSINESSES);

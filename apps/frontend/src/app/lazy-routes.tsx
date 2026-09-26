@@ -249,6 +249,9 @@ export const DocumentManagementPage = lazy(() =>
 export const FailedDeliveriesPage = lazy(() =>
   import('../components/pages/FailedDeliveriesPage')
 );
+export const FailedPickupsPage = lazy(() =>
+  import('../components/pages/FailedPickupsPage')
+);
 export const FirstRentalItemOnboardingPage = lazy(() =>
   import('../components/pages/FirstRentalItemOnboardingPage')
 );

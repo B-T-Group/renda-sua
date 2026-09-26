@@ -260,6 +260,7 @@ export type BusinessRootStackParamList = {
   };
   BusinessPickupPaymentAwaiting: BusinessPickupPaymentAwaitingParams;
   BusinessFailedDeliveriesList: undefined;
+  BusinessFailedPickupsList: undefined;
   BusinessRefundsList: undefined;
   BusinessLocationsList:
     | { transferRequestId?: string; hoursUpdated?: boolean }

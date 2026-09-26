@@ -342,6 +342,9 @@ export function IncomingOrderView({
           isSlotPast={isSlotPast}
           extraPrepMinutes={extraPrepMinutesOf(details)}
           fulfillmentMethod={details?.fulfillment_method}
+          payAfterMerchantConfirm={
+            details?.pay_after_merchant_confirm === true
+          }
           onConfirm={onConfirm}
           onBusy={onBusy}
           onDismiss={onDismiss}

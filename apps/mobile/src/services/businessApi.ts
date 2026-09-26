@@ -13,6 +13,7 @@ import type {
   ReconcileCashPayload,
 } from '../types/business/orders';
 import type { FailedDelivery, ResolutionRequest } from '../types/business/failedDeliveries';
+import type { FailedPickup } from '../types/business/failedPickups';
 import type {
   BusinessLocation,
   BusinessLocationsListData,
@@ -396,6 +397,46 @@ export const businessApi = {
       body: ResolutionRequest
     ): Promise<{ success: boolean; message?: string }> =>
       api.post(`/failed-deliveries/${orderId}/resolve`, body),
+  },
+
+  failedPickups: {
+    list: (
+      status?: 'pending' | 'completed'
+    ): Promise<{ success: boolean; failed_pickups: FailedPickup[] }> => {
+      const q = status ? `?status=${status}` : '';
+      return api.get(`/failed-pickups${q}`);
+    },
+    reasons: (
+      language?: 'en' | 'fr'
+    ): Promise<{
+      success: boolean;
+      reasons: Array<{
+        id: string;
+        reason_key: string;
+        reason: string;
+        reason_en: string;
+        reason_fr: string;
+      }>;
+    }> =>
+      api.get(
+        language
+          ? `/failed-pickups/reasons?language=${language}`
+          : '/failed-pickups/reasons'
+      ),
+    fail: (
+      orderId: string,
+      failure_reason_id: string,
+      notes?: string
+    ): Promise<{
+      success: boolean;
+      message?: string;
+      refund_amount?: number;
+      fee_retained?: number;
+    }> =>
+      api.post(`/orders/${orderId}/fail-pickup`, {
+        failure_reason_id,
+        notes,
+      }),
   },
 
   locations: {

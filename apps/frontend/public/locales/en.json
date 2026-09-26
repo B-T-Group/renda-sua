@@ -2889,6 +2889,8 @@
       "adminAccessDenied": "You do not have access to admin tools.",
       "failedDeliveries": "Failed Deliveries",
       "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business",
+      "failedPickups": "Failed pickups",
+      "failedPickupsDescription": "Cooked-food pickups marked as failed with partial refunds.",
       "cashReconciliationTitle": "Cash reconciliation",
       "cashReconciliationDescription": "Pay-at-delivery orders with a cash exception—open the list and collect mobile payment per order.",
       "refundsTitle": "Refund requests",
@@ -3418,6 +3420,14 @@
       "resolveDialog": {
         "title": "Resolve Failed Delivery"
       }
+    },
+    "failedPickups": {
+      "title": "Failed pickups",
+      "description": "Cooked-food pickups marked as failed by your business",
+      "empty": "No failed pickups",
+      "fetchError": "Failed to fetch failed pickups",
+      "refundChip": "Refund {{amount}} {{currency}}",
+      "feeRetained": "Fee retained: {{amount}} {{currency}}"
     },
     "inventory": {
       "active": "Active",
@@ -4924,6 +4934,7 @@
     "markAsShipped": "Mark as shipped",
     "markAsDelivered": "Mark as Delivered",
     "markAsFailed": "Mark as Failed",
+    "failPickup": "Mark pickup failed",
     "markAsInTransit": "Mark as In Transit",
     "markAsOutForDelivery": "Mark as Out for Delivery",
     "pickUp": "Pick Up",
@@ -5658,6 +5669,19 @@
       "selectReasonRequired": "Please select a failure reason",
       "loadReasonsError": "Failed to load failure reasons",
       "noReasonsAvailable": "No failure reasons available. Please try again later."
+    },
+    "failPickup": {
+      "title": "Mark pickup as failed",
+      "orderNumber": "Order #{{orderNumber}}",
+      "feeNote": "The client receives a partial refund after the standard cancellation fee is retained.",
+      "reasonLabel": "Why did the pickup fail?",
+      "notesLabel": "Please describe the reason",
+      "notesOptional": "Notes (optional)",
+      "confirm": "Mark as failed",
+      "success": "Pickup marked as failed",
+      "error": "Failed to mark pickup as failed",
+      "selectReasonRequired": "Please select a failure reason",
+      "loadReasonsError": "Failed to load failure reasons"
     },
     "filters": {
       "allStatuses": "All Statuses",

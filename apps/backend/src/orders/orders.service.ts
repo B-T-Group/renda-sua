@@ -5489,6 +5489,382 @@ export class OrdersService {
     };
   }
 
+  async failPickup(request: {
+    orderId: string;
+    failure_reason_id: string;
+    notes?: string;
+  }) {
+    const userId = await this.requireBusinessOrderAccess(
+      request.orderId,
+      'Only business users can mark pickups as failed',
+      'Unauthorized to fail pickup for this order'
+    );
+    if (!request.failure_reason_id) {
+      throw new HttpException(
+        'failure_reason_id is required when marking a pickup as failed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const order = await this.getOrderDetails(request.orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    const existing = await this.findFailedPickupByOrderId(request.orderId);
+    if (order.current_status === 'failed' && existing) {
+      return {
+        success: true,
+        order,
+        refund_amount: existing.refund_amount,
+        fee_retained: existing.fee_retained,
+        message: 'Pickup already marked as failed',
+      };
+    }
+
+    if (order.current_status === 'failed' && !existing) {
+      return this.repairFailedPickupWithoutRecord(
+        order,
+        request,
+        await this.resolveFailPickupAmounts({
+          ...order,
+          current_status: 'ready_for_pickup',
+        } as Orders)
+      );
+    }
+
+    this.assertCookedFoodFailPickupEligible(order);
+    await this.assertActivePickupFailureReason(request.failure_reason_id);
+
+    const { feeRetained, refundAmount } =
+      await this.resolveFailPickupAmounts(order);
+    await this.releaseStripeAuthorizationIfNeeded(order);
+
+    return this.commitFailPickup({
+      order,
+      request,
+      userId,
+      feeRetained,
+      refundAmount,
+      existing,
+    });
+  }
+
+  private async commitFailPickup(params: {
+    order: Orders;
+    request: { orderId: string; failure_reason_id: string; notes?: string };
+    userId: string;
+    feeRetained: number;
+    refundAmount: number;
+    existing: { id: string } | null;
+  }) {
+    const { order, request, userId, feeRetained, refundAmount, existing } =
+      params;
+    if (!existing) {
+      await this.insertFailedPickupRecord({
+        orderId: request.orderId,
+        businessId: order.business_id,
+        reasonId: request.failure_reason_id,
+        notes: request.notes,
+        refundAmount,
+        feeRetained,
+        currency: order.currency,
+        fulfillmentMethod: order.fulfillment_method ?? null,
+      });
+    }
+
+    const previousStatus = order.current_status;
+    let updatedOrder;
+    try {
+      updatedOrder = await this.orderStatusService.updateOrderStatus(
+        request.orderId,
+        'failed',
+        { viaFailPickupEndpoint: true }
+      );
+    } catch (error: any) {
+      if (!existing) {
+        await this.deleteFailedPickupByOrderId(request.orderId);
+      }
+      throw error;
+    }
+
+    await this.finishFailPickupSideEffects(
+      order,
+      request.orderId,
+      previousStatus,
+      userId,
+      request.notes
+    );
+
+    return {
+      success: true,
+      order: updatedOrder,
+      refund_amount: refundAmount,
+      fee_retained: feeRetained,
+      message: 'Pickup marked as failed',
+    };
+  }
+
+  private async repairFailedPickupWithoutRecord(
+    order: Orders,
+    request: { orderId: string; failure_reason_id: string; notes?: string },
+    amounts: { feeRetained: number; refundAmount: number }
+  ) {
+    await this.assertActivePickupFailureReason(request.failure_reason_id);
+    await this.insertFailedPickupRecord({
+      orderId: request.orderId,
+      businessId: order.business_id,
+      reasonId: request.failure_reason_id,
+      notes: request.notes,
+      refundAmount: amounts.refundAmount,
+      feeRetained: amounts.feeRetained,
+      currency: order.currency,
+      fulfillmentMethod: order.fulfillment_method ?? null,
+    });
+    try {
+      await this.orderQueueService.sendOrderCancelledMessage(
+        request.orderId,
+        'client',
+        request.notes,
+        'ready_for_pickup'
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to enqueue fail-pickup refund for ${request.orderId}: ${error?.message}`
+      );
+    }
+    return {
+      success: true,
+      order,
+      refund_amount: amounts.refundAmount,
+      fee_retained: amounts.feeRetained,
+      message: 'Pickup marked as failed',
+    };
+  }
+
+  private async findFailedPickupByOrderId(orderId: string): Promise<{
+    id: string;
+    refund_amount: number;
+    fee_retained: number;
+  } | null> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `
+      query FailedPickupByOrder($orderId: uuid!) {
+        failed_pickups(where: { order_id: { _eq: $orderId } }, limit: 1) {
+          id
+          refund_amount
+          fee_retained
+        }
+      }
+      `,
+      { orderId }
+    );
+    return result.failed_pickups?.[0] ?? null;
+  }
+
+  private async assertActivePickupFailureReason(reasonId: string): Promise<void> {
+    const reasonResult = await this.hasuraSystemService.executeQuery(
+      `
+      query ValidatePickupFailureReason($reasonId: uuid!) {
+        pickup_failure_reasons_by_pk(id: $reasonId) {
+          id
+          is_active
+        }
+      }
+      `,
+      { reasonId }
+    );
+    if (!reasonResult.pickup_failure_reasons_by_pk) {
+      throw new HttpException(
+        'Invalid failure reason ID',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (!reasonResult.pickup_failure_reasons_by_pk.is_active) {
+      throw new HttpException(
+        'The selected failure reason is not active',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async resolveFailPickupAmounts(order: Orders): Promise<{
+    feeRetained: number;
+    refundAmount: number;
+  }> {
+    const countryCode =
+      (order.business_location as any)?.address?.country ??
+      (order as any).business_location?.country_code ??
+      'GA';
+    const policy = await this.cancellationPolicyService.getPolicy(
+      {
+        id: order.id,
+        current_status: order.current_status,
+        assigned_agent_id: order.assigned_agent_id,
+        total_amount: order.total_amount,
+        currency: order.currency,
+        payment_source: (order as any).payment_source,
+        payment_status: order.payment_status,
+        payment_timing: (order as any).payment_timing,
+        pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
+        is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
+        business_location: { country_code: countryCode },
+      },
+      'client'
+    );
+    const feeRetained = policy.cancellationFee ?? 0;
+    return {
+      feeRetained,
+      refundAmount: Math.max(0, order.total_amount - feeRetained),
+    };
+  }
+
+  private async insertFailedPickupRecord(params: {
+    orderId: string;
+    businessId: string;
+    reasonId: string;
+    notes?: string;
+    refundAmount: number;
+    feeRetained: number;
+    currency: string;
+    fulfillmentMethod: string | null;
+  }): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation CreateFailedPickup($failedPickup: failed_pickups_insert_input!) {
+        insert_failed_pickups_one(object: $failedPickup) {
+          id
+          order_id
+        }
+      }
+      `,
+      {
+        failedPickup: {
+          order_id: params.orderId,
+          business_id: params.businessId,
+          reason_id: params.reasonId,
+          notes: params.notes || null,
+          status: 'completed',
+          refund_amount: params.refundAmount,
+          fee_retained: params.feeRetained,
+          currency: params.currency,
+          fulfillment_method: params.fulfillmentMethod,
+        },
+      }
+    );
+  }
+
+  private async deleteFailedPickupByOrderId(orderId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation DeleteFailedPickup($orderId: uuid!) {
+          delete_failed_pickups(where: { order_id: { _eq: $orderId } }) {
+            affected_rows
+          }
+        }
+        `,
+        { orderId }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to roll back failed_pickups for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async finishFailPickupSideEffects(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    userId: string,
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.createStatusHistoryEntry(
+        orderId,
+        'failed',
+        'Pickup failed',
+        'business',
+        userId,
+        notes
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to write fail-pickup history for ${orderId}: ${error?.message}`
+      );
+    }
+
+    try {
+      await this.updateReservedQuantities(order.order_items || [], 'decrement');
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to update reserved quantities after fail pickup: ${error?.message}`
+      );
+    }
+
+    try {
+      await this.purchaseCreditsService?.restore(orderId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Purchase credit restore failed for ${orderId}: ${error?.message}`
+      );
+    }
+
+    try {
+      await this.orderQueueService.sendOrderCancelledMessage(
+        orderId,
+        'client',
+        notes,
+        previousStatus
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to enqueue fail-pickup refund for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private assertCookedFoodFailPickupEligible(order: Orders): void {
+    if (order.current_status !== 'ready_for_pickup') {
+      throw new HttpException(
+        `Cannot mark pickup as failed in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const payment = (order.payment_status || '').toLowerCase();
+    if (payment !== 'paid' && payment !== 'authorized') {
+      throw new HttpException(
+        'Order must be paid before marking pickup as failed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const cooked =
+      (order as any).is_cooked_food_pickup === true ||
+      (order as any).pay_after_merchant_confirm === true ||
+      isCookedFoodFulfillmentOrder({
+        fulfillmentMethod: order.fulfillment_method,
+        itemFlags: (order.order_items || []).map((oi: any) => ({
+          is_cooked_food: oi.is_cooked_food,
+        })),
+      });
+    if (!cooked) {
+      throw new HttpException(
+        'Fail pickup is only available for cooked-food orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (
+      order.fulfillment_method === 'delivery' &&
+      order.assigned_agent_id
+    ) {
+      throw new HttpException(
+        'Use fail delivery after an agent is assigned',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   private businessMayCancelDeferredUncollectedOrder(order: Orders): boolean {
     const timing = (
       order as Orders & { payment_timing?: string | null }
@@ -5511,6 +5887,19 @@ export class OrdersService {
   }
 
   private businessMayCancelOrder(order: Orders): boolean {
+    if ((order as any).pay_after_merchant_confirm === true) {
+      const payment = ((order as any).payment_status || '').toLowerCase();
+      if (payment === 'paid' || payment === 'authorized') {
+        const status = order.current_status;
+        if (
+          status === 'confirmed' ||
+          status === 'preparing' ||
+          status === 'ready_for_pickup'
+        ) {
+          return false;
+        }
+      }
+    }
     const early = [
       'pending_payment',
       'pending',
@@ -5856,6 +6245,7 @@ export class OrdersService {
       payment_status: order.payment_status,
       payment_timing: (order as any).payment_timing,
       pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
+      is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
       business_location: { country_code: countryCode },
     };
 

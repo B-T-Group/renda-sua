@@ -19,6 +19,8 @@ import type { AuthorizedBusinessActor } from './authorized-business-actor';
 export type OrderStatusUpdateOptions = {
   viaCancelEndpoint?: boolean;
   viaSystem?: boolean;
+  /** Business fail-pickup from ready_for_pickup (POST /orders/:id/fail-pickup). */
+  viaFailPickupEndpoint?: boolean;
 };
 
 @Injectable()
@@ -150,6 +152,14 @@ export class OrderStatusService {
       // Cooked-food auto prep / auto-ready system transitions
     } else if (newStatus === 'cancelled') {
       this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
+    } else if (
+      order.current_status === 'ready_for_pickup' &&
+      newStatus === 'failed'
+    ) {
+      this.assertFailPickupViaDedicatedEndpoint(
+        options?.viaFailPickupEndpoint,
+        isBusinessOwner
+      );
     } else if (!validTransitions.includes(newStatus)) {
       throw new Error(
         `Invalid status transition from ${order.current_status} to ${newStatus}`
@@ -397,6 +407,17 @@ export class OrderStatusService {
     if (viaCancelEndpoint) return;
     throw new Error(
       'Cancellations must use POST /orders/cancel so payment release and inventory restore run'
+    );
+  }
+
+  /** Ready → failed must use POST /orders/:id/fail-pickup (partial refund + tracking). */
+  private assertFailPickupViaDedicatedEndpoint(
+    viaFailPickupEndpoint: boolean | undefined,
+    isBusinessOwner: boolean
+  ): void {
+    if (viaFailPickupEndpoint && isBusinessOwner) return;
+    throw new Error(
+      'Fail pickup must use POST /orders/:id/fail-pickup so partial refund and tracking run'
     );
   }
 

@@ -66,6 +66,15 @@ array_relationships:
         remote_table:
           name: failed_deliveries
           schema: public
+  - name: failed_pickup
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: failed_pickups
+          schema: public
   - name: order_holds
     using:
       manual_configuration:
