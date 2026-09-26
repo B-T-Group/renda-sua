@@ -48,6 +48,7 @@ import {
   PlaceOrderFulfillmentChoice,
   type OrderFulfillment,
 } from '../../components/place-order/PlaceOrderFulfillmentChoice';
+import { PlaceOrderSpecialInstructions } from '../../components/place-order/PlaceOrderSpecialInstructions';
 import { AddressCapture } from '../../components/forms/AddressCapture';
 import type { DeliveryAddressFormValue } from '../../components/forms/DeliveryAddressForm';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
@@ -60,7 +61,7 @@ import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodL
 import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
 import { pickMobileMoneyDefaultCountry, validateOrderPaymentPhone, validateOrderPaymentPhoneForCountry } from '../../utils/placeOrderPhoneValidation';
-import { calculateDepositFallback, resolveDepositAmount } from '../../types/deposit';
+import { resolveDepositAmount, isMoMoDepositCheckoutPath } from '../../types/deposit';
 import { alignCatalogAddressToCscFields } from '../../utils/addressRegionMatch';
 import { getCountryDisplayName } from '../../utils/phoneCountryOptions';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
@@ -554,22 +555,34 @@ export default observer(function CartCheckoutScreen() {
   }, [deliveryAmount, discountCode.appliedCode, discountCode.percentage, singleBusiness, subtotal]);
   const grandTotal = Math.max(0, subtotal + deliveryAmount - discountAmount);
 
-  // Deposit path detection: only show deposit UI when actually on deposit path
-  // (server provides deposit_amount OR pay-at-delivery/pickup mode active)
+  // Deposit UI only when the server quotes a deposit. Cooked-food pickup never
+  // takes a reservation deposit (full amount after merchant confirm).
   const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
   const isDepositPath = useMemo(() => {
-    if (isDiaspora || resolvedIsStripeRail) return false;
-    // Deposit path active when:
-    // 1. Server explicitly provides deposit_amount > 0, OR
-    // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
-    const serverDepositProvided =
-      (preflightConfig?.deposit_amount != null &&
-        preflightConfig.deposit_amount > 0) ||
-      (preflightConfig?.groups?.[0]?.deposit_amount != null &&
-        (preflightConfig.groups[0].deposit_amount ?? 0) > 0);
-    const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
-    return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
-  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
+    return isMoMoDepositCheckoutPath({
+      isDiaspora,
+      isStripeRail: resolvedIsStripeRail,
+      depositAmount: preflightConfig?.deposit_amount,
+      depositRequired: preflightConfig?.deposit_required,
+      groupDepositAmount: preflightConfig?.groups?.[0]?.deposit_amount,
+      groupDepositRequired: preflightConfig?.groups?.[0]?.deposit_required,
+      preflightLoaded: preflightConfig != null,
+      momoPayNowDeliveryEnabled,
+      payTiming,
+      cookedFoodPickup:
+        fulfillment === 'pickup' &&
+        (preflightConfig?.schedule_allowed === false ||
+          preflightConfig?.groups?.some((g) => g.schedule_allowed === false) ===
+            true),
+    });
+  }, [
+    isDiaspora,
+    resolvedIsStripeRail,
+    preflightConfig,
+    payTiming,
+    momoPayNowDeliveryEnabled,
+    fulfillment,
+  ]);
 
   const depositAmount = useMemo(() => {
     if (!isDepositPath) return null;
@@ -873,6 +886,10 @@ export default observer(function CartCheckoutScreen() {
             paymentCompleted,
             cardAuthorized,
             fulfillment,
+            cookedFoodPayAfterConfirm:
+              fulfillment === 'pickup' &&
+              !resolvedIsStripeRail &&
+              preflightConfig?.schedule_allowed === false,
           },
         },
       ],
@@ -1134,7 +1151,10 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        {fulfillmentConfirmed && fulfillment === 'pickup' && !isDiaspora ? (
+        {fulfillmentConfirmed &&
+        fulfillment === 'pickup' &&
+        !isDiaspora &&
+        !(preflightConfig?.schedule_allowed === false && !resolvedIsStripeRail) ? (
           <NoticeBanner
             style={{ marginBottom: spacing.sm }}
             tone="info"
@@ -1235,6 +1255,10 @@ export default observer(function CartCheckoutScreen() {
             businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false}
+            payAfterConfirm={
+              !resolvedIsStripeRail &&
+              preflightConfig?.schedule_allowed === false
+            }
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1255,6 +1279,10 @@ export default observer(function CartCheckoutScreen() {
             businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false}
+            payAfterConfirm={
+              !resolvedIsStripeRail &&
+              preflightConfig?.schedule_allowed === false
+            }
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1404,6 +1432,10 @@ export default observer(function CartCheckoutScreen() {
                   onOverrideNationalDigitsChange={setOverrideNationalDigits}
                   phoneInvalidReason={phoneInvalidReason}
                   onAddPhonePress={onAddPhonePress}
+                  cookedFoodPayAfterConfirm={
+                    fulfillment === 'pickup' &&
+                    preflightConfig?.schedule_allowed === false
+                  }
                 />
                 <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
                   {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
@@ -1413,12 +1445,11 @@ export default observer(function CartCheckoutScreen() {
           </>
         ) : null}
 
-        <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-          <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-            {t('client.placeOrder.notes', 'Special instructions (optional)')}
-          </Text>
-          <TextInput mode="outlined" multiline value={instructions} onChangeText={setInstructions} numberOfLines={3} />
-        </View>
+        <PlaceOrderSpecialInstructions
+          value={instructions}
+          onChangeText={setInstructions}
+          numberOfLines={3}
+        />
 
         {checkoutBlocker && (
           <NoticeBanner

@@ -709,6 +709,10 @@ const CheckoutPage: React.FC = () => {
   // Store pickup is offered only when every seller group supports it.
   const preflightGroups = checkoutPreflight?.groups ?? [];
   const cookedFoodAsapOnly = checkoutPreflight?.schedule_allowed === false;
+  const cookedFoodClosedMessage =
+    checkoutPreflight?.blocking_errors?.find(
+      (b) => b.code === 'COOKED_FOOD_STORE_CLOSED'
+    )?.message ?? null;
 
   useEffect(() => {
     if (cookedFoodAsapOnly) setDeliveryWindow(null);
@@ -1384,11 +1388,19 @@ const CheckoutPage: React.FC = () => {
 
                   {/* Delivery Time Window — cooked food is ASAP-only */}
                   {cookedFoodAsapOnly ? (
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      {t(
-                        'orders.deliveryTimeWindow.cookedFoodAsapOnly',
-                        'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
-                      )}
+                    <Alert
+                      severity={cookedFoodClosedMessage ? 'error' : 'info'}
+                      sx={{ mb: 2 }}
+                    >
+                      {cookedFoodClosedMessage ??
+                        t(
+                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
+                            ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                            : 'orders.deliveryTimeWindow.cookedFoodAsapOnly',
+                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
+                            ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                            : 'We’ll start preparing when the kitchen confirms.'
+                        )}
                     </Alert>
                   ) : (
                     <DeliveryTimeWindowSelector
@@ -1412,11 +1424,16 @@ const CheckoutPage: React.FC = () => {
                     )}
                   </Typography>
                   {cookedFoodAsapOnly ? (
-                    <Alert severity="info">
-                      {t(
-                        'orders.deliveryTimeWindow.cookedFoodAsapOnlyPickup',
-                        'Cooked food is ASAP only. Pick up as soon as the kitchen marks it ready.'
-                      )}
+                    <Alert severity={cookedFoodClosedMessage ? 'error' : 'info'}>
+                      {cookedFoodClosedMessage ??
+                        t(
+                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
+                            ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                            : 'orders.deliveryTimeWindow.cookedFoodAsapOnlyPickup',
+                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
+                            ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                            : 'Pick up as soon as the kitchen marks it ready.'
+                        )}
                     </Alert>
                   ) : (
                     <DeliveryTimeWindowSelector
@@ -1733,6 +1750,7 @@ const CheckoutPage: React.FC = () => {
               checkoutLoading ||
               isCheckoutInProgress ||
               recipientIncomplete ||
+              Boolean(cookedFoodClosedMessage) ||
               (fulfillment === 'delivery' &&
                 (!selectedAddressId || deliveryUnavailable))
             }

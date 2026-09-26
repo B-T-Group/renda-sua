@@ -52,6 +52,8 @@ import {
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { buildCookedFoodStoreClosedMessage, collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
+import type { FoodAvailabilitySlot } from '../food/food-availability.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { anyLineIsCookedFood, isCookedFoodPickupOrder } from '../food/cooked-food-flag.util';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
@@ -532,6 +534,14 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     const groups: CheckoutGroupDto[] = [];
     let requiresPaymentPhoneOverall = false;
+    const cookedFoodClosedMeta = new Map<
+      string,
+      {
+        timezone: string;
+        operatingHours: unknown;
+        foodSlots: FoodAvailabilitySlot[];
+      }
+    >();
 
     for (const [businessId, group] of businessMap) {
       const rail = groupRails.get(businessId) ?? 'mobile_money';
@@ -824,6 +834,13 @@ export class CheckoutPreflightService {
       const groupHasCookedFood = anyLineIsCookedFood(
         group.inventoryRows.map((row: { item?: unknown }) => row.item as any)
       );
+      if (groupHasCookedFood) {
+        cookedFoodClosedMeta.set(businessId, {
+          timezone,
+          operatingHours: location?.operating_hours,
+          foodSlots: collectCookedFoodSlots(group.inventoryRows),
+        });
+      }
 
       groups.push({
         business_id: businessId,
@@ -957,10 +974,15 @@ export class CheckoutPreflightService {
 
     for (const group of asapGroups) {
       if (group.schedule_allowed === false && group.asap_available === false) {
+        const meta = cookedFoodClosedMeta.get(group.business_id);
         blockers.push({
           code: 'COOKED_FOOD_STORE_CLOSED',
-          message:
-            'This kitchen is closed right now. Cooked food is ASAP only — try again when the store is open.',
+          message: buildCookedFoodStoreClosedMessage({
+            opensAt: group.opens_at,
+            timezone: meta?.timezone ?? 'UTC',
+            operatingHours: meta?.operatingHours,
+            foodSlots: meta?.foodSlots,
+          }),
         });
         break;
       }

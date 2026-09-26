@@ -33,6 +33,11 @@ export interface PlaceOrderPaymentBlockProps {
   phoneInvalidReason: 'invalid' | 'unsupported' | null;
   /** Optional — shown only when the profile already has a phone number. */
   onAddPhonePress?: () => void;
+  /**
+   * Cooked-food MoMo pickup: full amount is requested after the kitchen
+   * confirms (not classic pay-at-pickup remainder).
+   */
+  cookedFoodPayAfterConfirm?: boolean;
 }
 
 export function PlaceOrderPaymentBlock({
@@ -49,12 +54,17 @@ export function PlaceOrderPaymentBlock({
   onOverrideNationalDigitsChange,
   phoneInvalidReason,
   onAddPhonePress,
+  cookedFoodPayAfterConfirm = false,
 }: PlaceOrderPaymentBlockProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
 
-  const hint =
-    payTiming === 'pay_at_delivery'
+  const hint = cookedFoodPayAfterConfirm
+    ? t(
+        'client.placeOrder.payment.hintCookedFoodPayAfterConfirm',
+        'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
+      )
+    : payTiming === 'pay_at_delivery'
       ? t(
           'client.placeOrder.payment.hintPayAtDelivery',
           'When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.'

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { calculateDepositFallback, resolveDepositAmount } from './deposit';
+import {
+  calculateDepositFallback,
+  isMoMoDepositCheckoutPath,
+  resolveDepositAmount,
+} from './deposit';
 
 describe('calculateDepositFallback', () => {
   it('returns floor 150 XAF for very small orders', () => {
@@ -60,5 +64,47 @@ describe('resolveDepositAmount', () => {
   it('falls back to calculation when server amount is zero or negative', () => {
     expect(resolveDepositAmount(3000, 0)).toBe(300);
     expect(resolveDepositAmount(3000, -50)).toBe(300);
+  });
+});
+
+describe('isMoMoDepositCheckoutPath', () => {
+  it('shows deposit when the server quoted an amount', () => {
+    expect(
+      isMoMoDepositCheckoutPath({
+        depositAmount: 150,
+        preflightLoaded: true,
+        payTiming: 'pay_at_pickup',
+      })
+    ).toBe(true);
+  });
+
+  it('hides deposit for cooked-food pickup even before preflight', () => {
+    expect(
+      isMoMoDepositCheckoutPath({
+        cookedFoodPickup: true,
+        payTiming: 'pay_at_pickup',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe(false);
+  });
+
+  it('hides deposit when preflight loaded without a quote', () => {
+    expect(
+      isMoMoDepositCheckoutPath({
+        preflightLoaded: true,
+        payTiming: 'pay_at_pickup',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe(false);
+  });
+
+  it('uses pay-at timing fallback only before preflight for grocery', () => {
+    expect(
+      isMoMoDepositCheckoutPath({
+        preflightLoaded: false,
+        payTiming: 'pay_at_pickup',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe(true);
   });
 });

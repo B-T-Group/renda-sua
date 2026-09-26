@@ -15,6 +15,11 @@ export interface PlaceOrderDeliveryWindowBlockProps {
   scheduleRequired?: boolean;
   /** When false, hide schedule link (cooked food is ASAP-only). */
   allowSchedule?: boolean;
+  /**
+   * MoMo cooked-food pickup: payment is requested after the kitchen confirms.
+   * Changes the ASAP helper copy.
+   */
+  payAfterConfirm?: boolean;
   estimatedReadyAt?: string | null;
   estimatedFulfillBy?: string | null;
   opensAt?: string | null;
@@ -30,6 +35,7 @@ export function PlaceOrderDeliveryWindowBlock({
   businessLocationId,
   scheduleRequired = false,
   allowSchedule = true,
+  payAfterConfirm = false,
   estimatedReadyAt,
   estimatedFulfillBy,
   opensAt,
@@ -81,15 +87,20 @@ export function PlaceOrderDeliveryWindowBlock({
         'client.placeOrder.deliveryWindow.storeClosedDelivery',
         'This store is closed. Select a future delivery date below.'
       );
-  const cookedFoodAsapCopy = isPickup
+  const cookedFoodAsapCopy = payAfterConfirm
     ? t(
-        'client.placeOrder.deliveryWindow.cookedFoodAsapPickup',
-        'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
+        'client.placeOrder.deliveryWindow.cookedFoodAsapPayAfterConfirm',
+        'We’ll start preparing once the kitchen confirms and receives your payment.'
       )
-    : t(
-        'client.placeOrder.deliveryWindow.cookedFoodAsapDelivery',
-        'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
-      );
+    : isPickup
+      ? t(
+          'client.placeOrder.deliveryWindow.cookedFoodAsapPickup',
+          'We’ll start preparing when the kitchen confirms.'
+        )
+      : t(
+          'client.placeOrder.deliveryWindow.cookedFoodAsapDelivery',
+          'We’ll start preparing when the kitchen confirms.'
+        );
 
   return (
     <View

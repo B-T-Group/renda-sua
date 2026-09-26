@@ -54,3 +54,38 @@ export function resolveDepositAmount(
   }
   return calculateDepositFallback(grandTotalXAF);
 }
+
+/**
+ * Whether checkout should show / charge a MoMo reservation deposit.
+ * Prefers the server preflight quote. Never invents a deposit for cooked-food
+ * pickup (pay-after-confirm), and once preflight has loaded, absence of a
+ * deposit means no deposit — do not fall back to a client-side %.
+ */
+export function isMoMoDepositCheckoutPath(params: {
+  isDiaspora?: boolean;
+  isStripeRail?: boolean;
+  depositAmount?: number | null;
+  depositRequired?: boolean | null;
+  groupDepositAmount?: number | null;
+  groupDepositRequired?: boolean | null;
+  /** True once a preflight response is available. */
+  preflightLoaded?: boolean;
+  momoPayNowDeliveryEnabled?: boolean;
+  payTiming?: string | null;
+  /** Cooked-food ASAP pickup: full amount after merchant confirm. */
+  cookedFoodPickup?: boolean;
+}): boolean {
+  if (params.isDiaspora || params.isStripeRail) return false;
+  if (params.cookedFoodPickup) return false;
+
+  const amount = params.depositAmount ?? params.groupDepositAmount;
+  const required = params.depositRequired ?? params.groupDepositRequired;
+  if (amount != null && Number(amount) > 0) return true;
+  if (required === true) return true;
+  if (params.preflightLoaded) return false;
+
+  const isPayAtDeliveryOrPickup =
+    params.payTiming === 'pay_at_delivery' ||
+    params.payTiming === 'pay_at_pickup';
+  return !params.momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup;
+}

@@ -17,7 +17,6 @@ import {
   SegmentedButtons,
   Snackbar,
   Text,
-  TextInput,
 } from 'react-native-paper';
 import { agentApi } from '../../services/agentApi';
 import { checkoutAnalytics } from '../../services/checkoutAnalytics';
@@ -37,6 +36,7 @@ import {
   PlaceOrderFulfillmentChoice,
   type OrderFulfillment,
 } from '../../components/place-order/PlaceOrderFulfillmentChoice';
+import { PlaceOrderSpecialInstructions } from '../../components/place-order/PlaceOrderSpecialInstructions';
 import { AddressCapture } from '../../components/forms/AddressCapture';
 import type { DeliveryAddressFormValue } from '../../components/forms/DeliveryAddressForm';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
@@ -47,7 +47,7 @@ import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgr
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
 import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { useClientAddresses } from '../../hooks/useClientAddresses';
-import { calculateDepositFallback, resolveDepositAmount } from '../../types/deposit';
+import { resolveDepositAmount, isMoMoDepositCheckoutPath } from '../../types/deposit';
 import { useClientProfileForPlaceOrder } from '../../hooks/useClientProfileForPlaceOrder';
 import { useCheckoutOrchestrator } from '../../hooks/useCheckoutOrchestrator';
 import { useCompleteAddressPrompt } from '../../hooks/useCompleteAddressPrompt';
@@ -772,21 +772,32 @@ export default function PlaceOrderScreen() {
   const grandTotal = Math.max(0, lineSubtotal + deliveryAmount - discountAmount);
 
   const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
-  
-  // BLOCKER 1 FIX: Gate deposit UI on real deposit path
-  // Deposit path is active when:
-  // 1. Server explicitly provides deposit_amount > 0, OR
-  // 2. Pay-at-delivery/pickup mode (when full pay-now not enabled)
+
+  // Deposit UI only when the server quotes a deposit. Cooked-food pickup never
+  // takes a reservation deposit (full amount after merchant confirm).
   const isDepositPath = useMemo(() => {
-    if (isDiaspora || resolvedIsStripeRail) return false;
-    const serverDepositProvided =
-      (preflightConfig?.deposit_amount != null &&
-        preflightConfig.deposit_amount > 0) ||
-      (preflightConfig?.groups?.[0]?.deposit_amount != null &&
-        (preflightConfig.groups[0].deposit_amount ?? 0) > 0);
-    const isPayAtDeliveryOrPickup = payTiming === 'pay_at_delivery' || payTiming === 'pay_at_pickup';
-    return serverDepositProvided || (!momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup);
-  }, [isDiaspora, resolvedIsStripeRail, preflightConfig?.deposit_amount, payTiming, momoPayNowDeliveryEnabled]);
+    return isMoMoDepositCheckoutPath({
+      isDiaspora,
+      isStripeRail: resolvedIsStripeRail,
+      depositAmount: preflightConfig?.deposit_amount,
+      depositRequired: preflightConfig?.deposit_required,
+      groupDepositAmount: preflightConfig?.groups?.[0]?.deposit_amount,
+      groupDepositRequired: preflightConfig?.groups?.[0]?.deposit_required,
+      preflightLoaded: preflightConfig != null,
+      momoPayNowDeliveryEnabled,
+      payTiming,
+      cookedFoodPickup:
+        fulfillment === 'pickup' && item != null && isFoodCatalogItem(item),
+    });
+  }, [
+    isDiaspora,
+    resolvedIsStripeRail,
+    preflightConfig,
+    payTiming,
+    momoPayNowDeliveryEnabled,
+    fulfillment,
+    item,
+  ]);
 
   // Deposit calculation: prefer server deposit_amount, fallback to calculation.
   const depositAmount = useMemo(() => {
@@ -1129,6 +1140,11 @@ export default function PlaceOrderScreen() {
             paymentCompleted,
             cardAuthorized,
             fulfillment,
+            cookedFoodPayAfterConfirm:
+              fulfillment === 'pickup' &&
+              !resolvedIsStripeRail &&
+              item != null &&
+              isFoodCatalogItem(item),
           },
         },
       ],
@@ -1448,7 +1464,10 @@ export default function PlaceOrderScreen() {
           />
         ) : null}
 
-        {fulfillmentConfirmed && fulfillment === 'pickup' && !isDiaspora ? (
+        {fulfillmentConfirmed &&
+        fulfillment === 'pickup' &&
+        !isDiaspora &&
+        !(item != null && isFoodCatalogItem(item) && !resolvedIsStripeRail) ? (
           <NoticeBanner
             style={{ marginBottom: spacing.sm }}
             tone="info"
@@ -1546,6 +1565,9 @@ export default function PlaceOrderScreen() {
             businessLocationId={item.business_location?.id ?? ''}
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
+            payAfterConfirm={
+              !resolvedIsStripeRail && isFoodCatalogItem(item)
+            }
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1566,6 +1588,9 @@ export default function PlaceOrderScreen() {
             businessLocationId={item.business_location?.id ?? ''}
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
+            payAfterConfirm={
+              !resolvedIsStripeRail && isFoodCatalogItem(item)
+            }
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1647,6 +1672,11 @@ export default function PlaceOrderScreen() {
                   onOverrideNationalDigitsChange={setOverrideNationalDigits}
                   phoneInvalidReason={phoneInvalidReason}
                   onAddPhonePress={onAddPhonePress}
+                  cookedFoodPayAfterConfirm={
+                    fulfillment === 'pickup' &&
+                    item != null &&
+                    isFoodCatalogItem(item)
+                  }
                 />
                 <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
                   {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
@@ -1656,20 +1686,10 @@ export default function PlaceOrderScreen() {
           </>
         ) : null}
 
-        <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.card }]}>
-          <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-            {t('client.placeOrder.notes', 'Special instructions (optional)')}
-          </Text>
-          <TextInput
-            mode="outlined"
-            multiline
-            value={instructions}
-            onChangeText={setInstructions}
-            numberOfLines={4}
-            style={styles.textarea}
-            outlineStyle={{ borderRadius: borderRadius.input }}
-          />
-        </View>
+        <PlaceOrderSpecialInstructions
+          value={instructions}
+          onChangeText={setInstructions}
+        />
 
         {checkoutBlocker ? (
           <NoticeBanner
@@ -1790,7 +1810,6 @@ export default function PlaceOrderScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   block: { padding: 16, borderWidth: 1, marginBottom: 12 },
-  textarea: { minHeight: 96, textAlignVertical: 'top' },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',

@@ -2,8 +2,10 @@ import {
   Add,
   ArrowBack,
   CheckCircle,
+  Close,
   LocalShipping,
   LocationOn,
+  NoteAddOutlined,
   PaymentsOutlined,
   Phone,
   ScheduleOutlined,
@@ -31,6 +33,7 @@ import {
   FormControl,
   FormControlLabel,
   Grid,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -891,6 +894,7 @@ const PlaceOrderPage: React.FC = () => {
   const [pickupAtStore, setPickupAtStore] = useState(false);
   const { trackSiteEvent } = useTrackSiteEvent();
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [showSpecialInstructions, setShowSpecialInstructions] = useState(false);
   const [paymentChoiceDialogOpen, setPaymentChoiceDialogOpen] = useState(false);
   
   // Wizard step state (mobile full-screen dialog only). Step 0 merges delivery options + address.
@@ -1155,20 +1159,6 @@ const PlaceOrderPage: React.FC = () => {
   const cookedFoodAsapOnly =
     !!selectedItem && isFoodCatalogItem(selectedItem);
 
-  const renderTimingSelector = (
-    props: React.ComponentProps<typeof DeliveryTimeWindowSelector>
-  ) =>
-    cookedFoodAsapOnly ? (
-      <Alert severity="info">
-        {t(
-          'orders.deliveryTimeWindow.cookedFoodAsapOnly',
-          'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
-        )}
-      </Alert>
-    ) : (
-      <DeliveryTimeWindowSelector {...props} />
-    );
-
   const itemCountrySupportsStripe = useMemo(() => {
     const itemCountry =
       selectedItem?.business_location?.address?.country?.toUpperCase();
@@ -1179,6 +1169,10 @@ const PlaceOrderPage: React.FC = () => {
         system.name?.toLowerCase() === 'stripe'
     );
   }, [selectedItem, paymentSystems]);
+
+  /** MoMo markets: cooked food charges after kitchen confirm (not at place order). */
+  const cookedFoodMoMoPayAfterConfirm =
+    cookedFoodAsapOnly && !itemCountrySupportsStripe;
 
   useEffect(() => {
     if (!isPayAtDeliveryEligible && paymentTiming === 'pay_at_delivery') {
@@ -1971,6 +1965,30 @@ const PlaceOrderPage: React.FC = () => {
     Boolean(checkoutPreflightRequest)
   );
 
+  const cookedFoodClosedMessage =
+    checkoutPreflight?.blocking_errors?.find(
+      (b) => b.code === 'COOKED_FOOD_STORE_CLOSED'
+    )?.message ?? null;
+
+  const renderTimingSelector = (
+    props: React.ComponentProps<typeof DeliveryTimeWindowSelector>
+  ) =>
+    cookedFoodAsapOnly ? (
+      <Alert severity={cookedFoodClosedMessage ? 'error' : 'info'}>
+        {cookedFoodClosedMessage ??
+          t(
+            cookedFoodMoMoPayAfterConfirm
+              ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+              : 'orders.deliveryTimeWindow.cookedFoodAsapOnly',
+            cookedFoodMoMoPayAfterConfirm
+              ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+              : 'We’ll start preparing when the kitchen confirms.'
+          )}
+      </Alert>
+    ) : (
+      <DeliveryTimeWindowSelector {...props} />
+    );
+
   const showTaxAtCheckoutNotice =
     checkoutPreflight?.tax_notice === 'calculated_at_checkout';
 
@@ -2138,6 +2156,7 @@ const PlaceOrderPage: React.FC = () => {
     !loading &&
     !paymentSystemsLoading &&
     !deliveryUnavailable &&
+    !cookedFoodClosedMessage &&
     (isPickupOrder || (!!selectedAddressId && addresses.length > 0));
   const canPlaceOrder =
     variantSelectionValid &&
@@ -2661,47 +2680,87 @@ const PlaceOrderPage: React.FC = () => {
                     </Paper>
                   )}
 
-                  <Paper
-                    variant="outlined"
-                    sx={(theme) => ({
-                      p: 1.5,
-                      bgcolor: 'background.paper',
-                      borderRadius: 1.5,
-                      borderColor:
-                        theme.palette.mode === 'dark'
-                          ? alpha(theme.palette.primary.light, 0.55)
-                          : alpha(theme.palette.primary.main, 0.35),
-                    })}
-                  >
-                    <Stack spacing={1}>
-                      <Typography variant="body2" fontWeight={600}>
-                        {t('orders.specialInstructions', 'Special Instructions')}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {t(
-                          'orders.specialInstructionsHint',
-                          'Add any additional delivery details for the driver (optional).'
-                        )}
-                      </Typography>
-                      <TextField
-                        multiline
-                        minRows={3}
-                        maxRows={5}
-                        fullWidth
-                        value={specialInstructions}
-                        onChange={(e) => setSpecialInstructions(e.target.value)}
-                        disabled={loading}
-                        placeholder={t(
-                          'orders.specialInstructionsPlaceholder',
-                          'Add any special instructions for this order (optional)'
-                        )}
-                        inputProps={{ maxLength: 300 }}
-                      />
-                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'right' }}>
-                        {specialInstructions.length}/300
-                      </Typography>
-                    </Stack>
-                  </Paper>
+                  {showSpecialInstructions || specialInstructions.trim() ? (
+                    <Paper
+                      variant="outlined"
+                      sx={(theme) => ({
+                        p: 1.5,
+                        bgcolor: 'background.paper',
+                        borderRadius: 1.5,
+                        borderColor:
+                          theme.palette.mode === 'dark'
+                            ? alpha(theme.palette.primary.light, 0.55)
+                            : alpha(theme.palette.primary.main, 0.35),
+                      })}
+                    >
+                      <Stack spacing={1}>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          justifyContent="space-between"
+                        >
+                          <Typography variant="body2" fontWeight={600}>
+                            {t(
+                              'orders.specialInstructions',
+                              'Special Instructions'
+                            )}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            aria-label={t('common.close', 'Close')}
+                            onClick={() => {
+                              setSpecialInstructions('');
+                              setShowSpecialInstructions(false);
+                            }}
+                          >
+                            <Close fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary">
+                          {t(
+                            'orders.specialInstructionsHint',
+                            'Add any additional delivery details for the driver (optional).'
+                          )}
+                        </Typography>
+                        <TextField
+                          multiline
+                          minRows={3}
+                          maxRows={5}
+                          fullWidth
+                          autoFocus={!specialInstructions.trim()}
+                          value={specialInstructions}
+                          onChange={(e) =>
+                            setSpecialInstructions(e.target.value)
+                          }
+                          disabled={loading}
+                          placeholder={t(
+                            'orders.specialInstructionsPlaceholder',
+                            'Add any special instructions for this order (optional)'
+                          )}
+                          inputProps={{ maxLength: 300 }}
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textAlign: 'right' }}
+                        >
+                          {specialInstructions.length}/300
+                        </Typography>
+                      </Stack>
+                    </Paper>
+                  ) : (
+                    <Button
+                      variant="text"
+                      startIcon={<NoteAddOutlined />}
+                      onClick={() => setShowSpecialInstructions(true)}
+                      sx={{ alignSelf: 'flex-start', px: 0.5 }}
+                    >
+                      {t(
+                        'orders.addSpecialInstructions',
+                        'Add special instructions'
+                      )}
+                    </Button>
+                  )}
 
                   <Box>
                     <Box
@@ -3004,15 +3063,20 @@ const PlaceOrderPage: React.FC = () => {
                         {t('orders.mobilePayment', 'Mobile Money Payment')}
                       </Typography>
                       <Typography variant="body2">
-                        {isPickupOrder
+                        {isPickupOrder && cookedFoodMoMoPayAfterConfirm
                           ? t(
-                              'orders.pickup.clientPaymentHint',
-                              'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
+                              'orders.pickup.cookedFoodPayAfterConfirmHint',
+                              'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
                             )
-                          : t(
-                              'orders.paymentRequestMessage',
-                              'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
-                            )}
+                          : isPickupOrder
+                            ? t(
+                                'orders.pickup.clientPaymentHint',
+                                'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
+                              )
+                            : t(
+                                'orders.paymentRequestMessage',
+                                'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
+                              )}
                       </Typography>
                     </Alert>
 
@@ -4003,15 +4067,21 @@ const PlaceOrderPage: React.FC = () => {
                                 'orders.payAtDelivery.info',
                                 'When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.'
                               )
-                            : paymentTiming === 'pay_at_pickup'
+                            : paymentTiming === 'pay_at_pickup' &&
+                                cookedFoodMoMoPayAfterConfirm
                               ? t(
-                                  'orders.pickup.clientPaymentHint',
-                                  'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
+                                  'orders.pickup.cookedFoodPayAfterConfirmHint',
+                                  'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
                                 )
-                              : t(
-                                  'orders.paymentRequestMessage',
-                                  'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
-                                )}
+                              : paymentTiming === 'pay_at_pickup'
+                                ? t(
+                                    'orders.pickup.clientPaymentHint',
+                                    'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
+                                  )
+                                : t(
+                                    'orders.paymentRequestMessage',
+                                    'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
+                                  )}
                         </Typography>
                       </Alert>
 

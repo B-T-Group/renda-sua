@@ -246,3 +246,37 @@ export function nextOpenAt(
   }
   return null;
 }
+
+const DAY_SHORT_LABELS: Record<DayName, string> = {
+  sunday: 'Sun',
+  monday: 'Mon',
+  tuesday: 'Tue',
+  wednesday: 'Wed',
+  thursday: 'Thu',
+  friday: 'Fri',
+  saturday: 'Sat',
+};
+
+function formatHmForDisplay(value: string | undefined): string | null {
+  const mins = parseTimeToMinutes(value);
+  if (mins == null) return null;
+  const hours = Math.floor(mins / 60);
+  const minutes = mins % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/** Compact weekly hours for client-facing copy, e.g. "Mon 08:00–20:00, Tue 08:00–20:00". */
+export function formatOperatingHoursForDisplay(raw: unknown): string {
+  const hours = normalizeOperatingHours(raw);
+  if (!hours) return '';
+  const parts: string[] = [];
+  for (const day of DAY_NAMES_BY_INDEX) {
+    const dayHours = hours[day];
+    if (!dayHours || dayHours.closed) continue;
+    const open = formatHmForDisplay(dayHours.open);
+    const close = formatHmForDisplay(dayHours.close);
+    if (!open || !close) continue;
+    parts.push(`${DAY_SHORT_LABELS[day]} ${open}–${close}`);
+  }
+  return parts.join(', ');
+}

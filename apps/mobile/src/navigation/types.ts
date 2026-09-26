@@ -84,6 +84,8 @@ export type OrderPlacedSuccessParams = {
   cardAuthorized?: boolean;
   /** Used for card-authorized copy (agent pickup vs store collect). */
   fulfillment?: 'delivery' | 'pickup' | 'shipping';
+  /** MoMo cooked-food pickup: payment is requested after kitchen confirm. */
+  cookedFoodPayAfterConfirm?: boolean;
 };
 
 /** Where deposit-fail “Back to checkout” should return. */
