@@ -472,6 +472,20 @@ def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def client_cancellation_fee_applies(
+    order: Any, cancelled_by: str, previous_status: Optional[str]
+) -> bool:
+    """Charge after confirm, but not for unpaid pay-after cooked food."""
+    if cancelled_by != "client":
+        return False
+    if previous_status not in ("confirmed", "preparing", "ready_for_pickup"):
+        return False
+    if getattr(order, "pay_after_merchant_confirm", None) is not True:
+        return True
+    payment_status = (getattr(order, "payment_status", None) or "").lower()
+    return payment_status in ("paid", "authorized")
+
+
 def process_cancellation_financials(
     order_id: str,
     cancelled_by: str,
@@ -580,7 +594,7 @@ def process_cancellation_financials(
         
         # Process cancellation fee
         cancellation_fee = 0.0
-        if cancelled_by == "client" and previous_status and previous_status in ["confirmed", "preparing", "ready_for_pickup"]:
+        if client_cancellation_fee_applies(order, cancelled_by, previous_status):
             # Client cancelling after confirmation - fee applies
             log_info("Client cancelled after confirmation, checking for cancellation fee", order_id=order_id, previous_status=previous_status)
             

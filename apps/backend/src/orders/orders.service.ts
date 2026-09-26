@@ -5813,6 +5813,7 @@ export class OrdersService {
       payment_source: (order as any).payment_source,
       payment_status: order.payment_status,
       payment_timing: (order as any).payment_timing,
+      pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
       business_location: { country_code: countryCode },
     };
 
