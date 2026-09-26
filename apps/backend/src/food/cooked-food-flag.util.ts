@@ -11,17 +11,6 @@ export function isCookedFoodItem(item: {
   return item?.is_cooked_food === true;
 }
 
-/** True when every line is cooked food (empty list is false). */
-export function everyLineIsCookedFood(lines: CookedFoodLine[]): boolean {
-  if (!lines.length) return false;
-  return lines.every((line) => {
-    if (!line) return false;
-    if (line.is_cooked_food === true) return true;
-    if (line.is_cooked_food === false) return false;
-    return isFoodCategoryName(line.item_sub_category?.item_category?.name);
-  });
-}
-
 type CookedFoodLine = {
   is_cooked_food?: boolean | null;
   item_sub_category?: {
@@ -30,16 +19,31 @@ type CookedFoodLine = {
 } | null | undefined;
 
 /**
+ * True when a line is cooked food. Food category wins over an explicit
+ * `is_cooked_food: false` (same rule as stock) so mis-flagged dishes still
+ * skip reservation deposits and use pay-after-confirm.
+ */
+export function lineIsCookedFood(line: CookedFoodLine): boolean {
+  if (!line) return false;
+  if (line.is_cooked_food === true) return true;
+  if (isFoodCategoryName(line.item_sub_category?.item_category?.name)) {
+    return true;
+  }
+  return false;
+}
+
+/** True when every line is cooked food (empty list is false). */
+export function everyLineIsCookedFood(lines: CookedFoodLine[]): boolean {
+  if (!lines.length) return false;
+  return lines.every((line) => lineIsCookedFood(line));
+}
+
+/**
  * True when any line is cooked food (flag preferred; category is legacy
- * fallback when the flag is unset).
+ * fallback when the flag is unset or wrongly false).
  */
 export function anyLineIsCookedFood(lines: CookedFoodLine[]): boolean {
-  return lines.some((line) => {
-    if (!line) return false;
-    if (line.is_cooked_food === true) return true;
-    if (line.is_cooked_food === false) return false;
-    return isFoodCategoryName(line.item_sub_category?.item_category?.name);
-  });
+  return lines.some((line) => lineIsCookedFood(line));
 }
 
 /**
@@ -48,7 +52,7 @@ export function anyLineIsCookedFood(lines: CookedFoodLine[]): boolean {
  */
 export function isCookedFoodFulfillmentOrder(params: {
   fulfillmentMethod?: string | null;
-  itemFlags: Array<{ is_cooked_food?: boolean | null } | null | undefined>;
+  itemFlags: Array<CookedFoodLine>;
 }): boolean {
   const method = params.fulfillmentMethod;
   if (method !== 'pickup' && method !== 'delivery') return false;
@@ -62,7 +66,7 @@ export function isCookedFoodFulfillmentOrder(params: {
  */
 export function isCookedFoodPickupOrder(params: {
   fulfillmentMethod?: string | null;
-  itemFlags: Array<{ is_cooked_food?: boolean | null } | null | undefined>;
+  itemFlags: Array<CookedFoodLine>;
 }): boolean {
   if (params.fulfillmentMethod !== 'pickup') return false;
   return everyLineIsCookedFood(params.itemFlags);

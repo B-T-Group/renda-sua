@@ -54,6 +54,7 @@ import {
 import {
   FOOD_CATEGORY_NAME,
   FOOD_SUB_CATEGORY_NAME,
+  isFoodCategoryName,
 } from '../../utils/foodAvailability';
 import { useProfileMe } from '../useProfileMe';
 import { useImageItemSuggestions } from './useImageItemSuggestions';
@@ -934,10 +935,10 @@ export function useBusinessAddItemFromImage() {
       if (!itemId) return;
       await businessApi.catalog.updateItem(
         itemId,
-        saleItemUpdatePayload(values, currency)
+        saleItemUpdatePayload(values, currency, isFoodItem)
       );
     },
-    [currency]
+    [currency, isFoodItem]
   );
 
   const publish = useCallback(async () => {
@@ -1383,18 +1384,26 @@ function mergeSuggestionForm(
 
 function saleItemUpdatePayload(
   values: AiReviewFormValues,
-  currency: string
+  currency: string,
+  isFoodItem = false
 ): UpdateBusinessItemPayload {
   const price = Number.parseFloat(values.price);
   const shippingPrice = parseShippingPrice(values.shippingPrice);
+  const treatAsCookedFood =
+    isFoodItem || isFoodCategoryName(values.categoryName);
   return {
     name: values.name.trim() || undefined,
     description: values.description.trim() || undefined,
     price: !Number.isNaN(price) && price > 0 ? price : undefined,
-    categoryName: values.categoryName.trim() || undefined,
-    subCategoryName: values.subCategoryName.trim() || undefined,
+    categoryName: treatAsCookedFood
+      ? FOOD_CATEGORY_NAME
+      : values.categoryName.trim() || undefined,
+    subCategoryName: treatAsCookedFood
+      ? values.subCategoryName.trim() || FOOD_SUB_CATEGORY_NAME
+      : values.subCategoryName.trim() || undefined,
     brandName: values.brandName.trim() || undefined,
     is_used: values.isUsed,
+    ...(treatAsCookedFood ? { is_cooked_food: true } : {}),
     pay_at_pickup_enabled: values.payAtPickupEnabled,
     shipping_enabled: values.shippingEnabled,
     ...(values.shippingEnabled && shippingPrice != null

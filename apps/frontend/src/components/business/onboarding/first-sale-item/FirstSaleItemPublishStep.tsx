@@ -20,6 +20,7 @@ import { useApiClient } from '../../../../hooks/useApiClient';
 import { useBusinessImages } from '../../../../hooks/useBusinessImages';
 import { useBusinessLocations } from '../../../../hooks/useBusinessLocations';
 import { useItems } from '../../../../hooks/useItems';
+import { FOOD_CATEGORY_NAME, FOOD_SUB_CATEGORY_NAME, isFoodCategoryName } from '../../../../constants/food';
 import { trackProductCreateEvent } from '../../../../utils/productCreateAnalytics';
 import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
 import type { ReviewFormValues } from './FirstSaleItemReviewStep';
@@ -29,6 +30,8 @@ export interface FirstSaleItemPublishStepProps {
   imageIds: string[];
   form: ReviewFormValues;
   merchantHint: string;
+  /** Merchant toggled "This is a cooked food item" on the description step. */
+  isFoodItem?: boolean;
   qualityScore?: number;
   initialLocationId?: string;
   onComplete: (
@@ -43,6 +46,7 @@ const FirstSaleItemPublishStep: React.FC<FirstSaleItemPublishStepProps> = ({
   imageIds,
   form,
   merchantHint,
+  isFoodItem = false,
   qualityScore,
   initialLocationId,
   onComplete,
@@ -104,15 +108,22 @@ const FirstSaleItemPublishStep: React.FC<FirstSaleItemPublishStepProps> = ({
     if (asDraft && !form.name.trim()) return;
     setBusy(true);
     try {
+      const treatAsCookedFood =
+        isFoodItem || isFoodCategoryName(form.categoryName);
       const patch: Record<string, unknown> = {
         name: form.name.trim(),
         price: priceNum > 0 ? priceNum : undefined,
         currency: form.currency,
-        categoryName: form.categoryName.trim() || undefined,
-        subCategoryName: form.subCategoryName.trim() || undefined,
+        categoryName: treatAsCookedFood
+          ? FOOD_CATEGORY_NAME
+          : form.categoryName.trim() || undefined,
+        subCategoryName: treatAsCookedFood
+          ? form.subCategoryName.trim() || FOOD_SUB_CATEGORY_NAME
+          : form.subCategoryName.trim() || undefined,
         brandName: form.brandName.trim() || undefined,
         is_used: form.isUsed,
         dimensions: form.dimensions.trim() || undefined,
+        ...(treatAsCookedFood ? { is_cooked_food: true } : {}),
       };
       const prepMinutes = Number.parseInt(form.preparationMinutes ?? '', 10);
       if (Number.isFinite(prepMinutes) && prepMinutes >= 0) {

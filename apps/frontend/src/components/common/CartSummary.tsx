@@ -17,7 +17,6 @@ import {
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
-import { PurchaseCreditCheckoutNote } from '../common/PurchaseCreditCheckoutNote';
 
 interface CartSummaryProps {
   showCheckoutButton?: boolean;
@@ -125,7 +124,6 @@ const CartSummary: React.FC<CartSummaryProps> = ({
       </Box>
 
       <CheckoutTaxSummaryLines show={showTaxAtCheckoutNotice} namespace="cart" />
-      <PurchaseCreditCheckoutNote credits={checkoutPreflight?.purchase_credits} />
 
       <Divider sx={{ my: 2 }} />
 

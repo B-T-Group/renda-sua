@@ -140,6 +140,7 @@ export function PlaceOrderSummaryCard({
               </Text>
             </Row>
 
+            {fulfillmentPending || fulfillment !== 'pickup' ? (
             <Row
               label={
                 fulfillment === 'shipping'
@@ -150,10 +151,6 @@ export function PlaceOrderSummaryCard({
               {fulfillmentPending ? (
                 <Text variant="bodySmall" style={{ color: colors.primary.main, textAlign: 'right', fontWeight: '600' }}>
                   {t('client.placeOrder.summary.chooseFulfillment', 'Choose delivery or pickup')}
-                </Text>
-              ) : fulfillment === 'pickup' ? (
-                <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>
-                  {t('client.placeOrder.summary.deliveryFeeWaived', 'Waived')}
                 </Text>
               ) : deliveryFeeLoading ? (
                 <ActivityIndicator size="small" />
@@ -186,6 +183,7 @@ export function PlaceOrderSummaryCard({
                 </Text>
               )}
             </Row>
+            ) : null}
 
             {showFirstDeliveryDiscount ? (
               <Row label={t('client.placeOrder.summary.firstDeliveryDiscount', 'First delivery discount')}>

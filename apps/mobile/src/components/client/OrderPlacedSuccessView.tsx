@@ -242,18 +242,18 @@ function PayAfterKitchenConfirmNextSteps({
         <Text variant="titleMedium" style={{ color: colors.info.dark, marginBottom: spacing.sm }}>
           {t(
             'client.placeOrder.successScreen.cookedFoodPayAfterConfirmTitle',
-            'Pay after the kitchen confirms'
+            'Awaiting kitchen confirmation'
           )}
         </Text>
         <Text variant="bodyMedium" style={{ color: colors.info.dark, lineHeight: 22 }}>
           {isPickup
             ? t(
                 'client.placeOrder.successScreen.cookedFoodPayAfterConfirmBodyPickup',
-                'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.'
+                'Your order is not paid yet. After the business confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.'
               )
             : t(
                 'client.placeOrder.successScreen.cookedFoodPayAfterConfirmBodyDelivery',
-                'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.'
+                'Your order is not paid yet. After the business confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.'
               )}
         </Text>
       </Card.Content>
@@ -306,14 +306,15 @@ function paymentChipLabel(
   if (params.cardAuthorized) {
     return t('client.placeOrder.successScreen.chipCardAuthorized', 'Card authorized');
   }
-  if (params.paymentCompleted) {
-    return t('client.placeOrder.successScreen.chipPaid', 'Order confirmed and paid');
-  }
+  // Food MoMo: order is placed unpaid; payment request comes after kitchen confirm.
   if (params.cookedFoodPayAfterConfirm) {
     return t(
       'client.placeOrder.successScreen.chipCookedFoodPayAfterConfirm',
       'Pay after kitchen confirms'
     );
+  }
+  if (params.paymentCompleted) {
+    return t('client.placeOrder.successScreen.chipPaid', 'Order confirmed and paid');
   }
   if (params.paymentTiming === 'pay_at_delivery') {
     return t('client.placeOrder.successScreen.chipPayAtDelivery', 'Pay at delivery');
@@ -337,12 +338,13 @@ function SuccessNextSteps(props: OrderPlacedSuccessViewProps & { isPickup: boole
   if (depositConfirmed) {
     return <DepositConfirmedNextSteps remainingAmountLabel={props.remainingAmountLabel} />;
   }
-  if (paymentCompleted) return <PaidNextSteps />;
-  if (cardAuthorized) return <CardAuthorizedNextSteps isPickup={isPickup} />;
-  if (isStripeRail) return <StripeNextSteps />;
+  // Must run before paymentCompleted — food orders land here unpaid.
   if (cookedFoodPayAfterConfirm) {
     return <PayAfterKitchenConfirmNextSteps isPickup={isPickup} />;
   }
+  if (paymentCompleted) return <PaidNextSteps />;
+  if (cardAuthorized) return <CardAuthorizedNextSteps isPickup={isPickup} />;
+  if (isStripeRail) return <StripeNextSteps />;
   if (paymentTiming === 'pay_now') return <PayNowNextSteps />;
   if (paymentTiming === 'pay_at_delivery') return <PayAtDeliveryNextSteps />;
   if (paymentTiming === 'pay_at_pickup') {
@@ -385,11 +387,12 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
   const { nudge } = useStore();
   const [contactSnack, setContactSnack] = useState<string | null>(null);
   const isContentReady = !profileLoading && !stripeRailLoading;
-  const chipIcon = depositConfirmed || paymentCompleted
-    ? 'check-circle-outline'
-    : cardAuthorized
-      ? 'credit-card-check-outline'
-      : 'information-outline';
+  const chipIcon =
+    depositConfirmed || (paymentCompleted && !cookedFoodPayAfterConfirm)
+      ? 'check-circle-outline'
+      : cardAuthorized
+        ? 'credit-card-check-outline'
+        : 'information-outline';
 
   useEffect(() => {
     if (!showFirstOrderPreview || placedTrackedRef.current) return;

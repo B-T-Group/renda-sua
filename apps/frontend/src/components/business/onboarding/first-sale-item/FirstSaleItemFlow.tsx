@@ -340,6 +340,7 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             imageIds={imageIds}
             form={reviewForm}
             merchantHint={merchantHint}
+            isFoodItem={isFoodItem}
             qualityScore={suggestions?.listingQuality?.score}
             initialLocationId={initialLocationId}
             onComplete={(summary, asDraft, locName) => {

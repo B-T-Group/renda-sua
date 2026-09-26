@@ -40,7 +40,7 @@ import { useResolvedCheckout } from '../../hooks/useResolvedCheckout';
 import useUpdateClientProfile from '../../hooks/useUpdateClientProfile';
 import { PlaceOrderDeliveryWindowBlock } from '../../components/browse/PlaceOrderDeliveryWindowBlock';
 import { PlaceOrderPaymentBlock } from '../../components/browse/PlaceOrderPaymentBlock';
-import { PurchaseCreditCheckoutNote } from '../../components/credits/PurchaseCreditCheckoutNote';
+import { appliedPurchaseCredit } from '../../utils/purchaseCredits';
 import { AddPaymentPhoneDialog } from '../../components/dialogs/AddPaymentPhoneDialog';
 import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
@@ -635,8 +635,6 @@ export default observer(function CartCheckoutScreen() {
     return depositAmount === DEPOSIT_FLOOR;
   }, [depositAmount]);
 
-  const [stickyBarHeight, setStickyBarHeight] = useState(220);
-
   const stickyBreakdown = useMemo((): CheckoutStickyBreakdownLine[] => {
     const lines: CheckoutStickyBreakdownLine[] = [
       {
@@ -652,11 +650,7 @@ export default observer(function CartCheckoutScreen() {
         tone: 'secondary',
       });
     } else if (fulfillment === 'pickup') {
-      lines.push({
-        label: t('checkout.deliveryFee', 'Delivery'),
-        value: t('client.placeOrder.summary.deliveryFeeWaived', 'Waived'),
-        tone: 'success',
-      });
+      // Pickup has no delivery fee; don't show a "Waived" line.
     } else if (fulfillment === 'shipping') {
       lines.push({
         label: t('client.placeOrder.summary.shippingFee', 'Shipping fee'),
@@ -689,8 +683,23 @@ export default observer(function CartCheckoutScreen() {
       });
     }
 
+    const credit = appliedPurchaseCredit({
+      itemSubtotal: subtotal,
+      orderTotal: grandTotal,
+      creditTotal: preflightConfig?.purchase_credits?.total ?? 0,
+      depositNow: depositAmount,
+    });
+    if (credit.applied > 0) {
+      lines.push({
+        label: t('accounts.purchaseCredits.appliedLine', 'Store credit'),
+        value: `−${formatCatalogMoney(credit.applied, currency)}`,
+        tone: 'success',
+      });
+    }
+
+    const amountAfterCredit = credit.applied > 0 ? credit.remaining : grandTotal;
     const dueNow =
-      depositAmount != null && depositAmount > 0 ? depositAmount : grandTotal;
+      depositAmount != null && depositAmount > 0 ? depositAmount : amountAfterCredit;
     lines.push({
       label:
         depositAmount != null && depositAmount > 0
@@ -705,7 +714,12 @@ export default observer(function CartCheckoutScreen() {
     if (depositAmount != null && depositAmount > 0) {
       lines.push({
         label: t('deposit.dueLater', 'Due later'),
-        value: formatCatalogMoney(Math.max(0, grandTotal - depositAmount), currency),
+        value: formatCatalogMoney(
+          credit.applied > 0
+            ? credit.dueAtFulfillment
+            : Math.max(0, grandTotal - depositAmount),
+          currency
+        ),
         tone: 'secondary',
       });
     }
@@ -721,6 +735,7 @@ export default observer(function CartCheckoutScreen() {
     fulfillment,
     fulfillmentConfirmed,
     grandTotal,
+    preflightConfig?.purchase_credits?.total,
     preflightConfig?.tax_notice,
     subtotal,
     t,
@@ -1014,7 +1029,9 @@ export default observer(function CartCheckoutScreen() {
     cart.clear();
 
     const cardAuthorized = outcome.type === 'success' && !!outcome.cardAuthorized;
-    const paymentCompleted = outcome.type === 'success' && !cardAuthorized;
+    // Cooked-food MoMo: unpaid until kitchen confirm + payment request.
+    const paymentCompleted =
+      outcome.type === 'success' && !cardAuthorized && !isCookedFoodMoMoPayAfter;
     navigation.reset({
       index: 1,
       routes: [
@@ -1102,7 +1119,8 @@ export default observer(function CartCheckoutScreen() {
     >
       <ScrollView
         {...keyboardAwareScrollProps}
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: stickyBarHeight + spacing.md }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.md }}
       >
         <CheckoutProgressStepper
           steps={[
@@ -1195,6 +1213,7 @@ export default observer(function CartCheckoutScreen() {
                 {formatCatalogMoney(l.itemData.price * l.quantity, l.itemData.currency)}
               </Text>
             ))}
+            {fulfillmentConfirmed && fulfillment === 'pickup' ? null : (
             <Text variant="bodySmall" style={{ marginTop: spacing.sm, color: colors.text.primary }}>
               {t(
                 fulfillment === 'shipping'
@@ -1205,9 +1224,7 @@ export default observer(function CartCheckoutScreen() {
               :{' '}
               {!fulfillmentConfirmed
                 ? t('client.placeOrder.summary.chooseFulfillment', 'Choose delivery or pickup')
-                : fulfillment === 'pickup'
-                  ? t('checkout.pickupNoFee', 'Waived (store pickup)')
-                  : fulfillment === 'shipping'
+                : fulfillment === 'shipping'
                     ? preflightLoading
                       ? '…'
                       : formatCatalogMoney(
@@ -1225,6 +1242,7 @@ export default observer(function CartCheckoutScreen() {
                         currency
                       )}
             </Text>
+            )}
           </View>
         ))}
 
@@ -1469,8 +1487,6 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        <PurchaseCreditCheckoutNote credits={preflightConfig?.purchase_credits} />
-
         {/* Payment method (country-locked) - driven by preflight, not client country */}
         {fulfillmentConfirmed && preflightConfig ? (
           <>
@@ -1544,7 +1560,7 @@ export default observer(function CartCheckoutScreen() {
         ) : null}
       </ScrollView>
 
-      <View onLayout={(e) => setStickyBarHeight(e.nativeEvent.layout.height)}>
+      <View>
         {checkoutBlocker?.code === 'COOKED_FOOD_STORE_CLOSED' ? (
           <KitchenClosedStickyPanel
             topContent={stickyFulfillment}

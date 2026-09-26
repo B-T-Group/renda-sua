@@ -108,7 +108,6 @@ import { CookedFoodClosedAlert } from '../common/CookedFoodClosedAlert';
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import {
   appliedPurchaseCredit,
-  PurchaseCreditPlaceOrderNote,
 } from '../common/PurchaseCreditCheckoutNote';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import {
@@ -572,6 +571,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Paper>
           )}
 
+          {!pickupSelected ? (
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
               {t('orders.deliveryFee', 'Delivery Fee')}
@@ -618,15 +618,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                     )}
                   </Typography>
                 </>
-              ) : pickupSelected && computedDeliveryFee === 0 ? (
-                <Typography
-                  variant="body2"
-                  fontWeight="medium"
-                  component="span"
-                  color="success.main"
-                >
-                  {t('orders.deliveryFeeWaived', 'Waived')}
-                </Typography>
               ) : (
                 <Typography variant="body2" fontWeight="medium" component="span">
                   {formatCurrency(computedDeliveryFee, selectedItem.item.currency)}
@@ -634,10 +625,12 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               )}
             </Box>
           </Box>
+          ) : null}
 
           {!deliveryFeeLoading &&
             !deliveryAddressMissing &&
             !deliveryFeeError &&
+            !pickupSelected &&
             firstOrderBaseDeliveryDiscountAmount > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="success.main">
@@ -792,14 +785,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             {error}
           </Alert>
         )}
-
-        <PurchaseCreditPlaceOrderNote
-          applied={credit.applied}
-          due={payLater ? credit.dueAtFulfillment : credit.remaining}
-          depositNow={depositAmount ?? 0}
-          payLater={payLater}
-          formatAmount={(amount) => formatCurrency(amount, selectedItem.item.currency)}
-        />
 
         {/* CTA Button */}
         <Button
@@ -2809,6 +2794,7 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                     </Box>
 
+                    {!isPickupOrder ? (
                     <Box
                       sx={{
                         display: 'flex',
@@ -2842,15 +2828,6 @@ const PlaceOrderPage: React.FC = () => {
                         ) : deliveryFeeError ? (
                           <Typography variant="body2" color="error">
                             {t('common.error', 'Error')}
-                          </Typography>
-                        ) : isPickupOrder && mobileReviewDelivery === 0 ? (
-                          <Typography
-                            variant="body2"
-                            fontWeight="medium"
-                            component="span"
-                            color="success.main"
-                          >
-                            {t('orders.deliveryFeeWaived', 'Waived')}
                           </Typography>
                         ) : (() => {
                             const pay = mobileReviewDelivery;
@@ -2905,6 +2882,7 @@ const PlaceOrderPage: React.FC = () => {
                           })()}
                       </Box>
                     </Box>
+                    ) : null}
 
                     {!isPickupOrder &&
                       !deliveryFeeLoading &&

@@ -58,7 +58,6 @@ import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
-import { PurchaseCreditCheckoutNote } from '../common/PurchaseCreditCheckoutNote';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import DiasporaCheckoutBanner from '../checkout/DiasporaCheckoutBanner';
 import PayerChargeSummary from '../checkout/PayerChargeSummary';
@@ -262,21 +261,13 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               </Typography>
             </Box>
 
+            {fulfillment !== 'pickup' ? (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
                 {t('checkout.deliveryFee', 'Delivery Fee')}
               </Typography>
               <Box sx={{ textAlign: 'right' }}>
-                {fulfillment === 'pickup' ? (
-                  <Typography
-                    variant="body2"
-                    fontWeight="medium"
-                    component="span"
-                    color="success.main"
-                  >
-                    {t('checkout.pickupNoFee', 'Waived (store pickup)')}
-                  </Typography>
-                ) : business.deliveryFeeLoading ? (
+                {business.deliveryFeeLoading ? (
                   <CircularProgress size={16} />
                 ) : business.deliveryFeeError ? (
                   <Typography variant="body2" color="error" component="span">
@@ -308,8 +299,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                 )}
               </Box>
             </Box>
+            ) : null}
 
-            {!business.deliveryFeeLoading &&
+            {fulfillment !== 'pickup' &&
+              !business.deliveryFeeLoading &&
               !business.deliveryFeeError &&
               business.firstOrderBaseDeliveryDiscountAmount > 0 &&
               business.businessId === firstBusinessId && (
@@ -1471,7 +1464,6 @@ const CheckoutPage: React.FC = () => {
               <Typography variant="h6" sx={{ mb: 3 }}>
                 {t('checkout.paymentInformation', 'Payment Information')}
               </Typography>
-              <PurchaseCreditCheckoutNote credits={checkoutPreflight?.purchase_credits} />
 
               {/* Locked Payment Method Display */}
               {checkoutPreflight?.checkout_method && (

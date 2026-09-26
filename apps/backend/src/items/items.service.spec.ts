@@ -89,6 +89,7 @@ describe('ItemsService privileged field filtering', () => {
 
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
       name: 'Griot',
+      is_cooked_food: true,
       min_order_quantity: 1,
     });
   });
@@ -139,7 +140,38 @@ describe('ItemsService privileged field filtering', () => {
     });
   });
 
-  it('does not write is_cooked_food when only the category changes', async () => {
+  it('writes is_cooked_food when moving into Restaurant & Cooked Food', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      is_cooked_food: false,
+      item_sub_category_id: 10,
+      item_sub_category: {
+        item_category: { name: 'Electronics' },
+      },
+    });
+    hasuraSystem.executeQuery.mockResolvedValue({
+      item_sub_categories_by_pk: {
+        item_category: { name: 'Restaurant & Cooked Food' },
+      },
+      supported_country_states: [{ country_code: 'CM', service_status: 'active' }],
+      item_export_markets_aggregate: { aggregate: { count: 1 } },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', is_cooked_food: true },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      item_sub_category_id: 42,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      item_sub_category_id: 42,
+      is_cooked_food: true,
+      min_order_quantity: 1,
+    });
+  });
+
+  it('keeps is_cooked_food when the flag is true outside the food category', async () => {
     const { service, hasuraSystem } = createService({
       ...ownedItem,
       is_cooked_food: true,
@@ -164,8 +196,11 @@ describe('ItemsService privileged field filtering', () => {
     });
 
     const itemData = hasuraSystem.executeMutation.mock.calls[0][1].itemData;
-    expect(itemData).toEqual({ item_sub_category_id: 99, min_order_quantity: 1 });
-    expect(itemData).not.toHaveProperty('is_cooked_food');
+    expect(itemData).toEqual({
+      item_sub_category_id: 99,
+      is_cooked_food: true,
+      min_order_quantity: 1,
+    });
   });
 
   it('persists an explicit is_cooked_food update', async () => {

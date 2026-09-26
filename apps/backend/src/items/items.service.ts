@@ -604,8 +604,10 @@ export class ItemsService {
   }
 
   /**
-   * Cooked-food flag is independent of category. Only write it when the client
-   * sends it; recategorize must not clear or set the flag.
+   * Persist cooked-food when the client sends the flag or the item is under
+   * Restaurant & Cooked Food — either wins. Recategorize alone does not clear
+   * an existing true flag (flag stays until an explicit false is sent and the
+   * category is no longer food).
    */
   private async normalizeUpdatePayloadWithFoodMin(
     existing: {
@@ -674,9 +676,7 @@ export class ItemsService {
     },
     categoryName?: string | null
   ): boolean {
-    if (existing.is_cooked_food === true) return true;
-    if (existing.is_cooked_food === false) return false;
-    return cookedFoodIgnoresStock(categoryName);
+    return cookedFoodIgnoresStock(categoryName, existing.is_cooked_food);
   }
   private async resolveCategoryNameForSubCategory(
     subCategoryId: unknown

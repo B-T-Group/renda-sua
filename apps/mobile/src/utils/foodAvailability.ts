@@ -31,9 +31,6 @@ export function isFoodCatalogItem(item: {
   if (item.is_cooked_food === true || item.item?.is_cooked_food === true) {
     return true;
   }
-  if (item.is_cooked_food === false || item.item?.is_cooked_food === false) {
-    return false;
-  }
   return isFoodCategoryName(
     item.item_sub_category?.item_category?.name ??
       item.item?.item_sub_category?.item_category?.name

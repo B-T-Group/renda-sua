@@ -3964,10 +3964,10 @@
         "payAtDeliveryBody": "You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.",
         "payAtPickupTitle": "Pay when you pick up",
         "payAtPickupBody": "Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.",
-        "cookedFoodPayAfterConfirmTitle": "Pay after the kitchen confirms",
-        "cookedFoodPayAfterConfirmBody": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
-        "cookedFoodPayAfterConfirmBodyPickup": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
-        "cookedFoodPayAfterConfirmBodyDelivery": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.",
+        "cookedFoodPayAfterConfirmTitle": "Awaiting kitchen confirmation",
+        "cookedFoodPayAfterConfirmBody": "Your order is not paid yet. After the business confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
+        "cookedFoodPayAfterConfirmBodyPickup": "Your order is not paid yet. After the business confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
+        "cookedFoodPayAfterConfirmBodyDelivery": "Your order is not paid yet. After the business confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.",
         "viewOrders": "My orders",
         "goToOrder": "Go to the order",
         "goToHome": "Go to home",
@@ -4900,6 +4900,7 @@
       "partnerBadge": "Credits apply",
       "partnersListHint": "Partner stores where your store credits can apply.",
       "checkoutApply": "{{amount}} in store credits will apply",
+      "appliedLine": "Store credit",
       "balances": "balance(s)"
     },
     "cashAdvance": {

@@ -41,6 +41,29 @@ describe('cooked-food-flag.util', () => {
     ).toBe(false);
   });
 
+  it('treats food-category lines as cooked even when is_cooked_food is false', () => {
+    expect(
+      everyLineIsCookedFood([
+        {
+          is_cooked_food: false,
+          item_sub_category: {
+            item_category: { name: 'Restaurant & Cooked Food' },
+          },
+        },
+      ])
+    ).toBe(true);
+    expect(
+      anyLineIsCookedFood([
+        {
+          is_cooked_food: false,
+          item_sub_category: {
+            item_category: { name: 'Restaurant & Cooked Food' },
+          },
+        },
+      ])
+    ).toBe(true);
+  });
+
   it('requires every line to be cooked food', () => {
     expect(
       everyLineIsCookedFood([
@@ -74,6 +97,16 @@ describe('cooked-food-flag.util', () => {
       ])
     ).toBe(true);
     expect(anyLineIsCookedFood([{ is_cooked_food: false }])).toBe(false);
+    expect(
+      anyLineIsCookedFood([
+        {
+          is_cooked_food: false,
+          item_sub_category: {
+            item_category: { name: 'Grocery' },
+          },
+        },
+      ])
+    ).toBe(false);
   });
 
   it('is a cooked-food pickup only for pickup carts of cooked food', () => {

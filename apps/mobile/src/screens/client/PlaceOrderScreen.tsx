@@ -31,7 +31,7 @@ import { VariantOptionPicker } from '../../components/browse/VariantOptionPicker
 import { AddPaymentPhoneDialog } from '../../components/dialogs/AddPaymentPhoneDialog';
 import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
 import { PlaceOrderSummaryCard } from '../../components/browse/PlaceOrderSummaryCard';
-import { PurchaseCreditCheckoutNote } from '../../components/credits/PurchaseCreditCheckoutNote';
+import { appliedPurchaseCredit } from '../../utils/purchaseCredits';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
 import { PlaceOrderDeliveryAddressBlock } from '../../components/place-order/PlaceOrderDeliveryAddressBlock';
 import {
@@ -174,7 +174,6 @@ export default function PlaceOrderScreen() {
   const [phoneDialogDefaultCountry, setPhoneDialogDefaultCountry] = useState<CountryCode | undefined>(undefined);
   const [addAddressModalVisible, setAddAddressModalVisible] = useState(false);
   const [addAddressForm, setAddAddressForm] = useState<DeliveryAddressFormValue>(BLANK_ADDRESS_FORM);
-  const [stickyBarHeight, setStickyBarHeight] = useState(240);
   const [addAddressSaving, setAddAddressSaving] = useState(false);
   
   // Diaspora: recipient is always required once preflight confirms diaspora.
@@ -889,11 +888,7 @@ export default function PlaceOrderScreen() {
     ];
 
     if (fulfillment === 'pickup') {
-      lines.push({
-        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
-        value: t('client.placeOrder.summary.deliveryFeeWaived', 'Waived'),
-        tone: 'success',
-      });
+      // Pickup has no delivery fee; don't show a "Waived" line.
     } else if (fulfillment === 'shipping') {
       lines.push({
         label: t('client.placeOrder.summary.shippingFee', 'Shipping fee'),
@@ -943,8 +938,23 @@ export default function PlaceOrderScreen() {
       });
     }
 
+    const credit = appliedPurchaseCredit({
+      itemSubtotal: lineSubtotal,
+      orderTotal: grandTotal,
+      creditTotal: preflightConfig?.purchase_credits?.total ?? 0,
+      depositNow: depositAmount,
+    });
+    if (credit.applied > 0) {
+      lines.push({
+        label: t('accounts.purchaseCredits.appliedLine', 'Store credit'),
+        value: `−${formatCatalogMoney(credit.applied, currency)}`,
+        tone: 'success',
+      });
+    }
+
+    const amountAfterCredit = credit.applied > 0 ? credit.remaining : grandTotal;
     const dueNow =
-      depositAmount != null && depositAmount > 0 ? depositAmount : grandTotal;
+      depositAmount != null && depositAmount > 0 ? depositAmount : amountAfterCredit;
     lines.push({
       label:
         depositAmount != null && depositAmount > 0
@@ -959,7 +969,12 @@ export default function PlaceOrderScreen() {
     if (depositAmount != null && depositAmount > 0) {
       lines.push({
         label: t('deposit.dueLater', 'Due later'),
-        value: formatCatalogMoney(Math.max(0, grandTotal - depositAmount), currency),
+        value: formatCatalogMoney(
+          credit.applied > 0
+            ? credit.dueAtFulfillment
+            : Math.max(0, grandTotal - depositAmount),
+          currency
+        ),
         tone: 'secondary',
       });
     }
@@ -977,6 +992,7 @@ export default function PlaceOrderScreen() {
     fulfillment,
     grandTotal,
     lineSubtotal,
+    preflightConfig?.purchase_credits?.total,
     preflightConfig?.tax_notice,
     preflightLoading,
     showFirstDeliveryDiscount,
@@ -1285,7 +1301,9 @@ export default function PlaceOrderScreen() {
     }
 
     const cardAuthorized = outcome.type === 'success' && !!outcome.cardAuthorized;
-    const paymentCompleted = outcome.type === 'success' && !cardAuthorized;
+    // Cooked-food MoMo: unpaid until kitchen confirm + payment request.
+    const paymentCompleted =
+      outcome.type === 'success' && !cardAuthorized && !isCookedFoodMoMoPayAfter;
     navigation.reset({
       index: 1,
       routes: [
@@ -1395,9 +1413,10 @@ export default function PlaceOrderScreen() {
     >
       <ScrollView
         {...keyboardAwareScrollProps}
+        style={{ flex: 1 }}
         contentContainerStyle={{
           padding: spacing.md,
-          paddingBottom: stickyBarHeight + spacing.lg,
+          paddingBottom: spacing.md,
         }}
       >
         <CheckoutProgressStepper
@@ -1487,8 +1506,6 @@ export default function PlaceOrderScreen() {
             style={{ marginBottom: spacing.sm }}
           />
         ) : null}
-
-        <PurchaseCreditCheckoutNote credits={preflightConfig?.purchase_credits} />
 
         <PlaceOrderSummaryCard
           thumb={thumb}
@@ -1825,7 +1842,7 @@ export default function PlaceOrderScreen() {
         ) : null}
       </ScrollView>
 
-      <View onLayout={(e) => setStickyBarHeight(e.nativeEvent.layout.height)}>
+      <View>
         {checkoutBlocker?.code === 'COOKED_FOOD_STORE_CLOSED' ? (
           <KitchenClosedStickyPanel
             topContent={stickyFulfillment}
