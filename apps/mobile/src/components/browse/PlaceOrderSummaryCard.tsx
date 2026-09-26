@@ -40,6 +40,8 @@ export interface PlaceOrderSummaryCardProps {
   depositAmount?: number | null;
   /** True when showing deposit breakdown (Due now / Due later). */
   showDepositBreakdown?: boolean;
+  /** When true, hide fee/total rows (shown in sticky checkout bar instead). */
+  hideFinancialSummary?: boolean;
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -84,6 +86,7 @@ export function PlaceOrderSummaryCard({
   showTaxAtCheckoutNotice = false,
   depositAmount,
   showDepositBreakdown,
+  hideFinancialSummary = false,
 }: PlaceOrderSummaryCardProps) {
   const { t } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
@@ -97,7 +100,7 @@ export function PlaceOrderSummaryCard({
   return (
     <Card style={{ borderRadius: borderRadius.md, marginBottom: spacing.md }}>
       <Card.Content>
-        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
+        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: hideFinancialSummary ? 0 : spacing.md }}>
           {thumb ? (
             <Image source={{ uri: thumb }} style={{ width: 72, height: 72, borderRadius: 8 }} resizeMode="cover" />
           ) : (
@@ -127,70 +130,76 @@ export function PlaceOrderSummaryCard({
           </View>
         </View>
 
-        <Divider style={{ marginBottom: spacing.sm }} />
+        {!hideFinancialSummary ? (
+          <>
+            <Divider style={{ marginBottom: spacing.sm }} />
 
-        <Row label={t('client.placeOrder.summary.subtotal', 'Subtotal')}>
-          <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
-            {formatCatalogMoney(subtotal, currency)}
-          </Text>
-        </Row>
-
-        <Row
-          label={
-            fulfillment === 'shipping'
-              ? t('client.placeOrder.summary.shippingFee', 'Shipping fee')
-              : t('client.placeOrder.summary.deliveryFee', 'Delivery fee')
-          }
-        >
-          {fulfillmentPending ? (
-            <Text variant="bodySmall" style={{ color: colors.primary.main, textAlign: 'right', fontWeight: '600' }}>
-              {t('client.placeOrder.summary.chooseFulfillment', 'Choose delivery or pickup')}
-            </Text>
-          ) : fulfillment === 'pickup' ? (
-            <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>
-              {t('client.placeOrder.summary.deliveryFeeWaived', 'Waived')}
-            </Text>
-          ) : deliveryFeeLoading ? (
-            <ActivityIndicator size="small" />
-          ) : deliveryAddressMissing ? (
-            <Text variant="bodySmall" style={{ color: colors.text.secondary, textAlign: 'right' }}>
-              {t(
-                'client.placeOrder.summary.deliveryFeeAddressRequired',
-                'Choose a delivery address to see shipping.'
-              )}
-            </Text>
-          ) : deliveryFeeError ? (
-            <Text variant="bodySmall" style={{ color: colors.error.main, textAlign: 'right' }}>
-              {t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')}
-            </Text>
-          ) : showStrikethrough ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 }}>
-              <Text
-                variant="bodySmall"
-                style={{ textDecorationLine: 'line-through', color: colors.text.secondary }}
-              >
-                {formatCatalogMoney(deliveryFullBefore, currency)}
-              </Text>
+            <Row label={t('client.placeOrder.summary.subtotal', 'Subtotal')}>
               <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
-                {formatCatalogMoney(deliveryAmount, currency)}
+                {formatCatalogMoney(subtotal, currency)}
               </Text>
-            </View>
-          ) : (
-            <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
-              {formatCatalogMoney(deliveryAmount, currency)}
-            </Text>
-          )}
-        </Row>
+            </Row>
 
-        {showFirstDeliveryDiscount ? (
-          <Row label={t('client.placeOrder.summary.firstDeliveryDiscount', 'First delivery discount')}>
-            <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>
-              −{formatCatalogMoney(firstDeliveryDiscountAmount, currency)}
-            </Text>
-          </Row>
-        ) : null}
+            <Row
+              label={
+                fulfillment === 'shipping'
+                  ? t('client.placeOrder.summary.shippingFee', 'Shipping fee')
+                  : t('client.placeOrder.summary.deliveryFee', 'Delivery fee')
+              }
+            >
+              {fulfillmentPending ? (
+                <Text variant="bodySmall" style={{ color: colors.primary.main, textAlign: 'right', fontWeight: '600' }}>
+                  {t('client.placeOrder.summary.chooseFulfillment', 'Choose delivery or pickup')}
+                </Text>
+              ) : fulfillment === 'pickup' ? (
+                <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>
+                  {t('client.placeOrder.summary.deliveryFeeWaived', 'Waived')}
+                </Text>
+              ) : deliveryFeeLoading ? (
+                <ActivityIndicator size="small" />
+              ) : deliveryAddressMissing ? (
+                <Text variant="bodySmall" style={{ color: colors.text.secondary, textAlign: 'right' }}>
+                  {t(
+                    'client.placeOrder.summary.deliveryFeeAddressRequired',
+                    'Choose a delivery address to see shipping.'
+                  )}
+                </Text>
+              ) : deliveryFeeError ? (
+                <Text variant="bodySmall" style={{ color: colors.error.main, textAlign: 'right' }}>
+                  {t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')}
+                </Text>
+              ) : showStrikethrough ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 }}>
+                  <Text
+                    variant="bodySmall"
+                    style={{ textDecorationLine: 'line-through', color: colors.text.secondary }}
+                  >
+                    {formatCatalogMoney(deliveryFullBefore, currency)}
+                  </Text>
+                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+                    {formatCatalogMoney(deliveryAmount, currency)}
+                  </Text>
+                </View>
+              ) : (
+                <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+                  {formatCatalogMoney(deliveryAmount, currency)}
+                </Text>
+              )}
+            </Row>
 
-        <Divider style={{ marginVertical: spacing.sm }} />
+            {showFirstDeliveryDiscount ? (
+              <Row label={t('client.placeOrder.summary.firstDeliveryDiscount', 'First delivery discount')}>
+                <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>
+                  −{formatCatalogMoney(firstDeliveryDiscountAmount, currency)}
+                </Text>
+              </Row>
+            ) : null}
+
+            <Divider style={{ marginVertical: spacing.sm }} />
+          </>
+        ) : (
+          <Divider style={{ marginVertical: spacing.sm }} />
+        )}
 
         {couponVisible ? (
           <>
@@ -242,60 +251,64 @@ export function PlaceOrderSummaryCard({
           </View>
         )}
 
-        {discountAmount > 0 ? (
-          <Row label={t('client.placeOrder.summary.discount', 'Discount')}>
-            <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>
-              −{formatCatalogMoney(discountAmount, currency)}
-            </Text>
-          </Row>
-        ) : null}
-
-        {showTaxAtCheckoutNotice ? (
-          <Row label={t('orders.tax', 'Tax')}>
-            <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
-              {t(
-                'client.placeOrder.summary.taxCalculatedAtCheckout',
-                'Calculated at checkout'
-              )}
-            </Text>
-          </Row>
-        ) : null}
-
-        <Divider style={{ marginVertical: spacing.sm }} />
-
-        <Row
-          label={
-            showTaxAtCheckoutNotice
-              ? t('client.placeOrder.summary.totalBeforeTax', 'Total (before tax)')
-              : t('client.placeOrder.summary.total', 'Order total')
-          }
-        >
-          <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.text.primary }}>
-            {formatCatalogMoney(grandTotal, currency)}
-          </Text>
-        </Row>
-
-        {showDepositBreakdown && depositAmount != null && depositAmount > 0 ? (
+        {!hideFinancialSummary ? (
           <>
+            {discountAmount > 0 ? (
+              <Row label={t('client.placeOrder.summary.discount', 'Discount')}>
+                <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>
+                  −{formatCatalogMoney(discountAmount, currency)}
+                </Text>
+              </Row>
+            ) : null}
+
+            {showTaxAtCheckoutNotice ? (
+              <Row label={t('orders.tax', 'Tax')}>
+                <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+                  {t(
+                    'client.placeOrder.summary.taxCalculatedAtCheckout',
+                    'Calculated at checkout'
+                  )}
+                </Text>
+              </Row>
+            ) : null}
+
             <Divider style={{ marginVertical: spacing.sm }} />
 
-            <Row label={t('deposit.dueNow', 'Due now (deposit)')}>
-              <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.primary.main }}>
-                {formatCatalogMoney(dueNow, currency)}
+            <Row
+              label={
+                showTaxAtCheckoutNotice
+                  ? t('client.placeOrder.summary.totalBeforeTax', 'Total (before tax)')
+                  : t('client.placeOrder.summary.total', 'Order total')
+              }
+            >
+              <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.text.primary }}>
+                {formatCatalogMoney(grandTotal, currency)}
               </Text>
             </Row>
 
-            <Row label={t('deposit.dueLater', 'Due later')}>
-              <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.text.secondary }}>
-                {formatCatalogMoney(dueLater, currency)}
-              </Text>
-            </Row>
+            {showDepositBreakdown && depositAmount != null && depositAmount > 0 ? (
+              <>
+                <Divider style={{ marginVertical: spacing.sm }} />
+
+                <Row label={t('deposit.dueNow', 'Due now (deposit)')}>
+                  <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.primary.main }}>
+                    {formatCatalogMoney(dueNow, currency)}
+                  </Text>
+                </Row>
+
+                <Row label={t('deposit.dueLater', 'Due later')}>
+                  <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.text.secondary }}>
+                    {formatCatalogMoney(dueLater, currency)}
+                  </Text>
+                </Row>
+              </>
+            ) : null}
+
+            <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.md, textAlign: 'center' }}>
+              {t('client.placeOrder.summary.securePayment', 'Secure payment')}
+            </Text>
           </>
         ) : null}
-
-        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.md, textAlign: 'center' }}>
-          {t('client.placeOrder.summary.securePayment', 'Secure payment')}
-        </Text>
       </Card.Content>
     </Card>
   );

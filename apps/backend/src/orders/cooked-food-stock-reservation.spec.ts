@@ -117,4 +117,40 @@ describe('OrdersService cooked-food stock sentinel', () => {
 
     expect(executeMutation).not.toHaveBeenCalled();
   });
+
+  it('skips reservation when flag is false but category is cooked food', async () => {
+    const executeQuery = jest.fn(async (query: string) => {
+      if (query.includes('StockTrackedInventories')) {
+        return {
+          business_inventory: [
+            {
+              id: 'inv-food',
+              item: {
+                is_cooked_food: false,
+                item_sub_category: {
+                  item_category: { name: FOOD_CATEGORY_NAME },
+                },
+              },
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    const executeMutation = jest.fn();
+    const service = Object.create(OrdersService.prototype) as OrdersService;
+    (service as any).hasuraSystemService = { executeQuery, executeMutation };
+    (service as any).logger = {
+      warn: jest.fn(),
+      log: jest.fn(),
+      error: jest.fn(),
+    };
+
+    await service.updateReservedQuantities(
+      [{ business_inventory_id: 'inv-food', quantity: 1 }],
+      'increment'
+    );
+
+    expect(executeMutation).not.toHaveBeenCalled();
+  });
 });

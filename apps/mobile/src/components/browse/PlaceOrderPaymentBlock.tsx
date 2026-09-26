@@ -14,16 +14,11 @@ import { TrustBadge } from '../common/TrustBadge';
 import { spacing as themeSpacing } from '../../theme/spacing';
 import PhoneNumberInput from '../PhoneNumberInput';
 
-type PayTiming = 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
-type Fulfillment = 'delivery' | 'pickup' | 'shipping';
-
 export interface PlaceOrderPaymentBlockProps {
   /** When true the client pays by card via Stripe; Mobile Money UI is hidden. */
   isStripeRail?: boolean;
   profileLoading: boolean;
   profilePhone: string | null | undefined;
-  payTiming: PayTiming;
-  fulfillment: Fulfillment;
   useDifferentPhone: boolean;
   onToggleDifferentPhone: (value: boolean) => void;
   overrideCountryIso: CountryCode;
@@ -33,19 +28,13 @@ export interface PlaceOrderPaymentBlockProps {
   phoneInvalidReason: 'invalid' | 'unsupported' | null;
   /** Optional — shown only when the profile already has a phone number. */
   onAddPhonePress?: () => void;
-  /**
-   * Cooked-food MoMo pickup: full amount is requested after the kitchen
-   * confirms (not classic pay-at-pickup remainder).
-   */
-  cookedFoodPayAfterConfirm?: boolean;
 }
 
+/** Payment method + phone only. Next-step copy lives on the success screen. */
 export function PlaceOrderPaymentBlock({
   isStripeRail = false,
   profileLoading,
   profilePhone,
-  payTiming,
-  fulfillment,
   useDifferentPhone,
   onToggleDifferentPhone,
   overrideCountryIso,
@@ -54,30 +43,9 @@ export function PlaceOrderPaymentBlock({
   onOverrideNationalDigitsChange,
   phoneInvalidReason,
   onAddPhonePress,
-  cookedFoodPayAfterConfirm = false,
 }: PlaceOrderPaymentBlockProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
-
-  const hint = cookedFoodPayAfterConfirm
-    ? t(
-        'client.placeOrder.payment.hintCookedFoodPayAfterConfirm',
-        'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
-      )
-    : payTiming === 'pay_at_delivery'
-      ? t(
-          'client.placeOrder.payment.hintPayAtDelivery',
-          'When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.'
-        )
-      : fulfillment === 'pickup'
-        ? t(
-            'client.placeOrder.payment.hintPickup',
-            'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
-          )
-        : t(
-            'client.placeOrder.payment.hintPayNow',
-            'A payment request will be sent to your registered phone number. Please approve it to complete your order.'
-          );
 
   const unsupportedMsg = t(
     'client.placeOrder.payment.unsupportedCountry',
@@ -118,15 +86,10 @@ export function PlaceOrderPaymentBlock({
             {t('client.placeOrder.payment.cardTitle', 'Pay securely by card')}
           </Text>
           <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>
-            {fulfillment === 'pickup'
-              ? t(
-                  'client.placeOrder.payment.cardPickupDescription',
-                  'Your card is authorized now and charged when you collect your order at the store.'
-                )
-              : t(
-                  'client.placeOrder.payment.cardDescription',
-                  'A secure payment sheet will open when you place your order.'
-                )}
+            {t(
+              'client.placeOrder.payment.cardDescription',
+              'A secure payment sheet will open when you place your order.'
+            )}
           </Text>
           <View style={payStyles.trustRow}>
             <TrustBadge variant="encrypted_payments" label={t('checkout.payment.encrypted', 'Encrypted')} inline />
@@ -142,24 +105,6 @@ export function PlaceOrderPaymentBlock({
         </View>
       ) : profilePhone?.trim() ? (
         <>
-          <View
-            style={{
-              padding: spacing.md,
-              borderRadius: borderRadius.md,
-              borderLeftWidth: 4,
-              borderLeftColor: colors.info.main,
-              backgroundColor: colors.surface,
-              marginBottom: spacing.md,
-            }}
-          >
-            <Text variant="titleSmall" style={{ marginBottom: spacing.xs }}>
-              {t('client.placeOrder.payment.mobileMoneyTitle', 'Mobile Money payment')}
-            </Text>
-            <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-              {hint}
-            </Text>
-          </View>
-
           <Text variant="labelLarge" style={{ color: colors.text.secondary, marginBottom: 4 }}>
             {t('client.placeOrder.payment.paymentPhoneLabel', 'Payment phone number')}
           </Text>
@@ -217,7 +162,10 @@ export function PlaceOrderPaymentBlock({
             {t('client.placeOrder.payment.mobileMoneyTitle', 'Mobile Money payment')}
           </Text>
           <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>
-            {hint}
+            {t(
+              'client.placeOrder.payment.addPhoneRequired',
+              'Add a phone number to receive Mobile Money payment requests.'
+            )}
           </Text>
           {onAddPhonePress ? (
             <Button

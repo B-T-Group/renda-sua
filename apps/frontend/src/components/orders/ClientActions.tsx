@@ -323,11 +323,15 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   };
 
   const availableActions = getAvailableActions();
+  const payAfterDelivery =
+    order.pay_after_merchant_confirm === true &&
+    order.fulfillment_method !== 'pickup';
   const showPin =
     !hideDeliveryPin &&
-    order.payment_timing !== 'pay_at_delivery' &&
-    order.payment_timing !== 'pay_at_pickup' &&
-    order.payment_method !== 'pay_on_delivery' &&
+    (payAfterDelivery ||
+      (order.payment_timing !== 'pay_at_delivery' &&
+        order.payment_timing !== 'pay_at_pickup' &&
+        order.payment_method !== 'pay_on_delivery')) &&
     order.fulfillment_method !== 'pickup' &&
     ['picked_up', 'in_transit', 'out_for_delivery'].includes(
       order.current_status

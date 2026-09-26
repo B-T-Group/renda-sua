@@ -54,9 +54,22 @@ export interface CheckoutPreflightGroup {
   momo_pay_now_delivery_enabled?: boolean;
 }
 
+export interface CookedFoodStoreClosedHourSlot {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface CookedFoodStoreClosedDetails {
+  timezone: string;
+  next_opens_at: string | null;
+  hours: CookedFoodStoreClosedHourSlot[];
+}
+
 export interface CheckoutPreflightBlocker {
   code: string;
   message: string;
+  details?: CookedFoodStoreClosedDetails;
 }
 
 export interface CheckoutPreflightResult {
@@ -79,6 +92,8 @@ export interface CheckoutPreflightResult {
   /** False when the cart includes cooked food (ASAP-only). */
   schedule_allowed?: boolean;
   schedule_required?: boolean;
+  /** True when every group is cooked-food MoMo pay-after (no deposit). */
+  pay_after_merchant_confirm_eligible?: boolean;
   purchase_credits?: {
     total: number;
     currency: string;

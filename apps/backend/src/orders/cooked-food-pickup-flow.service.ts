@@ -37,8 +37,8 @@ export type CookedFoodPickupOrderRow = {
 };
 
 /**
- * Cooked-food ASAP pickup: ready-in confirm helpers, auto-mark-ready and
- * unpaid auto-cancel scheduling.
+ * Cooked-food ASAP: ready-in confirm helpers, auto-mark-ready and
+ * unpaid auto-cancel scheduling (pickup cohort, or MoMo delivery pay-after).
  */
 @Injectable()
 export class CookedFoodPickupFlowService {
@@ -51,6 +51,7 @@ export class CookedFoodPickupFlowService {
     private readonly orderStatusService: OrderStatusService
   ) {}
 
+  /** Durable pickup flag — used for no-PIN complete and pickup-only UX. */
   isCookedFoodPickupCohort(order: {
     is_cooked_food_pickup?: boolean | null;
     fulfillment_method?: string | null;
@@ -58,6 +59,22 @@ export class CookedFoodPickupFlowService {
     return (
       order.is_cooked_food_pickup === true &&
       order.fulfillment_method === 'pickup'
+    );
+  }
+
+  /**
+   * Ready-in confirm + auto-mark-ready cohort: cooked-food pickup, or
+   * MoMo delivery with pay_after_merchant_confirm.
+   */
+  isCookedFoodAsapReadyInCohort(order: {
+    is_cooked_food_pickup?: boolean | null;
+    fulfillment_method?: string | null;
+    pay_after_merchant_confirm?: boolean | null;
+  }): boolean {
+    if (this.isCookedFoodPickupCohort(order)) return true;
+    return (
+      order.fulfillment_method === 'delivery' &&
+      order.pay_after_merchant_confirm === true
     );
   }
 
@@ -191,7 +208,7 @@ export class CookedFoodPickupFlowService {
     if (!order) {
       return { success: false, shouldMarkReady: false, reason: 'order_not_found' };
     }
-    if (!this.isCookedFoodPickupCohort(order)) {
+    if (!this.isCookedFoodAsapReadyInCohort(order)) {
       return { success: true, shouldMarkReady: false, reason: 'not_cohort' };
     }
     if (order.current_status !== 'preparing') {

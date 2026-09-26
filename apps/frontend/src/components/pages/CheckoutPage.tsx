@@ -47,6 +47,7 @@ import {
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
+import { CookedFoodClosedAlert } from '../common/CookedFoodClosedAlert';
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import {
   CheckoutTaxSummaryLines,
@@ -709,10 +710,13 @@ const CheckoutPage: React.FC = () => {
   // Store pickup is offered only when every seller group supports it.
   const preflightGroups = checkoutPreflight?.groups ?? [];
   const cookedFoodAsapOnly = checkoutPreflight?.schedule_allowed === false;
-  const cookedFoodClosedMessage =
+  const cookedFoodClosedBlocker =
     checkoutPreflight?.blocking_errors?.find(
       (b) => b.code === 'COOKED_FOOD_STORE_CLOSED'
-    )?.message ?? null;
+    ) ?? null;
+  const cookedFoodClosedMessage = cookedFoodClosedBlocker?.message ?? null;
+  const cookedFoodMoMoPayAfterConfirm =
+    checkoutPreflight?.pay_after_merchant_confirm_eligible === true;
 
   useEffect(() => {
     if (cookedFoodAsapOnly) setDeliveryWindow(null);
@@ -722,6 +726,7 @@ const CheckoutPage: React.FC = () => {
     preflightGroups.every((g) => g.pickup_eligible === true);
 
   const depositBreakdown = useMemo(() => {
+    if (cookedFoodMoMoPayAfterConfirm || cookedFoodAsapOnly) return null;
     const withDeposit = preflightGroups.filter(
       (g) => g.deposit_required && (Number(g.deposit_amount) || 0) > 0
     );
@@ -739,7 +744,7 @@ const CheckoutPage: React.FC = () => {
       0
     );
     return { depositAmount, amountDue };
-  }, [preflightGroups]);
+  }, [preflightGroups, cookedFoodMoMoPayAfterConfirm, cookedFoodAsapOnly]);
 
   // Reason-blind delivery availability (aggregated + per seller group).
   const deliveryUnavailable =
@@ -755,13 +760,17 @@ const CheckoutPage: React.FC = () => {
     [preflightGroups]
   );
 
-  // Pickup on the Mobile Money rail is paid on collection; Stripe pickup is
-  // authorized at checkout. The resolver decides — the UI just forwards it.
-  const paymentTiming: 'pay_now' | 'pay_at_pickup' =
-    fulfillment === 'pickup' &&
-    checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
-      ? 'pay_at_pickup'
-      : 'pay_now';
+  // MoMo cooked food: pay after kitchen confirm (flag). Delivery stores
+  // pay_now so agents get Complete+PIN once paid; pickup stays PAP.
+  const paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
+    cookedFoodMoMoPayAfterConfirm
+      ? fulfillment === 'pickup'
+        ? 'pay_at_pickup'
+        : 'pay_now'
+      : fulfillment === 'pickup' &&
+          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
+        ? 'pay_at_pickup'
+        : 'pay_now';
 
   // Only query fast delivery config when we have a real address selection.
   // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
@@ -1100,6 +1109,7 @@ const CheckoutPage: React.FC = () => {
             confirmationState: {
               orders,
               multipleOrders: orders.length > 1,
+              pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
             },
           })
         );
@@ -1111,6 +1121,7 @@ const CheckoutPage: React.FC = () => {
         state: {
           orders: orders,
           multipleOrders: orders.length > 1,
+          pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
         },
       });
     } catch (error) {
@@ -1388,20 +1399,19 @@ const CheckoutPage: React.FC = () => {
 
                   {/* Delivery Time Window — cooked food is ASAP-only */}
                   {cookedFoodAsapOnly ? (
-                    <Alert
-                      severity={cookedFoodClosedMessage ? 'error' : 'info'}
+                    <CookedFoodClosedAlert
                       sx={{ mb: 2 }}
-                    >
-                      {cookedFoodClosedMessage ??
-                        t(
-                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
-                            ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
-                            : 'orders.deliveryTimeWindow.cookedFoodAsapOnly',
-                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
-                            ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
-                            : 'We’ll start preparing when the kitchen confirms.'
-                        )}
-                    </Alert>
+                      message={cookedFoodClosedMessage}
+                      details={cookedFoodClosedBlocker?.details}
+                      openMessage={t(
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                          : 'orders.deliveryTimeWindow.cookedFoodAsapOnly',
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                          : 'We’ll start preparing when the kitchen confirms.'
+                      )}
+                    />
                   ) : (
                     <DeliveryTimeWindowSelector
                       countryCode={selectedAddress?.country || 'GA'}
@@ -1424,17 +1434,18 @@ const CheckoutPage: React.FC = () => {
                     )}
                   </Typography>
                   {cookedFoodAsapOnly ? (
-                    <Alert severity={cookedFoodClosedMessage ? 'error' : 'info'}>
-                      {cookedFoodClosedMessage ??
-                        t(
-                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
-                            ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
-                            : 'orders.deliveryTimeWindow.cookedFoodAsapOnlyPickup',
-                          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
-                            ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
-                            : 'Pick up as soon as the kitchen marks it ready.'
-                        )}
-                    </Alert>
+                    <CookedFoodClosedAlert
+                      message={cookedFoodClosedMessage}
+                      details={cookedFoodClosedBlocker?.details}
+                      openMessage={t(
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                          : 'orders.deliveryTimeWindow.cookedFoodAsapOnlyPickup',
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                          : 'Pick up as soon as the kitchen marks it ready.'
+                      )}
+                    />
                   ) : (
                     <DeliveryTimeWindowSelector
                       countryCode={preflightGroups[0]?.seller_country || 'GA'}

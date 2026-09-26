@@ -4401,6 +4401,7 @@
         "outForDeliveryPaymentPending": "The agent will send a payment request when they arrive. Keep your phone nearby to approve it."
       },
       "storeReadyPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+      "storeReadyCompletePaid": "When you arrive, tap Complete order so the merchant gets paid, then collect your order.",
       "storeReadySendPin": "Your order is ready at the store. Come during your pickup slot and send your PIN so the seller can confirm pickup.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
       "refundedNotice": "💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
@@ -5612,6 +5613,11 @@
       "cookedFoodAsapOnly": "We’ll start preparing when the kitchen confirms.",
       "cookedFoodAsapOnlyPickup": "Pick up as soon as the kitchen marks it ready.",
       "cookedFoodAsapPayAfterConfirm": "We’ll start preparing once the kitchen confirms and receives your payment.",
+      "kitchenClosed": {
+        "title": "Kitchen closed",
+        "nextOpening": "Next opening",
+        "availableHours": "Available hours"
+      },
       "pickupReviewSummary": "Pickup on {{date}} between {{start}} and {{end}}.",
       "flexible": "I'm flexible with timing",
       "alternativeDates": "Alternative dates",
@@ -5906,7 +5912,17 @@
       "startCookingTitle": "Start cooking",
       "startCookingOne": "Order #{{number}} is paid and ready for your kitchen.",
       "startCookingMany": "{{count}} cooked-food orders need your kitchen now.",
-      "openOrder": "Open order"
+      "openOrder": "Open order",
+      "payAfterConfirm": {
+        "chip": "Pay after kitchen confirms",
+        "title": "Pay after the kitchen confirms",
+        "bodyPickup": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
+        "bodyDelivery": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.",
+        "step1": "Your order has been sent to the kitchen.",
+        "step2": "When the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Approve it so they can start preparing.",
+        "step3Pickup": "When your order is ready, pick it up and tap Complete order in the app. Track progress in My Orders.",
+        "step3Delivery": "We’ll notify you as your order is prepared and delivered. Track progress in My Orders."
+      }
     },
     "phases": {
       "pay": "Payment needed",

@@ -30,6 +30,9 @@ export interface FirstOrderJourneyOrder {
   fulfillment_method?: string | null;
   payment_timing?: string | null;
   payment_status?: string | null;
+  payment_method?: string | null;
+  pay_after_merchant_confirm?: boolean | null;
+  is_cooked_food_pickup?: boolean | null;
   assigned_agent_id?: string | null;
   dispatch_exhausted_at?: string | null;
 }

@@ -3,15 +3,21 @@ import { FOOD_DEFAULT_INVENTORY_QUANTITY } from './food.constants';
 
 /**
  * True when stock counts, reserves, and decrements must be skipped.
- * Prefer items.is_cooked_food; category name is only a legacy fallback.
+ *
+ * Ignore stock when either:
+ * - `items.is_cooked_food` is true, or
+ * - the item is under Restaurant & Cooked Food (quantity is a visibility
+ *   sentinel of 1). An explicit `is_cooked_food: false` must not override the
+ *   food category — otherwise orders reserve that sentinel unit and the dish
+ *   disappears from catalogs (`available = quantity - reserved = 0`).
  */
 export function cookedFoodIgnoresStock(
   categoryName?: string | null,
   isCookedFood?: boolean | null
 ): boolean {
   if (isCookedFood === true) return true;
-  if (isCookedFood === false) return false;
-  return isFoodCategoryName(categoryName);
+  if (isFoodCategoryName(categoryName)) return true;
+  return false;
 }
 
 /**

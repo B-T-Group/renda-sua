@@ -44,9 +44,22 @@ export type CheckoutErrorCode =
   | 'MERCHANT_NOT_ACCEPTING_ORDERS'
   | string; // forward-compatible
 
+export interface CookedFoodStoreClosedHourSlot {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface CookedFoodStoreClosedDetails {
+  timezone: string;
+  next_opens_at: string | null;
+  hours: CookedFoodStoreClosedHourSlot[];
+}
+
 export interface CheckoutBlocker {
   code: CheckoutErrorCode;
   message: string;
+  details?: CookedFoodStoreClosedDetails;
 }
 
 export interface CheckoutItemLine {
@@ -103,6 +116,8 @@ export interface CheckoutGroup {
   schedule_required?: boolean;
   /** False when this group contains cooked food (ASAP-only). */
   schedule_allowed?: boolean;
+  /** True when every line is cooked food on MoMo — pay after kitchen confirm. */
+  pay_after_merchant_confirm_eligible?: boolean;
   /** MoMo deposit configuration (when available). */
   deposit_required?: boolean | null;
   deposit_amount?: number | null;
@@ -186,6 +201,8 @@ export interface ResolvedCheckoutConfig {
   schedule_required?: boolean;
   /** False when the cart includes cooked food (ASAP-only). */
   schedule_allowed?: boolean;
+  /** True when every group is cooked-food MoMo pay-after (no deposit). */
+  pay_after_merchant_confirm_eligible?: boolean;
   /** Diaspora checkout context (when cross-border or someone-else receiving). */
   diaspora?: CheckoutDiaspora | null;
   /** True when MoMo pay-now for delivery is enabled (default false; hide full pay-now). */

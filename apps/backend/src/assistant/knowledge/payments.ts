@@ -48,7 +48,7 @@ Acompte de réservation (mobile money, payer à la livraison ou au retrait) : un
 
 Pour le paiement à la livraison, le livreur envoie une demande de paiement mobile à la porte ; le client l'approuve sur son téléphone (il n'appuie pas sur Payer dans l'application). Pour un retrait en mobile money, le client appuie sur Payer dans l'application à son arrivée et approuve la demande sur son téléphone ; une fois payée, la commande est finalisée et il peut récupérer ses articles. Le commerçant peut aussi envoyer une demande s'il a besoin d'aide.
 
-Plats cuisinés à emporter (ASAP) : pas d'acompte de réservation en mobile money — le commerçant confirme avec un délai de préparation, puis le montant total est demandé après confirmation. Le client finalise le retrait dans l'application quand le plat est prêt (sans code PIN de retrait) ; le versement au commerçant suit cette finalisation.`
+Plats cuisinés (livraison ou retrait ASAP) : pas d'acompte de réservation en mobile money — le commerçant confirme avec un délai de préparation, puis le montant total est demandé après confirmation. Pour le retrait, le client finalise dans l'application quand le plat est prêt (sans code PIN) ; le versement au commerçant suit cette finalisation. Pour la livraison, un livreur prend en charge la commande une fois prête.`
       : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada, the United States, and the Philippines.
 
 - Cameroon: MTN Mobile Money, Orange Money
@@ -61,7 +61,7 @@ Reservation deposit (mobile money pay-at-delivery or pay-at-pickup): a deposit i
 
 For pay-at-delivery, the courier sends a mobile payment request at the door; the customer approves it on their phone (they do not tap Pay in the app). For mobile-money pickup, the customer taps Pay in the app when they arrive and approves the request on their phone; after approval the order is complete and they can collect it. The merchant can also send a payment request if they need help.
 
-Cooked-food ASAP pickup (restaurant dishes): there is no reservation deposit on mobile money — the merchant confirms with a ready-in time, then the full amount is requested after confirm (pay after merchant confirm). The client completes pickup in the app when food is ready (no pickup PIN); payout to the merchant follows that completion.`;
+Cooked-food ASAP delivery or pickup (restaurant dishes): there is no reservation deposit on mobile money — the merchant confirms with a ready-in time, then the full amount is requested after confirm (pay after merchant confirm). For pickup, the client completes the order in the app when food is ready (no pickup PIN); payout to the merchant follows that completion. For delivery, a courier takes the order once it is ready.`;
 
   const credits =
     locale === 'fr'

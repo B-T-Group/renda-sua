@@ -52,10 +52,17 @@ import {
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
-import { buildCookedFoodStoreClosedMessage, collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
+import {
+  buildCookedFoodStoreClosedDetails,
+  buildCookedFoodStoreClosedMessage,
+  collectCookedFoodSlots,
+} from '../food/cooked-food-closed-message.util';
 import type { FoodAvailabilitySlot } from '../food/food-availability.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
-import { anyLineIsCookedFood, isCookedFoodPickupOrder } from '../food/cooked-food-flag.util';
+import {
+  anyLineIsCookedFood,
+  isCookedFoodFulfillmentOrder,
+} from '../food/cooked-food-flag.util';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 
@@ -781,18 +788,28 @@ export class CheckoutPreflightService {
         (allowedPaymentTimings.includes('pay_at_delivery') ? 'pay_at_delivery' :
          allowedPaymentTimings.includes('pay_at_pickup') ? 'pay_at_pickup' : 'pay_now');
 
-      // Cooked-food MoMo pickup collects full payment after merchant confirm — no deposit.
-      const groupIsCookedFoodPayAfter =
-        isCookedFoodPickupOrder({
+      // Cooked-food delivery/pickup: no reservation deposit (pay after confirm or full MoMo later).
+      const groupIsCookedFood =
+        isCookedFoodFulfillmentOrder({
           fulfillmentMethod: fulfillment,
           itemFlags: group.inventoryRows.map(
-            (row: { item?: { is_cooked_food?: boolean | null } }) => row.item
+            (row: {
+              item?: {
+                is_cooked_food?: boolean | null;
+                item_sub_category?: {
+                  item_category?: { name?: string | null } | null;
+                } | null;
+              };
+            }) => row.item
           ),
-        }) && rail === 'mobile_money';
+        });
+
+      const groupIsCookedFoodPayAfter =
+        groupIsCookedFood && rail === 'mobile_money';
 
       if (
         rail === 'mobile_money' &&
-        !groupIsCookedFoodPayAfter &&
+        !groupIsCookedFood &&
         (requestedOrAvailableTiming === 'pay_at_delivery' ||
           requestedOrAvailableTiming === 'pay_at_pickup')
       ) {
@@ -876,6 +893,7 @@ export class CheckoutPreflightService {
         // Cooked food cannot be scheduled; never force a future slot.
         schedule_required: groupHasCookedFood ? false : asap.scheduleRequired,
         schedule_allowed: !groupHasCookedFood,
+        pay_after_merchant_confirm_eligible: groupIsCookedFoodPayAfter,
       });
     }
 
@@ -975,14 +993,16 @@ export class CheckoutPreflightService {
     for (const group of asapGroups) {
       if (group.schedule_allowed === false && group.asap_available === false) {
         const meta = cookedFoodClosedMeta.get(group.business_id);
+        const closedParams = {
+          opensAt: group.opens_at,
+          timezone: meta?.timezone ?? 'UTC',
+          operatingHours: meta?.operatingHours,
+          foodSlots: meta?.foodSlots,
+        };
         blockers.push({
           code: 'COOKED_FOOD_STORE_CLOSED',
-          message: buildCookedFoodStoreClosedMessage({
-            opensAt: group.opens_at,
-            timezone: meta?.timezone ?? 'UTC',
-            operatingHours: meta?.operatingHours,
-            foodSlots: meta?.foodSlots,
-          }),
+          message: buildCookedFoodStoreClosedMessage(closedParams),
+          details: buildCookedFoodStoreClosedDetails(closedParams),
         });
         break;
       }
@@ -1037,6 +1057,9 @@ export class CheckoutPreflightService {
       estimated_fulfill_by: asapGroups[0]?.estimated_fulfill_by,
       schedule_required: scheduleRequired,
       schedule_allowed: scheduleAllowed,
+      pay_after_merchant_confirm_eligible:
+        groups.length > 0 &&
+        groups.every((g) => g.pay_after_merchant_confirm_eligible === true),
       diaspora: this.buildDiasporaBlock({
         dto,
         isDiaspora,

@@ -1,5 +1,9 @@
 import type { Order } from '../types/agent';
 import { isStorePickupOrder } from './businessOrderListDisplay';
+import {
+  resolvePickupReadyCopyMode,
+  type PickupReadyCopyMode,
+} from './cookedFoodOrder';
 import { isCarrierShipping } from './fulfillmentMethod';
 
 export type JourneyTone = 'info' | 'success' | 'warning' | 'error';
@@ -157,13 +161,20 @@ function readyDeliveryWaiting(): ClientOrderJourney {
 }
 
 function pickupReadyNextCopy(
-  payAtPickup: boolean
+  mode: PickupReadyCopyMode
 ): { key: string; defaultValue: string } {
-  if (payAtPickup) {
+  if (mode === 'pay_at_pickup') {
     return {
       key: 'client.orderJourney.readyPickup.nextPayAtPickup',
       defaultValue:
         'When you arrive, tap Complete order and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.',
+    };
+  }
+  if (mode === 'complete_paid') {
+    return {
+      key: 'client.orderJourney.readyPickup.nextCompletePaid',
+      defaultValue:
+        'When you arrive, tap Complete order so the merchant gets paid, then collect your order.',
     };
   }
   return {
@@ -173,8 +184,8 @@ function pickupReadyNextCopy(
   };
 }
 
-function readyPickupStage(payAtPickup: boolean): ClientOrderJourney {
-  const next = pickupReadyNextCopy(payAtPickup);
+function readyPickupStage(mode: PickupReadyCopyMode): ClientOrderJourney {
+  const next = pickupReadyNextCopy(mode);
   return stage({
     stageId: 'ready_pickup',
     titleKey: 'client.orderJourney.readyPickup.title',
@@ -478,6 +489,12 @@ function shippingJourney(status: string): ClientOrderJourney {
 }
 
 function isPinEligible(order: Order): boolean {
+  if (
+    order.pay_after_merchant_confirm === true &&
+    order.fulfillment_method !== 'pickup'
+  ) {
+    return true;
+  }
   if (order.payment_timing === 'pay_at_delivery') return false;
   if (order.payment_timing === 'pay_at_pickup') return false;
   if (order.payment_method === 'pay_on_delivery') return false;
@@ -523,7 +540,7 @@ export function getClientOrderJourney(order: Order): ClientOrderJourney {
       return preparingStage(pickup);
     case 'ready_for_pickup':
       if (pickup) {
-        return readyPickupStage(order.payment_timing === 'pay_at_pickup');
+        return readyPickupStage(resolvePickupReadyCopyMode(order));
       }
       if (hasAgent) return claimedStage(name);
       return readyDeliveryWaiting();

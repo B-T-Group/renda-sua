@@ -58,6 +58,24 @@ describe('buildClientHomeOrderCardModel', () => {
     expect(model.ctaDefault).toBe('Complete order');
   });
 
+  it('explains Complete for already-paid cooked food when ready', () => {
+    const model = buildClientHomeOrderCardModel(
+      order({
+        fulfillment_method: 'pickup',
+        current_status: 'ready_for_pickup',
+        payment_timing: 'pay_at_pickup',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+        is_cooked_food_pickup: true,
+      })
+    );
+    expect(model.subtitleKey).toBe(
+      'client.orderJourney.readyPickup.nextCompletePaid'
+    );
+    expect(model.subtitleDefault).toMatch(/merchant gets paid/i);
+    expect(model.primaryActionId).toBe('complete');
+  });
+
   it('uses track CTA for in-transit delivery', () => {
     const model = buildClientHomeOrderCardModel(
       order({

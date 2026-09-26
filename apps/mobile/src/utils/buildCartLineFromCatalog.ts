@@ -160,6 +160,7 @@ export function buildCartLineFromCatalog(
       maxOrderQuantity: maxQ,
       minOrderQuantity: minQ,
       payOnDeliveryEnabled: Boolean(item.item.pay_on_delivery_enabled),
+      isCookedFood: isFoodCatalogItem(item),
       merchantCanAcceptOrders: merchantCanAcceptOrders(
         item.business_location.business
       ),

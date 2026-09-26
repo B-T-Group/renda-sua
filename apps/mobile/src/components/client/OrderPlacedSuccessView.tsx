@@ -220,10 +220,10 @@ function PayAtDeliveryNextSteps() {
   );
 }
 
-function PayAtPickupNextSteps({
-  cookedFoodPayAfterConfirm,
+function PayAfterKitchenConfirmNextSteps({
+  isPickup,
 }: {
-  cookedFoodPayAfterConfirm?: boolean;
+  isPickup: boolean;
 }) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
@@ -240,23 +240,50 @@ function PayAtPickupNextSteps({
     >
       <Card.Content style={{ paddingVertical: spacing.md }}>
         <Text variant="titleMedium" style={{ color: colors.info.dark, marginBottom: spacing.sm }}>
-          {cookedFoodPayAfterConfirm
-            ? t(
-                'client.placeOrder.successScreen.cookedFoodPayAfterConfirmTitle',
-                'Pay after the kitchen confirms'
-              )
-            : t('client.placeOrder.successScreen.payAtPickupTitle', 'Pay when you pick up')}
+          {t(
+            'client.placeOrder.successScreen.cookedFoodPayAfterConfirmTitle',
+            'Pay after the kitchen confirms'
+          )}
         </Text>
         <Text variant="bodyMedium" style={{ color: colors.info.dark, lineHeight: 22 }}>
-          {cookedFoodPayAfterConfirm
+          {isPickup
             ? t(
-                'client.placeOrder.successScreen.cookedFoodPayAfterConfirmBody',
+                'client.placeOrder.successScreen.cookedFoodPayAfterConfirmBodyPickup',
                 'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.'
               )
             : t(
-                'client.placeOrder.successScreen.payAtPickupBody',
-                'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
+                'client.placeOrder.successScreen.cookedFoodPayAfterConfirmBodyDelivery',
+                'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.'
               )}
+        </Text>
+      </Card.Content>
+    </Card>
+  );
+}
+
+function PayAtPickupNextSteps() {
+  const { t } = useTranslation();
+  const { colors, spacing, borderRadius } = useTheme();
+  return (
+    <Card
+      mode="outlined"
+      style={{
+        marginBottom: spacing.md,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.info.main + '55',
+        backgroundColor: colors.info.main + '12',
+      }}
+    >
+      <Card.Content style={{ paddingVertical: spacing.md }}>
+        <Text variant="titleMedium" style={{ color: colors.info.dark, marginBottom: spacing.sm }}>
+          {t('client.placeOrder.successScreen.payAtPickupTitle', 'Pay when you pick up')}
+        </Text>
+        <Text variant="bodyMedium" style={{ color: colors.info.dark, lineHeight: 22 }}>
+          {t(
+            'client.placeOrder.successScreen.payAtPickupBody',
+            'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
+          )}
         </Text>
       </Card.Content>
     </Card>
@@ -270,6 +297,7 @@ function paymentChipLabel(
     cardAuthorized?: boolean;
     paymentCompleted?: boolean;
     paymentTiming: OrderPlacedSuccessParams['paymentTiming'];
+    cookedFoodPayAfterConfirm?: boolean;
   }
 ) {
   if (params.depositConfirmed) {
@@ -280,6 +308,12 @@ function paymentChipLabel(
   }
   if (params.paymentCompleted) {
     return t('client.placeOrder.successScreen.chipPaid', 'Order confirmed and paid');
+  }
+  if (params.cookedFoodPayAfterConfirm) {
+    return t(
+      'client.placeOrder.successScreen.chipCookedFoodPayAfterConfirm',
+      'Pay after kitchen confirms'
+    );
   }
   if (params.paymentTiming === 'pay_at_delivery') {
     return t('client.placeOrder.successScreen.chipPayAtDelivery', 'Pay at delivery');
@@ -306,12 +340,13 @@ function SuccessNextSteps(props: OrderPlacedSuccessViewProps & { isPickup: boole
   if (paymentCompleted) return <PaidNextSteps />;
   if (cardAuthorized) return <CardAuthorizedNextSteps isPickup={isPickup} />;
   if (isStripeRail) return <StripeNextSteps />;
+  if (cookedFoodPayAfterConfirm) {
+    return <PayAfterKitchenConfirmNextSteps isPickup={isPickup} />;
+  }
   if (paymentTiming === 'pay_now') return <PayNowNextSteps />;
   if (paymentTiming === 'pay_at_delivery') return <PayAtDeliveryNextSteps />;
   if (paymentTiming === 'pay_at_pickup') {
-    return (
-      <PayAtPickupNextSteps cookedFoodPayAfterConfirm={cookedFoodPayAfterConfirm} />
-    );
+    return <PayAtPickupNextSteps />;
   }
   return null;
 }
@@ -327,6 +362,7 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
     fulfillment,
     depositConfirmed,
     remainingAmountLabel,
+    cookedFoodPayAfterConfirm,
     primaryAction,
     secondaryAction,
   } = props;
@@ -424,6 +460,7 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
                 cardAuthorized,
                 paymentCompleted,
                 paymentTiming,
+                cookedFoodPayAfterConfirm,
               })}
             </Chip>
             <Chip icon="clipboard-text-outline">

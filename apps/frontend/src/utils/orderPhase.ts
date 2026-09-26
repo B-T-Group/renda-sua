@@ -102,6 +102,10 @@ function isPickup(input: OrderPhaseInput): boolean {
 }
 
 function isPinEligible(input: OrderPhaseInput): boolean {
+  // Pay-after MoMo delivery is prepaid once paid; PIN like pay_now.
+  if (input.payAfterMerchantConfirm === true && !isPickup(input)) {
+    return true;
+  }
   if (input.paymentTiming === 'pay_at_delivery') return false;
   if (input.paymentTiming === 'pay_at_pickup') return false;
   if (input.paymentMethod === 'pay_on_delivery') return false;
@@ -135,7 +139,6 @@ function isCookedFoodPickup(input: OrderPhaseInput): boolean {
 }
 
 function isCookedFoodAwaitingPayment(input: OrderPhaseInput): boolean {
-  if (!isCookedFoodPickup(input)) return false;
   if (input.payAfterMerchantConfirm !== true) return false;
   const payment = input.paymentStatus;
   return payment !== 'paid' && payment !== 'authorized';

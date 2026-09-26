@@ -20,30 +20,74 @@ function lineCookedFlags(order: CookedFoodOrderLike) {
   }));
 }
 
-export function isAsapPickupOrder(order: CookedFoodOrderLike): boolean {
-  if (order.fulfillment_method !== 'pickup') return false;
+function isAsapOrder(order: CookedFoodOrderLike): boolean {
   return (
     order.fulfillment_timing === 'asap' ||
     (order.delivery_time_windows?.length ?? 0) === 0
   );
 }
 
-/** Merchant confirm uses ready-in flow (ASAP cooked-food pickup only). */
+export function isAsapPickupOrder(order: CookedFoodOrderLike): boolean {
+  if (order.fulfillment_method !== 'pickup') return false;
+  return isAsapOrder(order);
+}
+
+function isAsapDeliveryOrder(order: CookedFoodOrderLike): boolean {
+  if (order.fulfillment_method !== 'delivery') return false;
+  return isAsapOrder(order);
+}
+
+/**
+ * Merchant confirm uses ready-in flow for ASAP cooked-food pickup, or ASAP
+ * delivery with pay_after_merchant_confirm (MoMo).
+ */
 export function shouldUseCookedFoodConfirmModal(order: CookedFoodOrderLike): boolean {
-  if (!isAsapPickupOrder(order)) return false;
-  if (order.is_cooked_food_pickup === true) return true;
-  return everyLineIsCookedFood(lineCookedFlags(order));
+  if (isAsapPickupOrder(order)) {
+    if (order.is_cooked_food_pickup === true) return true;
+    return everyLineIsCookedFood(lineCookedFlags(order));
+  }
+  if (isAsapDeliveryOrder(order) && order.pay_after_merchant_confirm === true) {
+    return true;
+  }
+  return false;
 }
 
 export function isCookedFoodPickupFlow(order: CookedFoodOrderLike): boolean {
   return shouldUseCookedFoodConfirmModal(order);
 }
 
+export type PickupReadyCopyMode = 'pay_at_pickup' | 'complete_paid' | 'pin';
+
+/**
+ * Ready-for-pickup client copy: unpaid pay-at-pickup → Pay; already-paid cooked /
+ * pay-after (or paid pay-at-pickup) → Complete so merchant is paid; else PIN.
+ */
+export function resolvePickupReadyCopyMode(order: {
+  payment_timing?: string | null;
+  payment_status?: string | null;
+  pay_after_merchant_confirm?: boolean | null;
+  is_cooked_food_pickup?: boolean | null;
+}): PickupReadyCopyMode {
+  const unpaidPayAtPickup =
+    order.payment_timing === 'pay_at_pickup' &&
+    order.payment_status !== 'paid' &&
+    order.payment_status !== 'authorized';
+  if (unpaidPayAtPickup) return 'pay_at_pickup';
+  if (
+    order.is_cooked_food_pickup === true ||
+    order.pay_after_merchant_confirm === true ||
+    order.payment_timing === 'pay_at_pickup'
+  ) {
+    return 'complete_paid';
+  }
+  return 'pin';
+}
+
 export function isCookedFoodAwaitingClientPayment(
   order: CookedFoodOrderLike
 ): boolean {
-  if (!isCookedFoodPickupFlow(order)) return false;
   if (order.pay_after_merchant_confirm !== true) return false;
+  if (!shouldUseCookedFoodConfirmModal(order)) return false;
   const payment = order.payment_status;
   return payment !== 'paid' && payment !== 'authorized';
 }
@@ -51,7 +95,7 @@ export function isCookedFoodAwaitingClientPayment(
 export function isCookedFoodStartCookingPriority(
   order: CookedFoodOrderLike
 ): boolean {
-  if (!isCookedFoodPickupFlow(order)) return false;
+  if (!shouldUseCookedFoodConfirmModal(order)) return false;
   const status = order.current_status ?? '';
   if (status === 'preparing') return true;
   if (status !== 'confirmed') return false;

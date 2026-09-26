@@ -12,11 +12,14 @@ export function isCookedFoodItem(item: {
 }
 
 /** True when every line is cooked food (empty list is false). */
-export function everyLineIsCookedFood(
-  lines: Array<{ is_cooked_food?: boolean | null } | null | undefined>
-): boolean {
+export function everyLineIsCookedFood(lines: CookedFoodLine[]): boolean {
   if (!lines.length) return false;
-  return lines.every((line) => isCookedFoodItem(line));
+  return lines.every((line) => {
+    if (!line) return false;
+    if (line.is_cooked_food === true) return true;
+    if (line.is_cooked_food === false) return false;
+    return isFoodCategoryName(line.item_sub_category?.item_category?.name);
+  });
 }
 
 type CookedFoodLine = {
@@ -40,8 +43,22 @@ export function anyLineIsCookedFood(lines: CookedFoodLine[]): boolean {
 }
 
 /**
+ * Checkout snapshot: delivery or pickup where every catalog line is cooked food.
+ * Used for MoMo pay-after-merchant-confirm and to skip reservation deposits.
+ */
+export function isCookedFoodFulfillmentOrder(params: {
+  fulfillmentMethod?: string | null;
+  itemFlags: Array<{ is_cooked_food?: boolean | null } | null | undefined>;
+}): boolean {
+  const method = params.fulfillmentMethod;
+  if (method !== 'pickup' && method !== 'delivery') return false;
+  return everyLineIsCookedFood(params.itemFlags);
+}
+
+/**
  * Checkout snapshot: ASAP pickup where every catalog line is cooked food.
  * Callers pass fulfillment_method === 'pickup' and the item flags from the cart.
+ * Keeps is_cooked_food_pickup / no-PIN complete path pickup-only.
  */
 export function isCookedFoodPickupOrder(params: {
   fulfillmentMethod?: string | null;

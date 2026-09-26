@@ -3539,7 +3539,8 @@
         "now": "Votre commande est prête en magasin.",
         "next": "Rendez-vous au commerce et appuyez sur Terminer la commande lorsque vous la récupérez.",
         "nextPin": "Rendez-vous au commerce et appuyez sur Terminer la commande lorsque vous la récupérez.",
-        "nextPayAtPickup": "À votre arrivée, appuyez sur Terminer la commande et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande."
+        "nextPayAtPickup": "À votre arrivée, appuyez sur Terminer la commande et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+        "nextCompletePaid": "À votre arrivée, appuyez sur Terminer la commande pour que le commerçant soit payé, puis récupérez votre commande."
       },
       "shippingPending": {
         "title": "Commande reçue",
@@ -3674,7 +3675,8 @@
         "readyForPickup": {
           "title": "Prête en magasin",
           "whatHappens": "Rendez-vous au magasin et partagez votre code PIN de retrait à l’arrivée.",
-          "whatHappensPayAtPickup": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande."
+          "whatHappensPayAtPickup": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+          "whatHappensCompletePaid": "À votre arrivée, appuyez sur Terminer la commande pour que le commerçant soit payé, puis récupérez votre commande."
         },
         "pickedUp": {
           "title": "Récupérée",
@@ -3746,6 +3748,11 @@
       "addNotes": "Ajouter des instructions particulières",
       "notesPlaceholder": "Allergies, code d’accès, niveau d’épices…",
       "submit": "Passer la commande",
+      "kitchenClosed": {
+        "title": "Cuisine fermée",
+        "nextOpening": "Prochaine ouverture",
+        "availableHours": "Horaires disponibles"
+      },
       "success": "Commande {{number}} enregistrée.",
       "error": "Impossible de passer la commande.",
       "merchantClosed": "Ce marchand est actuellement fermé. Choisissez un horaire de livraison ou de retrait lorsqu'il est ouvert.",
@@ -3796,10 +3803,7 @@
           "unsupportedCountry": "Choisissez le Cameroun ou le Gabon comme pays et saisissez un numéro Mobile Money valide."
         },
         "mobileMoneyTitle": "Paiement Mobile Money",
-        "hintPayNow": "Une demande de paiement sera envoyée à votre numéro de téléphone enregistré. Veuillez l'approuver pour terminer votre commande.",
-        "hintPayAtDelivery": "Lorsque l'agent arrive, il enverra une demande de paiement mobile. Gardez votre téléphone à portée de main pour l'approuver.",
-        "hintPickup": "Payez au magasin lors du retrait. Quand la commande est prête, appuyez sur Payer dans l'application et approuvez la demande sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
-        "hintCookedFoodPayAfterConfirm": "Après confirmation de la cuisine, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Une fois approuvée, ils commencent à préparer votre commande.",
+        "addPhoneRequired": "Ajoutez un numéro pour recevoir les demandes de paiement Mobile Money.",
         "paymentPhoneLabel": "Numéro de téléphone pour le paiement",
         "useDifferentPhone": "Utiliser un autre numéro",
         "overrideLabel": "Numéro pour le paiement",
@@ -3809,7 +3813,6 @@
         "unsupportedCountry": "Ce numéro n'est pas d'un pays pris en charge. Utilisez un numéro du Cameroun (+237) ou du Gabon (+241), ou activez Utiliser un autre numéro.",
         "cardTitle": "Payez en toute sécurité par carte",
         "cardDescription": "Lorsque vous passez votre commande, une fenêtre de paiement sécurisée s'ouvre pour payer par carte, Apple Pay ou Google Pay.",
-        "cardPickupDescription": "Votre carte est autorisée maintenant et débitée lorsque vous retirez votre commande en magasin.",
         "paymentCancelled": "Paiement annulé. Votre commande est en attente de paiement — vous pouvez la régler depuis vos commandes.",
         "paymentFailed": "Le paiement n'a pas pu être effectué. Veuillez réessayer.",
         "stripeUnavailable": "Le paiement par carte n'est pas disponible pour ce vendeur pour le moment. Veuillez contacter le support."
@@ -3820,6 +3823,7 @@
         "shippingFee": "Frais d’expédition",
         "chooseFulfillment": "Choisissez la livraison ou le retrait",
         "deliveryFeeWaived": "Offerts",
+        "deliveryFeePending": "Ajouter une adresse",
         "deliveryFeeAddressRequired": "Choisissez une adresse de livraison pour voir les frais.",
         "deliveryFeeError": "Calcul impossible",
         "firstDeliveryDiscount": "Réduction première livraison",
@@ -3858,6 +3862,7 @@
         "paidBody": "Votre paiement a été effectué avec succès. Aucune autre action n'est requise.",
         "chipPayAtDelivery": "Paiement à la livraison",
         "chipPayAtPickup": "Paiement au retrait",
+        "chipCookedFoodPayAfterConfirm": "Paiement après confirmation cuisine",
         "payNowTitle": "Confirmation de paiement requise",
         "payNowBody": "Une demande de paiement a été envoyée sur votre téléphone mobile. Veuillez confirmer le paiement pour terminer votre commande.",
         "payNowDeadline": "Votre commande sera transmise au marchand dans les 24 heures une fois le paiement confirmé.",
@@ -3867,6 +3872,8 @@
         "payAtPickupBody": "Payez au magasin lors du retrait. Quand la commande est prête, appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
         "cookedFoodPayAfterConfirmTitle": "Paiement après confirmation de la cuisine",
         "cookedFoodPayAfterConfirmBody": "Après confirmation de la cuisine, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Une fois approuvée, ils commencent à préparer votre commande. Appuyez sur Terminer la commande lorsque vous la récupérez.",
+        "cookedFoodPayAfterConfirmBodyPickup": "Après confirmation de la cuisine, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Une fois approuvée, ils commencent à préparer votre commande. Appuyez sur Terminer la commande lorsque vous la récupérez.",
+        "cookedFoodPayAfterConfirmBodyDelivery": "Après confirmation de la cuisine, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Une fois approuvée, ils commencent à préparer votre commande pour la livraison.",
         "viewOrders": "Mes commandes",
         "goToOrder": "Aller à la commande",
         "goToHome": "Aller à l'accueil",

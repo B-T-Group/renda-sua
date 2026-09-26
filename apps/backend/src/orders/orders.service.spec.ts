@@ -421,6 +421,7 @@ describe('OrdersService', () => {
             .CookedFoodPickupFlowService,
           useValue: {
             isCookedFoodPickupCohort: jest.fn().mockReturnValue(false),
+            isCookedFoodAsapReadyInCohort: jest.fn().mockReturnValue(false),
             isPayAfterMerchantConfirm: jest.fn().mockReturnValue(false),
             normalizeReadyInMinutes: jest.fn((n: number) => n ?? 30),
             writeEstimatedPrepMinutes: jest.fn(),

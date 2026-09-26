@@ -14,9 +14,14 @@ export function clientShowAgentLocation(status: string | undefined, fulfillmentM
 export function clientShowDeliveryPin(order: Order): boolean {
   if (isCarrierShipping(order.fulfillment_method)) return false;
   if (isStorePickupOrder(order)) return false;
-  if (order.payment_timing === 'pay_at_delivery') return false;
-  if (order.payment_method === 'pay_on_delivery') return false;
-  if (order.payment_timing === 'pay_at_pickup') return false;
+  const payAfterDelivery =
+    order.pay_after_merchant_confirm === true &&
+    order.fulfillment_method !== 'pickup';
+  if (!payAfterDelivery) {
+    if (order.payment_timing === 'pay_at_delivery') return false;
+    if (order.payment_method === 'pay_on_delivery') return false;
+    if (order.payment_timing === 'pay_at_pickup') return false;
+  }
 
   const status = order.current_status || '';
   return PIN_STATUSES.includes(status);

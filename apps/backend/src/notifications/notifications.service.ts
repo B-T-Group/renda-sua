@@ -3658,8 +3658,8 @@ export class NotificationsService {
   ): { title: string; body: string } {
     if (
       status === 'confirmed' &&
-      data?.isCookedFoodPickup &&
-      data.readyInMinutes
+      data?.readyInMinutes &&
+      (data.isCookedFoodPickup || data.payAfterMerchantConfirm)
     ) {
       return this.cookedFoodConfirmedPush(orderNumber, data);
     }
@@ -3698,7 +3698,8 @@ export class NotificationsService {
       confirmed: {
         title: 'Order confirmed',
         body:
-          data?.isCookedFoodPickup && data.readyInMinutes
+          data?.readyInMinutes &&
+          (data?.isCookedFoodPickup || data?.payAfterMerchantConfirm)
             ? this.cookedFoodConfirmedPushBody(orderNumber, data)
             : data?.fulfillmentMethod === 'pickup' && data.estimatedDeliveryTime
               ? `Order ${orderNumber} confirmed. Pickup: ${data.estimatedDeliveryTime}.`

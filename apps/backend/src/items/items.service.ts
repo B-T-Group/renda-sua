@@ -171,7 +171,7 @@ export class ItemsService {
     );
     const isCookedFood =
       typeof mutable.is_cooked_food === 'boolean'
-        ? mutable.is_cooked_food
+        ? mutable.is_cooked_food || cookedFoodIgnoresStock(categoryName)
         : cookedFoodIgnoresStock(categoryName);
     const itemData = {
       ...mutable,
@@ -640,7 +640,7 @@ export class ItemsService {
     const explicitFlag = withDescription.is_cooked_food;
     const hasExplicitFlag = typeof explicitFlag === 'boolean';
     const isCookedFood = hasExplicitFlag
-      ? explicitFlag
+      ? explicitFlag || cookedFoodIgnoresStock(categoryName)
       : this.resolveExistingCookedFoodFlag(existing, categoryName);
 
     if (!hasExplicitFlag) {
@@ -650,7 +650,7 @@ export class ItemsService {
     if (cookedFoodIgnoresStock(categoryName, isCookedFood)) {
       return {
         ...withDescription,
-        ...(hasExplicitFlag ? { is_cooked_food: true } : {}),
+        is_cooked_food: true,
         min_order_quantity: 1,
       };
     }

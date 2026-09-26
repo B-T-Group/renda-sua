@@ -11,8 +11,9 @@ import {
 } from './orderListGrouping';
 import { businessOrderUnitsCount } from './businessOrderListDisplay';
 import { formatCurrency } from './formatters';
+import { resolveOrderPricing } from './orderAmounts';
 import type { BusinessOrder } from '../types/business/orders';
-
+import type { Order } from '../types/agent';
 export type ActiveOrderCardUrgency = 'warning' | 'primary' | 'info' | 'neutral';
 
 export type ActiveOrderCardDestination =
@@ -305,7 +306,7 @@ export function buildActiveOrderCardModel(
     order.acceptance_state
   );
   const itemCount = businessOrderUnitsCount(order);
-  const total = order.total_amount ?? 0;
+  const pricing = resolveOrderPricing(order as Order);
   const currency = order.currency || 'XAF';
 
   return {
@@ -313,7 +314,7 @@ export function buildActiveOrderCardModel(
     orderNumber: order.order_number,
     customerName: customerName(order),
     itemCount,
-    totalLabel: formatCurrency(total, currency, locale),
+    totalLabel: formatCurrency(pricing.total, currency, locale),
     status,
     phase: phaseInfo.phase,
     primaryActionId: phaseInfo.primaryActionId,

@@ -68,6 +68,45 @@ describe('CookedFoodPickupFlowService', () => {
     });
   });
 
+  it('auto-marks delivery pay-after when preparing and paid', async () => {
+    const { service } = makeService({
+      order: {
+        id: 'o1',
+        is_cooked_food_pickup: false,
+        fulfillment_method: 'delivery',
+        pay_after_merchant_confirm: true,
+        current_status: 'preparing',
+        payment_status: 'paid',
+      },
+    });
+    await expect(service.shouldAutoMarkReady('o1')).resolves.toEqual({
+      success: true,
+      shouldMarkReady: true,
+    });
+  });
+
+  it('ready-in cohort includes delivery pay-after and pickup flag', () => {
+    const { service } = makeService();
+    expect(
+      service.isCookedFoodAsapReadyInCohort({
+        is_cooked_food_pickup: true,
+        fulfillment_method: 'pickup',
+      })
+    ).toBe(true);
+    expect(
+      service.isCookedFoodAsapReadyInCohort({
+        fulfillment_method: 'delivery',
+        pay_after_merchant_confirm: true,
+      })
+    ).toBe(true);
+    expect(
+      service.isCookedFoodAsapReadyInCohort({
+        fulfillment_method: 'delivery',
+        pay_after_merchant_confirm: false,
+      })
+    ).toBe(false);
+  });
+
   it('skips auto-mark when unpaid', async () => {
     const { service } = makeService({
       order: {

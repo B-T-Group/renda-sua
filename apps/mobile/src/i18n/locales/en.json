@@ -3633,7 +3633,8 @@
         "now": "Your order is ready at the store.",
         "next": "Head to the store and tap Complete order when you collect it.",
         "nextPin": "Head to the store and tap Complete order when you collect it.",
-        "nextPayAtPickup": "When you arrive, tap Complete order and approve the mobile money request on your phone. The store will see the payment, then you can collect your order."
+        "nextPayAtPickup": "When you arrive, tap Complete order and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+        "nextCompletePaid": "When you arrive, tap Complete order so the merchant gets paid, then collect your order."
       },
       "shippingPending": {
         "title": "Order received",
@@ -3768,7 +3769,8 @@
         "readyForPickup": {
           "title": "Ready at the store",
           "whatHappens": "Head to the store and share your pickup PIN when you arrive.",
-          "whatHappensPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order."
+          "whatHappensPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+          "whatHappensCompletePaid": "When you arrive, tap Complete order so the merchant gets paid, then collect your order."
         },
         "pickedUp": {
           "title": "Picked up",
@@ -3840,6 +3842,11 @@
       "addNotes": "Add special instructions",
       "notesPlaceholder": "Allergies, gate code, spice level…",
       "submit": "Place order",
+      "kitchenClosed": {
+        "title": "Kitchen closed",
+        "nextOpening": "Next opening",
+        "availableHours": "Available hours"
+      },
       "success": "Order {{number}} placed.",
       "error": "Could not place order.",
       "merchantClosed": "This merchant is closed right now. Choose a delivery or pickup time when they are open.",
@@ -3890,10 +3897,7 @@
           "unsupportedCountry": "Select Cameroon or Gabon as the country and enter a valid Mobile Money number."
         },
         "mobileMoneyTitle": "Mobile Money payment",
-        "hintPayNow": "A payment request will be sent to your registered phone number. Please approve it to complete your order.",
-        "hintPayAtDelivery": "When the agent arrives, they will send a mobile payment request. Keep your phone nearby to approve it.",
-        "hintPickup": "Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.",
-        "hintCookedFoodPayAfterConfirm": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.",
+        "addPhoneRequired": "Add a phone number to receive Mobile Money payment requests.",
         "paymentPhoneLabel": "Payment phone number",
         "useDifferentPhone": "Use a different phone number",
         "overrideLabel": "Phone number for payment",
@@ -3903,7 +3907,6 @@
         "unsupportedCountry": "This number is not from a supported country. Use a Cameroon (+237) or Gabon (+241) number, or tap Use a different phone number.",
         "cardTitle": "Pay securely by card",
         "cardDescription": "When you place your order, a secure payment sheet will open so you can pay by card, Apple Pay, or Google Pay.",
-        "cardPickupDescription": "Your card is authorized now and charged when you collect your order at the store.",
         "paymentCancelled": "Payment cancelled. Your order is awaiting payment — you can pay it from your orders.",
         "paymentFailed": "Payment could not be completed. Please try again.",
         "stripeUnavailable": "Card payment is unavailable for this seller right now. Please contact support."
@@ -3914,6 +3917,7 @@
         "shippingFee": "Shipping fee",
         "chooseFulfillment": "Choose delivery or pickup",
         "deliveryFeeWaived": "Waived",
+        "deliveryFeePending": "Add address",
         "deliveryFeeAddressRequired": "Choose a delivery address to see shipping.",
         "deliveryFeeError": "Unable to calculate",
         "firstDeliveryDiscount": "First delivery discount",
@@ -3952,6 +3956,7 @@
         "paidBody": "Your payment was completed successfully. No further action is required.",
         "chipPayAtDelivery": "Pay at delivery",
         "chipPayAtPickup": "Pay at pickup",
+        "chipCookedFoodPayAfterConfirm": "Pay after kitchen confirms",
         "payNowTitle": "Payment confirmation required",
         "payNowBody": "A payment request has been sent to your mobile phone. Please confirm the payment to complete your order.",
         "payNowDeadline": "Your order will be transmitted to the merchant within 24 hours once payment is confirmed.",
@@ -3961,6 +3966,8 @@
         "payAtPickupBody": "Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.",
         "cookedFoodPayAfterConfirmTitle": "Pay after the kitchen confirms",
         "cookedFoodPayAfterConfirmBody": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
+        "cookedFoodPayAfterConfirmBodyPickup": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
+        "cookedFoodPayAfterConfirmBodyDelivery": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.",
         "viewOrders": "My orders",
         "goToOrder": "Go to the order",
         "goToHome": "Go to home",

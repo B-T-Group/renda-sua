@@ -1,4 +1,5 @@
 import {
+  buildCookedFoodStoreClosedDetails,
   buildCookedFoodStoreClosedMessage,
   collectCookedFoodSlots,
 } from './cooked-food-closed-message.util';
@@ -95,5 +96,47 @@ describe('buildCookedFoodStoreClosedMessage', () => {
     expect(message).toBe(
       'This kitchen is closed right now. Available: Fri 10:00–22:00.'
     );
+  });
+});
+
+describe('buildCookedFoodStoreClosedDetails', () => {
+  it('returns food slots and next opening', () => {
+    expect(
+      buildCookedFoodStoreClosedDetails({
+        timezone: 'Africa/Douala',
+        opensAt: '2026-08-25T10:30:00.000Z',
+        foodSlots: [
+          { day_of_week: 5, start_time: '18:00:00', end_time: '22:00' },
+          { day_of_week: 1, start_time: '11:30', end_time: '16:00' },
+        ],
+      })
+    ).toEqual({
+      timezone: 'Africa/Douala',
+      next_opens_at: '2026-08-25T10:30:00.000Z',
+      hours: [
+        { day_of_week: 1, start_time: '11:30', end_time: '16:00' },
+        { day_of_week: 5, start_time: '18:00', end_time: '22:00' },
+      ],
+    });
+  });
+
+  it('falls back to operating hours when food slots are empty', () => {
+    expect(
+      buildCookedFoodStoreClosedDetails({
+        timezone: 'Africa/Douala',
+        operatingHours: {
+          monday: { open: '08:00', close: '20:00' },
+          friday: { open: '10:00', close: '22:00' },
+          sunday: { closed: true },
+        },
+      })
+    ).toEqual({
+      timezone: 'Africa/Douala',
+      next_opens_at: null,
+      hours: [
+        { day_of_week: 1, start_time: '08:00', end_time: '20:00' },
+        { day_of_week: 5, start_time: '10:00', end_time: '22:00' },
+      ],
+    });
   });
 });

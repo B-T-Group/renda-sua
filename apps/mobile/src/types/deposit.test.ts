@@ -78,11 +78,21 @@ describe('isMoMoDepositCheckoutPath', () => {
     ).toBe(true);
   });
 
-  it('hides deposit for cooked-food pickup even before preflight', () => {
+  it('hides deposit for cooked-food orders even before preflight', () => {
     expect(
       isMoMoDepositCheckoutPath({
-        cookedFoodPickup: true,
-        payTiming: 'pay_at_pickup',
+        cookedFoodOrder: true,
+        payTiming: 'pay_at_delivery',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe(false);
+  });
+
+  it('hides deposit for cooked-food pay-after alias', () => {
+    expect(
+      isMoMoDepositCheckoutPath({
+        cookedFoodPayAfterConfirm: true,
+        payTiming: 'pay_at_delivery',
         momoPayNowDeliveryEnabled: false,
       })
     ).toBe(false);

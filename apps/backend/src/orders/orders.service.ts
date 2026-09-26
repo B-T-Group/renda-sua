@@ -119,7 +119,11 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
-import { isCookedFoodPickupOrder, anyLineIsCookedFood } from '../food/cooked-food-flag.util';
+import {
+  isCookedFoodPickupOrder,
+  isCookedFoodFulfillmentOrder,
+  anyLineIsCookedFood,
+} from '../food/cooked-food-flag.util';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
@@ -1510,14 +1514,14 @@ export class OrdersService {
       }
     }
 
-    const isCookedFoodAsapPickup =
-      this.cookedFoodPickupFlow.isCookedFoodPickupCohort(order as any) &&
+    const isCookedFoodAsapReadyIn =
+      this.cookedFoodPickupFlow.isCookedFoodAsapReadyInCohort(order as any) &&
       isAsapConfirm;
     const payAfterConfirm =
-      isCookedFoodAsapPickup &&
+      isCookedFoodAsapReadyIn &&
       this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order as any);
     let cookedReadyInMinutes: number | undefined;
-    if (isCookedFoodAsapPickup) {
+    if (isCookedFoodAsapReadyIn) {
       cookedReadyInMinutes = this.cookedFoodPickupFlow.normalizeReadyInMinutes(
         request.ready_in_minutes
       );
@@ -1580,7 +1584,7 @@ export class OrdersService {
       request.notes
     );
 
-    if (isCookedFoodAsapPickup && cookedReadyInMinutes != null) {
+    if (isCookedFoodAsapReadyIn && cookedReadyInMinutes != null) {
       const cookedFoodResult = await this.afterCookedFoodConfirm(
         request.orderId,
         order as any,
@@ -1610,8 +1614,8 @@ export class OrdersService {
   }
 
   /**
-   * Cooked-food ASAP pickup after status confirmed: MoMo unpaid-cancel / zero-amount
-   * finalize, or prepare + auto-ready for Stripe/wallet.
+   * Cooked-food ASAP after status confirmed: MoMo unpaid-cancel / zero-amount
+   * finalize, or prepare + auto-ready for Stripe/wallet pickup.
    */
   private async afterCookedFoodConfirm(
     orderId: string,
@@ -4009,7 +4013,7 @@ export class OrdersService {
   }
 
   /**
-   * Cooked-food MoMo pickup: after merchant confirm, push full-amount payment.
+   * Cooked-food MoMo: after merchant confirm, push full-amount payment.
    * When `allowPending` is set, may run before status flips to confirmed so a
    * MoMo failure never leaves a confirmed order without a payment request.
    */
@@ -10300,7 +10304,7 @@ export class OrdersService {
       this.hasuraSystemService
     );
 
-    const paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
+    let paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
       orderData.payment_timing === 'pay_at_delivery'
         ? 'pay_at_delivery'
         : orderData.payment_timing === 'pay_at_pickup'
@@ -10477,7 +10481,18 @@ export class OrdersService {
     // Use the first item's currency (all items should have the same currency from same business)
     const currency = businessInventories[0].item.currency;
 
-    if (paymentTiming === 'pay_at_delivery') {
+    const itemCookedFlags = businessInventories.map((inv: any) => ({
+      is_cooked_food: inv.item?.is_cooked_food,
+      item_sub_category: inv.item?.item_sub_category,
+    }));
+    const cookedFoodFulfillment = isCookedFoodFulfillmentOrder({
+      fulfillmentMethod,
+      itemFlags: itemCookedFlags,
+    });
+
+    // Classic PAD requires pay_on_delivery_enabled. Cooked-food orders never
+    // use classic PAD deposits — pay-after or pay_now / pay_at_pickup only.
+    if (paymentTiming === 'pay_at_delivery' && !cookedFoodFulfillment) {
       const anyNotEligible = businessInventories.some(
         (inv) => inv?.item?.pay_on_delivery_enabled !== true
       );
@@ -10707,11 +10722,13 @@ export class OrdersService {
     });
 
     // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
-    // Block MoMo pay_now + delivery when flag is false (default)
+    // Block MoMo pay_now + delivery when flag is false (default).
+    // Cooked-food MoMo pay-after also stores pay_now but is not classic pay-now.
     if (
       paymentTiming === 'pay_now' &&
       fulfillmentMethod === 'delivery' &&
-      railResolution.rail === 'mobile_money'
+      railResolution.rail === 'mobile_money' &&
+      !cookedFoodFulfillment
     ) {
       const momoPayNowDeliveryEnabled =
         await this.isMarketFlagEnabled(
@@ -10815,29 +10832,52 @@ export class OrdersService {
 
     const isCookedFoodPickup = isCookedFoodPickupOrder({
       fulfillmentMethod,
-      itemFlags: businessInventories.map((inv: any) => ({
-        is_cooked_food: inv.item?.is_cooked_food,
-      })),
+      itemFlags: itemCookedFlags,
     });
     const payAfterMerchantConfirm =
-      isCookedFoodPickup &&
+      cookedFoodFulfillment &&
       railResolution.rail === 'mobile_money' &&
       !canPayWithWallet &&
       !isZeroOrNegativeOrder;
+
+    // Persist prepaid timing for delivery pay-after so agents get Complete+PIN
+    // (not classic PAD), even if the client still sent pay_at_delivery.
+    if (payAfterMerchantConfirm) {
+      paymentTiming =
+        fulfillmentMethod === 'pickup' ? 'pay_at_pickup' : 'pay_now';
+    }
+
+    if (
+      paymentTiming === 'pay_at_delivery' &&
+      cookedFoodFulfillment &&
+      !payAfterMerchantConfirm
+    ) {
+      const anyNotEligible = businessInventories.some(
+        (inv) => inv?.item?.pay_on_delivery_enabled !== true
+      );
+      if (anyNotEligible) {
+        throw new HttpException(
+          'Pay at delivery is not enabled for one or more items in this order',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
     
     // Determine initial status for pay_at_delivery/pickup orders
     // When deposit is required, start in pending_payment (not pending)
     // to avoid triggering acceptance SLA before deposit is paid
     let current_status: string;
     if (payAfterMerchantConfirm) {
-      // Cooked-food MoMo pickup: no deposit; merchant confirms before payment.
+      // Cooked-food MoMo: no deposit; merchant confirms before payment.
       current_status = 'pending';
     } else if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
       const railForDepositCheck = getDepositRailForPayAtTiming();
-      const requiresDeposit = this.depositCalculationService.isDepositRequired(
-        paymentTiming,
-        railForDepositCheck
-      );
+      const requiresDeposit =
+        !cookedFoodFulfillment &&
+        this.depositCalculationService.isDepositRequired(
+          paymentTiming,
+          railForDepositCheck
+        );
       // If deposit required, start in pending_payment until deposit is captured
       current_status = requiresDeposit ? 'pending_payment' : 'pending';
     } else {
@@ -11039,6 +11079,8 @@ export class OrdersService {
           presentment_amount
           presentment_fx_rate
           presentment_fx_source
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           order_items {
             id
             business_inventory_id
@@ -11262,6 +11304,7 @@ export class OrdersService {
 
     if (
       !payAfterMerchantConfirm &&
+      !cookedFoodFulfillment &&
       (paymentTiming === 'pay_at_delivery' ||
         paymentTiming === 'pay_at_pickup')
     ) {

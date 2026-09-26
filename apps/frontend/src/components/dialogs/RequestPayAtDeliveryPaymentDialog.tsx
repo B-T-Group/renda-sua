@@ -23,6 +23,7 @@ import {
   isDepositPaid,
   remainingAfterDeposit,
 } from '../../utils/depositRemainder';
+import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 
 interface RequestPayAtDeliveryPaymentDialogProps {
   open: boolean;
@@ -55,9 +56,7 @@ export default function RequestPayAtDeliveryPaymentDialog({
     return clientPhone;
   }, [clientPhone, overridePhoneNumber, useDifferentPhone]);
 
-  const isPayAtDelivery =
-    order.payment_timing === 'pay_at_delivery' ||
-    order.payment_method === 'pay_on_delivery';
+  const isPayAtDelivery = orderNeedsPayAtDeliveryAgentActions(order);
 
   const handleSubmit = async () => {
     setError(null);

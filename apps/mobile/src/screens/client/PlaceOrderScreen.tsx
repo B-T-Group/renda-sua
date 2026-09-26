@@ -3,6 +3,8 @@ import type { CountryCode } from 'libphonenumber-js';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { AppModal } from '../../components/common/AppModal';
 import { CheckoutStickyActionBar } from '../../components/common/CheckoutStickyActionBar';
+import type { CheckoutStickyBreakdownLine } from '../../components/common/CheckoutStickyActionBar';
+import { KitchenClosedStickyPanel } from '../../components/checkout/KitchenClosedStickyPanel';
 import {
   keyboardAwareScrollProps,
   useKeyboardVerticalOffset,
@@ -154,8 +156,8 @@ export default function PlaceOrderScreen() {
   const [quantity, setQuantity] = useState(1);
   const [addressId, setAddressId] = useState('');
   const [variantId, setVariantId] = useState<string | null>(null);
-  const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery');
-  // Delivery is the default when both options exist; confirmed immediately.
+  const [fulfillment, setFulfillment] = useState<Fulfillment>('pickup');
+  // Pickup is the default when available; confirmed immediately.
   const [hasChosenFulfillment, setHasChosenFulfillment] = useState(true);
   // Default to pay_at_delivery (safe default when momo_pay_now_delivery_enabled may be false)
   const [payTiming, setPayTiming] = useState<PayTiming>('pay_at_delivery');
@@ -172,7 +174,7 @@ export default function PlaceOrderScreen() {
   const [phoneDialogDefaultCountry, setPhoneDialogDefaultCountry] = useState<CountryCode | undefined>(undefined);
   const [addAddressModalVisible, setAddAddressModalVisible] = useState(false);
   const [addAddressForm, setAddAddressForm] = useState<DeliveryAddressFormValue>(BLANK_ADDRESS_FORM);
-  const [stickyBarHeight, setStickyBarHeight] = useState(180);
+  const [stickyBarHeight, setStickyBarHeight] = useState(240);
   const [addAddressSaving, setAddAddressSaving] = useState(false);
   
   // Diaspora: recipient is always required once preflight confirms diaspora.
@@ -305,6 +307,14 @@ export default function PlaceOrderScreen() {
     },
     [deliveryUnavailable]
   );
+
+  // If pickup isn't offered for this item, fall back to delivery/shipping once.
+  useEffect(() => {
+    if (!item) return;
+    if (fulfillment === 'pickup' && !pickupEnabled) {
+      setFulfillment(shippingEnabled ? 'shipping' : 'delivery');
+    }
+  }, [item, fulfillment, pickupEnabled, shippingEnabled]);
 
   const onDwReadyChange = useCallback((ok: boolean) => {
     setDeliveryScheduleOk(ok);
@@ -502,6 +512,10 @@ export default function PlaceOrderScreen() {
     });
   }, [addressesForDelivery, hideShopperAddressBook, suppressAddressAutoSelect]);
 
+  // Same gate as CartCheckout — only when preflight marks pay-after eligible.
+  const isCookedFoodMoMoPayAfter =
+    preflightConfig?.pay_after_merchant_confirm_eligible === true;
+
   useEffect(() => {
     // Diaspora orders always use Stripe pay-now
     if (isDiaspora) {
@@ -516,20 +530,27 @@ export default function PlaceOrderScreen() {
     } else if (fulfillment === 'shipping') {
       setPayTiming('pay_now');
     } else if (fulfillment === 'delivery') {
-      // For delivery: respect momo_pay_now_delivery_enabled flag
       if (resolvedIsStripeRail) {
         setPayTiming('pay_now');
+      } else if (isCookedFoodMoMoPayAfter) {
+        // Pay after kitchen confirm; store pay_now so agents get Complete+PIN.
+        setPayTiming('pay_now');
       } else if (momoPayNowEnabled) {
-        // Flag enabled: keep current timing or default to pay_now if invalid
         if (payTiming === 'pay_at_pickup') {
           setPayTiming('pay_now');
         }
       } else {
-        // Flag disabled: force pay_at_delivery
         setPayTiming('pay_at_delivery');
       }
     }
-  }, [fulfillment, resolvedIsStripeRail, isDiaspora, preflightConfig?.momo_pay_now_delivery_enabled, payTiming]);
+  }, [
+    fulfillment,
+    resolvedIsStripeRail,
+    isDiaspora,
+    preflightConfig?.momo_pay_now_delivery_enabled,
+    payTiming,
+    isCookedFoodMoMoPayAfter,
+  ]);
 
   const selectedAddress = useMemo(
     () => addressesForDelivery.find((a) => a.id === deliveryAddressId),
@@ -773,8 +794,10 @@ export default function PlaceOrderScreen() {
 
   const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
 
-  // Deposit UI only when the server quotes a deposit. Cooked-food pickup never
-  // takes a reservation deposit (full amount after merchant confirm).
+  // Deposit UI only when the server quotes a deposit. Cooked-food orders never
+  // take a reservation deposit.
+  const isCookedFoodOrder = item != null && isFoodCatalogItem(item);
+
   const isDepositPath = useMemo(() => {
     return isMoMoDepositCheckoutPath({
       isDiaspora,
@@ -786,8 +809,7 @@ export default function PlaceOrderScreen() {
       preflightLoaded: preflightConfig != null,
       momoPayNowDeliveryEnabled,
       payTiming,
-      cookedFoodPickup:
-        fulfillment === 'pickup' && item != null && isFoodCatalogItem(item),
+      cookedFoodOrder: isCookedFoodOrder || isCookedFoodMoMoPayAfter,
     });
   }, [
     isDiaspora,
@@ -795,8 +817,8 @@ export default function PlaceOrderScreen() {
     preflightConfig,
     payTiming,
     momoPayNowDeliveryEnabled,
-    fulfillment,
-    item,
+    isCookedFoodOrder,
+    isCookedFoodMoMoPayAfter,
   ]);
 
   // Deposit calculation: prefer server deposit_amount, fallback to calculation.
@@ -857,6 +879,142 @@ export default function PlaceOrderScreen() {
     !hideShopperAddressBook;
 
   const firstDeliveryDiscountAmount = deliveryFeeState.data?.firstOrderBaseDeliveryDiscountAmount ?? 0;
+
+  const stickyBreakdown = useMemo((): CheckoutStickyBreakdownLine[] => {
+    const lines: CheckoutStickyBreakdownLine[] = [
+      {
+        label: t('client.placeOrder.summary.subtotal', 'Subtotal'),
+        value: formatCatalogMoney(lineSubtotal, currency),
+      },
+    ];
+
+    if (fulfillment === 'pickup') {
+      lines.push({
+        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
+        value: t('client.placeOrder.summary.deliveryFeeWaived', 'Waived'),
+        tone: 'success',
+      });
+    } else if (fulfillment === 'shipping') {
+      lines.push({
+        label: t('client.placeOrder.summary.shippingFee', 'Shipping fee'),
+        value:
+          preflightLoading
+            ? '…'
+            : formatCatalogMoney(deliveryAmount, currency),
+      });
+    } else if (deliveryFeeState.loading) {
+      lines.push({
+        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
+        value: '…',
+        tone: 'secondary',
+      });
+    } else if (deliveryAddressMissing) {
+      lines.push({
+        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
+        value: t('client.placeOrder.summary.deliveryFeePending', 'Add address'),
+        tone: 'secondary',
+      });
+    } else if (deliveryFeeState.error) {
+      lines.push({
+        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
+        value: t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate'),
+        tone: 'secondary',
+      });
+    } else {
+      lines.push({
+        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
+        value: formatCatalogMoney(deliveryAmount, currency),
+      });
+    }
+
+    if (showFirstDeliveryDiscount && firstDeliveryDiscountAmount > 0) {
+      lines.push({
+        label: t('client.placeOrder.summary.firstDeliveryDiscount', 'First delivery discount'),
+        value: `−${formatCatalogMoney(firstDeliveryDiscountAmount, currency)}`,
+        tone: 'success',
+      });
+    }
+
+    if (discountAmount > 0) {
+      lines.push({
+        label: t('client.placeOrder.summary.discount', 'Discount'),
+        value: `−${formatCatalogMoney(discountAmount, currency)}`,
+        tone: 'success',
+      });
+    }
+
+    const dueNow =
+      depositAmount != null && depositAmount > 0 ? depositAmount : grandTotal;
+    lines.push({
+      label:
+        depositAmount != null && depositAmount > 0
+          ? t('deposit.dueNow', 'Due now')
+          : preflightConfig?.tax_notice === 'calculated_at_checkout'
+            ? t('checkout.totalBeforeTax', 'Total (before tax)')
+            : t('client.placeOrder.summary.total', 'Total'),
+      value: formatCatalogMoney(dueNow, currency),
+      tone: 'emphasize',
+    });
+
+    if (depositAmount != null && depositAmount > 0) {
+      lines.push({
+        label: t('deposit.dueLater', 'Due later'),
+        value: formatCatalogMoney(Math.max(0, grandTotal - depositAmount), currency),
+        tone: 'secondary',
+      });
+    }
+
+    return lines;
+  }, [
+    currency,
+    deliveryAddressMissing,
+    deliveryAmount,
+    deliveryFeeState.error,
+    deliveryFeeState.loading,
+    depositAmount,
+    discountAmount,
+    firstDeliveryDiscountAmount,
+    fulfillment,
+    grandTotal,
+    lineSubtotal,
+    preflightConfig?.tax_notice,
+    preflightLoading,
+    showFirstDeliveryDiscount,
+    t,
+  ]);
+
+  const stickyFulfillment =
+    pickupEnabled || shippingEnabled ? (
+      <PlaceOrderFulfillmentChoice
+        compact
+        value={fulfillment}
+        onChange={chooseFulfillment}
+        deliveryDisabled={deliveryUnavailable}
+        deliveryDisabledReason={t(
+          'client.placeOrder.deliveryUnavailable',
+          'Delivery is currently unavailable.'
+        )}
+        pickupAvailable={pickupEnabled}
+        shippingAvailable={shippingEnabled}
+        pickupLocations={pickupLocations}
+        deliveryPriceLabel={
+          !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
+            ? formatCatalogMoney(deliveryAmount, currency)
+            : undefined
+        }
+        deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
+        deliveryPriceHint={
+          deliveryAddressMissing
+            ? t(
+                'client.placeOrder.deliveryPriceAddressRequired',
+                'Choose an address to see the delivery price.'
+              )
+            : deliveryFeeState.error
+              ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
+              : undefined
+        }
+      />
+    ) : null;
 
   const imgs = item ? catalogOrderedImages(item) : [];
   const selectedVariant =
@@ -1140,11 +1298,7 @@ export default function PlaceOrderScreen() {
             paymentCompleted,
             cardAuthorized,
             fulfillment,
-            cookedFoodPayAfterConfirm:
-              fulfillment === 'pickup' &&
-              !resolvedIsStripeRail &&
-              item != null &&
-              isFoodCatalogItem(item),
+            cookedFoodPayAfterConfirm: isCookedFoodMoMoPayAfter,
           },
         },
       ],
@@ -1175,6 +1329,7 @@ export default function PlaceOrderScreen() {
     currency,
     inventoryItemId,
     initialVariantId,
+    isCookedFoodMoMoPayAfter,
   ]);
 
   if (itemLoading) {
@@ -1254,37 +1409,6 @@ export default function PlaceOrderScreen() {
           currentStep="checkout"
         />
 
-        {pickupEnabled || shippingEnabled ? (
-          <PlaceOrderFulfillmentChoice
-            value={fulfillment}
-            onChange={chooseFulfillment}
-            deliveryDisabled={deliveryUnavailable}
-            deliveryDisabledReason={t(
-              'client.placeOrder.deliveryUnavailable',
-              'Delivery is currently unavailable.'
-            )}
-            pickupAvailable={pickupEnabled}
-            shippingAvailable={shippingEnabled}
-            pickupLocations={pickupLocations}
-            deliveryPriceLabel={
-              !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
-                ? formatCatalogMoney(deliveryAmount, currency)
-                : undefined
-            }
-            deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
-            deliveryPriceHint={
-              deliveryAddressMissing
-                ? t(
-                    'client.placeOrder.deliveryPriceAddressRequired',
-                    'Choose an address to see the delivery price.'
-                  )
-                : deliveryFeeState.error
-                  ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
-                  : undefined
-            }
-          />
-        ) : null}
-
         {/* Diaspora checkout banner + recipient (always someone-else when diaspora) */}
         {fulfillmentConfirmed && isDiaspora ? (
           <>
@@ -1350,7 +1474,11 @@ export default function PlaceOrderScreen() {
           </>
         ) : null}
 
-        {depositAmount != null && depositAmount > 0 && !isDiaspora && !resolvedIsStripeRail ? (
+        {depositAmount != null &&
+        depositAmount > 0 &&
+        !isCookedFoodOrder &&
+        !isDiaspora &&
+        !resolvedIsStripeRail ? (
           <ReservationDepositExplainer
             depositAmount={depositAmount}
             currency={currency}
@@ -1398,6 +1526,7 @@ export default function PlaceOrderScreen() {
           showTaxAtCheckoutNotice={
             preflightConfig?.tax_notice === 'calculated_at_checkout'
           }
+          hideFinancialSummary
         />
 
         {variants.length > 0 && item ? (
@@ -1565,9 +1694,7 @@ export default function PlaceOrderScreen() {
             businessLocationId={item.business_location?.id ?? ''}
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
-            payAfterConfirm={
-              !resolvedIsStripeRail && isFoodCatalogItem(item)
-            }
+            payAfterConfirm={isCookedFoodMoMoPayAfter}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1588,9 +1715,7 @@ export default function PlaceOrderScreen() {
             businessLocationId={item.business_location?.id ?? ''}
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
-            payAfterConfirm={
-              !resolvedIsStripeRail && isFoodCatalogItem(item)
-            }
+            payAfterConfirm={isCookedFoodMoMoPayAfter}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1606,8 +1731,13 @@ export default function PlaceOrderScreen() {
           </View>
         ) : null}
 
-        {/* Payment timing (Pay now / Pay at delivery) */}
-        {fulfillmentConfirmed && fulfillment === 'delivery' && payAtDeliveryEnabled && !isDiaspora && momoPayNowDeliveryEnabled ? (
+        {/* Payment timing (Pay now / Pay at delivery) — hidden for cooked-food MoMo */}
+        {fulfillmentConfirmed &&
+        fulfillment === 'delivery' &&
+        payAtDeliveryEnabled &&
+        !isDiaspora &&
+        momoPayNowDeliveryEnabled &&
+        !isCookedFoodMoMoPayAfter ? (
           <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
             <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
               {t('client.placeOrder.paymentTiming', 'Payment')}
@@ -1662,8 +1792,6 @@ export default function PlaceOrderScreen() {
                   isStripeRail={false}
                   profileLoading={profileLoading}
                   profilePhone={profilePhone}
-                  payTiming={payTiming}
-                  fulfillment={fulfillment}
                   useDifferentPhone={useDifferentPhone}
                   onToggleDifferentPhone={setUseDifferentPhone}
                   overrideCountryIso={overrideCountryIso}
@@ -1672,11 +1800,6 @@ export default function PlaceOrderScreen() {
                   onOverrideNationalDigitsChange={setOverrideNationalDigits}
                   phoneInvalidReason={phoneInvalidReason}
                   onAddPhonePress={onAddPhonePress}
-                  cookedFoodPayAfterConfirm={
-                    fulfillment === 'pickup' &&
-                    item != null &&
-                    isFoodCatalogItem(item)
-                  }
                 />
                 <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
                   {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
@@ -1691,7 +1814,8 @@ export default function PlaceOrderScreen() {
           onChangeText={setInstructions}
         />
 
-        {checkoutBlocker ? (
+        {checkoutBlocker &&
+        checkoutBlocker.code !== 'COOKED_FOOD_STORE_CLOSED' ? (
           <NoticeBanner
             tone="error"
             icon="alert-circle-outline"
@@ -1702,41 +1826,40 @@ export default function PlaceOrderScreen() {
       </ScrollView>
 
       <View onLayout={(e) => setStickyBarHeight(e.nativeEvent.layout.height)}>
-        <CheckoutStickyActionBar
-          label={
-            resolvedIsStripeRail
-              ? t('checkout.payNow', 'Pay now')
-              : depositAmount != null && depositAmount > 0
-                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
-                    amount: depositAmount,
-                    currency,
-                  })
-                : payTiming === 'pay_now'
-                  ? t('checkout.payWithMoMo', 'Pay with MoMo')
-                  : t('client.placeOrder.submit', 'Place order')
-          }
-          total={formatCatalogMoney(
-            depositAmount != null && depositAmount > 0 ? depositAmount : grandTotal,
-            currency
-          )}
-          totalLabel={
-            depositAmount != null && depositAmount > 0
-              ? t('deposit.dueNow', 'Due now')
-              : preflightConfig?.tax_notice === 'calculated_at_checkout'
-                ? t('checkout.totalBeforeTax', 'Total (before tax)')
-                : t('client.placeOrder.summary.total', 'Total')
-          }
-          onPress={() => { if (!submitting) void onSubmit(); }}
-          loading={submitting}
-          disabled={!canSubmit}
-          disabledReason={
-            isRecipientDraftIncomplete(someoneElseReceiving, recipient)
-              ? t('diaspora.selectRecipientToPay', 'Select a recipient before paying')
-              : captureRecipientAddress && !deliveryAddressId
-                ? t('diaspora.selectRecipientAddressToPay', 'Add the recipient’s delivery address before paying')
-                : undefined
-          }
-        />
+        {checkoutBlocker?.code === 'COOKED_FOOD_STORE_CLOSED' ? (
+          <KitchenClosedStickyPanel
+            topContent={stickyFulfillment}
+            details={checkoutBlocker.details}
+            message={checkoutBlocker.message}
+          />
+        ) : (
+          <CheckoutStickyActionBar
+            topContent={stickyFulfillment}
+            breakdown={stickyBreakdown}
+            label={
+              resolvedIsStripeRail
+                ? t('checkout.payNow', 'Pay now')
+                : depositAmount != null && depositAmount > 0
+                  ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+                      amount: depositAmount,
+                      currency,
+                    })
+                  : payTiming === 'pay_now'
+                    ? t('checkout.payWithMoMo', 'Pay with MoMo')
+                    : t('client.placeOrder.submit', 'Place order')
+            }
+            onPress={() => { if (!submitting) void onSubmit(); }}
+            loading={submitting}
+            disabled={!canSubmit}
+            disabledReason={
+              isRecipientDraftIncomplete(someoneElseReceiving, recipient)
+                ? t('diaspora.selectRecipientToPay', 'Select a recipient before paying')
+                : captureRecipientAddress && !deliveryAddressId
+                  ? t('diaspora.selectRecipientAddressToPay', 'Add the recipient’s delivery address before paying')
+                  : undefined
+            }
+          />
+        )}
       </View>
       <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
         {snack}

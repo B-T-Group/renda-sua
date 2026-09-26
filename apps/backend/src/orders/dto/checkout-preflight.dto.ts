@@ -196,6 +196,40 @@ export enum VerificationMethod {
   PHONE = 'PHONE',
 }
 
+export class CookedFoodStoreClosedHourSlotDto {
+  @ApiProperty({
+    description: 'Day of week (0 = Sunday … 6 = Saturday).',
+    example: 1,
+  })
+  day_of_week!: number;
+
+  @ApiProperty({ description: 'Local start time HH:mm', example: '11:30' })
+  start_time!: string;
+
+  @ApiProperty({ description: 'Local end time HH:mm', example: '16:00' })
+  end_time!: string;
+}
+
+export class CookedFoodStoreClosedDetailsDto {
+  @ApiProperty({
+    description: 'IANA timezone for the kitchen schedule.',
+    example: 'Africa/Douala',
+  })
+  timezone!: string;
+
+  @ApiPropertyOptional({
+    description: 'ISO timestamp of the next opening, or null if unknown.',
+    nullable: true,
+  })
+  next_opens_at!: string | null;
+
+  @ApiProperty({
+    type: [CookedFoodStoreClosedHourSlotDto],
+    description: 'Weekly serving windows (food slots preferred over store hours).',
+  })
+  hours!: CookedFoodStoreClosedHourSlotDto[];
+}
+
 export class CheckoutBlockerDto {
   @ApiProperty({
     description: 'Machine-readable stable error code.',
@@ -205,6 +239,13 @@ export class CheckoutBlockerDto {
 
   @ApiProperty({ description: 'Human-readable message (English default).' })
   message!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Structured payload for specific codes (e.g. COOKED_FOOD_STORE_CLOSED).',
+    type: CookedFoodStoreClosedDetailsDto,
+  })
+  details?: CookedFoodStoreClosedDetailsDto;
 }
 
 export class DeliveryAvailabilityDto {
@@ -387,6 +428,12 @@ export class CheckoutGroupDto {
       'False when this group contains cooked food. Cooked food is ASAP-only; scheduling is disabled.',
   })
   schedule_allowed?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when every line is cooked food on the mobile-money rail — no deposit; pay after kitchen confirm.',
+  })
+  pay_after_merchant_confirm_eligible?: boolean;
 }
 
 export class PayerChargeEstimateDto {
@@ -602,6 +649,12 @@ export class CheckoutPreflightResponseDto {
       'False when the cart includes cooked food. Cooked food is ASAP-only.',
   })
   schedule_allowed?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when every seller group is cooked-food MoMo pay-after (no deposit; charge after kitchen confirm).',
+  })
+  pay_after_merchant_confirm_eligible?: boolean;
 
   @ApiPropertyOptional({
     type: CheckoutDiasporaDto,

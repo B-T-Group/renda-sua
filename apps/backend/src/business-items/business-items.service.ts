@@ -1869,6 +1869,7 @@ export class BusinessItemsService {
         business_location: { business_id: string };
         item?: {
           export_available?: boolean;
+          is_cooked_food?: boolean | null;
           item_sub_category?: {
             item_category?: { name?: string | null } | null;
           } | null;
@@ -1886,6 +1887,7 @@ export class BusinessItemsService {
           }
           item {
             export_available
+            is_cooked_food
             item_sub_category {
               item_category { name }
             }
@@ -1914,7 +1916,8 @@ export class BusinessItemsService {
 
     const sanitized = this.sanitizeInventoryUpdatesForFood(
       updates,
-      inv.item?.item_sub_category?.item_category?.name
+      inv.item?.item_sub_category?.item_category?.name,
+      inv.item?.is_cooked_food
     );
 
     const result = await this.hasuraUserService.executeMutation<{
@@ -1946,9 +1949,10 @@ export class BusinessItemsService {
       is_active?: boolean;
       promotion?: Record<string, unknown> | null;
     },
-    categoryName?: string | null
+    categoryName?: string | null,
+    isCookedFood?: boolean | null
   ) {
-    if (!cookedFoodIgnoresStock(categoryName)) return updates;
+    if (!cookedFoodIgnoresStock(categoryName, isCookedFood)) return updates;
     return {
       ...updates,
       quantity: FOOD_DEFAULT_INVENTORY_QUANTITY,

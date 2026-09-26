@@ -2,6 +2,7 @@ import { Alert, Box } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
+import { resolvePickupReadyCopyMode } from '../../utils/cookedFoodOrder';
 
 interface ClientOrderAlertsProps {
   order: OrderData;
@@ -74,12 +75,21 @@ const ClientOrderAlerts: React.FC<ClientOrderAlertsProps> = ({ order }) => {
 
       case 'ready_for_pickup':
         if (order.fulfillment_method === 'pickup') {
-          if (order.payment_timing === 'pay_at_pickup') {
+          const readyMode = resolvePickupReadyCopyMode(order);
+          if (readyMode === 'pay_at_pickup') {
             alerts.push({
               severity: 'success' as const,
               message: t(
                 'client.orders.storeReadyPayAtPickup',
                 'When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.'
+              ),
+            });
+          } else if (readyMode === 'complete_paid') {
+            alerts.push({
+              severity: 'success' as const,
+              message: t(
+                'client.orders.storeReadyCompletePaid',
+                'When you arrive, tap Complete order so the merchant gets paid, then collect your order.'
               ),
             });
           } else {
