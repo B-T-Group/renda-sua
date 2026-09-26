@@ -539,7 +539,19 @@ export class OrderAcceptanceService {
               fulfillment_timing promised_ready_at promised_fulfill_by business_id
               pay_after_merchant_confirm is_cooked_food_pickup
               client { user { first_name last_name } }
-              order_items { item_name quantity is_cooked_food }
+              order_items {
+                item_name
+                quantity
+                item {
+                  is_cooked_food
+                  item_sub_category {
+                    name
+                    item_category {
+                      name
+                    }
+                  }
+                }
+              }
             }
           }`
         : `query PendingAcceptance($bid: uuid!, $snoozeCutoff: timestamptz!) {
@@ -566,7 +578,19 @@ export class OrderAcceptanceService {
               fulfillment_timing promised_ready_at promised_fulfill_by business_id
               pay_after_merchant_confirm is_cooked_food_pickup
               client { user { first_name last_name } }
-              order_items { item_name quantity is_cooked_food }
+              order_items {
+                item_name
+                quantity
+                item {
+                  is_cooked_food
+                  item_sub_category {
+                    name
+                    item_category {
+                      name
+                    }
+                  }
+                }
+              }
             }
           }`,
       params.locationId

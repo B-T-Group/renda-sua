@@ -40,10 +40,14 @@ export interface IncomingOrderDetails {
     id?: string;
     item_name?: string | null;
     quantity?: number | null;
-    is_cooked_food?: boolean | null;
     variant_snapshot?: { image_url?: string | null } | null;
     item?: {
       name?: string | null;
+      is_cooked_food?: boolean | null;
+      item_sub_category?: {
+        name?: string | null;
+        item_category?: { name?: string | null } | null;
+      } | null;
       item_images?: Array<{
         image_url?: string | null;
         image_type?: string | null;

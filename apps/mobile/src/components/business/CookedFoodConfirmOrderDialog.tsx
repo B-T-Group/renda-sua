@@ -4,17 +4,21 @@ import { useTranslation } from 'react-i18next';
 import { Button, Chip, Modal, Portal, Text, TextInput } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { CommonActions } from '@react-navigation/native';
 import { ActionLoadingDialog } from '../feedback/ActionLoadingDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessOrder } from '../../types/business/orders';
 import type { ConfirmOrderPayload } from '../../types/business/orders';
-import type { BusinessRootStackParamList } from '@/navigation/types';
+import { rootNavigationRef } from '@/navigation/rootNavigationRef';
 
 const PRESETS = [15, 30, 45, 60] as const;
 const MIN_CUSTOM = 5;
 const MAX_CUSTOM = 180;
+
+function navigateBusinessRoute(name: 'BusinessDashboard' | 'BusinessOrdersList') {
+  if (!rootNavigationRef.isReady()) return;
+  rootNavigationRef.dispatch(CommonActions.navigate({ name }));
+}
 
 type ConfirmResponse = {
   success: boolean;
@@ -50,7 +54,6 @@ export function CookedFoodConfirmOrderDialog({
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const navigation = useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const [step, setStep] = useState<1 | 2>(1);
   const [selected, setSelected] = useState<number | 'custom'>(30);
   const [customMinutes, setCustomMinutes] = useState('');
@@ -198,7 +201,7 @@ export function CookedFoodConfirmOrderDialog({
                   mode="contained"
                   onPress={() => {
                     onDismiss();
-                    navigation.navigate('BusinessDashboard');
+                    navigateBusinessRoute('BusinessDashboard');
                   }}
                 >
                   {t('orders.cookedFood.returnDashboard', 'Return to dashboard')}
@@ -207,7 +210,7 @@ export function CookedFoodConfirmOrderDialog({
                   mode="outlined"
                   onPress={() => {
                     onDismiss();
-                    navigation.navigate('BusinessOrdersList');
+                    navigateBusinessRoute('BusinessOrdersList');
                   }}
                 >
                   {t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}

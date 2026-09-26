@@ -165,7 +165,7 @@ function IncomingOrderOverlayBase() {
           />
         </View>
       </AppModal>
-      {orderForDialog ? (
+      {orderForDialog && needsReadyInConfirm ? (
         <CookedFoodConfirmOrderDialog
           visible={incomingOrder.showConfirmDialog}
           order={orderForDialog}

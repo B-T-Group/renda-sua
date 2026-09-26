@@ -46,6 +46,12 @@ export interface PendingAcceptanceOrder {
   order_items?: Array<{
     item_name?: string | null;
     quantity?: number | null;
-    is_cooked_food?: boolean | null;
+    item?: {
+      is_cooked_food?: boolean | null;
+      item_sub_category?: {
+        name?: string | null;
+        item_category?: { name?: string | null } | null;
+      } | null;
+    } | null;
   }>;
 }

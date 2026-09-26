@@ -21,7 +21,10 @@ function everyLineIsCookedFood(
 
 function lineCookedFlags(order: CookedFoodOrderLike) {
   return (order.order_items ?? []).map((line) => ({
-    is_cooked_food: (line as { is_cooked_food?: boolean | null }).is_cooked_food,
+    is_cooked_food:
+      (line as { is_cooked_food?: boolean | null }).is_cooked_food ??
+      (line as { item?: { is_cooked_food?: boolean | null } | null }).item
+        ?.is_cooked_food,
   }));
 }
 

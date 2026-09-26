@@ -5846,7 +5846,7 @@ export class OrdersService {
       isCookedFoodFulfillmentOrder({
         fulfillmentMethod: order.fulfillment_method,
         itemFlags: (order.order_items || []).map((oi: any) => ({
-          is_cooked_food: oi.is_cooked_food,
+          is_cooked_food: oi.is_cooked_food ?? oi.item?.is_cooked_food,
         })),
       });
     if (!cooked) {
