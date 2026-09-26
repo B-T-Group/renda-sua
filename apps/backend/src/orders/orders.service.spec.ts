@@ -741,6 +741,12 @@ describe('OrdersService', () => {
         'mobile_money'
       );
       expect(depositCalcService.calculateDeposit).toHaveBeenCalledWith(5500, 'XAF');
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({
+          payerPhone: '+237670000000',
+        })
+      );
       expect(
         (service as any).mobilePaymentsDatabaseService.createTransaction
       ).toHaveBeenCalledWith(
@@ -3335,6 +3341,97 @@ describe('OrdersService', () => {
           amount: 5000,
           transactionType: 'payment',
         })
+      );
+    });
+  });
+
+  describe('initiateCookedFoodFullPaymentAfterConfirm phone', () => {
+    const payAfterOrder = {
+      id: 'order-123',
+      order_number: 'ORD-COOKED-1',
+      current_status: 'confirmed',
+      payment_status: 'pending',
+      pay_after_merchant_confirm: true,
+      total_amount: 4500,
+      currency: 'XAF',
+      payer_phone: '+237699111111',
+      client: {
+        user_id: 'client-456',
+        user: {
+          phone_number: '+237670000000',
+          email: 'client@example.com',
+        },
+      },
+      business_location: { address: { country: 'CM' } },
+    };
+
+    beforeEach(() => {
+      (service as any).cookedFoodPickupFlow = {
+        isPayAfterMerchantConfirm: jest.fn().mockReturnValue(true),
+      };
+      (service as any).mobilePaymentsService = {
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+        initiatePayment: jest.fn().mockResolvedValue({
+          success: true,
+          transactionId: 'momo-tx-1',
+          message: 'Payment initiated',
+        }),
+      };
+      (service as any).mobilePaymentsDatabaseService = {
+        getPendingOrderPaymentTransactionByOrderNumber: jest
+          .fn()
+          .mockResolvedValue(null),
+        createTransaction: jest.fn().mockResolvedValue({
+          id: 'db-tx-1',
+          reference: 'REF-1',
+          status: 'pending',
+        }),
+        updateTransaction: jest.fn().mockResolvedValue(undefined),
+      };
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'account-1' });
+      jest
+        .spyOn(service as any, 'resetOrderPaymentFailure')
+        .mockResolvedValue(undefined);
+    });
+
+    it('charges the checkout payer_phone instead of the profile phone', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: payAfterOrder,
+      });
+
+      await (service as any).initiateCookedFoodFullPaymentAfterConfirm(
+        'order-123'
+      );
+
+      expect(
+        (service as any).mobilePaymentsDatabaseService.createTransaction
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ customer_phone: '+237699111111' })
+      );
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ customerPhone: '+237699111111' }),
+        expect.any(String),
+        'client-456'
+      );
+    });
+
+    it('falls back to the profile phone when payer_phone is missing', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...payAfterOrder, payer_phone: null },
+      });
+
+      await (service as any).initiateCookedFoodFullPaymentAfterConfirm(
+        'order-123'
+      );
+
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ customerPhone: '+237670000000' }),
+        expect.any(String),
+        'client-456'
       );
     });
   });
