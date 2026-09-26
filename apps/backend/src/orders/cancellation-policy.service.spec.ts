@@ -88,6 +88,42 @@ describe('CancellationPolicyService', () => {
       expect(policy.refundAmount).toBe(4500);
     });
 
+    it('does not charge a fee for unpaid pay-after cooked food', async () => {
+      configurationsService.getConfigurationByKey.mockResolvedValue({
+        number_value: 500,
+      } as any);
+
+      const order = {
+        ...baseOrder,
+        current_status: 'confirmed',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+        pay_after_merchant_confirm: true,
+      };
+      const policy = await service.getPolicy(order, 'client');
+
+      expect(policy.cancellationFee).toBe(0);
+      expect(policy.refundAmount).toBe(5000);
+      expect(configurationsService.getConfigurationByKey).not.toHaveBeenCalled();
+    });
+
+    it('still charges a fee after pay-after cooked food is paid', async () => {
+      configurationsService.getConfigurationByKey.mockResolvedValue({
+        number_value: 500,
+      } as any);
+
+      const order = {
+        ...baseOrder,
+        current_status: 'preparing',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+      };
+      const policy = await service.getPolicy(order, 'client');
+
+      expect(policy.cancellationFee).toBe(500);
+      expect(policy.refundAmount).toBe(4500);
+    });
+
     it('returns none when fee equals total', async () => {
       configurationsService.getConfigurationByKey.mockResolvedValue({
         number_value: 5000,
