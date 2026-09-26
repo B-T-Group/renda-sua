@@ -4,7 +4,7 @@ const EN = `How delivery works on Rendasua:
 
 - Orders can be fulfilled by delivery (agent/courier) or in-store pickup.
 - **Store products**: Usually 24–48 hours from order confirmation. No minute-level ETA until an agent is assigned and out for delivery.
-- **Food orders**: ASAP only while the kitchen is open. Timing depends on prep time; future-slot scheduling is not available for cooked food.
+- **Food orders**: ASAP only while a dish is being served. Serving days and hours override the business location hours. Timing depends on prep time; future-slot scheduling is not available for cooked food.
 - **Rentals**: Pickup and drop-off at business location. Coordinate timing directly with the business for pickup/return.
 - Fees are calculated by distance; checkout shows the delivery fee before payment.
 - **Tracking**: Track delivery progress on web or in the app once an agent is assigned. Live location and ETA are available when the order is out for delivery.
@@ -15,7 +15,7 @@ const FR = `Comment fonctionne la livraison sur Rendasua :
 
 - Les commandes peuvent être livrées (agent/coursier) ou retirées en magasin.
 - **Produits de magasin** : Habituellement 24–48 h après confirmation de commande. Pas d'ETA en minutes avant qu'un agent soit assigné et en livraison.
-- **Commandes alimentaires** : ASAP uniquement pendant les heures d'ouverture. Le délai dépend du temps de préparation ; la planification d'un créneau futur n'est pas disponible pour les plats cuisinés.
+- **Commandes alimentaires** : ASAP uniquement pendant les horaires de service du plat. Ces jours et heures priment sur les horaires du lieu. Le délai dépend du temps de préparation ; la planification d'un créneau futur n'est pas disponible pour les plats cuisinés.
 - **Locations** : Retrait et retour au lieu du commerce. Coordonnez l'horaire directement avec le commerce pour le retrait/retour.
 - Les frais sont calculés selon la distance ; le checkout les affiche avant paiement.
 - **Suivi** : Suivez la livraison sur le web ou dans l'app une fois un agent assigné. Position en direct et ETA disponibles lorsque la commande est en livraison.

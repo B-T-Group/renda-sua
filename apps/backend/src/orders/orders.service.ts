@@ -118,6 +118,7 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
 import {
@@ -10418,9 +10419,11 @@ export class OrdersService {
       country: string;
       prepMinutes: number;
       isFastDelivery: boolean;
+      foodSlots?: ReturnType<typeof collectCookedFoodSlots>;
     }
   ): Promise<void> {
-    if (!locationHours) return;
+    const foodSlots = asapContext?.foodSlots ?? [];
+    if (!locationHours && foodSlots.length === 0) return;
 
     const slotId = deliveryWindow?.slot_id?.trim();
     const preferredDate = deliveryWindow?.preferred_date?.trim();
@@ -10463,6 +10466,7 @@ export class OrdersService {
     );
     const availability = this.fulfillmentPromiseService.evaluateAsap({
       operatingHours: locationHours,
+      foodSlots: foodSlots.length > 0 ? foodSlots : undefined,
       prepMinutes: asapContext?.prepMinutes ?? 30,
       fulfillmentMethod: asapContext?.fulfillmentMethod ?? 'delivery',
       timezone,
@@ -11000,6 +11004,7 @@ export class OrdersService {
             )
           ).defaultEstimatedPrepMinutes,
         isFastDelivery: !!orderData.requires_fast_delivery,
+        foodSlots: collectCookedFoodSlots(businessInventories),
       }
     );
 

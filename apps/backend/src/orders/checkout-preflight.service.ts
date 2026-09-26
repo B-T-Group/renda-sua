@@ -843,21 +843,25 @@ export class CheckoutPreflightService {
       const timezone = await this.fulfillmentPromiseService.timezoneForCountry(
         group.sellerCountry
       );
+      const groupHasCookedFood = anyLineIsCookedFood(
+        group.inventoryRows.map((row: { item?: unknown }) => row.item as any)
+      );
+      const foodSlots = groupHasCookedFood
+        ? collectCookedFoodSlots(group.inventoryRows)
+        : [];
       const asap = this.fulfillmentPromiseService.evaluateAsap({
         operatingHours: location?.operating_hours,
+        foodSlots: foodSlots.length > 0 ? foodSlots : undefined,
         prepMinutes,
         fulfillmentMethod: fulfillment,
         timezone,
         isFastDelivery: dto.requires_fast_delivery === true,
       });
-      const groupHasCookedFood = anyLineIsCookedFood(
-        group.inventoryRows.map((row: { item?: unknown }) => row.item as any)
-      );
       if (groupHasCookedFood) {
         cookedFoodClosedMeta.set(businessId, {
           timezone,
           operatingHours: location?.operating_hours,
-          foodSlots: collectCookedFoodSlots(group.inventoryRows),
+          foodSlots,
         });
       }
 
