@@ -925,6 +925,113 @@ describe('CheckoutPreflightService', () => {
       ]);
       expect(result.blocking_errors[0]?.message).toContain('Phone charger');
     });
+
+    it('includes kitchen hours when the store cannot take a cooked-food order', async () => {
+      const row = makeFoodInventoryRow();
+      (row.business_location as { operating_hours?: unknown }).operating_hours = {
+        friday: { open: '10:00', close: '22:00' },
+      };
+      mockInventory([row]);
+      const promise = (service as any).fulfillmentPromiseService;
+      promise.timezoneForCountry.mockResolvedValue('Africa/Douala');
+      promise.evaluateAsap.mockReturnValue({
+        available: false,
+        reason: 'closed',
+        opensAt: '2026-08-25T10:30:00.000Z',
+        estimatedPrepMinutes: 30,
+        scheduleRequired: false,
+      });
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          fulfillment_method: 'pickup',
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.groups[0]?.schedule_allowed).toBe(false);
+      const closed = result.blocking_errors.find(
+        (error) => error.code === 'COOKED_FOOD_STORE_CLOSED'
+      );
+      expect(closed?.message).toBe(
+        'This kitchen is closed right now. Available: Mon 12:30–16:00. Next opening: Tuesday at 11:30.'
+      );
+    });
+
+    it('falls back to store hours when a closed kitchen has no serving slots', async () => {
+      const row = makeFoodInventoryRow({ slots: [] });
+      (row.business_location as { operating_hours?: unknown }).operating_hours = {
+        friday: { open: '10:00', close: '22:00' },
+      };
+      mockInventory([row]);
+      const promise = (service as any).fulfillmentPromiseService;
+      promise.timezoneForCountry.mockResolvedValue('Africa/Douala');
+      promise.evaluateAsap.mockReturnValue({
+        available: false,
+        reason: 'closed',
+        opensAt: '2026-08-25T10:30:00.000Z',
+        estimatedPrepMinutes: 30,
+        scheduleRequired: false,
+      });
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          fulfillment_method: 'pickup',
+        },
+        false
+      );
+
+      const closed = result.blocking_errors.find(
+        (error) => error.code === 'COOKED_FOOD_STORE_CLOSED'
+      );
+      expect(closed?.message).toBe(
+        'This kitchen is closed right now. Available: Fri 10:00–22:00. Next opening: Tuesday at 11:30.'
+      );
+    });
+
+    it('does not attach the kitchen-closed blocker to retail when the store is closed', async () => {
+      mockInventory([makeInventoryRow({ itemName: 'Phone charger' })]);
+      (service as any).fulfillmentPromiseService.evaluateAsap.mockReturnValue({
+        available: false,
+        reason: 'closed',
+        opensAt: '2026-08-25T10:30:00.000Z',
+        scheduleRequired: true,
+      });
+
+      const result = await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 1 }] },
+        false
+      );
+
+      expect(
+        result.blocking_errors.some(
+          (error) => error.code === 'COOKED_FOOD_STORE_CLOSED'
+        )
+      ).toBe(false);
+    });
+
+    it('keeps an open cooked-food kitchen free of the closed-store blocker', async () => {
+      mockInventory([makeFoodInventoryRow()]);
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          fulfillment_method: 'pickup',
+        },
+        false
+      );
+
+      expect(result.groups[0]?.schedule_allowed).toBe(false);
+      expect(result.groups[0]?.asap_available).toBe(true);
+      expect(
+        result.blocking_errors.some(
+          (error) => error.code === 'COOKED_FOOD_STORE_CLOSED'
+        )
+      ).toBe(false);
+    });
   });
 
   describe('export-available purchase blockers', () => {

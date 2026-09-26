@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   orderProgressSteps,
+  orderToPhaseInput,
   resolveOrderPhase,
 } from './orderPhase';
 
@@ -154,5 +155,28 @@ describe('resolveOrderPhase pickup ready', () => {
     );
     expect(info.primaryActionId).toBe('none');
     expect(info.nextStepKey).toBe('orders.nextStep.cookedFoodWaitPaymentBusiness');
+  });
+
+  it('infers cooked-food pickup from line flags when the order flag is missing', () => {
+    const input = orderToPhaseInput({
+      fulfillment_method: 'pickup',
+      fulfillment_timing: 'asap',
+      current_status: 'confirmed',
+      pay_after_merchant_confirm: true,
+      payment_status: 'pending',
+      order_items: [{ is_cooked_food: true } as never],
+    });
+    expect(input.isCookedFoodPickup).toBe(true);
+    expect(resolveOrderPhase(input, 'client').primaryActionId).toBe('pay');
+  });
+
+  it('does not infer cooked-food pickup for delivery', () => {
+    const input = orderToPhaseInput({
+      fulfillment_method: 'delivery',
+      fulfillment_timing: 'asap',
+      current_status: 'confirmed',
+      order_items: [{ is_cooked_food: true } as never],
+    });
+    expect(input.isCookedFoodPickup).toBe(false);
   });
 });
