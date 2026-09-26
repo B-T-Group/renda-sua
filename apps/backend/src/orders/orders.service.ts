@@ -123,6 +123,7 @@ import {
   isCookedFoodPickupOrder,
   isCookedFoodFulfillmentOrder,
   anyLineIsCookedFood,
+  lineIsCookedFood,
 } from '../food/cooked-food-flag.util';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
@@ -6622,6 +6623,7 @@ export class OrdersService {
             id
             quantity
             special_instructions
+            is_cooked_food
             item {
               weight
               weight_unit
@@ -6863,6 +6865,7 @@ export class OrdersService {
             quantity
             total_price
             special_instructions
+            is_cooked_food
             item {
               id
               sku
@@ -11092,6 +11095,7 @@ export class OrdersService {
             quantity
             unit_price
             total_price
+            is_cooked_food
           }
         }
       }
@@ -11126,6 +11130,10 @@ export class OrdersService {
           ...(snapshot && { variant_snapshot: snapshot }),
         }),
         ...(choseBaseWithOptions && { variant_name: 'Default' }),
+        is_cooked_food: lineIsCookedFood({
+          is_cooked_food: businessInventory.item?.is_cooked_food,
+          item_sub_category: businessInventory.item?.item_sub_category,
+        }),
         stripe_tax_code_id:
           businessInventory.item.stripe_tax_code_id ||
           STRIPE_TAX_CODE_GENERAL_TANGIBLE,
