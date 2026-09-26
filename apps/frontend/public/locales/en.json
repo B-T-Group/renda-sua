@@ -4121,6 +4121,11 @@
       "isUsed": "Used",
       "isFoodItem": "This is a cooked food item",
       "isFoodItemHelp": "Cooked dishes get serving hours per location and can be marked sold out for the day. Category can be anything — this flag is separate.",
+      "initialDepositEnabled": "Require an initial deposit",
+      "initialDepositHelp": "Buyers who pay at delivery or pickup with mobile money pay this percent of the item price now. You can set 1 to 25.",
+      "initialDepositPercent": "Deposit percent",
+      "initialDepositPercentHelp": "Whole number from 1 to 25.",
+      "initialDepositPercentInvalid": "Enter a deposit percent from 1 to 25.",
       "preparationMinutes": "Preparation time (minutes)",
       "preparationMinutesHelp": "Roughly how long this dish takes to cook."
     },
@@ -8054,5 +8059,15 @@
       "line1": "Loading orders and inventory",
       "line2": "Almost ready"
     }
+  },
+  "deposit": {
+    "reservationTitle": "Reservation deposit",
+    "minimumLabel": "Minimum deposit for this order",
+    "percentageLabel": "{{percentage}}% of items that require a deposit",
+    "mixedItemsLabel": "Deposit on items this store requires a deposit for",
+    "refundableUntilSent": "Refundable until we send it for delivery, or until it is ready for pickup",
+    "appliedToTotal": "Applied to your order — not an extra fee",
+    "dueNow": "Due now (deposit)",
+    "amountDue": "Amount due"
   }
 }

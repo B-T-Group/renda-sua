@@ -137,6 +137,8 @@ export interface UpdateBusinessItemPayload {
   requires_special_handling?: boolean;
   /** True when this is a cooked/restaurant dish. */
   is_cooked_food?: boolean;
+  initial_deposit_enabled?: boolean;
+  initial_deposit_percent?: number | null;
   preparation_minutes?: number | null;
   min_order_quantity?: number;
   max_order_quantity?: number | null;

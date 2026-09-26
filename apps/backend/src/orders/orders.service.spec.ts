@@ -456,10 +456,13 @@ describe('OrdersService', () => {
         {
           provide: require('./deposit-calculation.service').DepositCalculationService,
           useValue: {
-            calculateDeposit: jest.fn().mockReturnValue({
-              depositAmount: 500,
-              amountDue: 4500,
-              totalAmount: 5000,
+            calculateItemDeposit: jest.fn().mockReturnValue({
+              depositAmount: 0,
+              amountDue: 0,
+              totalAmount: 0,
+              minimumApplied: false,
+              percent: null,
+              lines: [],
             }),
             isDepositRequired: jest.fn().mockReturnValue(false),
             remainderPaymentAmount: jest.fn((o: any) =>
@@ -682,11 +685,13 @@ describe('OrdersService', () => {
 
       const depositCalcService = module.get(DepositCalculationService) as jest.Mocked<DepositCalculationService>;
       depositCalcService.isDepositRequired.mockReturnValue(true);
-      depositCalcService.calculateDeposit.mockReturnValue({
+      depositCalcService.calculateItemDeposit.mockReturnValue({
         depositAmount: 550,
-        rate: 0.10,
         amountDue: 4950,
         totalAmount: 5500,
+        minimumApplied: false,
+        percent: 10,
+        lines: [{ initialDepositPercent: 10, initialDepositAmount: 500 }],
       });
 
       (service as any).mobilePaymentsService = {
@@ -759,7 +764,9 @@ describe('OrdersService', () => {
         'pay_at_delivery',
         'mobile_money'
       );
-      expect(depositCalcService.calculateDeposit).toHaveBeenCalledWith(5500, 'XAF');
+      expect(depositCalcService.calculateItemDeposit).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'XAF', orderTotal: 5500 })
+      );
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('mutation CreateOrderWithItems'),
         expect.objectContaining({
@@ -981,11 +988,13 @@ describe('OrdersService', () => {
         DepositCalculationService
       ) as jest.Mocked<DepositCalculationService>;
       depositCalcService.isDepositRequired.mockReturnValue(true);
-      depositCalcService.calculateDeposit.mockReturnValue({
+      depositCalcService.calculateItemDeposit.mockReturnValue({
         depositAmount: 450,
-        rate: 0.1,
         amountDue: 4050,
         totalAmount: 4500,
+        minimumApplied: false,
+        percent: 10,
+        lines: [{ initialDepositPercent: 10, initialDepositAmount: 500 }],
       });
       (service as any).mobilePaymentsService = {
         initiatePayment: jest.fn().mockResolvedValue({
@@ -1085,7 +1094,13 @@ describe('OrdersService', () => {
         delivery_address_id: 'address-123',
       });
 
-      expect(depositCalcService.calculateDeposit).toHaveBeenCalledWith(4500, 'XAF');
+      expect(depositCalcService.calculateItemDeposit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          currency: 'XAF',
+          orderTotal: 4500,
+          lines: [expect.objectContaining({ unitPrice: 5000, quantity: 1 })],
+        })
+      );
     });
   });
 

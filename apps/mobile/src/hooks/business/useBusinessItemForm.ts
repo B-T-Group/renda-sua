@@ -24,6 +24,29 @@ import type { UpdateBusinessItemPayload } from '../../types/business/items';
 import { isFoodCategoryName } from '../../utils/foodAvailability';
 import { useSupportedCurrencies } from './useSupportedCurrencies';
 
+function depositPercentInvalid(
+  values: BusinessItemFormValues,
+  categories: ItemFormCategory[]
+): boolean {
+  const isFood = isFoodCategoryName(
+    categories.find((c) => c.id === values.categoryId)?.name
+  );
+  if (isFood || values.is_cooked_food || !values.initial_deposit_enabled) return false;
+  const percent = Number.parseInt(values.initial_deposit_percent, 10);
+  return !(Number.isInteger(percent) && percent >= 1 && percent <= 25);
+}
+
+function initialDepositPayload(
+  values: BusinessItemFormValues,
+  hideDeposit: boolean
+): Pick<UpdateBusinessItemPayload, 'initial_deposit_enabled' | 'initial_deposit_percent'> {
+  if (hideDeposit || !values.initial_deposit_enabled) {
+    return { initial_deposit_enabled: false, initial_deposit_percent: null };
+  }
+  const percent = Number.parseInt(values.initial_deposit_percent, 10);
+  return { initial_deposit_enabled: true, initial_deposit_percent: percent };
+}
+
 function itemToFormValues(item: BusinessItemDetail, lockedCurrency?: string | null): BusinessItemFormValues {
   const catId = item.item_sub_category?.item_category?.id ?? null;
   return {
@@ -43,6 +66,10 @@ function itemToFormValues(item: BusinessItemDetail, lockedCurrency?: string | nu
     is_perishable: Boolean(item.is_perishable),
     requires_special_handling: Boolean(item.requires_special_handling),
     pay_on_delivery_enabled: Boolean(item.pay_on_delivery_enabled),
+    is_cooked_food: item.is_cooked_food === true,
+    initial_deposit_enabled: item.initial_deposit_enabled === true,
+    initial_deposit_percent:
+      item.initial_deposit_percent != null ? String(item.initial_deposit_percent) : '',
     min_order_quantity: String(item.min_order_quantity ?? 1),
     max_order_quantity:
       item.max_order_quantity != null ? String(item.max_order_quantity) : '',
@@ -79,6 +106,7 @@ function buildPayload(
     is_perishable: values.is_perishable,
     requires_special_handling: values.requires_special_handling,
     pay_on_delivery_enabled: values.pay_on_delivery_enabled,
+    ...initialDepositPayload(values, isFood || values.is_cooked_food),
     min_order_quantity: isFood
       ? 1
       : Number.parseInt(values.min_order_quantity, 10) || 1,
@@ -104,6 +132,9 @@ const EMPTY_FORM: BusinessItemFormValues = {
   is_perishable: false,
   requires_special_handling: false,
   pay_on_delivery_enabled: false,
+  is_cooked_food: false,
+  initial_deposit_enabled: false,
+  initial_deposit_percent: '',
   min_order_quantity: '1',
   max_order_quantity: '',
   is_active: true,
@@ -178,6 +209,12 @@ export function useBusinessItemForm(itemId: string) {
   const save = useCallback(async () => {
     if (!values.name.trim()) {
       setError(t('business.items.nameRequired', 'Name is required'));
+      return false;
+    }
+    if (depositPercentInvalid(values, categories)) {
+      setError(
+        t('business.items.initialDepositPercentInvalid', 'Enter a deposit percent from 1 to 25.')
+      );
       return false;
     }
     setSaving(true);

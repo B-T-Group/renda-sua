@@ -277,6 +277,7 @@ select_permissions:
         - is_diaspora_order
         - fulfillment_country
         - deposit_amount
+        - deposit_minimum_applied
         - deposit_mobile_payment_transaction_id
         - deposit_status
         - deposit_refund_status
@@ -381,6 +382,7 @@ select_permissions:
         - is_diaspora_order
         - fulfillment_country
         - deposit_amount
+        - deposit_minimum_applied
         - deposit_mobile_payment_transaction_id
         - deposit_status
         - deposit_refund_status
@@ -488,6 +490,7 @@ select_permissions:
         - presentment_fx_rate
         - presentment_fx_source
         - deposit_amount
+        - deposit_minimum_applied
         - deposit_mobile_payment_transaction_id
         - deposit_status
         - deposit_refund_status

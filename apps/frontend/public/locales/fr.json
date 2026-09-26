@@ -3815,6 +3815,11 @@
       "isUsed": "Occasion",
       "isFoodItem": "Ceci est un plat préparé",
       "isFoodItemHelp": "Les plats préparés ont des heures de service par emplacement et peuvent être marqués épuisés pour la journée. La catégorie peut être quelconque — ce drapeau est indépendant.",
+      "initialDepositEnabled": "Exiger un acompte initial",
+      "initialDepositHelp": "Les acheteurs qui paient à la livraison ou au retrait en mobile money paient maintenant ce pourcentage du prix de l'article. Vous pouvez choisir de 1 à 25.",
+      "initialDepositPercent": "Pourcentage de l'acompte",
+      "initialDepositPercentHelp": "Nombre entier de 1 à 25.",
+      "initialDepositPercentInvalid": "Saisissez un pourcentage d'acompte de 1 à 25.",
       "preparationMinutes": "Temps de préparation (minutes)",
       "preparationMinutesHelp": "Environ combien de temps ce plat prend à cuisiner."
     },
@@ -8070,5 +8075,15 @@
       "line1": "Chargement des commandes et du stock",
       "line2": "Presque prêt"
     }
+  },
+  "deposit": {
+    "reservationTitle": "Acompte de réservation",
+    "minimumLabel": "Acompte minimum pour cette commande",
+    "percentageLabel": "{{percentage}} % des articles qui exigent un acompte",
+    "mixedItemsLabel": "Acompte sur les articles pour lesquels cette boutique exige un acompte",
+    "refundableUntilSent": "Remboursable jusqu'à l'envoi en livraison ou jusqu'à ce que la commande soit prête pour le retrait",
+    "appliedToTotal": "Appliqué à votre commande — pas de frais supplémentaires",
+    "dueNow": "À payer maintenant (acompte)",
+    "amountDue": "Reste à payer"
   }
 }

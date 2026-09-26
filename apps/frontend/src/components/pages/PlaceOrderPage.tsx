@@ -116,6 +116,7 @@ import {
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
+import { ReservationDepositNote } from '../checkout/ReservationDepositNote';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 import { isFoodCatalogItem, placeOrderMaxQuantity } from '../../constants/food';
@@ -268,6 +269,8 @@ interface OrderSummaryProps {
   depositAmount?: number | null;
   /** Remaining after deposit (from preflight). */
   amountDueAfterDeposit?: number | null;
+  depositMinimumApplied?: boolean;
+  depositPercent?: number | null;
   /** Purchase credit that will auto-apply to the item subtotal. */
   purchaseCreditTotal?: number | null;
   /** Pay-later timing shown in the credit notice. Null means pay now. */
@@ -312,6 +315,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   deliveryUnavailable = false,
   depositAmount = null,
   amountDueAfterDeposit = null,
+  depositMinimumApplied = false,
+  depositPercent = null,
   purchaseCreditTotal = null,
   payLater = null,
 }) => {
@@ -768,6 +773,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                   )}
                 </Typography>
               </Box>
+              <ReservationDepositNote
+                minimumApplied={depositMinimumApplied}
+                percent={depositPercent}
+              />
             </Box>
           ) : null}
         </Box>
@@ -2030,18 +2039,22 @@ const PlaceOrderPage: React.FC = () => {
     checkoutPreflight?.delivery_availability?.available === false;
 
   const preflightDeposit = useMemo(() => {
-    if (cookedFoodMoMoPayAfterConfirm || cookedFoodAsapOnly) {
-      return { depositAmount: null as number | null, amountDue: null as number | null };
-    }
+    const empty = {
+      depositAmount: null as number | null,
+      amountDue: null as number | null,
+      minimumApplied: false,
+      percent: null as number | null,
+    };
+    if (cookedFoodMoMoPayAfterConfirm || cookedFoodAsapOnly) return empty;
     const group = checkoutPreflight?.groups?.[0];
     const deposit = Number(group?.deposit_amount) || 0;
-    if (!group?.deposit_required || deposit <= 0) {
-      return { depositAmount: null as number | null, amountDue: null as number | null };
-    }
+    if (!group?.deposit_required || deposit <= 0) return empty;
     return {
       depositAmount: deposit,
-      amountDue:
-        group.amount_due != null ? Number(group.amount_due) : null,
+      amountDue: group.amount_due != null ? Number(group.amount_due) : null,
+      minimumApplied: group.deposit_minimum_applied === true,
+      percent:
+        group.deposit_percent != null ? Number(group.deposit_percent) : null,
     };
   }, [checkoutPreflight?.groups, cookedFoodMoMoPayAfterConfirm, cookedFoodAsapOnly]);
 
@@ -3200,6 +3213,8 @@ const PlaceOrderPage: React.FC = () => {
               deliveryUnavailable={deliveryUnavailable}
               depositAmount={preflightDeposit.depositAmount}
               amountDueAfterDeposit={preflightDeposit.amountDue}
+              depositMinimumApplied={preflightDeposit.minimumApplied}
+              depositPercent={preflightDeposit.percent}
               purchaseCreditTotal={checkoutPreflight?.purchase_credits?.total}
               payLater={
                 pickupAtStore
@@ -4027,6 +4042,8 @@ const PlaceOrderPage: React.FC = () => {
               deliveryUnavailable={deliveryUnavailable}
               depositAmount={preflightDeposit.depositAmount}
               amountDueAfterDeposit={preflightDeposit.amountDue}
+              depositMinimumApplied={preflightDeposit.minimumApplied}
+              depositPercent={preflightDeposit.percent}
               purchaseCreditTotal={checkoutPreflight?.purchase_credits?.total}
               payLater={
                 pickupAtStore

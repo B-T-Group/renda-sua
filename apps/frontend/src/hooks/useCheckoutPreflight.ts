@@ -52,6 +52,8 @@ export interface CheckoutPreflightGroup {
   deposit_required?: boolean;
   deposit_amount?: number;
   amount_due?: number;
+  deposit_minimum_applied?: boolean;
+  deposit_percent?: number | null;
   momo_pay_now_delivery_enabled?: boolean;
 }
 

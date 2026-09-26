@@ -10,10 +10,10 @@ export interface ReservationDepositExplainerProps {
   depositAmount: number;
   currency: string;
   style?: object;
-  /** True when deposit equals floor amount (150 XAF). */
-  isFloorAmount?: boolean;
-  /** Grand total for calculating percentage (optional). */
-  grandTotal?: number;
+  /** True when the server raised the sum to the 150 XAF minimum. */
+  minimumApplied?: boolean;
+  /** Shared merchant percent. Null when lines use different percents. */
+  percent?: number | null;
 }
 
 /**
@@ -24,16 +24,11 @@ export function ReservationDepositExplainer({
   depositAmount,
   currency,
   style,
-  isFloorAmount,
-  grandTotal,
+  minimumApplied = false,
+  percent = null,
 }: ReservationDepositExplainerProps) {
   const { t } = useTranslation();
   const { colors, typography, spacing, borderRadius } = useTheme();
-
-  // Calculate percentage used for non-floor amounts
-  const percentageUsed = grandTotal && !isFloorAmount && grandTotal > 0
-    ? (grandTotal < 5000 ? 10 : 5)
-    : null;
 
   return (
     <View
@@ -74,33 +69,18 @@ export function ReservationDepositExplainer({
         {formatCatalogMoney(depositAmount, currency)}
       </Text>
 
-      {isFloorAmount ? (
-        <Text
-          variant="bodySmall"
-          style={[
-            typography.caption,
-            {
-              color: colors.text.secondary,
-              marginTop: spacing.xs,
-            },
-          ]}
-        >
-          {t('deposit.minimumLabel', 'Minimum deposit for this order')}
-        </Text>
-      ) : percentageUsed ? (
-        <Text
-          variant="bodySmall"
-          style={[
-            typography.caption,
-            {
-              color: colors.text.secondary,
-              marginTop: spacing.xs,
-            },
-          ]}
-        >
-          {t('deposit.percentageLabel', '{{percentage}}% of your order', { percentage: percentageUsed })}
-        </Text>
-      ) : null}
+      <Text
+        variant="bodySmall"
+        style={[
+          typography.caption,
+          {
+            color: colors.text.secondary,
+            marginTop: spacing.xs,
+          },
+        ]}
+      >
+        {depositDetail(t, minimumApplied, percent)}
+      </Text>
 
       <View style={[styles.bulletList, { marginTop: spacing.sm }]}>
         <View style={styles.bulletRow}>
@@ -144,6 +124,27 @@ export function ReservationDepositExplainer({
       </View>
 
     </View>
+  );
+}
+
+function depositDetail(
+  t: (key: string, defaultValue: string, options?: { percentage: number }) => string,
+  minimumApplied: boolean,
+  percent: number | null
+): string {
+  if (minimumApplied) {
+    return t('deposit.minimumLabel', 'Minimum deposit for this order');
+  }
+  if (percent != null) {
+    return t(
+      'deposit.percentageLabel',
+      '{{percentage}}% of items that require a deposit',
+      { percentage: percent }
+    );
+  }
+  return t(
+    'deposit.mixedItemsLabel',
+    'Deposit on items this store requires a deposit for'
   );
 }
 

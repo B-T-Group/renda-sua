@@ -34,6 +34,8 @@ export interface Item {
   preparation_minutes?: number | null;
   /** Durable cooked-food flag; independent of category. */
   is_cooked_food?: boolean | null;
+  initial_deposit_enabled?: boolean | null;
+  initial_deposit_percent?: number | null;
   min_order_quantity: number;
   max_order_quantity: number | null;
   is_active: boolean;
@@ -159,6 +161,8 @@ export interface CreateItemData {
   preparation_minutes?: number | null;
   /** Durable cooked-food flag; independent of category. */
   is_cooked_food?: boolean;
+  initial_deposit_enabled?: boolean;
+  initial_deposit_percent?: number | null;
   min_order_quantity?: number;
   max_order_quantity?: number;
   is_active?: boolean;

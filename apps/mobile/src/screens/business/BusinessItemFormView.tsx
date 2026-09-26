@@ -337,6 +337,34 @@ export function BusinessItemFormView({ itemId, form, onSaveSuccess }: Props) {
               onChange={(v) => patch('pay_on_delivery_enabled', v)}
             />
           ) : null}
+          {!isFoodItem && !values.is_cooked_food ? (
+            <>
+              <SwitchRow
+                label={t('business.items.initialDepositEnabled', 'Require an initial deposit')}
+                value={values.initial_deposit_enabled}
+                onChange={(v) => {
+                  patch('initial_deposit_enabled', v);
+                  if (!v) patch('initial_deposit_percent', '');
+                }}
+              />
+              <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                {t(
+                  'business.items.initialDepositHelp',
+                  'Buyers who pay at delivery or pickup with mobile money pay this percent of the item price now. You can set 1 to 25.'
+                )}
+              </Text>
+              {values.initial_deposit_enabled ? (
+                <TextInput
+                  label={t('business.items.initialDepositPercent', 'Deposit percent')}
+                  value={values.initial_deposit_percent}
+                  onChangeText={(v) => patch('initial_deposit_percent', v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  mode="outlined"
+                  style={styles.input}
+                />
+              ) : null}
+            </>
+          ) : null}
           <Button
             mode="outlined"
             icon="truck-delivery-outline"

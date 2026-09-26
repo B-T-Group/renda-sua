@@ -700,6 +700,68 @@ export class OrdersService {
     return this.computeUnitPriceFromBase(base, deal);
   }
 
+  private initialDepositQuote(
+    lineContexts: Array<{ inventory: any; variant: any }>,
+    items: Array<{ quantity: number }>,
+    dealsMap: Record<string, { discount_type: string; discount_value: number }>,
+    currency: string,
+    orderTotal: number
+  ) {
+    const lines = lineContexts.map((ctx, idx) =>
+      this.depositLineInput(ctx, items[idx]?.quantity ?? 0, dealsMap)
+    );
+    return this.depositCalculationService.calculateItemDeposit({
+      lines,
+      currency,
+      orderTotal,
+    });
+  }
+
+  private depositLineInput(
+    ctx: { inventory: any; variant: any },
+    quantity: number,
+    dealsMap: Record<string, { discount_type: string; discount_value: number }>
+  ) {
+    const item = ctx.inventory.item;
+    return {
+      unitPrice: this.computeUnitPriceFromVariantOrInventory(
+        ctx.inventory,
+        ctx.variant,
+        dealsMap[ctx.inventory.id]
+      ),
+      quantity,
+      initialDepositEnabled: item?.initial_deposit_enabled === true,
+      initialDepositPercent: item?.initial_deposit_percent ?? null,
+      isCookedFood: lineIsCookedFood(item),
+    };
+  }
+
+  private shouldCollectInitialDeposit(input: {
+    cookedFoodFulfillment: boolean;
+    paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
+    rail: 'mobile_money' | 'stripe' | 'wallet';
+    depositAmount: number;
+  }): boolean {
+    if (input.cookedFoodFulfillment || input.depositAmount <= 0) return false;
+    return this.depositCalculationService.isDepositRequired(
+      input.paymentTiming,
+      input.rail
+    );
+  }
+
+  private orderItemDepositSnapshot(
+    collect: boolean,
+    line?: { initialDepositPercent: number | null; initialDepositAmount: number | null }
+  ) {
+    if (!collect || !line?.initialDepositPercent) {
+      return { initial_deposit_percent: null, initial_deposit_amount: null };
+    }
+    return {
+      initial_deposit_percent: line.initialDepositPercent,
+      initial_deposit_amount: line.initialDepositAmount,
+    };
+  }
+
   private primaryVariantImageUrl(variant: any): string | null {
     const images = variant?.item_variant_images ?? [];
     if (!Array.isArray(images) || images.length === 0) {
@@ -10853,6 +10915,8 @@ export class OrdersService {
             max_order_quantity
             preparation_minutes
             is_cooked_food
+            initial_deposit_enabled
+            initial_deposit_percent
             stripe_tax_code_id
             item_sub_category {
               item_category { name }
@@ -11482,23 +11546,28 @@ export class OrdersService {
       }
     }
     
-    // Determine initial status for pay_at_delivery/pickup orders
-    // When deposit is required, start in pending_payment (not pending)
-    // to avoid triggering acceptance SLA before deposit is paid
+    const depositQuote = this.initialDepositQuote(
+      lineContexts,
+      orderData.items,
+      dealsMap,
+      currency,
+      total_amount
+    );
+    // When a deposit is required, start in pending_payment (not pending)
+    // so acceptance SLA does not start before the deposit is paid.
+    let collectInitialDeposit = false;
     let current_status: string;
     if (payAfterMerchantConfirm) {
-      // Cooked-food MoMo: no deposit; merchant confirms before payment.
       current_status = 'pending';
     } else if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
       const railForDepositCheck = getDepositRailForPayAtTiming();
-      const requiresDeposit =
-        !cookedFoodFulfillment &&
-        this.depositCalculationService.isDepositRequired(
-          paymentTiming,
-          railForDepositCheck
-        );
-      // If deposit required, start in pending_payment until deposit is captured
-      current_status = requiresDeposit ? 'pending_payment' : 'pending';
+      collectInitialDeposit = this.shouldCollectInitialDeposit({
+        cookedFoodFulfillment,
+        paymentTiming,
+        rail: railForDepositCheck,
+        depositAmount: depositQuote.depositAmount,
+      });
+      current_status = collectInitialDeposit ? 'pending_payment' : 'pending';
     } else {
       current_status = 'pending_payment';
     }
@@ -11750,6 +11819,7 @@ export class OrdersService {
           is_cooked_food: businessInventory.item?.is_cooked_food,
           item_sub_category: businessInventory.item?.item_sub_category,
         }),
+        ...this.orderItemDepositSnapshot(collectInitialDeposit, depositQuote.lines[idx]),
         stripe_tax_code_id:
           businessInventory.item.stripe_tax_code_id ||
           STRIPE_TAX_CODE_GENERAL_TANGIBLE,
@@ -11908,26 +11978,10 @@ export class OrdersService {
       }
     }
 
-    if (
-      !payAfterMerchantConfirm &&
-      !cookedFoodFulfillment &&
-      (paymentTiming === 'pay_at_delivery' ||
-        paymentTiming === 'pay_at_pickup')
-    ) {
-      // MoMo reservation deposit collection for pay_at_delivery/pickup
-      // Use same rail logic as status decision above
-      const railForDeposit = getDepositRailForPayAtTiming();
-      const requiresDeposit = this.depositCalculationService.isDepositRequired(
-        paymentTiming,
-        railForDeposit
-      );
-
-      if (requiresDeposit) {
-        try {
-          const depositCalc = this.depositCalculationService.calculateDeposit(
-            total_amount,
-            currency
-          );
+    if (collectInitialDeposit) {
+      // MoMo reservation deposit for opted-in items on pay_at_delivery/pickup
+      try {
+        const depositCalc = depositQuote;
 
           // Generate references: long for DB, short for MyPVIT (≤15 chars)
           const depositLongReference = `${order.order_number}-DEP-${Date.now()}`;
@@ -11988,6 +12042,7 @@ export class OrdersService {
             mutation UpdateOrderDeposit(
               $orderId: uuid!,
               $depositAmount: numeric!,
+              $depositMinimumApplied: Boolean!,
               $depositMobilePaymentTransactionId: uuid!,
               $currentStatus: order_status!
             ) {
@@ -11995,6 +12050,7 @@ export class OrdersService {
                 pk_columns: { id: $orderId }
                 _set: {
                   deposit_amount: $depositAmount
+                  deposit_minimum_applied: $depositMinimumApplied
                   deposit_mobile_payment_transaction_id: $depositMobilePaymentTransactionId
                   deposit_status: "pending"
                   current_status: $currentStatus
@@ -12008,6 +12064,7 @@ export class OrdersService {
           await this.hasuraSystemService.executeMutation(updateDepositMutation, {
             orderId: order.id,
             depositAmount: depositCalc.depositAmount,
+            depositMinimumApplied: depositCalc.minimumApplied,
             depositMobilePaymentTransactionId: depositTransaction.id,
             currentStatus: 'pending_payment',
           });
@@ -12033,6 +12090,7 @@ export class OrdersService {
             current_status: 'pending_payment',
             total_amount: total_amount,
             deposit_amount: depositCalc.depositAmount,
+            deposit_minimum_applied: depositCalc.minimumApplied,
             deposit_status: 'pending',
             amount_due: depositCalc.amountDue,
             delivery_window: deliveryWindow,
@@ -12061,10 +12119,16 @@ export class OrdersService {
             { allowPendingUnpaid: true }
           );
           throw error;
-        }
       }
+    }
 
-      // No deposit required (non-XAF, Stripe rail, etc.) - proceed with normal deferred payment
+    if (
+      !payAfterMerchantConfirm &&
+      !cookedFoodFulfillment &&
+      (paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup')
+    ) {
+    // No deposit required — proceed with normal deferred payment
       // Deferred-payment orders are not finalized at placement time, but we still want the
       // "order placed" notifications to go out immediately.
       try {

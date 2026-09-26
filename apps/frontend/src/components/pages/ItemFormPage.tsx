@@ -121,6 +121,12 @@ interface ItemFormData {
   stripe_tax_code_id: string;
   preparation_minutes: number | null;
   is_cooked_food: boolean;
+  initial_deposit_enabled: boolean;
+  initial_deposit_percent: number | null;
+}
+
+function isValidDepositPercent(value: number | null): boolean {
+  return value != null && Number.isInteger(value) && value >= 1 && value <= 25;
 }
 
 const ItemFormPage: React.FC = () => {
@@ -169,6 +175,8 @@ const ItemFormPage: React.FC = () => {
     stripe_tax_code_id: STRIPE_TAX_CODE_GENERAL_TANGIBLE,
     preparation_minutes: null,
     is_cooked_food: false,
+    initial_deposit_enabled: false,
+    initial_deposit_percent: null,
   });
 
   useEffect(() => {
@@ -205,6 +213,8 @@ const ItemFormPage: React.FC = () => {
       is_cooked_food: checked,
       preparation_minutes: checked ? prev.preparation_minutes : null,
       min_order_quantity: checked ? 1 : prev.min_order_quantity,
+      initial_deposit_enabled: checked ? false : prev.initial_deposit_enabled,
+      initial_deposit_percent: checked ? null : prev.initial_deposit_percent,
     }));
   }, []);
 
@@ -328,6 +338,10 @@ const ItemFormPage: React.FC = () => {
               is_cooked_food:
                 (foundItem as Item & { is_cooked_food?: boolean | null })
                   .is_cooked_food === true,
+              initial_deposit_enabled:
+                (foundItem as Item).initial_deposit_enabled === true,
+              initial_deposit_percent:
+                (foundItem as Item).initial_deposit_percent ?? null,
             });
 
             // Set category and subcategory for edit mode
@@ -459,6 +473,20 @@ const ItemFormPage: React.FC = () => {
       return;
     }
 
+    if (
+      !isCookedFoodItem &&
+      formData.initial_deposit_enabled &&
+      !isValidDepositPercent(formData.initial_deposit_percent)
+    ) {
+      setError(
+        t(
+          'business.items.initialDepositPercentInvalid',
+          'Enter a deposit percent from 1 to 25.'
+        )
+      );
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -473,6 +501,13 @@ const ItemFormPage: React.FC = () => {
           name: normalizedName,
           min_order_quantity: isCookedFoodItem ? 1 : formData.min_order_quantity,
           is_cooked_food: isCookedFoodItem,
+          initial_deposit_enabled: isCookedFoodItem
+            ? false
+            : formData.initial_deposit_enabled,
+          initial_deposit_percent:
+            isCookedFoodItem || !formData.initial_deposit_enabled
+              ? null
+              : formData.initial_deposit_percent,
           // Coerce nullable values to undefined to satisfy API requirements
           weight: formData.weight ?? undefined,
           brand_id: formData.brand_id ?? undefined,
@@ -499,6 +534,13 @@ const ItemFormPage: React.FC = () => {
           business_id: effectiveBusinessId,
           min_order_quantity: isCookedFoodItem ? 1 : formData.min_order_quantity,
           is_cooked_food: isCookedFoodItem,
+          initial_deposit_enabled: isCookedFoodItem
+            ? false
+            : formData.initial_deposit_enabled,
+          initial_deposit_percent:
+            isCookedFoodItem || !formData.initial_deposit_enabled
+              ? null
+              : formData.initial_deposit_percent,
           // Coerce nullable values to undefined to satisfy API requirements
           weight: formData.weight ?? undefined,
           brand_id: formData.brand_id ?? undefined,
@@ -1138,6 +1180,67 @@ const ItemFormPage: React.FC = () => {
                         )}
                       </Typography>
                     </Grid>
+
+                  {!isCookedFoodItem && (
+                    <Grid size={{ xs: 12 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={formData.initial_deposit_enabled}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                initial_deposit_enabled: e.target.checked,
+                                initial_deposit_percent: e.target.checked
+                                  ? prev.initial_deposit_percent
+                                  : null,
+                              }))
+                            }
+                            disabled={loading}
+                          />
+                        }
+                        label={t(
+                          'business.items.initialDepositEnabled',
+                          'Require an initial deposit'
+                        )}
+                      />
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {t(
+                          'business.items.initialDepositHelp',
+                          'Buyers who pay at delivery or pickup with mobile money pay this percent of the item price now. You can set 1 to 25.'
+                        )}
+                      </Typography>
+                      {formData.initial_deposit_enabled && (
+                        <TextField
+                          sx={{ mt: 1, maxWidth: 240 }}
+                          type="number"
+                          label={t(
+                            'business.items.initialDepositPercent',
+                            'Deposit percent'
+                          )}
+                          value={formData.initial_deposit_percent ?? ''}
+                          onChange={(e) =>
+                            handleInputChange(
+                              'initial_deposit_percent',
+                              e.target.value === ''
+                                ? null
+                                : parseInt(e.target.value, 10)
+                            )
+                          }
+                          disabled={loading}
+                          inputProps={{ min: 1, max: 25, step: 1 }}
+                          error={
+                            formData.initial_deposit_percent != null &&
+                            !isValidDepositPercent(formData.initial_deposit_percent)
+                          }
+                          helperText={t(
+                            'business.items.initialDepositPercentHelp',
+                            'Whole number from 1 to 25.'
+                          )}
+                        />
+                      )}
+                    </Grid>
+                  )}
 
                   {isCookedFoodItem && (
                     <Grid size={{ xs: 12, sm: 6 }}>

@@ -25,6 +25,14 @@ import { trackProductCreateEvent } from '../../../../utils/productCreateAnalytic
 import type { CreatedSaleItemSummary } from './FirstSaleItemCreateStep';
 import type { ReviewFormValues } from './FirstSaleItemReviewStep';
 
+function depositPatch(enabled: boolean, percentText: string): Record<string, unknown> {
+  if (!enabled) {
+    return { initial_deposit_enabled: false, initial_deposit_percent: null };
+  }
+  const percent = Number.parseInt(percentText, 10);
+  return { initial_deposit_enabled: true, initial_deposit_percent: percent };
+}
+
 export interface FirstSaleItemPublishStepProps {
   itemId: string;
   imageIds: string[];
@@ -32,6 +40,8 @@ export interface FirstSaleItemPublishStepProps {
   merchantHint: string;
   /** Merchant toggled "This is a cooked food item" on the description step. */
   isFoodItem?: boolean;
+  initialDepositEnabled?: boolean;
+  initialDepositPercent?: string;
   qualityScore?: number;
   initialLocationId?: string;
   onComplete: (
@@ -47,6 +57,8 @@ const FirstSaleItemPublishStep: React.FC<FirstSaleItemPublishStepProps> = ({
   form,
   merchantHint,
   isFoodItem = false,
+  initialDepositEnabled = false,
+  initialDepositPercent = '',
   qualityScore,
   initialLocationId,
   onComplete,
@@ -123,7 +135,13 @@ const FirstSaleItemPublishStep: React.FC<FirstSaleItemPublishStepProps> = ({
         brandName: form.brandName.trim() || undefined,
         is_used: form.isUsed,
         dimensions: form.dimensions.trim() || undefined,
-        ...(treatAsCookedFood ? { is_cooked_food: true } : {}),
+        ...(treatAsCookedFood
+          ? {
+              is_cooked_food: true,
+              initial_deposit_enabled: false,
+              initial_deposit_percent: null,
+            }
+          : depositPatch(initialDepositEnabled, initialDepositPercent)),
       };
       const prepMinutes = Number.parseInt(form.preparationMinutes ?? '', 10);
       if (Number.isFinite(prepMinutes) && prepMinutes >= 0) {

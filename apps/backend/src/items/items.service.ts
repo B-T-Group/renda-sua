@@ -10,6 +10,7 @@ import {
   assertItemDecimalField,
   rethrowNumericOverflow,
 } from './item-numeric-fields';
+import { resolveInitialDepositSave } from './initial-deposit.util';
 
 /** Payload for `items` insert; `business_id` is set by the service. */
 export type ItemsInsertInput = Record<string, unknown>;
@@ -35,6 +36,8 @@ const MUTABLE_ITEM_FIELDS = [
   'estimated_delivery_time',
   'preparation_minutes',
   'is_cooked_food',
+  'initial_deposit_enabled',
+  'initial_deposit_percent',
   'min_order_quantity',
   'max_order_quantity',
   'is_active',
@@ -175,6 +178,7 @@ export class ItemsService {
         : cookedFoodIgnoresStock(categoryName);
     const itemData = {
       ...mutable,
+      ...this.requireInitialDepositFields(mutable, isCookedFood, true),
       is_cooked_food: isCookedFood,
       min_order_quantity: resolveCookedFoodMinOrderQuantity({
         requestedMin:
@@ -650,24 +654,59 @@ export class ItemsService {
     }
 
     if (cookedFoodIgnoresStock(categoryName, isCookedFood)) {
-      return {
+      return this.withInitialDeposit(withDescription, isCookedFood, {
         ...withDescription,
         is_cooked_food: true,
         min_order_quantity: 1,
-      };
+      });
     }
 
     if (Object.prototype.hasOwnProperty.call(withDescription, 'min_order_quantity')) {
-      return {
+      return this.withInitialDeposit(withDescription, isCookedFood, {
         ...withDescription,
         min_order_quantity: resolveCookedFoodMinOrderQuantity({
           requestedMin,
           categoryName,
           isCookedFood,
         }),
-      };
+      });
     }
-    return withDescription;
+    return this.withInitialDeposit(withDescription, isCookedFood, withDescription);
+  }
+
+  private withInitialDeposit(
+    source: Record<string, unknown>,
+    isCookedFood: boolean,
+    payload: Record<string, unknown>
+  ): Record<string, unknown> {
+    return {
+      ...payload,
+      ...this.requireInitialDepositFields(source, isCookedFood, false),
+    };
+  }
+
+  private requireInitialDepositFields(
+    source: Record<string, unknown>,
+    isCookedFood: boolean,
+    force: boolean
+  ): Record<string, unknown> {
+    const touchDeposit =
+      force ||
+      Object.prototype.hasOwnProperty.call(source, 'initial_deposit_enabled') ||
+      Object.prototype.hasOwnProperty.call(source, 'initial_deposit_percent');
+    const resolved = resolveInitialDepositSave({
+      isCookedFood,
+      enabled: source.initial_deposit_enabled,
+      percent: source.initial_deposit_percent,
+      touchDeposit,
+    });
+    if (resolved.error) {
+      throw new HttpException(
+        { success: false, message: resolved.error },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return resolved.fields ?? {};
   }
 
   private resolveExistingCookedFoodFlag(

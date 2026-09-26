@@ -60,7 +60,7 @@ import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgr
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
 import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
-import { resolveDepositAmount, isMoMoDepositCheckoutPath } from '../../types/deposit';
+import { resolveDepositAmount, isMoMoDepositCheckoutPath, preflightDepositCopy } from '../../types/deposit';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
 import { isAddressComplete } from '../../utils/addressCompleteness';
 import {
@@ -567,11 +567,10 @@ export default observer(function CartCheckoutScreen() {
     preflightConfig?.groups,
   ]);
 
-  const depositIsFloor = useMemo(() => {
-    if (!depositAmount) return false;
-    const DEPOSIT_FLOOR = 150;
-    return depositAmount === DEPOSIT_FLOOR;
-  }, [depositAmount]);
+  const depositCopy = useMemo(
+    () => preflightDepositCopy(preflightConfig),
+    [preflightConfig]
+  );
 
   const stickyBreakdown = useMemo((): CheckoutStickyBreakdownLine[] => {
     const lines: CheckoutStickyBreakdownLine[] = [
@@ -1393,8 +1392,8 @@ export default observer(function CartCheckoutScreen() {
           <ReservationDepositExplainer
             depositAmount={depositAmount}
             currency={currency}
-            isFloorAmount={depositIsFloor}
-            grandTotal={grandTotal}
+            minimumApplied={depositCopy.minimumApplied}
+            percent={depositCopy.percent}
             style={{ marginBottom: spacing.sm }}
           />
         ) : null}

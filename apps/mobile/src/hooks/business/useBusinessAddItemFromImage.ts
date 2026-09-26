@@ -85,6 +85,8 @@ const EMPTY_FORM: AiReviewFormValues = {
   quantity: '1',
   locationId: '',
   isUsed: false,
+  initialDepositEnabled: false,
+  initialDepositPercent: '',
   payAtPickupEnabled: true,
   shippingEnabled: false,
   shippingPrice: '',
@@ -916,17 +918,36 @@ export function useBusinessAddItemFromImage() {
 
   const onFoodItemChange = useCallback((value: boolean) => {
     setIsFoodItem(value);
-    if (value) {
-      setForm((prev) => ({
-        ...prev,
-        categoryName: FOOD_CATEGORY_NAME,
-        subCategoryName: FOOD_SUB_CATEGORY_NAME,
-      }));
-    }
+    setForm((prev) => ({
+      ...prev,
+      ...(value
+        ? {
+            categoryName: FOOD_CATEGORY_NAME,
+            subCategoryName: FOOD_SUB_CATEGORY_NAME,
+            initialDepositEnabled: false,
+            initialDepositPercent: '',
+          }
+        : {}),
+    }));
   }, []);
 
   const onPriceChange = useCallback((value: string) => {
     setForm((prev) => ({ ...prev, price: value }));
+  }, []);
+
+  const onInitialDepositEnabledChange = useCallback((value: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      initialDepositEnabled: value,
+      initialDepositPercent: value ? prev.initialDepositPercent : '',
+    }));
+  }, []);
+
+  const onInitialDepositPercentChange = useCallback((value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      initialDepositPercent: value.replace(/[^0-9]/g, ''),
+    }));
   }, []);
 
   const persistFormToServer = useCallback(
@@ -1306,6 +1327,8 @@ export function useBusinessAddItemFromImage() {
     isFoodItem,
     onFoodItemChange,
     onPriceChange,
+    onInitialDepositEnabledChange,
+    onInitialDepositPercentChange,
     aiLoading,
     aiError,
     aiTokens,
@@ -1382,6 +1405,16 @@ function mergeSuggestionForm(
   };
 }
 
+function depositFields(
+  values: AiReviewFormValues
+): Pick<UpdateBusinessItemPayload, 'initial_deposit_enabled' | 'initial_deposit_percent'> {
+  if (!values.initialDepositEnabled) {
+    return { initial_deposit_enabled: false, initial_deposit_percent: null };
+  }
+  const percent = Number.parseInt(values.initialDepositPercent, 10);
+  return { initial_deposit_enabled: true, initial_deposit_percent: percent };
+}
+
 function saleItemUpdatePayload(
   values: AiReviewFormValues,
   currency: string,
@@ -1403,7 +1436,13 @@ function saleItemUpdatePayload(
       : values.subCategoryName.trim() || undefined,
     brandName: values.brandName.trim() || undefined,
     is_used: values.isUsed,
-    ...(treatAsCookedFood ? { is_cooked_food: true } : {}),
+    ...(treatAsCookedFood
+      ? {
+          is_cooked_food: true,
+          initial_deposit_enabled: false,
+          initial_deposit_percent: null,
+        }
+      : depositFields(values)),
     pay_at_pickup_enabled: values.payAtPickupEnabled,
     shipping_enabled: values.shippingEnabled,
     ...(values.shippingEnabled && shippingPrice != null

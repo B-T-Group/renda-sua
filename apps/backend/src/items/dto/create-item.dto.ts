@@ -71,6 +71,19 @@ export class CreateItemDto {
   })
   is_cooked_food?: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      'When true, Mobile Money pay-at-delivery or pickup collects an initial deposit. Not allowed on cooked food.',
+    default: false,
+  })
+  initial_deposit_enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Whole-number percent (1-25) of the item price collected as the initial deposit. Required when initial_deposit_enabled is true.',
+  })
+  initial_deposit_percent?: number | null;
+
   @ApiPropertyOptional()
   min_order_quantity?: number;
 

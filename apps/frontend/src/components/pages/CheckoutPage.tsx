@@ -55,6 +55,7 @@ import {
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
+import { ReservationDepositNote } from '../checkout/ReservationDepositNote';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
@@ -104,6 +105,20 @@ interface BusinessDeliveryFee {
   fullDeliveryFeeWithoutPromo?: number;
 }
 
+function sharedDepositCopy(
+  groups: Array<{
+    deposit_minimum_applied?: boolean;
+    deposit_percent?: number | null;
+  }>
+): { minimumApplied: boolean; percent: number | null } {
+  if (groups.some((group) => group.deposit_minimum_applied === true)) {
+    return { minimumApplied: true, percent: null };
+  }
+  const first = groups[0]?.deposit_percent ?? null;
+  const shared = groups.every((group) => (group.deposit_percent ?? null) === first);
+  return { minimumApplied: false, percent: shared ? first : null };
+}
+
 interface OrderSummaryProps {
   cartItems: CartItem[];
   businessDeliveryFees: Map<string, BusinessDeliveryFee>;
@@ -122,7 +137,12 @@ interface OrderSummaryProps {
   discountLoading: boolean;
   discountError: string | null;
   showTaxAtCheckoutNotice?: boolean;
-  depositBreakdown?: { depositAmount: number; amountDue: number } | null;
+  depositBreakdown?: {
+    depositAmount: number;
+    amountDue: number;
+    minimumApplied: boolean;
+    percent: number | null;
+  } | null;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -386,6 +406,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               {formatCurrency(depositBreakdown.amountDue, currency)}
             </Typography>
           </Box>
+          <ReservationDepositNote
+            minimumApplied={depositBreakdown.minimumApplied}
+            percent={depositBreakdown.percent}
+          />
         </Box>
       ) : null}
 
@@ -751,7 +775,11 @@ const CheckoutPage: React.FC = () => {
           : Math.max(0, (Number(g.total) || 0) - (Number(g.deposit_amount) || 0))),
       0
     );
-    return { depositAmount, amountDue };
+    return {
+      depositAmount,
+      amountDue,
+      ...sharedDepositCopy(withDeposit),
+    };
   }, [preflightGroups, cookedFoodMoMoPayAfterConfirm, cookedFoodAsapOnly]);
 
   // Reason-blind delivery availability (aggregated + per seller group).

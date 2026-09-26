@@ -123,6 +123,8 @@ export interface CheckoutGroup {
   deposit_amount?: number | null;
   deposit_paid?: number | null;
   amount_due?: number | null;
+  deposit_minimum_applied?: boolean | null;
+  deposit_percent?: number | null;
   deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
 }
 
@@ -207,11 +209,13 @@ export interface ResolvedCheckoutConfig {
   diaspora?: CheckoutDiaspora | null;
   /** True when MoMo pay-now for delivery is enabled (default false; hide full pay-now). */
   momo_pay_now_delivery_enabled?: boolean | null;
-  /** Server-authoritative deposit amount (XAF). UI always prefers this when present. */
+  /** Server-authoritative deposit amount. UI always prefers this when present. */
   deposit_required?: boolean | null;
   deposit_amount?: number | null;
   deposit_paid?: number | null;
   amount_due?: number | null;
+  deposit_minimum_applied?: boolean | null;
+  deposit_percent?: number | null;
   deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
   /** Purchase credits that will auto-apply to item subtotals. */
   purchase_credits?: {

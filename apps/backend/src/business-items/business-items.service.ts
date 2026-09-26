@@ -69,6 +69,8 @@ const GET_ITEMS = `
       estimated_delivery_time
       preparation_minutes
       is_cooked_food
+      initial_deposit_enabled
+      initial_deposit_percent
       min_order_quantity
       max_order_quantity
       is_active
@@ -330,6 +332,8 @@ const GET_SINGLE_ITEM = `
       estimated_delivery_time
       preparation_minutes
       is_cooked_food
+      initial_deposit_enabled
+      initial_deposit_percent
       min_order_quantity
       max_order_quantity
       is_active
@@ -574,6 +578,8 @@ const GET_AVAILABLE_ITEMS = `
       estimated_delivery_time
       preparation_minutes
       is_cooked_food
+      initial_deposit_enabled
+      initial_deposit_percent
       min_order_quantity
       max_order_quantity
       is_active

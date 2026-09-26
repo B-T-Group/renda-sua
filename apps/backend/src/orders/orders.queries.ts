@@ -223,6 +223,7 @@ export const GET_ORDER_BY_ID = gql`
       payment_status
       verified_agent_delivery
       deposit_amount
+      deposit_minimum_applied
       deposit_mobile_payment_transaction_id
       deposit_status
       deposit_refund_status

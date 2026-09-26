@@ -371,6 +371,19 @@ export class CheckoutGroupDto {
 
   @ApiPropertyOptional({
     description:
+      'True when the charged deposit was raised to the 150 XAF Mobile Money minimum.',
+  })
+  deposit_minimum_applied?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Shared item deposit percent when every opted-in line uses the same rate. Null when rates differ or the minimum applied.',
+    nullable: true,
+  })
+  deposit_percent?: number | null;
+
+  @ApiPropertyOptional({
+    description:
       'True when MoMo pay_now is enabled for delivery in this market. False means pay_now is hidden for MoMo + delivery.',
   })
   momo_pay_now_delivery_enabled?: boolean;
@@ -709,6 +722,19 @@ export class CheckoutPreflightResponseDto {
       'Hoisted from the first seller group: remaining amount due after deposit (total - deposit_amount).',
   })
   amount_due?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: true when the 150 XAF minimum was applied.',
+  })
+  deposit_minimum_applied?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: shared item deposit percent, or null when rates differ.',
+    nullable: true,
+  })
+  deposit_percent?: number | null;
 
   @ApiPropertyOptional({
     description:

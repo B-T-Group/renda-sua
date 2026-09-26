@@ -40,6 +40,9 @@ export interface BusinessItemDetail {
   min_order_quantity?: number;
   max_order_quantity?: number | null;
   is_active?: boolean;
+  is_cooked_food?: boolean | null;
+  initial_deposit_enabled?: boolean | null;
+  initial_deposit_percent?: number | null;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
   shipping_enabled?: boolean;
@@ -72,6 +75,9 @@ export interface BusinessItemFormValues {
   is_perishable: boolean;
   requires_special_handling: boolean;
   pay_on_delivery_enabled: boolean;
+  is_cooked_food: boolean;
+  initial_deposit_enabled: boolean;
+  initial_deposit_percent: string;
   min_order_quantity: string;
   max_order_quantity: string;
   is_active: boolean;

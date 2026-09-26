@@ -74,6 +74,8 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
   const [merchantHint, setMerchantHint] = useState('');
   const [merchantPrice, setMerchantPrice] = useState('');
   const [isFoodItem, setIsFoodItem] = useState(false);
+  const [initialDepositEnabled, setInitialDepositEnabled] = useState(false);
+  const [initialDepositPercent, setInitialDepositPercent] = useState('');
   const [preparationMinutes, setPreparationMinutes] = useState('');
   const [itemId, setItemId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ImageItemSuggestions | null>(
@@ -288,7 +290,17 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             preparationMinutes={preparationMinutes}
             onChange={setMerchantHint}
             onPriceChange={setMerchantPrice}
-            onFoodItemChange={setIsFoodItem}
+            onFoodItemChange={(checked) => {
+              setIsFoodItem(checked);
+              if (checked) {
+                setInitialDepositEnabled(false);
+                setInitialDepositPercent('');
+              }
+            }}
+            initialDepositEnabled={initialDepositEnabled}
+            initialDepositPercent={initialDepositPercent}
+            onInitialDepositEnabledChange={setInitialDepositEnabled}
+            onInitialDepositPercentChange={setInitialDepositPercent}
             onPreparationMinutesChange={setPreparationMinutes}
             onContinue={() => {
               if (!merchantHint.trim()) return;
@@ -341,6 +353,8 @@ const FirstSaleItemFlow: React.FC<FirstSaleItemFlowProps> = ({
             form={reviewForm}
             merchantHint={merchantHint}
             isFoodItem={isFoodItem}
+            initialDepositEnabled={initialDepositEnabled}
+            initialDepositPercent={initialDepositPercent}
             qualityScore={suggestions?.listingQuality?.score}
             initialLocationId={initialLocationId}
             onComplete={(summary, asDraft, locName) => {

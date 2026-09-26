@@ -63,7 +63,9 @@ import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import {
   anyLineIsCookedFood,
   isCookedFoodFulfillmentOrder,
+  lineIsCookedFood,
 } from '../food/cooked-food-flag.util';
+import type { DepositLineInput } from './deposit-calculation.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 
@@ -119,6 +121,8 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         shipping_price
         shipping_currency
         is_cooked_food
+        initial_deposit_enabled
+        initial_deposit_percent
         item_sub_category {
           item_category { name }
         }
@@ -781,11 +785,6 @@ export class CheckoutPreflightService {
       const totalFee = shippingFee ?? deliveryFee ?? 0;
       const grandTotal = subtotal + totalFee;
 
-      // Calculate deposit for MoMo + pay_at_delivery/pickup (any MM currency)
-      let depositRequired = false;
-      let depositAmount: number | undefined;
-      let amountDue: number | undefined;
-
       const requestedOrAvailableTiming = dto.payment_timing ?? 
         (allowedPaymentTimings.includes('pay_at_delivery') ? 'pay_at_delivery' :
          allowedPaymentTimings.includes('pay_at_pickup') ? 'pay_at_pickup' : 'pay_now');
@@ -809,27 +808,15 @@ export class CheckoutPreflightService {
       const groupIsCookedFoodPayAfter =
         groupIsCookedFood && rail === 'mobile_money';
 
-      if (
-        rail === 'mobile_money' &&
-        !groupIsCookedFood &&
-        (requestedOrAvailableTiming === 'pay_at_delivery' ||
-          requestedOrAvailableTiming === 'pay_at_pickup')
-      ) {
-        try {
-          const depositCalc = this.depositCalculationService.calculateDeposit(
-            grandTotal,
-            currency
-          );
-          depositRequired = true;
-          depositAmount = depositCalc.depositAmount;
-          amountDue = depositCalc.amountDue;
-        } catch (error: any) {
-          this.logger.warn(
-            `Deposit calculation failed for group ${businessId}`,
-            error?.message
-          );
-        }
-      }
+      const depositQuote = this.quoteMomoItemDeposit({
+        rail,
+        groupIsCookedFood,
+        timing: requestedOrAvailableTiming,
+        currency,
+        orderTotal: grandTotal,
+        lines: this.depositLinesForGroup(itemLines, inventoryById),
+      });
+      const depositRequired = (depositQuote?.depositAmount ?? 0) > 0;
 
       const location = group.inventoryRows[0]?.business_location;
       const configuredPrep =
@@ -880,8 +867,12 @@ export class CheckoutPreflightService {
         is_first_order_client: isFirstOrderClient,
         total: grandTotal,
         deposit_required: depositRequired || undefined,
-        deposit_amount: depositAmount,
-        amount_due: amountDue,
+        deposit_amount: depositRequired ? depositQuote?.depositAmount : undefined,
+        amount_due: depositRequired ? depositQuote?.amountDue : undefined,
+        deposit_minimum_applied: depositRequired
+          ? depositQuote?.minimumApplied
+          : undefined,
+        deposit_percent: depositRequired ? depositQuote?.percent : undefined,
         momo_pay_now_delivery_enabled: rail === 'mobile_money' && fulfillment === 'delivery' 
           ? momoPayNowDeliveryEnabled 
           : undefined,
@@ -1087,6 +1078,8 @@ export class CheckoutPreflightService {
       deposit_required: groups[0]?.deposit_required,
       deposit_amount: groups[0]?.deposit_amount,
       amount_due: groups[0]?.amount_due,
+      deposit_minimum_applied: groups[0]?.deposit_minimum_applied,
+      deposit_percent: groups[0]?.deposit_percent,
       momo_pay_now_delivery_enabled: groups[0]?.momo_pay_now_delivery_enabled,
     };
   }
@@ -1459,4 +1452,56 @@ export class CheckoutPreflightService {
       return false;
     }
   }
+
+  private depositLinesForGroup(
+    itemLines: CheckoutItemLineDto[],
+    inventoryById: Map<string, any>
+  ): DepositLineInput[] {
+    return itemLines.map((line) => {
+      const item = inventoryById.get(line.business_inventory_id)?.item as
+        | DepositLineSource
+        | undefined;
+      return {
+        unitPrice: line.unit_price,
+        quantity: line.quantity,
+        initialDepositEnabled: item?.initial_deposit_enabled === true,
+        initialDepositPercent: item?.initial_deposit_percent ?? null,
+        isCookedFood: lineIsCookedFood(item),
+      };
+    });
+  }
+
+  private quoteMomoItemDeposit(input: {
+    rail: string;
+    groupIsCookedFood: boolean;
+    timing: string;
+    currency: string;
+    orderTotal: number;
+    lines: DepositLineInput[];
+  }) {
+    if (!this.momoPayLaterDeposit(input)) return null;
+    return this.depositCalculationService.calculateItemDeposit({
+      lines: input.lines,
+      currency: input.currency,
+      orderTotal: input.orderTotal,
+    });
+  }
+
+  private momoPayLaterDeposit(input: {
+    rail: string;
+    groupIsCookedFood: boolean;
+    timing: string;
+  }): boolean {
+    if (input.rail !== 'mobile_money' || input.groupIsCookedFood) return false;
+    return input.timing === 'pay_at_delivery' || input.timing === 'pay_at_pickup';
+  }
 }
+
+type DepositLineSource = {
+  is_cooked_food?: boolean | null;
+  initial_deposit_enabled?: boolean | null;
+  initial_deposit_percent?: number | null;
+  item_sub_category?: {
+    item_category?: { name?: string | null } | null;
+  } | null;
+};

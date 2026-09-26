@@ -17,10 +17,12 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { DepositCalculationService } from './deposit-calculation.service';
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
@@ -48,6 +50,8 @@ function makeInventoryRow(overrides: {
   currency?: string;
   payOnDelivery?: boolean;
   payAtPickup?: boolean;
+  initialDepositEnabled?: boolean;
+  initialDepositPercent?: number | null;
   shippingEnabled?: boolean;
   shippingPrice?: number | null;
   available?: number;
@@ -90,6 +94,8 @@ function makeInventoryRow(overrides: {
       export_available: overrides.exportAvailable ?? false,
       pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
+      initial_deposit_enabled: overrides.initialDepositEnabled ?? false,
+      initial_deposit_percent: overrides.initialDepositPercent ?? null,
       shipping_enabled: overrides.shippingEnabled ?? false,
       shipping_price: overrides.shippingPrice ?? null,
       item_variants: [],
@@ -203,6 +209,16 @@ describe('CheckoutPreflightService', () => {
           },
         },
         {
+          provide: MobilePaymentPhonesService,
+          useValue: {
+            resolveCheckoutPaymentPhone: jest.fn().mockResolvedValue({
+              phoneE164: null,
+              phoneId: null,
+              source: 'none',
+            }),
+          },
+        },
+        {
           provide: LoyaltyService,
           useValue: {
             validateDiscountCode: jest.fn().mockResolvedValue({ valid: false }),
@@ -267,26 +283,7 @@ describe('CheckoutPreflightService', () => {
             payerCurrencyForCountry: jest.fn().mockReturnValue(null),
           },
         },
-        {
-          provide: require('./deposit-calculation.service').DepositCalculationService,
-          useValue: {
-            calculateDeposit: jest.fn((total: number, currency: string) => {
-              if (currency !== 'XAF') {
-                throw new Error('Only XAF supported');
-              }
-              const rate = total < 5000 ? 0.1 : 0.05;
-              const calculated = Math.round(total * rate);
-              const depositAmount = Math.max(150, calculated);
-              return {
-                depositAmount,
-                rate,
-                amountDue: total - depositAmount,
-                totalAmount: total,
-              };
-            }),
-            isDepositRequired: jest.fn(),
-          },
-        },
+        DepositCalculationService,
       ],
     }).compile();
 
@@ -1285,6 +1282,8 @@ describe('CheckoutPreflightService', () => {
                   price: 10000,
                   payOnDelivery: true,
                   payAtPickup: true,
+                  initialDepositEnabled: true,
+                  initialDepositPercent: 5,
                 }),
               ],
             });
@@ -1315,10 +1314,13 @@ describe('CheckoutPreflightService', () => {
 
       expect(result.can_proceed).toBe(true);
       expect(result.groups[0]?.deposit_required).toBe(true);
-      expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF (>= 5000)
+      expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of the 10000 item
+      expect(result.groups[0]?.deposit_percent).toBe(5);
+      expect(result.groups[0]?.deposit_minimum_applied).toBe(false);
       expect(result.groups[0]?.amount_due).toBe(9500);
       expect(result.deposit_required).toBe(true);
       expect(result.deposit_amount).toBe(500);
+      expect(result.deposit_percent).toBe(5);
       expect(result.amount_due).toBe(9500);
     });
 
@@ -1334,7 +1336,7 @@ describe('CheckoutPreflightService', () => {
 
       expect(result.can_proceed).toBe(true);
       expect(result.groups[0]?.deposit_required).toBe(true);
-      expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF
+      expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of the 10000 item
       expect(result.groups[0]?.amount_due).toBe(9500);
     });
 
@@ -1388,7 +1390,46 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.deposit_amount).toBeUndefined();
     });
 
-    it('uses 5% rate for orders >= 5000 XAF', async () => {
+    it('does not charge a deposit when the item has not opted in', async () => {
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({
+              business_inventory: [
+                makeInventoryRow({
+                  id: 'inv-1',
+                  sellerCountry: 'CM',
+                  currency: 'XAF',
+                  price: 10000,
+                  payOnDelivery: true,
+                }),
+              ],
+            });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [{ boolean_value: true }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+
+      const result = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          provisional_country: 'CM',
+          payment_timing: 'pay_at_delivery',
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.groups[0]?.deposit_required).toBeUndefined();
+      expect(result.deposit_required).toBeUndefined();
+    });
+
+    it('charges the merchant percent instead of a platform rate', async () => {
       (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
         (query: string) => {
           if (query.includes('GetInventoryForPreflight')) {
@@ -1400,6 +1441,8 @@ describe('CheckoutPreflightService', () => {
                   currency: 'XAF',
                   price: 6000,
                   payOnDelivery: true,
+                  initialDepositEnabled: true,
+                  initialDepositPercent: 10,
                 }),
               ],
             });
@@ -1427,7 +1470,8 @@ describe('CheckoutPreflightService', () => {
       const result = await service.resolve(dto, false);
 
       expect(result.groups[0]?.deposit_required).toBe(true);
-      expect(result.groups[0]?.deposit_amount).toBe(300); // 5% of 6000 XAF
+      expect(result.groups[0]?.deposit_amount).toBe(600); // 10% of the 6000 item
+      expect(result.groups[0]?.deposit_percent).toBe(10);
     });
 
     it('enforces 150 XAF floor on small orders', async () => {
@@ -1442,6 +1486,8 @@ describe('CheckoutPreflightService', () => {
                   currency: 'XAF',
                   price: 1000,
                   payOnDelivery: true,
+                  initialDepositEnabled: true,
+                  initialDepositPercent: 10,
                 }),
               ],
             });
@@ -1469,7 +1515,9 @@ describe('CheckoutPreflightService', () => {
       const result = await service.resolve(dto, false);
 
       expect(result.groups[0]?.deposit_required).toBe(true);
-      expect(result.groups[0]?.deposit_amount).toBe(150); // Floor, not 100 (10% of 1000)
+      expect(result.groups[0]?.deposit_amount).toBe(150);
+      expect(result.groups[0]?.deposit_minimum_applied).toBe(true);
+      expect(result.deposit_minimum_applied).toBe(true);
     });
   });
 

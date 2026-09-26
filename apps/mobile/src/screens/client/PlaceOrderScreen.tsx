@@ -50,7 +50,7 @@ import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgr
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
 import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { useClientAddresses } from '../../hooks/useClientAddresses';
-import { resolveDepositAmount, isMoMoDepositCheckoutPath } from '../../types/deposit';
+import { resolveDepositAmount, isMoMoDepositCheckoutPath, preflightDepositCopy } from '../../types/deposit';
 import { useClientProfileForPlaceOrder } from '../../hooks/useClientProfileForPlaceOrder';
 import { useCheckoutOrchestrator } from '../../hooks/useCheckoutOrchestrator';
 import { useCompleteAddressPrompt } from '../../hooks/useCompleteAddressPrompt';
@@ -783,11 +783,10 @@ export default function PlaceOrderScreen() {
     preflightConfig?.groups,
   ]);
 
-  const depositIsFloor = useMemo(() => {
-    if (!depositAmount) return false;
-    const DEPOSIT_FLOOR = 150;
-    return depositAmount === DEPOSIT_FLOOR;
-  }, [depositAmount]);
+  const depositCopy = useMemo(
+    () => preflightDepositCopy(preflightConfig),
+    [preflightConfig]
+  );
 
   const showFirstDeliveryDiscount = useMemo(
     () =>
@@ -1387,8 +1386,8 @@ export default function PlaceOrderScreen() {
           <ReservationDepositExplainer
             depositAmount={depositAmount}
             currency={currency}
-            isFloorAmount={depositIsFloor}
-            grandTotal={grandTotal}
+            minimumApplied={depositCopy.minimumApplied}
+            percent={depositCopy.percent}
             style={{ marginBottom: spacing.sm }}
           />
         ) : null}

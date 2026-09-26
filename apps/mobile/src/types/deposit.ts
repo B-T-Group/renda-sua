@@ -1,9 +1,8 @@
 /**
  * MoMo deposit checkout types.
  *
- * Deposit path: customer pays a small reservation deposit now (via MoMo),
- * remainder when order is delivered/picked up. Server returns deposit_amount;
- * client fallback: max(150 XAF, percentage based on grand total).
+ * Deposit path: customer pays a merchant-opted reservation deposit now (via MoMo),
+ * remainder when order is delivered/picked up. The server quotes deposit_amount.
  *
  * Backend contract (renda-sua #275, merged main @ 3ed60fab):
  * - deposit_status enum: none | pending | paid | failed | forfeited | refunded
@@ -26,33 +25,35 @@ export interface DepositConfig {
 }
 
 /**
- * Calculate fallback deposit amount when server deposit_amount is missing.
- * Rule: max(150, round(grand_total * (total<5000?0.10:0.05)))
- * 
- * Backend contract (renda-sua #282 merged @ eb9cca31):
- * - max(150, round(grand_total * (total<5000?0.10:0.05)))
- * - Market flag: application_configurations.config_key=momo_pay_now_delivery_enabled
- *   (country_code scoped, default false)
- */
-export function calculateDepositFallback(grandTotalXAF: number): number {
-  const FLOOR = 150;
-  const percentage = grandTotalXAF < 5000 ? 0.1 : 0.05;
-  const computed = Math.round(grandTotalXAF * percentage);
-  return Math.max(FLOOR, computed);
-}
-
-/**
- * Resolve the deposit amount to charge: prefer server deposit_amount,
- * fallback to calculation when missing.
+ * Resolve the deposit amount to charge. Only a positive server quote counts.
  */
 export function resolveDepositAmount(
-  grandTotalXAF: number,
+  _grandTotal: number,
   serverDepositAmount?: number | null
 ): number {
   if (serverDepositAmount != null && serverDepositAmount > 0) {
     return serverDepositAmount;
   }
-  return calculateDepositFallback(grandTotalXAF);
+  return 0;
+}
+
+export function preflightDepositCopy(config?: {
+  deposit_minimum_applied?: boolean | null;
+  deposit_percent?: number | null;
+  groups?: Array<{
+    deposit_minimum_applied?: boolean | null;
+    deposit_percent?: number | null;
+  }> | null;
+} | null): { minimumApplied: boolean; percent: number | null } {
+  const group = config?.groups?.[0];
+  const raw = config?.deposit_percent ?? group?.deposit_percent;
+  const percent = raw != null && Number(raw) > 0 ? Number(raw) : null;
+  return {
+    minimumApplied: Boolean(
+      config?.deposit_minimum_applied ?? group?.deposit_minimum_applied
+    ),
+    percent,
+  };
 }
 
 /**
@@ -89,8 +90,5 @@ export function isMoMoDepositCheckoutPath(params: {
   if (required === true) return true;
   if (params.preflightLoaded) return false;
 
-  const isPayAtDeliveryOrPickup =
-    params.payTiming === 'pay_at_delivery' ||
-    params.payTiming === 'pay_at_pickup';
-  return !params.momoPayNowDeliveryEnabled && isPayAtDeliveryOrPickup;
+  return false;
 }

@@ -68,6 +68,8 @@ export interface AiReviewFormValues {
   quantity: string;
   locationId: string;
   isUsed: boolean;
+  initialDepositEnabled: boolean;
+  initialDepositPercent: string;
   payAtPickupEnabled: boolean;
   shippingEnabled: boolean;
   shippingPrice: string;
