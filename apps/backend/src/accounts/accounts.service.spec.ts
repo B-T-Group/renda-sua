@@ -271,6 +271,47 @@ describe('AccountsService', () => {
         transactionType: 'deposit',
       });
     });
+
+    it('skips cash-advance repayment when skipCashAdvanceRepayment is set', async () => {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('SumAppliedDeposit')) {
+          return { account_transactions: [] };
+        }
+        if (query.includes('GetAccountById')) {
+          return {
+            accounts_by_pk: {
+              ...activeAccount,
+              cash_advance_balance: -500,
+            },
+          };
+        }
+        return { account_transactions: [] };
+      });
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx-dep' } };
+        }
+        return { update_accounts_by_pk: { id: accountId } };
+      });
+
+      const result = await service.registerDepositIfNotExists({
+        accountId,
+        amount: 300,
+        memo: 'order payment',
+        referenceId,
+        skipCashAdvanceRepayment: true,
+      });
+
+      expect(result.success).toBe(true);
+      const insert = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('InsertTransaction')
+      );
+      expect(insert?.[1]).toMatchObject({
+        amount: 300,
+        transactionType: 'deposit',
+      });
+      expect(insert?.[1].transactionType).not.toBe('cash_advance_repayment');
+    });
   });
 
   describe('registerTransaction', () => {

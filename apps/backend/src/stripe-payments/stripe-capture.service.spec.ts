@@ -279,6 +279,7 @@ describe('StripeCaptureService', () => {
         accountId: 'account-123',
         amount: 100,
         referenceId: 'tx-123',
+        skipCashAdvanceRepayment: true,
       })
     );
   });
@@ -301,6 +302,7 @@ describe('StripeCaptureService', () => {
         accountId: 'account-123',
         amount: 125,
         referenceId: 'tx-123',
+        skipCashAdvanceRepayment: true,
       })
     );
   });

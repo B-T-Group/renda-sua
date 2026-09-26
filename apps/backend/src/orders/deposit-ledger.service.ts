@@ -34,6 +34,7 @@ export class DepositLedgerService {
       amount: params.amount,
       referenceId: params.depositTransactionId,
       memo: `Deposit captured for order ${params.orderNumber}`,
+      skipCashAdvanceRepayment: true,
     });
     if (!credit?.success) {
       throw new Error(

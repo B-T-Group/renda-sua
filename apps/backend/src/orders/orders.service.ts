@@ -4302,30 +4302,104 @@ export class OrdersService {
       await this.finalizeClientOrderPayment(order, account.id, {
         skipOrderPlacedNotifications: true,
       });
+    } else {
+      // Paid earlier without a successful hold (e.g. legacy silent hold fail).
+      await this.ensureClientOrderHolds(fresh);
     }
 
-    const afterPay = (await this.getOrderDetails(order.id)) ?? fresh;
+    await this.enterCookedFoodPreparingAfterPayment(order.id);
+  }
+
+  /** Wallet holds for an order already marked paid (idempotent if hold exists). */
+  private async ensureClientOrderHolds(order: Orders): Promise<void> {
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
+    await this.placeMissingClientHolds(
+      order,
+      account.id,
+      itemAmount,
+      deliveryAmount
+    );
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+    await this.updateOrderHold(orderHold.id, {
+      client_hold_amount: itemAmount,
+      delivery_fees: deliveryAmount,
+    });
+  }
+
+  private async placeMissingClientHolds(
+    order: Orders,
+    accountId: string,
+    itemAmount: number,
+    deliveryAmount: number
+  ): Promise<void> {
+    const needed = itemAmount + deliveryAmount;
+    if (needed <= 0) return;
+    const held = await this.sumHoldAmountForOrder(accountId, order.id);
+    if (held >= needed) return;
+    await this.requireSuccessfulHold({
+      accountId,
+      amount: itemAmount,
+      memo: `Hold for order ${order.order_number}`,
+      referenceId: order.id,
+    });
+    await this.requireSuccessfulHold({
+      accountId,
+      amount: deliveryAmount,
+      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
+      referenceId: order.id,
+    });
+  }
+
+  private async sumHoldAmountForOrder(
+    accountId: string,
+    orderId: string
+  ): Promise<number> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `
+      query SumOrderHolds($accountId: uuid!, $orderId: uuid!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $orderId }
+            transaction_type: { _eq: hold }
+          }
+        ) { amount }
+      }
+    `,
+      { accountId, orderId }
+    );
+    const rows = result.account_transactions ?? [];
+    return rows.reduce(
+      (sum: number, row: { amount?: number }) => sum + Number(row.amount || 0),
+      0
+    );
+  }
+
+  /** Confirmed + paid pay-after: start prep clock and schedule auto-ready. */
+  private async enterCookedFoodPreparingAfterPayment(
+    orderId: string
+  ): Promise<void> {
+    const afterPay = await this.getOrderDetails(orderId);
+    if (!afterPay) return;
     // Fast MoMo callback can beat merchant confirm. Hold funds while still
     // pending, but do not enter preparing — confirm would then 409.
-    if (afterPay.current_status === 'pending') {
-      return;
-    }
+    if (afterPay.current_status === 'pending') return;
+    if (afterPay.current_status !== 'confirmed') return;
 
-    if (afterPay.current_status !== 'confirmed') {
-      return;
-    }
-
-    await this.orderStatusService.updateOrderStatus(order.id, 'preparing', {
+    await this.orderStatusService.updateOrderStatus(orderId, 'preparing', {
       viaSystem: true,
     });
-    // Prep clock starts at payment (confirm intentionally skipped persistForOrder).
-    await this.cookedFoodPickupFlow.clearPromisedReady(order.id);
-    await this.fulfillmentPromiseService.persistForOrder(order.id);
+    await this.cookedFoodPickupFlow.clearPromisedReady(orderId);
+    await this.fulfillmentPromiseService.persistForOrder(orderId);
     const readySeconds = this.cookedFoodPickupFlow.readySecondsFromEstimatedPrep(
       afterPay as any
     );
     await this.cookedFoodPickupFlow.scheduleAutoMarkReady(
-      order.id,
+      orderId,
       readySeconds
     );
   }
@@ -9290,18 +9364,15 @@ export class OrdersService {
     const wasAuthorized = (order as any).payment_status === 'authorized';
     const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
 
-    await this.accountsService.registerTransaction({
+    await this.requireSuccessfulHold({
       accountId,
       amount: itemAmount,
-      transactionType: 'hold',
       memo: `Hold for order ${order.order_number}`,
       referenceId: order.id,
     });
-
-    await this.accountsService.registerTransaction({
+    await this.requireSuccessfulHold({
       accountId,
       amount: deliveryAmount,
-      transactionType: 'hold',
       memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
       referenceId: order.id,
     });
@@ -9348,6 +9419,24 @@ export class OrdersService {
     if (!options?.skipOrderPlacedNotifications) {
       await this.sendOrderPlacedNotifications(order, 'pending');
     }
+  }
+
+  private async requireSuccessfulHold(request: {
+    accountId: string;
+    amount: number;
+    memo: string;
+    referenceId: string;
+  }): Promise<void> {
+    if (request.amount <= 0) return;
+    const result = await this.accountsService.registerTransaction({
+      ...request,
+      transactionType: 'hold',
+    });
+    if (result.success) return;
+    throw new HttpException(
+      result.error || 'Failed to hold funds for order payment',
+      HttpStatus.PAYMENT_REQUIRED
+    );
   }
 
   private async sendOrderPlacedNotifications(

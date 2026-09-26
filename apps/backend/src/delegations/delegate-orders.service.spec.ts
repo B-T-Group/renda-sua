@@ -200,7 +200,14 @@ describe('DelegateOrdersService status PATCH side effects', () => {
       success: true,
     });
 
-    expect(orders.cancelOrder).toHaveBeenCalledWith({ orderId: 'ord-1' }, actor);
+    expect(orders.cancelOrder).toHaveBeenCalledWith(
+      {
+        orderId: 'ord-1',
+        cancellationReasonId: 13,
+        notes: 'Cancelled by business delegate',
+      },
+      actor
+    );
     expect(orderStatus.updateOrderStatus).not.toHaveBeenCalled();
     expect(orders.completePreparation).not.toHaveBeenCalled();
   });

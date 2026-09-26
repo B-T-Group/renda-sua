@@ -190,7 +190,7 @@ describe('OrdersService', () => {
     };
 
     const mockAccountsService = {
-      registerTransaction: jest.fn(),
+      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
       registerDepositIfNotExists: jest.fn(),
     };
 
@@ -2265,6 +2265,28 @@ describe('OrdersService', () => {
       );
     });
 
+    it('finalizeClientOrderPayment throws when the wallet hold fails', async () => {
+      accountsService.registerTransaction.mockResolvedValue({
+        success: false,
+        error: 'Insufficient funds for this transaction',
+      });
+
+      await expect(
+        (service as any).finalizeClientOrderPayment(
+          {
+            id: 'order-123',
+            order_number: 'ORD-1',
+            payment_status: 'pending',
+            subtotal: 300,
+            total_amount: 300,
+            base_delivery_fee: 0,
+            per_km_delivery_fee: 0,
+          },
+          'account-1'
+        )
+      ).rejects.toThrow(/Insufficient funds/i);
+    });
+
     it('finalizeClientOrderPayment coerces stripped subtotal and fees to 0', async () => {
       const updateOrderHoldSpy = jest
         .spyOn(service, 'updateOrderHold')
@@ -2286,9 +2308,7 @@ describe('OrdersService', () => {
         'account-1'
       );
 
-      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 0, transactionType: 'hold' })
-      );
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
       expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
         client_hold_amount: 0,
         delivery_fees: 0,
@@ -2363,9 +2383,7 @@ describe('OrdersService', () => {
         'account-1'
       );
 
-      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 0, transactionType: 'hold' })
-      );
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
       expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
         client_hold_amount: 0,
         delivery_fees: 0,
@@ -2547,6 +2565,7 @@ describe('OrdersService', () => {
           current_status: 'cancelled',
           payment_status: 'cancelled',
           payment_timing: 'pay_now',
+          payment_source: 'credit_card',
         });
 
       await service.finalizeOrderAfterAuthorization({
@@ -2555,10 +2574,7 @@ describe('OrdersService', () => {
       });
 
       expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-      expect(stripeCaptureService.cancelOrderPaymentIntent).toHaveBeenCalledWith({
-        orderNumber: 'ORD-1',
-        orderId: 'order-123',
-      });
+      expect(stripeCaptureService.cancelOrderPaymentIntent).not.toHaveBeenCalled();
 
       requireSpy.mockRestore();
     });
@@ -2606,6 +2622,7 @@ describe('OrdersService', () => {
           current_status: 'cancelled',
           payment_status: 'pending',
           payment_timing: 'pay_now',
+          payment_source: 'credit_card',
         });
       const finalizeSpy = jest
         .spyOn(service as any, 'finalizeClientOrderPayment')

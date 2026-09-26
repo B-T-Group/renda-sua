@@ -159,6 +159,7 @@ describe('StripePaymentCallbackProcessor', () => {
       amount: 125,
       memo: 'Stripe payment deposit - stripe-ref-123',
       referenceId: 'tx-123',
+      skipCashAdvanceRepayment: true,
     });
     expect(callbackHandler.onPaymentSuccess).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'tx-123', reference: 'stripe-ref-123' })
@@ -191,6 +192,7 @@ describe('StripePaymentCallbackProcessor', () => {
       amount: 125,
       memo: 'Stripe payment deposit - stripe-ref-123',
       referenceId: 'tx-123',
+      skipCashAdvanceRepayment: true,
     });
     expect(callbackHandler.onPaymentSuccess).toHaveBeenCalled();
   });

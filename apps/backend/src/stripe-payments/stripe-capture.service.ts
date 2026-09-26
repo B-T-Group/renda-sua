@@ -245,6 +245,7 @@ export class StripeCaptureService {
       amount: tx.amount,
       memo: `Stripe payment deposit - ${tx.reference}`,
       referenceId: tx.id,
+      skipCashAdvanceRepayment: true,
     });
     if (!result.success) {
       this.logger.error(
