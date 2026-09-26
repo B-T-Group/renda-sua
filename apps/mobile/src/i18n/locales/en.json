@@ -951,9 +951,9 @@
       "readyPickupCookedFoodClient": "Your food is ready. Tap Complete order when you arrive — no pickup PIN needed.",
       "cookedFoodWaitPaymentBusiness": "Waiting for the client to pay. Do not start cooking until payment succeeds.",
       "cookedFoodWaitPaymentClient": "Approve the payment request on your phone so the restaurant can start cooking.",
-      "readyPickupPayAtPickupClient": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
-      "readyPickupWaitClientPayBusiness": "The client will pay in the app when they arrive. You can still request a payment if they need help.",
-      "readyPickupBusiness": "Ask for the client’s pickup PIN when they arrive. Payment is captured when you confirm pickup.",
+      "readyPickupPayAtPickupClient": "When you arrive, tap Complete order and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+      "readyPickupWaitClientPayBusiness": "The client will tap Complete order in the app when they arrive to pay and finish pickup.",
+      "readyPickupBusiness": "Ask the client to tap Complete order in the app when they arrive.",
       "readyDeliveryClient": "Waiting for a delivery agent to claim your order.",
       "readyDeliveryBusiness": "Waiting for an agent to claim this delivery.",
       "readyAgent": "Claim this order to start the delivery.",
@@ -3631,9 +3631,9 @@
       "readyPickup": {
         "title": "Ready for pickup",
         "now": "Your order is ready at the store.",
-        "next": "Head to the store to collect it.",
-        "nextPin": "Head to the store and send your pickup PIN so the seller can confirm.",
-        "nextPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order."
+        "next": "Head to the store and tap Complete order when you collect it.",
+        "nextPin": "Head to the store and tap Complete order when you collect it.",
+        "nextPayAtPickup": "When you arrive, tap Complete order and approve the mobile money request on your phone. The store will see the payment, then you can collect your order."
       },
       "shippingPending": {
         "title": "Order received",

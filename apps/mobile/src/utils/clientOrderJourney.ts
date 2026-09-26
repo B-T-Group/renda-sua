@@ -157,34 +157,24 @@ function readyDeliveryWaiting(): ClientOrderJourney {
 }
 
 function pickupReadyNextCopy(
-  pinEligible: boolean,
   payAtPickup: boolean
 ): { key: string; defaultValue: string } {
   if (payAtPickup) {
     return {
       key: 'client.orderJourney.readyPickup.nextPayAtPickup',
       defaultValue:
-        'When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.',
-    };
-  }
-  if (pinEligible) {
-    return {
-      key: 'client.orderJourney.readyPickup.nextPin',
-      defaultValue:
-        'Head to the store and send your pickup PIN so the seller can confirm.',
+        'When you arrive, tap Complete order and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.',
     };
   }
   return {
     key: 'client.orderJourney.readyPickup.next',
-    defaultValue: 'Head to the store to collect it.',
+    defaultValue:
+      'Head to the store and tap Complete order when you collect it.',
   };
 }
 
-function readyPickupStage(
-  pinEligible: boolean,
-  payAtPickup: boolean
-): ClientOrderJourney {
-  const next = pickupReadyNextCopy(pinEligible, payAtPickup);
+function readyPickupStage(payAtPickup: boolean): ClientOrderJourney {
+  const next = pickupReadyNextCopy(payAtPickup);
   return stage({
     stageId: 'ready_pickup',
     titleKey: 'client.orderJourney.readyPickup.title',
@@ -196,8 +186,8 @@ function readyPickupStage(
     tone: 'success',
     illustrationId: 'pickupReady',
     agentFirstName: null,
-    showPinHint: pinEligible,
-    emphasizePinCta: pinEligible,
+    showPinHint: false,
+    emphasizePinCta: false,
   });
 }
 
@@ -494,12 +484,6 @@ function isPinEligible(order: Order): boolean {
   return true;
 }
 
-function isPickupPinReady(order: Order): boolean {
-  if (!isPinEligible(order)) return false;
-  const payment = order.payment_status;
-  return payment === 'authorized' || payment === 'paid';
-}
-
 function isRefundStatus(status: string): boolean {
   return (
     status === 'refunded' ||
@@ -520,7 +504,6 @@ export function getClientOrderJourney(order: Order): ClientOrderJourney {
   const name = agentFirstName(order);
   const hasAgent = !!(order.assigned_agent_id || name);
   const pinEligible = isPinEligible(order);
-  const pickupPinReady = isPickupPinReady(order);
 
   if (isRefundStatus(status)) {
     return refundStage(status);
@@ -540,10 +523,7 @@ export function getClientOrderJourney(order: Order): ClientOrderJourney {
       return preparingStage(pickup);
     case 'ready_for_pickup':
       if (pickup) {
-        return readyPickupStage(
-          pickupPinReady,
-          order.payment_timing === 'pay_at_pickup'
-        );
+        return readyPickupStage(order.payment_timing === 'pay_at_pickup');
       }
       if (hasAgent) return claimedStage(name);
       return readyDeliveryWaiting();

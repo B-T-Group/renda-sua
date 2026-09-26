@@ -54,7 +54,7 @@ describe('resolveOrderPhase shipping', () => {
 });
 
 describe('resolveOrderPhase pickup ready', () => {
-  it('asks pay-at-pickup clients to pay in the app when ready', () => {
+  it('asks pay-at-pickup clients to complete in the app when ready', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -66,10 +66,10 @@ describe('resolveOrderPhase pickup ready', () => {
     expect(info.nextStepKey).toBe(
       'orders.nextStep.readyPickupPayAtPickupClient'
     );
-    expect(info.primaryActionId).toBe('pay');
+    expect(info.primaryActionId).toBe('complete');
   });
 
-  it('tells the store to wait for the client to pay at pickup', () => {
+  it('tells the store to wait for the client to complete at pickup', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -82,10 +82,10 @@ describe('resolveOrderPhase pickup ready', () => {
     expect(info.nextStepKey).toBe(
       'orders.nextStep.readyPickupWaitClientPayBusiness'
     );
-    expect(info.primaryActionId).toBe('collect_pickup_payment');
+    expect(info.primaryActionId).toBe('none');
   });
 
-  it('lets the store request pickup payment after a failed attempt', () => {
+  it('keeps the store waiting after a failed pay-at-pickup attempt', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -95,7 +95,7 @@ describe('resolveOrderPhase pickup ready', () => {
       },
       'business'
     );
-    expect(info.primaryActionId).toBe('collect_pickup_payment');
+    expect(info.primaryActionId).toBe('none');
   });
 
   it('uses generic complete copy for prepaid non-cooked pickup', () => {

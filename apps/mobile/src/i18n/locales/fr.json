@@ -936,9 +936,9 @@
       "readyPickupCookedFoodClient": "Votre plat est prêt. Appuyez sur Terminer la commande à votre arrivée — pas de code PIN de retrait.",
       "cookedFoodWaitPaymentBusiness": "En attente du paiement client. Ne commencez pas à cuisiner tant que le paiement n'a pas réussi.",
       "cookedFoodWaitPaymentClient": "Approuvez la demande de paiement sur votre téléphone pour que le restaurant puisse commencer à cuisiner.",
-      "readyPickupPayAtPickupClient": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
-      "readyPickupWaitClientPayBusiness": "Le client paiera dans l’application à son arrivée. Vous pouvez toujours envoyer une demande de paiement s’il a besoin d’aide.",
-      "readyPickupBusiness": "Demandez le PIN de retrait du client à son arrivée. Le paiement est capturé lorsque vous confirmez le retrait.",
+      "readyPickupPayAtPickupClient": "À votre arrivée, appuyez sur Terminer la commande et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "readyPickupWaitClientPayBusiness": "Le client appuiera sur Terminer la commande dans l’application à son arrivée pour payer et finaliser le retrait.",
+      "readyPickupBusiness": "Demandez au client d’appuyer sur Terminer la commande dans l’application à son arrivée.",
       "readyDeliveryClient": "En attente qu’un livreur prenne votre commande.",
       "readyDeliveryBusiness": "En attente qu’un agent prenne cette livraison.",
       "readyAgent": "Prenez cette commande pour démarrer la livraison.",
@@ -3537,9 +3537,9 @@
       "readyPickup": {
         "title": "Prête pour le retrait",
         "now": "Votre commande est prête en magasin.",
-        "next": "Rendez-vous au commerce pour la récupérer.",
-        "nextPin": "Rendez-vous au commerce et envoyez votre PIN de retrait pour que le vendeur puisse confirmer.",
-        "nextPayAtPickup": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande."
+        "next": "Rendez-vous au commerce et appuyez sur Terminer la commande lorsque vous la récupérez.",
+        "nextPin": "Rendez-vous au commerce et appuyez sur Terminer la commande lorsque vous la récupérez.",
+        "nextPayAtPickup": "À votre arrivée, appuyez sur Terminer la commande et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande."
       },
       "shippingPending": {
         "title": "Commande reçue",

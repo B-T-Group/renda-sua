@@ -28,7 +28,7 @@ describe('buildClientHomeOrderCardModel', () => {
     expect(model.urgency).toBe('warning');
   });
 
-  it('uses send PIN for ready store pickup when authorized', () => {
+  it('uses Complete for ready store pickup when authorized', () => {
     const model = buildClientHomeOrderCardModel(
       order({
         fulfillment_method: 'pickup',
@@ -37,11 +37,11 @@ describe('buildClientHomeOrderCardModel', () => {
         payment_status: 'authorized',
       })
     );
-    expect(model.primaryActionId).toBe('send_pin');
-    expect(model.ctaDefault).toMatch(/PIN/i);
+    expect(model.primaryActionId).toBe('complete');
+    expect(model.ctaDefault).toMatch(/Complete/i);
   });
 
-  it('explains the in-store payment request for pay-at-pickup', () => {
+  it('explains Complete for pay-at-pickup when ready', () => {
     const model = buildClientHomeOrderCardModel(
       order({
         fulfillment_method: 'pickup',
@@ -53,9 +53,9 @@ describe('buildClientHomeOrderCardModel', () => {
     expect(model.subtitleKey).toBe(
       'client.orderJourney.readyPickup.nextPayAtPickup'
     );
-    expect(model.subtitleDefault).toMatch(/tap Pay/i);
-    expect(model.primaryActionId).toBe('pay');
-    expect(model.ctaDefault).toBe('Pay now');
+    expect(model.subtitleDefault).toMatch(/Complete order/i);
+    expect(model.primaryActionId).toBe('complete');
+    expect(model.ctaDefault).toBe('Complete order');
   });
 
   it('uses track CTA for in-transit delivery', () => {
