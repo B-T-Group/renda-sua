@@ -86,7 +86,7 @@ export class OrderMarkReadyInternalController {
       orderId,
       notes: 'Auto-marked ready after prep timer',
       viaSystem: true,
-    } as any);
+    });
     return { success: true };
   }
 

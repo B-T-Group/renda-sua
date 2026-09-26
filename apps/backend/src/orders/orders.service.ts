@@ -133,12 +133,14 @@ import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
 import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
+import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
   cancellationReasonId?: number; // Required by cancelOrder, optional for other operations
+  viaSystem?: boolean;
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -1681,50 +1683,86 @@ export class OrdersService {
     request: OrderStatusChangeRequest,
     actor?: AuthorizedBusinessActor
   ) {
-    const userId =
-      actor === undefined && (request as any).viaSystem === true
-        ? 'system'
-        : await this.requireBusinessOrderAccess(
-            request.orderId,
-            'Only business users can complete order preparation',
-            'Unauthorized to complete preparation for this order',
-            actor
-          );
-    const order = await this.getOrderDetails(request.orderId);
-    if (!order)
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (!['confirmed', 'preparing'].includes(order.current_status))
-      throw new HttpException(
-        `Cannot complete preparation for order in ${order.current_status} status`,
-        HttpStatus.BAD_REQUEST
-      );
-    this.assertNotCarrierShipping(
-      order,
-      'Carrier shipping orders must be marked as shipped, not set ready for pickup'
+    const viaSystem = actor === undefined && request.viaSystem === true;
+    const userId = await this.resolvePreparationActorUserId(
+      request.orderId,
+      actor,
+      viaSystem
     );
-    this.assertPayAfterPaidBeforeReady(order);
+    const order = await this.requirePreparableOrder(request.orderId);
     await this.ensurePickupPinIfNeeded(order);
     await this.fulfillmentPromiseService.reanchorAsapAtReady(request.orderId);
     const dispatchSchedule = await this.scheduleAgentDispatchGate(order);
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
+    const updatedOrder = await this.markReadyForPickup(
       request.orderId,
-      'ready_for_pickup',
-      (request as any).viaSystem === true ? { viaSystem: true } : actor
+      viaSystem,
+      actor
     );
-    await this.createStatusHistoryEntry(
-      request.orderId,
-      'ready_for_pickup',
-      request.notes || 'Order preparation completed, ready for pickup',
-      (request as any).viaSystem === true ? 'system' : 'business',
-      userId,
-      request.notes
-    );
+    await this.recordPreparationReadyHistory(request, viaSystem, userId);
     await this.scheduleDispatchRelease(order.id, dispatchSchedule);
     return {
       success: true,
       order: updatedOrder,
       message: 'Order preparation completed successfully',
     };
+  }
+
+  private async resolvePreparationActorUserId(
+    orderId: string,
+    actor: AuthorizedBusinessActor | undefined,
+    viaSystem: boolean
+  ): Promise<string | null> {
+    if (viaSystem) return null;
+    return this.requireBusinessOrderAccess(
+      orderId,
+      'Only business users can complete order preparation',
+      'Unauthorized to complete preparation for this order',
+      actor
+    );
+  }
+
+  private async requirePreparableOrder(orderId: string): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (!['confirmed', 'preparing'].includes(order.current_status)) {
+      throw new HttpException(
+        `Cannot complete preparation for order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    this.assertNotCarrierShipping(
+      order,
+      'Carrier shipping orders must be marked as shipped, not set ready for pickup'
+    );
+    this.assertPayAfterPaidBeforeReady(order);
+    return order;
+  }
+
+  private async markReadyForPickup(
+    orderId: string,
+    viaSystem: boolean,
+    actor?: AuthorizedBusinessActor
+  ) {
+    return this.orderStatusService.updateOrderStatus(
+      orderId,
+      'ready_for_pickup',
+      viaSystem ? { viaSystem: true } : actor
+    );
+  }
+
+  private async recordPreparationReadyHistory(
+    request: OrderStatusChangeRequest,
+    viaSystem: boolean,
+    userId: string | null
+  ): Promise<void> {
+    await this.createStatusHistoryEntry(
+      request.orderId,
+      'ready_for_pickup',
+      request.notes || 'Order preparation completed, ready for pickup',
+      viaSystem ? 'system' : 'business',
+      userId,
+      request.notes
+    );
   }
 
   /**
@@ -11222,34 +11260,16 @@ export class OrdersService {
       throw error;
     }
 
-    // Create order status history after order is created
-    const createStatusHistoryMutation = `
-      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId,
-          status: $status,
-          notes: $notes,
-          changed_by_type: $changedByType,
-          changed_by_user_id: $changedByUserId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-
-    await this.hasuraSystemService.executeMutation(
-      createStatusHistoryMutation,
-      {
-        orderId: order.id,
-        status: current_status,
-        notes:
-          current_status === 'pending_payment'
-            ? 'Order created, awaiting payment'
-            : 'Order created',
-        changedByType: 'client',
-        changedByUserId: user.id,
-      }
-    );
+    await writeOrderStatusHistory(this.hasuraSystemService, {
+      orderId: order.id,
+      status: current_status,
+      notes:
+        current_status === 'pending_payment'
+          ? 'Order created, awaiting payment'
+          : 'Order created',
+      changedByType: 'client',
+      changedByUserId: user.id,
+    });
 
     // Create delivery/pickup window before acceptance SLA so future orders defer correctly
     let deliveryWindow = null;
@@ -12737,24 +12757,11 @@ export class OrdersService {
     status: string,
     notes: string,
     changedByType: string,
-    changedByUserId: string,
+    changedByUserId?: string | null,
     additionalNotes?: string
   ): Promise<void> {
     const finalNotes = additionalNotes ? `${notes}. ${additionalNotes}` : notes;
-    const mutation = `
-      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId,
-          status: $status,
-          notes: $notes,
-          changed_by_type: $changedByType,
-          changed_by_user_id: $changedByUserId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
+    await writeOrderStatusHistory(this.hasuraSystemService, {
       orderId,
       status,
       notes: finalNotes,
@@ -13887,24 +13894,7 @@ export class OrdersService {
     userId: string,
     changedByType: string
   ): Promise<void> {
-    const mutation = `
-      mutation InsertShippingStatusHistory(
-        $orderId: uuid!,
-        $status: order_status!,
-        $changedByType: String!,
-        $changedByUserId: uuid!
-      ) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId
-          status: $status
-          changed_by_type: $changedByType
-          changed_by_user_id: $changedByUserId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
+    await writeOrderStatusHistory(this.hasuraSystemService, {
       orderId,
       status,
       changedByType,
