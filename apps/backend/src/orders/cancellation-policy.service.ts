@@ -62,6 +62,7 @@ interface OrderForPolicy {
   payment_source?: string | null;
   payment_status?: string | null;
   payment_timing?: string | null;
+  pay_after_merchant_confirm?: boolean | null;
   business_location?: { country_code?: string | null } | null;
 }
 
@@ -99,6 +100,14 @@ export class CancellationPolicyService {
     return this.blockedPolicy(order, 'consequences.notAuthorized', persona);
   }
 
+  /** Confirmed+ normally bills a fee. Unpaid pay-after food has not committed funds. */
+  private clientCancellationFeeApplies(order: OrderForPolicy): boolean {
+    if (!FEE_APPLICABLE_STATUSES.includes(order.current_status)) return false;
+    if (order.pay_after_merchant_confirm !== true) return true;
+    const payment = (order.payment_status || '').toLowerCase();
+    return payment === 'paid' || payment === 'authorized';
+  }
+
   private async getClientPolicy(
     order: OrderForPolicy
   ): Promise<CancellationPolicy> {
@@ -110,7 +119,7 @@ export class CancellationPolicyService {
       return this.blockedPolicy(order, 'blocked.terminalStatus', 'client');
     }
 
-    const feeApplies = FEE_APPLICABLE_STATUSES.includes(order.current_status);
+    const feeApplies = this.clientCancellationFeeApplies(order);
     const countryCode = order.business_location?.country_code ?? 'GA';
     const cancellationFee = feeApplies
       ? await this.resolveFee(countryCode)

@@ -73,6 +73,50 @@ class CancellationFinancialsTest(unittest.TestCase):
             "hold-123", "cancelled", "endpoint", "secret"
         )
 
+    def test_unpaid_pay_after_confirm_skips_cancellation_fee(self):
+        order = _order(
+            pay_after_merchant_confirm=True,
+            payment_status="pending",
+        )
+        with self._patch_cancellation_dependencies(
+            order=order,
+            hold=_hold(client_hold_amount=0.0),
+            transaction_ids=[],
+        ):
+            result = handler.process_cancellation_financials(
+                "order-123", "client", "confirmed", "endpoint", "secret"
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["cancellation_fee"], 0.0)
+
+    def test_paid_pay_after_confirm_still_charges_cancellation_fee(self):
+        order = _order(
+            pay_after_merchant_confirm=True,
+            payment_status="paid",
+        )
+        with self._patch_cancellation_dependencies(
+            order=order,
+            hold=_hold(client_hold_amount=0.0),
+            transaction_ids=[],
+        ):
+            with patch.object(
+                handler, "get_order_business_location_country", return_value="GA"
+            ), patch.object(
+                handler, "get_cancellation_fee_config", return_value=500.0
+            ), patch.object(
+                handler,
+                "register_cancellation_fee_transactions",
+                return_value={"success": True},
+            ) as register_fee:
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["cancellation_fee"], 500.0)
+        register_fee.assert_called_once()
+
     def test_missing_agent_account_does_not_cancel_hold(self):
         order = _order(assigned_agent=SimpleNamespace(user_id="agent-user-123"))
         hold = _hold(agent_hold_amount=40.0, client_hold_amount=0.0)
