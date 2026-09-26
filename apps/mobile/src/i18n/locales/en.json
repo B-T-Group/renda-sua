@@ -242,7 +242,12 @@
     },
     "payment": {
       "encrypted": "Encrypted",
-      "secure": "Secure checkout"
+      "secure": "Secure checkout",
+      "cmMobileMoney": "MTN MoMo and Orange Money",
+      "airtelMoney": "Airtel Money",
+      "moovMoney": "Moov Money",
+      "card": "Card",
+      "genericMobileMoney": "Mobile money"
     },
     "paymentMethod": "Payment method",
     "yourMoMoNumber": "Your MoMo number",

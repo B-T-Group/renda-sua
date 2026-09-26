@@ -265,14 +265,18 @@
     "payment": {
       "mobileMoney": "Mobile Money",
       "cardPayment": "Paiement par carte",
-      "basedOnCountry": "Selon votre pays",
       "mustMatchMomo": "Doit correspondre à votre numéro MoMo",
       "checkBalance": "Vérifiez votre solde MoMo",
       "checkBalanceDesc": "Rechargez votre portefeuille MoMo et réessayez.",
       "confirmPhone": "Confirmez votre numéro de téléphone",
       "confirmPhoneDesc": "Assurez-vous que {{phone}} correspond au numéro lié à votre portefeuille MoMo.",
       "encrypted": "Crypté",
-      "secure": "Paiement sécurisé"
+      "secure": "Paiement sécurisé",
+      "cmMobileMoney": "MTN MoMo et Orange Money",
+      "airtelMoney": "Airtel Money",
+      "moovMoney": "Moov Money",
+      "card": "Carte",
+      "genericMobileMoney": "Mobile money"
     },
     "linkMoMoRequired": "Liez un numéro Mobile Money pour continuer.",
     "selectedForPayment": "Sélectionné pour le paiement"

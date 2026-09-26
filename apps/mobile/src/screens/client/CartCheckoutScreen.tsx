@@ -63,7 +63,6 @@ import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
 import { resolveDepositAmount, isMoMoDepositCheckoutPath } from '../../types/deposit';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
 import { isAddressComplete } from '../../utils/addressCompleteness';
-import { resolveMoMoDisplayCountryIso } from '../../utils/momoCountryDisplay';
 import {
   cartShippingAvailability,
   fulfillmentNeedsAddress,
@@ -1409,23 +1408,7 @@ export default observer(function CartCheckoutScreen() {
               </Text>
               <PaymentMethodLockedRow
                 method={resolvedIsStripeRail ? 'stripe' : 'mobile_money'}
-                countryIso={
-                  // Country label logic (for display only):
-                  // - Diaspora: no country label (payer is abroad)
-                  // - Stripe: no country label (card payment without country suffix)
-                  // - Local MoMo: show buyer/market/delivery country (NOT seller country)
-                  isDiaspora
-                    ? undefined
-                    : resolvedIsStripeRail
-                      ? undefined
-                      : resolveMoMoDisplayCountryIso({
-                          selectedAddressCountry: selectedAddress?.country,
-                          preflightDeliveryCountry: preflightConfig.delivery_country,
-                          userCountry: meUser?.country,
-                          userPhone: meUser?.phone_number,
-                        })
-                }
-                locked
+                countryIsos={cart.items.map((line) => line.sellerCountry)}
               />
             </View>
 
