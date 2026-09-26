@@ -12,6 +12,7 @@ import { DepositRefundService } from './deposit-refund.service';
 import { OrderQueueService } from './order-queue.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { releaseReservedInventory } from './release-reserved-inventory.util';
+import { insertOrderStatusHistory } from './order-status-history.util';
 
 /**
  * Singleton system actions for orders (cron / webhooks).
@@ -679,36 +680,17 @@ export class OrderSystemJobsService {
     status: string,
     notes: string,
     changedByType: string,
-    changedByUserId: string,
+    changedByUserId?: string | null,
     additionalNotes?: string
   ): Promise<void> {
     const finalNotes = additionalNotes ? `${notes}. ${additionalNotes}` : notes;
-    await this.hasuraSystemService.executeMutation(
-      `
-      mutation CreateStatusHistory(
-        $orderId: uuid!
-        $status: order_status!
-        $notes: String!
-        $changedByType: String!
-        $changedByUserId: uuid!
-      ) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId,
-          status: $status,
-          notes: $notes,
-          changed_by_type: $changedByType,
-          changed_by_user_id: $changedByUserId
-        }]) { affected_rows }
-      }
-    `,
-      {
-        orderId,
-        status,
-        notes: finalNotes,
-        changedByType,
-        changedByUserId,
-      }
-    );
+    await insertOrderStatusHistory(this.hasuraSystemService, {
+      orderId,
+      status,
+      notes: finalNotes,
+      changedByType,
+      changedByUserId,
+    });
   }
 
   private async getOrderDetails(orderId: string): Promise<Orders | null> {
