@@ -108,6 +108,7 @@ export const GET_ORDERS = gql`
         item_variant_id
         variant_name
         variant_snapshot
+        is_cooked_food
         item {
           sku
           currency
@@ -332,6 +333,7 @@ export const GET_ORDER_BY_ID = gql`
         quantity
         total_price
         special_instructions
+        is_cooked_food
         item {
           id
           sku

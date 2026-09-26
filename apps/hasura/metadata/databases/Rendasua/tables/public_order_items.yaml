@@ -38,6 +38,7 @@ insert_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
         - order_id
 select_permissions:
   - role: agent
@@ -50,6 +51,7 @@ select_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
         - item_name
         - item_description
         - unit_price
@@ -74,6 +76,7 @@ select_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
         - item_name
         - item_description
         - unit_price
@@ -98,6 +101,7 @@ select_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
         - item_name
         - item_description
         - unit_price
