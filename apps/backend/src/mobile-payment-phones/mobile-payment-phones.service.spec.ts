@@ -39,6 +39,7 @@ describe('MobilePaymentPhonesService', () => {
     user_id: 'user-1',
     phone_e164: '+237600000001',
     is_verified: false,
+    is_default: false,
     verified_at: null,
     last_verification_transaction_id: 'tx-1',
     created_at: '2026-01-01',
@@ -359,6 +360,130 @@ describe('MobilePaymentPhonesService', () => {
       expect(variables).toEqual({
         entityId: 'tx-1',
         desc: 'Phone verification refund +237600000001',
+      });
+    });
+  });
+
+  describe('setDefaultForUser', () => {
+    it('clears other defaults then marks the phone default', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        user_mobile_payment_phones: [{ ...phoneRow, is_default: false }],
+      });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          update_user_mobile_payment_phones: { affected_rows: 1 },
+        })
+        .mockResolvedValueOnce({
+          update_user_mobile_payment_phones_by_pk: {
+            ...phoneRow,
+            is_default: true,
+          },
+        });
+
+      const result = await service.setDefaultForUser('user-1', 'phone-1');
+
+      expect(result.is_default).toBe(true);
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('resolveCheckoutPaymentPhone', () => {
+    it('uses an explicit registry phone and marks it default', async () => {
+      jest.spyOn(service, 'getByIdForUser').mockResolvedValue({
+        ...phoneRow,
+        is_default: false,
+      } as any);
+      jest.spyOn(service, 'setDefaultForUser').mockResolvedValue({
+        ...phoneRow,
+        is_default: true,
+      } as any);
+
+      const result = await service.resolveCheckoutPaymentPhone({
+        userId: 'user-1',
+        mobilePaymentPhoneId: 'phone-1',
+      });
+
+      expect(result).toEqual({
+        phoneE164: '+237600000001',
+        phoneId: 'phone-1',
+        source: 'registry',
+      });
+      expect(service.setDefaultForUser).toHaveBeenCalledWith('user-1', 'phone-1');
+    });
+
+    it('falls back to profile and links when no default exists', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          user_mobile_payment_phones: [],
+        })
+        .mockResolvedValueOnce({
+          user_mobile_payment_phones: [],
+        });
+      mobilePaymentPhoneSeedService.ensureFromContactPhone.mockResolvedValue({
+        ...phoneRow,
+        is_default: false,
+      });
+      jest.spyOn(service, 'setDefaultForUser').mockResolvedValue({
+        ...phoneRow,
+        is_default: true,
+      } as any);
+
+      const result = await service.resolveCheckoutPaymentPhone({
+        userId: 'user-1',
+        profilePhone: '+237600000001',
+        profileCountry: 'CM',
+        linkProfileIfNeeded: true,
+      });
+
+      expect(result.source).toBe('registry');
+      expect(result.phoneId).toBe('phone-1');
+      expect(
+        mobilePaymentPhoneSeedService.ensureFromContactPhone
+      ).toHaveBeenCalled();
+    });
+
+    it('promotes an existing registry phone when none is marked default', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ user_mobile_payment_phones: [] })
+        .mockResolvedValueOnce({
+          user_mobile_payment_phones: [{ ...phoneRow, is_default: false }],
+        });
+      jest.spyOn(service, 'setDefaultForUser').mockResolvedValue({
+        ...phoneRow,
+        is_default: true,
+      } as any);
+
+      const result = await service.resolveCheckoutPaymentPhone({
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({
+        phoneE164: '+237600000001',
+        phoneId: 'phone-1',
+        source: 'registry',
+      });
+      expect(service.setDefaultForUser).toHaveBeenCalledWith('user-1', 'phone-1');
+    });
+
+    it('returns profile source when linking is not possible', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ user_mobile_payment_phones: [] })
+        .mockResolvedValueOnce({ user_mobile_payment_phones: [] });
+      mobilePaymentPhoneSeedService.ensureFromContactPhone.mockResolvedValue(
+        null
+      );
+
+      const result = await service.resolveCheckoutPaymentPhone({
+        userId: 'user-1',
+        profilePhone: '+15551234567',
+        profileCountry: 'US',
+        linkProfileIfNeeded: true,
+      });
+
+      expect(result).toEqual({
+        phoneE164: '+15551234567',
+        phoneId: null,
+        source: 'profile',
       });
     });
   });

@@ -98,6 +98,7 @@ import {
 } from '../../utils/shopperVariantSelection';
 import VariantSelector from '../common/VariantSelector';
 import { CmAcceptedPaymentLogos } from '../common/CmAcceptedPaymentLogos';
+import { ClientMobileMoneyPhoneSection } from '../common/ClientMobileMoneyPhoneSection';
 import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
@@ -862,8 +863,8 @@ const PlaceOrderPage: React.FC = () => {
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
-  const [useDifferentPhone, setUseDifferentPhone] = useState(false);
-  const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [linkedPaymentPhoneId, setLinkedPaymentPhoneId] = useState<string | null>(null);
+  const [linkedPaymentPhoneE164, setLinkedPaymentPhoneE164] = useState<string | null>(null);
   const [missingEmailDialogOpen, setMissingEmailDialogOpen] = useState(false);
   const [missingPhoneDialogOpen, setMissingPhoneDialogOpen] = useState(false);
   const [missingPhoneNumber, setMissingPhoneNumber] = useState('');
@@ -1221,6 +1222,20 @@ const PlaceOrderPage: React.FC = () => {
     Boolean(checkoutPreflightRequest)
   );
 
+  useEffect(() => {
+    if (linkedPaymentPhoneId) return;
+    const id = checkoutPreflight?.suggested_payment_phone_id;
+    if (!id) return;
+    setLinkedPaymentPhoneId(id);
+    setLinkedPaymentPhoneE164(
+      checkoutPreflight?.suggested_payment_phone ?? null
+    );
+  }, [
+    checkoutPreflight?.suggested_payment_phone,
+    checkoutPreflight?.suggested_payment_phone_id,
+    linkedPaymentPhoneId,
+  ]);
+
   /** Server rail+SKU gate — same as CheckoutPage / mobile place order. */
   const cookedFoodMoMoPayAfterConfirm =
     checkoutPreflight?.pay_after_merchant_confirm_eligible === true;
@@ -1455,12 +1470,14 @@ const PlaceOrderPage: React.FC = () => {
     if (!isPickupOrder && !selectedAddressId) return;
     if (placingOrderRef.current) return;
 
-    // Validate phone number if override is enabled
-    if (useDifferentPhone && !overridePhoneNumber.trim()) {
+    const needsMoMoPhone =
+      !itemCountrySupportsStripe &&
+      checkoutPreflight?.checkout_method !== 'STRIPE';
+    if (needsMoMoPhone && !linkedPaymentPhoneId && !checkoutPreflight?.suggested_payment_phone_id) {
       setError(
         t(
-          'orders.phoneNumberRequired',
-          'Phone number is required when using a different phone number'
+          'checkout.linkMoMoRequired',
+          'Link a Mobile Money number to continue.'
         )
       );
       return;
@@ -1499,7 +1516,7 @@ const PlaceOrderPage: React.FC = () => {
                 ? {}
                 : { delivery_window: deliveryWindow }),
             }),
-        phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
+        mobile_payment_phone_id: linkedPaymentPhoneId || checkoutPreflight?.suggested_payment_phone_id || undefined,
         special_instructions: specialInstructions.trim() || undefined,
         discount_code: appliedDiscountCode || undefined,
         ...getMetaBrowserContext(),
@@ -1560,9 +1577,10 @@ const PlaceOrderPage: React.FC = () => {
         order.payment_source !== 'wallet';
       if (momoAwaiting) {
         const phoneE164 = (
-          useDifferentPhone
-            ? overridePhoneNumber
-            : profile?.phone_number || ''
+          linkedPaymentPhoneE164 ||
+          checkoutPreflight?.suggested_payment_phone ||
+          profile?.phone_number ||
+          ''
         ).trim();
         navigate(
           buildMomoAwaitingPaymentTo({
@@ -1632,8 +1650,10 @@ const PlaceOrderPage: React.FC = () => {
     selectedVariantId,
     t,
     trackPurchase,
-    useDifferentPhone,
-    overridePhoneNumber,
+    linkedPaymentPhoneId,
+    linkedPaymentPhoneE164,
+    checkoutPreflight?.suggested_payment_phone,
+    checkoutPreflight?.suggested_payment_phone_id,
     profile?.phone_number,
   ]);
 
@@ -1642,34 +1662,30 @@ const PlaceOrderPage: React.FC = () => {
       await handleSubmit();
       return;
     }
-    // Only gate when using profile phone (not override) and it's missing
-    const hasProfilePhone = Boolean(profile?.phone_number?.trim());
-    if (!useDifferentPhone && !hasProfilePhone) {
-      setMissingPhoneError(null);
-      setMissingPhoneNumber('');
-      setMissingPhoneNationalNumber('');
-      const addrCountry =
-        (isPickupOrder ? itemOriginCountryIso : selectedAddress?.country)?.trim() ||
-        '';
-      const locked = !!addrCountry && isCountrySupported(addrCountry);
-      const fallbackCountry = locked
-        ? addrCountry
-        : supportedCountries?.[0] || 'GA';
-      setMissingPhoneCountry(fallbackCountry);
-      setMissingPhoneDialogOpen(true);
+    const needsMoMoPhone =
+      !itemCountrySupportsStripe &&
+      checkoutPreflight?.checkout_method !== 'STRIPE';
+    const hasLinkedPhone = Boolean(
+      linkedPaymentPhoneId || checkoutPreflight?.suggested_payment_phone_id
+    );
+    if (needsMoMoPhone && !hasLinkedPhone) {
+      setError(
+        t(
+          'checkout.linkMoMoRequired',
+          'Link a Mobile Money number to continue.'
+        )
+      );
       return;
     }
     await handleSubmit();
   }, [
     handleSubmit,
-    isCountrySupported,
+    checkoutPreflight?.checkout_method,
+    checkoutPreflight?.suggested_payment_phone_id,
     isPickupOrder,
     itemCountrySupportsStripe,
-    itemOriginCountryIso,
-    profile?.phone_number,
-    selectedAddress?.country,
-    supportedCountries,
-    useDifferentPhone,
+    linkedPaymentPhoneId,
+    t,
   ]);
 
   const submitWithEmailGate = useCallback(async () => {
@@ -2054,81 +2070,6 @@ const PlaceOrderPage: React.FC = () => {
     [deliveryUnavailable, trackSiteEvent]
   );
 
-  // Validate phone number country - must be before early returns
-  const phoneValidation = useMemo(() => {
-    const phoneToValidate = useDifferentPhone
-      ? overridePhoneNumber
-      : profile?.phone_number;
-
-    // If using different phone but no phone number entered yet, don't show error but don't validate
-    if (useDifferentPhone && !overridePhoneNumber.trim()) {
-      return {
-        isValid: false, // Don't allow empty state for button enabling
-        countryCode: null,
-        message: null,
-      };
-    }
-
-    if (!phoneToValidate) {
-      return {
-        isValid: false,
-        countryCode: null,
-        message: null,
-      };
-    }
-
-    try {
-      const parsedPhone = parsePhoneNumber(phoneToValidate);
-      if (!parsedPhone) {
-        return {
-          isValid: false,
-          countryCode: null,
-          message: t(
-            'orders.invalidPhoneNumber',
-            'Invalid phone number format'
-          ),
-        };
-      }
-
-      const countryCode = parsedPhone.country;
-      const isSupported = countryCode ? isCountrySupported(countryCode) : false;
-
-      // Stripe-supported item countries pay by card; don't enforce the
-      // mobile-money supported-phone-country restriction.
-      if (!isSupported && !itemCountrySupportsStripe) {
-        return {
-          isValid: false,
-          countryCode,
-          message: t(
-            'orders.unsupportedPhoneCountry',
-            'Phone number is not from a supported country. Supported countries: {{countries}}',
-            { countries: supportedCountries.join(', ') }
-          ),
-        };
-      }
-
-      return {
-        isValid: true,
-        countryCode,
-        message: null,
-      };
-    } catch {
-      return {
-        isValid: false,
-        countryCode: null,
-        message: t('orders.invalidPhoneNumber', 'Invalid phone number format'),
-      };
-    }
-  }, [
-    useDifferentPhone,
-    overridePhoneNumber,
-    profile?.phone_number,
-    isCountrySupported,
-    itemCountrySupportsStripe,
-    supportedCountries,
-    t,
-  ]);
-
   // Show loading skeleton
   if (inventoryLoading) {
     return <OrderPageSkeleton />;
@@ -2162,7 +2103,6 @@ const PlaceOrderPage: React.FC = () => {
   }
 
   // Calculate if order can be placed
-  const hasProfilePhone = Boolean(profile?.phone_number?.trim());
   const variantSelectionValid =
     dbVariants.length === 0 || Boolean(selectedVariantId);
   const baseCanPlaceOrder =
@@ -2171,14 +2111,17 @@ const PlaceOrderPage: React.FC = () => {
     !deliveryUnavailable &&
     !cookedFoodClosedMessage &&
     (isPickupOrder || (!!selectedAddressId && addresses.length > 0));
+  const needsLinkedMoMoPhone =
+    !isStripeStorePickup &&
+    !itemCountrySupportsStripe &&
+    checkoutPreflight?.checkout_method !== 'STRIPE';
+  const hasLinkedPaymentPhone = Boolean(
+    linkedPaymentPhoneId || checkoutPreflight?.suggested_payment_phone_id
+  );
   const canPlaceOrder =
     variantSelectionValid &&
-    (isStripeStorePickup
-      ? baseCanPlaceOrder
-      : useDifferentPhone
-        ? overridePhoneNumber.trim() !== '' && phoneValidation.isValid
-        : !hasProfilePhone || phoneValidation.isValid) &&
-    baseCanPlaceOrder;
+    baseCanPlaceOrder &&
+    (!needsLinkedMoMoPhone || hasLinkedPaymentPhone);
 
   // Step validation (mobile wizard). Quantity is chosen on the final review step.
   const isStepValid = (step: number): boolean => {
@@ -3086,105 +3029,21 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                     </Alert>
 
-                    <Paper
-                      variant="outlined"
-                      sx={{ p: 2, bgcolor: 'grey.50', mb: 2 }}
-                    >
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        gutterBottom
-                      >
-                        {t(
-                          'orders.paymentPhoneNumber',
-                          'Payment Phone Number'
-                        )}
-                      </Typography>
-                      <Typography variant="body1" fontWeight="bold">
-                        {useDifferentPhone
-                          ? overridePhoneNumber
-                          : profile.phone_number}
-                      </Typography>
-                    </Paper>
-
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={useDifferentPhone}
-                          onChange={(e) =>
-                            setUseDifferentPhone(e.target.checked)
-                          }
-                          disabled={loading}
-                        />
+                    <ClientMobileMoneyPhoneSection
+                      variant="checkout"
+                      requireLinkedPhone={!itemCountrySupportsStripe}
+                      profilePhone={profile?.phone_number}
+                      profileCountry={profile?.country}
+                      selectedPhoneId={
+                        linkedPaymentPhoneId ||
+                        checkoutPreflight?.suggested_payment_phone_id ||
+                        null
                       }
-                      label={
-                        <Typography variant="body2">
-                          {t(
-                            'orders.useDifferentPhone',
-                            'Use a different phone number'
-                          )}
-                        </Typography>
-                      }
+                      onSelectedPhoneChange={(phone) => {
+                        setLinkedPaymentPhoneId(phone?.id ?? null);
+                        setLinkedPaymentPhoneE164(phone?.phone_e164 ?? null);
+                      }}
                     />
-
-                    {useDifferentPhone && (
-                      <Box sx={{ mt: 2 }}>
-                        <PhoneInput
-                          value={overridePhoneNumber}
-                          onChange={(value) =>
-                            setOverridePhoneNumber(value || '')
-                          }
-                          label={t(
-                            'orders.overridePhoneNumber',
-                            'Phone Number for Payment'
-                          )}
-                          defaultCountry={pickMobileMoneyDefaultCountry(
-                            itemOriginCountryIso
-                          )}
-                          fullWidth
-                          onlyCountries={['CM', 'GA']}
-                          error={
-                            !phoneValidation.isValid &&
-                            overridePhoneNumber.trim() !== '' &&
-                            phoneValidation.message !== null
-                          }
-                          helperText={
-                            !phoneValidation.isValid &&
-                            overridePhoneNumber.trim() !== '' &&
-                            phoneValidation.message !== null
-                              ? phoneValidation.message || ''
-                              : t(
-                                  'orders.overridePhoneNote',
-                                  'This number will receive the payment request for this order'
-                                )
-                          }
-                        />
-                      </Box>
-                    )}
-
-                    {phoneValidation.message && !phoneValidation.isValid && (
-                      <Alert severity="error" sx={{ mt: 2 }}>
-                        <Typography
-                          variant="body2"
-                          fontWeight="medium"
-                          gutterBottom
-                        >
-                          {t(
-                            'orders.phoneNumberNotSupported',
-                            'Phone Number Not Supported'
-                          )}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 2 }}>
-                          {phoneValidation.message}
-                        </Typography>
-                        <Typography variant="body2" fontWeight="medium">
-                          {t(
-                            'orders.useAlternativePhone',
-                            'Please use the "Use a different phone number" option above to enter a phone number from a supported country.'
-                          )}
-                        </Typography>
-                      </Alert>
-                    )}
                   </>
                 )}
               </CardContent>
@@ -4090,106 +3949,22 @@ const PlaceOrderPage: React.FC = () => {
                         </Typography>
                       </Alert>
 
-                      <Paper
-                        variant="outlined"
-                        sx={{ p: 2, bgcolor: 'grey.50', mb: 2 }}
-                      >
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          gutterBottom
-                        >
-                          {t(
-                            'orders.paymentPhoneNumber',
-                            'Payment Phone Number'
-                          )}
-                        </Typography>
-                        <Typography variant="body1" fontWeight="bold">
-                          {useDifferentPhone
-                            ? overridePhoneNumber
-                            : profile.phone_number}
-                        </Typography>
-                      </Paper>
-
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={useDifferentPhone}
-                            onChange={(e) =>
-                              setUseDifferentPhone(e.target.checked)
-                            }
-                            disabled={loading}
-                          />
+                      <ClientMobileMoneyPhoneSection
+                        variant="checkout"
+                        requireLinkedPhone={!itemCountrySupportsStripe}
+                        profilePhone={profile?.phone_number}
+                        profileCountry={profile?.country}
+                        selectedPhoneId={
+                          linkedPaymentPhoneId ||
+                          checkoutPreflight?.suggested_payment_phone_id ||
+                          null
                         }
-                        label={
-                          <Typography variant="body2">
-                            {t(
-                              'orders.useDifferentPhone',
-                              'Use a different phone number'
-                            )}
-                          </Typography>
-                        }
+                        onSelectedPhoneChange={(phone) => {
+                          setLinkedPaymentPhoneId(phone?.id ?? null);
+                          setLinkedPaymentPhoneE164(phone?.phone_e164 ?? null);
+                        }}
                       />
 
-                      {useDifferentPhone && (
-                        <Box sx={{ mt: 2 }}>
-                          <PhoneInput
-                            value={overridePhoneNumber}
-                            onChange={(value) =>
-                              setOverridePhoneNumber(value || '')
-                            }
-                            label={t(
-                              'orders.overridePhoneNumber',
-                              'Phone Number for Payment'
-                            )}
-                            defaultCountry={pickMobileMoneyDefaultCountry(
-                              itemOriginCountryIso
-                            )}
-                            fullWidth
-                            onlyCountries={['CM', 'GA']}
-                            error={
-                              !phoneValidation.isValid &&
-                              overridePhoneNumber.trim() !== '' &&
-                              phoneValidation.message !== null
-                            }
-                            helperText={
-                              !phoneValidation.isValid &&
-                              overridePhoneNumber.trim() !== '' &&
-                              phoneValidation.message !== null
-                                ? phoneValidation.message || ''
-                                : t(
-                                    'orders.overridePhoneNote',
-                                    'This number will receive the payment request for this order'
-                                  )
-                            }
-                          />
-                        </Box>
-                      )}
-
-                      {/* Phone Number Country Validation Warning */}
-                      {phoneValidation.message && !phoneValidation.isValid && (
-                        <Alert severity="error" sx={{ mt: 2 }}>
-                          <Typography
-                            variant="body2"
-                            fontWeight="medium"
-                            gutterBottom
-                          >
-                            {t(
-                              'orders.phoneNumberNotSupported',
-                              'Phone Number Not Supported'
-                            )}
-                          </Typography>
-                          <Typography variant="body2" sx={{ mb: 2 }}>
-                            {phoneValidation.message}
-                          </Typography>
-                          <Typography variant="body2" fontWeight="medium">
-                            {t(
-                              'orders.useAlternativePhone',
-                              'Please use the "Use a different phone number" option above to enter a phone number from a supported country.'
-                            )}
-                          </Typography>
-                        </Alert>
-                      )}
                     </>
                   )}
                 </CardContent>

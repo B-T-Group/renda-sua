@@ -7243,6 +7243,9 @@
     "basedOnYourCountry": "Based on your country",
     "yourMoMoNumber": "Your MoMo number",
     "momoPhoneHelper": "Must match your MoMo number",
+    "linkMoMoRequired": "Link a Mobile Money number to continue.",
+    "selectedForPayment": "Selected for payment",
+    "useSavedPhone": "Use {{phone}}",
     "heldUntilAccepted": "Held until store accepts",
     "contactNumber": "Contact Number",
     "useDifferentPhone": "Use different phone number",
@@ -7513,7 +7516,13 @@
     "questionYes": "Yes, it receives Mobile Money",
     "questionNoDifferent": "No, use a different number",
     "questionContinue": "Continue",
-    "questionSuccess": "Number confirmed. You can use it for Mobile Money payouts."
+    "questionSuccess": "Number confirmed. You can use it for Mobile Money payouts.",
+    "profileTitle": "Mobile Money number",
+    "profileHelper": "Payment requests go to this number.",
+    "noneYet": "No Mobile Money number linked yet.",
+    "linkNumber": "Link a Mobile Money number",
+    "useProfilePhone": "Use {{phone}} for Mobile Money",
+    "profileNotMobileMoney": "Your profile phone is not a Mobile Money number"
   },
   "businessOrderTiming": {
     "title": "Order confirmation timing",

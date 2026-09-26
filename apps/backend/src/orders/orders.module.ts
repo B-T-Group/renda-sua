@@ -13,6 +13,7 @@ import { PaymentProgramsModule } from '../payment-programs/payment-programs.modu
 import { MessagingModule } from '../messaging/messaging.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
+import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payment-phones.module';
 import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
 import { CreditsModule } from '../credits/credits.module';
 import { FoodModule } from '../food/food.module';
@@ -98,6 +99,7 @@ import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
     CommerceIntegrationsModule,
     MetaConversionsModule,
     MerchantLifecycleModule,
+    MobilePaymentPhonesModule,
     RepresentativeCompensationModule,
     CreditsModule,
     FoodModule,

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CreateMobilePaymentPhoneDto {
   @ApiProperty({ example: '237', description: 'Country calling code without +' })
@@ -12,6 +12,13 @@ export class CreateMobilePaymentPhoneDto {
   @IsString()
   @IsNotEmpty()
   phoneNumber!: string;
+
+  @ApiPropertyOptional({
+    description: 'When true, mark this phone as the client default Mobile Money number',
+  })
+  @IsOptional()
+  @IsBoolean()
+  setAsDefault?: boolean;
 }
 
 export class UpdateMobilePaymentPhoneDto {

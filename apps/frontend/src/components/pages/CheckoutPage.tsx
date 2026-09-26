@@ -1,4 +1,4 @@
-import { ArrowBack, Lock, Security } from '@mui/icons-material';
+import { ArrowBack, Lock } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -44,6 +44,7 @@ import {
   SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
+import { ClientMobileMoneyPhoneSection } from '../common/ClientMobileMoneyPhoneSection';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -54,8 +55,6 @@ import {
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
-import PhoneInput from '../common/PhoneInput';
-import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
@@ -585,8 +584,9 @@ const CheckoutPage: React.FC = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<string>(
     reorderPrefill?.deliveryAddressId ?? ''
   );
-  const [useDifferentPhone, setUseDifferentPhone] = useState(false);
-  const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [linkedPaymentPhoneId, setLinkedPaymentPhoneId] = useState<string | null>(null);
+  const [linkedPaymentPhoneE164, setLinkedPaymentPhoneE164] = useState<string | null>(null);
+  const [momoPhoneError, setMomoPhoneError] = useState<string | null>(null);
   const [sendingToSomeoneElse, setSendingToSomeoneElse] = useState(false);
   const [recipient, setRecipient] = useState<RecipientDraft>(
     EMPTY_RECIPIENT_DRAFT
@@ -714,6 +714,21 @@ const CheckoutPage: React.FC = () => {
   useEffect(() => {
     if (cookedFoodAsapOnly) setDeliveryWindow(null);
   }, [cookedFoodAsapOnly]);
+
+  useEffect(() => {
+    if (linkedPaymentPhoneId) return;
+    const id = checkoutPreflight?.suggested_payment_phone_id;
+    if (!id) return;
+    setLinkedPaymentPhoneId(id);
+    setLinkedPaymentPhoneE164(
+      checkoutPreflight?.suggested_payment_phone ?? null
+    );
+  }, [
+    checkoutPreflight?.suggested_payment_phone,
+    checkoutPreflight?.suggested_payment_phone_id,
+    linkedPaymentPhoneId,
+  ]);
+
   const pickupEligible =
     preflightGroups.length > 0 &&
     preflightGroups.every((g) => g.pickup_eligible === true);
@@ -1022,10 +1037,20 @@ const CheckoutPage: React.FC = () => {
     if (!isPickup && !selectedAddressId) return;
     if (!isPickup && deliveryUnavailable) return;
 
-    // Validate phone number if override is enabled
-    if (useDifferentPhone && !overridePhoneNumber.trim()) {
+    if (
+      checkoutPreflight?.checkout_method === 'MOBILE_MONEY' &&
+      !linkedPaymentPhoneId &&
+      !checkoutPreflight?.suggested_payment_phone_id
+    ) {
+      setMomoPhoneError(
+        t(
+          'checkout.linkMoMoRequired',
+          'Link a Mobile Money number to continue.'
+        )
+      );
       return;
     }
+    setMomoPhoneError(null);
 
     // A recipient with no phone cannot be reached or verified at handover.
     if (recipientIncomplete) {
@@ -1036,7 +1061,10 @@ const CheckoutPage: React.FC = () => {
     setIsCheckoutInProgress(true); // Set flag before checkout
 
     try {
-      const phoneNumber = useDifferentPhone ? overridePhoneNumber : undefined;
+      const paymentPhoneId =
+        linkedPaymentPhoneId ||
+        checkoutPreflight?.suggested_payment_phone_id ||
+        undefined;
       const fastDeliveryFee = requiresFastDelivery
         ? fastDeliveryConfig?.fee || 0
         : 0;
@@ -1047,7 +1075,7 @@ const CheckoutPage: React.FC = () => {
       const orders = await createOrdersFromCart(
         cartItems,
         isPickup ? null : selectedAddressId,
-        phoneNumber,
+        undefined,
         undefined, // specialInstructions removed
         discountCodeToApply,
         isPickup ? false : requiresFastDelivery,
@@ -1065,7 +1093,8 @@ const CheckoutPage: React.FC = () => {
           payerCountry: diaspora?.payer_country ?? undefined,
           sendingToSomeoneElse,
           recipient: recipientPayload,
-        }
+        },
+        paymentPhoneId
       );
 
       if (isPickup) {
@@ -1089,9 +1118,10 @@ const CheckoutPage: React.FC = () => {
         );
       if (momoAwaiting) {
         const phoneE164 = (
-          useDifferentPhone
-            ? overridePhoneNumber
-            : profile?.phone_number || ''
+          linkedPaymentPhoneE164 ||
+          checkoutPreflight?.suggested_payment_phone ||
+          profile?.phone_number ||
+          ''
         ).trim();
         navigate(
           buildMomoAwaitingPaymentTo({
@@ -1514,164 +1544,22 @@ const CheckoutPage: React.FC = () => {
 
               {/* Mobile Payment Method - MoMo only */}
               {checkoutPreflight?.checkout_method === 'MOBILE_MONEY' && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle1" gutterBottom fontWeight={600}>
-                    {t('checkout.yourMoMoNumber', 'Your MoMo number')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
-                  </Typography>
-
-                  {/* Primary Phone Number Display */}
-                <Card
-                  variant="outlined"
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    bgcolor: useDifferentPhone ? 'grey.50' : 'primary.50',
-                    borderColor: useDifferentPhone ? 'grey.300' : 'primary.200',
-                    transition: 'all 0.2s ease-in-out',
+                <ClientMobileMoneyPhoneSection
+                  variant="checkout"
+                  requireLinkedPhone
+                  profilePhone={profile?.phone_number}
+                  profileCountry={profile?.country}
+                  selectedPhoneId={
+                    linkedPaymentPhoneId ||
+                    checkoutPreflight?.suggested_payment_phone_id ||
+                    null
+                  }
+                  onSelectedPhoneChange={(phone) => {
+                    setLinkedPaymentPhoneId(phone?.id ?? null);
+                    setLinkedPaymentPhoneE164(phone?.phone_e164 ?? null);
+                    setMomoPhoneError(null);
                   }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Security
-                      color={useDifferentPhone ? 'disabled' : 'primary'}
-                    />
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="body1" fontWeight={500}>
-                        {t(
-                          'checkout.primaryPhoneNumber',
-                          'Primary Phone Number'
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color={
-                          useDifferentPhone ? 'text.disabled' : 'text.secondary'
-                        }
-                      >
-                        {profile?.phone_number ||
-                          t('common.notAvailable', 'Not available')}
-                      </Typography>
-                      {!useDifferentPhone && (
-                        <Typography
-                          variant="caption"
-                          color="primary"
-                          sx={{ mt: 0.5, display: 'block' }}
-                        >
-                          {t(
-                            'checkout.selectedForPayment',
-                            'Selected for payment'
-                          )}
-                        </Typography>
-                      )}
-                    </Box>
-                    {!useDifferentPhone && (
-                      <Box
-                        sx={{
-                          bgcolor: 'primary.main',
-                          color: 'white',
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: 1,
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {t('checkout.active', 'Active')}
-                      </Box>
-                    )}
-                  </Box>
-                </Card>
-
-                {/* Toggle for Different Phone Number */}
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={useDifferentPhone}
-                      onChange={(e) => setUseDifferentPhone(e.target.checked)}
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {t(
-                          'checkout.useDifferentPhone',
-                          'Use a different phone number for this order'
-                        )}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {t(
-                          'checkout.useDifferentPhoneDescription',
-                          'Override your primary phone number for this specific order'
-                        )}
-                      </Typography>
-                    </Box>
-                  }
-                  sx={{ alignItems: 'flex-start', mb: 2 }}
                 />
-
-                {/* Alternative Phone Input */}
-                {useDifferentPhone && (
-                  <Card
-                    variant="outlined"
-                    sx={{
-                      p: 2,
-                      bgcolor: 'primary.50',
-                      borderColor: 'primary.200',
-                      border: '2px solid',
-                      animation: 'fadeIn 0.3s ease-in-out',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 2,
-                        mb: 2,
-                      }}
-                    >
-                      <Security color="primary" />
-                      <Typography
-                        variant="body2"
-                        fontWeight={500}
-                        color="primary"
-                      >
-                        {t(
-                          'checkout.alternativePhoneNumber',
-                          'Alternative Phone Number'
-                        )}
-                      </Typography>
-                    </Box>
-                    <PhoneInput
-                      value={overridePhoneNumber}
-                      onChange={(value) => setOverridePhoneNumber(value || '')}
-                      label={t(
-                        'checkout.enterPhoneNumber',
-                        'Enter phone number'
-                      )}
-                      defaultCountry={pickMobileMoneyDefaultCountry(
-                        preflightGroups[0]?.seller_country ||
-                          selectedAddress?.country
-                      )}
-                      onlyCountries={['CM', 'GA']}
-                    />
-                    {overridePhoneNumber && (
-                      <Typography
-                        variant="caption"
-                        color="primary"
-                        sx={{ mt: 1, display: 'block' }}
-                      >
-                        {t(
-                          'checkout.alternativePhoneSelected',
-                          'This number will be used for payment processing'
-                        )}
-                      </Typography>
-                    )}
-                  </Card>
-                )}
-                </Box>
               )}
 
               {/* Held Until Store Accepts Trust Banner - shown for all payment methods */}
@@ -1754,6 +1642,9 @@ const CheckoutPage: React.FC = () => {
               isCheckoutInProgress ||
               recipientIncomplete ||
               Boolean(cookedFoodClosedMessage) ||
+              (checkoutPreflight?.checkout_method === 'MOBILE_MONEY' &&
+                !linkedPaymentPhoneId &&
+                !checkoutPreflight?.suggested_payment_phone_id) ||
               (fulfillment === 'delivery' &&
                 (!selectedAddressId || deliveryUnavailable))
             }
@@ -1770,9 +1661,9 @@ const CheckoutPage: React.FC = () => {
             )}
           </Button>
 
-          {checkoutError && (
+          {(momoPhoneError || checkoutError) && (
             <Alert severity="error" sx={{ mt: 2 }}>
-              {checkoutError}
+              {momoPhoneError || checkoutError}
             </Alert>
           )}
         </Grid>

@@ -23,6 +23,9 @@ export interface CreateOrderPayload {
   special_instructions?: string;
   fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   delivery_address_id?: string;
+  /** Linked `user_mobile_payment_phones` row for MoMo checkout. */
+  mobile_payment_phone_id?: string;
+  /** @deprecated Prefer mobile_payment_phone_id */
   phone_number?: string;
   requires_fast_delivery?: boolean;
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';

@@ -7029,7 +7029,10 @@
       "whatsappEnabled": "WhatsApp",
       "selectPrompt": "Sélectionnez un destinataire pour cette commande",
       "selectRequired": "Requis avant de passer votre commande"
-    }
+    },
+    "linkMoMoRequired": "Liez un numéro Mobile Money pour continuer.",
+    "selectedForPayment": "Sélectionné pour le paiement",
+    "useSavedPhone": "Utiliser {{phone}}"
   },
   "recipients": {
     "title": "Destinataires Enregistrés",
@@ -7804,7 +7807,13 @@
     "questionYes": "Oui, il reçoit du Mobile Money",
     "questionNoDifferent": "Non, utiliser un autre numéro",
     "questionContinue": "Continuer",
-    "questionSuccess": "Numéro confirmé. Vous pouvez l’utiliser pour les paiements Mobile Money."
+    "questionSuccess": "Numéro confirmé. Vous pouvez l’utiliser pour les paiements Mobile Money.",
+    "profileTitle": "Numéro Mobile Money",
+    "profileHelper": "Les demandes de paiement sont envoyées à ce numéro.",
+    "noneYet": "Aucun numéro Mobile Money lié pour le moment.",
+    "linkNumber": "Lier un numéro Mobile Money",
+    "useProfilePhone": "Utiliser {{phone}} pour le Mobile Money",
+    "profileNotMobileMoney": "Le numéro de votre profil n’est pas un numéro Mobile Money"
   },
   "businessOrderTiming": {
     "title": "Délais de confirmation",

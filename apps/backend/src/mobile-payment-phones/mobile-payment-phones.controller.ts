@@ -60,9 +60,29 @@ export class MobilePaymentPhonesController {
     const phone = await this.mobilePaymentPhonesService.createForUser(
       userId,
       body.countryCode,
-      body.phoneNumber
+      body.phoneNumber,
+      body.setAsDefault === true
     );
     return { success: true, data: { phone } };
+  }
+
+  @Post('link-profile')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Link the profile phone into the Mobile Money registry and set it as default',
+  })
+  @ApiResponse({ status: 200, description: 'Profile phone linked or reason returned' })
+  async linkProfile(@ReqContext() ctx: RequestContext) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    const result = await this.mobilePaymentPhonesService.linkProfilePhone(userId);
+    return {
+      success: true,
+      data: {
+        phone: result.phone,
+        reason: result.reason ?? null,
+      },
+    };
   }
 
   @Post('agent/attach')
@@ -108,6 +128,26 @@ export class MobilePaymentPhonesController {
       id,
       body.countryCode,
       body.phoneNumber
+    );
+    return { success: true, data: { phone } };
+  }
+
+  @Post(':id/default')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Set this registry phone as the client default Mobile Money number',
+  })
+  @ApiParam({ name: 'id', type: String })
+  @ApiResponse({ status: 200, description: 'Phone marked as default' })
+  @ApiResponse({ status: 404, description: 'Phone not found' })
+  async setDefault(
+    @ReqContext() ctx: RequestContext,
+    @Param('id') id: string
+  ) {
+    const userId = this.hasuraUserService.getUserId(ctx);
+    const phone = await this.mobilePaymentPhonesService.setDefaultForUser(
+      userId,
+      id
     );
     return { success: true, data: { phone } };
   }

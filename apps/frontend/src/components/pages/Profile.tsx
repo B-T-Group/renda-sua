@@ -65,6 +65,7 @@ import ReferralCodeEntryButton from '../common/ReferralCodeEntryButton';
 import MissingEmailBanner from '../common/MissingEmailBanner';
 import MyRatingsSection from '../common/MyRatingsSection';
 import PhoneInput from '../common/PhoneInput';
+import { ClientMobileMoneyPhoneSection } from '../common/ClientMobileMoneyPhoneSection';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 import { PhoneVerificationDialog } from '../dialogs/PhoneVerificationDialog';
 
@@ -708,6 +709,11 @@ const Profile: React.FC = () => {
                       {t('profile.verifyPhoneAction', 'Verify phone number')}
                     </Button>
                   )}
+                  <ClientMobileMoneyPhoneSection
+                    variant="profile"
+                    profilePhone={profile?.phone_number}
+                    profileCountry={profile?.country}
+                  />
                   <Autocomplete
                     size="small"
                     options={timezoneOptions}
@@ -813,6 +819,11 @@ const Profile: React.FC = () => {
                       )}
                     </Stack>
                   </Box>
+                  <ClientMobileMoneyPhoneSection
+                    variant="profile"
+                    profilePhone={profile?.phone_number}
+                    profileCountry={profile?.country}
+                  />
                   <Box>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {t('profile.memberSince')}

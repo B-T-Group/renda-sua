@@ -14,6 +14,7 @@ export interface CheckoutPreflightRequest {
   fulfillment_method?: 'delivery' | 'pickup';
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   phone_number?: string;
+  mobile_payment_phone_id?: string;
   /** ISO 3166-1 alpha-2 billing country of the payer. */
   payer_country?: string;
   /** Set when the shopper is buying for a different recipient. */
@@ -94,6 +95,10 @@ export interface CheckoutPreflightResult {
   schedule_required?: boolean;
   /** True when every group is cooked-food MoMo pay-after (no deposit). */
   pay_after_merchant_confirm_eligible?: boolean;
+  requires_payment_phone?: boolean;
+  suggested_payment_phone?: string | null;
+  suggested_payment_phone_id?: string | null;
+  payment_phone_source?: 'registry' | 'profile' | 'none';
   purchase_credits?: {
     total: number;
     currency: string;

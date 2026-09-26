@@ -282,7 +282,9 @@
     "invalidAddress": "The delivery address is incomplete or unsupported. Please choose a different address.",
     "stripeRetryUnsupported": "To retry the payment, please go to your order details and follow the payment instructions.",
     "merchantNotAcceptingOrders": "This merchant is currently completing account setup and is not yet accepting orders.",
-    "taxAtCheckout": "Sales tax is calculated at checkout"
+    "taxAtCheckout": "Sales tax is calculated at checkout",
+    "linkMoMoRequired": "Link a Mobile Money number to continue.",
+    "selectedForPayment": "Selected for payment"
   },
   "deposit": {
     "reservationTitle": "Reservation deposit",
@@ -6501,7 +6503,13 @@
     "success": "Number verified. Refund of 150 XAF is on the way.",
     "genericError": "Something went wrong. Please try again.",
     "sendRequest": "Send verification request",
-    "saveAndVerify": "Save and verify"
+    "saveAndVerify": "Save and verify",
+    "profileTitle": "Mobile Money number",
+    "profileHelper": "Payment requests go to this number.",
+    "noneYet": "No Mobile Money number linked yet.",
+    "linkNumber": "Link a Mobile Money number",
+    "useProfilePhone": "Use {{phone}} for Mobile Money",
+    "profileNotMobileMoney": "Your profile phone is not a Mobile Money number"
   },
   "incomingOrder": {
     "title": "New order",

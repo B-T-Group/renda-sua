@@ -106,13 +106,24 @@ export class MobilePaymentPhoneSeedService {
     const res = await this.hasuraSystemService.executeMutation(
       `mutation InsertPhone($row: user_mobile_payment_phones_insert_input!) {
         insert_user_mobile_payment_phones_one(object: $row) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
         }
       }`,
-      { row: { user_id: userId, phone_e164: phoneE164, is_verified: false } }
+      {
+        row: {
+          user_id: userId,
+          phone_e164: phoneE164,
+          is_verified: false,
+          is_default: false,
+        },
+      }
     );
-    return res.insert_user_mobile_payment_phones_one;
+    return {
+      ...res.insert_user_mobile_payment_phones_one,
+      is_default:
+        res.insert_user_mobile_payment_phones_one?.is_default === true,
+    };
   }
 
   private async findByUserAndE164(
@@ -125,13 +136,15 @@ export class MobilePaymentPhoneSeedService {
           where: { user_id: { _eq: $userId }, phone_e164: { _eq: $phone } }
           limit: 1
         ) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
         }
       }`,
       { userId, phone: phoneE164 }
     );
-    return res.user_mobile_payment_phones?.[0] ?? null;
+    const row = res.user_mobile_payment_phones?.[0];
+    if (!row) return null;
+    return { ...row, is_default: row.is_default === true };
   }
 
   private resolveContactE164(

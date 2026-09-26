@@ -21,6 +21,7 @@ interface CreateOrderRequest {
   delivery_address_id?: string;
   fulfillment_method?: 'delivery' | 'pickup';
   phone_number?: string;
+  mobile_payment_phone_id?: string;
   special_instructions?: string;
   requires_fast_delivery?: boolean;
   discount_code?: string;
@@ -176,7 +177,8 @@ export const useCheckout = () => {
         special_instructions?: string;
       },
       fulfillmentMethod: 'delivery' | 'pickup' = 'delivery',
-      diaspora?: DiasporaCheckoutOptions
+      diaspora?: DiasporaCheckoutOptions,
+      mobilePaymentPhoneId?: string
     ): Promise<OrderResult[]> => {
       if (!apiClient) {
         throw new Error('API client not available');
@@ -218,6 +220,9 @@ export const useCheckout = () => {
             : {}),
           fulfillment_method: fulfillmentMethod,
           phone_number: phoneNumber,
+          ...(mobilePaymentPhoneId
+            ? { mobile_payment_phone_id: mobilePaymentPhoneId }
+            : {}),
           payment_timing: paymentTiming,
           eventId: checkoutEventId,
           ...diasporaPayload,
@@ -314,6 +319,9 @@ export const useCheckout = () => {
               : {}),
             fulfillment_method: fulfillmentMethod,
             phone_number: phoneNumber,
+            ...(mobilePaymentPhoneId
+              ? { mobile_payment_phone_id: mobilePaymentPhoneId }
+              : {}),
             special_instructions: specialInstructions,
             discount_code: discountCode,
             requires_fast_delivery:

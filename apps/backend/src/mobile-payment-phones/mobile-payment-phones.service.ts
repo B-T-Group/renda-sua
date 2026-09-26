@@ -19,6 +19,7 @@ import {
 import type {
   MobileMoneyVerificationMethod,
   MobilePaymentPhoneVerificationStatus,
+  ResolvedCheckoutPaymentPhone,
   UserMobilePaymentPhoneRow,
 } from './mobile-payment-phones.types';
 import { MobilePaymentPhoneSeedService } from './mobile-payment-phone-seed.service';
@@ -49,9 +50,9 @@ export class MobilePaymentPhonesService {
       `query ListPhones($userId: uuid!) {
         user_mobile_payment_phones(
           where: { user_id: { _eq: $userId } }
-          order_by: { created_at: desc }
+          order_by: [{ is_default: desc }, { created_at: desc }]
         ) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
           business_locations_aggregate {
             aggregate { count }
@@ -64,18 +65,7 @@ export class MobilePaymentPhonesService {
       { userId }
     );
     const rows = res.user_mobile_payment_phones ?? [];
-    return rows.map((row: any) => ({
-      id: row.id,
-      user_id: row.user_id,
-      phone_e164: row.phone_e164,
-      is_verified: row.is_verified,
-      verified_at: row.verified_at,
-      last_verification_transaction_id: row.last_verification_transaction_id,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      locationCount: row.business_locations_aggregate?.aggregate?.count ?? 0,
-      linkedToAgent: (row.agents_aggregate?.aggregate?.count ?? 0) > 0,
-    }));
+    return rows.map((row: any) => this.mapPhoneRow(row, true));
   }
 
   async getVerificationMethod(): Promise<MobileMoneyVerificationMethod> {
@@ -140,23 +130,151 @@ export class MobilePaymentPhonesService {
   async createForUser(
     userId: string,
     countryCode: string,
-    phoneNumber: string
+    phoneNumber: string,
+    setAsDefault = false
   ): Promise<UserMobilePaymentPhoneRow> {
     const phoneE164 = this.requireE164(countryCode, phoneNumber);
     await this.assertMobileMoneyRail(userId);
     this.assertProviderSupports(phoneE164);
     const existing = await this.findByUserAndE164(userId, phoneE164);
-    if (existing) return existing;
+    if (existing) {
+      if (setAsDefault) return this.setDefaultForUser(userId, existing.id);
+      return existing;
+    }
     const res = await this.hasuraSystemService.executeMutation(
       `mutation InsertPhone($row: user_mobile_payment_phones_insert_input!) {
         insert_user_mobile_payment_phones_one(object: $row) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
         }
       }`,
-      { row: { user_id: userId, phone_e164: phoneE164, is_verified: false } }
+      {
+        row: {
+          user_id: userId,
+          phone_e164: phoneE164,
+          is_verified: false,
+          is_default: false,
+        },
+      }
     );
-    return res.insert_user_mobile_payment_phones_one;
+    const created = this.mapPhoneRow(res.insert_user_mobile_payment_phones_one);
+    if (setAsDefault) return this.setDefaultForUser(userId, created.id);
+    return created;
+  }
+
+  async setDefaultForUser(
+    userId: string,
+    phoneId: string
+  ): Promise<UserMobilePaymentPhoneRow> {
+    await this.getByIdForUser(userId, phoneId);
+    await this.clearDefaultForUser(userId);
+    const res = await this.hasuraSystemService.executeMutation(
+      `mutation SetDefaultPhone($id: uuid!) {
+        update_user_mobile_payment_phones_by_pk(
+          pk_columns: { id: $id }
+          _set: { is_default: true }
+        ) {
+          id user_id phone_e164 is_verified is_default verified_at
+          last_verification_transaction_id created_at updated_at
+        }
+      }`,
+      { id: phoneId }
+    );
+    return this.mapPhoneRow(res.update_user_mobile_payment_phones_by_pk);
+  }
+
+  /**
+   * Ensure a registry row from the profile phone and mark it default when MoMo-capable.
+   */
+  async linkProfilePhone(
+    userId: string
+  ): Promise<{ phone: UserMobilePaymentPhoneRow | null; reason?: string }> {
+    const userRes = await this.hasuraSystemService.executeQuery(
+      `query UserProfilePhone($id: uuid!) {
+        users_by_pk(id: $id) { phone_number country }
+      }`,
+      { id: userId }
+    );
+    const profilePhone = userRes.users_by_pk?.phone_number?.trim() ?? '';
+    if (!profilePhone) {
+      return { phone: null, reason: 'PROFILE_PHONE_MISSING' };
+    }
+    const country = userRes.users_by_pk?.country ?? null;
+    const seeded = await this.ensureFromContactPhone(
+      userId,
+      country,
+      profilePhone
+    );
+    if (!seeded) {
+      return { phone: null, reason: 'PROFILE_PHONE_NOT_MOBILE_MONEY' };
+    }
+    const phone = await this.setDefaultForUser(userId, seeded.id);
+    return { phone };
+  }
+
+  /**
+   * Resolve which MoMo number to charge: explicit registry id, then default, then profile.
+   */
+  async resolveCheckoutPaymentPhone(params: {
+    userId: string;
+    mobilePaymentPhoneId?: string | null;
+    profilePhone?: string | null;
+    profileCountry?: string | null;
+    linkProfileIfNeeded?: boolean;
+  }): Promise<ResolvedCheckoutPaymentPhone> {
+    const {
+      userId,
+      mobilePaymentPhoneId,
+      profilePhone,
+      profileCountry,
+      linkProfileIfNeeded = true,
+    } = params;
+
+    if (mobilePaymentPhoneId) {
+      const linked = await this.getByIdForUser(userId, mobilePaymentPhoneId);
+      await this.setDefaultForUser(userId, linked.id);
+      return {
+        phoneE164: linked.phone_e164,
+        phoneId: linked.id,
+        source: 'registry',
+      };
+    }
+
+    const defaultPhone = await this.findDefaultForUser(userId);
+    if (defaultPhone) {
+      return {
+        phoneE164: defaultPhone.phone_e164,
+        phoneId: defaultPhone.id,
+        source: 'registry',
+      };
+    }
+
+    const trimmedProfile = profilePhone?.trim() || '';
+    if (!trimmedProfile) {
+      return { phoneE164: null, phoneId: null, source: 'none' };
+    }
+
+    if (linkProfileIfNeeded) {
+      const seeded = await this.ensureFromContactPhone(
+        userId,
+        profileCountry,
+        trimmedProfile
+      );
+      if (seeded) {
+        const phone = await this.setDefaultForUser(userId, seeded.id);
+        return {
+          phoneE164: phone.phone_e164,
+          phoneId: phone.id,
+          source: 'registry',
+        };
+      }
+    }
+
+    return {
+      phoneE164: trimmedProfile,
+      phoneId: null,
+      source: 'profile',
+    };
   }
 
   ensureFromContactPhone(
@@ -219,7 +337,7 @@ export class MobilePaymentPhonesService {
             last_verification_transaction_id: null
           }
         ) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
         }
       }`,
@@ -227,7 +345,7 @@ export class MobilePaymentPhonesService {
     );
     await this.syncLocationPhonesFromRegistry(phoneId, phoneE164);
     await this.onVerificationLost(userId);
-    return res.update_user_mobile_payment_phones_by_pk;
+    return this.mapPhoneRow(res.update_user_mobile_payment_phones_by_pk);
   }
 
   /**
@@ -819,13 +937,14 @@ export class MobilePaymentPhonesService {
           where: { id: { _eq: $id }, user_id: { _eq: $userId } }
           limit: 1
         ) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
         }
       }`,
       { id: phoneId, userId }
     );
-    return res.user_mobile_payment_phones?.[0] ?? null;
+    const row = res.user_mobile_payment_phones?.[0];
+    return row ? this.mapPhoneRow(row) : null;
   }
 
   private async fetchPhoneById(
@@ -834,13 +953,14 @@ export class MobilePaymentPhonesService {
     const res = await this.hasuraSystemService.executeQuery(
       `query PhoneById($id: uuid!) {
         user_mobile_payment_phones_by_pk(id: $id) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
         }
       }`,
       { id: phoneId }
     );
-    return res.user_mobile_payment_phones_by_pk ?? null;
+    const row = res.user_mobile_payment_phones_by_pk;
+    return row ? this.mapPhoneRow(row) : null;
   }
 
   private async findByUserAndE164(
@@ -853,13 +973,87 @@ export class MobilePaymentPhonesService {
           where: { user_id: { _eq: $userId }, phone_e164: { _eq: $phone } }
           limit: 1
         ) {
-          id user_id phone_e164 is_verified verified_at
+          id user_id phone_e164 is_verified is_default verified_at
           last_verification_transaction_id created_at updated_at
         }
       }`,
       { userId, phone: phoneE164 }
     );
-    return res.user_mobile_payment_phones?.[0] ?? null;
+    const row = res.user_mobile_payment_phones?.[0];
+    return row ? this.mapPhoneRow(row) : null;
+  }
+
+  private async findDefaultForUser(
+    userId: string
+  ): Promise<UserMobilePaymentPhoneRow | null> {
+    const defaultRes = await this.hasuraSystemService.executeQuery(
+      `query DefaultPhone($userId: uuid!) {
+        user_mobile_payment_phones(
+          where: { user_id: { _eq: $userId }, is_default: { _eq: true } }
+          limit: 1
+        ) {
+          id user_id phone_e164 is_verified is_default verified_at
+          last_verification_transaction_id created_at updated_at
+        }
+      }`,
+      { userId }
+    );
+    const defaultRow = defaultRes.user_mobile_payment_phones?.[0];
+    if (defaultRow) return this.mapPhoneRow(defaultRow);
+
+    const fallbackRes = await this.hasuraSystemService.executeQuery(
+      `query FallbackPhone($userId: uuid!) {
+        user_mobile_payment_phones(
+          where: { user_id: { _eq: $userId } }
+          order_by: [{ is_verified: desc }, { created_at: asc }]
+          limit: 1
+        ) {
+          id user_id phone_e164 is_verified is_default verified_at
+          last_verification_transaction_id created_at updated_at
+        }
+      }`,
+      { userId }
+    );
+    const fallback = fallbackRes.user_mobile_payment_phones?.[0];
+    if (!fallback) return null;
+    return this.setDefaultForUser(userId, fallback.id);
+  }
+
+  private async clearDefaultForUser(userId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation ClearDefaultPhones($userId: uuid!) {
+        update_user_mobile_payment_phones(
+          where: { user_id: { _eq: $userId }, is_default: { _eq: true } }
+          _set: { is_default: false }
+        ) { affected_rows }
+      }`,
+      { userId }
+    );
+  }
+
+  private mapPhoneRow(
+    row: any,
+    withUsage = false
+  ): UserMobilePaymentPhoneRow {
+    const mapped: UserMobilePaymentPhoneRow = {
+      id: row.id,
+      user_id: row.user_id,
+      phone_e164: row.phone_e164,
+      is_verified: row.is_verified === true,
+      is_default: row.is_default === true,
+      verified_at: row.verified_at ?? null,
+      last_verification_transaction_id:
+        row.last_verification_transaction_id ?? null,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+    if (withUsage) {
+      mapped.locationCount =
+        row.business_locations_aggregate?.aggregate?.count ?? 0;
+      mapped.linkedToAgent =
+        (row.agents_aggregate?.aggregate?.count ?? 0) > 0;
+    }
+    return mapped;
   }
 
   private requireE164(countryCode: string, phoneNumber: string): string {

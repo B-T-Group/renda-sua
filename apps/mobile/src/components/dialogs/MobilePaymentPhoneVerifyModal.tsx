@@ -33,6 +33,10 @@ export interface MobilePaymentPhoneVerifyModalProps {
   mode: MobilePaymentPhoneModalMode;
   initialPhone?: MobilePaymentPhoneSummary | null;
   attachAgentOnSuccess?: boolean;
+  /** Mark the saved phone as the client default Mobile Money number. */
+  setAsDefault?: boolean;
+  /** Save without verification (checkout / payment linking). */
+  allowSkipVerification?: boolean;
   onDismiss: () => void;
   onCompleted?: (phone: MobilePaymentPhone) => void;
 }
@@ -42,6 +46,8 @@ export function MobilePaymentPhoneVerifyModal({
   mode,
   initialPhone,
   attachAgentOnSuccess = false,
+  setAsDefault = false,
+  allowSkipVerification = false,
   onDismiss,
   onCompleted,
 }: MobilePaymentPhoneVerifyModalProps) {
@@ -87,12 +93,16 @@ export function MobilePaymentPhoneVerifyModal({
         : t('mobilePaymentPhone.addTitle', 'Add mobile money number');
 
   const finishSuccess = async (verified: MobilePaymentPhone) => {
+    let phone = verified;
+    if (setAsDefault && !phone.is_default) {
+      phone = (await mobilePaymentPhonesApi.setDefault(verified.id)).data.phone;
+    }
     if (attachAgentOnSuccess) {
-      await mobilePaymentPhonesApi.attachAgent(verified.id);
+      await mobilePaymentPhonesApi.attachAgent(phone.id);
     }
     await fetchPhones();
     setStep('success');
-    onCompleted?.(verified);
+    onCompleted?.(phone);
   };
 
   const resolvePhoneForForm = async (): Promise<MobilePaymentPhoneSummary> => {
@@ -106,7 +116,9 @@ export function MobilePaymentPhoneVerifyModal({
         .data.phone;
     }
     if (mode === 'add') {
-      return (await mobilePaymentPhonesApi.create(cc, nationalDigits)).data.phone;
+      return (
+        await mobilePaymentPhonesApi.create(cc, nationalDigits, { setAsDefault })
+      ).data.phone;
     }
     if (initialPhone) return initialPhone;
     throw new Error('Missing phone');
@@ -130,6 +142,10 @@ export function MobilePaymentPhoneVerifyModal({
     try {
       const phone = await resolvePhoneForForm();
       setActivePhone(phone);
+      if (allowSkipVerification) {
+        await finishSuccess(phone as MobilePaymentPhone);
+        return;
+      }
       if (isQuestion) {
         setStep('question');
         return;

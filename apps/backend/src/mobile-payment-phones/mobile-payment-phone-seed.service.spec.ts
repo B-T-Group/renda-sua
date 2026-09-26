@@ -19,6 +19,7 @@ describe('MobilePaymentPhoneSeedService', () => {
     user_id: 'user-1',
     phone_e164: '+237600000001',
     is_verified: false,
+    is_default: false,
     verified_at: null,
     last_verification_transaction_id: null,
     created_at: '2026-01-01',

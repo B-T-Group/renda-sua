@@ -20,6 +20,7 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { PurchaseCreditsService } from '../payment-programs/purchase-credits.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { StripeConfig, Configuration } from '../config/configuration';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
@@ -158,6 +159,7 @@ export class CheckoutPreflightService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly mobilePaymentsService: MobilePaymentsService,
+    private readonly mobilePaymentPhonesService: MobilePaymentPhonesService,
     private readonly loyaltyService: LoyaltyService,
     private readonly configService: ConfigService,
     private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
@@ -1026,6 +1028,12 @@ export class CheckoutPreflightService {
       this.scheduleInitiateCheckout(dto, groups, meta);
     }
 
+    const paymentPhoneHint = await this.resolveSuggestedPaymentPhone(
+      dto,
+      isAuthenticated,
+      requiresPaymentPhoneOverall
+    );
+
     return {
       success: true,
       can_proceed: canProceed,
@@ -1042,6 +1050,9 @@ export class CheckoutPreflightService {
       purchase_credits: purchaseCredits,
       requires_address_for_payment: this.needsShipToAddress(fulfillment),
       requires_payment_phone: requiresPaymentPhoneOverall,
+      suggested_payment_phone: paymentPhoneHint.suggested_payment_phone,
+      suggested_payment_phone_id: paymentPhoneHint.suggested_payment_phone_id,
+      payment_phone_source: paymentPhoneHint.payment_phone_source,
       stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
       stripe_manual_capture: stripeManualCapture,
       tax_notice: taxNotice,
@@ -1322,10 +1333,54 @@ export class CheckoutPreflightService {
       purchase_credits: null,
       requires_address_for_payment: dto.fulfillment_method !== 'pickup',
       requires_payment_phone: false,
+      suggested_payment_phone: null,
+      suggested_payment_phone_id: null,
+      payment_phone_source: 'none',
       stripe_retry_unsupported: true,
       stripe_manual_capture: false,
       delivery_availability: null,
     };
+  }
+
+  private async resolveSuggestedPaymentPhone(
+    dto: CheckoutPreflightDto,
+    isAuthenticated: boolean,
+    requiresPaymentPhone: boolean
+  ): Promise<{
+    suggested_payment_phone: string | null;
+    suggested_payment_phone_id: string | null;
+    payment_phone_source: 'registry' | 'profile' | 'none';
+  }> {
+    const empty = {
+      suggested_payment_phone: null as string | null,
+      suggested_payment_phone_id: null as string | null,
+      payment_phone_source: 'none' as const,
+    };
+    if (!requiresPaymentPhone || !isAuthenticated) return empty;
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.id) return empty;
+      const profileCountry =
+        await this.paymentRoutingService.getUserCountryCode(user.id);
+      const resolved =
+        await this.mobilePaymentPhonesService.resolveCheckoutPaymentPhone({
+          userId: user.id,
+          mobilePaymentPhoneId: dto.mobile_payment_phone_id,
+          profilePhone: user.phone_number,
+          profileCountry,
+          linkProfileIfNeeded: false,
+        });
+      return {
+        suggested_payment_phone: resolved.phoneE164,
+        suggested_payment_phone_id: resolved.phoneId,
+        payment_phone_source: resolved.source,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `resolveSuggestedPaymentPhone: ${error?.message ?? String(error)}`
+      );
+      return empty;
+    }
   }
 
   /**

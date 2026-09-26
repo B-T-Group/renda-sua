@@ -105,6 +105,15 @@ export class CheckoutPreflightDto {
 
   @ApiPropertyOptional({
     description:
+      'Client Mobile Money registry phone id. Preferred over raw phone_number for checkout.',
+    format: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID()
+  mobile_payment_phone_id?: string;
+
+  @ApiPropertyOptional({
+    description:
       'E.164 phone number. Supplied to validate Mobile Money provider availability and phone-country alignment before checkout.',
   })
   @IsOptional()
@@ -589,6 +598,25 @@ export class CheckoutPreflightResponseDto {
       'True when at least one seller group requires a Mobile Money phone number.',
   })
   requires_payment_phone!: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Suggested E.164 Mobile Money number for this checkout (registry default or profile).',
+  })
+  suggested_payment_phone?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Registry id for suggested_payment_phone when the number is already linked.',
+    format: 'uuid',
+  })
+  suggested_payment_phone_id?: string | null;
+
+  @ApiPropertyOptional({
+    enum: ['registry', 'profile', 'none'],
+    description: 'Where suggested_payment_phone came from.',
+  })
+  payment_phone_source?: 'registry' | 'profile' | 'none';
 
   @ApiPropertyOptional({
     description:

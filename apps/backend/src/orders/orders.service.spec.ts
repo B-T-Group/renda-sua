@@ -228,11 +228,23 @@ describe('OrdersService', () => {
         },
         { provide: GoogleDistanceService, useValue: {} },
         { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: { getProvider: jest.fn() } },
+        { provide: MobilePaymentsService, useValue: {
+          getProvider: jest.fn(),
+          getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+          initiatePayment: jest.fn(),
+        } },
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
         } },
+        {
+          provide: require('../mobile-payment-phones/mobile-payment-phones.service')
+            .MobilePaymentPhonesService,
+          useValue: {
+            resolveCheckoutPhone: jest.fn().mockResolvedValue(null),
+            listForUser: jest.fn().mockResolvedValue([]),
+          },
+        },
         { provide: NotificationsService, useValue: {} },
         {
           provide: OrderRecipientNotificationsService,
@@ -293,7 +305,13 @@ describe('OrdersService', () => {
           useValue: {
             resolveRailForBusiness: jest.fn(),
             resolveRailForUser: jest.fn(),
+            resolveOrderRail: jest.fn().mockResolvedValue({
+              rail: 'mobile_money',
+              isDiaspora: false,
+            }),
             getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+            getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+            resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
           },
         },
         { provide: StripeCheckoutService, useValue: {} },
@@ -756,6 +774,158 @@ describe('OrdersService', () => {
           transaction_id: 'momo-tx-123',
         })
       );
+    });
+
+    it('does not wallet-hold cooked-food MoMo pay-after orders at create', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 50000,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: true,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Food' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(finalizeSpy).not.toHaveBeenCalled();
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({
+          payAfterMerchantConfirm: true,
+          paymentStatus: 'pending',
+          currentStatus: 'pending',
+        })
+      );
+      expect(result).toMatchObject({
+        payment_rail: 'mobile_money',
+        payment_transaction: expect.objectContaining({
+          transaction_id: null,
+          mode: 'mobile_money',
+          message: expect.stringMatching(/merchant confirmation/i),
+        }),
+      });
     });
 
     it('calculates the MoMo deposit from the post-credit total', async () => {
@@ -3389,7 +3559,10 @@ describe('OrdersService', () => {
         }),
         updateTransaction: jest.fn().mockResolvedValue(undefined),
       };
-      hasuraSystemService.getAccount.mockResolvedValue({ id: 'account-1' });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: 0,
+      });
       jest
         .spyOn(service as any, 'resetOrderPaymentFailure')
         .mockResolvedValue(undefined);
@@ -3434,6 +3607,83 @@ describe('OrdersService', () => {
         expect.any(String),
         'client-456'
       );
+    });
+
+    it('settles from wallet when available balance covers the total', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: payAfterOrder,
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: 10000,
+      });
+      const settleSteps: string[] = [];
+      jest
+        .spyOn(service as any, 'finalizeCookedFoodPayAfterConfirm')
+        .mockImplementation(async () => {
+          settleSteps.push('finalize');
+        });
+      hasuraSystemService.executeMutation.mockImplementation(async (q: string) => {
+        if (String(q).includes('MarkOrderPaidFromWallet')) {
+          settleSteps.push('mark-wallet');
+        }
+        return {};
+      });
+
+      const result = await (service as any).initiateCookedFoodFullPaymentAfterConfirm(
+        'order-123'
+      );
+
+      expect(result).toBe('wallet');
+      expect(settleSteps).toEqual(['finalize', 'mark-wallet']);
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).not.toHaveBeenCalled();
+    });
+
+    it('does not stamp wallet source when the hold fails', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: payAfterOrder,
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: 10000,
+      });
+      jest
+        .spyOn(service as any, 'finalizeCookedFoodPayAfterConfirm')
+        .mockRejectedValue(new Error('hold failed'));
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await expect(
+        (service as any).initiateCookedFoodFullPaymentAfterConfirm('order-123')
+      ).rejects.toThrow('hold failed');
+
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+        expect.stringContaining('MarkOrderPaidFromWallet'),
+        expect.anything()
+      );
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).not.toHaveBeenCalled();
+    });
+
+    it('requests MoMo when wallet balance is insufficient', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: payAfterOrder,
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: 100,
+      });
+
+      const result = await (service as any).initiateCookedFoodFullPaymentAfterConfirm(
+        'order-123'
+      );
+
+      expect(result).toBe('momo');
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).toHaveBeenCalled();
     });
   });
 });

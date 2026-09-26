@@ -273,7 +273,9 @@
       "confirmPhoneDesc": "Assurez-vous que {{phone}} correspond au numéro lié à votre portefeuille MoMo.",
       "encrypted": "Crypté",
       "secure": "Paiement sécurisé"
-    }
+    },
+    "linkMoMoRequired": "Liez un numéro Mobile Money pour continuer.",
+    "selectedForPayment": "Sélectionné pour le paiement"
   },
   "deposit": {
     "reservationTitle": "Acompte de réservation",
@@ -6422,7 +6424,13 @@
     "success": "Numéro vérifié. Le remboursement de 150 XAF est en cours.",
     "genericError": "Une erreur s’est produite. Veuillez réessayer.",
     "sendRequest": "Envoyer la demande de vérification",
-    "saveAndVerify": "Enregistrer et vérifier"
+    "saveAndVerify": "Enregistrer et vérifier",
+    "profileTitle": "Numéro Mobile Money",
+    "profileHelper": "Les demandes de paiement sont envoyées à ce numéro.",
+    "noneYet": "Aucun numéro Mobile Money lié pour le moment.",
+    "linkNumber": "Lier un numéro Mobile Money",
+    "useProfilePhone": "Utiliser {{phone}} pour le Mobile Money",
+    "profileNotMobileMoney": "Le numéro de votre profil n’est pas un numéro Mobile Money"
   },
   "incomingOrder": {
     "title": "Nouvelle commande",

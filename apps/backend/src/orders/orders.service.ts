@@ -39,6 +39,7 @@ import {
   MobilePaymentIntegrationProvider,
   MobilePaymentsService,
 } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import {
   NotificationData,
@@ -498,6 +499,7 @@ export class OrdersService {
     private readonly addressesService: AddressesService,
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
+    private readonly mobilePaymentPhonesService: MobilePaymentPhonesService,
     private readonly notificationsService: NotificationsService,
     private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
     private readonly fxEstimateService: FxEstimateService,
@@ -3710,7 +3712,8 @@ export class OrdersService {
     }
 
     const phoneNumber =
-      phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
+      phoneNumberOverride?.trim() ||
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Client phone number is required to initiate payment',
@@ -3921,7 +3924,8 @@ export class OrdersService {
     }
 
     const phoneNumber =
-      phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
+      phoneNumberOverride?.trim() ||
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Client phone number is required to initiate payment',
@@ -4052,14 +4056,15 @@ export class OrdersService {
   }
 
   /**
-   * Cooked-food MoMo: after merchant confirm, push full-amount payment.
-   * When `allowPending` is set, may run before status flips to confirmed so a
-   * MoMo failure never leaves a confirmed order without a payment request.
+   * Cooked-food MoMo: after merchant confirm, settle from wallet if funded,
+   * otherwise push full-amount MoMo. When `allowPending` is set, may run before
+   * status flips to confirmed so a provider failure never leaves the order
+   * confirmed without a payment request or cancel timer.
    */
   private async initiateCookedFoodFullPaymentAfterConfirm(
     orderId: string,
     options?: { allowPending?: boolean }
-  ): Promise<void> {
+  ): Promise<'wallet' | 'momo' | 'skipped'> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
@@ -4070,7 +4075,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
-    if ((order as any).payment_status === 'paid') return;
+    if ((order as any).payment_status === 'paid') return 'skipped';
     const statusOk =
       order.current_status === 'confirmed' ||
       (options?.allowPending === true && order.current_status === 'pending');
@@ -4081,6 +4086,58 @@ export class OrdersService {
       );
     }
 
+    const chargeAmount = Number(order.total_amount) || 0;
+    if (chargeAmount <= 0) {
+      if (order.current_status === 'confirmed') {
+        await this.finalizeCookedFoodPayAfterConfirm(order);
+      }
+      return 'skipped';
+    }
+
+    if (await this.trySettleCookedFoodPayAfterFromWallet(order, chargeAmount)) {
+      return 'wallet';
+    }
+
+    await this.initiateCookedFoodMomoAfterConfirm(order, orderId);
+    return 'momo';
+  }
+
+  /** Hold from client wallet when available balance covers the order total. */
+  private async trySettleCookedFoodPayAfterFromWallet(
+    order: Orders,
+    chargeAmount: number
+  ): Promise<boolean> {
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (Number(account.available_balance ?? 0) < chargeAmount) return false;
+    // Hold + mark paid first; only then stamp wallet source so a failed hold
+    // never leaves an unpaid order labeled as wallet-paid.
+    await this.finalizeCookedFoodPayAfterConfirm(order);
+    await this.markOrderPaidFromWallet(order.id);
+    return true;
+  }
+
+  private async markOrderPaidFromWallet(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation MarkOrderPaidFromWallet($id: uuid!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            payment_source: wallet
+            payer_payment_rail: "wallet"
+          }
+        ) { id }
+      }`,
+      { id: orderId }
+    );
+  }
+
+  private async initiateCookedFoodMomoAfterConfirm(
+    order: Orders,
+    orderId: string
+  ): Promise<void> {
     const phoneNumber = this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
@@ -4104,13 +4161,6 @@ export class OrdersService {
       order.order_number
     );
     const chargeAmount = Number(order.total_amount) || 0;
-    // Zero-amount: finalize only once confirmed (caller handles after status flip).
-    if (chargeAmount <= 0) {
-      if (order.current_status === 'confirmed') {
-        await this.finalizeCookedFoodPayAfterConfirm(order);
-      }
-      return;
-    }
 
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
@@ -4314,7 +4364,19 @@ export class OrdersService {
       (order as any).pay_after_merchant_confirm === true &&
       order.current_status === 'confirmed'
     ) {
-      await this.initiateCookedFoodFullPaymentAfterConfirm(orderId);
+      const settlement = await this.initiateCookedFoodFullPaymentAfterConfirm(
+        orderId
+      );
+      if (settlement === 'wallet' || settlement === 'skipped') {
+        return {
+          success: true,
+          message:
+            settlement === 'wallet'
+              ? 'Paid from your Rendasua wallet.'
+              : 'Order is already paid',
+          payment_rail: 'wallet' as const,
+        };
+      }
       return {
         success: true,
         message: 'Payment request sent. Approve it on your phone.',
@@ -4459,7 +4521,9 @@ export class OrdersService {
       };
     }
 
-    const phoneNumber = phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
+    const phoneNumber =
+      phoneNumberOverride?.trim() ||
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Phone number is required to retry payment',
@@ -4704,8 +4768,7 @@ export class OrdersService {
 
     const phoneNumber =
       phoneNumberOverride?.trim() ||
-      order.client?.user?.phone_number ||
-      '';
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Phone number is required for mobile payment',
@@ -10339,16 +10402,39 @@ export class OrdersService {
   /**
    * MoMo integration from the order's item location country (not the payer phone).
    */
-  /** Checkout override, then stored payer snapshot, then profile phone. */
+  /** Checkout override, then stored payer snapshot, then registry default, then profile phone. */
   private resolveOrderMobileMoneyPhone(order: {
     payer_phone?: string | null;
-    client?: { user?: { phone_number?: string | null } | null } | null;
+    client?: {
+      user_id?: string | null;
+      user?: { phone_number?: string | null } | null;
+    } | null;
   }): string {
-    return (
-      String(order.payer_phone || '').trim() ||
-      order.client?.user?.phone_number?.trim() ||
-      ''
-    );
+    const snap = String(order.payer_phone || '').trim();
+    if (snap) return snap;
+    return order.client?.user?.phone_number?.trim() || '';
+  }
+
+  private async resolveCheckoutChargePhone(params: {
+    userId: string;
+    mobilePaymentPhoneId?: string | null;
+    phoneNumberOverride?: string | null;
+    profilePhone?: string | null;
+    profileCountry?: string | null;
+  }): Promise<string> {
+    const override = params.phoneNumberOverride?.trim();
+    if (override && !params.mobilePaymentPhoneId) {
+      return override;
+    }
+    const resolved =
+      await this.mobilePaymentPhonesService.resolveCheckoutPaymentPhone({
+        userId: params.userId,
+        mobilePaymentPhoneId: params.mobilePaymentPhoneId,
+        profilePhone: params.profilePhone,
+        profileCountry: params.profileCountry,
+        linkProfileIfNeeded: true,
+      });
+    return resolved.phoneE164?.trim() || override || '';
   }
 
   private applyCheckoutPaymentPhone<T extends { payer_phone: string | null }>(
@@ -11094,7 +11180,15 @@ export class OrdersService {
       }
     }
 
-    const phoneNumber = orderData.phone_number || user.phone_number || '';
+    const phoneNumber = await this.resolveCheckoutChargePhone({
+      userId: user.id,
+      mobilePaymentPhoneId: orderData.mobile_payment_phone_id,
+      phoneNumberOverride: orderData.phone_number,
+      profilePhone: user.phone_number,
+      profileCountry: await this.paymentRoutingService.getUserCountryCode(
+        user.id
+      ),
+    });
     const requiredAmountForHold = total_amount;
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
@@ -12084,11 +12178,18 @@ export class OrdersService {
       }
     }
 
+    if (payAfterMerchantConfirm) {
+      return this.finishPayAfterMerchantConfirmCreate(
+        order,
+        total_amount,
+        deliveryWindow
+      );
+    }
+
     if (
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
-      !isZeroOrNegativeOrder &&
-      !payAfterMerchantConfirm
+      !isZeroOrNegativeOrder
     ) {
       try {
         const { transaction, paymentTransaction } =
@@ -12146,7 +12247,22 @@ export class OrdersService {
       }
     }
 
-    // Wallet-funded or zero-amount orders: hold funds then CAS to pending + paid.
+    // Wallet-funded or zero-amount only — never hold for unpaid MoMo pay-after.
+    if (!canPayWithWallet && !isZeroOrNegativeOrder) {
+      await this.compensateUnpaidCreate(
+        order.id,
+        'Create failed: no payment path resolved'
+      );
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Unable to determine payment path for this order',
+          error: 'PAYMENT_PATH_UNRESOLVED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     try {
       const orderWithDetails = await this.requireOrderDetailsByNumber(
         order.order_number
@@ -12176,6 +12292,41 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Cooked-food MoMo: leave unpaid with no wallet hold until merchant confirm
+   * triggers the full-amount payment request.
+   */
+  private async finishPayAfterMerchantConfirmCreate(
+    order: { id: string; order_number: string },
+    totalAmount: number,
+    deliveryWindow: unknown
+  ) {
+    try {
+      const orderWithDetails = await this.requireOrderDetailsByNumber(
+        order.order_number
+      );
+      await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send pay-after create notifications for ${order.order_number}: ${error?.message}`
+      );
+    }
+    return {
+      ...order,
+      total_amount: totalAmount,
+      delivery_window: deliveryWindow,
+      payment_source: 'mobile_money' as const,
+      payment_rail: 'mobile_money' as const,
+      payment_transaction: {
+        success: true,
+        transaction_id: null,
+        message: 'Awaiting merchant confirmation before payment',
+        mode: 'mobile_money' as const,
+      },
+      database_transaction: null,
+    };
   }
 
   private async schedulePendingPaymentTimeout(orderId: string): Promise<void> {

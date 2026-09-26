@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CountryCode } from 'libphonenumber-js';
-import { parsePhoneNumber } from 'libphonenumber-js';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { AppModal } from '../../components/common/AppModal';
 import { CheckoutStickyActionBar } from '../../components/common/CheckoutStickyActionBar';
@@ -37,11 +36,12 @@ import { usePlaceOrderDiscountCode } from '../../hooks/usePlaceOrderDiscountCode
 import { useCartDeliveryFees } from '../../hooks/useCartDeliveryFees';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useResolvedCheckout } from '../../hooks/useResolvedCheckout';
-import useUpdateClientProfile from '../../hooks/useUpdateClientProfile';
+import { useCheckoutLinkedMoMoPhone } from '../../hooks/useCheckoutLinkedMoMoPhone';
 import { PlaceOrderDeliveryWindowBlock } from '../../components/browse/PlaceOrderDeliveryWindowBlock';
 import { PlaceOrderPaymentBlock } from '../../components/browse/PlaceOrderPaymentBlock';
 import { appliedPurchaseCredit } from '../../utils/purchaseCredits';
-import { AddPaymentPhoneDialog } from '../../components/dialogs/AddPaymentPhoneDialog';
+import { MobilePaymentPhoneChooserSheet } from '../../components/dialogs/MobilePaymentPhoneChooserSheet';
+import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePaymentPhoneVerifyModal';
 import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
 import { PlaceOrderDeliveryAddressBlock } from '../../components/place-order/PlaceOrderDeliveryAddressBlock';
@@ -60,10 +60,7 @@ import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgr
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
 import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
-import { pickMobileMoneyDefaultCountry, validateOrderPaymentPhone, validateOrderPaymentPhoneForCountry } from '../../utils/placeOrderPhoneValidation';
 import { resolveDepositAmount, isMoMoDepositCheckoutPath } from '../../types/deposit';
-import { alignCatalogAddressToCscFields } from '../../utils/addressRegionMatch';
-import { getCountryDisplayName } from '../../utils/phoneCountryOptions';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
 import { isAddressComplete } from '../../utils/addressCompleteness';
 import { resolveMoMoDisplayCountryIso } from '../../utils/momoCountryDisplay';
@@ -117,8 +114,7 @@ export default observer(function CartCheckoutScreen() {
   const reorderPrefill = route.params;
   const { cart } = useStore();
   const { addresses, loading: addrLoading, error: addrError, refetch: refetchAddresses } = useClientAddresses();
-  const { user: meUser, loading: profileLoading, refetch: refetchProfile } = useClientProfileForPlaceOrder();
-  const { updateClientProfile, loading: savingProfilePhone } = useUpdateClientProfile();
+  const { user: meUser, loading: profileLoading } = useClientProfileForPlaceOrder();
   const { isStripeRail, loading: stripeRailLoading } = useIsStripeRail();
   const { placeCartOrders, submitting } = useCheckoutOrchestrator();
   const { openPrompt, Prompt: CompleteAddressPromptEl } = useCompleteAddressPrompt();
@@ -152,13 +148,6 @@ export default observer(function CartCheckoutScreen() {
   const [snack, setSnack] = useState<string | null>(null);
   const [deliveryScheduleOk, setDeliveryScheduleOk] = useState(true);
   const [deliveryWindow, setDeliveryWindow] = useState<ClientDeliveryWindowPayload | null>(null);
-  const [useDifferentPhone, setUseDifferentPhone] = useState(false);
-  const [overrideCountryIso, setOverrideCountryIso] = useState<CountryCode>(() =>
-    pickMobileMoneyDefaultCountry()
-  );
-  const [overrideNationalDigits, setOverrideNationalDigits] = useState('');
-  const [addPhoneDialogVisible, setAddPhoneDialogVisible] = useState(false);
-  const [phoneDialogDefaultCountry, setPhoneDialogDefaultCountry] = useState<CountryCode | undefined>(undefined);
   const [addAddressModalVisible, setAddAddressModalVisible] = useState(false);
   const [addAddressForm, setAddAddressForm] = useState<DeliveryAddressFormValue>(BLANK_ADDRESS_FORM);
   const [addAddressSaving, setAddAddressSaving] = useState(false);
@@ -243,6 +232,9 @@ export default observer(function CartCheckoutScreen() {
   // Diaspora orders require Stripe pay-now only; someone else always receives.
   const diasporaContext = preflightConfig?.diaspora;
   const isDiaspora = requiresStripePayNow(diasporaContext);
+  const needsLinkedMoMoPhone =
+    fulfillmentConfirmed && !isDiaspora && !resolvedIsStripeRail;
+  const linkedMoMo = useCheckoutLinkedMoMoPhone(needsLinkedMoMoPhone);
   const someoneElseReceiving = isDiaspora;
   const captureRecipientAddress = needsRecipientDeliveryAddress(
     someoneElseReceiving,
@@ -393,10 +385,6 @@ export default observer(function CartCheckoutScreen() {
   useEffect(() => {
     setDeliveryScheduleOk(true);
     setDeliveryWindow(null);
-    if (fulfillment === 'pickup') {
-      setUseDifferentPhone(false);
-      setOverrideNationalDigits('');
-    }
   }, [fulfillment]);
 
   // Clear recipient when fulfillment country changes (not on initial mount)
@@ -476,38 +464,6 @@ export default observer(function CartCheckoutScreen() {
     });
   }, [addressesForDelivery, hideShopperAddressBook, suppressAddressAutoSelect]);
 
-  useEffect(() => {
-    const sel = addresses.find((a) => a.id === deliveryAddressId);
-    if (!sel?.country?.trim()) {
-      setPhoneDialogDefaultCountry(undefined);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const aligned = await alignCatalogAddressToCscFields({
-          city: sel.city,
-          state: sel.state,
-          country: sel.country,
-          postal_code: sel.postal_code ?? undefined,
-        });
-        const c = aligned.country?.trim().toUpperCase();
-        if (cancelled) return;
-        if (c === 'CM' || c === 'GA') setPhoneDialogDefaultCountry(c as CountryCode);
-        else setPhoneDialogDefaultCountry(undefined);
-      } catch {
-        if (!cancelled) setPhoneDialogDefaultCountry(undefined);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [deliveryAddressId, addresses]);
-
-  useEffect(() => {
-    setOverrideCountryIso(pickMobileMoneyDefaultCountry(provisionalCountry));
-  }, [provisionalCountry]);
-
   const selectedAddress = useMemo(
     () => addressesForDelivery.find((a) => a.id === deliveryAddressId),
     [addressesForDelivery, deliveryAddressId]
@@ -534,23 +490,6 @@ export default observer(function CartCheckoutScreen() {
   }, [openPrompt, refetchAddresses, selectedAddress]);
 
   const profilePhone = meUser?.phone_number;
-  const paymentPhoneRaw = useMemo(
-    () => (useDifferentPhone ? overrideNationalDigits : (profilePhone ?? '')).trim(),
-    [overrideNationalDigits, profilePhone, useDifferentPhone]
-  );
-  const paymentPhoneValidation = useMemo(
-    () =>
-      useDifferentPhone
-        ? validateOrderPaymentPhoneForCountry(overrideCountryIso, overrideNationalDigits)
-        : validateOrderPaymentPhone(paymentPhoneRaw),
-    [overrideCountryIso, overrideNationalDigits, paymentPhoneRaw, useDifferentPhone]
-  );
-  const phoneInvalidReason = useMemo((): 'invalid' | 'unsupported' | null => {
-    if (profileLoading) return null;
-    if (!paymentPhoneRaw) return useDifferentPhone ? 'invalid' : null;
-    if (paymentPhoneValidation.ok) return null;
-    return paymentPhoneValidation.reason === 'unsupported' ? 'unsupported' : 'invalid';
-  }, [paymentPhoneRaw, paymentPhoneValidation, profileLoading, useDifferentPhone]);
 
   const subtotal = cart.subtotal;
   const deliveryAmount = useMemo(() => {
@@ -850,26 +789,6 @@ export default observer(function CartCheckoutScreen() {
     }
   }, [addAddressForm, addresses.length, refetchAddresses, savedRecipientId, t]);
 
-  const onSaveProfilePhone = useCallback(
-    async (phoneE164: string) => {
-      try {
-        await updateClientProfile({ phoneNumber: phoneE164 });
-        await refetchProfile();
-        setAddPhoneDialogVisible(false);
-      } catch (e: unknown) {
-        setSnack(e instanceof Error ? e.message : t('client.placeOrder.payment.addPhoneModal.saveError', 'Could not update your profile.'));
-        throw e;
-      }
-    },
-    [refetchProfile, t, updateClientProfile]
-  );
-
-  const onDismissAddPhoneDialog = useCallback(() => {
-    if (!savingProfilePhone) setAddPhoneDialogVisible(false);
-  }, [savingProfilePhone]);
-
-  const onAddPhonePress = useCallback(() => setAddPhoneDialogVisible(true), []);
-
   /**
    * Payment rail resolution (server-authoritative):
    * - resolvedIsStripeRail comes from preflightConfig.checkout_method === 'STRIPE'
@@ -902,6 +821,7 @@ export default observer(function CartCheckoutScreen() {
     if (!deliveryAddressId || !deliveryScheduleOk || feeLoading) return false;
     if (stripeDeliveryAddressIncomplete) return false;
     if (deliveryUnavailable) return false;
+    if (needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId) return false;
     return true;
   }, [
     deliveryAddressId,
@@ -919,15 +839,13 @@ export default observer(function CartCheckoutScreen() {
     submitting,
     someoneElseReceiving,
     recipient,
+    needsLinkedMoMoPhone,
+    linkedMoMo.selectedPhoneId,
   ]);
 
   const onSubmit = useCallback(async () => {
     if (submitting || !canSubmit) return;
     setSnack(null);
-    const overrideValidated = validateOrderPaymentPhoneForCountry(
-      overrideCountryIso,
-      overrideNationalDigits
-    );
     const isPickup = fulfillment === 'pickup';
     const recipientPayload = buildRecipientPayload(someoneElseReceiving, recipient);
     
@@ -939,7 +857,9 @@ export default observer(function CartCheckoutScreen() {
         : {}),
       ...(instructions.trim() ? { special_instructions: instructions.trim() } : {}),
       payment_timing: payTiming,
-      ...(!resolvedIsStripeRail && useDifferentPhone && overrideValidated.ok ? { phone_number: overrideValidated.e164 } : {}),
+      ...(!resolvedIsStripeRail && linkedMoMo.selectedPhoneId
+        ? { mobile_payment_phone_id: linkedMoMo.selectedPhoneId }
+        : {}),
       ...(singleBusiness && discountCode.appliedCode ? { discount_code: discountCode.appliedCode } : {}),
       ...(recipientPayload ? { recipient: recipientPayload } : {}),
     };
@@ -994,14 +914,8 @@ export default observer(function CartCheckoutScreen() {
       outcome.paymentRail === 'mobile_money' &&
       (outcome.isDepositOrder === true || payTiming === 'pay_now');
     if (momoWaitingRequired) {
-      const overrideValidated = validateOrderPaymentPhoneForCountry(
-        overrideCountryIso,
-        overrideNationalDigits
-      );
       const phoneE164 =
-        useDifferentPhone && overrideValidated.ok
-          ? overrideValidated.e164
-          : (meUser?.phone_number ?? '').trim();
+        linkedMoMo.linkedPhone?.phone_e164 ?? (meUser?.phone_number ?? '').trim();
       navigation.reset({
         index: 1,
         routes: [
@@ -1067,9 +981,8 @@ export default observer(function CartCheckoutScreen() {
     preflightConfig,
     singleBusiness,
     t,
-    useDifferentPhone,
-    overrideCountryIso,
-    overrideNationalDigits,
+    linkedMoMo.selectedPhoneId,
+    linkedMoMo.linkedPhone?.phone_e164,
     depositAmount,
     amountDueAfterDeposit,
     isCookedFoodMoMoPayAfter,
@@ -1518,27 +1431,15 @@ export default observer(function CartCheckoutScreen() {
 
             {/* Hide payment phone on diaspora (Stripe only) + show locked MoMo phone for local */}
             {!isDiaspora && !resolvedIsStripeRail ? (
-              <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-                <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-                  {t('checkout.yourMoMoNumber', 'Your MoMo number')}
-                </Text>
-                <PlaceOrderPaymentBlock
-                  isStripeRail={false}
-                  profileLoading={profileLoading}
-                  profilePhone={profilePhone}
-                  useDifferentPhone={useDifferentPhone}
-                  onToggleDifferentPhone={setUseDifferentPhone}
-                  overrideCountryIso={overrideCountryIso}
-                  overrideNationalDigits={overrideNationalDigits}
-                  onOverrideCountryIsoChange={setOverrideCountryIso}
-                  onOverrideNationalDigitsChange={setOverrideNationalDigits}
-                  phoneInvalidReason={phoneInvalidReason}
-                  onAddPhonePress={onAddPhonePress}
-                />
-                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs }]}>
-                  {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
-                </Text>
-              </View>
+              <PlaceOrderPaymentBlock
+                isStripeRail={false}
+                profileLoading={profileLoading || linkedMoMo.phonesLoading}
+                profilePhone={profilePhone}
+                linkedPhone={linkedMoMo.linkedPhone}
+                onChangePhonePress={linkedMoMo.openChangePhone}
+                onLinkProfilePress={() => void linkedMoMo.linkProfilePhone()}
+                linkingBusy={linkedMoMo.linkingBusy}
+              />
             ) : null}
           </>
         ) : null}
@@ -1589,7 +1490,9 @@ export default observer(function CartCheckoutScreen() {
                 ? t('diaspora.selectRecipientToPay', 'Select a recipient before paying')
                 : captureRecipientAddress && !deliveryAddressId
                   ? t('diaspora.selectRecipientAddressToPay', 'Add the recipient’s delivery address before paying')
-                  : undefined
+                  : needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId
+                    ? t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.')
+                    : undefined
             }
           />
         )}
@@ -1635,12 +1538,24 @@ export default observer(function CartCheckoutScreen() {
         </View>
       </AppModal>
 
-      <AddPaymentPhoneDialog
-        visible={addPhoneDialogVisible}
-        saving={savingProfilePhone}
-        onDismiss={onDismissAddPhoneDialog}
-        onSave={onSaveProfilePhone}
-        defaultCountryIso={phoneDialogDefaultCountry}
+      <MobilePaymentPhoneChooserSheet
+        visible={linkedMoMo.chooserOpen}
+        phones={linkedMoMo.phones}
+        selectedPhoneId={linkedMoMo.selectedPhoneId}
+        verificationMethod={linkedMoMo.verificationMethod}
+        onDismiss={() => linkedMoMo.setChooserOpen(false)}
+        onSelect={(phone) => void linkedMoMo.selectPhone(phone)}
+        onAddNew={linkedMoMo.openAddPhone}
+        onVerify={linkedMoMo.openVerifyPhone}
+      />
+      <MobilePaymentPhoneVerifyModal
+        visible={linkedMoMo.verifyOpen}
+        mode={linkedMoMo.verifyMode}
+        initialPhone={linkedMoMo.verifyInitial}
+        setAsDefault
+        allowSkipVerification
+        onDismiss={() => linkedMoMo.setVerifyOpen(false)}
+        onCompleted={(phone) => void linkedMoMo.onVerifyCompleted(phone)}
       />
 
       <ActionLoadingDialog visible={submitting} action="checkout_pay" />

@@ -35,6 +35,13 @@ interface MobilePaymentPhoneVerifyModalProps {
   onClose: () => void;
   onCompleted?: (phone: MobilePaymentPhone) => void;
   attachAgentOnSuccess?: boolean;
+  /** Mark the saved phone as the client default Mobile Money number. */
+  setAsDefault?: boolean;
+  /**
+   * When true, saving the number completes without verification
+   * (checkout / client payment linking). Verify remains available afterward.
+   */
+  allowSkipVerification?: boolean;
 }
 
 type Step = 'choose' | 'form' | 'question' | 'waiting' | 'success' | 'error';
@@ -46,12 +53,15 @@ export function MobilePaymentPhoneVerifyModal({
   onClose,
   onCompleted,
   attachAgentOnSuccess = false,
+  setAsDefault = false,
+  allowSkipVerification = false,
 }: MobilePaymentPhoneVerifyModalProps) {
   const { t } = useTranslation();
   const {
     phones,
     createPhone,
     updatePhone,
+    setDefaultPhone,
     startVerification,
     confirmVerification,
     pollUntilVerified,
@@ -106,12 +116,16 @@ export function MobilePaymentPhoneVerifyModal({
   const title = modalTitle(t, mode, step);
 
   const finishSuccess = async (verified: MobilePaymentPhone) => {
+    let phone = verified;
+    if (setAsDefault && !phone.is_default) {
+      phone = await setDefaultPhone(phone.id);
+    }
     if (attachAgentOnSuccess) {
-      await attachAgentPhone(verified.id);
+      await attachAgentPhone(phone.id);
     }
     await fetchPhones();
     setStep('success');
-    onCompleted?.(verified);
+    onCompleted?.(phone);
   };
 
   const beginAddNewNumber = () => {
@@ -131,10 +145,17 @@ export function MobilePaymentPhoneVerifyModal({
       initialPhoneId: initialPhone?.id,
     });
     if (action.type === 'update') {
-      return updatePhone(action.phoneId, countryCode, national);
+      const updated = await updatePhone(action.phoneId, countryCode, national);
+      if (setAsDefault) return setDefaultPhone(updated.id);
+      return updated;
     }
-    if (action.type === 'reuse' && initialPhone) return initialPhone;
-    return createPhone(countryCode, national);
+    if (action.type === 'reuse' && initialPhone) {
+      if (setAsDefault && !initialPhone.is_default) {
+        return setDefaultPhone(initialPhone.id);
+      }
+      return initialPhone;
+    }
+    return createPhone(countryCode, national, { setAsDefault });
   };
 
   const runTransactionFlow = async (phone: MobilePaymentPhone) => {
@@ -151,7 +172,7 @@ export function MobilePaymentPhoneVerifyModal({
     setPreferNew(false);
     setActivePhone(phone);
     try {
-      if (phone.is_verified) {
+      if (allowSkipVerification || phone.is_verified) {
         await finishSuccess(phone);
         return;
       }
@@ -176,6 +197,10 @@ export function MobilePaymentPhoneVerifyModal({
       setActivePhone(phone);
       setPreferNew(false);
       setSelectedExisting(false);
+      if (allowSkipVerification) {
+        await finishSuccess(phone);
+        return;
+      }
       if (isQuestion) {
         setStep('question');
         return;

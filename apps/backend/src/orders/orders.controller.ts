@@ -191,6 +191,12 @@ export class OrdersController {
         special_instructions: { type: 'string' },
         verified_agent_delivery: { type: 'boolean' },
         phone_number: { type: 'string' },
+        mobile_payment_phone_id: {
+          type: 'string',
+          format: 'uuid',
+          description:
+            'Client Mobile Money registry phone to charge. Preferred over phone_number.',
+        },
         requires_fast_delivery: { type: 'boolean' },
         payment_timing: {
           type: 'string',

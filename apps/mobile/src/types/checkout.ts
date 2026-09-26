@@ -236,6 +236,8 @@ export interface CheckoutPreflightRequest {
   provisional_country?: string;
   fulfillment_method?: FulfillmentMethod;
   payment_timing?: PaymentTiming;
+  mobile_payment_phone_id?: string;
+  /** @deprecated Prefer mobile_payment_phone_id */
   phone_number?: string;
   discount_code?: string;
   requires_fast_delivery?: boolean;
