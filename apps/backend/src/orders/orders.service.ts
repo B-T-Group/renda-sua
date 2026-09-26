@@ -4038,7 +4038,7 @@ export class OrdersService {
       );
     }
 
-    const phoneNumber = order.client?.user?.phone_number || '';
+    const phoneNumber = this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Client phone number is required to initiate payment',
@@ -7458,6 +7458,7 @@ export class OrdersService {
           payment_timing
           payment_failed_at
           payment_failure_message
+          payer_phone
           reconciliation_status
           is_cooked_food_pickup
           pay_after_merchant_confirm
@@ -9902,6 +9903,27 @@ export class OrdersService {
   /**
    * MoMo integration from the order's item location country (not the payer phone).
    */
+  /** Checkout override, then stored payer snapshot, then profile phone. */
+  private resolveOrderMobileMoneyPhone(order: {
+    payer_phone?: string | null;
+    client?: { user?: { phone_number?: string | null } | null } | null;
+  }): string {
+    return (
+      String(order.payer_phone || '').trim() ||
+      order.client?.user?.phone_number?.trim() ||
+      ''
+    );
+  }
+
+  private applyCheckoutPaymentPhone<T extends { payer_phone: string | null }>(
+    payer: T,
+    checkoutPhone?: string | null
+  ): T {
+    const phone = checkoutPhone?.trim();
+    if (!phone) return payer;
+    return { ...payer, payer_phone: phone };
+  }
+
   private orderMomoContext(order: Orders): {
     provider: MobilePaymentIntegrationProvider;
     itemCountry: string | null;
@@ -10642,9 +10664,9 @@ export class OrdersService {
           : address?.country
       ) ?? normalizeCountryCode(itemCountry);
 
-    const payer = await this.resolveTrustedOrderPayer(
-      user,
-      orderData.payer_country
+    const payer = this.applyCheckoutPaymentPhone(
+      await this.resolveTrustedOrderPayer(user, orderData.payer_country),
+      phoneNumber
     );
     
     // If recipient_id is provided, fetch the saved recipient and use it
