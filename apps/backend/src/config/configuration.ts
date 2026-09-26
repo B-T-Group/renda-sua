@@ -148,6 +148,11 @@ export interface OrderConfig {
   acceptanceGraceSeconds: number;
   /** Default estimated prep minutes before Busy adds. Launch default: 30. */
   defaultEstimatedPrepMinutes: number;
+  /**
+   * Hours after cooked-food MoMo confirm before unpaid orders auto-cancel.
+   * Env: ORDER_COOKED_FOOD_UNPAID_CANCEL_HOURS (default 3).
+   */
+  cookedFoodUnpaidCancelHours: number;
   /** Minutes added per Busy tap. */
   busyExtraPrepMinutes: number;
   /** Cap on busy_extra_prep_minutes. */
@@ -905,6 +910,10 @@ export default (): Configuration => {
       ),
       defaultEstimatedPrepMinutes: parseInt(
         process.env.ORDER_DEFAULT_ESTIMATED_PREP_MINUTES || '30',
+        10
+      ),
+      cookedFoodUnpaidCancelHours: parseInt(
+        process.env.ORDER_COOKED_FOOD_UNPAID_CANCEL_HOURS || '3',
         10
       ),
       busyExtraPrepMinutes: parseInt(

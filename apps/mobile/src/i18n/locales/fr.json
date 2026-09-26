@@ -882,6 +882,22 @@
         "unprofessional": "Peu professionnel"
       }
     },
+    "cookedFood": {
+      "confirmTitle": "Prêt dans combien de temps ?",
+      "waitPaymentTitle": "En attente du paiement",
+      "readyHint": "Indiquez le délai pour préparer cette commande de plats à emporter.",
+      "minutesChip": "{{m}} min",
+      "customChip": "Autre",
+      "customMinutes": "Minutes avant d'être prêt",
+      "invalidReadyMinutes": "Saisissez un délai entre {{min}} et {{max}} minutes.",
+      "confirmReady": "Confirmer le délai",
+      "waitPaymentBody": "Nous avons envoyé une demande de paiement mobile money au client. Attendez la notification de paiement avant de commencer à cuisiner.",
+      "returnDashboard": "Retour au tableau de bord",
+      "viewOrdersToCook": "Voir les commandes à préparer",
+      "startCookingTitle": "Commencer à cuisiner",
+      "startCookingCard": "Plat à emporter payé — commencez la préparation.",
+      "openOrder": "Ouvrir la commande"
+    },
     "phases": {
       "pay": "Paiement requis",
       "confirm": "En attente de confirmation",
@@ -917,6 +933,9 @@
       "prepareClient": "Le commerçant prépare votre commande.",
       "prepareBusiness": "Marquez la commande prête lorsqu’elle est emballée.",
       "readyPickupClient": "Votre commande est prête à être retirée en magasin.",
+      "readyPickupCookedFoodClient": "Votre plat est prêt. Appuyez sur Terminer la commande à votre arrivée — pas de code PIN de retrait.",
+      "cookedFoodWaitPaymentBusiness": "En attente du paiement client. Ne commencez pas à cuisiner tant que le paiement n'a pas réussi.",
+      "cookedFoodWaitPaymentClient": "Approuvez la demande de paiement sur votre téléphone pour que le restaurant puisse commencer à cuisiner.",
       "readyPickupPayAtPickupClient": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
       "readyPickupWaitClientPayBusiness": "Le client paiera dans l’application à son arrivée. Vous pouvez toujours envoyer une demande de paiement s’il a besoin d’aide.",
       "readyPickupBusiness": "Demandez le PIN de retrait du client à son arrivée. Le paiement est capturé lorsque vous confirmez le retrait.",
@@ -942,7 +961,10 @@
       "prepareShippingClient": "Le vendeur prépare votre commande pour l’expédition.",
       "prepareShippingBusiness": "Marquez comme expédiée lorsque le colis est chez le transporteur.",
       "shippingClient": "Votre commande est en route. Confirmez à la réception.",
-      "shippingBusiness": "En attente que le client confirme la réception du colis."
+      "shippingBusiness": "En attente que le client confirme la réception du colis.",
+      "readyPickupCompleteClient": "La commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
+      "readyPickupCompleteOrderClient": "Votre commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
+      "readyPickupAskClientCompleteBusiness": "Demandez au client d'appuyer sur Terminer la commande dans l'app pour que vous soyez payé (et la commission)."
     },
     "busy": {
       "banner": "Le commerçant a une demande plus élevée que d’habitude. Préparation estimée : {{minutes}} minutes.",

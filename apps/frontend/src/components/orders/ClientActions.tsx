@@ -52,8 +52,13 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   deliveryPinFullWidth = false,
 }) => {
   const { t } = useTranslation();
-  const { completeOrder, confirmOrderReceipt, switchToPickup, remindReady } =
-    useBackendOrders();
+  const {
+    completeOrder,
+    completeClientPickup,
+    confirmOrderReceipt,
+    switchToPickup,
+    remindReady,
+  } = useBackendOrders();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [payPickupOpen, setPayPickupOpen] = useState(false);
@@ -76,6 +81,26 @@ const ClientActions: React.FC<ClientActionsProps> = ({
 
   const handleCancelError = (errorMessage: string) => {
     onShowNotification?.(errorMessage, 'error');
+  };
+
+  const handleCompletePickup = async () => {
+    setCompleting(true);
+    try {
+      await completeClientPickup(order.id);
+      onShowNotification?.(
+        t('messages.orderCompleteSuccess', 'Order completed successfully'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message ||
+          t('messages.orderCompleteError', 'Failed to complete order'),
+        'error'
+      );
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const handleCompleteOrder = async () => {
@@ -209,6 +234,21 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       });
     }
 
+    if (
+      order.fulfillment_method === 'pickup' &&
+      order.current_status === 'ready_for_pickup' &&
+      (order.payment_status === 'paid' || order.payment_status === 'authorized')
+    ) {
+      actions.push({
+        label: t('orders.actions.complete', 'Complete order'),
+        action: () => void handleCompletePickup(),
+        color: 'success',
+        icon: <CheckCircle />,
+        variant: 'contained',
+        loading: completing,
+      });
+    }
+
     if (order.current_status === 'delivered') {
       actions.push({
         label: t('orders.actions.completeOrder', 'Complete Order'),
@@ -288,14 +328,10 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     order.payment_timing !== 'pay_at_delivery' &&
     order.payment_timing !== 'pay_at_pickup' &&
     order.payment_method !== 'pay_on_delivery' &&
-    (order.fulfillment_method === 'pickup'
-      ? order.current_status === 'ready_for_pickup' &&
-        (order.payment_status === 'authorized' || order.payment_status === 'paid')
-      : [
-          'picked_up',
-          'in_transit',
-          'out_for_delivery',
-        ].includes(order.current_status));
+    order.fulfillment_method !== 'pickup' &&
+    ['picked_up', 'in_transit', 'out_for_delivery'].includes(
+      order.current_status
+    );
 
   if (availableActions.length === 0 && !showPin && !reorderFlow.enabled) {
     return null;

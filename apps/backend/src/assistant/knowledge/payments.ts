@@ -46,7 +46,9 @@ Options de moment de paiement : payer maintenant, payer à la livraison, ou paye
 
 Acompte de réservation (mobile money, payer à la livraison ou au retrait) : un acompte est prélevé à la commande et bloqué sur le portefeuille Rendasua du client (il ne peut pas le retirer). Le reste est demandé à la porte ou en magasin. Si la commande est annulée avant le point de verrouillage (en livraison : « en cours de livraison » ; au retrait : « prêt au retrait »), l'acompte est libéré vers le solde disponible du portefeuille client. Après ce point, une annulation client entraîne la confiscation de l'acompte au profit de Rendasua. Une annulation commerçant ou plateforme rembourse l'acompte même après le verrouillage.
 
-Pour le paiement à la livraison, le livreur envoie une demande de paiement mobile à la porte ; le client l'approuve sur son téléphone (il n'appuie pas sur Payer dans l'application). Pour un retrait en mobile money, le client appuie sur Payer dans l'application à son arrivée et approuve la demande sur son téléphone ; une fois payée, la commande est finalisée et il peut récupérer ses articles. Le commerçant peut aussi envoyer une demande s'il a besoin d'aide.`
+Pour le paiement à la livraison, le livreur envoie une demande de paiement mobile à la porte ; le client l'approuve sur son téléphone (il n'appuie pas sur Payer dans l'application). Pour un retrait en mobile money, le client appuie sur Payer dans l'application à son arrivée et approuve la demande sur son téléphone ; une fois payée, la commande est finalisée et il peut récupérer ses articles. Le commerçant peut aussi envoyer une demande s'il a besoin d'aide.
+
+Plats cuisinés à emporter (ASAP) : pas d'acompte de réservation en mobile money — le commerçant confirme avec un délai de préparation, puis le montant total est demandé après confirmation. Le client finalise le retrait dans l'application quand le plat est prêt (sans code PIN de retrait) ; le versement au commerçant suit cette finalisation.`
       : `Rendasua supports mobile money in Africa and card payments (Stripe) in Canada, the United States, and the Philippines.
 
 - Cameroon: MTN Mobile Money, Orange Money
@@ -57,7 +59,9 @@ Payment timing options: pay now, pay at delivery, or pay at in-store pickup (dep
 
 Reservation deposit (mobile money pay-at-delivery or pay-at-pickup): a deposit is collected when the order is placed and held on the client's Rendasua wallet (it cannot be withdrawn). The remainder is requested at the door or in store. If the order is cancelled before the lock point (delivery: out for delivery; pickup: ready for pickup), the deposit is released to the client's available wallet balance. After the lock point, a customer cancel forfeits the deposit to Rendasua. A business or platform cancel refunds the deposit even after the lock point.
 
-For pay-at-delivery, the courier sends a mobile payment request at the door; the customer approves it on their phone (they do not tap Pay in the app). For mobile-money pickup, the customer taps Pay in the app when they arrive and approves the request on their phone; after approval the order is complete and they can collect it. The merchant can also send a payment request if they need help.`;
+For pay-at-delivery, the courier sends a mobile payment request at the door; the customer approves it on their phone (they do not tap Pay in the app). For mobile-money pickup, the customer taps Pay in the app when they arrive and approves the request on their phone; after approval the order is complete and they can collect it. The merchant can also send a payment request if they need help.
+
+Cooked-food ASAP pickup (restaurant dishes): there is no reservation deposit on mobile money — the merchant confirms with a ready-in time, then the full amount is requested after confirm (pay after merchant confirm). The client completes pickup in the app when food is ready (no pickup PIN); payout to the merchant follows that completion.`;
 
   const credits =
     locale === 'fr'

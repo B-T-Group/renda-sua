@@ -68,6 +68,7 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
+import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
 
 @Module({
   imports: [
@@ -148,6 +149,7 @@ import { DepositRefundService } from './deposit-refund.service';
     DepositCalculationService,
     DepositLedgerService,
     DepositRefundService,
+    CookedFoodPickupFlowService,
   ],
   exports: [
     OrdersService,
@@ -170,6 +172,7 @@ import { DepositRefundService } from './deposit-refund.service';
     DepositCalculationService,
     DepositLedgerService,
     DepositRefundService,
+    CookedFoodPickupFlowService,
   ],
 })
 export class OrdersModule {}

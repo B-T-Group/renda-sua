@@ -118,6 +118,8 @@ import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { FoodOrdersService } from '../food/food-orders.service';
+import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
+import { isCookedFoodPickupOrder, anyLineIsCookedFood } from '../food/cooked-food-flag.util';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
@@ -170,6 +172,11 @@ export interface ConfirmOrderRequest {
    * how many portions are left once this order is in the kitchen.
    */
   food_stock_updates?: FoodConfirmationStockUpdate[];
+  /**
+   * Cooked-food ASAP pickup: minutes until ready (15/30/45/60 or custom 5–180).
+   * WhatsApp one-tap defaults to 30.
+   */
+  ready_in_minutes?: number;
 }
 
 export interface GetOrderRequest {
@@ -520,6 +527,7 @@ export class OrdersService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
     private readonly foodOrdersService: FoodOrdersService,
+    private readonly cookedFoodPickupFlow: CookedFoodPickupFlowService,
     private readonly depositCalculationService: DepositCalculationService,
     private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
@@ -535,6 +543,15 @@ export class OrdersService {
 
   private emitOrderPaid(orderId: string): void {
     this.eventEmitter.emit(ORDER_PAID_EVENT, { orderId });
+  }
+
+  /** System cancel for cooked-food MoMo still unpaid after confirm timeout. */
+  async cancelUnpaidCookedFoodAfterConfirm(orderId: string): Promise<void> {
+    await this.orderCleanupService.cancelUnpaidPendingPaymentAsSystem(
+      orderId,
+      'Client did not pay within the allowed time after confirm',
+      { allowConfirmedUnpaid: true, releaseInventory: true }
+    );
   }
 
   private async canAccessAnyOrder(userId: string): Promise<boolean> {
@@ -1493,6 +1510,38 @@ export class OrdersService {
       }
     }
 
+    const isCookedFoodAsapPickup =
+      this.cookedFoodPickupFlow.isCookedFoodPickupCohort(order as any) &&
+      isAsapConfirm;
+    const payAfterConfirm =
+      isCookedFoodAsapPickup &&
+      this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order as any);
+    let cookedReadyInMinutes: number | undefined;
+    if (isCookedFoodAsapPickup) {
+      cookedReadyInMinutes = this.cookedFoodPickupFlow.normalizeReadyInMinutes(
+        request.ready_in_minutes
+      );
+      await this.cookedFoodPickupFlow.writeEstimatedPrepMinutes(
+        request.orderId,
+        cookedReadyInMinutes
+      );
+    }
+
+    // MoMo pay-after: request payment while still pending so a provider failure
+    // never leaves the order confirmed without a payment request or cancel timer.
+    if (payAfterConfirm) {
+      try {
+        await this.initiateCookedFoodFullPaymentAfterConfirm(request.orderId, {
+          allowPending: true,
+        });
+      } catch (error: any) {
+        await this.cookedFoodPickupFlow.clearEstimatedPrepMinutes(
+          request.orderId
+        );
+        throw error;
+      }
+    }
+
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'confirmed',
@@ -1511,7 +1560,10 @@ export class OrdersService {
       );
     }
 
-    await this.fulfillmentPromiseService.persistForOrder(request.orderId);
+    // Prep clock for pay-after-confirm starts when the client pays, not at confirm.
+    if (!payAfterConfirm) {
+      await this.fulfillmentPromiseService.persistForOrder(request.orderId);
+    }
 
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -1527,6 +1579,22 @@ export class OrdersService {
       userId,
       request.notes
     );
+
+    if (isCookedFoodAsapPickup && cookedReadyInMinutes != null) {
+      const cookedFoodResult = await this.afterCookedFoodConfirm(
+        request.orderId,
+        order as any,
+        cookedReadyInMinutes
+      );
+      return {
+        success: true,
+        order: cookedFoodResult.order ?? updatedOrder,
+        message: cookedFoodResult.message,
+        pay_after_merchant_confirm: cookedFoodResult.payAfterConfirm,
+        ready_in_minutes: cookedReadyInMinutes,
+      };
+    }
+
     void this.orderMarkReadyService.scheduleAfterConfirm({
       id: request.orderId,
       business_id: order.business_id,
@@ -1541,16 +1609,83 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Cooked-food ASAP pickup after status confirmed: MoMo unpaid-cancel / zero-amount
+   * finalize, or prepare + auto-ready for Stripe/wallet.
+   */
+  private async afterCookedFoodConfirm(
+    orderId: string,
+    order: {
+      business_id: string;
+      fulfillment_method?: string | null;
+      fulfillment_timing?: string | null;
+      pay_after_merchant_confirm?: boolean | null;
+      payment_status?: string | null;
+      total_amount?: number | null;
+      delivery_time_windows?: Array<{ id: string }>;
+    },
+    readyInMinutes: number
+  ): Promise<{
+    order?: any;
+    message: string;
+    payAfterConfirm: boolean;
+  }> {
+    if (this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order)) {
+      return this.afterCookedFoodPayAfterConfirm(orderId);
+    }
+
+    // Stripe/wallet are already paid/authorized; unpaid is rare. Auto-ready
+    // still waits for paid/authorized before marking ready.
+    await this.cookedFoodPickupFlow.enterPreparingAndScheduleReady(
+      orderId,
+      readyInMinutes
+    );
+    return {
+      order: await this.getOrderDetails(orderId),
+      message: `Order confirmed. Ready in ${readyInMinutes} minutes.`,
+      payAfterConfirm: false,
+    };
+  }
+
+  private async afterCookedFoodPayAfterConfirm(orderId: string): Promise<{
+    order?: any;
+    message: string;
+    payAfterConfirm: boolean;
+  }> {
+    const fresh = await this.getOrderDetails(orderId);
+    const paidOrZero =
+      fresh &&
+      ((fresh as any).payment_status === 'paid' ||
+        !(Number(fresh.total_amount) > 0));
+    if (paidOrZero && fresh) {
+      await this.finalizeCookedFoodPayAfterConfirm(fresh);
+      return {
+        order: await this.getOrderDetails(orderId),
+        message: 'Order confirmed. Payment received. Start preparing now.',
+        payAfterConfirm: true,
+      };
+    }
+    await this.cookedFoodPickupFlow.scheduleUnpaidCancelAfterConfirm(orderId);
+    return {
+      message:
+        'Order confirmed. Payment request sent to the client. Start preparing after they pay.',
+      payAfterConfirm: true,
+    };
+  }
+
   async completePreparation(
     request: OrderStatusChangeRequest,
     actor?: AuthorizedBusinessActor
   ) {
-    const userId = await this.requireBusinessOrderAccess(
-      request.orderId,
-      'Only business users can complete order preparation',
-      'Unauthorized to complete preparation for this order',
-      actor
-    );
+    const userId =
+      actor === undefined && (request as any).viaSystem === true
+        ? 'system'
+        : await this.requireBusinessOrderAccess(
+            request.orderId,
+            'Only business users can complete order preparation',
+            'Unauthorized to complete preparation for this order',
+            actor
+          );
     const order = await this.getOrderDetails(request.orderId);
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
@@ -1563,24 +1698,20 @@ export class OrdersService {
       order,
       'Carrier shipping orders must be marked as shipped, not set ready for pickup'
     );
+    this.assertPayAfterPaidBeforeReady(order);
     await this.ensurePickupPinIfNeeded(order);
     await this.fulfillmentPromiseService.reanchorAsapAtReady(request.orderId);
-    // Persist the dispatch gate BEFORE flipping the status: the status write
-    // below fires an async event that triggers dispatchOrderOffers, which
-    // reads dispatch_ready_at to decide whether to dispatch immediately. If
-    // that event were allowed to race ahead of this write, it could see a
-    // null dispatch_ready_at and dispatch agents too early.
     const dispatchSchedule = await this.scheduleAgentDispatchGate(order);
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'ready_for_pickup',
-      actor
+      (request as any).viaSystem === true ? { viaSystem: true } : actor
     );
     await this.createStatusHistoryEntry(
       request.orderId,
       'ready_for_pickup',
-      'Order preparation completed, ready for pickup',
-      'business',
+      request.notes || 'Order preparation completed, ready for pickup',
+      (request as any).viaSystem === true ? 'system' : 'business',
       userId,
       request.notes
     );
@@ -2007,9 +2138,26 @@ export class OrdersService {
     }
   }
 
+  /** Pay-after cooked food cannot be marked ready until the client has paid. */
+  private assertPayAfterPaidBeforeReady(order: Orders): void {
+    if ((order as any).pay_after_merchant_confirm !== true) return;
+    const paymentStatus = (order as any).payment_status;
+    if (paymentStatus === 'paid' || paymentStatus === 'authorized') return;
+    throw new HttpException(
+      {
+        success: false,
+        error: 'PAYMENT_REQUIRED',
+        message:
+          'Wait for the client to complete payment before marking this order ready.',
+      },
+      HttpStatus.PAYMENT_REQUIRED
+    );
+  }
+
   /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
   private async ensurePickupPinIfNeeded(order: Orders): Promise<void> {
-    if ((order as any).fulfillment_method !== 'pickup') return;
+    // Store pickup is completed by the client tapping Complete — no PIN.
+    if ((order as any).fulfillment_method === 'pickup') return;
     if ((order as any).payment_timing === 'pay_at_pickup') return;
     const paymentStatus = (order as any).payment_status;
     if (paymentStatus !== 'authorized' && paymentStatus !== 'paid') return;
@@ -3861,7 +4009,236 @@ export class OrdersService {
   }
 
   /**
-   * Client: retry pay-now payment for an existing pending-payment order.
+   * Cooked-food MoMo pickup: after merchant confirm, push full-amount payment.
+   * When `allowPending` is set, may run before status flips to confirmed so a
+   * MoMo failure never leaves a confirmed order without a payment request.
+   */
+  private async initiateCookedFoodFullPaymentAfterConfirm(
+    orderId: string,
+    options?: { allowPending?: boolean }
+  ): Promise<void> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (!this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order as any)) {
+      throw new HttpException(
+        'Order is not configured for pay after merchant confirm',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if ((order as any).payment_status === 'paid') return;
+    const statusOk =
+      order.current_status === 'confirmed' ||
+      (options?.allowPending === true && order.current_status === 'pending');
+    if (!statusOk) {
+      throw new HttpException(
+        'Payment can only be requested after confirm',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const phoneNumber = order.client?.user?.phone_number || '';
+    if (!phoneNumber.trim()) {
+      throw new HttpException(
+        'Client phone number is required to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const existing =
+      await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
+        order.order_number
+      );
+    if (existing && existing.status === 'pending') return;
+
+    const momo = this.orderMomoContext(order);
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
+      order.order_number
+    );
+    const chargeAmount = Number(order.total_amount) || 0;
+    // Zero-amount: finalize only once confirmed (caller handles after status flip).
+    if (chargeAmount <= 0) {
+      if (order.current_status === 'confirmed') {
+        await this.finalizeCookedFoodPayAfterConfirm(order);
+      }
+      return;
+    }
+
+    const tx = await this.mobilePaymentsDatabaseService.createTransaction({
+      reference: paymentAttemptReference,
+      amount: chargeAmount,
+      currency: order.currency,
+      description: `order ${order.order_number} (after confirm)`,
+      provider: momo.provider,
+      payment_method: 'mobile_money',
+      customer_phone: phoneNumber,
+      ...(order.client.user.email
+        ? { customer_email: order.client.user.email }
+        : {}),
+      account_id: account.id,
+      transaction_type: 'PAYMENT',
+      payment_entity: 'order' as const,
+      entity_id: order.order_number,
+    });
+
+    const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+      {
+        amount: chargeAmount,
+        currency: order.currency,
+        description: `Order ${order.order_number}`,
+        customerPhone: phoneNumber,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        ownerCharge: 'MERCHANT' as const,
+        transactionType: 'PAYMENT' as const,
+      },
+      paymentAttemptReference,
+      momo.payerUserId
+    );
+
+    if (!paymentTransaction.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        status: 'failed',
+        error_message: paymentTransaction.message,
+        error_code: paymentTransaction.errorCode,
+      });
+      throw new HttpException(
+        paymentTransaction.message || 'Failed to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (paymentTransaction.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        transaction_id: paymentTransaction.transactionId,
+      });
+    }
+    await this.resetOrderPaymentFailure(orderId);
+  }
+
+  /**
+   * Client marks a store-pickup order complete (no PIN). Settles paid/authorized
+   * orders, or requests MoMo remainder for classic pay-at-pickup.
+   */
+  async completeClientPickup(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (!this.userOwnsOrderAsClient(order, user)) {
+      throw new HttpException(
+        'Unauthorized to complete this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if ((order as any).fulfillment_method !== 'pickup') {
+      throw new HttpException(
+        'Only store pickup orders can be completed this way',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (order.current_status !== 'ready_for_pickup') {
+      throw new HttpException(
+        `Cannot complete pickup for order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const paymentStatus = (order as any).payment_status;
+    const paymentTiming = (order as any).payment_timing;
+    const paidOrAuthorized =
+      paymentStatus === 'paid' || paymentStatus === 'authorized';
+
+    if (paidOrAuthorized) {
+      await this.captureStripeAuthorizedOrderIfNeeded(order);
+      await this.processOrderPayment(orderId);
+      await this.processOrderDeliveryPayment(orderId);
+      await this.completeOrderWithSideEffects(
+        order,
+        'Order completed by client after store pickup'
+      );
+      return {
+        success: true,
+        order: await this.getOrderDetails(orderId),
+        message: 'Order completed',
+      };
+    }
+
+    // Pay-after-confirm is full MoMo hold, not classic PAP remainder.
+    if (
+      paymentTiming === 'pay_at_pickup' &&
+      !(order as any).pay_after_merchant_confirm
+    ) {
+      return this.initiatePayAtPickupPayment(orderId);
+    }
+
+    throw new HttpException(
+      'Order payment must be authorized or paid before completing pickup',
+      HttpStatus.PAYMENT_REQUIRED
+    );
+  }
+
+  /** MoMo pay-after-confirm success: hold funds, then prepare once confirmed. */
+  private async finalizeCookedFoodPayAfterConfirm(
+    order: Orders
+  ): Promise<void> {
+    const fresh = (await this.getOrderDetails(order.id)) ?? order;
+    const status = fresh.current_status;
+    const alreadyPaid = (fresh as any).payment_status === 'paid';
+
+    // Idempotent: payment callback and confirm path may both arrive here.
+    if (
+      alreadyPaid &&
+      (status === 'preparing' ||
+        status === 'ready_for_pickup' ||
+        status === 'complete')
+    ) {
+      return;
+    }
+
+    if (!alreadyPaid) {
+      const account = await this.hasuraSystemService.getAccount(
+        order.client.user_id,
+        order.currency
+      );
+      await this.finalizeClientOrderPayment(order, account.id, {
+        skipOrderPlacedNotifications: true,
+      });
+    }
+
+    const afterPay = (await this.getOrderDetails(order.id)) ?? fresh;
+    // Fast MoMo callback can beat merchant confirm. Hold funds while still
+    // pending, but do not enter preparing — confirm would then 409.
+    if (afterPay.current_status === 'pending') {
+      return;
+    }
+
+    if (afterPay.current_status !== 'confirmed') {
+      return;
+    }
+
+    await this.orderStatusService.updateOrderStatus(order.id, 'preparing', {
+      viaSystem: true,
+    });
+    // Prep clock starts at payment (confirm intentionally skipped persistForOrder).
+    await this.cookedFoodPickupFlow.clearPromisedReady(order.id);
+    await this.fulfillmentPromiseService.persistForOrder(order.id);
+    const readySeconds = this.cookedFoodPickupFlow.readySecondsFromEstimatedPrep(
+      afterPay as any
+    );
+    await this.cookedFoodPickupFlow.scheduleAutoMarkReady(
+      order.id,
+      readySeconds
+    );
+  }
+
+  /**
+   * Client: retry MoMo for pay-after-confirm cooked food, or pay-now pending_payment.
    * Mobile money: new MM transaction. Stripe: new Checkout session or PaymentIntent.
    */
   async retryOrderPayment(
@@ -3886,6 +4263,22 @@ export class OrdersService {
       );
     }
 
+    if ((order as any).payment_status === 'paid') {
+      return { success: true, message: 'Order is already paid' };
+    }
+
+    if (
+      (order as any).pay_after_merchant_confirm === true &&
+      order.current_status === 'confirmed'
+    ) {
+      await this.initiateCookedFoodFullPaymentAfterConfirm(orderId);
+      return {
+        success: true,
+        message: 'Payment request sent. Approve it on your phone.',
+        payment_rail: 'mobile_money' as const,
+      };
+    }
+
     const paymentTiming = (order as any).payment_timing as
       | 'pay_now'
       | 'pay_at_delivery'
@@ -3901,9 +4294,6 @@ export class OrdersService {
         'Payment retry is only available when order is pending payment',
         HttpStatus.BAD_REQUEST
       );
-    }
-    if ((order as any).payment_status === 'paid') {
-      return { success: true, message: 'Order is already paid' };
     }
 
     if ((order as any).payment_source === 'credit_card') {
@@ -6143,6 +6533,8 @@ export class OrdersService {
           payment_source
           payment_timing
           reconciliation_status
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           verified_agent_delivery
           created_at
           updated_at
@@ -6231,6 +6623,7 @@ export class OrdersService {
               dimensions
               is_fragile
               is_perishable
+              is_cooked_food
               item_sub_category {
                 name
                 item_category {
@@ -6369,6 +6762,8 @@ export class OrdersService {
           payment_source
           payment_timing
           reconciliation_status
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           verified_agent_delivery
           deposit_amount
           deposit_mobile_payment_transaction_id
@@ -6474,6 +6869,7 @@ export class OrdersService {
               weight
               weight_unit
               dimensions
+              is_cooked_food
               brand {
                 id
                 name
@@ -7063,6 +7459,8 @@ export class OrdersService {
           payment_failed_at
           payment_failure_message
           reconciliation_status
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           deposit_amount
           deposit_mobile_payment_transaction_id
           deposit_status
@@ -7471,20 +7869,22 @@ export class OrdersService {
       const orderWithDetails = await this.requireOrderDetailsByNumber(
         order.order_number
       );
-      const deliveryPin = this.deliveryPinService.generatePin();
-      const deliveryPinHash = this.deliveryPinService.hashPin(
-        orderWithDetails.id,
-        deliveryPin
-      );
-      await this.setOrderDeliveryPinHash(orderWithDetails.id, deliveryPinHash);
-      await this.deliveryPinService.setPinForClient(
-        orderWithDetails.id,
-        deliveryPin
-      );
-      await this.shareDeliveryPinWithRecipient(
-        orderWithDetails.id,
-        deliveryPin
-      );
+      if ((orderWithDetails as any).fulfillment_method !== 'pickup') {
+        const deliveryPin = this.deliveryPinService.generatePin();
+        const deliveryPinHash = this.deliveryPinService.hashPin(
+          orderWithDetails.id,
+          deliveryPin
+        );
+        await this.setOrderDeliveryPinHash(orderWithDetails.id, deliveryPinHash);
+        await this.deliveryPinService.setPinForClient(
+          orderWithDetails.id,
+          deliveryPin
+        );
+        await this.shareDeliveryPinWithRecipient(
+          orderWithDetails.id,
+          deliveryPin
+        );
+      }
       try {
         await this.orderAcceptanceService.startAcceptanceSla(order.id);
       } catch (slaError: any) {
@@ -7525,6 +7925,11 @@ export class OrdersService {
         paymentTiming === 'pay_now' &&
         (order as any).payment_status === 'paid'
       ) {
+        return;
+      }
+
+      if ((order as any).pay_after_merchant_confirm === true) {
+        await this.finalizeCookedFoodPayAfterConfirm(order);
         return;
       }
 
@@ -8379,7 +8784,8 @@ export class OrdersService {
    */
   private async finalizeClientOrderPayment(
     order: Orders,
-    accountId: string
+    accountId: string,
+    options?: { skipOrderPlacedNotifications?: boolean }
   ): Promise<void> {
     const wasAuthorized = (order as any).payment_status === 'authorized';
     const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
@@ -8429,14 +8835,19 @@ export class OrdersService {
       return;
     }
 
-    const deliveryPin = this.deliveryPinService.generatePin();
-    const deliveryPinHash =
-      this.deliveryPinService.hashPin(order.id, deliveryPin);
-    await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
-    await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
-    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
+    // Store pickup completes via client Complete (no PIN).
+    if ((order as any).fulfillment_method !== 'pickup') {
+      const deliveryPin = this.deliveryPinService.generatePin();
+      const deliveryPinHash =
+        this.deliveryPinService.hashPin(order.id, deliveryPin);
+      await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
+      await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+      await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
+    }
 
-    await this.sendOrderPlacedNotifications(order, 'pending');
+    if (!options?.skipOrderPlacedNotifications) {
+      await this.sendOrderPlacedNotifications(order, 'pending');
+    }
   }
 
   private async sendOrderPlacedNotifications(
@@ -9372,6 +9783,41 @@ export class OrdersService {
    * ASAP (no window): merchant must be open now.
    * Future slot: slot must fall fully within operating hours on that date.
    */
+  private assertCookedFoodAsapOnly(
+    businessInventories: Array<{
+      item?: {
+        is_cooked_food?: boolean | null;
+        item_sub_category?: {
+          item_category?: { name?: string | null } | null;
+        } | null;
+      } | null;
+    }>,
+    deliveryWindow?: {
+      slot_id?: string;
+      preferred_date?: string;
+    } | null
+  ): void {
+    const slotId = deliveryWindow?.slot_id?.trim();
+    if (!slotId) return;
+    const hasCookedFood = anyLineIsCookedFood(
+      businessInventories.map((inv) => inv.item)
+    );
+    if (!hasCookedFood) return;
+    throw new HttpException(
+      {
+        success: false,
+        error: 'COOKED_FOOD_ASAP_ONLY',
+        message:
+          'Cooked food orders are ASAP only. Please place the order when the store is open.',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  /**
+   * ASAP (no window): merchant must be open now.
+   * Future slot: slot must fall fully within operating hours on that date.
+   */
   private async assertMerchantOpenForCheckout(
     locationHours: unknown,
     deliveryWindow?: {
@@ -9769,6 +10215,7 @@ export class OrdersService {
             weight
             max_order_quantity
             preparation_minutes
+            is_cooked_food
             stripe_tax_code_id
             item_sub_category {
               item_category { name }
@@ -9903,6 +10350,8 @@ export class OrdersService {
       );
     }
 
+    this.assertCookedFoodAsapOnly(businessInventories, orderData.delivery_window);
+
     await this.assertMerchantOpenForCheckout(
       businessInventories[0].business_location?.operating_hours,
       orderData.delivery_window,
@@ -9984,7 +10433,8 @@ export class OrdersService {
       const requestedQuantity =
         requestedQuantityByInventoryId.get(item.business_inventory_id) || 0;
       const ignoresStock = cookedFoodIgnoresStock(
-        businessInventory.item?.item_sub_category?.item_category?.name
+        businessInventory.item?.item_sub_category?.item_category?.name,
+        businessInventory.item?.is_cooked_food
       );
       if (
         !ignoresStock &&
@@ -10339,12 +10789,27 @@ export class OrdersService {
           : 'mobile_payment';
       return payment_source === 'wallet' ? 'wallet' : 'mobile_money';
     };
+
+    const isCookedFoodPickup = isCookedFoodPickupOrder({
+      fulfillmentMethod,
+      itemFlags: businessInventories.map((inv: any) => ({
+        is_cooked_food: inv.item?.is_cooked_food,
+      })),
+    });
+    const payAfterMerchantConfirm =
+      isCookedFoodPickup &&
+      railResolution.rail === 'mobile_money' &&
+      !canPayWithWallet &&
+      !isZeroOrNegativeOrder;
     
     // Determine initial status for pay_at_delivery/pickup orders
     // When deposit is required, start in pending_payment (not pending)
     // to avoid triggering acceptance SLA before deposit is paid
     let current_status: string;
-    if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
+    if (payAfterMerchantConfirm) {
+      // Cooked-food MoMo pickup: no deposit; merchant confirms before payment.
+      current_status = 'pending';
+    } else if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
       const railForDepositCheck = getDepositRailForPayAtTiming();
       const requiresDeposit = this.depositCalculationService.isDepositRequired(
         paymentTiming,
@@ -10446,7 +10911,9 @@ export class OrdersService {
         $presentmentAmount: numeric,
         $presentmentFxRate: numeric,
         $presentmentFxSource: String,
-        $metaCapiContext: jsonb
+        $metaCapiContext: jsonb,
+        $isCookedFoodPickup: Boolean!,
+        $payAfterMerchantConfirm: Boolean!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -10497,6 +10964,8 @@ export class OrdersService {
           presentment_fx_rate: $presentmentFxRate,
           presentment_fx_source: $presentmentFxSource,
           meta_capi_context: $metaCapiContext,
+          is_cooked_food_pickup: $isCookedFoodPickup,
+          pay_after_merchant_confirm: $payAfterMerchantConfirm,
           order_items: {
             data: $orderItems
           }
@@ -10659,6 +11128,8 @@ export class OrdersService {
           actionSource: orderData.metaActionSource,
           eventSourceUrl: orderData.eventSourceUrl,
         }),
+        isCookedFoodPickup,
+        payAfterMerchantConfirm,
       }
     );
 
@@ -10767,8 +11238,9 @@ export class OrdersService {
     }
 
     if (
-      paymentTiming === 'pay_at_delivery' ||
-      paymentTiming === 'pay_at_pickup'
+      !payAfterMerchantConfirm &&
+      (paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup')
     ) {
       // MoMo reservation deposit collection for pay_at_delivery/pickup
       // Use same rail logic as status decision above
@@ -11131,7 +11603,8 @@ export class OrdersService {
     if (
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
-      !isZeroOrNegativeOrder
+      !isZeroOrNegativeOrder &&
+      !payAfterMerchantConfirm
     ) {
       try {
         const { transaction, paymentTransaction } =
@@ -12225,6 +12698,19 @@ export class OrdersService {
   }
 
   /**
+   * Pay-after-confirm holds full GMV like pay-now. Settlement must release that
+   * hold even when payment_timing is still pay_at_pickup from checkout.
+   */
+  private settlesViaClientHoldRelease(order: {
+    payment_timing?: string | null;
+    pay_after_merchant_confirm?: boolean | null;
+  }): boolean {
+    if (order.pay_after_merchant_confirm === true) return true;
+    const timing = order.payment_timing;
+    return timing !== 'pay_at_delivery' && timing !== 'pay_at_pickup';
+  }
+
+  /**
    * Release item/subtotal client hold, record item payment, distribute item/business commissions.
    * Idempotent via order_holds.item_settlement_completed_at. Call while status is assigned_to_agent (pickup) or picked_up (retry).
    */
@@ -12278,37 +12764,17 @@ export class OrdersService {
     }
 
     if (subtotalPortion > 0 && !skipClient) {
-      if (
-        paymentTiming === 'pay_at_delivery' ||
-        paymentTiming === 'pay_at_pickup'
-      ) {
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
+      const clientAccount = await this.hasuraSystemService.getAccount(
+        order.client.user_id,
+        order.currency
+      );
+      if (!clientAccount) {
+        throw new HttpException(
+          'Client account not found',
+          HttpStatus.NOT_FOUND
         );
-        if (!clientAccount) {
-          throw new HttpException(
-            'Client account not found',
-            HttpStatus.NOT_FOUND
-          );
-        }
-        // Release withheld deposit into available before full GMV payment debit
-        await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: subtotalPortion,
-          transactionType: 'payment',
-          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
-          referenceId: orderId,
-        });
-      } else {
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
-        );
-        if (!clientAccount) {
-          throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
-        }
+      }
+      if (this.settlesViaClientHoldRelease(order as any)) {
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
           amount: subtotalPortion,
@@ -12321,6 +12787,16 @@ export class OrdersService {
           amount: subtotalPortion,
           transactionType: 'payment',
           memo: `Order item payment for order ${order.order_number}`,
+          referenceId: orderId,
+        });
+      } else {
+        // Classic PAD/PAP: release deposit hold, then debit full GMV.
+        await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: subtotalPortion,
+          transactionType: 'payment',
+          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
           referenceId: orderId,
         });
       }
@@ -12414,36 +12890,16 @@ export class OrdersService {
 
     const deliveryAmt = Number(orderHold.delivery_fees);
     if (deliveryAmt > 0) {
-      if (
-        paymentTiming === 'pay_at_delivery' ||
-        paymentTiming === 'pay_at_pickup'
-      ) {
-        if (!skipClient) {
-          const clientAccount = await this.hasuraSystemService.getAccount(
-            order.client.user_id,
-            order.currency
-          );
-          if (!clientAccount) {
-            throw new HttpException(
-              'Client account not found',
-              HttpStatus.NOT_FOUND
-            );
-          }
-          await this.accountsService.registerTransaction({
-            accountId: clientAccount.id,
-            amount: deliveryAmt,
-            transactionType: 'payment',
-            memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
-            referenceId: orderId,
-          });
-        }
-      } else {
+      if (this.settlesViaClientHoldRelease(order as any)) {
         const clientAccount = await this.hasuraSystemService.getAccount(
           order.client.user_id,
           order.currency
         );
         if (!clientAccount) {
-          throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+          throw new HttpException(
+            'Client account not found',
+            HttpStatus.NOT_FOUND
+          );
         }
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
@@ -12457,6 +12913,24 @@ export class OrdersService {
           amount: deliveryAmt,
           transactionType: 'payment',
           memo: `Order delivery payment for order ${order.order_number}`,
+          referenceId: orderId,
+        });
+      } else if (!skipClient) {
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new HttpException(
+            'Client account not found',
+            HttpStatus.NOT_FOUND
+          );
+        }
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: deliveryAmt,
+          transactionType: 'payment',
+          memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
           referenceId: orderId,
         });
       }
@@ -13162,6 +13636,7 @@ export class OrdersService {
       business_inventory: Array<{
         id: string;
         item?: {
+          is_cooked_food?: boolean | null;
           item_sub_category?: {
             item_category?: { name?: string | null } | null;
           } | null;
@@ -13172,6 +13647,7 @@ export class OrdersService {
         business_inventory(where: { id: { _in: $ids } }) {
           id
           item {
+            is_cooked_food
             item_sub_category {
               item_category { name }
             }
@@ -13184,7 +13660,8 @@ export class OrdersService {
     for (const row of result.business_inventory ?? []) {
       if (
         !cookedFoodIgnoresStock(
-          row.item?.item_sub_category?.item_category?.name
+          row.item?.item_sub_category?.item_category?.name,
+          row.item?.is_cooked_food
         )
       ) {
         stocked.add(row.id);

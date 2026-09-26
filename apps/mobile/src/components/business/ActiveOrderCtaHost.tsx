@@ -15,6 +15,8 @@ import {
   type BusinessOrderActionId,
 } from '../../utils/businessOrderActions';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
+import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
+import { shouldUseCookedFoodConfirmModal } from '../../utils/cookedFoodOrder';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
@@ -74,6 +76,7 @@ export function ActiveOrderCtaHost({
 
   const acting = !!order && actingId === order.id;
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cookedConfirmOpen, setCookedConfirmOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickupPinOpen, setPickupPinOpen] = useState(false);
   const [pickupPinError, setPickupPinError] = useState<string | null>(null);
@@ -123,7 +126,11 @@ export function ActiveOrderCtaHost({
   const handlePrimary = useCallback(
     (actionOrder: BusinessOrder, actionId: BusinessOrderActionId) => {
       if (actionId === 'confirm') {
-        setConfirmOpen(true);
+        if (shouldUseCookedFoodConfirmModal(actionOrder)) {
+          setCookedConfirmOpen(true);
+        } else {
+          setConfirmOpen(true);
+        }
         return;
       }
       if (actionId === 'reconcileCash') {
@@ -292,6 +299,12 @@ export function ActiveOrderCtaHost({
         visible={confirmOpen}
         order={order}
         onDismiss={() => setConfirmOpen(false)}
+        onConfirm={confirmOrder}
+      />
+      <CookedFoodConfirmOrderDialog
+        visible={cookedConfirmOpen}
+        order={order}
+        onDismiss={() => setCookedConfirmOpen(false)}
         onConfirm={confirmOrder}
       />
       <BusinessMarkShippedSheet

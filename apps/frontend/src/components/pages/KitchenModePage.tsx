@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useIncomingOrderInterrupt } from '../../hooks/useIncomingOrderInterrupt';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrderModal';
 
 type WakeLockSentinelLike = {
   release: () => Promise<void>;
@@ -307,6 +308,16 @@ export function KitchenModePage() {
           order={order}
           persona="business"
           onSuccess={interrupt.onDeclineSuccess}
+        />
+      ) : null}
+
+      {order ? (
+        <CookedFoodConfirmOrderModal
+          open={interrupt.cookedFoodConfirmOpen}
+          order={order}
+          onClose={interrupt.closeCookedFoodConfirm}
+          onConfirm={interrupt.confirmWithData}
+          loading={isWorking}
         />
       ) : null}
     </Container>

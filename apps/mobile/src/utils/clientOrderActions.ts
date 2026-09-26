@@ -10,19 +10,13 @@ export function clientShowAgentLocation(status: string | undefined, fulfillmentM
   return !!status && AGENT_TRACK_STATUSES.includes(status);
 }
 
-/** Show from pickup onward so clients can prep/send the PIN before arrival. */
+/** Delivery PIN only — store pickup uses client Complete (no PIN). */
 export function clientShowDeliveryPin(order: Order): boolean {
   if (isCarrierShipping(order.fulfillment_method)) return false;
+  if (isStorePickupOrder(order)) return false;
   if (order.payment_timing === 'pay_at_delivery') return false;
   if (order.payment_method === 'pay_on_delivery') return false;
   if (order.payment_timing === 'pay_at_pickup') return false;
-
-  if (isStorePickupOrder(order)) {
-    const status = order.current_status || '';
-    if (status !== 'ready_for_pickup') return false;
-    const payment = order.payment_status;
-    return payment === 'authorized' || payment === 'paid';
-  }
 
   const status = order.current_status || '';
   return PIN_STATUSES.includes(status);

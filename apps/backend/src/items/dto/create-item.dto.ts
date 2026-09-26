@@ -65,6 +65,12 @@ export class CreateItemDto {
   })
   preparation_minutes?: number | null;
 
+  @ApiPropertyOptional({
+    description:
+      'True when this is a cooked/restaurant dish. Drives stock and cooked-food pickup payment rules.',
+  })
+  is_cooked_food?: boolean;
+
   @ApiPropertyOptional()
   min_order_quantity?: number;
 

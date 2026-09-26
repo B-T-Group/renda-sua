@@ -34,6 +34,7 @@ const MUTABLE_ITEM_FIELDS = [
   'max_delivery_distance',
   'estimated_delivery_time',
   'preparation_minutes',
+  'is_cooked_food',
   'min_order_quantity',
   'max_order_quantity',
   'is_active',
@@ -59,6 +60,7 @@ const GET_ITEM_BY_ID = `
       shipping_price
       price
       export_available
+      is_cooked_food
       item_sub_category_id
       item_sub_category {
         item_category {
@@ -167,14 +169,20 @@ export class ItemsService {
     const categoryName = await this.resolveCategoryNameForSubCategory(
       mutable.item_sub_category_id
     );
+    const isCookedFood =
+      typeof mutable.is_cooked_food === 'boolean'
+        ? mutable.is_cooked_food
+        : cookedFoodIgnoresStock(categoryName);
     const itemData = {
       ...mutable,
+      is_cooked_food: isCookedFood,
       min_order_quantity: resolveCookedFoodMinOrderQuantity({
         requestedMin:
           typeof mutable.min_order_quantity === 'number'
             ? mutable.min_order_quantity
             : null,
         categoryName,
+        isCookedFood,
       }),
       business_id: businessId,
       // Never allow clients to activate on create; moderation must approve first
@@ -239,6 +247,7 @@ export class ItemsService {
       shipping_price?: number | null;
       price?: number | null;
       export_available?: boolean | null;
+      is_cooked_food?: boolean | null;
       item_sub_category_id?: number | null;
       item_sub_category?: {
         item_category?: { name?: string | null } | null;
@@ -561,6 +570,7 @@ export class ItemsService {
     shipping_price?: number | null;
     price?: number | null;
     export_available?: boolean | null;
+    is_cooked_food?: boolean | null;
     item_sub_category_id?: number | null;
     item_sub_category?: {
       item_category?: { name?: string | null } | null;
@@ -576,6 +586,7 @@ export class ItemsService {
         shipping_price?: number | null;
         price?: number | null;
         export_available?: boolean | null;
+        is_cooked_food?: boolean | null;
         item_sub_category_id?: number | null;
         item_sub_category?: {
           item_category?: { name?: string | null } | null;
@@ -592,9 +603,14 @@ export class ItemsService {
     return item;
   }
 
+  /**
+   * Cooked-food flag is independent of category. Only write it when the client
+   * sends it; recategorize must not clear or set the flag.
+   */
   private async normalizeUpdatePayloadWithFoodMin(
     existing: {
       item_sub_category_id?: number | null;
+      is_cooked_food?: boolean | null;
       item_sub_category?: {
         item_category?: { name?: string | null } | null;
       } | null;
@@ -621,21 +637,47 @@ export class ItemsService {
       typeof withDescription.min_order_quantity === 'number'
         ? withDescription.min_order_quantity
         : null;
-    if (cookedFoodIgnoresStock(categoryName)) {
-      return { ...withDescription, min_order_quantity: 1 };
+    const explicitFlag = withDescription.is_cooked_food;
+    const hasExplicitFlag = typeof explicitFlag === 'boolean';
+    const isCookedFood = hasExplicitFlag
+      ? explicitFlag
+      : this.resolveExistingCookedFoodFlag(existing, categoryName);
+
+    if (!hasExplicitFlag) {
+      delete withDescription.is_cooked_food;
     }
+
+    if (cookedFoodIgnoresStock(categoryName, isCookedFood)) {
+      return {
+        ...withDescription,
+        ...(hasExplicitFlag ? { is_cooked_food: true } : {}),
+        min_order_quantity: 1,
+      };
+    }
+
     if (Object.prototype.hasOwnProperty.call(withDescription, 'min_order_quantity')) {
       return {
         ...withDescription,
         min_order_quantity: resolveCookedFoodMinOrderQuantity({
           requestedMin,
           categoryName,
+          isCookedFood,
         }),
       };
     }
     return withDescription;
   }
 
+  private resolveExistingCookedFoodFlag(
+    existing: {
+      is_cooked_food?: boolean | null;
+    },
+    categoryName?: string | null
+  ): boolean {
+    if (existing.is_cooked_food === true) return true;
+    if (existing.is_cooked_food === false) return false;
+    return cookedFoodIgnoresStock(categoryName);
+  }
   private async resolveCategoryNameForSubCategory(
     subCategoryId: unknown
   ): Promise<string | null> {

@@ -245,6 +245,8 @@ select_permissions:
         - pickup_reminder_last_sent_at
         - client_ready_nudge_sent_at
         - fulfillment_timing
+        - is_cooked_food_pickup
+        - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by
         - dispatch_round
@@ -347,6 +349,8 @@ select_permissions:
         - pickup_reminder_last_sent_at
         - client_ready_nudge_sent_at
         - fulfillment_timing
+        - is_cooked_food_pickup
+        - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by
         - dispatch_round
@@ -448,6 +452,8 @@ select_permissions:
         - pickup_reminder_last_sent_at
         - client_ready_nudge_sent_at
         - fulfillment_timing
+        - is_cooked_food_pickup
+        - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by
         - dispatch_round

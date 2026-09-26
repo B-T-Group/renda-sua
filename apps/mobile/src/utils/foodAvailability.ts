@@ -19,13 +19,25 @@ export function isFoodCategoryName(name?: string | null): boolean {
   return (name ?? '').trim() === FOOD_CATEGORY_NAME;
 }
 
-/** True when a catalog row is in the cooked-food category. */
+/** True when a catalog row is cooked food (flag preferred; category legacy). */
 export function isFoodCatalogItem(item: {
+  is_cooked_food?: boolean | null;
   item?: {
+    is_cooked_food?: boolean | null;
     item_sub_category?: { item_category?: { name?: string | null } | null } | null;
   } | null;
+  item_sub_category?: { item_category?: { name?: string | null } | null } | null;
 }): boolean {
-  return isFoodCategoryName(item.item?.item_sub_category?.item_category?.name);
+  if (item.is_cooked_food === true || item.item?.is_cooked_food === true) {
+    return true;
+  }
+  if (item.is_cooked_food === false || item.item?.is_cooked_food === false) {
+    return false;
+  }
+  return isFoodCategoryName(
+    item.item_sub_category?.item_category?.name ??
+      item.item?.item_sub_category?.item_category?.name
+  );
 }
 
 /** Drop grocery and general-marketplace rows from a Food-tab list. */

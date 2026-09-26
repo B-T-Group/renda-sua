@@ -37,6 +37,7 @@ import { DashboardComposingOverlay } from '../../components/feedback/DashboardCo
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
 import { ActiveOrdersCarousel } from '../../components/business/ActiveOrdersCarousel';
+import { CookedFoodStartCookingCarousel } from '../../components/business/CookedFoodStartCookingCarousel';
 import { ActiveOrderCtaHost } from '../../components/business/ActiveOrderCtaHost';
 import { MobilePaymentPhoneChooserSheet } from '../../components/dialogs/MobilePaymentPhoneChooserSheet';
 import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePaymentPhoneVerifyModal';
@@ -298,11 +299,17 @@ export function BusinessDashboardView({
 
         {/* —— Fulfillment: active orders first —— */}
         {!showSkeleton && fulfillmentMode ? (
-          <ActiveOrdersCarousel
-            orders={activeOrders}
-            onOpenOrder={onOpenActiveOrder}
-            onPressCta={onActiveOrderCta}
-          />
+          <>
+            <CookedFoodStartCookingCarousel
+              orders={activeOrders}
+              onOpenOrder={onOpenActiveOrder}
+            />
+            <ActiveOrdersCarousel
+              orders={activeOrders}
+              onOpenOrder={onOpenActiveOrder}
+              onPressCta={onActiveOrderCta}
+            />
+          </>
         ) : null}
 
         {/* —— Quiet / fulfillment operational pillars —— */}

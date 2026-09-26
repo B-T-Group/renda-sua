@@ -1,7 +1,12 @@
 /**
  * Maps product-order status × persona × fulfillment → phase, next step, primary CTA.
- * Keep in sync with mobile-rendasua/src/utils/orderPhase.ts
+ * Keep in sync with apps/mobile/src/utils/orderPhase.ts
  */
+
+import {
+  shouldUseCookedFoodConfirmModal,
+  type CookedFoodOrderLike,
+} from './cookedFoodOrder';
 
 export type OrderPhase =
   | 'pay'
@@ -51,6 +56,8 @@ export interface OrderPhaseInput {
   paymentMethod?: string | null;
   assignedAgentId?: string | null;
   reconciliationStatus?: string | null;
+  isCookedFoodPickup?: boolean | null;
+  payAfterMerchantConfirm?: boolean | null;
 }
 
 export interface OrderPhaseInfo {
@@ -108,10 +115,13 @@ function isPickupPinReady(input: OrderPhaseInput): boolean {
 }
 
 function readyPickupClientNextStepKey(input: OrderPhaseInput): string {
-  if (input.paymentTiming === 'pay_at_pickup') {
+  if (isPayAtPickupPending(input)) {
     return 'orders.nextStep.readyPickupPayAtPickupClient';
   }
-  return 'orders.nextStep.readyPickupClient';
+  if (isCookedFoodPickup(input)) {
+    return 'orders.nextStep.readyPickupCompleteClient';
+  }
+  return 'orders.nextStep.readyPickupCompleteOrderClient';
 }
 
 function isPayAtPickupPending(input: OrderPhaseInput): boolean {
@@ -120,11 +130,22 @@ function isPayAtPickupPending(input: OrderPhaseInput): boolean {
   return payment !== 'paid' && payment !== 'authorized';
 }
 
+function isCookedFoodPickup(input: OrderPhaseInput): boolean {
+  return input.isCookedFoodPickup === true;
+}
+
+function isCookedFoodAwaitingPayment(input: OrderPhaseInput): boolean {
+  if (!isCookedFoodPickup(input)) return false;
+  if (input.payAfterMerchantConfirm !== true) return false;
+  const payment = input.paymentStatus;
+  return payment !== 'paid' && payment !== 'authorized';
+}
+
 function readyPickupBusinessNextStepKey(input: OrderPhaseInput): string {
-  if (input.paymentTiming === 'pay_at_pickup') {
+  if (isPayAtPickupPending(input)) {
     return 'orders.nextStep.readyPickupWaitClientPayBusiness';
   }
-  return 'orders.nextStep.readyPickupBusiness';
+  return 'orders.nextStep.readyPickupAskClientCompleteBusiness';
 }
 
 function resolvePhase(input: OrderPhaseInput): OrderPhase {
@@ -177,6 +198,12 @@ function nextStepKeyFor(
         : null;
   }
   if (phase === 'prepare') {
+    if (isCookedFoodAwaitingPayment(input) && role === 'business') {
+      return 'orders.nextStep.cookedFoodWaitPaymentBusiness';
+    }
+    if (isCookedFoodAwaitingPayment(input) && role === 'client') {
+      return 'orders.nextStep.cookedFoodWaitPaymentClient';
+    }
     return role === 'client'
       ? 'orders.nextStep.prepareClient'
       : role === 'business'
@@ -258,10 +285,13 @@ function hubGroupFor(
   }
 
   if (role === 'business') {
+    if (phase === 'prepare' && isCookedFoodAwaitingPayment(input)) {
+      return 'waiting';
+    }
     if (
       phase === 'confirm' ||
       phase === 'prepare' ||
-      (phase === 'ready' && isPickup(input)) ||
+      (phase === 'ready' && isPickup(input) && !isCookedFoodPickup(input)) ||
       input.reconciliationStatus === 'pending_manual_reconciliation' ||
       input.status === 'refund_requested'
     ) {
@@ -307,8 +337,17 @@ function primaryActionFor(
 
   if (role === 'client') {
     if (phase === 'pay') return 'pay';
-    if (phase === 'ready' && pickup && isPayAtPickupPending(input)) return 'pay';
-    if (phase === 'ready' && pickup && isPickupPinReady(input)) return 'send_pin';
+    if (isCookedFoodAwaitingPayment(input)) return 'pay';
+    if (phase === 'ready' && pickup && isPayAtPickupPending(input)) {
+      return 'complete';
+    }
+    if (
+      phase === 'ready' &&
+      pickup &&
+      (input.paymentStatus === 'authorized' || input.paymentStatus === 'paid')
+    ) {
+      return 'complete';
+    }
     if (s === 'out_for_delivery' && isPinEligible(input)) return 'send_pin';
     if (s === 'delivered') return 'complete';
     if (s === 'complete') return 'rate';
@@ -318,17 +357,13 @@ function primaryActionFor(
   if (role === 'business') {
     if (s === 'refund_requested') return 'open_refunds';
     if (phase === 'confirm') return 'confirm';
-    if (phase === 'prepare') return 'mark_ready';
+    if (phase === 'prepare') {
+      if (isCookedFoodAwaitingPayment(input)) return 'none';
+      return 'mark_ready';
+    }
     if (phase === 'ready' && pickup) {
-      if (isPayAtPickupPending(input)) {
-        return 'collect_pickup_payment';
-      }
-      if (
-        input.paymentTiming !== 'pay_at_pickup' &&
-        (input.paymentStatus === 'authorized' || input.paymentStatus === 'paid')
-      ) {
-        return 'confirm_pickup';
-      }
+      // Client taps Complete; merchant asks them to do that so payouts release.
+      return 'none';
     }
     if (s === 'out_for_delivery') return 'generate_overwrite';
     if (s === 'delivered') return 'complete';
@@ -433,8 +468,7 @@ export const ORDER_PRIMARY_ACTION_LABEL: Record<
   none: ['orders.actions.none', ''],
 };
 
-/** Build OrderPhaseInput from a typical order-shaped object. */
-export function orderToPhaseInput(order: {
+export type OrderPhaseSource = CookedFoodOrderLike & {
   current_status?: string | null;
   fulfillment_method?: string | null;
   payment_timing?: string | null;
@@ -442,7 +476,14 @@ export function orderToPhaseInput(order: {
   payment_method?: string | null;
   assigned_agent_id?: string | null;
   reconciliation_status?: string | null;
-}): OrderPhaseInput {
+  is_cooked_food_pickup?: boolean | null;
+  pay_after_merchant_confirm?: boolean | null;
+};
+
+/** Build OrderPhaseInput from a typical order-shaped object. */
+export function orderToPhaseInput(order: OrderPhaseSource): OrderPhaseInput {
+  const isCookedFoodPickup =
+    order.is_cooked_food_pickup ?? shouldUseCookedFoodConfirmModal(order);
   return {
     status: order.current_status,
     fulfillmentMethod: order.fulfillment_method,
@@ -451,5 +492,7 @@ export function orderToPhaseInput(order: {
     paymentMethod: order.payment_method,
     assignedAgentId: order.assigned_agent_id,
     reconciliationStatus: order.reconciliation_status,
+    isCookedFoodPickup,
+    payAfterMerchantConfirm: order.pay_after_merchant_confirm,
   };
 }

@@ -32,6 +32,9 @@ export const GET_ORDERS = gql`
       fulfillment_timing
       promised_ready_at
       promised_fulfill_by
+      estimated_prep_minutes
+      is_cooked_food_pickup
+      pay_after_merchant_confirm
       shipping_tracking_number
       shipping_carrier
       shipped_at
@@ -114,6 +117,7 @@ export const GET_ORDERS = gql`
           weight
           weight_unit
           dimensions
+          is_cooked_food
           brand {
             id
             name
@@ -229,6 +233,9 @@ export const GET_ORDER_BY_ID = gql`
       fulfillment_timing
       promised_ready_at
       promised_fulfill_by
+      estimated_prep_minutes
+      is_cooked_food_pickup
+      pay_after_merchant_confirm
       shipping_tracking_number
       shipping_carrier
       shipped_at
@@ -337,6 +344,7 @@ export const GET_ORDER_BY_ID = gql`
           weight
           weight_unit
           dimensions
+          is_cooked_food
           brand {
             id
             name

@@ -381,6 +381,12 @@ export class CheckoutGroupDto {
     description: 'True when the client must pick a future slot (store closed or closing soon).',
   })
   schedule_required?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'False when this group contains cooked food. Cooked food is ASAP-only; scheduling is disabled.',
+  })
+  schedule_allowed?: boolean;
 }
 
 export class PayerChargeEstimateDto {
@@ -590,6 +596,12 @@ export class CheckoutPreflightResponseDto {
     description: 'True when checkout must collect a future slot.',
   })
   schedule_required?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'False when the cart includes cooked food. Cooked food is ASAP-only.',
+  })
+  schedule_allowed?: boolean;
 
   @ApiPropertyOptional({
     type: CheckoutDiasporaDto,

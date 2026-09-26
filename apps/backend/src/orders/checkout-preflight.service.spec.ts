@@ -129,6 +129,7 @@ function makeFoodInventoryRow(overrides: {
     ],
     item: {
       ...row.item,
+      is_cooked_food: true,
       item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
     },
   };
@@ -1228,6 +1229,42 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0]?.deposit_required).toBe(true);
       expect(result.groups[0]?.deposit_amount).toBe(500); // 5% of 10000 XAF
       expect(result.groups[0]?.amount_due).toBe(9500);
+    });
+
+    it('skips deposit for cooked-food MoMo pickup (pay-after-confirm)', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-08-24T12:00:00.000Z'));
+      try {
+        const row = makeFoodInventoryRow({ id: 'inv-1', itemName: 'Griot' });
+        row.selling_price = 10000;
+        row.item = {
+          ...row.item,
+          pay_at_pickup_enabled: true,
+          is_cooked_food: true,
+          currency: 'XAF',
+        };
+        mockInventory([row]);
+        paymentRoutingService.resolveRailForUser.mockResolvedValue({
+          rail: 'mobile_money',
+          source: 'seller',
+        } as any);
+
+        const result = await service.resolve(
+          {
+            items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+            provisional_country: 'CM',
+            fulfillment_method: 'pickup',
+            payment_timing: 'pay_at_pickup',
+          },
+          false
+        );
+
+        expect(result.can_proceed).toBe(true);
+        expect(result.groups[0]?.deposit_required).toBeUndefined();
+        expect(result.groups[0]?.deposit_amount).toBeUndefined();
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('does NOT calculate deposit for pay_now timing', async () => {

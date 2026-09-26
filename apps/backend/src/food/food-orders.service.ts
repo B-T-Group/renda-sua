@@ -13,6 +13,7 @@ const GET_ORDER_ITEMS_FOR_STOCK = `
         item_id
         business_location_id
         item {
+          is_cooked_food
           item_sub_category {
             item_category { name }
           }
@@ -52,6 +53,7 @@ interface OrderItemStockRow {
     item_id: string;
     business_location_id: string;
     item?: {
+      is_cooked_food?: boolean | null;
       item_sub_category?: {
         item_category?: { name?: string | null } | null;
       } | null;
@@ -102,8 +104,11 @@ export class FoodOrdersService {
   }
 
   private isFoodRow(row: OrderItemStockRow): boolean {
+    const item = row.business_inventory?.item;
+    if (item?.is_cooked_food === true) return true;
+    if (item?.is_cooked_food === false) return false;
     return isFoodCategoryName(
-      row.business_inventory?.item?.item_sub_category?.item_category?.name
+      item?.item_sub_category?.item_category?.name
     );
   }
 

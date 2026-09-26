@@ -1545,6 +1545,7 @@ export default function PlaceOrderScreen() {
             enabled={Boolean(selectedAddress.country?.trim() && selectedAddress.state?.trim())}
             businessLocationId={item.business_location?.id ?? ''}
             scheduleRequired={!!preflightConfig?.schedule_required}
+            allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1564,6 +1565,7 @@ export default function PlaceOrderScreen() {
             fulfillment="pickup"
             businessLocationId={item.business_location?.id ?? ''}
             scheduleRequired={!!preflightConfig?.schedule_required}
+            allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}

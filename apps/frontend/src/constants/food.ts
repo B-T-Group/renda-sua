@@ -16,13 +16,28 @@ export function isFoodCategoryName(name?: string | null): boolean {
 }
 
 export type FoodCatalogRow = {
+  is_cooked_food?: boolean | null;
   item_sub_category?: { item_category?: { name?: string | null } | null } | null;
   item?: {
+    is_cooked_food?: boolean | null;
     item_sub_category?: { item_category?: { name?: string | null } | null } | null;
   } | null;
 };
 
+export function everyLineIsCookedFood(
+  lines: Array<{ is_cooked_food?: boolean | null } | null | undefined>
+): boolean {
+  if (!lines.length) return false;
+  return lines.every((line) => line?.is_cooked_food === true);
+}
+
 export function isFoodCatalogItem(item: FoodCatalogRow): boolean {
+  if (item.is_cooked_food === true || item.item?.is_cooked_food === true) {
+    return true;
+  }
+  if (item.is_cooked_food === false || item.item?.is_cooked_food === false) {
+    return false;
+  }
   const name =
     item.item_sub_category?.item_category?.name ??
     item.item?.item_sub_category?.item_category?.name;

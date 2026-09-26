@@ -18,7 +18,7 @@ import {
   Alert,
   Stack,
 } from '@mui/material';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { Country } from 'react-phone-number-input';
 import {
   getCountryCallingCode,
@@ -38,6 +38,11 @@ import {
 } from '../../utils/orderUtils';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
+import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrderModal';
+import {
+  isCookedFoodAwaitingClientPayment,
+  shouldUseCookedFoodConfirmModal,
+} from '../../utils/cookedFoodOrder';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 
@@ -133,8 +138,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     completePreparation,
     markOrderAsShipped,
     completeOrder,
-    confirmClientPickup,
-    getActiveDeliveryPin,
     generateDeliveryOverwriteCode,
     reconcileCashException,
   } = useBackendOrders();
@@ -142,6 +145,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [loading, setLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [cookedFoodConfirmOpen, setCookedFoodConfirmOpen] = useState(false);
   const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
   const [reconcileNationalDigits, setReconcileNationalDigits] = useState('');
   const [reconcileReference, setReconcileReference] = useState('');
@@ -193,19 +197,25 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   };
 
   const handleConfirmOrder = () => {
+    if (shouldUseCookedFoodConfirmModal(order)) {
+      setCookedFoodConfirmOpen(true);
+      return;
+    }
     setConfirmModalOpen(true);
   };
 
   const handleConfirmOrderSuccess = async (data: ConfirmOrderData) => {
     setLoading(true);
     try {
-      await confirmOrder(data);
+      const result = await confirmOrder(data);
       onShowNotification?.(
-        t('messages.orderConfirmSuccess', 'Order confirmed successfully'),
+        result.message ||
+          t('messages.orderConfirmSuccess', 'Order confirmed successfully'),
         'success'
       );
       onActionComplete?.();
       setConfirmModalOpen(false);
+      return result;
     } finally {
       setLoading(false);
     }
@@ -280,82 +290,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [overwriteCodeDialogOpen, setOverwriteCodeDialogOpen] = useState(false);
   const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
   const [pickupPaymentDialogOpen, setPickupPaymentDialogOpen] = useState(false);
-  const [confirmPickupDialogOpen, setConfirmPickupDialogOpen] = useState(false);
-  const [pickupPin, setPickupPin] = useState('');
-  const [pickupPinError, setPickupPinError] = useState<string | null>(null);
-  const [pickupPinMessageId, setPickupPinMessageId] = useState<string | null>(
-    null
-  );
-  const [resolvingPickupPin, setResolvingPickupPin] = useState(false);
-  const [showManualPickupPin, setShowManualPickupPin] = useState(false);
-
-  useEffect(() => {
-    if (!confirmPickupDialogOpen) return;
-    setPickupPin('');
-    setPickupPinError(null);
-    setPickupPinMessageId(null);
-    setShowManualPickupPin(false);
-    let cancelled = false;
-    (async () => {
-      setResolvingPickupPin(true);
-      try {
-        const active = await getActiveDeliveryPin(order.id);
-        if (cancelled) return;
-        if (active?.pin) {
-          setPickupPin(active.pin);
-          setPickupPinMessageId(active.messageId);
-        } else {
-          setShowManualPickupPin(true);
-        }
-      } catch {
-        if (!cancelled) setShowManualPickupPin(true);
-      } finally {
-        if (!cancelled) setResolvingPickupPin(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [confirmPickupDialogOpen, getActiveDeliveryPin, order.id]);
-
-  const handleConfirmClientPickup = async () => {
-    const pin = pickupPin.trim();
-    const useShared = !!pickupPinMessageId && !showManualPickupPin;
-    if (!useShared && !/^\d{4}$/.test(pin)) {
-      setPickupPinError(
-        t('orders.pickup.pinRequired', 'Enter the 4-digit pickup PIN from the client.')
-      );
-      return;
-    }
-    setLoading(true);
-    setPickupPinError(null);
-    try {
-      await confirmClientPickup(order.id, useShared ? '' : pin, {
-        useLatestSharedPin: useShared,
-        pinMessageId: useShared ? pickupPinMessageId ?? undefined : undefined,
-      });
-      onShowNotification?.(
-        t(
-          'orders.pickup.confirmPickupSuccess',
-          'Pickup confirmed. The order is complete.'
-        ),
-        'success'
-      );
-      setConfirmPickupDialogOpen(false);
-      setPickupPin('');
-      setPickupPinMessageId(null);
-      onActionComplete?.();
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : t('orders.pickup.confirmPickupError', 'Failed to confirm pickup');
-      setPickupPinError(errorMessage);
-      onShowNotification?.(errorMessage, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGenerateOverwriteCode = async () => {
     setLoading(true);
@@ -472,6 +406,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       case 'confirmed':
       case 'preparing':
       case 'awaiting_shipment':
+        if (
+          isCookedFoodAwaitingClientPayment(order) &&
+          ['confirmed', 'preparing'].includes(order.current_status || '')
+        ) {
+          break;
+        }
         if (order.fulfillment_method === 'shipping') {
           actions.push({
             label: t('orderActions.markAsShipped', 'Mark as shipped'),
@@ -533,19 +473,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             action: () => setPickupPaymentDialogOpen(true),
             color: 'primary' as const,
             icon: <PaymentsOutlined />,
-          });
-        }
-        if (
-          order.fulfillment_method === 'pickup' &&
-          order.payment_timing !== 'pay_at_pickup' &&
-          (order.payment_status === 'authorized' ||
-            order.payment_status === 'paid')
-        ) {
-          actions.push({
-            label: t('orderActions.confirmClientPickup', 'Confirm pickup'),
-            action: () => setConfirmPickupDialogOpen(true),
-            color: 'success' as const,
-            icon: <CheckCircle />,
           });
         }
         break;
@@ -676,6 +603,14 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         loading={loading}
       />
 
+      <CookedFoodConfirmOrderModal
+        open={cookedFoodConfirmOpen}
+        order={order}
+        onClose={() => setCookedFoodConfirmOpen(false)}
+        onConfirm={handleConfirmOrderSuccess}
+        loading={loading}
+      />
+
       {/* Overwrite code dialog */}
       <Dialog
         open={overwriteCodeDialogOpen}
@@ -718,107 +653,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             }}
           >
             {t('common.close', 'Close')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={confirmPickupDialogOpen}
-        onClose={() => {
-          if (!loading) {
-            setConfirmPickupDialogOpen(false);
-            setPickupPin('');
-            setPickupPinError(null);
-          }
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          {t('orders.pickup.confirmPickupPinTitle', 'Confirm pickup with PIN')}
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ mb: 2 }}>
-            {t(
-              'orders.pickup.confirmPickupPinBody',
-              'Ask the customer to send their pickup PIN in the order chat, or enter it manually. Confirming will capture the authorized card payment and complete the order.'
-            )}
-          </Typography>
-          {resolvingPickupPin ? (
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              {t(
-                'orders.pickup.resolvingPin',
-                'Looking for shared pickup PIN…'
-              )}
-            </Typography>
-          ) : null}
-          {pickupPinMessageId && !showManualPickupPin && !resolvingPickupPin ? (
-            <Stack spacing={1} sx={{ mb: 2 }}>
-              <Typography color="text.secondary">
-                {t(
-                  'orders.pickup.usingSharedPin',
-                  'Using the pickup PIN shared by the client in order chat.'
-                )}
-              </Typography>
-              <Typography
-                variant="h4"
-                align="center"
-                sx={{ letterSpacing: 8, fontFamily: 'monospace', fontWeight: 700 }}
-              >
-                {pickupPin}
-              </Typography>
-              <Button size="small" onClick={() => setShowManualPickupPin(true)}>
-                {t('orders.pickup.enterManually', 'Enter PIN manually instead')}
-              </Button>
-            </Stack>
-          ) : null}
-          {(showManualPickupPin || !pickupPinMessageId) &&
-          !resolvingPickupPin ? (
-            <TextField
-              autoFocus
-              fullWidth
-              label={t('orders.pickup.pinLabel', 'Pickup PIN')}
-              value={pickupPin}
-              onChange={(e) => {
-                setPickupPin(e.target.value.replace(/\D/g, '').slice(0, 4));
-                setPickupPinError(null);
-                setPickupPinMessageId(null);
-              }}
-              inputProps={{ inputMode: 'numeric', maxLength: 4 }}
-              error={!!pickupPinError}
-              helperText={pickupPinError}
-            />
-          ) : pickupPinError ? (
-            <Alert severity="error" sx={{ mt: 1 }}>
-              {pickupPinError}
-            </Alert>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setConfirmPickupDialogOpen(false);
-              setPickupPin('');
-              setPickupPinError(null);
-              setPickupPinMessageId(null);
-            }}
-            disabled={loading}
-          >
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            disabled={
-              loading ||
-              resolvingPickupPin ||
-              (!(pickupPinMessageId && !showManualPickupPin) &&
-                pickupPin.length !== 4)
-            }
-            startIcon={loading ? <CircularProgress size={16} /> : <CheckCircle />}
-            onClick={() => void handleConfirmClientPickup()}
-          >
-            {t('orderActions.confirmClientPickup', 'Confirm pickup')}
           </Button>
         </DialogActions>
       </Dialog>

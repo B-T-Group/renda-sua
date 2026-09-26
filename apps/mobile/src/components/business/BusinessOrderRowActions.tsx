@@ -17,6 +17,8 @@ import {
 } from '../../utils/businessOrderActions';
 import { BusinessCancelOrderDialog } from './BusinessCancelOrderDialog';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
+import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
+import { shouldUseCookedFoodConfirmModal } from '../../utils/cookedFoodOrder';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
@@ -70,6 +72,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
   const actions = getBusinessOrderActions(order, { mode });
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cookedConfirmOpen, setCookedConfirmOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [pickupPinOpen, setPickupPinOpen] = useState(false);
@@ -118,7 +121,11 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
   const handlePress = useCallback(
     (actionId: BusinessOrderActionId, destructive?: boolean) => {
       if (actionId === 'confirm') {
-        setConfirmOpen(true);
+        if (shouldUseCookedFoodConfirmModal(order)) {
+          setCookedConfirmOpen(true);
+        } else {
+          setConfirmOpen(true);
+        }
         return;
       }
       if (actionId === 'cancel') {
@@ -297,6 +304,12 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         visible={confirmOpen}
         order={order}
         onDismiss={() => setConfirmOpen(false)}
+        onConfirm={confirmOrder}
+      />
+      <CookedFoodConfirmOrderDialog
+        visible={cookedConfirmOpen}
+        order={order}
+        onDismiss={() => setCookedConfirmOpen(false)}
         onConfirm={confirmOrder}
       />
       <BusinessMarkShippedSheet

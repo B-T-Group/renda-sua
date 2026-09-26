@@ -52,6 +52,7 @@ import {
   type OrderHubFilter,
 } from '../../utils/orderPhase';
 import AddressAlert from '../common/AddressAlert';
+import { CookedFoodStartCookingStrip } from '../business/food/CookedFoodStartCookingStrip';
 import OrdersGroupedList from '../orders/OrdersGroupedList';
 import PersonaOrderCard from '../orders/PersonaOrderCard';
 import { getOrderStatusBoxColor } from '../orders/shared';
@@ -545,6 +546,9 @@ const OrdersPage: React.FC = () => {
 
           {/* Address Alert - Only for clients */}
           {isOrdersClient && <AddressAlert />}
+          {isOrdersBusiness && !loading ? (
+            <CookedFoodStartCookingStrip orders={orders ?? []} />
+          ) : null}
         </Box>
 
         {/* Stats Cards */}

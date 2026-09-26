@@ -48,11 +48,18 @@ export interface NotificationData {
   fulfillmentTiming?: 'asap' | 'scheduled' | string | null;
   /** pay_now | pay_at_delivery | pay_at_pickup */
   paymentTiming?: string | null;
+  /** pending | paid | authorized | … */
+  paymentStatus?: string | null;
   /** Seconds the merchant has to confirm before acceptance escalate/grace */
   acceptanceTimeoutSeconds?: number;
   /** asap = interrupt push; scheduled = soft notify (no SLA yet) */
   acceptanceMode?: 'asap' | 'scheduled';
   acceptanceActivatesAt?: string;
+  /** Cooked-food ASAP pickup: merchant ready-in minutes after confirm */
+  readyInMinutes?: number | null;
+  isCookedFoodPickup?: boolean | null;
+  /** MoMo cooked-food: client pays after merchant confirm */
+  payAfterMerchantConfirm?: boolean | null;
 }
 
 export interface RentalPeriodEndedEmailPayload {

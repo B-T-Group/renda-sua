@@ -708,6 +708,11 @@ const CheckoutPage: React.FC = () => {
 
   // Store pickup is offered only when every seller group supports it.
   const preflightGroups = checkoutPreflight?.groups ?? [];
+  const cookedFoodAsapOnly = checkoutPreflight?.schedule_allowed === false;
+
+  useEffect(() => {
+    if (cookedFoodAsapOnly) setDeliveryWindow(null);
+  }, [cookedFoodAsapOnly]);
   const pickupEligible =
     preflightGroups.length > 0 &&
     preflightGroups.every((g) => g.pickup_eligible === true);
@@ -1042,7 +1047,7 @@ const CheckoutPage: React.FC = () => {
         isPickup ? false : requiresFastDelivery,
         fastDeliveryFee,
         paymentTiming,
-        deliveryWindow
+        deliveryWindow && !cookedFoodAsapOnly
           ? {
               slot_id: deliveryWindow.slot_id,
               preferred_date: deliveryWindow.preferred_date,
@@ -1377,15 +1382,24 @@ const CheckoutPage: React.FC = () => {
                       />
                     )}
 
-                  {/* Delivery Time Window */}
-                  <DeliveryTimeWindowSelector
-                    countryCode={selectedAddress?.country || 'GA'}
-                    stateCode={selectedAddress?.state}
-                    onChange={handleDeliveryWindowChange}
-                    isFastDelivery={requiresFastDelivery}
-                    loading={checkoutLoading}
-                    businessLocationId={cartItems[0]?.businessLocationId}
-                  />
+                  {/* Delivery Time Window — cooked food is ASAP-only */}
+                  {cookedFoodAsapOnly ? (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      {t(
+                        'orders.deliveryTimeWindow.cookedFoodAsapOnly',
+                        'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
+                      )}
+                    </Alert>
+                  ) : (
+                    <DeliveryTimeWindowSelector
+                      countryCode={selectedAddress?.country || 'GA'}
+                      stateCode={selectedAddress?.state}
+                      onChange={handleDeliveryWindowChange}
+                      isFastDelivery={requiresFastDelivery}
+                      loading={checkoutLoading}
+                      businessLocationId={cartItems[0]?.businessLocationId}
+                    />
+                  )}
                 </>
               )}
 
@@ -1397,18 +1411,27 @@ const CheckoutPage: React.FC = () => {
                       'When will you pick up your order?'
                     )}
                   </Typography>
-                  <DeliveryTimeWindowSelector
-                    countryCode={preflightGroups[0]?.seller_country || 'GA'}
-                    stateCode={preflightGroups[0]?.seller_state}
-                    onChange={handleDeliveryWindowChange}
-                    loading={checkoutLoading}
-                    shouldFetchNextAvailable={true}
-                    fulfillment="pickup"
-                    businessLocationId={
-                      preflightGroups[0]?.business_location_id ||
-                      cartItems[0]?.businessLocationId
-                    }
-                  />
+                  {cookedFoodAsapOnly ? (
+                    <Alert severity="info">
+                      {t(
+                        'orders.deliveryTimeWindow.cookedFoodAsapOnlyPickup',
+                        'Cooked food is ASAP only. Pick up as soon as the kitchen marks it ready.'
+                      )}
+                    </Alert>
+                  ) : (
+                    <DeliveryTimeWindowSelector
+                      countryCode={preflightGroups[0]?.seller_country || 'GA'}
+                      stateCode={preflightGroups[0]?.seller_state}
+                      onChange={handleDeliveryWindowChange}
+                      loading={checkoutLoading}
+                      shouldFetchNextAvailable={true}
+                      fulfillment="pickup"
+                      businessLocationId={
+                        preflightGroups[0]?.business_location_id ||
+                        cartItems[0]?.businessLocationId
+                      }
+                    />
+                  )}
                 </Box>
               )}
             </CardContent>

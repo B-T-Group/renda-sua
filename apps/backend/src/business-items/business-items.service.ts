@@ -68,6 +68,7 @@ const GET_ITEMS = `
       max_delivery_distance
       estimated_delivery_time
       preparation_minutes
+      is_cooked_food
       min_order_quantity
       max_order_quantity
       is_active
@@ -328,6 +329,7 @@ const GET_SINGLE_ITEM = `
       max_delivery_distance
       estimated_delivery_time
       preparation_minutes
+      is_cooked_food
       min_order_quantity
       max_order_quantity
       is_active
@@ -571,6 +573,7 @@ const GET_AVAILABLE_ITEMS = `
       max_delivery_distance
       estimated_delivery_time
       preparation_minutes
+      is_cooked_food
       min_order_quantity
       max_order_quantity
       is_active

@@ -13,6 +13,8 @@ export interface PlaceOrderDeliveryWindowBlockProps {
   fulfillment?: 'delivery' | 'pickup';
   businessLocationId?: string;
   scheduleRequired?: boolean;
+  /** When false, hide schedule link (cooked food is ASAP-only). */
+  allowSchedule?: boolean;
   estimatedReadyAt?: string | null;
   estimatedFulfillBy?: string | null;
   opensAt?: string | null;
@@ -27,6 +29,7 @@ export function PlaceOrderDeliveryWindowBlock({
   fulfillment = 'delivery',
   businessLocationId,
   scheduleRequired = false,
+  allowSchedule = true,
   estimatedReadyAt,
   estimatedFulfillBy,
   opensAt,
@@ -36,20 +39,29 @@ export function PlaceOrderDeliveryWindowBlock({
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const isPickup = fulfillment === 'pickup';
-  const [scheduling, setScheduling] = useState(scheduleRequired);
-  const prevScheduleRequired = useRef(scheduleRequired);
-  const showPicker = scheduleRequired || scheduling;
+  const effectiveScheduleRequired = allowSchedule && scheduleRequired;
+  const [scheduling, setScheduling] = useState(effectiveScheduleRequired);
+  const prevScheduleRequired = useRef(effectiveScheduleRequired);
+  const showPicker = effectiveScheduleRequired || (allowSchedule && scheduling);
 
   useEffect(() => {
-    if (scheduleRequired) {
+    if (!allowSchedule) {
+      setScheduling(false);
+      onCommit(null);
+      onReadyChange(true);
+    }
+  }, [allowSchedule]);
+
+  useEffect(() => {
+    if (effectiveScheduleRequired) {
       setScheduling(true);
     } else if (prevScheduleRequired.current) {
       setScheduling(false);
       onCommit(null);
       onReadyChange(true);
     }
-    prevScheduleRequired.current = scheduleRequired;
-  }, [scheduleRequired]);
+    prevScheduleRequired.current = effectiveScheduleRequired;
+  }, [effectiveScheduleRequired]);
 
   useEffect(() => {
     if (!enabled || showPicker) return;
@@ -69,6 +81,15 @@ export function PlaceOrderDeliveryWindowBlock({
         'client.placeOrder.deliveryWindow.storeClosedDelivery',
         'This store is closed. Select a future delivery date below.'
       );
+  const cookedFoodAsapCopy = isPickup
+    ? t(
+        'client.placeOrder.deliveryWindow.cookedFoodAsapPickup',
+        'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
+      )
+    : t(
+        'client.placeOrder.deliveryWindow.cookedFoodAsapDelivery',
+        'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
+      );
 
   return (
     <View
@@ -82,7 +103,7 @@ export function PlaceOrderDeliveryWindowBlock({
         },
       ]}
     >
-      {scheduleRequired ? (
+      {effectiveScheduleRequired ? (
         <View style={{ marginBottom: spacing.sm }}>
           <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '600' }}>
             {closedCopy}
@@ -103,14 +124,16 @@ export function PlaceOrderDeliveryWindowBlock({
               : t('client.placeOrder.deliveryWindow.asapTitle', 'Deliver as soon as possible')}
           </Text>
           <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs, lineHeight: 20 }}>
-            {etaLabel
-              ? t('client.placeOrder.deliveryWindow.asapEta', 'Usually ready {{eta}}', {
-                  eta: etaLabel,
-                })
-              : t(
-                  'client.placeOrder.deliveryWindow.asapSubtitle',
-                  'We’ll start preparing as soon as the store confirms.'
-                )}
+            {!allowSchedule
+              ? cookedFoodAsapCopy
+              : etaLabel
+                ? t('client.placeOrder.deliveryWindow.asapEta', 'Usually ready {{eta}}', {
+                    eta: etaLabel,
+                  })
+                : t(
+                    'client.placeOrder.deliveryWindow.asapSubtitle',
+                    'We’ll start preparing as soon as the store confirms.'
+                  )}
           </Text>
         </View>
       )}
@@ -127,7 +150,7 @@ export function PlaceOrderDeliveryWindowBlock({
         />
       ) : null}
 
-      {scheduleRequired ? null : (
+      {allowSchedule && !effectiveScheduleRequired ? (
         <Button
           mode="text"
           compact
@@ -156,7 +179,7 @@ export function PlaceOrderDeliveryWindowBlock({
                   'Schedule delivery for a future date'
                 )}
         </Button>
-      )}
+      ) : null}
     </View>
   );
 }

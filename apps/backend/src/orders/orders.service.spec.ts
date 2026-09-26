@@ -417,6 +417,24 @@ describe('OrdersService', () => {
           useValue: { applyConfirmationUpdates: jest.fn() },
         },
         {
+          provide: require('./cooked-food-pickup-flow.service')
+            .CookedFoodPickupFlowService,
+          useValue: {
+            isCookedFoodPickupCohort: jest.fn().mockReturnValue(false),
+            isPayAfterMerchantConfirm: jest.fn().mockReturnValue(false),
+            normalizeReadyInMinutes: jest.fn((n: number) => n ?? 30),
+            writeEstimatedPrepMinutes: jest.fn(),
+            clearEstimatedPrepMinutes: jest.fn(),
+            clearPromisedReady: jest.fn(),
+            enterPreparingAndScheduleReady: jest.fn(),
+            scheduleUnpaidCancelAfterConfirm: jest.fn(),
+            scheduleAutoMarkReady: jest.fn(),
+            remainingReadySeconds: jest.fn().mockReturnValue(1800),
+            readySecondsFromEstimatedPrep: jest.fn().mockReturnValue(1800),
+            shouldSkipMarkReadyPrompt: jest.fn().mockReturnValue(false),
+          },
+        },
+        {
           provide: require('./deposit-calculation.service').DepositCalculationService,
           useValue: {
             calculateDeposit: jest.fn().mockReturnValue({
@@ -2179,6 +2197,58 @@ describe('OrdersService', () => {
       updateOrderHoldSpy.mockRestore();
     });
 
+    it('finalizeClientOrderPayment skips pickup PIN for store pickup', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' });
+      jest
+        .spyOn(service as any, 'markOrderPaidAfterPaymentFinalize')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'setOrderDeliveryPinHash')
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          payment_status: 'pending',
+          fulfillment_method: 'pickup',
+          subtotal: 5000,
+          total_amount: 5000,
+          base_delivery_fee: 0,
+          per_km_delivery_fee: 0,
+        },
+        'account-1',
+        { skipOrderPlacedNotifications: true }
+      );
+
+      expect(
+        (service as any).deliveryPinService.generatePin
+      ).not.toHaveBeenCalled();
+      expect(
+        (service as any).setOrderDeliveryPinHash
+      ).not.toHaveBeenCalled();
+    });
+
+    it('assertPayAfterPaidBeforeReady blocks unpaid pay-after orders', () => {
+      expect(() =>
+        (service as any).assertPayAfterPaidBeforeReady({
+          pay_after_merchant_confirm: true,
+          payment_status: 'pending',
+        })
+      ).toThrow(/payment/i);
+
+      expect(() =>
+        (service as any).assertPayAfterPaidBeforeReady({
+          pay_after_merchant_confirm: true,
+          payment_status: 'paid',
+        })
+      ).not.toThrow();
+    });
+
     it('finalizePayAtDeliveryPaymentAndComplete settles the post-credit total', async () => {
       const updateOrderHoldSpy = jest
         .spyOn(service, 'updateOrderHold')
@@ -3179,6 +3249,93 @@ describe('OrdersService', () => {
       expect(
         (service as any).depositRefundService.forfeitDeposit
       ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('processOrderPayment pay-after-confirm settlement', () => {
+    const paidPickupOrder = {
+      id: 'order-123',
+      order_number: 'ORD-COOKED-1',
+      current_status: 'ready_for_pickup',
+      currency: 'XAF',
+      client_id: 'client-123',
+      fulfillment_method: 'pickup',
+      payment_timing: 'pay_at_pickup',
+      payment_status: 'paid',
+      business: { user_id: 'biz-user-1' },
+      client: { user_id: 'client-456' },
+    };
+
+    beforeEach(() => {
+      jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 5000,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'client-account-1',
+        available_balance: 0,
+      });
+      (
+        service as any
+      ).commissionsService.distributeItemCommissions = jest
+        .fn()
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'releasePaidDepositHoldIfNeeded')
+        .mockResolvedValue(undefined);
+    });
+
+    it('releases hold then pays when pay_after_merchant_confirm despite pay_at_pickup', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...paidPickupOrder,
+          pay_after_merchant_confirm: true,
+        },
+      });
+
+      await service.processOrderPayment('order-123');
+
+      expect(accountsService.registerTransaction).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'release',
+        })
+      );
+      expect(accountsService.registerTransaction).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+      expect(
+        (service as any).releasePaidDepositHoldIfNeeded
+      ).not.toHaveBeenCalled();
+    });
+
+    it('uses classic pay_at_pickup debit when pay_after_merchant_confirm is false', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...paidPickupOrder,
+          pay_after_merchant_confirm: false,
+        },
+      });
+
+      await service.processOrderPayment('order-123');
+
+      expect(
+        (service as any).releasePaidDepositHoldIfNeeded
+      ).toHaveBeenCalled();
+      expect(accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
     });
   });
 });

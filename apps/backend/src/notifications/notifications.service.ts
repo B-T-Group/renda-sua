@@ -3631,6 +3631,23 @@ export class NotificationsService {
     };
   }
 
+  private prepaidPickupReadyPush(
+    orderNumber: string,
+    language?: string | null
+  ): { title: string; body: string } {
+    const isFr = (language || '').toLowerCase().startsWith('fr');
+    if (isFr) {
+      return {
+        title: 'Prêt au retrait',
+        body: `Commande ${orderNumber} prête. À votre arrivée, appuyez sur Terminer la commande dans l'application (sans code PIN).`,
+      };
+    }
+    return {
+      title: 'Ready for pickup',
+      body: `Order ${orderNumber} is ready. When you arrive, tap Complete order in the app (no pickup PIN).`,
+    };
+  }
+
   /**
    * Get title and body for push notification by order status.
    */
@@ -3639,18 +3656,31 @@ export class NotificationsService {
     orderNumber: string,
     data?: NotificationData
   ): { title: string; body: string } {
+    if (
+      status === 'confirmed' &&
+      data?.isCookedFoodPickup &&
+      data.readyInMinutes
+    ) {
+      return this.cookedFoodConfirmedPush(orderNumber, data);
+    }
+
     if (status === 'ready_for_pickup') {
       if (data?.fulfillmentMethod === 'pickup') {
-        if (data.paymentTiming === 'pay_at_pickup') {
+        // Classic PAP still asks for MoMo at the store. Pay-after already
+        // collected payment after confirm — use Complete copy.
+        const classicPayAtPickup =
+          data.paymentTiming === 'pay_at_pickup' &&
+          data.payAfterMerchantConfirm !== true;
+        if (classicPayAtPickup) {
           return this.payAtPickupReadyPush(
             orderNumber,
             data.clientPreferredLanguage
           );
         }
-        return {
-          title: 'Ready for pickup',
-          body: `Order ${orderNumber} is ready at the store. Send your PIN to confirm pickup.`,
-        };
+        return this.prepaidPickupReadyPush(
+          orderNumber,
+          data.clientPreferredLanguage
+        );
       }
       return {
         title: 'Ready for pickup',
@@ -3668,13 +3698,15 @@ export class NotificationsService {
       confirmed: {
         title: 'Order confirmed',
         body:
-          data?.fulfillmentMethod === 'pickup' && data.estimatedDeliveryTime
-            ? `Order ${orderNumber} confirmed. Pickup: ${data.estimatedDeliveryTime}.`
-            : data?.fulfillmentMethod === 'pickup'
-              ? data?.fulfillmentTiming === 'asap'
-                ? `Order ${orderNumber} has been confirmed. Come as soon as it is ready.`
-                : `Order ${orderNumber} has been confirmed. Check your pickup date and time slot.`
-              : `Order ${orderNumber} has been confirmed.`,
+          data?.isCookedFoodPickup && data.readyInMinutes
+            ? this.cookedFoodConfirmedPushBody(orderNumber, data)
+            : data?.fulfillmentMethod === 'pickup' && data.estimatedDeliveryTime
+              ? `Order ${orderNumber} confirmed. Pickup: ${data.estimatedDeliveryTime}.`
+              : data?.fulfillmentMethod === 'pickup'
+                ? data?.fulfillmentTiming === 'asap'
+                  ? `Order ${orderNumber} has been confirmed. Come as soon as it is ready.`
+                  : `Order ${orderNumber} has been confirmed. Check your pickup date and time slot.`
+                : `Order ${orderNumber} has been confirmed.`,
       },
       preparing: {
         title: 'Order preparing',
@@ -3727,6 +3759,42 @@ export class NotificationsService {
         body: `Order ${orderNumber} status has been updated.`,
       }
     );
+  }
+
+  private cookedFoodConfirmedPush(
+    orderNumber: string,
+    data: NotificationData
+  ): { title: string; body: string } {
+    const isFr = (data.clientPreferredLanguage || '')
+      .toLowerCase()
+      .startsWith('fr');
+    return {
+      title: isFr ? 'Commande confirmée' : 'Order confirmed',
+      body: this.cookedFoodConfirmedPushBody(orderNumber, data, isFr),
+    };
+  }
+
+  private cookedFoodConfirmedPushBody(
+    orderNumber: string,
+    data: NotificationData,
+    isFr?: boolean
+  ): string {
+    const fr =
+      isFr ??
+      (data.clientPreferredLanguage || '').toLowerCase().startsWith('fr');
+    const minutes = data.readyInMinutes!;
+    const awaitingPayment =
+      data.payAfterMerchantConfirm === true &&
+      data.paymentStatus !== 'paid' &&
+      data.paymentStatus !== 'authorized';
+    if (awaitingPayment) {
+      return fr
+        ? `Commande ${orderNumber} confirmée. Prête dans environ ${minutes} minutes après paiement.`
+        : `Order ${orderNumber} confirmed. Ready in about ${minutes} minutes after payment.`;
+    }
+    return fr
+      ? `Commande ${orderNumber} confirmée. Prête dans environ ${minutes} minutes.`
+      : `Order ${orderNumber} confirmed. Ready in about ${minutes} minutes.`;
   }
 
   /**

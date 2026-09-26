@@ -101,6 +101,8 @@ export interface CheckoutGroup {
   estimated_ready_at?: string;
   estimated_fulfill_by?: string;
   schedule_required?: boolean;
+  /** False when this group contains cooked food (ASAP-only). */
+  schedule_allowed?: boolean;
   /** MoMo deposit configuration (when available). */
   deposit_required?: boolean | null;
   deposit_amount?: number | null;
@@ -182,6 +184,8 @@ export interface ResolvedCheckoutConfig {
   estimated_ready_at?: string;
   estimated_fulfill_by?: string;
   schedule_required?: boolean;
+  /** False when the cart includes cooked food (ASAP-only). */
+  schedule_allowed?: boolean;
   /** Diaspora checkout context (when cross-border or someone-else receiving). */
   diaspora?: CheckoutDiaspora | null;
   /** True when MoMo pay-now for delivery is enabled (default false; hide full pay-now). */

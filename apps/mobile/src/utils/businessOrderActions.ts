@@ -5,6 +5,9 @@ import {
   businessMayCancelOrder,
 } from './businessOrderUtils';
 import { isCarrierShipping } from './fulfillmentMethod';
+import {
+  isCookedFoodAwaitingClientPayment,
+} from './cookedFoodOrder';
 
 export type BusinessOrderActionId =
   | 'confirm'
@@ -151,12 +154,14 @@ function standardOrderActions(
       );
       break;
     case 'confirmed':
-      actions.push({
-        id: 'completePreparation',
-        labelKey: 'orderActions.readyForPickup',
-        defaultLabel: 'Set as ready',
-        primary: true,
-      });
+      if (!isCookedFoodAwaitingClientPayment(order)) {
+        actions.push({
+          id: 'completePreparation',
+          labelKey: 'orderActions.readyForPickup',
+          defaultLabel: 'Set as ready',
+          primary: true,
+        });
+      }
       if (businessMayCancelOrder(order)) {
         actions.push({
           id: 'cancel',
@@ -167,12 +172,14 @@ function standardOrderActions(
       }
       break;
     case 'preparing':
-      actions.push({
-        id: 'completePreparation',
-        labelKey: 'orderActions.completePreparation',
-        defaultLabel: 'Complete preparation',
-        primary: true,
-      });
+      if (!isCookedFoodAwaitingClientPayment(order)) {
+        actions.push({
+          id: 'completePreparation',
+          labelKey: 'orderActions.completePreparation',
+          defaultLabel: 'Complete preparation',
+          primary: true,
+        });
+      }
       if (businessMayCancelOrder(order)) {
         actions.push({
           id: 'cancel',
@@ -197,19 +204,6 @@ function standardOrderActions(
           id: 'requestPickupPayment',
           labelKey: 'orderActions.requestPickupPayment',
           defaultLabel: 'Request pickup payment',
-          primary: true,
-        });
-      }
-      if (
-        order.fulfillment_method === 'pickup' &&
-        order.payment_timing !== 'pay_at_pickup' &&
-        (order.payment_status === 'authorized' ||
-          order.payment_status === 'paid')
-      ) {
-        actions.push({
-          id: 'confirmClientPickup',
-          labelKey: 'orderActions.confirmClientPickup',
-          defaultLabel: 'Confirm pickup',
           primary: true,
         });
       }

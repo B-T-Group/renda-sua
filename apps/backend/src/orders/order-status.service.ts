@@ -140,6 +140,14 @@ export class OrderStatusService {
       isAnyAgent
     ) {
       // This transition is allowed
+    } else if (
+      options?.viaSystem &&
+      ((order.current_status === 'confirmed' && newStatus === 'preparing') ||
+        ((order.current_status === 'confirmed' ||
+          order.current_status === 'preparing') &&
+          newStatus === 'ready_for_pickup'))
+    ) {
+      // Cooked-food auto prep / auto-ready system transitions
     } else if (newStatus === 'cancelled') {
       this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
     } else if (!validTransitions.includes(newStatus)) {
@@ -408,7 +416,9 @@ export class OrderStatusService {
     const transitions: { [key: string]: string[] } = {
       pending_payment: [],
       pending: isBusinessOwner ? ['confirmed'] : [],
-      confirmed: canReadyForPickup ? ['ready_for_pickup'] : [],
+      confirmed: canReadyForPickup
+        ? ['ready_for_pickup', 'preparing']
+        : [],
       preparing: canReadyForPickup ? ['ready_for_pickup'] : [],
       // Pickup completion must go through POST /orders/:id/confirm-pickup so
       // capture/settlement run; the generic status endpoint cannot complete it.
@@ -445,7 +455,12 @@ export class OrderStatusService {
             current_status
             business_location_id
             fulfillment_method
+            fulfillment_timing
             payment_timing
+            payment_status
+            estimated_prep_minutes
+            is_cooked_food_pickup
+            pay_after_merchant_confirm
             subtotal
             base_delivery_fee
             per_km_delivery_fee
@@ -633,6 +648,11 @@ export class OrderStatusService {
         fulfillmentMethod: (order as any).fulfillment_method ?? 'delivery',
         fulfillmentTiming: (order as any).fulfillment_timing ?? null,
         paymentTiming: (order as any).payment_timing ?? null,
+        paymentStatus: (order as any).payment_status ?? null,
+        readyInMinutes: (order as any).estimated_prep_minutes ?? null,
+        isCookedFoodPickup: (order as any).is_cooked_food_pickup ?? null,
+        payAfterMerchantConfirm:
+          (order as any).pay_after_merchant_confirm ?? null,
       };
     } catch (error: any) {
       this.logger.error(

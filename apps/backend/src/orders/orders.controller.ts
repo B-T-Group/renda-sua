@@ -671,7 +671,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Confirm client picked up a store-pickup order (business only)',
     description:
-      'For paid or card-authorized pickup orders in ready_for_pickup, the business enters the client PIN to confirm collection. Captures the authorized card payment (Stripe manual capture), settles, and marks the order complete. Pay-at-pickup (mobile money) orders are completed by their payment callback instead.',
+      'Legacy PIN confirmation for store pickup. Prefer client Complete order. Delivery still uses PIN.',
   })
   @ApiBody({
     schema: {
@@ -706,6 +706,21 @@ export class OrdersController {
       useLatestSharedPin: body?.useLatestSharedPin,
       pinMessageId: body?.pinMessageId,
     });
+  }
+
+  @Post(':id/complete-pickup')
+  @ApiOperation({
+    summary: 'Client completes a store-pickup order (no PIN)',
+    description:
+      'When ready_for_pickup: if paid/authorized, settles merchant and commission and completes. If pay_at_pickup with remainder due, initiates MoMo remainder; completion follows payment callback.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Order completed or payment requested' })
+  @ApiResponse({ status: 400, description: 'Invalid order state' })
+  @ApiResponse({ status: 402, description: 'Payment required' })
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async completeClientPickup(@Param('id') orderId: string) {
+    return this.ordersService.completeClientPickup(orderId);
   }
 
   @Post(':id/mark-paid-in-cash-exception')
@@ -1368,7 +1383,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry order payment (client only)',
     description:
-      'Re-initiates payment for a pending_payment pay-now order. Mobile money creates a new MM request; Stripe (credit_card) returns a Checkout URL or PaymentIntent client secret when stripe_payment_method is payment_sheet.',
+      'Re-initiates payment for a pending_payment pay-now order, or for a confirmed cooked-food MoMo pay-after-confirm order awaiting client payment. Mobile money creates a new MM request; Stripe (credit_card) returns a Checkout URL or PaymentIntent client secret when stripe_payment_method is payment_sheet.',
   })
   @ApiBody({
     required: false,

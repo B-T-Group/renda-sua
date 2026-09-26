@@ -3804,7 +3804,7 @@
       "dimensions": "Dimensions (optionnel)",
       "isUsed": "Occasion",
       "isFoodItem": "Ceci est un plat préparé",
-      "isFoodItemHelp": "Les plats préparés ont des heures de service par emplacement et peuvent être marqués épuisés pour la journée.",
+      "isFoodItemHelp": "Les plats préparés ont des heures de service par emplacement et peuvent être marqués épuisés pour la journée. La catégorie peut être quelconque — ce drapeau est indépendant.",
       "preparationMinutes": "Temps de préparation (minutes)",
       "preparationMinutesHelp": "Environ combien de temps ce plat prend à cuisiner."
     },
@@ -5333,6 +5333,8 @@
       "preferredDate": "Date de livraison préférée",
       "pickupDate": "Date de retrait",
       "pickupTimeTitle": "Quand récupérerez-vous votre commande ?",
+      "cookedFoodAsapOnly": "Les plats cuisinés sont en ASAP uniquement. Nous commencerons la préparation dès confirmation de la cuisine.",
+      "cookedFoodAsapOnlyPickup": "Les plats cuisinés sont en ASAP uniquement. Récupérez dès que la cuisine marque la commande prête.",
       "pickupReviewSummary": "Retrait le {{date}} entre {{start}} et {{end}}.",
       "flexible": "Je suis flexible avec les horaires",
       "alternativeDates": "Dates alternatives",
@@ -5605,6 +5607,23 @@
       "pickupInstead": "Vous pouvez toujours récupérer cette commande en magasin.",
       "groupUnavailable": "Ce vendeur ne peut pas livrer pour le moment."
     },
+    "cookedFood": {
+      "confirmTitle": "Prêt dans combien de temps ?",
+      "waitPaymentTitle": "En attente du paiement",
+      "readyHint": "Indiquez le délai pour préparer cette commande de plats à emporter.",
+      "minutesChip": "{{m}} min",
+      "customChip": "Autre",
+      "customMinutes": "Minutes avant d'être prêt",
+      "invalidReadyMinutes": "Saisissez un délai entre {{min}} et {{max}} minutes.",
+      "confirmReady": "Confirmer le délai",
+      "waitPaymentBody": "Nous avons envoyé une demande de paiement mobile money au client. Attendez la notification de paiement avant de commencer à cuisiner.",
+      "returnDashboard": "Retour au tableau de bord",
+      "viewOrdersToCook": "Voir les commandes à préparer",
+      "startCookingTitle": "Commencer à cuisiner",
+      "startCookingOne": "La commande n°{{number}} est payée — votre cuisine peut démarrer.",
+      "startCookingMany": "{{count}} commandes de plats attendent votre cuisine.",
+      "openOrder": "Ouvrir la commande"
+    },
     "phases": {
       "pay": "Paiement requis",
       "confirm": "En attente de confirmation",
@@ -5640,6 +5659,9 @@
       "prepareClient": "Le commerçant prépare votre commande.",
       "prepareBusiness": "Marquez la commande prête lorsqu’elle est emballée.",
       "readyPickupClient": "Votre commande est prête à être retirée en magasin.",
+      "readyPickupCookedFoodClient": "Votre plat est prêt. Appuyez sur Terminer la commande à votre arrivée — pas de code PIN de retrait.",
+      "cookedFoodWaitPaymentBusiness": "En attente du paiement client. Ne commencez pas à cuisiner tant que le paiement n'a pas réussi.",
+      "cookedFoodWaitPaymentClient": "Approuvez la demande de paiement sur votre téléphone pour que le restaurant puisse commencer à cuisiner.",
       "readyPickupPayAtPickupClient": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
       "readyPickupWaitClientPayBusiness": "Le client paiera dans l’application à son arrivée. Vous pouvez toujours envoyer une demande de paiement s’il a besoin d’aide.",
       "readyPickupBusiness": "Demandez le PIN de retrait du client à son arrivée. Le paiement est capturé lorsque vous confirmez le retrait.",
@@ -5661,7 +5683,10 @@
       "completeClient": "Cette commande est terminée. Vous pouvez laisser un avis.",
       "completeBusiness": "Cette commande est terminée.",
       "completeAgent": "Cette livraison est terminée.",
-      "refundRequested": "Une demande de remboursement nécessite votre attention."
+      "refundRequested": "Une demande de remboursement nécessite votre attention.",
+      "readyPickupCompleteClient": "La commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
+      "readyPickupCompleteOrderClient": "Votre commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
+      "readyPickupAskClientCompleteBusiness": "Demandez au client d'appuyer sur Terminer la commande dans l'app pour que vous soyez payé (et la commission)."
     },
     "pickupSla": {
       "pausedTitle": "Suivi de collecte en pause",

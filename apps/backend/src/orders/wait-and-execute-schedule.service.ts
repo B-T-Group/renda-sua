@@ -67,7 +67,9 @@ export class WaitAndExecuteScheduleService {
       | 'order.acceptance_grace_deadline'
       | 'order.acceptance_activate'
       | 'order.acceptance_reminder'
-      | 'order.mark_ready_prompt',
+      | 'order.mark_ready_prompt'
+      | 'order.auto_mark_ready'
+      | 'order.cooked_food_unpaid_cancel',
     payload: WaitExecutePayload,
     waitSeconds: number
   ): Promise<void> {

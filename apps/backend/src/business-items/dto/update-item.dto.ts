@@ -25,6 +25,8 @@ export class UpdateItemDto {
   estimated_delivery_time?: number | null;
   /** Typical minutes to cook the dish (cooked food only). */
   preparation_minutes?: number | null;
+  /** True when this is a cooked/restaurant dish. */
+  is_cooked_food?: boolean;
   min_order_quantity?: number;
   max_order_quantity?: number | null;
   is_active?: boolean;

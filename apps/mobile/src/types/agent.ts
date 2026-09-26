@@ -12,6 +12,7 @@ export interface OrderItem {
   unit_price?: number;
   total_price?: number;
   item?: {
+    is_cooked_food?: boolean | null;
     name?: string;
     weight?: number;
     weight_unit?: string;
@@ -88,6 +89,8 @@ export interface Order {
   grace_deadline_at?: string | null;
   busy_extra_prep_minutes?: number | null;
   estimated_prep_minutes?: number | null;
+  is_cooked_food_pickup?: boolean | null;
+  pay_after_merchant_confirm?: boolean | null;
   client_ready_nudge_sent_at?: string | null;
   estimated_delivery_time?: string;
   actual_delivery_time?: string;
@@ -173,6 +176,8 @@ export interface OrderActionResponse {
   success: boolean;
   order?: Order;
   message: string;
+  pay_after_merchant_confirm?: boolean;
+  ready_in_minutes?: number;
 }
 
 export interface OrderCancelResponse {

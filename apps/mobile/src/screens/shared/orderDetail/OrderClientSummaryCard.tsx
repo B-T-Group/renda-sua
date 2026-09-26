@@ -90,6 +90,14 @@ function isStripeCardOrder(order: Order): boolean {
 }
 
 function showRetryPayNow(order: Order): boolean {
+  if (
+    order.pay_after_merchant_confirm === true &&
+    order.current_status === 'confirmed' &&
+    order.payment_status !== 'paid' &&
+    order.payment_status !== 'authorized'
+  ) {
+    return true;
+  }
   return (
     order.current_status === 'pending_payment' &&
     order.payment_timing === 'pay_now' &&

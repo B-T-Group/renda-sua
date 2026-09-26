@@ -53,6 +53,7 @@ import {
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
+import { anyLineIsCookedFood, isCookedFoodPickupOrder } from '../food/cooked-food-flag.util';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 
@@ -107,6 +108,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         shipping_enabled
         shipping_price
         shipping_currency
+        is_cooked_food
         item_sub_category {
           item_category { name }
         }
@@ -648,7 +650,8 @@ export class CheckoutPreflightService {
         const requested = quantityByInv.get(inv.id) ?? 0;
         if (
           !cookedFoodIgnoresStock(
-            inv.item?.item_sub_category?.item_category?.name
+            inv.item?.item_sub_category?.item_category?.name,
+            inv.item?.is_cooked_food
           ) &&
           requested > inv.computed_available_quantity
         ) {
@@ -768,9 +771,20 @@ export class CheckoutPreflightService {
         (allowedPaymentTimings.includes('pay_at_delivery') ? 'pay_at_delivery' :
          allowedPaymentTimings.includes('pay_at_pickup') ? 'pay_at_pickup' : 'pay_now');
 
+      // Cooked-food MoMo pickup collects full payment after merchant confirm — no deposit.
+      const groupIsCookedFoodPayAfter =
+        isCookedFoodPickupOrder({
+          fulfillmentMethod: fulfillment,
+          itemFlags: group.inventoryRows.map(
+            (row: { item?: { is_cooked_food?: boolean | null } }) => row.item
+          ),
+        }) && rail === 'mobile_money';
+
       if (
         rail === 'mobile_money' &&
-        (requestedOrAvailableTiming === 'pay_at_delivery' || requestedOrAvailableTiming === 'pay_at_pickup')
+        !groupIsCookedFoodPayAfter &&
+        (requestedOrAvailableTiming === 'pay_at_delivery' ||
+          requestedOrAvailableTiming === 'pay_at_pickup')
       ) {
         try {
           const depositCalc = this.depositCalculationService.calculateDeposit(
@@ -807,6 +821,9 @@ export class CheckoutPreflightService {
         timezone,
         isFastDelivery: dto.requires_fast_delivery === true,
       });
+      const groupHasCookedFood = anyLineIsCookedFood(
+        group.inventoryRows.map((row: { item?: unknown }) => row.item as any)
+      );
 
       groups.push({
         business_id: businessId,
@@ -839,7 +856,9 @@ export class CheckoutPreflightService {
         estimated_prep_minutes: asap.estimatedPrepMinutes,
         estimated_ready_at: asap.estimatedReadyAt,
         estimated_fulfill_by: asap.estimatedFulfillBy,
-        schedule_required: asap.scheduleRequired,
+        // Cooked food cannot be scheduled; never force a future slot.
+        schedule_required: groupHasCookedFood ? false : asap.scheduleRequired,
+        schedule_allowed: !groupHasCookedFood,
       });
     }
 
@@ -924,6 +943,29 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     // 11. Assemble response
     // -----------------------------------------------------------------------
+    const asapGroups = groups.filter((g) => fulfillment !== 'shipping');
+    const scheduleAllowed = asapGroups.every(
+      (g) => g.schedule_allowed !== false
+    );
+    const scheduleRequired =
+      scheduleAllowed && asapGroups.some((g) => g.schedule_required);
+    const asapAvailable =
+      fulfillment !== 'shipping' &&
+      asapGroups.length > 0 &&
+      asapGroups.every((g) => g.asap_available);
+    const firstBlocked = asapGroups.find((g) => !g.asap_available);
+
+    for (const group of asapGroups) {
+      if (group.schedule_allowed === false && group.asap_available === false) {
+        blockers.push({
+          code: 'COOKED_FOOD_STORE_CLOSED',
+          message:
+            'This kitchen is closed right now. Cooked food is ASAP only — try again when the store is open.',
+        });
+        break;
+      }
+    }
+
     const canProceed = blockers.length === 0;
     const stripeManualCapture =
       this.configService.get<StripeConfig>('stripe')?.manualCaptureEnabled ?? false;
@@ -941,14 +983,6 @@ export class CheckoutPreflightService {
     if (canProceed) {
       this.scheduleInitiateCheckout(dto, groups, meta);
     }
-
-    const asapGroups = groups.filter((g) => fulfillment !== 'shipping');
-    const scheduleRequired = asapGroups.some((g) => g.schedule_required);
-    const asapAvailable =
-      fulfillment !== 'shipping' &&
-      asapGroups.length > 0 &&
-      asapGroups.every((g) => g.asap_available);
-    const firstBlocked = asapGroups.find((g) => !g.asap_available);
 
     return {
       success: true,
@@ -980,6 +1014,7 @@ export class CheckoutPreflightService {
       estimated_ready_at: asapGroups[0]?.estimated_ready_at,
       estimated_fulfill_by: asapGroups[0]?.estimated_fulfill_by,
       schedule_required: scheduleRequired,
+      schedule_allowed: scheduleAllowed,
       diaspora: this.buildDiasporaBlock({
         dto,
         isDiaspora,

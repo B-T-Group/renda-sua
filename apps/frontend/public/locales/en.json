@@ -4110,7 +4110,7 @@
       "dimensions": "Dimensions (Optional)",
       "isUsed": "Used",
       "isFoodItem": "This is a cooked food item",
-      "isFoodItemHelp": "Cooked dishes get serving hours per location, and can be marked sold out for the day.",
+      "isFoodItemHelp": "Cooked dishes get serving hours per location and can be marked sold out for the day. Category can be anything — this flag is separate.",
       "preparationMinutes": "Preparation time (minutes)",
       "preparationMinutesHelp": "Roughly how long this dish takes to cook."
     },
@@ -5608,6 +5608,8 @@
       "preferredDate": "Preferred delivery date",
       "pickupDate": "Pickup date",
       "pickupTimeTitle": "When will you pick up your order?",
+      "cookedFoodAsapOnly": "Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.",
+      "cookedFoodAsapOnlyPickup": "Cooked food is ASAP only. Pick up as soon as the kitchen marks it ready.",
       "pickupReviewSummary": "Pickup on {{date}} between {{start}} and {{end}}.",
       "flexible": "I'm flexible with timing",
       "alternativeDates": "Alternative dates",
@@ -5886,6 +5888,23 @@
       "pickupInstead": "You can still pick up this order at the store.",
       "groupUnavailable": "This seller cannot deliver right now."
     },
+    "cookedFood": {
+      "confirmTitle": "When will it be ready?",
+      "waitPaymentTitle": "Waiting for payment",
+      "readyHint": "Choose how long you need to prepare this cooked-food pickup order.",
+      "minutesChip": "{{m}} min",
+      "customChip": "Custom",
+      "customMinutes": "Minutes until ready",
+      "invalidReadyMinutes": "Enter a ready time between {{min}} and {{max}} minutes.",
+      "confirmReady": "Confirm ready time",
+      "waitPaymentBody": "We sent the client a mobile money payment request. Wait until you receive a payment notification before you start cooking.",
+      "returnDashboard": "Return to dashboard",
+      "viewOrdersToCook": "View orders to cook",
+      "startCookingTitle": "Start cooking",
+      "startCookingOne": "Order #{{number}} is paid and ready for your kitchen.",
+      "startCookingMany": "{{count}} cooked-food orders need your kitchen now.",
+      "openOrder": "Open order"
+    },
     "phases": {
       "pay": "Payment needed",
       "confirm": "Awaiting confirmation",
@@ -5921,6 +5940,9 @@
       "prepareClient": "The business is preparing your order.",
       "prepareBusiness": "Mark the order ready when it is packed.",
       "readyPickupClient": "Your order is ready for pickup at the store.",
+      "readyPickupCookedFoodClient": "Your food is ready. Tap Complete order when you arrive — no pickup PIN needed.",
+      "cookedFoodWaitPaymentBusiness": "Waiting for the client to pay. Do not start cooking until payment succeeds.",
+      "cookedFoodWaitPaymentClient": "Approve the payment request on your phone so the restaurant can start cooking.",
       "readyPickupPayAtPickupClient": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
       "readyPickupWaitClientPayBusiness": "The client will pay in the app when they arrive. You can still request a payment if they need help.",
       "readyPickupBusiness": "Ask for the client’s pickup PIN when they arrive. Payment is captured when you confirm pickup.",
@@ -5942,7 +5964,10 @@
       "completeClient": "This order is complete. You can leave a rating.",
       "completeBusiness": "This order is complete.",
       "completeAgent": "This delivery is complete.",
-      "refundRequested": "A refund request needs attention."
+      "refundRequested": "A refund request needs attention.",
+      "readyPickupCompleteClient": "Food is ready. Tap Complete order when you collect it so the merchant gets paid.",
+      "readyPickupCompleteOrderClient": "Your order is ready. Tap Complete order when you collect it so the merchant gets paid.",
+      "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid."
     },
     "pickupSla": {
       "pausedTitle": "Pickup monitoring paused",

@@ -117,6 +117,7 @@ describe('ItemsService privileged field filtering', () => {
       is_active: false,
       moderation_status: 'draft',
       min_order_quantity: 1,
+      is_cooked_food: false,
     });
   });
 
@@ -135,6 +136,58 @@ describe('ItemsService privileged field filtering', () => {
 
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
       name: 'New name',
+    });
+  });
+
+  it('does not write is_cooked_food when only the category changes', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      is_cooked_food: true,
+      item_sub_category_id: 42,
+      item_sub_category: {
+        item_category: { name: 'Restaurant & Cooked Food' },
+      },
+    });
+    hasuraSystem.executeQuery.mockResolvedValue({
+      item_sub_categories_by_pk: {
+        item_category: { name: 'Electronics' },
+      },
+      supported_country_states: [{ country_code: 'CM', service_status: 'active' }],
+      item_export_markets_aggregate: { aggregate: { count: 1 } },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', name: 'Griot' },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      item_sub_category_id: 99,
+    });
+
+    const itemData = hasuraSystem.executeMutation.mock.calls[0][1].itemData;
+    expect(itemData).toEqual({ item_sub_category_id: 99, min_order_quantity: 1 });
+    expect(itemData).not.toHaveProperty('is_cooked_food');
+  });
+
+  it('persists an explicit is_cooked_food update', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      is_cooked_food: false,
+      item_sub_category_id: 10,
+      item_sub_category: {
+        item_category: { name: 'Electronics' },
+      },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', is_cooked_food: true },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      is_cooked_food: true,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      is_cooked_food: true,
+      min_order_quantity: 1,
     });
   });
 
@@ -270,6 +323,7 @@ describe('ItemsService privileged field filtering', () => {
       is_active: false,
       moderation_status: 'draft',
       min_order_quantity: 1,
+      is_cooked_food: false,
     });
   });
 

@@ -98,7 +98,7 @@ describe('resolveOrderPhase pickup ready', () => {
     expect(info.primaryActionId).toBe('collect_pickup_payment');
   });
 
-  it('keeps PIN-oriented copy for prepaid pickup', () => {
+  it('uses generic complete copy for prepaid non-cooked pickup', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -108,6 +108,51 @@ describe('resolveOrderPhase pickup ready', () => {
       },
       'client'
     );
-    expect(info.nextStepKey).toBe('orders.nextStep.readyPickupClient');
+    expect(info.nextStepKey).toBe(
+      'orders.nextStep.readyPickupCompleteOrderClient'
+    );
+  });
+
+  it('uses food complete copy for cooked-food pickup when ready', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'ready_for_pickup',
+        fulfillmentMethod: 'pickup',
+        paymentTiming: 'pay_now',
+        paymentStatus: 'authorized',
+        isCookedFoodPickup: true,
+      },
+      'client'
+    );
+    expect(info.nextStepKey).toBe('orders.nextStep.readyPickupCompleteClient');
+  });
+
+  it('uses complete (not PIN) for cooked-food pickup when ready', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'ready_for_pickup',
+        fulfillmentMethod: 'pickup',
+        paymentTiming: 'pay_now',
+        paymentStatus: 'paid',
+        isCookedFoodPickup: true,
+      },
+      'client'
+    );
+    expect(info.primaryActionId).toBe('complete');
+  });
+
+  it('hides mark ready while waiting for cooked-food payment', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'confirmed',
+        fulfillmentMethod: 'pickup',
+        isCookedFoodPickup: true,
+        payAfterMerchantConfirm: true,
+        paymentStatus: 'pending',
+      },
+      'business'
+    );
+    expect(info.primaryActionId).toBe('none');
+    expect(info.nextStepKey).toBe('orders.nextStep.cookedFoodWaitPaymentBusiness');
   });
 });

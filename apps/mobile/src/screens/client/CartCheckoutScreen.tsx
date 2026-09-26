@@ -1234,6 +1234,7 @@ export default observer(function CartCheckoutScreen() {
             enabled={Boolean(selectedAddress.country?.trim() && selectedAddress.state?.trim())}
             businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
             scheduleRequired={!!preflightConfig?.schedule_required}
+            allowSchedule={preflightConfig?.schedule_allowed !== false}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1253,6 +1254,7 @@ export default observer(function CartCheckoutScreen() {
             fulfillment="pickup"
             businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
             scheduleRequired={!!preflightConfig?.schedule_required}
+            allowSchedule={preflightConfig?.schedule_allowed !== false}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}

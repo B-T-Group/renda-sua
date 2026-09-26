@@ -897,6 +897,22 @@
         "unprofessional": "Unprofessional"
       }
     },
+    "cookedFood": {
+      "confirmTitle": "When will it be ready?",
+      "waitPaymentTitle": "Waiting for payment",
+      "readyHint": "Choose how long you need to prepare this cooked-food pickup order.",
+      "minutesChip": "{{m}} min",
+      "customChip": "Custom",
+      "customMinutes": "Minutes until ready",
+      "invalidReadyMinutes": "Enter a ready time between {{min}} and {{max}} minutes.",
+      "confirmReady": "Confirm ready time",
+      "waitPaymentBody": "We sent the client a mobile money payment request. Wait until you receive a payment notification before you start cooking.",
+      "returnDashboard": "Return to dashboard",
+      "viewOrdersToCook": "View orders to cook",
+      "startCookingTitle": "Start cooking",
+      "startCookingCard": "Paid cooked-food pickup — start preparing now.",
+      "openOrder": "Open order"
+    },
     "phases": {
       "pay": "Payment needed",
       "confirm": "Awaiting confirmation",
@@ -932,6 +948,9 @@
       "prepareClient": "The business is preparing your order.",
       "prepareBusiness": "Mark the order ready when it is packed.",
       "readyPickupClient": "Your order is ready for pickup at the store.",
+      "readyPickupCookedFoodClient": "Your food is ready. Tap Complete order when you arrive — no pickup PIN needed.",
+      "cookedFoodWaitPaymentBusiness": "Waiting for the client to pay. Do not start cooking until payment succeeds.",
+      "cookedFoodWaitPaymentClient": "Approve the payment request on your phone so the restaurant can start cooking.",
       "readyPickupPayAtPickupClient": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
       "readyPickupWaitClientPayBusiness": "The client will pay in the app when they arrive. You can still request a payment if they need help.",
       "readyPickupBusiness": "Ask for the client’s pickup PIN when they arrive. Payment is captured when you confirm pickup.",
@@ -957,7 +976,10 @@
       "prepareShippingClient": "The seller is packing your order for carrier shipping.",
       "prepareShippingBusiness": "Mark as shipped when the package is with the carrier.",
       "shippingClient": "Your order is on the way. Confirm when you receive it.",
-      "shippingBusiness": "Waiting for the customer to confirm they received the shipment."
+      "shippingBusiness": "Waiting for the customer to confirm they received the shipment.",
+      "readyPickupCompleteClient": "Food is ready. Tap Complete order when you collect it so the merchant gets paid.",
+      "readyPickupCompleteOrderClient": "Your order is ready. Tap Complete order when you collect it so the merchant gets paid.",
+      "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid."
     },
     "busy": {
       "banner": "The merchant is experiencing higher demand than usual. Estimated preparation time: {{minutes}} minutes.",

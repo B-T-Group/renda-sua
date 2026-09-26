@@ -78,6 +78,8 @@ export interface ConfirmOrderData {
     preferred_date: string;
     special_instructions?: string;
   };
+  /** Cooked-food ASAP pickup: merchant ready-in estimate (minutes). */
+  ready_in_minutes?: number;
   /** Optional stock corrections for cooked-food lines on this order. */
   food_stock_updates?: FoodConfirmationStockUpdate[];
 }
@@ -91,6 +93,8 @@ export interface OrderStatusChangeResponse {
   order: any;
   message: string;
   holdAmount?: number; // For agent operations
+  pay_after_merchant_confirm?: boolean;
+  ready_in_minutes?: number;
 }
 
 export interface MarkBusyResponse {
@@ -765,6 +769,39 @@ export const useBackendOrders = () => {
     }, 'orders.failingDelivery');
   };
 
+  const completeClientPickup = async (
+    orderId: string
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+
+    return callWithLoading(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          op(`/orders/${orderId}/complete-pickup`)
+        );
+
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to complete pickup'
+          );
+        }
+
+        return response.data;
+      } catch (err: any) {
+        const errorMessage =
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to complete pickup';
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }, 'orders.completing');
+  };
+
   const completeOrder = async (
     request: OrderStatusChangeRequest
   ): Promise<OrderStatusChangeResponse> => {
@@ -1288,6 +1325,7 @@ export const useBackendOrders = () => {
 
     // Client methods
     completeOrder,
+    completeClientPickup,
     confirmOrderReceipt,
     switchToPickup,
     remindReady,

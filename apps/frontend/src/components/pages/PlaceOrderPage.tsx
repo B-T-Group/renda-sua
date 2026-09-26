@@ -1152,6 +1152,22 @@ const PlaceOrderPage: React.FC = () => {
 
   const isPayAtDeliveryEligible = !!selectedItem?.item?.pay_on_delivery_enabled;
   const isPickupEligible = !!selectedItem?.item?.pay_at_pickup_enabled;
+  const cookedFoodAsapOnly =
+    !!selectedItem && isFoodCatalogItem(selectedItem);
+
+  const renderTimingSelector = (
+    props: React.ComponentProps<typeof DeliveryTimeWindowSelector>
+  ) =>
+    cookedFoodAsapOnly ? (
+      <Alert severity="info">
+        {t(
+          'orders.deliveryTimeWindow.cookedFoodAsapOnly',
+          'Cooked food is ASAP only. We’ll start preparing when the kitchen confirms.'
+        )}
+      </Alert>
+    ) : (
+      <DeliveryTimeWindowSelector {...props} />
+    );
 
   const itemCountrySupportsStripe = useMemo(() => {
     const itemCountry =
@@ -1439,13 +1455,17 @@ const PlaceOrderPage: React.FC = () => {
                 ? 'pay_now'
                 : 'pay_at_pickup') as const,
               requires_fast_delivery: false,
-              delivery_window: deliveryWindow,
+              ...(cookedFoodAsapOnly
+                ? {}
+                : { delivery_window: deliveryWindow }),
             }
           : {
               delivery_address_id: selectedAddressId,
               payment_timing: paymentTiming,
               requires_fast_delivery: requiresFastDelivery,
-              delivery_window: deliveryWindow,
+              ...(cookedFoodAsapOnly
+                ? {}
+                : { delivery_window: deliveryWindow }),
             }),
         phone_number: useDifferentPhone ? overridePhoneNumber : undefined,
         special_instructions: specialInstructions.trim() || undefined,
@@ -1560,6 +1580,7 @@ const PlaceOrderPage: React.FC = () => {
   }, [
     apiClient,
     appliedDiscountCode,
+    cookedFoodAsapOnly,
     deliveryWindow,
     isPickupOrder,
     itemCountrySupportsStripe,
@@ -2224,15 +2245,15 @@ const PlaceOrderPage: React.FC = () => {
                     'When will you pick up your order?'
                   )}
                 </Typography>
-                <DeliveryTimeWindowSelector
-                  countryCode={itemOriginCountryIso}
-                  stateCode={itemOriginState}
-                  onChange={handleDeliveryWindowChange}
-                  loading={loading}
-                  shouldFetchNextAvailable={true}
-                  fulfillment="pickup"
-                  businessLocationId={selectedItem.business_location.id}
-                />
+                {renderTimingSelector({
+                  countryCode: itemOriginCountryIso,
+                  stateCode: itemOriginState,
+                  onChange: handleDeliveryWindowChange,
+                  loading,
+                  shouldFetchNextAvailable: true,
+                  fulfillment: 'pickup',
+                  businessLocationId: selectedItem.business_location.id,
+                })}
               </CardContent>
             </Card>
           )}
@@ -2322,15 +2343,15 @@ const PlaceOrderPage: React.FC = () => {
                     'When are you available for delivery?'
                   )}
                 </Typography>
-                <DeliveryTimeWindowSelector
-                  countryCode={selectedAddress.country}
-                  stateCode={selectedAddress.state}
-                  onChange={handleDeliveryWindowChange}
-                  isFastDelivery={requiresFastDelivery}
-                  loading={loading}
-                  shouldFetchNextAvailable={true}
-                  businessLocationId={selectedItem?.business_location?.id}
-                />
+                {renderTimingSelector({
+                  countryCode: selectedAddress.country,
+                  stateCode: selectedAddress.state,
+                  onChange: handleDeliveryWindowChange,
+                  isFastDelivery: requiresFastDelivery,
+                  loading,
+                  shouldFetchNextAvailable: true,
+                  businessLocationId: selectedItem?.business_location?.id,
+                })}
               </CardContent>
             </Card>
           )}
@@ -3770,15 +3791,15 @@ const PlaceOrderPage: React.FC = () => {
                         'When will you pick up your order?'
                       )}
                     </Typography>
-                    <DeliveryTimeWindowSelector
-                      countryCode={itemOriginCountryIso}
-                      stateCode={itemOriginState}
-                      onChange={handleDeliveryWindowChange}
-                      loading={loading}
-                      shouldFetchNextAvailable={true}
-                      fulfillment="pickup"
-                      businessLocationId={selectedItem.business_location.id}
-                    />
+                    {renderTimingSelector({
+                      countryCode: itemOriginCountryIso,
+                      stateCode: itemOriginState,
+                      onChange: handleDeliveryWindowChange,
+                      loading,
+                      shouldFetchNextAvailable: true,
+                      fulfillment: 'pickup',
+                      businessLocationId: selectedItem.business_location.id,
+                    })}
                   </CardContent>
                 </Card>
               )}
@@ -3903,15 +3924,15 @@ const PlaceOrderPage: React.FC = () => {
                         'When are you available for delivery?'
                       )}
                     </Typography>
-                    <DeliveryTimeWindowSelector
-                      countryCode={selectedAddress.country}
-                      stateCode={selectedAddress.state}
-                      onChange={handleDeliveryWindowChange}
-                      isFastDelivery={requiresFastDelivery}
-                      loading={loading}
-                      shouldFetchNextAvailable={true}
-                      businessLocationId={selectedItem?.business_location?.id}
-                    />
+                    {renderTimingSelector({
+                      countryCode: selectedAddress.country,
+                      stateCode: selectedAddress.state,
+                      onChange: handleDeliveryWindowChange,
+                      isFastDelivery: requiresFastDelivery,
+                      loading,
+                      shouldFetchNextAvailable: true,
+                      businessLocationId: selectedItem?.business_location?.id,
+                    })}
                   </CardContent>
                 </Card>
               )}

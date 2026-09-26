@@ -76,6 +76,9 @@ export interface CheckoutPreflightResult {
    * unavailable." message and steer the user to store pickup.
    */
   delivery_availability?: CheckoutDeliveryAvailability | null;
+  /** False when the cart includes cooked food (ASAP-only). */
+  schedule_allowed?: boolean;
+  schedule_required?: boolean;
   purchase_credits?: {
     total: number;
     currency: string;
