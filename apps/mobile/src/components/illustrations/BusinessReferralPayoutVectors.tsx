@@ -27,7 +27,7 @@ function ArtFrame({
   );
 }
 
-/** 10 approved products plus a completed sale. */
+/** 2 approved products plus a completed sale. */
 export function Catalog10PayoutVector({ size = 96 }: Props) {
   const { colors } = useTheme();
   const primary = colors.primary.main;

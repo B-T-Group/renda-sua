@@ -15,7 +15,10 @@ export type CompensationRuleCode =
   | typeof SALE_PERCENT
   | typeof BUSINESS_REFERRAL_10_ITEMS;
 
-export const ONBOARDING_10_ITEMS = 10;
+/** Approved items required for the agent onboarding bonus (plus a qualifying sale). */
+export const AGENT_ONBOARDING_MIN_ITEMS = 2;
+/** Approved items required for the business-to-business catalog bonus. */
+export const BUSINESS_REFERRAL_MIN_ITEMS = 5;
 export const ONBOARDING_WINDOW_DAYS = 30;
 export const ONBOARDING_10_MIN_SALE_TOTAL_XAF = 2500;
 export const ONBOARDING_10_MIN_SALE_TOTAL_KEY = 'onboarding_10_min_sale_total';
@@ -151,7 +154,7 @@ function businessReferralAction(
   if (
     !params.hasBusinessReferrer ||
     params.hasAgentReferrer ||
-    params.approvedItemCount < ONBOARDING_10_ITEMS ||
+    params.approvedItemCount < BUSINESS_REFERRAL_MIN_ITEMS ||
     params.alreadyPaidBusinessReferral ||
     params.triggeringOrderId
   ) {
@@ -178,7 +181,7 @@ function onboardingBonusAction(
   if (params.paidOnboardingRules.includes(ONBOARDING_10_FIRST_SALE)) {
     return null;
   }
-  if (params.approvedItemCount < ONBOARDING_10_ITEMS) return null;
+  if (params.approvedItemCount < AGENT_ONBOARDING_MIN_ITEMS) return null;
   if (!saleWithinOnboardingWindow(params.businessOnboardedAt, sale.completedAt)) {
     return null;
   }

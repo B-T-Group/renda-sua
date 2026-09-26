@@ -138,8 +138,8 @@ export default function AgentBusinessReferralScreen() {
             ? 'agent.businessReferrals.benefitBodyWithMinSales'
             : 'agent.businessReferrals.benefitBody',
           hasMinSales
-            ? 'You earn a one-time bonus when they list 10 products and reach the minimum sales total within 30 days, plus 1% on every completed sale.'
-            : 'You earn a one-time bonus when they list 10 products and complete a sale within 30 days, plus 1% on every completed sale.'
+            ? 'You earn a one-time bonus when they list 2 products and reach the minimum sales total within 30 days, plus 1% on every completed sale.'
+            : 'You earn a one-time bonus when they list 2 products and complete a sale within 30 days, plus 1% on every completed sale.'
         )}
         illustration={<BusinessReferralCommissionVector size={128} />}
       />

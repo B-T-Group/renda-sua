@@ -26,7 +26,7 @@ export class BusinessReferralPayoutsInternalController {
     summary: 'Internal: run weekly business-referral commission payouts (Lambda/cron)',
     description:
       'Called by the Saturday EventBridge cron Lambda. Credits agents who referred businesses ' +
-      'created after April 2026 that have at least 10 items, if the ' +
+      'created after April 2026 that have at least 2 approved items and a qualifying sale, if the ' +
       'business_referral_payout_enabled config flag is active.',
   })
   @ApiHeader({

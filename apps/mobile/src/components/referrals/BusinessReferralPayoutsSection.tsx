@@ -62,11 +62,11 @@ function PayoutsHeading({
     schedule.catalog10MinSaleTotal > 0
       ? t(
           'agent.businessReferrals.payouts.sectionIntroWithMinSales',
-          'A one-time bonus when they list 10 products and reach the minimum sales total within 30 days of joining, plus 1% on every completed sale.'
+          'A one-time bonus when they list 2 products and reach the minimum sales total within 30 days of joining, plus 1% on every completed sale.'
         )
       : t(
           'agent.businessReferrals.payouts.sectionIntro',
-          'A one-time bonus when they list 10 products and complete a sale within 30 days of joining, plus 1% on every completed sale.'
+          'A one-time bonus when they list 2 products and complete a sale within 30 days of joining, plus 1% on every completed sale.'
         );
   return (
     <>
@@ -147,12 +147,12 @@ function catalog10Copy(
     return {
       title: t(
         'agent.businessReferrals.payouts.catalog10TitleWithMinSales',
-        '10 approved products + {{minSales}} in sales in 30 days',
+        '2 approved products + {{minSales}} in sales in 30 days',
         { minSales }
       ),
       body: t(
         'agent.businessReferrals.payouts.catalog10BodyWithMinSales',
-        'When the shop has at least 10 approved products and at least {{minSales}} in completed sales within 30 days of joining, you receive {{amount}} once.',
+        'When the shop has at least 2 approved products and at least {{minSales}} in completed sales within 30 days of joining, you receive {{amount}} once.',
         { amount, minSales }
       ),
     };
@@ -160,11 +160,11 @@ function catalog10Copy(
   return {
     title: t(
       'agent.businessReferrals.payouts.catalog10Title',
-      '10 approved products + a sale in 30 days'
+      '2 approved products + a sale in 30 days'
     ),
     body: t(
       'agent.businessReferrals.payouts.catalog10Body',
-      'When the shop has at least 10 approved products and completes a sale within 30 days of joining, you receive {{amount}} once.',
+      'When the shop has at least 2 approved products and completes a sale within 30 days of joining, you receive {{amount}} once.',
       { amount }
     ),
   };
