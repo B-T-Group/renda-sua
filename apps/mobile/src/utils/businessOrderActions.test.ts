@@ -86,3 +86,41 @@ describe('getBusinessOrderActions pickup payment', () => {
     expect(actions.map((a) => a.id)).toContain('requestPickupPayment');
   });
 });
+
+describe('getBusinessOrderActions cooked-food pay-after', () => {
+  const awaiting = baseOrder({
+    current_status: 'confirmed',
+    fulfillment_method: 'pickup',
+    fulfillment_timing: 'asap',
+    is_cooked_food_pickup: true,
+    pay_after_merchant_confirm: true,
+    payment_status: 'pending',
+  });
+
+  it('hides ready while the client has not paid', () => {
+    const actions = getBusinessOrderActions(awaiting);
+    expect(actions.find((a) => a.id === 'completePreparation')).toBeUndefined();
+    expect(actions.map((a) => a.id)).toContain('cancel');
+  });
+
+  it('offers ready once the pay-after order is paid', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        ...awaiting,
+        payment_status: 'paid',
+      })
+    );
+    expect(actions.map((a) => a.id)).toContain('completePreparation');
+  });
+
+  it('hides complete preparation while a preparing order is still unpaid', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        ...awaiting,
+        current_status: 'preparing',
+      })
+    );
+    expect(actions.find((a) => a.id === 'completePreparation')).toBeUndefined();
+    expect(actions.map((a) => a.id)).toContain('cancel');
+  });
+});
