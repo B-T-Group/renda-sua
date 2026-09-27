@@ -19,6 +19,8 @@ import type { AuthorizedBusinessActor } from './authorized-business-actor';
 export type OrderStatusUpdateOptions = {
   viaCancelEndpoint?: boolean;
   viaSystem?: boolean;
+  /** Business fail-pickup from ready_for_pickup (POST /orders/:id/fail-pickup). */
+  viaFailPickupEndpoint?: boolean;
 };
 
 @Injectable()
@@ -140,8 +142,24 @@ export class OrderStatusService {
       isAnyAgent
     ) {
       // This transition is allowed
+    } else if (
+      options?.viaSystem &&
+      ((order.current_status === 'confirmed' && newStatus === 'preparing') ||
+        ((order.current_status === 'confirmed' ||
+          order.current_status === 'preparing') &&
+          newStatus === 'ready_for_pickup'))
+    ) {
+      // Cooked-food auto prep / auto-ready system transitions
     } else if (newStatus === 'cancelled') {
       this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
+    } else if (
+      order.current_status === 'ready_for_pickup' &&
+      newStatus === 'failed'
+    ) {
+      this.assertFailPickupViaDedicatedEndpoint(
+        options?.viaFailPickupEndpoint,
+        isBusinessOwner
+      );
     } else if (!validTransitions.includes(newStatus)) {
       throw new Error(
         `Invalid status transition from ${order.current_status} to ${newStatus}`
@@ -392,6 +410,17 @@ export class OrderStatusService {
     );
   }
 
+  /** Ready → failed must use POST /orders/:id/fail-pickup (partial refund + tracking). */
+  private assertFailPickupViaDedicatedEndpoint(
+    viaFailPickupEndpoint: boolean | undefined,
+    isBusinessOwner: boolean
+  ): void {
+    if (viaFailPickupEndpoint && isBusinessOwner) return;
+    throw new Error(
+      'Fail pickup must use POST /orders/:id/fail-pickup so partial refund and tracking run'
+    );
+  }
+
   /**
    * Get valid status transitions based on current status and user type.
    * Cancellation is intentionally omitted — use POST /orders/cancel.
@@ -408,7 +437,9 @@ export class OrderStatusService {
     const transitions: { [key: string]: string[] } = {
       pending_payment: [],
       pending: isBusinessOwner ? ['confirmed'] : [],
-      confirmed: canReadyForPickup ? ['ready_for_pickup'] : [],
+      confirmed: canReadyForPickup
+        ? ['ready_for_pickup', 'preparing']
+        : [],
       preparing: canReadyForPickup ? ['ready_for_pickup'] : [],
       // Pickup completion must go through POST /orders/:id/confirm-pickup so
       // capture/settlement run; the generic status endpoint cannot complete it.
@@ -445,7 +476,12 @@ export class OrderStatusService {
             current_status
             business_location_id
             fulfillment_method
+            fulfillment_timing
             payment_timing
+            payment_status
+            estimated_prep_minutes
+            is_cooked_food_pickup
+            pay_after_merchant_confirm
             subtotal
             base_delivery_fee
             per_km_delivery_fee
@@ -633,6 +669,11 @@ export class OrderStatusService {
         fulfillmentMethod: (order as any).fulfillment_method ?? 'delivery',
         fulfillmentTiming: (order as any).fulfillment_timing ?? null,
         paymentTiming: (order as any).payment_timing ?? null,
+        paymentStatus: (order as any).payment_status ?? null,
+        readyInMinutes: (order as any).estimated_prep_minutes ?? null,
+        isCookedFoodPickup: (order as any).is_cooked_food_pickup ?? null,
+        payAfterMerchantConfirm:
+          (order as any).pay_after_merchant_confirm ?? null,
       };
     } catch (error: any) {
       this.logger.error(

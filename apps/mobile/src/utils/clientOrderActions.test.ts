@@ -37,7 +37,7 @@ describe('clientShowDeliveryPin', () => {
     ).toBe(false);
   });
 
-  it('shows PIN for Stripe store pickup when ready', () => {
+  it('hides PIN for all store pickup when ready (client Complete)', () => {
     expect(
       clientShowDeliveryPin(
         order({
@@ -47,7 +47,7 @@ describe('clientShowDeliveryPin', () => {
           payment_status: 'authorized',
         })
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('hides PIN for MoMo pay_at_pickup', () => {
@@ -71,6 +71,20 @@ describe('clientShowDeliveryPin', () => {
           current_status: 'confirmed',
           payment_timing: 'pay_now',
           payment_status: 'authorized',
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('hides PIN for cooked-food pickup at ready', () => {
+    expect(
+      clientShowDeliveryPin(
+        order({
+          fulfillment_method: 'pickup',
+          current_status: 'ready_for_pickup',
+          payment_timing: 'pay_now',
+          payment_status: 'paid',
+          is_cooked_food_pickup: true,
         })
       )
     ).toBe(false);

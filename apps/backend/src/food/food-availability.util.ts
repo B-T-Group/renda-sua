@@ -26,6 +26,31 @@ export interface FoodAvailability {
   nextOpeningAt: Date | null;
 }
 
+const SLOT_DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function formatSlotClock(time: string): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec((time ?? '').trim());
+  if (!match) return time;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
+/** Compact serving windows for client copy, e.g. "Mon 11:30–16:00, Fri 18:00–22:00". */
+export function formatFoodSlotsForDisplay(
+  slots: FoodAvailabilitySlot[]
+): string {
+  if (!slots.length) return '';
+  const sorted = [...slots].sort(
+    (a, b) =>
+      a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time)
+  );
+  return sorted
+    .map((slot) => {
+      const day = SLOT_DAY_LABELS[slot.day_of_week] ?? `Day ${slot.day_of_week}`;
+      return `${day} ${formatSlotClock(slot.start_time)}–${formatSlotClock(slot.end_time)}`;
+    })
+    .join(', ');
+}
+
 interface ResolvedSlot {
   dayOfWeek: number;
   startMinutes: number;

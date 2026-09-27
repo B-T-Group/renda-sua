@@ -103,6 +103,7 @@ const ORDER_ACTION_FIELDS = `
   busy_extra_prep_minutes estimated_prep_minutes
   created_at total_amount currency fulfillment_method
   fulfillment_timing business_id business_location_id
+  is_cooked_food_pickup pay_after_merchant_confirm
   delivery_time_windows(limit: 1) { id }
 `;
 
@@ -489,9 +490,18 @@ export class WhatsAppOrderActionService {
       return this.msgNeedApp(order.order_number, lang);
     }
     await this.orders.confirmOrder(
-      { orderId: order.id, notes: 'Confirmed from WhatsApp' },
+      {
+        orderId: order.id,
+        notes: 'Confirmed from WhatsApp',
+        ready_in_minutes: (order as any).is_cooked_food_pickup
+          ? 30
+          : undefined,
+      },
       this.toActor(actor, order)
     );
+    if ((order as any).is_cooked_food_pickup) {
+      return this.msgConfirmedCookedFood(order.order_number, lang);
+    }
     return this.msgConfirmed(
       order.order_number,
       lang,
@@ -1056,6 +1066,12 @@ export class WhatsAppOrderActionService {
       language: lang,
       fulfillmentMethod,
     });
+  }
+
+  private msgConfirmedCookedFood(n: string, lang?: string | null): string {
+    return lang === 'fr'
+      ? `Commande ${n} confirmée : prête dans 30 minutes. Pour un autre délai, ouvrez l'app avant de confirmer.`
+      : `Order ${n} confirmed: ready in 30 minutes. To pick a different time, use the app instead of WhatsApp Yes.`;
   }
 
   private msgBusy(n: string, lang?: string | null): string {

@@ -7,6 +7,11 @@ import {
 } from '../common/operating-hours.util';
 import type { Configuration, OrderConfig } from '../config/configuration';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import {
+  minutesUntilFoodWindowCloses,
+  resolveFoodAvailability,
+  type FoodAvailabilitySlot,
+} from '../food/food-availability.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { parseCalendarDatePartsFromPreferredDate } from '../users/user-timezone.util';
 import { parseSlotTime } from './order-cleanup-window.util';
@@ -49,6 +54,8 @@ export class FulfillmentPromiseService {
 
   evaluateAsap(params: {
     operatingHours: unknown;
+    /** Cooked-food serving windows. When present, they replace location hours. */
+    foodSlots?: FoodAvailabilitySlot[];
     prepMinutes: number;
     fulfillmentMethod: 'delivery' | 'pickup' | 'shipping';
     timezone: string;
@@ -62,6 +69,8 @@ export class FulfillmentPromiseService {
         scheduleRequired: false,
       };
     }
+    const serving = this.evaluateServingWindows(params);
+    if (serving) return serving;
     const now = params.now ?? new Date();
     const remaining = minutesUntilClose(
       params.operatingHours,
@@ -246,6 +255,94 @@ export class FulfillmentPromiseService {
 
   async timezoneForCountry(country?: string | null): Promise<string> {
     return this.deliveryConfigService.getTimezone(country || 'GA');
+  }
+
+  /** Serving windows override location hours. Null when the dish has no schedule. */
+  private evaluateServingWindows(params: {
+    foodSlots?: FoodAvailabilitySlot[];
+    prepMinutes: number;
+    fulfillmentMethod: 'delivery' | 'pickup' | 'shipping';
+    timezone: string;
+    isFastDelivery?: boolean;
+    now?: Date;
+  }): AsapAvailability | null {
+    const slots = params.foodSlots ?? [];
+    if (slots.length === 0) return null;
+    const now = params.now ?? new Date();
+    const window = resolveFoodAvailability({
+      slots,
+      now,
+      timezone: params.timezone,
+    });
+    if (!window.hasSchedule) return null;
+    return this.availabilityForServingWindow(
+      params,
+      slots,
+      now,
+      params.timezone,
+      window
+    );
+  }
+
+  private availabilityForServingWindow(
+    params: {
+      prepMinutes: number;
+      fulfillmentMethod: 'delivery' | 'pickup' | 'shipping';
+      isFastDelivery?: boolean;
+    },
+    slots: FoodAvailabilitySlot[],
+    now: Date,
+    timezone: string,
+    window: ReturnType<typeof resolveFoodAvailability>
+  ): AsapAvailability {
+    const method = params.fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery';
+    if (!window.isOpenNow) {
+      return this.servingClosed(params.prepMinutes, 'merchant_closed', window.nextOpeningAt);
+    }
+    const remaining = minutesUntilFoodWindowCloses({ slots, now, timezone });
+    const needed = this.minutesNeededBeforeClose(
+      params.prepMinutes,
+      method,
+      params.isFastDelivery === true
+    );
+    if (remaining != null && remaining < needed) {
+      return this.servingClosed(
+        params.prepMinutes,
+        'too_close_to_close',
+        window.nextOpeningAt
+      );
+    }
+    return this.openAsap(method, params.prepMinutes, params.isFastDelivery === true, now);
+  }
+
+  private servingClosed(
+    prepMinutes: number,
+    reason: AsapDisabledReason,
+    opensAt: Date | null
+  ): AsapAvailability {
+    return {
+      available: false,
+      reason,
+      opensAt: opensAt?.toISOString() ?? null,
+      estimatedPrepMinutes: prepMinutes,
+      scheduleRequired: true,
+    };
+  }
+
+  private openAsap(
+    method: 'delivery' | 'pickup',
+    prepMinutes: number,
+    isFastDelivery: boolean,
+    now: Date
+  ): AsapAvailability {
+    const promise = this.computeAsapPromise(method, prepMinutes, isFastDelivery, now);
+    return {
+      available: true,
+      estimatedPrepMinutes: prepMinutes,
+      estimatedReadyAt: promise.promisedReadyAt.toISOString(),
+      estimatedFulfillBy: promise.promisedFulfillBy.toISOString(),
+      scheduleRequired: false,
+    };
   }
 
   private unavailable(

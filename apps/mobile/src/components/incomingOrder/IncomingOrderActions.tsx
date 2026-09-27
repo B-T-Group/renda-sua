@@ -11,6 +11,8 @@ interface Props {
   isSlotPast: boolean;
   extraPrepMinutes: number | null;
   fulfillmentMethod?: string | null;
+  /** Cooked-food MoMo: payment request is sent when the merchant confirms. */
+  payAfterMerchantConfirm?: boolean;
   onConfirm: () => void;
   onBusy: () => void;
   onDismiss: () => void;
@@ -19,8 +21,15 @@ interface Props {
 
 function confirmHintForFulfillment(
   fulfillmentMethod: string | null | undefined,
+  payAfterMerchantConfirm: boolean | undefined,
   t: ReturnType<typeof useTranslation>['t']
 ): string {
+  if (payAfterMerchantConfirm) {
+    return t(
+      'incomingOrder.confirmHintPayAfterConfirm',
+      'Once you confirm, the customer will receive a Mobile Money payment request. Wait until they pay before you start preparing.'
+    );
+  }
   if (fulfillmentMethod === 'pickup') {
     return t(
       'incomingOrder.confirmHintPickup',
@@ -95,6 +104,7 @@ function ConfirmableActions({
   isConfirming,
   extraPrepMinutes,
   fulfillmentMethod,
+  payAfterMerchantConfirm,
   onConfirm,
   onBusy,
   onDismiss,
@@ -116,7 +126,11 @@ function ConfirmableActions({
         {t('incomingOrder.confirm', 'Confirm order')}
       </Button>
       <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-        {confirmHintForFulfillment(fulfillmentMethod, t)}
+        {confirmHintForFulfillment(
+          fulfillmentMethod,
+          payAfterMerchantConfirm,
+          t
+        )}
       </Text>
       <BusyBlock
         extraPrepMinutes={extraPrepMinutes}

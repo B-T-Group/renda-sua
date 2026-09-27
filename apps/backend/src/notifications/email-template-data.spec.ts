@@ -24,4 +24,30 @@ describe('buildReadyNextStepHtml', () => {
     expect(html).toMatch(/tap Pay in the app/i);
     expect(html).toMatch(/approve/i);
   });
+
+  it('uses Complete copy for pay-after-confirm even when timing is pay_at_pickup', () => {
+    const html = buildReadyNextStepHtml(
+      {
+        orderId: 'o1',
+        orderNumber: 'ORD-1',
+        clientName: 'Ann',
+        businessName: 'Store',
+        orderStatus: 'ready_for_pickup',
+        orderItems: [],
+        subtotal: 0,
+        deliveryFee: 0,
+        taxAmount: 0,
+        totalAmount: 0,
+        currency: 'XAF',
+        deliveryAddress: '',
+        fulfillmentMethod: 'pickup',
+        fulfillmentTiming: 'asap',
+        paymentTiming: 'pay_at_pickup',
+        payAfterMerchantConfirm: true,
+      },
+      'en'
+    );
+    expect(html).toMatch(/Complete order/i);
+    expect(html).not.toMatch(/tap Pay in the app/i);
+  });
 });

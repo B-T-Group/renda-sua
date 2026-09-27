@@ -15,10 +15,18 @@ export const mobilePaymentPhonesApi = {
       };
     }>('/mobile-payment-phones'),
 
-  create: (countryCode: string, phoneNumber: string) =>
+  create: (
+    countryCode: string,
+    phoneNumber: string,
+    options?: { setAsDefault?: boolean }
+  ) =>
     api.post<{ success: boolean; data: { phone: MobilePaymentPhone } }>(
       '/mobile-payment-phones',
-      { countryCode, phoneNumber }
+      {
+        countryCode,
+        phoneNumber,
+        setAsDefault: options?.setAsDefault === true,
+      }
     ),
 
   update: (id: string, countryCode: string, phoneNumber: string) =>
@@ -28,6 +36,17 @@ export const mobilePaymentPhonesApi = {
     ),
 
   delete: (id: string) => api.delete(`/mobile-payment-phones/${id}`),
+
+  setDefault: (id: string) =>
+    api.post<{ success: boolean; data: { phone: MobilePaymentPhone } }>(
+      `/mobile-payment-phones/${id}/default`
+    ),
+
+  linkProfile: () =>
+    api.post<{
+      success: boolean;
+      data: { phone: MobilePaymentPhone | null; reason: string | null };
+    }>('/mobile-payment-phones/link-profile'),
 
   verify: (id: string) =>
     api.post<{ success: boolean; data: { transactionId: string; message?: string } }>(

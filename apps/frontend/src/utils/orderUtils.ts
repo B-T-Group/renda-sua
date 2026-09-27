@@ -1,4 +1,5 @@
 import type { OrderData } from '../hooks/useOrderById';
+import { isCookedFoodPayAfterPaid } from './cookedFoodOrder';
 
 export type PaymentStatusChipColor = 'success' | 'error' | 'info' | 'warning';
 
@@ -51,6 +52,16 @@ export function businessMayCancelDeferredUncollectedOrder(
 
 /** Matches backend business cancel rules (including deferred payment at any pre-completion stage). */
 export function businessMayCancelOrder(order: OrderData): boolean {
+  if (isCookedFoodPayAfterPaid(order as any)) {
+    const status = order.current_status;
+    if (
+      status === 'confirmed' ||
+      status === 'preparing' ||
+      status === 'ready_for_pickup'
+    ) {
+      return false;
+    }
+  }
   if (
     BUSINESS_EARLY_CANCEL_STATUSES.includes(
       order.current_status as (typeof BUSINESS_EARLY_CANCEL_STATUSES)[number]

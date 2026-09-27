@@ -126,6 +126,10 @@ export default function BusinessAddItemFromImageScreen() {
           onChange={wizard.onHintChange}
           onPriceChange={wizard.onPriceChange}
           onFoodItemChange={wizard.onFoodItemChange}
+          initialDepositEnabled={wizard.form.initialDepositEnabled}
+          initialDepositPercent={wizard.form.initialDepositPercent}
+          onInitialDepositEnabledChange={wizard.onInitialDepositEnabledChange}
+          onInitialDepositPercentChange={wizard.onInitialDepositPercentChange}
           onContinue={() => void wizard.startProcessing()}
         />
       ) : null}

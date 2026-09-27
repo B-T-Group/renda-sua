@@ -58,6 +58,11 @@ export interface CreateOrderRequest {
   /** Defaults to delivery when omitted. delivery = agent-based, pickup = store pickup, shipping = carrier shipping. */
   fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
   phone_number?: string;
+  /**
+   * Client Mobile Money registry phone to charge. Owned by the current user;
+   * snapshotted onto orders.payer_phone and marked as the client default.
+   */
+  mobile_payment_phone_id?: string;
   requires_fast_delivery?: boolean;
   discount_code?: string;
   /** Client-selected payment timing. Defaults to pay_now when omitted. shipping orders require pay_now. */

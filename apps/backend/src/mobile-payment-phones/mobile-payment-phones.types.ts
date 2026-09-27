@@ -5,6 +5,7 @@ export interface UserMobilePaymentPhoneRow {
   user_id: string;
   phone_e164: string;
   is_verified: boolean;
+  is_default: boolean;
   verified_at: string | null;
   last_verification_transaction_id: string | null;
   created_at: string;
@@ -12,6 +13,14 @@ export interface UserMobilePaymentPhoneRow {
   /** Present on list responses when usage aggregates are loaded. */
   locationCount?: number;
   linkedToAgent?: boolean;
+}
+
+export type CheckoutPaymentPhoneSource = 'registry' | 'profile' | 'none';
+
+export interface ResolvedCheckoutPaymentPhone {
+  phoneE164: string | null;
+  phoneId: string | null;
+  source: CheckoutPaymentPhoneSource;
 }
 
 export interface MobilePaymentPhoneVerificationStatus {

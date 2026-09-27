@@ -193,8 +193,17 @@ describe('compensation-rules', () => {
       ]);
     });
 
-    it('pays only 1% when the catalog has fewer than 10 items', () => {
-      const actions = agentEval({ approvedItemCount: 9 });
+    it('pays the onboarding bonus when the catalog has 2 approved items', () => {
+      const actions = agentEval({ approvedItemCount: 2 });
+      expect(actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ruleCode: ONBOARDING_10_FIRST_SALE }),
+        ])
+      );
+    });
+
+    it('pays only 1% when the catalog has fewer than 2 items', () => {
+      const actions = agentEval({ approvedItemCount: 1 });
       expect(actions).toEqual([
         expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 200 }),
       ]);
@@ -209,10 +218,25 @@ describe('compensation-rules', () => {
       ).toEqual([]);
     });
 
-    it('pays the B2B 10-item reward once without an order', () => {
+    it('does not pay the B2B reward below 5 approved items', () => {
       expect(
         evaluateCompensation({
-          approvedItemCount: 10,
+          approvedItemCount: 4,
+          completedSales: [],
+          payoutCurrency: 'XAF',
+          paidOnboardingRules: [],
+          hasAgentReferrer: false,
+          hasBusinessReferrer: true,
+          alreadyPaidBusinessReferral: false,
+          config: XAF,
+        })
+      ).toEqual([]);
+    });
+
+    it('pays the B2B reward once at 5 approved items without an order', () => {
+      expect(
+        evaluateCompensation({
+          approvedItemCount: 5,
           completedSales: [],
           payoutCurrency: 'XAF',
           paidOnboardingRules: [],

@@ -38,6 +38,9 @@ insert_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
+        - initial_deposit_percent
+        - initial_deposit_amount
         - order_id
 select_permissions:
   - role: agent
@@ -50,6 +53,9 @@ select_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
+        - initial_deposit_percent
+        - initial_deposit_amount
         - item_name
         - item_description
         - unit_price
@@ -74,6 +80,9 @@ select_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
+        - initial_deposit_percent
+        - initial_deposit_amount
         - item_name
         - item_description
         - unit_price
@@ -98,6 +107,9 @@ select_permissions:
         - item_variant_id
         - variant_name
         - variant_snapshot
+        - is_cooked_food
+        - initial_deposit_percent
+        - initial_deposit_amount
         - item_name
         - item_description
         - unit_price

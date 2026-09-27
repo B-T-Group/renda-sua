@@ -10,6 +10,7 @@ export interface MobilePaymentPhoneSummary {
 
 export interface MobilePaymentPhone extends MobilePaymentPhoneSummary {
   user_id: string;
+  is_default?: boolean;
   verified_at: string | null;
   last_verification_transaction_id: string | null;
   created_at: string;

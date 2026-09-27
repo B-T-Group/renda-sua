@@ -65,5 +65,25 @@ describe('order cancellation utilities', () => {
 
       expect(businessMayCancelOrder(order)).toBe(false);
     });
+
+    it('blocks cancel for paid cooked-food pay-after while preparing', () => {
+      const order = buildOrder({
+        current_status: 'preparing',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+      });
+
+      expect(businessMayCancelOrder(order)).toBe(false);
+    });
+
+    it('allows cancel for unpaid cooked-food pay-after while confirmed', () => {
+      const order = buildOrder({
+        current_status: 'confirmed',
+        payment_status: 'pending',
+        pay_after_merchant_confirm: true,
+      });
+
+      expect(businessMayCancelOrder(order)).toBe(true);
+    });
   });
 });

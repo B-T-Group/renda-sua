@@ -13,6 +13,7 @@ import { PaymentProgramsModule } from '../payment-programs/payment-programs.modu
 import { MessagingModule } from '../messaging/messaging.module';
 import { MetaConversionsModule } from '../meta-conversions/meta-conversions.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
+import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payment-phones.module';
 import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
 import { CreditsModule } from '../credits/credits.module';
 import { FoodModule } from '../food/food.module';
@@ -26,6 +27,8 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
 import { FailedDeliveriesController } from './failed-deliveries.controller';
 import { FailedDeliveriesService } from './failed-deliveries.service';
+import { FailedPickupsController } from './failed-pickups.controller';
+import { FailedPickupsService } from './failed-pickups.service';
 import { BusinessAvailabilityController } from './business-availability.controller';
 import { OrderAcceptanceInternalController } from './order-acceptance-internal.controller';
 import { OrderAcceptanceService } from './order-acceptance.service';
@@ -68,6 +71,7 @@ import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
+import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
 
 @Module({
   imports: [
@@ -95,6 +99,7 @@ import { DepositRefundService } from './deposit-refund.service';
     CommerceIntegrationsModule,
     MetaConversionsModule,
     MerchantLifecycleModule,
+    MobilePaymentPhonesModule,
     RepresentativeCompensationModule,
     CreditsModule,
     FoodModule,
@@ -104,6 +109,7 @@ import { DepositRefundService } from './deposit-refund.service';
     AdminPickupOpsController,
     AdminOrdersController,
     FailedDeliveriesController,
+    FailedPickupsController,
     OrderNotificationsInternalController,
     OrderAcceptanceInternalController,
     OrderMarkReadyInternalController,
@@ -125,6 +131,7 @@ import { DepositRefundService } from './deposit-refund.service';
     OrderOffersService,
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,
+    FailedPickupsService,
     OrderPaymentCallbackHandler,
     CheckoutPreflightService,
     CancellationPolicyService,
@@ -148,6 +155,7 @@ import { DepositRefundService } from './deposit-refund.service';
     DepositCalculationService,
     DepositLedgerService,
     DepositRefundService,
+    CookedFoodPickupFlowService,
   ],
   exports: [
     OrdersService,
@@ -166,10 +174,12 @@ import { DepositRefundService } from './deposit-refund.service';
     OrderRiskIncidentsService,
     OrderRiskMonitorService,
     FailedDeliveriesService,
+    FailedPickupsService,
     WhatsAppOrderActionService,
     DepositCalculationService,
     DepositLedgerService,
     DepositRefundService,
+    CookedFoodPickupFlowService,
   ],
 })
 export class OrdersModule {}

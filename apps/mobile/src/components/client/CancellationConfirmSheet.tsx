@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Button,
+  Chip,
   Divider,
   Modal,
   Portal,
@@ -204,6 +205,11 @@ export function CancellationConfirmSheet({ visible, order, onDismiss, onSuccess 
                     otherText={otherText}
                     onOtherTextChange={setOtherText}
                     isOther={isOther}
+                    chipMode={
+                      order.current_status === 'ready_for_pickup' &&
+                      (order.pay_after_merchant_confirm === true ||
+                        order.is_cooked_food_pickup === true)
+                    }
                     colors={colors}
                     spacing={spacing}
                     t={t}
@@ -509,6 +515,7 @@ function ReasonSelector({
   otherText,
   onOtherTextChange,
   isOther,
+  chipMode,
   colors,
   spacing,
   t,
@@ -519,6 +526,7 @@ function ReasonSelector({
   otherText: string;
   onOtherTextChange: (v: string) => void;
   isOther: boolean;
+  chipMode?: boolean;
   colors: any;
   spacing: any;
   t: (key: string, fallback: string) => string;
@@ -528,20 +536,35 @@ function ReasonSelector({
       <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
         {t('cancellation.reasons.title', 'Why are you cancelling?')}
       </Text>
-      <RadioButton.Group
-        onValueChange={(val) => onSelect(Number(val))}
-        value={selectedId !== null ? String(selectedId) : ''}
-      >
-        {reasons.map((reason) => (
-          <RadioButton.Item
-            key={reason.id}
-            label={reason.display}
-            value={String(reason.id)}
-            mode="android"
-            style={{ paddingVertical: 4 }}
-          />
-        ))}
-      </RadioButton.Group>
+      {chipMode ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+          {reasons.map((reason) => (
+            <Chip
+              key={reason.id}
+              selected={selectedId === reason.id}
+              onPress={() => onSelect(reason.id)}
+              style={{ marginBottom: spacing.xs }}
+            >
+              {reason.display}
+            </Chip>
+          ))}
+        </View>
+      ) : (
+        <RadioButton.Group
+          onValueChange={(val) => onSelect(Number(val))}
+          value={selectedId !== null ? String(selectedId) : ''}
+        >
+          {reasons.map((reason) => (
+            <RadioButton.Item
+              key={reason.id}
+              label={reason.display}
+              value={String(reason.id)}
+              mode="android"
+              style={{ paddingVertical: 4 }}
+            />
+          ))}
+        </RadioButton.Group>
+      )}
       {isOther && (
         <TextInput
           mode="outlined"

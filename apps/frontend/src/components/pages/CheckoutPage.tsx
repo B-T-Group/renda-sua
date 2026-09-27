@@ -1,4 +1,4 @@
-import { ArrowBack, Lock, Security } from '@mui/icons-material';
+import { ArrowBack, Lock } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -44,20 +44,20 @@ import {
   SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
+import { ClientMobileMoneyPhoneSection } from '../common/ClientMobileMoneyPhoneSection';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
+import { CookedFoodClosedAlert } from '../common/CookedFoodClosedAlert';
 import FastDeliveryOption from '../common/FastDeliveryOption';
 import {
   CheckoutTaxSummaryLines,
   checkoutTotalLabelDefault,
   checkoutTotalLabelKey,
 } from '../common/CheckoutTaxSummaryLines';
-import PhoneInput from '../common/PhoneInput';
-import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import { ReservationDepositNote } from '../checkout/ReservationDepositNote';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
-import { PurchaseCreditCheckoutNote } from '../common/PurchaseCreditCheckoutNote';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import DiasporaCheckoutBanner from '../checkout/DiasporaCheckoutBanner';
 import PayerChargeSummary from '../checkout/PayerChargeSummary';
@@ -105,6 +105,20 @@ interface BusinessDeliveryFee {
   fullDeliveryFeeWithoutPromo?: number;
 }
 
+function sharedDepositCopy(
+  groups: Array<{
+    deposit_minimum_applied?: boolean;
+    deposit_percent?: number | null;
+  }>
+): { minimumApplied: boolean; percent: number | null } {
+  if (groups.some((group) => group.deposit_minimum_applied === true)) {
+    return { minimumApplied: true, percent: null };
+  }
+  const first = groups[0]?.deposit_percent ?? null;
+  const shared = groups.every((group) => (group.deposit_percent ?? null) === first);
+  return { minimumApplied: false, percent: shared ? first : null };
+}
+
 interface OrderSummaryProps {
   cartItems: CartItem[];
   businessDeliveryFees: Map<string, BusinessDeliveryFee>;
@@ -123,7 +137,12 @@ interface OrderSummaryProps {
   discountLoading: boolean;
   discountError: string | null;
   showTaxAtCheckoutNotice?: boolean;
-  depositBreakdown?: { depositAmount: number; amountDue: number } | null;
+  depositBreakdown?: {
+    depositAmount: number;
+    amountDue: number;
+    minimumApplied: boolean;
+    percent: number | null;
+  } | null;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -261,21 +280,13 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               </Typography>
             </Box>
 
+            {fulfillment !== 'pickup' ? (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
                 {t('checkout.deliveryFee', 'Delivery Fee')}
               </Typography>
               <Box sx={{ textAlign: 'right' }}>
-                {fulfillment === 'pickup' ? (
-                  <Typography
-                    variant="body2"
-                    fontWeight="medium"
-                    component="span"
-                    color="success.main"
-                  >
-                    {t('checkout.pickupNoFee', 'Waived (store pickup)')}
-                  </Typography>
-                ) : business.deliveryFeeLoading ? (
+                {business.deliveryFeeLoading ? (
                   <CircularProgress size={16} />
                 ) : business.deliveryFeeError ? (
                   <Typography variant="body2" color="error" component="span">
@@ -307,8 +318,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                 )}
               </Box>
             </Box>
+            ) : null}
 
-            {!business.deliveryFeeLoading &&
+            {fulfillment !== 'pickup' &&
+              !business.deliveryFeeLoading &&
               !business.deliveryFeeError &&
               business.firstOrderBaseDeliveryDiscountAmount > 0 &&
               business.businessId === firstBusinessId && (
@@ -393,6 +406,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               {formatCurrency(depositBreakdown.amountDue, currency)}
             </Typography>
           </Box>
+          <ReservationDepositNote
+            minimumApplied={depositBreakdown.minimumApplied}
+            percent={depositBreakdown.percent}
+          />
         </Box>
       ) : null}
 
@@ -591,8 +608,9 @@ const CheckoutPage: React.FC = () => {
   const [selectedAddressId, setSelectedAddressId] = useState<string>(
     reorderPrefill?.deliveryAddressId ?? ''
   );
-  const [useDifferentPhone, setUseDifferentPhone] = useState(false);
-  const [overridePhoneNumber, setOverridePhoneNumber] = useState('');
+  const [linkedPaymentPhoneId, setLinkedPaymentPhoneId] = useState<string | null>(null);
+  const [linkedPaymentPhoneE164, setLinkedPaymentPhoneE164] = useState<string | null>(null);
+  const [momoPhoneError, setMomoPhoneError] = useState<string | null>(null);
   const [sendingToSomeoneElse, setSendingToSomeoneElse] = useState(false);
   const [recipient, setRecipient] = useState<RecipientDraft>(
     EMPTY_RECIPIENT_DRAFT
@@ -708,11 +726,39 @@ const CheckoutPage: React.FC = () => {
 
   // Store pickup is offered only when every seller group supports it.
   const preflightGroups = checkoutPreflight?.groups ?? [];
+  const cookedFoodAsapOnly = checkoutPreflight?.schedule_allowed === false;
+  const cookedFoodClosedBlocker =
+    checkoutPreflight?.blocking_errors?.find(
+      (b) => b.code === 'COOKED_FOOD_STORE_CLOSED'
+    ) ?? null;
+  const cookedFoodClosedMessage = cookedFoodClosedBlocker?.message ?? null;
+  const cookedFoodMoMoPayAfterConfirm =
+    checkoutPreflight?.pay_after_merchant_confirm_eligible === true;
+
+  useEffect(() => {
+    if (cookedFoodAsapOnly) setDeliveryWindow(null);
+  }, [cookedFoodAsapOnly]);
+
+  useEffect(() => {
+    if (linkedPaymentPhoneId) return;
+    const id = checkoutPreflight?.suggested_payment_phone_id;
+    if (!id) return;
+    setLinkedPaymentPhoneId(id);
+    setLinkedPaymentPhoneE164(
+      checkoutPreflight?.suggested_payment_phone ?? null
+    );
+  }, [
+    checkoutPreflight?.suggested_payment_phone,
+    checkoutPreflight?.suggested_payment_phone_id,
+    linkedPaymentPhoneId,
+  ]);
+
   const pickupEligible =
     preflightGroups.length > 0 &&
     preflightGroups.every((g) => g.pickup_eligible === true);
 
   const depositBreakdown = useMemo(() => {
+    if (cookedFoodMoMoPayAfterConfirm || cookedFoodAsapOnly) return null;
     const withDeposit = preflightGroups.filter(
       (g) => g.deposit_required && (Number(g.deposit_amount) || 0) > 0
     );
@@ -729,8 +775,12 @@ const CheckoutPage: React.FC = () => {
           : Math.max(0, (Number(g.total) || 0) - (Number(g.deposit_amount) || 0))),
       0
     );
-    return { depositAmount, amountDue };
-  }, [preflightGroups]);
+    return {
+      depositAmount,
+      amountDue,
+      ...sharedDepositCopy(withDeposit),
+    };
+  }, [preflightGroups, cookedFoodMoMoPayAfterConfirm, cookedFoodAsapOnly]);
 
   // Reason-blind delivery availability (aggregated + per seller group).
   const deliveryUnavailable =
@@ -746,13 +796,17 @@ const CheckoutPage: React.FC = () => {
     [preflightGroups]
   );
 
-  // Pickup on the Mobile Money rail is paid on collection; Stripe pickup is
-  // authorized at checkout. The resolver decides — the UI just forwards it.
-  const paymentTiming: 'pay_now' | 'pay_at_pickup' =
-    fulfillment === 'pickup' &&
-    checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
-      ? 'pay_at_pickup'
-      : 'pay_now';
+  // MoMo cooked food: pay after kitchen confirm (flag). Delivery stores
+  // pay_now so agents get Complete+PIN once paid; pickup stays PAP.
+  const paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
+    cookedFoodMoMoPayAfterConfirm
+      ? fulfillment === 'pickup'
+        ? 'pay_at_pickup'
+        : 'pay_now'
+      : fulfillment === 'pickup' &&
+          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
+        ? 'pay_at_pickup'
+        : 'pay_now';
 
   // Only query fast delivery config when we have a real address selection.
   // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
@@ -1011,10 +1065,20 @@ const CheckoutPage: React.FC = () => {
     if (!isPickup && !selectedAddressId) return;
     if (!isPickup && deliveryUnavailable) return;
 
-    // Validate phone number if override is enabled
-    if (useDifferentPhone && !overridePhoneNumber.trim()) {
+    if (
+      checkoutPreflight?.checkout_method === 'MOBILE_MONEY' &&
+      !linkedPaymentPhoneId &&
+      !checkoutPreflight?.suggested_payment_phone_id
+    ) {
+      setMomoPhoneError(
+        t(
+          'checkout.linkMoMoRequired',
+          'Link a Mobile Money number to continue.'
+        )
+      );
       return;
     }
+    setMomoPhoneError(null);
 
     // A recipient with no phone cannot be reached or verified at handover.
     if (recipientIncomplete) {
@@ -1025,7 +1089,10 @@ const CheckoutPage: React.FC = () => {
     setIsCheckoutInProgress(true); // Set flag before checkout
 
     try {
-      const phoneNumber = useDifferentPhone ? overridePhoneNumber : undefined;
+      const paymentPhoneId =
+        linkedPaymentPhoneId ||
+        checkoutPreflight?.suggested_payment_phone_id ||
+        undefined;
       const fastDeliveryFee = requiresFastDelivery
         ? fastDeliveryConfig?.fee || 0
         : 0;
@@ -1036,13 +1103,13 @@ const CheckoutPage: React.FC = () => {
       const orders = await createOrdersFromCart(
         cartItems,
         isPickup ? null : selectedAddressId,
-        phoneNumber,
+        undefined,
         undefined, // specialInstructions removed
         discountCodeToApply,
         isPickup ? false : requiresFastDelivery,
         fastDeliveryFee,
         paymentTiming,
-        deliveryWindow
+        deliveryWindow && !cookedFoodAsapOnly
           ? {
               slot_id: deliveryWindow.slot_id,
               preferred_date: deliveryWindow.preferred_date,
@@ -1054,7 +1121,8 @@ const CheckoutPage: React.FC = () => {
           payerCountry: diaspora?.payer_country ?? undefined,
           sendingToSomeoneElse,
           recipient: recipientPayload,
-        }
+        },
+        paymentPhoneId
       );
 
       if (isPickup) {
@@ -1078,9 +1146,10 @@ const CheckoutPage: React.FC = () => {
         );
       if (momoAwaiting) {
         const phoneE164 = (
-          useDifferentPhone
-            ? overridePhoneNumber
-            : profile?.phone_number || ''
+          linkedPaymentPhoneE164 ||
+          checkoutPreflight?.suggested_payment_phone ||
+          profile?.phone_number ||
+          ''
         ).trim();
         navigate(
           buildMomoAwaitingPaymentTo({
@@ -1091,6 +1160,7 @@ const CheckoutPage: React.FC = () => {
             confirmationState: {
               orders,
               multipleOrders: orders.length > 1,
+              pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
             },
           })
         );
@@ -1102,6 +1172,7 @@ const CheckoutPage: React.FC = () => {
         state: {
           orders: orders,
           multipleOrders: orders.length > 1,
+          pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
         },
       });
     } catch (error) {
@@ -1377,15 +1448,31 @@ const CheckoutPage: React.FC = () => {
                       />
                     )}
 
-                  {/* Delivery Time Window */}
-                  <DeliveryTimeWindowSelector
-                    countryCode={selectedAddress?.country || 'GA'}
-                    stateCode={selectedAddress?.state}
-                    onChange={handleDeliveryWindowChange}
-                    isFastDelivery={requiresFastDelivery}
-                    loading={checkoutLoading}
-                    businessLocationId={cartItems[0]?.businessLocationId}
-                  />
+                  {/* Delivery Time Window — cooked food is ASAP-only */}
+                  {cookedFoodAsapOnly ? (
+                    <CookedFoodClosedAlert
+                      sx={{ mb: 2 }}
+                      message={cookedFoodClosedMessage}
+                      details={cookedFoodClosedBlocker?.details}
+                      openMessage={t(
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                          : 'orders.deliveryTimeWindow.cookedFoodAsapOnly',
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                          : 'We’ll start preparing when the kitchen confirms.'
+                      )}
+                    />
+                  ) : (
+                    <DeliveryTimeWindowSelector
+                      countryCode={selectedAddress?.country || 'GA'}
+                      stateCode={selectedAddress?.state}
+                      onChange={handleDeliveryWindowChange}
+                      isFastDelivery={requiresFastDelivery}
+                      loading={checkoutLoading}
+                      businessLocationId={cartItems[0]?.businessLocationId}
+                    />
+                  )}
                 </>
               )}
 
@@ -1397,18 +1484,33 @@ const CheckoutPage: React.FC = () => {
                       'When will you pick up your order?'
                     )}
                   </Typography>
-                  <DeliveryTimeWindowSelector
-                    countryCode={preflightGroups[0]?.seller_country || 'GA'}
-                    stateCode={preflightGroups[0]?.seller_state}
-                    onChange={handleDeliveryWindowChange}
-                    loading={checkoutLoading}
-                    shouldFetchNextAvailable={true}
-                    fulfillment="pickup"
-                    businessLocationId={
-                      preflightGroups[0]?.business_location_id ||
-                      cartItems[0]?.businessLocationId
-                    }
-                  />
+                  {cookedFoodAsapOnly ? (
+                    <CookedFoodClosedAlert
+                      message={cookedFoodClosedMessage}
+                      details={cookedFoodClosedBlocker?.details}
+                      openMessage={t(
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                          : 'orders.deliveryTimeWindow.cookedFoodAsapOnlyPickup',
+                        cookedFoodMoMoPayAfterConfirm
+                          ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                          : 'Pick up as soon as the kitchen marks it ready.'
+                      )}
+                    />
+                  ) : (
+                    <DeliveryTimeWindowSelector
+                      countryCode={preflightGroups[0]?.seller_country || 'GA'}
+                      stateCode={preflightGroups[0]?.seller_state}
+                      onChange={handleDeliveryWindowChange}
+                      loading={checkoutLoading}
+                      shouldFetchNextAvailable={true}
+                      fulfillment="pickup"
+                      businessLocationId={
+                        preflightGroups[0]?.business_location_id ||
+                        cartItems[0]?.businessLocationId
+                      }
+                    />
+                  )}
                 </Box>
               )}
             </CardContent>
@@ -1420,7 +1522,6 @@ const CheckoutPage: React.FC = () => {
               <Typography variant="h6" sx={{ mb: 3 }}>
                 {t('checkout.paymentInformation', 'Payment Information')}
               </Typography>
-              <PurchaseCreditCheckoutNote credits={checkoutPreflight?.purchase_credits} />
 
               {/* Locked Payment Method Display */}
               {checkoutPreflight?.checkout_method && (
@@ -1471,164 +1572,22 @@ const CheckoutPage: React.FC = () => {
 
               {/* Mobile Payment Method - MoMo only */}
               {checkoutPreflight?.checkout_method === 'MOBILE_MONEY' && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle1" gutterBottom fontWeight={600}>
-                    {t('checkout.yourMoMoNumber', 'Your MoMo number')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
-                  </Typography>
-
-                  {/* Primary Phone Number Display */}
-                <Card
-                  variant="outlined"
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    bgcolor: useDifferentPhone ? 'grey.50' : 'primary.50',
-                    borderColor: useDifferentPhone ? 'grey.300' : 'primary.200',
-                    transition: 'all 0.2s ease-in-out',
+                <ClientMobileMoneyPhoneSection
+                  variant="checkout"
+                  requireLinkedPhone
+                  profilePhone={profile?.phone_number}
+                  profileCountry={profile?.country}
+                  selectedPhoneId={
+                    linkedPaymentPhoneId ||
+                    checkoutPreflight?.suggested_payment_phone_id ||
+                    null
+                  }
+                  onSelectedPhoneChange={(phone) => {
+                    setLinkedPaymentPhoneId(phone?.id ?? null);
+                    setLinkedPaymentPhoneE164(phone?.phone_e164 ?? null);
+                    setMomoPhoneError(null);
                   }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Security
-                      color={useDifferentPhone ? 'disabled' : 'primary'}
-                    />
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="body1" fontWeight={500}>
-                        {t(
-                          'checkout.primaryPhoneNumber',
-                          'Primary Phone Number'
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color={
-                          useDifferentPhone ? 'text.disabled' : 'text.secondary'
-                        }
-                      >
-                        {profile?.phone_number ||
-                          t('common.notAvailable', 'Not available')}
-                      </Typography>
-                      {!useDifferentPhone && (
-                        <Typography
-                          variant="caption"
-                          color="primary"
-                          sx={{ mt: 0.5, display: 'block' }}
-                        >
-                          {t(
-                            'checkout.selectedForPayment',
-                            'Selected for payment'
-                          )}
-                        </Typography>
-                      )}
-                    </Box>
-                    {!useDifferentPhone && (
-                      <Box
-                        sx={{
-                          bgcolor: 'primary.main',
-                          color: 'white',
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: 1,
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {t('checkout.active', 'Active')}
-                      </Box>
-                    )}
-                  </Box>
-                </Card>
-
-                {/* Toggle for Different Phone Number */}
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={useDifferentPhone}
-                      onChange={(e) => setUseDifferentPhone(e.target.checked)}
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>
-                        {t(
-                          'checkout.useDifferentPhone',
-                          'Use a different phone number for this order'
-                        )}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {t(
-                          'checkout.useDifferentPhoneDescription',
-                          'Override your primary phone number for this specific order'
-                        )}
-                      </Typography>
-                    </Box>
-                  }
-                  sx={{ alignItems: 'flex-start', mb: 2 }}
                 />
-
-                {/* Alternative Phone Input */}
-                {useDifferentPhone && (
-                  <Card
-                    variant="outlined"
-                    sx={{
-                      p: 2,
-                      bgcolor: 'primary.50',
-                      borderColor: 'primary.200',
-                      border: '2px solid',
-                      animation: 'fadeIn 0.3s ease-in-out',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 2,
-                        mb: 2,
-                      }}
-                    >
-                      <Security color="primary" />
-                      <Typography
-                        variant="body2"
-                        fontWeight={500}
-                        color="primary"
-                      >
-                        {t(
-                          'checkout.alternativePhoneNumber',
-                          'Alternative Phone Number'
-                        )}
-                      </Typography>
-                    </Box>
-                    <PhoneInput
-                      value={overridePhoneNumber}
-                      onChange={(value) => setOverridePhoneNumber(value || '')}
-                      label={t(
-                        'checkout.enterPhoneNumber',
-                        'Enter phone number'
-                      )}
-                      defaultCountry={pickMobileMoneyDefaultCountry(
-                        preflightGroups[0]?.seller_country ||
-                          selectedAddress?.country
-                      )}
-                      onlyCountries={['CM', 'GA']}
-                    />
-                    {overridePhoneNumber && (
-                      <Typography
-                        variant="caption"
-                        color="primary"
-                        sx={{ mt: 1, display: 'block' }}
-                      >
-                        {t(
-                          'checkout.alternativePhoneSelected',
-                          'This number will be used for payment processing'
-                        )}
-                      </Typography>
-                    )}
-                  </Card>
-                )}
-                </Box>
               )}
 
               {/* Held Until Store Accepts Trust Banner - shown for all payment methods */}
@@ -1710,6 +1669,10 @@ const CheckoutPage: React.FC = () => {
               checkoutLoading ||
               isCheckoutInProgress ||
               recipientIncomplete ||
+              Boolean(cookedFoodClosedMessage) ||
+              (checkoutPreflight?.checkout_method === 'MOBILE_MONEY' &&
+                !linkedPaymentPhoneId &&
+                !checkoutPreflight?.suggested_payment_phone_id) ||
               (fulfillment === 'delivery' &&
                 (!selectedAddressId || deliveryUnavailable))
             }
@@ -1726,9 +1689,9 @@ const CheckoutPage: React.FC = () => {
             )}
           </Button>
 
-          {checkoutError && (
+          {(momoPhoneError || checkoutError) && (
             <Alert severity="error" sx={{ mt: 2 }}>
-              {checkoutError}
+              {momoPhoneError || checkoutError}
             </Alert>
           )}
         </Grid>

@@ -14,11 +14,20 @@ import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { withOrdersApiPrefix } from '../contexts/OrdersApiPrefixContext';
 import {
   incomingInterruptSecondsLeft,
+  incomingWaitingCount,
   isActionableIncomingOrder,
+  nextIncomingOrderId,
+  pendingAcceptanceQueue,
   readIncomingInterruptPayload,
+  shouldKeepVisibleIncomingOrder,
   resolveIncomingInterruptDeadline,
   shouldOpenIncomingInterrupt,
 } from '../utils/incomingOrderInterrupt';
+import { shouldUseCookedFoodConfirmModal } from '../utils/cookedFoodOrder';
+import type {
+  ConfirmOrderData,
+  OrderStatusChangeResponse,
+} from './useBackendOrders';
 
 const POLL_MS = 15_000;
 const BUSY_SNOOZE_MS = 15 * 60 * 1000;
@@ -38,13 +47,17 @@ type IncomingOrderInterruptContextValue = {
   uiState: InterruptUiState;
   message: string | null;
   secondsLeft: number | null;
+  waitingCount: number;
   showDeclineDialog: boolean;
+  cookedFoodConfirmOpen: boolean;
+  closeCookedFoodConfirm: () => void;
   refreshPending: () => Promise<void>;
   dismiss: () => void;
   openDeclineDialog: () => void;
   closeDeclineDialog: () => void;
   onDeclineSuccess: () => void;
   confirm: () => Promise<void>;
+  confirmWithData: (data: ConfirmOrderData) => Promise<OrderStatusChangeResponse>;
   markBusy: () => Promise<void>;
 };
 
@@ -64,6 +77,8 @@ export function IncomingOrderInterruptProvider({
   const [uiState, setUiState] = useState<InterruptUiState>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [showDeclineDialog, setShowDeclineDialog] = useState(false);
+  const [cookedFoodConfirmOpen, setCookedFoodConfirmOpen] = useState(false);
+  const [waitingCount, setWaitingCount] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const loadEpochRef = useRef(0);
   const snoozedUntilRef = useRef<Record<string, number>>({});
@@ -83,6 +98,8 @@ export function IncomingOrderInterruptProvider({
     setUiState('idle');
     setMessage(null);
     setShowDeclineDialog(false);
+    setCookedFoodConfirmOpen(false);
+    setWaitingCount(0);
   }, []);
 
   const isSnoozed = useCallback((orderId: string) => {
@@ -135,18 +152,22 @@ export function IncomingOrderInterruptProvider({
       const response = await apiClient.get<{
         active: boolean;
         order: { id: string } | null;
+        queue?: Array<{ id: string }> | null;
       }>(orderPath('/orders/acceptance/pending'));
-      const pendingId = response.data?.order?.id ?? null;
-      if (!response.data?.active || !pendingId) {
-        if (visible) {
-          clearVisibleState();
-        }
+      const queue = pendingAcceptanceQueue(response.data ?? {});
+      const shownId = visible && order?.id ? order.id : null;
+      if (shouldKeepVisibleIncomingOrder(queue, shownId) && shownId) {
+        setWaitingCount(incomingWaitingCount(queue, shownId, isSnoozed));
         return;
       }
-      if (isSnoozed(pendingId)) return;
-      // Keep the order the merchant was interrupted about; do not replace mid-view.
-      if (visible && order?.id && order.id !== pendingId) return;
-      await loadOrder(pendingId);
+      const nextId = nextIncomingOrderId(queue, isSnoozed);
+      if (!nextId) {
+        setWaitingCount(0);
+        if (visible) clearVisibleState();
+        return;
+      }
+      setWaitingCount(incomingWaitingCount(queue, nextId, isSnoozed));
+      await loadOrder(nextId);
     } catch {
       // no-op
     }
@@ -189,17 +210,13 @@ export function IncomingOrderInterruptProvider({
     const handleMessage = (event: MessageEvent) => {
       const payload = readIncomingInterruptPayload(event);
       if (!shouldOpenIncomingInterrupt(payload.eventName)) return;
-      if (payload.orderId) {
-        void loadOrder(payload.orderId);
-        return;
-      }
       void refreshPending();
     };
     navigator.serviceWorker.addEventListener('message', handleMessage);
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleMessage);
     };
-  }, [interruptEnabled, loadOrder, refreshPending]);
+  }, [interruptEnabled, refreshPending]);
 
   useEffect(() => {
     if (!visible || uiState !== 'active') return undefined;
@@ -226,41 +243,73 @@ export function IncomingOrderInterruptProvider({
     clearVisibleState();
   }, [clearVisibleState]);
 
+  const confirmWithData = useCallback(
+    async (data: ConfirmOrderData): Promise<OrderStatusChangeResponse> => {
+      if (!isActionableIncomingOrder(order) || !apiClient) {
+        throw new Error('No order to confirm');
+      }
+      setUiState('confirming');
+      setMessage(null);
+      try {
+        let result: OrderStatusChangeResponse;
+        if (isDelegationContext) {
+          const response = await apiClient.post<OrderStatusChangeResponse>(
+            orderPath('/orders/confirm'),
+            data
+          );
+          if (!response.data.success) {
+            throw new Error(response.data.message || 'Could not confirm the order.');
+          }
+          result = response.data;
+        } else {
+          result = await confirmOrder(data);
+        }
+        if (!result.pay_after_merchant_confirm) {
+          clearVisibleState();
+        }
+        return result;
+      } catch (error: any) {
+        setUiState('active');
+        setMessage(error?.message || 'Could not confirm the order.');
+        throw error;
+      } finally {
+        setUiState((prev) => (prev === 'confirming' ? 'active' : prev));
+      }
+    },
+    [
+      apiClient,
+      clearVisibleState,
+      confirmOrder,
+      isDelegationContext,
+      order,
+      orderPath,
+    ]
+  );
+
   const confirm = useCallback(async () => {
     if (!isActionableIncomingOrder(order) || !apiClient) return;
+    if (shouldUseCookedFoodConfirmModal(order)) {
+      setCookedFoodConfirmOpen(true);
+      return;
+    }
     setUiState('confirming');
     setMessage(null);
-    const body = {
+    const body: ConfirmOrderData = {
       orderId: order.id,
       ...(order.delivery_time_windows?.[0]?.id
         ? { delivery_time_window_id: order.delivery_time_windows[0].id }
         : {}),
     };
     try {
-      if (isDelegationContext) {
-        const response = await apiClient.post<{
-          success: boolean;
-          message?: string;
-        }>(orderPath('/orders/confirm'), body);
-        if (!response.data.success) {
-          throw new Error(response.data.message || 'Could not confirm the order.');
-        }
-      } else {
-        await confirmOrder(body);
-      }
-      clearVisibleState();
-    } catch (error: any) {
-      setUiState('active');
-      setMessage(error?.message || 'Could not confirm the order.');
+      await confirmWithData(body);
+    } catch {
+      // message set in confirmWithData
     }
-  }, [
-    apiClient,
-    clearVisibleState,
-    confirmOrder,
-    isDelegationContext,
-    order,
-    orderPath,
-  ]);
+  }, [confirmWithData, order, apiClient]);
+
+  const closeCookedFoodConfirm = useCallback(() => {
+    setCookedFoodConfirmOpen(false);
+  }, []);
 
   const markOrderBusy = useCallback(async () => {
     if (!isActionableIncomingOrder(order) || !apiClient) return;
@@ -314,18 +363,25 @@ export function IncomingOrderInterruptProvider({
         resolveIncomingInterruptDeadline(order),
         nowMs
       ),
+      waitingCount,
       showDeclineDialog,
+      cookedFoodConfirmOpen,
+      closeCookedFoodConfirm,
       refreshPending,
       dismiss,
       openDeclineDialog,
       closeDeclineDialog,
       onDeclineSuccess,
       confirm,
+      confirmWithData,
       markBusy: markOrderBusy,
     }),
     [
+      closeCookedFoodConfirm,
       closeDeclineDialog,
       confirm,
+      confirmWithData,
+      cookedFoodConfirmOpen,
       dismiss,
       isBusinessPersona,
       markOrderBusy,
@@ -338,6 +394,7 @@ export function IncomingOrderInterruptProvider({
       showDeclineDialog,
       uiState,
       visible,
+      waitingCount,
     ]
   );
 

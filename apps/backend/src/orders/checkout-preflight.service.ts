@@ -20,6 +20,7 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { PurchaseCreditsService } from '../payment-programs/purchase-credits.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { StripeConfig, Configuration } from '../config/configuration';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeTaxCheckoutBuilderService } from '../stripe-tax/stripe-tax-checkout-builder.service';
@@ -52,7 +53,19 @@ import {
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import {
+  buildCookedFoodStoreClosedDetails,
+  buildCookedFoodStoreClosedMessage,
+  collectCookedFoodSlots,
+} from '../food/cooked-food-closed-message.util';
+import type { FoodAvailabilitySlot } from '../food/food-availability.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
+import {
+  anyLineIsCookedFood,
+  isCookedFoodFulfillmentOrder,
+  lineIsCookedFood,
+} from '../food/cooked-food-flag.util';
+import type { DepositLineInput } from './deposit-calculation.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 
@@ -107,6 +120,9 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         shipping_enabled
         shipping_price
         shipping_currency
+        is_cooked_food
+        initial_deposit_enabled
+        initial_deposit_percent
         item_sub_category {
           item_category { name }
         }
@@ -147,6 +163,7 @@ export class CheckoutPreflightService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly mobilePaymentsService: MobilePaymentsService,
+    private readonly mobilePaymentPhonesService: MobilePaymentPhonesService,
     private readonly loyaltyService: LoyaltyService,
     private readonly configService: ConfigService,
     private readonly taxCheckoutBuilder: StripeTaxCheckoutBuilderService,
@@ -530,6 +547,14 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     const groups: CheckoutGroupDto[] = [];
     let requiresPaymentPhoneOverall = false;
+    const cookedFoodClosedMeta = new Map<
+      string,
+      {
+        timezone: string;
+        operatingHours: unknown;
+        foodSlots: FoodAvailabilitySlot[];
+      }
+    >();
 
     for (const [businessId, group] of businessMap) {
       const rail = groupRails.get(businessId) ?? 'mobile_money';
@@ -648,7 +673,8 @@ export class CheckoutPreflightService {
         const requested = quantityByInv.get(inv.id) ?? 0;
         if (
           !cookedFoodIgnoresStock(
-            inv.item?.item_sub_category?.item_category?.name
+            inv.item?.item_sub_category?.item_category?.name,
+            inv.item?.is_cooked_food
           ) &&
           requested > inv.computed_available_quantity
         ) {
@@ -759,34 +785,38 @@ export class CheckoutPreflightService {
       const totalFee = shippingFee ?? deliveryFee ?? 0;
       const grandTotal = subtotal + totalFee;
 
-      // Calculate deposit for MoMo + pay_at_delivery/pickup (any MM currency)
-      let depositRequired = false;
-      let depositAmount: number | undefined;
-      let amountDue: number | undefined;
-
       const requestedOrAvailableTiming = dto.payment_timing ?? 
         (allowedPaymentTimings.includes('pay_at_delivery') ? 'pay_at_delivery' :
          allowedPaymentTimings.includes('pay_at_pickup') ? 'pay_at_pickup' : 'pay_now');
 
-      if (
-        rail === 'mobile_money' &&
-        (requestedOrAvailableTiming === 'pay_at_delivery' || requestedOrAvailableTiming === 'pay_at_pickup')
-      ) {
-        try {
-          const depositCalc = this.depositCalculationService.calculateDeposit(
-            grandTotal,
-            currency
-          );
-          depositRequired = true;
-          depositAmount = depositCalc.depositAmount;
-          amountDue = depositCalc.amountDue;
-        } catch (error: any) {
-          this.logger.warn(
-            `Deposit calculation failed for group ${businessId}`,
-            error?.message
-          );
-        }
-      }
+      // Cooked-food delivery/pickup: no reservation deposit (pay after confirm or full MoMo later).
+      const groupIsCookedFood =
+        isCookedFoodFulfillmentOrder({
+          fulfillmentMethod: fulfillment,
+          itemFlags: group.inventoryRows.map(
+            (row: {
+              item?: {
+                is_cooked_food?: boolean | null;
+                item_sub_category?: {
+                  item_category?: { name?: string | null } | null;
+                } | null;
+              };
+            }) => row.item
+          ),
+        });
+
+      const groupIsCookedFoodPayAfter =
+        groupIsCookedFood && rail === 'mobile_money';
+
+      const depositQuote = this.quoteMomoItemDeposit({
+        rail,
+        groupIsCookedFood,
+        timing: requestedOrAvailableTiming,
+        currency,
+        orderTotal: grandTotal,
+        lines: this.depositLinesForGroup(itemLines, inventoryById),
+      });
+      const depositRequired = (depositQuote?.depositAmount ?? 0) > 0;
 
       const location = group.inventoryRows[0]?.business_location;
       const configuredPrep =
@@ -800,13 +830,27 @@ export class CheckoutPreflightService {
       const timezone = await this.fulfillmentPromiseService.timezoneForCountry(
         group.sellerCountry
       );
+      const groupHasCookedFood = anyLineIsCookedFood(
+        group.inventoryRows.map((row: { item?: unknown }) => row.item as any)
+      );
+      const foodSlots = groupHasCookedFood
+        ? collectCookedFoodSlots(group.inventoryRows)
+        : [];
       const asap = this.fulfillmentPromiseService.evaluateAsap({
         operatingHours: location?.operating_hours,
+        foodSlots: foodSlots.length > 0 ? foodSlots : undefined,
         prepMinutes,
         fulfillmentMethod: fulfillment,
         timezone,
         isFastDelivery: dto.requires_fast_delivery === true,
       });
+      if (groupHasCookedFood) {
+        cookedFoodClosedMeta.set(businessId, {
+          timezone,
+          operatingHours: location?.operating_hours,
+          foodSlots,
+        });
+      }
 
       groups.push({
         business_id: businessId,
@@ -823,8 +867,12 @@ export class CheckoutPreflightService {
         is_first_order_client: isFirstOrderClient,
         total: grandTotal,
         deposit_required: depositRequired || undefined,
-        deposit_amount: depositAmount,
-        amount_due: amountDue,
+        deposit_amount: depositRequired ? depositQuote?.depositAmount : undefined,
+        amount_due: depositRequired ? depositQuote?.amountDue : undefined,
+        deposit_minimum_applied: depositRequired
+          ? depositQuote?.minimumApplied
+          : undefined,
+        deposit_percent: depositRequired ? depositQuote?.percent : undefined,
         momo_pay_now_delivery_enabled: rail === 'mobile_money' && fulfillment === 'delivery' 
           ? momoPayNowDeliveryEnabled 
           : undefined,
@@ -839,7 +887,10 @@ export class CheckoutPreflightService {
         estimated_prep_minutes: asap.estimatedPrepMinutes,
         estimated_ready_at: asap.estimatedReadyAt,
         estimated_fulfill_by: asap.estimatedFulfillBy,
-        schedule_required: asap.scheduleRequired,
+        // Cooked food cannot be scheduled; never force a future slot.
+        schedule_required: groupHasCookedFood ? false : asap.scheduleRequired,
+        schedule_allowed: !groupHasCookedFood,
+        pay_after_merchant_confirm_eligible: groupIsCookedFoodPayAfter,
       });
     }
 
@@ -924,6 +975,36 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     // 11. Assemble response
     // -----------------------------------------------------------------------
+    const asapGroups = groups.filter((g) => fulfillment !== 'shipping');
+    const scheduleAllowed = asapGroups.every(
+      (g) => g.schedule_allowed !== false
+    );
+    const scheduleRequired =
+      scheduleAllowed && asapGroups.some((g) => g.schedule_required);
+    const asapAvailable =
+      fulfillment !== 'shipping' &&
+      asapGroups.length > 0 &&
+      asapGroups.every((g) => g.asap_available);
+    const firstBlocked = asapGroups.find((g) => !g.asap_available);
+
+    for (const group of asapGroups) {
+      if (group.schedule_allowed === false && group.asap_available === false) {
+        const meta = cookedFoodClosedMeta.get(group.business_id);
+        const closedParams = {
+          opensAt: group.opens_at,
+          timezone: meta?.timezone ?? 'UTC',
+          operatingHours: meta?.operatingHours,
+          foodSlots: meta?.foodSlots,
+        };
+        blockers.push({
+          code: 'COOKED_FOOD_STORE_CLOSED',
+          message: buildCookedFoodStoreClosedMessage(closedParams),
+          details: buildCookedFoodStoreClosedDetails(closedParams),
+        });
+        break;
+      }
+    }
+
     const canProceed = blockers.length === 0;
     const stripeManualCapture =
       this.configService.get<StripeConfig>('stripe')?.manualCaptureEnabled ?? false;
@@ -942,13 +1023,11 @@ export class CheckoutPreflightService {
       this.scheduleInitiateCheckout(dto, groups, meta);
     }
 
-    const asapGroups = groups.filter((g) => fulfillment !== 'shipping');
-    const scheduleRequired = asapGroups.some((g) => g.schedule_required);
-    const asapAvailable =
-      fulfillment !== 'shipping' &&
-      asapGroups.length > 0 &&
-      asapGroups.every((g) => g.asap_available);
-    const firstBlocked = asapGroups.find((g) => !g.asap_available);
+    const paymentPhoneHint = await this.resolveSuggestedPaymentPhone(
+      dto,
+      isAuthenticated,
+      requiresPaymentPhoneOverall
+    );
 
     return {
       success: true,
@@ -966,6 +1045,9 @@ export class CheckoutPreflightService {
       purchase_credits: purchaseCredits,
       requires_address_for_payment: this.needsShipToAddress(fulfillment),
       requires_payment_phone: requiresPaymentPhoneOverall,
+      suggested_payment_phone: paymentPhoneHint.suggested_payment_phone,
+      suggested_payment_phone_id: paymentPhoneHint.suggested_payment_phone_id,
+      payment_phone_source: paymentPhoneHint.payment_phone_source,
       stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
       stripe_manual_capture: stripeManualCapture,
       tax_notice: taxNotice,
@@ -980,6 +1062,10 @@ export class CheckoutPreflightService {
       estimated_ready_at: asapGroups[0]?.estimated_ready_at,
       estimated_fulfill_by: asapGroups[0]?.estimated_fulfill_by,
       schedule_required: scheduleRequired,
+      schedule_allowed: scheduleAllowed,
+      pay_after_merchant_confirm_eligible:
+        groups.length > 0 &&
+        groups.every((g) => g.pay_after_merchant_confirm_eligible === true),
       diaspora: this.buildDiasporaBlock({
         dto,
         isDiaspora,
@@ -992,6 +1078,8 @@ export class CheckoutPreflightService {
       deposit_required: groups[0]?.deposit_required,
       deposit_amount: groups[0]?.deposit_amount,
       amount_due: groups[0]?.amount_due,
+      deposit_minimum_applied: groups[0]?.deposit_minimum_applied,
+      deposit_percent: groups[0]?.deposit_percent,
       momo_pay_now_delivery_enabled: groups[0]?.momo_pay_now_delivery_enabled,
     };
   }
@@ -1242,10 +1330,54 @@ export class CheckoutPreflightService {
       purchase_credits: null,
       requires_address_for_payment: dto.fulfillment_method !== 'pickup',
       requires_payment_phone: false,
+      suggested_payment_phone: null,
+      suggested_payment_phone_id: null,
+      payment_phone_source: 'none',
       stripe_retry_unsupported: true,
       stripe_manual_capture: false,
       delivery_availability: null,
     };
+  }
+
+  private async resolveSuggestedPaymentPhone(
+    dto: CheckoutPreflightDto,
+    isAuthenticated: boolean,
+    requiresPaymentPhone: boolean
+  ): Promise<{
+    suggested_payment_phone: string | null;
+    suggested_payment_phone_id: string | null;
+    payment_phone_source: 'registry' | 'profile' | 'none';
+  }> {
+    const empty = {
+      suggested_payment_phone: null as string | null,
+      suggested_payment_phone_id: null as string | null,
+      payment_phone_source: 'none' as const,
+    };
+    if (!requiresPaymentPhone || !isAuthenticated) return empty;
+    try {
+      const user = await this.hasuraUserService.getUser();
+      if (!user?.id) return empty;
+      const profileCountry =
+        await this.paymentRoutingService.getUserCountryCode(user.id);
+      const resolved =
+        await this.mobilePaymentPhonesService.resolveCheckoutPaymentPhone({
+          userId: user.id,
+          mobilePaymentPhoneId: dto.mobile_payment_phone_id,
+          profilePhone: user.phone_number,
+          profileCountry,
+          linkProfileIfNeeded: false,
+        });
+      return {
+        suggested_payment_phone: resolved.phoneE164,
+        suggested_payment_phone_id: resolved.phoneId,
+        payment_phone_source: resolved.source,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `resolveSuggestedPaymentPhone: ${error?.message ?? String(error)}`
+      );
+      return empty;
+    }
   }
 
   /**
@@ -1320,4 +1452,56 @@ export class CheckoutPreflightService {
       return false;
     }
   }
+
+  private depositLinesForGroup(
+    itemLines: CheckoutItemLineDto[],
+    inventoryById: Map<string, any>
+  ): DepositLineInput[] {
+    return itemLines.map((line) => {
+      const item = inventoryById.get(line.business_inventory_id)?.item as
+        | DepositLineSource
+        | undefined;
+      return {
+        unitPrice: line.unit_price,
+        quantity: line.quantity,
+        initialDepositEnabled: item?.initial_deposit_enabled === true,
+        initialDepositPercent: item?.initial_deposit_percent ?? null,
+        isCookedFood: lineIsCookedFood(item),
+      };
+    });
+  }
+
+  private quoteMomoItemDeposit(input: {
+    rail: string;
+    groupIsCookedFood: boolean;
+    timing: string;
+    currency: string;
+    orderTotal: number;
+    lines: DepositLineInput[];
+  }) {
+    if (!this.momoPayLaterDeposit(input)) return null;
+    return this.depositCalculationService.calculateItemDeposit({
+      lines: input.lines,
+      currency: input.currency,
+      orderTotal: input.orderTotal,
+    });
+  }
+
+  private momoPayLaterDeposit(input: {
+    rail: string;
+    groupIsCookedFood: boolean;
+    timing: string;
+  }): boolean {
+    if (input.rail !== 'mobile_money' || input.groupIsCookedFood) return false;
+    return input.timing === 'pay_at_delivery' || input.timing === 'pay_at_pickup';
+  }
 }
+
+type DepositLineSource = {
+  is_cooked_food?: boolean | null;
+  initial_deposit_enabled?: boolean | null;
+  initial_deposit_percent?: number | null;
+  item_sub_category?: {
+    item_category?: { name?: string | null } | null;
+  } | null;
+};

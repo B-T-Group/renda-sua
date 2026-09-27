@@ -1,43 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 /**
- * MoMo reservation deposit minimum amount in XAF.
+ * MoMo reservation deposit minimum in XAF.
  * MyPVIT docs: amount > 150 XAF (strict greater-than, not >=).
- * Samuel locked: 150 XAF floor. If MyPVIT rejects, revert to 151.
- * Freemopay: same floor for UX parity unless code shows different min.
- * Other MM currencies: 10% with no floor (config later).
+ * When opted-in item percents sum to less than this, charge this floor,
+ * never more than the order total.
  */
 export const MOMO_DEPOSIT_MIN_XAF = 150;
 
-/**
- * Deposit rate for XAF orders under 5000
- */
-const DEPOSIT_RATE_SMALL = 0.1;
+export interface DepositLineInput {
+  unitPrice: number;
+  quantity: number;
+  initialDepositEnabled?: boolean | null;
+  initialDepositPercent?: number | null;
+  isCookedFood?: boolean | null;
+}
 
-/**
- * Deposit rate for XAF orders 5000 and above
- */
-const DEPOSIT_RATE_LARGE = 0.05;
+export interface DepositLineSnapshot {
+  initialDepositPercent: number | null;
+  initialDepositAmount: number | null;
+}
 
-/**
- * Flat rate for non-XAF Mobile Money currencies
- */
-const DEPOSIT_RATE_OTHER = 0.1;
-
-/**
- * Threshold for switching deposit rates (XAF only)
- */
-const RATE_THRESHOLD_XAF = 5000;
-
-export interface DepositCalculationResult {
-  /** Calculated deposit amount (integer) */
+export interface ItemDepositCalculationResult {
   depositAmount: number;
-  /** Rate used for calculation (0.10 or 0.05) */
-  rate: number;
-  /** Remaining amount due after deposit */
   amountDue: number;
-  /** Total order amount at place-order (snapshot) */
   totalAmount: number;
+  minimumApplied: boolean;
+  /** Set when every contributing line shares one percent and the floor did not apply. */
+  percent: number | null;
+  lines: DepositLineSnapshot[];
 }
 
 @Injectable()
@@ -45,53 +36,34 @@ export class DepositCalculationService {
   private readonly logger = new Logger(DepositCalculationService.name);
 
   /**
-   * Calculate deposit amount for a MoMo pay-at-delivery/pickup order.
-   *
-   * XAF:
-   *   rate = grand_total < 5000 ? 0.10 : 0.05
-   *   deposit = min(grandTotal, max(150, round(grand_total * rate)))
-   *
-   * Other currencies:
-   *   deposit = min(grandTotal, round(grand_total * 0.10))  // no floor
+   * Deposit for MoMo pay-at-delivery/pickup from opted-in item lines.
+   * Each line is round(unit price x quantity x percent / 100).
+   * XAF sums under 150 are raised to 150, then capped at the order total.
    */
-  calculateDeposit(
-    grandTotal: number,
-    currency: string
-  ): DepositCalculationResult {
-    if (grandTotal < 0) {
+  calculateItemDeposit(input: {
+    lines: DepositLineInput[];
+    currency: string;
+    orderTotal: number;
+  }): ItemDepositCalculationResult {
+    if (input.orderTotal < 0) {
       throw new Error('Grand total cannot be negative');
     }
-
-    const isXaf = currency === 'XAF';
-    const rate = isXaf
-      ? grandTotal < RATE_THRESHOLD_XAF
-        ? DEPOSIT_RATE_SMALL
-        : DEPOSIT_RATE_LARGE
-      : DEPOSIT_RATE_OTHER;
-
-    const calculated = Math.round(grandTotal * rate);
-    const withFloor = isXaf
-      ? Math.max(MOMO_DEPOSIT_MIN_XAF, calculated)
-      : calculated;
-    // Never collect more than the order total (tiny XAF orders vs 150 floor)
-    const depositAmount = Math.min(grandTotal, withFloor);
-    const amountDue = Math.max(0, grandTotal - depositAmount);
-
-    this.logger.debug(
-      `Deposit calculation: total=${grandTotal} ${currency}, rate=${rate}, ` +
-        `calculated=${calculated}, deposit=${depositAmount}, due=${amountDue}`
+    const lines = input.lines.map((line) => lineInitialDepositAmount(line));
+    const sum = lines.reduce(
+      (total, line) => total + (line.initialDepositAmount ?? 0),
+      0
     );
-
-    return {
-      depositAmount,
-      rate,
-      amountDue,
-      totalAmount: grandTotal,
-    };
+    return this.applyDepositFloor({
+      lines,
+      sum,
+      currency: input.currency,
+      orderTotal: input.orderTotal,
+    });
   }
 
   /**
-   * Check if deposit is required for the given payment configuration.
+   * Check if a deposit can be collected for this payment configuration.
+   * The amount is still zero unless an item opted in.
    */
   isDepositRequired(
     paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup',
@@ -136,15 +108,90 @@ export class DepositCalculationService {
         currentStatus === 'out_for_delivery' || currentStatus === 'delivered'
       );
     }
-
     if (fulfillmentMethod === 'pickup') {
       return (
         currentStatus === 'ready_for_pickup' || currentStatus === 'picked_up'
       );
     }
-
     return (
       currentStatus === 'out_for_delivery' || currentStatus === 'delivered'
     );
   }
+
+  private applyDepositFloor(input: {
+    lines: DepositLineSnapshot[];
+    sum: number;
+    currency: string;
+    orderTotal: number;
+  }): ItemDepositCalculationResult {
+    if (input.sum <= 0) return emptyDeposit(input.lines, input.orderTotal);
+    const raised = xafFloor(input.currency, input.sum);
+    const depositAmount = Math.min(input.orderTotal, raised);
+    const minimumApplied =
+      input.currency === 'XAF' &&
+      input.sum < MOMO_DEPOSIT_MIN_XAF &&
+      depositAmount > input.sum;
+    this.logger.debug(
+      `Item deposit: sum=${input.sum} ${input.currency}, charge=${depositAmount}`
+    );
+    return {
+      depositAmount,
+      amountDue: Math.max(0, input.orderTotal - depositAmount),
+      totalAmount: input.orderTotal,
+      minimumApplied,
+      percent: minimumApplied ? null : sharedDepositPercent(input.lines),
+      lines: input.lines,
+    };
+  }
+}
+
+export function lineInitialDepositAmount(
+  line: DepositLineInput
+): DepositLineSnapshot {
+  const percent = contributingPercent(line);
+  if (percent == null) return emptyLine();
+  const amount = Math.round(
+    (Math.max(0, line.unitPrice) * Math.max(0, line.quantity) * percent) / 100
+  );
+  if (amount <= 0) return emptyLine();
+  return { initialDepositPercent: percent, initialDepositAmount: amount };
+}
+
+function contributingPercent(line: DepositLineInput): number | null {
+  if (line.isCookedFood || line.initialDepositEnabled !== true) return null;
+  const percent = Number(line.initialDepositPercent);
+  if (!Number.isInteger(percent) || percent < 1 || percent > 25) return null;
+  return percent;
+}
+
+function sharedDepositPercent(lines: DepositLineSnapshot[]): number | null {
+  const percents = lines
+    .map((line) => line.initialDepositPercent)
+    .filter((percent): percent is number => percent != null);
+  if (percents.length === 0) return null;
+  const first = percents[0];
+  return percents.every((percent) => percent === first) ? first : null;
+}
+
+function emptyLine(): DepositLineSnapshot {
+  return { initialDepositPercent: null, initialDepositAmount: null };
+}
+
+function emptyDeposit(
+  lines: DepositLineSnapshot[],
+  orderTotal: number
+): ItemDepositCalculationResult {
+  return {
+    depositAmount: 0,
+    amountDue: orderTotal,
+    totalAmount: orderTotal,
+    minimumApplied: false,
+    percent: null,
+    lines,
+  };
+}
+
+function xafFloor(currency: string, sum: number): number {
+  if (currency !== 'XAF' || sum >= MOMO_DEPOSIT_MIN_XAF) return sum;
+  return MOMO_DEPOSIT_MIN_XAF;
 }

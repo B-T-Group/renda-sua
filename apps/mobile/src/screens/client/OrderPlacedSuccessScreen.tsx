@@ -10,7 +10,7 @@ export default observer(function OrderPlacedSuccessScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const route = useRoute<RouteProp<{ OrderPlacedSuccess: OrderPlacedSuccessParams }, 'OrderPlacedSuccess'>>();
-  const { orderNumbers, paymentTiming, paymentCompleted, cardAuthorized, fulfillment } =
+  const { orderNumbers, paymentTiming, paymentCompleted, cardAuthorized, fulfillment, cookedFoodPayAfterConfirm } =
     route.params;
 
   useLayoutEffect(() => {
@@ -28,6 +28,7 @@ export default observer(function OrderPlacedSuccessScreen() {
       paymentCompleted={paymentCompleted}
       cardAuthorized={cardAuthorized}
       fulfillment={fulfillment}
+      cookedFoodPayAfterConfirm={cookedFoodPayAfterConfirm}
       primaryAction={{
         label: t('client.placeOrder.successScreen.returnToDashboard', 'Return to dashboard'),
         onPress: () => navigation.navigate('ClientMainTabs', { screen: 'ClientBrowse' }),

@@ -219,6 +219,8 @@ def get_complete_order_details(
         client_id
         business_id
         payment_source
+        payment_status
+        pay_after_merchant_confirm
         client {
           id
           user_id
@@ -305,6 +307,10 @@ def get_complete_order_details(
             client=client,
             business=business,
             payment_source=order_data.get("payment_source"),
+            payment_status=order_data.get("payment_status"),
+            pay_after_merchant_confirm=order_data.get(
+                "pay_after_merchant_confirm"
+            ),
             current_status="",  # Not fetched in this query
             business_location_id="",  # Not fetched in this query
             delivery_address_id="",  # Not fetched in this query

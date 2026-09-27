@@ -108,6 +108,7 @@ const INVENTORY_FOR_REORDER_QUERY = `
         min_order_quantity
         pay_on_delivery_enabled
         export_available
+        is_cooked_food
         item_sub_category {
           item_category { name }
         }
@@ -417,7 +418,8 @@ export class OrderReorderService {
     const foodBlock = checkFoodOrderable(inv);
     if (foodBlock) return 'not_orderable';
     const ignoresStock = cookedFoodIgnoresStock(
-      inv.item?.item_sub_category?.item_category?.name
+      inv.item?.item_sub_category?.item_category?.name,
+      inv.item?.is_cooked_food
     );
     if (!ignoresStock) {
       const available = Number(inv.computed_available_quantity ?? 0);
@@ -434,7 +436,8 @@ export class OrderReorderService {
   ): ReorderLineDto {
     const ordered = Math.max(1, Number(item.quantity) || 1);
     const ignoresStock = cookedFoodIgnoresStock(
-      inv.item?.item_sub_category?.item_category?.name
+      inv.item?.item_sub_category?.item_category?.name,
+      inv.item?.is_cooked_food
     );
     const stock = ignoresStock
       ? ordered

@@ -20,6 +20,7 @@ import { RefundEventService } from './refund-event.service';
 import { RefundPaymentService } from './refund-payment.service';
 import { ReturnWorkflowService } from './return-workflow.service';
 import type { RefundDestination, RefundOrderContext } from './refund.types';
+import { insertOrderStatusHistory } from './order-status-history.util';
 
 const ELIGIBLE_FOR_CLIENT_REQUEST = ['complete', 'refund_rejected'];
 const ELIGIBLE_FOR_LEGACY_REFUND = ['complete', 'delivered', 'failed'];
@@ -918,19 +919,11 @@ export class OrderRefundsService {
     status: string,
     notes: string,
     changedByType: string,
-    changedByUserId: string,
+    changedByUserId?: string | null,
     additionalNotes?: string
   ) {
     const finalNotes = additionalNotes ? `${notes}. ${additionalNotes}` : notes;
-    const mutation = `
-      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId, status: $status, notes: $notes,
-          changed_by_type: $changedByType, changed_by_user_id: $changedByUserId
-        }]) { affected_rows }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
+    await insertOrderStatusHistory(this.hasuraSystemService, {
       orderId,
       status,
       notes: finalNotes,

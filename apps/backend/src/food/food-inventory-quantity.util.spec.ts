@@ -17,6 +17,19 @@ describe('cookedFoodIgnoresStock', () => {
     expect(cookedFoodIgnoresStock('Food & Beverages')).toBe(false);
     expect(cookedFoodIgnoresStock(null)).toBe(false);
   });
+
+  it('is true when the durable cooked-food flag is set', () => {
+    expect(cookedFoodIgnoresStock('Retail & Shopping', true)).toBe(true);
+  });
+
+  it('still ignores stock for food category even if the flag is false', () => {
+    // Sentinel quantity is category-based; a false flag must not reserve it.
+    expect(cookedFoodIgnoresStock(FOOD_CATEGORY_NAME, false)).toBe(true);
+  });
+
+  it('tracks stock when flag is false outside the food category', () => {
+    expect(cookedFoodIgnoresStock('Retail & Shopping', false)).toBe(false);
+  });
 });
 
 describe('resolveInitialInventoryQuantity', () => {

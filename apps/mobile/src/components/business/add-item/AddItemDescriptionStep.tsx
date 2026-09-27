@@ -22,6 +22,10 @@ export interface AddItemDescriptionStepProps {
   onChange: (hint: string) => void;
   onPriceChange: (price: string) => void;
   onFoodItemChange?: (isFoodItem: boolean) => void;
+  initialDepositEnabled?: boolean;
+  initialDepositPercent?: string;
+  onInitialDepositEnabledChange?: (enabled: boolean) => void;
+  onInitialDepositPercentChange?: (percent: string) => void;
   onContinue: () => void;
 }
 
@@ -39,6 +43,10 @@ export function AddItemDescriptionStep({
   onChange,
   onPriceChange,
   onFoodItemChange,
+  initialDepositEnabled = false,
+  initialDepositPercent = '',
+  onInitialDepositEnabledChange,
+  onInitialDepositPercentChange,
   onContinue,
 }: AddItemDescriptionStepProps) {
   const { t } = useTranslation();
@@ -47,7 +55,12 @@ export function AddItemDescriptionStep({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [phKey, phDefault] = PLACEHOLDERS[placeholderIndex];
   const priceOk = isValidPrice(price);
-  const canContinue = hint.trim().length > 0 && priceOk && !busy;
+  const percent = Number.parseInt(initialDepositPercent, 10);
+  const depositOk =
+    isFoodItem ||
+    !initialDepositEnabled ||
+    (Number.isInteger(percent) && percent >= 1 && percent <= 25);
+  const canContinue = hint.trim().length > 0 && priceOk && depositOk && !busy;
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -180,6 +193,41 @@ export function AddItemDescriptionStep({
             onValueChange={onFoodItemChange}
             color={colors.primary.main}
           />
+        </View>
+      ) : null}
+      {!isFoodItem && onInitialDepositEnabledChange ? (
+        <View style={{ marginTop: spacing.lg }}>
+          <View style={styles.foodRow}>
+            <View style={styles.foodCopy}>
+              <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
+                {t('business.items.initialDepositEnabled', 'Require an initial deposit')}
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={{ color: colors.text.secondary, marginTop: spacing.xs }}
+              >
+                {t(
+                  'business.items.initialDepositHelp',
+                  'Buyers who pay at delivery or pickup with mobile money pay this percent of the item price now. You can set 1 to 25.'
+                )}
+              </Text>
+            </View>
+            <Switch
+              value={initialDepositEnabled}
+              onValueChange={onInitialDepositEnabledChange}
+              color={colors.primary.main}
+            />
+          </View>
+          {initialDepositEnabled ? (
+            <TextInput
+              label={t('business.items.initialDepositPercent', 'Deposit percent')}
+              value={initialDepositPercent}
+              onChangeText={onInitialDepositPercentChange}
+              keyboardType="number-pad"
+              mode="outlined"
+              style={{ marginTop: spacing.sm }}
+            />
+          ) : null}
         </View>
       ) : null}
       <View style={{ marginTop: spacing.lg }}>

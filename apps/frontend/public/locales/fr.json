@@ -2612,6 +2612,8 @@
       "adminAccessDenied": "Vous n'avez pas accès aux outils administrateur.",
       "failedDeliveries": "Livraisons échouées",
       "failedDeliveriesDescription": "Gérer et résoudre les livraisons échouées pour votre entreprise",
+      "failedPickups": "Retraits échoués",
+      "failedPickupsDescription": "Retraits de plats cuisinés marqués comme échoués avec remboursement partiel.",
       "cashReconciliationTitle": "Rapprochement espèces",
       "cashReconciliationDescription": "Commandes payées à la livraison avec exception espèces : ouvrez la liste et encaissez le paiement mobile par commande.",
       "refundsTitle": "Demandes de remboursement",
@@ -3112,6 +3114,14 @@
       "resolveDialog": {
         "title": "Résoudre la livraison échouée"
       }
+    },
+    "failedPickups": {
+      "title": "Retraits échoués",
+      "description": "Retraits de plats cuisinés marqués comme échoués par votre commerce",
+      "empty": "Aucun retrait échoué",
+      "fetchError": "Échec de la récupération des retraits échoués",
+      "refundChip": "Remboursement {{amount}} {{currency}}",
+      "feeRetained": "Frais retenus : {{amount}} {{currency}}"
     },
     "inventory": {
       "active": "Actif",
@@ -3804,7 +3814,12 @@
       "dimensions": "Dimensions (optionnel)",
       "isUsed": "Occasion",
       "isFoodItem": "Ceci est un plat préparé",
-      "isFoodItemHelp": "Les plats préparés ont des heures de service par emplacement et peuvent être marqués épuisés pour la journée.",
+      "isFoodItemHelp": "Les plats préparés ont des heures de service par emplacement et peuvent être marqués épuisés pour la journée. La catégorie peut être quelconque — ce drapeau est indépendant.",
+      "initialDepositEnabled": "Exiger un acompte initial",
+      "initialDepositHelp": "Les acheteurs qui paient à la livraison ou au retrait en mobile money paient maintenant ce pourcentage du prix de l'article. Vous pouvez choisir de 1 à 25.",
+      "initialDepositPercent": "Pourcentage de l'acompte",
+      "initialDepositPercentHelp": "Nombre entier de 1 à 25.",
+      "initialDepositPercentInvalid": "Saisissez un pourcentage d'acompte de 1 à 25.",
       "preparationMinutes": "Temps de préparation (minutes)",
       "preparationMinutesHelp": "Environ combien de temps ce plat prend à cuisiner."
     },
@@ -4123,6 +4138,7 @@
         "outForDeliveryPaymentPending": "L’agent enverra une demande de paiement à son arrivée. Gardez votre téléphone à portée de main pour l’approuver."
       },
       "storeReadyPayAtPickup": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "storeReadyCompletePaid": "À votre arrivée, appuyez sur Terminer la commande pour que le commerçant soit payé, puis récupérez votre commande.",
       "storeReadySendPin": "Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait et envoyez votre code PIN pour que le vendeur confirme.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
       "refundedNotice": "💰 Votre remboursement de {{orderTotal}} a été traité et devrait apparaître dans votre compte dans les 3 à 5 jours ouvrables. Merci pour votre patience.",
@@ -4645,6 +4661,7 @@
     "markAsShipped": "Marquer comme expédié",
     "markAsDelivered": "Marquer comme Livré",
     "markAsFailed": "Marquer comme Échoué",
+    "failPickup": "Marquer le retrait échoué",
     "markAsInTransit": "Marquer comme En Transit",
     "markAsOutForDelivery": "Marquer comme En Livraison",
     "pickUp": "Récupérer",
@@ -4759,6 +4776,7 @@
       "storePickupTitle": "Retrait au magasin (sans frais de livraison)",
       "payAtPickupHint": "Vous paierez à l’arrivée. Appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone.",
       "clientPaymentHint": "Payez au magasin lors du retrait. Quand la commande est prête, appuyez sur Payer dans l’application et approuvez la demande sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
+      "cookedFoodPayAfterConfirmHint": "Après confirmation de la cuisine, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Une fois approuvée, ils commencent à préparer votre commande.",
       "requestPaymentTitle": "Demander le paiement au retrait",
       "notEligibleForPaymentRequest": "Cette commande n’est pas configurée pour le paiement au retrait.",
       "businessInitiateHelp": "Si le client a besoin d’aide, envoyez une demande de paiement mobile. Une fois approuvée, la commande se termine automatiquement.",
@@ -5333,6 +5351,14 @@
       "preferredDate": "Date de livraison préférée",
       "pickupDate": "Date de retrait",
       "pickupTimeTitle": "Quand récupérerez-vous votre commande ?",
+      "cookedFoodAsapOnly": "Nous commencerons la préparation dès confirmation de la cuisine.",
+      "cookedFoodAsapOnlyPickup": "Récupérez dès que la cuisine marque la commande prête.",
+      "cookedFoodAsapPayAfterConfirm": "Nous commencerons la préparation une fois que la cuisine aura confirmé et reçu votre paiement.",
+      "kitchenClosed": {
+        "title": "Cuisine fermée",
+        "nextOpening": "Prochaine ouverture",
+        "availableHours": "Horaires disponibles"
+      },
       "pickupReviewSummary": "Retrait le {{date}} entre {{start}} et {{end}}.",
       "flexible": "Je suis flexible avec les horaires",
       "alternativeDates": "Dates alternatives",
@@ -5373,6 +5399,19 @@
       "selectReasonRequired": "Veuillez sélectionner une raison d'échec",
       "loadReasonsError": "Échec du chargement des raisons d'échec",
       "noReasonsAvailable": "Aucune raison d'échec disponible. Veuillez réessayer plus tard."
+    },
+    "failPickup": {
+      "title": "Marquer le retrait comme échoué",
+      "orderNumber": "Commande #{{orderNumber}}",
+      "feeNote": "Le client reçoit un remboursement partiel après rétention des frais d'annulation standard.",
+      "reasonLabel": "Pourquoi le retrait a-t-il échoué ?",
+      "notesLabel": "Veuillez décrire la raison",
+      "notesOptional": "Notes (optionnel)",
+      "confirm": "Marquer comme échoué",
+      "success": "Retrait marqué comme échoué",
+      "error": "Échec du marquage du retrait",
+      "selectReasonRequired": "Veuillez sélectionner une raison d'échec",
+      "loadReasonsError": "Échec du chargement des raisons d'échec"
     },
     "filters": {
       "allStatuses": "Tous les Statuts",
@@ -5487,6 +5526,7 @@
     "selectCancellationReason": "Veuillez sélectionner une raison d'annulation",
     "specialInstructionsPlaceholder": "Ajoutez des instructions spéciales pour cette commande (optionnel)",
     "specialInstructionsHint": "Ajoutez des détails de livraison supplémentaires pour le livreur (optionnel).",
+    "addSpecialInstructions": "Ajouter des instructions particulières",
     "stats": {
       "active": "Actif",
       "byStatus": "Commandes par statut",
@@ -5605,6 +5645,44 @@
       "pickupInstead": "Vous pouvez toujours récupérer cette commande en magasin.",
       "groupUnavailable": "Ce vendeur ne peut pas livrer pour le moment."
     },
+    "cookedFood": {
+      "confirmTitle": "Prêt dans combien de temps ?",
+      "waitPaymentTitle": "Ne commencez pas à cuisiner",
+      "orderLabel": "Commande n°{{number}}",
+      "pickup": "Retrait",
+      "delivery": "Livraison",
+      "readyHint": "Indiquez le délai au client. Il paie après votre confirmation. Ne cuisinez qu’une fois ce paiement reçu.",
+      "readyIn": "Prêt dans {{m}} minutes",
+      "customHelp": "Nombre entier de {{min}} à {{max}}.",
+      "confirmReadyMinutes": "Confirmer · {{m}} min",
+      "waitStepSent": "Une demande Mobile Money est sur le téléphone du client.",
+      "waitStepWait": "Attendez la notification de paiement.",
+      "waitStepCook": "Commencez à cuisiner seulement après avoir vu ce paiement.",
+      "waitPickup": "Quand c’est prêt, le client récupère la commande et la termine dans l’application.",
+      "waitDelivery": "Quand c’est prêt, un livreur vient la chercher pour la livraison.",
+      "minutesChip": "{{m}} min",
+      "customChip": "Autre",
+      "customMinutes": "Minutes avant d'être prêt",
+      "invalidReadyMinutes": "Saisissez un délai entre {{min}} et {{max}} minutes.",
+      "confirmReady": "Confirmer le délai",
+      "waitPaymentBody": "Nous avons envoyé une demande de paiement mobile money au client. Attendez la notification de paiement avant de commencer à cuisiner.",
+      "returnDashboard": "Retour au tableau de bord",
+      "viewOrdersToCook": "Voir les commandes à préparer",
+      "startCookingTitle": "Commencer à cuisiner",
+      "startCookingOne": "La commande n°{{number}} est payée — votre cuisine peut démarrer.",
+      "startCookingMany": "{{count}} commandes de plats attendent votre cuisine.",
+      "openOrder": "Ouvrir la commande",
+      "payAfterConfirm": {
+        "chip": "Paiement après confirmation cuisine",
+        "title": "Paiement après confirmation de la cuisine",
+        "bodyPickup": "Après confirmation de la cuisine, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Une fois approuvée, ils commencent à préparer votre commande. Appuyez sur Terminer la commande lorsque vous la récupérez.",
+        "bodyDelivery": "Après confirmation de la cuisine, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Une fois approuvée, ils commencent à préparer votre commande pour la livraison.",
+        "step1": "Votre commande a été envoyée à la cuisine.",
+        "step2": "Lorsque la cuisine confirme, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Approuvez-la pour qu’ils puissent commencer la préparation.",
+        "step3Pickup": "Quand votre commande est prête, récupérez-la et appuyez sur Terminer la commande dans l’application. Suivez l’avancement dans Mes commandes.",
+        "step3Delivery": "Nous vous informerons pendant la préparation et la livraison. Suivez l’avancement dans Mes commandes."
+      }
+    },
     "phases": {
       "pay": "Paiement requis",
       "confirm": "En attente de confirmation",
@@ -5640,6 +5718,9 @@
       "prepareClient": "Le commerçant prépare votre commande.",
       "prepareBusiness": "Marquez la commande prête lorsqu’elle est emballée.",
       "readyPickupClient": "Votre commande est prête à être retirée en magasin.",
+      "readyPickupCookedFoodClient": "Votre plat est prêt. Appuyez sur Terminer la commande à votre arrivée — pas de code PIN de retrait.",
+      "cookedFoodWaitPaymentBusiness": "En attente du paiement client. Ne commencez pas à cuisiner tant que le paiement n'a pas réussi.",
+      "cookedFoodWaitPaymentClient": "Approuvez la demande de paiement sur votre téléphone pour que le restaurant puisse commencer à cuisiner.",
       "readyPickupPayAtPickupClient": "À votre arrivée, appuyez sur Payer et approuvez la demande de paiement mobile sur votre téléphone. Le magasin verra le paiement, puis vous pourrez récupérer votre commande.",
       "readyPickupWaitClientPayBusiness": "Le client paiera dans l’application à son arrivée. Vous pouvez toujours envoyer une demande de paiement s’il a besoin d’aide.",
       "readyPickupBusiness": "Demandez le PIN de retrait du client à son arrivée. Le paiement est capturé lorsque vous confirmez le retrait.",
@@ -5661,7 +5742,10 @@
       "completeClient": "Cette commande est terminée. Vous pouvez laisser un avis.",
       "completeBusiness": "Cette commande est terminée.",
       "completeAgent": "Cette livraison est terminée.",
-      "refundRequested": "Une demande de remboursement nécessite votre attention."
+      "refundRequested": "Une demande de remboursement nécessite votre attention.",
+      "readyPickupCompleteClient": "La commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
+      "readyPickupCompleteOrderClient": "Votre commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
+      "readyPickupAskClientCompleteBusiness": "Demandez au client d'appuyer sur Terminer la commande dans l'app pour que vous soyez payé (et la commission)."
     },
     "pickupSla": {
       "pausedTitle": "Suivi de collecte en pause",
@@ -6961,7 +7045,10 @@
       "whatsappEnabled": "WhatsApp",
       "selectPrompt": "Sélectionnez un destinataire pour cette commande",
       "selectRequired": "Requis avant de passer votre commande"
-    }
+    },
+    "linkMoMoRequired": "Liez un numéro Mobile Money pour continuer.",
+    "selectedForPayment": "Sélectionné pour le paiement",
+    "useSavedPhone": "Utiliser {{phone}}"
   },
   "recipients": {
     "title": "Destinataires Enregistrés",
@@ -7719,6 +7806,15 @@
   "mobilePaymentPhone": {
     "verifyCta": "Confirmer le numéro Mobile Money",
     "confirmCta": "Confirmer le numéro Mobile Money",
+    "addOrLinkCta": "Ajouter ou lier un numéro Mobile Money",
+    "locationAddOrLinkCta": "Liez un numéro Mobile Money vérifié, ou ajoutez-en un nouveau, pour que les clients puissent acheter depuis cet emplacement.",
+    "linkTitle": "Lier un numéro Mobile Money",
+    "chooseExisting": "Choisissez un numéro déjà ajouté, ou ajoutez-en un nouveau pour cet emplacement.",
+    "backToExisting": "Retour aux numéros existants",
+    "unverified": "Non vérifié",
+    "needsConfirm": "Non vérifié — confirmez pour l’utiliser",
+    "verified": "Vérifié",
+    "addNew": "Ajouter un nouveau numéro…",
     "businessDashboardCta": "Vérifiez votre numéro Mobile Money pour que vos emplacements puissent accepter les paiements clients.",
     "businessDashboardCtaWithItems": "Vous avez des produits en catalogue. Vérifiez votre numéro Mobile Money pour que les clients puissent payer et que vous receviez les versements.",
     "questionWhy": "Confirmez que ce numéro est enregistré pour recevoir du Mobile Money afin que nous puissions y envoyer vos paiements.",
@@ -7727,7 +7823,13 @@
     "questionYes": "Oui, il reçoit du Mobile Money",
     "questionNoDifferent": "Non, utiliser un autre numéro",
     "questionContinue": "Continuer",
-    "questionSuccess": "Numéro confirmé. Vous pouvez l’utiliser pour les paiements Mobile Money."
+    "questionSuccess": "Numéro confirmé. Vous pouvez l’utiliser pour les paiements Mobile Money.",
+    "profileTitle": "Numéro Mobile Money",
+    "profileHelper": "Les demandes de paiement sont envoyées à ce numéro.",
+    "noneYet": "Aucun numéro Mobile Money lié pour le moment.",
+    "linkNumber": "Lier un numéro Mobile Money",
+    "useProfilePhone": "Utiliser {{phone}} pour le Mobile Money",
+    "profileNotMobileMoney": "Le numéro de votre profil n’est pas un numéro Mobile Money"
   },
   "businessOrderTiming": {
     "title": "Délais de confirmation",
@@ -7914,7 +8016,8 @@
     "kitchenHint": "Gardez cet onglet ouvert. Le son démarre après « Démarrer le mode cuisine ».",
     "armed": "Mode cuisine activé",
     "kitchenAlert": "Alerte nouvelle commande",
-    "orderNumber": "Commande {{number}}"
+    "orderNumber": "Commande {{number}}",
+    "moreWaiting": "{{count}} de plus en attente"
   },
   "kitchenMode": {
     "title": "Mode cuisine",
@@ -7984,5 +8087,15 @@
       "line1": "Chargement des commandes et du stock",
       "line2": "Presque prêt"
     }
+  },
+  "deposit": {
+    "reservationTitle": "Acompte de réservation",
+    "minimumLabel": "Acompte minimum pour cette commande",
+    "percentageLabel": "{{percentage}} % des articles qui exigent un acompte",
+    "mixedItemsLabel": "Acompte sur les articles pour lesquels cette boutique exige un acompte",
+    "refundableUntilSent": "Remboursable jusqu'à l'envoi en livraison ou jusqu'à ce que la commande soit prête pour le retrait",
+    "appliedToTotal": "Appliqué à votre commande — pas de frais supplémentaires",
+    "dueNow": "À payer maintenant (acompte)",
+    "amountDue": "Reste à payer"
   }
 }

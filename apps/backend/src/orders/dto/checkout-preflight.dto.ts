@@ -105,6 +105,15 @@ export class CheckoutPreflightDto {
 
   @ApiPropertyOptional({
     description:
+      'Client Mobile Money registry phone id. Preferred over raw phone_number for checkout.',
+    format: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID()
+  mobile_payment_phone_id?: string;
+
+  @ApiPropertyOptional({
+    description:
       'E.164 phone number. Supplied to validate Mobile Money provider availability and phone-country alignment before checkout.',
   })
   @IsOptional()
@@ -196,6 +205,40 @@ export enum VerificationMethod {
   PHONE = 'PHONE',
 }
 
+export class CookedFoodStoreClosedHourSlotDto {
+  @ApiProperty({
+    description: 'Day of week (0 = Sunday … 6 = Saturday).',
+    example: 1,
+  })
+  day_of_week!: number;
+
+  @ApiProperty({ description: 'Local start time HH:mm', example: '11:30' })
+  start_time!: string;
+
+  @ApiProperty({ description: 'Local end time HH:mm', example: '16:00' })
+  end_time!: string;
+}
+
+export class CookedFoodStoreClosedDetailsDto {
+  @ApiProperty({
+    description: 'IANA timezone for the kitchen schedule.',
+    example: 'Africa/Douala',
+  })
+  timezone!: string;
+
+  @ApiPropertyOptional({
+    description: 'ISO timestamp of the next opening, or null if unknown.',
+    nullable: true,
+  })
+  next_opens_at!: string | null;
+
+  @ApiProperty({
+    type: [CookedFoodStoreClosedHourSlotDto],
+    description: 'Weekly serving windows (food slots preferred over store hours).',
+  })
+  hours!: CookedFoodStoreClosedHourSlotDto[];
+}
+
 export class CheckoutBlockerDto {
   @ApiProperty({
     description: 'Machine-readable stable error code.',
@@ -205,6 +248,13 @@ export class CheckoutBlockerDto {
 
   @ApiProperty({ description: 'Human-readable message (English default).' })
   message!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Structured payload for specific codes (e.g. COOKED_FOOD_STORE_CLOSED).',
+    type: CookedFoodStoreClosedDetailsDto,
+  })
+  details?: CookedFoodStoreClosedDetailsDto;
 }
 
 export class DeliveryAvailabilityDto {
@@ -321,6 +371,19 @@ export class CheckoutGroupDto {
 
   @ApiPropertyOptional({
     description:
+      'True when the charged deposit was raised to the 150 XAF Mobile Money minimum.',
+  })
+  deposit_minimum_applied?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Shared item deposit percent when every opted-in line uses the same rate. Null when rates differ or the minimum applied.',
+    nullable: true,
+  })
+  deposit_percent?: number | null;
+
+  @ApiPropertyOptional({
+    description:
       'True when MoMo pay_now is enabled for delivery in this market. False means pay_now is hidden for MoMo + delivery.',
   })
   momo_pay_now_delivery_enabled?: boolean;
@@ -381,6 +444,18 @@ export class CheckoutGroupDto {
     description: 'True when the client must pick a future slot (store closed or closing soon).',
   })
   schedule_required?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'False when this group contains cooked food. Cooked food is ASAP-only; scheduling is disabled.',
+  })
+  schedule_allowed?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when every line is cooked food on the mobile-money rail — no deposit; pay after kitchen confirm.',
+  })
+  pay_after_merchant_confirm_eligible?: boolean;
 }
 
 export class PayerChargeEstimateDto {
@@ -539,6 +614,25 @@ export class CheckoutPreflightResponseDto {
 
   @ApiPropertyOptional({
     description:
+      'Suggested E.164 Mobile Money number for this checkout (registry default or profile).',
+  })
+  suggested_payment_phone?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Registry id for suggested_payment_phone when the number is already linked.',
+    format: 'uuid',
+  })
+  suggested_payment_phone_id?: string | null;
+
+  @ApiPropertyOptional({
+    enum: ['registry', 'profile', 'none'],
+    description: 'Where suggested_payment_phone came from.',
+  })
+  payment_phone_source?: 'registry' | 'profile' | 'none';
+
+  @ApiPropertyOptional({
+    description:
       'True when Stripe retry is not yet supported for orders that fail payment. Consumers should surface this to guide the user to pay from order details.',
   })
   stripe_retry_unsupported?: boolean;
@@ -592,6 +686,18 @@ export class CheckoutPreflightResponseDto {
   schedule_required?: boolean;
 
   @ApiPropertyOptional({
+    description:
+      'False when the cart includes cooked food. Cooked food is ASAP-only.',
+  })
+  schedule_allowed?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when every seller group is cooked-food MoMo pay-after (no deposit; charge after kitchen confirm).',
+  })
+  pay_after_merchant_confirm_eligible?: boolean;
+
+  @ApiPropertyOptional({
     type: CheckoutDiasporaDto,
     nullable: true,
     description:
@@ -616,6 +722,19 @@ export class CheckoutPreflightResponseDto {
       'Hoisted from the first seller group: remaining amount due after deposit (total - deposit_amount).',
   })
   amount_due?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: true when the 150 XAF minimum was applied.',
+  })
+  deposit_minimum_applied?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Hoisted from the first seller group: shared item deposit percent, or null when rates differ.',
+    nullable: true,
+  })
+  deposit_percent?: number | null;
 
   @ApiPropertyOptional({
     description:

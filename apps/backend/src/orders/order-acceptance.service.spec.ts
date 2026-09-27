@@ -315,6 +315,46 @@ describe('OrderAcceptanceService.onAcceptanceReminder', () => {
     expect(svc.waitAndExecute.scheduleAcceptanceTimeout).not.toHaveBeenCalled();
     expect(svc.orderEvents.recordEvent).not.toHaveBeenCalled();
   });
+
+  it('sends one digest instead of a per-order reminder when several orders are pending', async () => {
+    const order = { ...awaitingOrder, business_id: 'biz-1' };
+    const svc = buildService({ order });
+    svc.hasura.executeQuery.mockImplementation((query: string) => {
+      if (String(query).includes('ActionableAcceptanceCount')) {
+        return Promise.resolve({
+          orders_aggregate: { aggregate: { count: 3 } },
+        });
+      }
+      if (String(query).includes('LastAcceptanceReminder')) {
+        return Promise.resolve({ order_events: [] });
+      }
+      return Promise.resolve({ orders_by_pk: order });
+    });
+    svc.notifications.sendPendingAcceptanceDigestPush = jest
+      .fn()
+      .mockResolvedValue(undefined);
+
+    await svc.onAcceptanceReminder('order-1');
+
+    expect(svc.notifications.sendPendingAcceptanceDigestPush).toHaveBeenCalledWith(
+      {
+        businessId: 'biz-1',
+        businessUserId: 'biz-user-1',
+        orderId: 'order-1',
+        preferredLanguage: 'en',
+        businessLocationId: 'loc-1',
+        count: 3,
+      }
+    );
+    expect(svc.notifications.sendOrderAcceptanceReminderPush).not.toHaveBeenCalled();
+    expect(svc.hasura.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('busy_extra_prep_minutes'),
+      expect.objectContaining({
+        bid: 'biz-1',
+        snoozeCutoff: expect.any(String),
+      })
+    );
+  });
 });
 
 describe('OrderAcceptanceService.assertCanMarkBusy', () => {

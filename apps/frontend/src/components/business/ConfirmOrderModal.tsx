@@ -36,7 +36,7 @@ interface ConfirmOrderModalProps {
   open: boolean;
   order: OrderData | null;
   onClose: () => void;
-  onConfirm: (data: ConfirmOrderData) => Promise<void>;
+  onConfirm: (data: ConfirmOrderData) => Promise<void | unknown>;
   loading?: boolean;
 }
 

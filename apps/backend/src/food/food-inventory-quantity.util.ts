@@ -3,10 +3,21 @@ import { FOOD_DEFAULT_INVENTORY_QUANTITY } from './food.constants';
 
 /**
  * True when stock counts, reserves, and decrements must be skipped.
- * Quantity 1 is only a visibility sentinel, not a sellable count.
+ *
+ * Ignore stock when either:
+ * - `items.is_cooked_food` is true, or
+ * - the item is under Restaurant & Cooked Food (quantity is a visibility
+ *   sentinel of 1). An explicit `is_cooked_food: false` must not override the
+ *   food category — otherwise orders reserve that sentinel unit and the dish
+ *   disappears from catalogs (`available = quantity - reserved = 0`).
  */
-export function cookedFoodIgnoresStock(categoryName?: string | null): boolean {
-  return isFoodCategoryName(categoryName);
+export function cookedFoodIgnoresStock(
+  categoryName?: string | null,
+  isCookedFood?: boolean | null
+): boolean {
+  if (isCookedFood === true) return true;
+  if (isFoodCategoryName(categoryName)) return true;
+  return false;
 }
 
 /**
@@ -16,9 +27,12 @@ export function cookedFoodIgnoresStock(categoryName?: string | null): boolean {
 export function resolveInitialInventoryQuantity(params: {
   requestedQuantity: number;
   categoryName?: string | null;
+  isCookedFood?: boolean | null;
 }): number {
-  const { requestedQuantity, categoryName } = params;
-  if (!cookedFoodIgnoresStock(categoryName)) return requestedQuantity;
+  const { requestedQuantity, categoryName, isCookedFood } = params;
+  if (!cookedFoodIgnoresStock(categoryName, isCookedFood)) {
+    return requestedQuantity;
+  }
   return FOOD_DEFAULT_INVENTORY_QUANTITY;
 }
 
@@ -26,8 +40,11 @@ export function resolveInitialInventoryQuantity(params: {
 export function resolveCookedFoodMinOrderQuantity(params: {
   requestedMin?: number | null;
   categoryName?: string | null;
+  isCookedFood?: boolean | null;
 }): number {
-  if (cookedFoodIgnoresStock(params.categoryName)) return 1;
+  if (cookedFoodIgnoresStock(params.categoryName, params.isCookedFood)) {
+    return 1;
+  }
   const requested = params.requestedMin;
   if (requested == null || !Number.isFinite(requested)) return 1;
   return Math.max(1, Math.trunc(requested));

@@ -45,8 +45,9 @@ export function useBusinessOrderActions(onSuccess?: () => void) {
     async (payload: ConfirmOrderPayload) => {
       setActingId(payload.orderId);
       try {
-        await ordersApi.confirm(payload);
+        const result = await ordersApi.confirm(payload);
         finish();
+        return result;
       } catch (e: unknown) {
         fail(e, t('business.orders.confirmFailed', 'Failed to confirm order'));
         throw e;

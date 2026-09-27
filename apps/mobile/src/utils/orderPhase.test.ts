@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   orderProgressSteps,
+  orderToPhaseInput,
   resolveOrderPhase,
 } from './orderPhase';
 
@@ -54,7 +55,7 @@ describe('resolveOrderPhase shipping', () => {
 });
 
 describe('resolveOrderPhase pickup ready', () => {
-  it('asks pay-at-pickup clients to pay in the app when ready', () => {
+  it('asks pay-at-pickup clients to complete in the app when ready', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -66,10 +67,10 @@ describe('resolveOrderPhase pickup ready', () => {
     expect(info.nextStepKey).toBe(
       'orders.nextStep.readyPickupPayAtPickupClient'
     );
-    expect(info.primaryActionId).toBe('pay');
+    expect(info.primaryActionId).toBe('complete');
   });
 
-  it('tells the store to wait for the client to pay at pickup', () => {
+  it('tells the store to wait for the client to complete at pickup', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -82,10 +83,10 @@ describe('resolveOrderPhase pickup ready', () => {
     expect(info.nextStepKey).toBe(
       'orders.nextStep.readyPickupWaitClientPayBusiness'
     );
-    expect(info.primaryActionId).toBe('collect_pickup_payment');
+    expect(info.primaryActionId).toBe('none');
   });
 
-  it('lets the store request pickup payment after a failed attempt', () => {
+  it('keeps the store waiting after a failed pay-at-pickup attempt', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -95,10 +96,10 @@ describe('resolveOrderPhase pickup ready', () => {
       },
       'business'
     );
-    expect(info.primaryActionId).toBe('collect_pickup_payment');
+    expect(info.primaryActionId).toBe('none');
   });
 
-  it('keeps PIN-oriented copy for prepaid pickup', () => {
+  it('uses generic complete copy for prepaid non-cooked pickup', () => {
     const info = resolveOrderPhase(
       {
         status: 'ready_for_pickup',
@@ -108,6 +109,74 @@ describe('resolveOrderPhase pickup ready', () => {
       },
       'client'
     );
-    expect(info.nextStepKey).toBe('orders.nextStep.readyPickupClient');
+    expect(info.nextStepKey).toBe(
+      'orders.nextStep.readyPickupCompleteOrderClient'
+    );
+  });
+
+  it('uses food complete copy for cooked-food pickup when ready', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'ready_for_pickup',
+        fulfillmentMethod: 'pickup',
+        paymentTiming: 'pay_now',
+        paymentStatus: 'authorized',
+        isCookedFoodPickup: true,
+      },
+      'client'
+    );
+    expect(info.nextStepKey).toBe('orders.nextStep.readyPickupCompleteClient');
+  });
+
+  it('uses complete (not PIN) for cooked-food pickup when ready', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'ready_for_pickup',
+        fulfillmentMethod: 'pickup',
+        paymentTiming: 'pay_now',
+        paymentStatus: 'paid',
+        isCookedFoodPickup: true,
+      },
+      'client'
+    );
+    expect(info.primaryActionId).toBe('complete');
+  });
+
+  it('hides mark ready while waiting for cooked-food payment', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'confirmed',
+        fulfillmentMethod: 'pickup',
+        isCookedFoodPickup: true,
+        payAfterMerchantConfirm: true,
+        paymentStatus: 'pending',
+      },
+      'business'
+    );
+    expect(info.primaryActionId).toBe('none');
+    expect(info.nextStepKey).toBe('orders.nextStep.cookedFoodWaitPaymentBusiness');
+  });
+
+  it('infers cooked-food pickup from line flags when the order flag is missing', () => {
+    const input = orderToPhaseInput({
+      fulfillment_method: 'pickup',
+      fulfillment_timing: 'asap',
+      current_status: 'confirmed',
+      pay_after_merchant_confirm: true,
+      payment_status: 'pending',
+      order_items: [{ is_cooked_food: true } as never],
+    });
+    expect(input.isCookedFoodPickup).toBe(true);
+    expect(resolveOrderPhase(input, 'client').primaryActionId).toBe('pay');
+  });
+
+  it('does not infer cooked-food pickup for delivery', () => {
+    const input = orderToPhaseInput({
+      fulfillment_method: 'delivery',
+      fulfillment_timing: 'asap',
+      current_status: 'confirmed',
+      order_items: [{ is_cooked_food: true } as never],
+    });
+    expect(input.isCookedFoodPickup).toBe(false);
   });
 });

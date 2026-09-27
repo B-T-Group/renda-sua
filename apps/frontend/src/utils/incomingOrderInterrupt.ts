@@ -59,6 +59,40 @@ export function shouldOpenIncomingInterrupt(eventName: string | null): boolean {
   return !!eventName && INCOMING_INTERRUPT_EVENTS.has(eventName);
 }
 
+export function nextIncomingOrderId(
+  queue: Array<{ id: string }>,
+  isSnoozed: (id: string) => boolean
+): string | null {
+  return queue.find((row) => row.id && !isSnoozed(row.id))?.id ?? null;
+}
+
+export function incomingWaitingCount(
+  queue: Array<{ id: string }>,
+  shownId: string | null,
+  isSnoozed: (id: string) => boolean
+): number {
+  if (!shownId) return 0;
+  const open = queue.filter((row) => row.id && !isSnoozed(row.id));
+  const index = open.findIndex((row) => row.id === shownId);
+  if (index < 0) return open.length;
+  return Math.max(0, open.length - index - 1);
+}
+
+export function shouldKeepVisibleIncomingOrder(
+  queue: Array<{ id: string }>,
+  shownId: string | null
+): boolean {
+  return !!shownId && queue.some((row) => row.id === shownId);
+}
+
+export function pendingAcceptanceQueue(payload: {
+  queue?: Array<{ id: string }> | null;
+  order?: { id: string } | null;
+}): Array<{ id: string }> {
+  if (payload.queue?.length) return payload.queue.filter((row) => !!row.id);
+  return payload.order?.id ? [{ id: payload.order.id }] : [];
+}
+
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }

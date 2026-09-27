@@ -47,4 +47,17 @@ describe('site-event-metadata.util', () => {
     });
     expect(out.loginHint).toBeUndefined();
   });
+
+  it('strips nested emails and bare one-time codes', () => {
+    const out = normalizeSiteEventMetadata('page.view', {
+      context: 'checkout',
+      note: '482910',
+      quantity: '12',
+      extra: { contact: 'shop@example.com', label: 'checkout' },
+    });
+    expect(out.context).toBe('checkout');
+    expect(out.quantity).toBe('12');
+    expect(out.note).toBeUndefined();
+    expect(out.extra).toEqual({ label: 'checkout' });
+  });
 });

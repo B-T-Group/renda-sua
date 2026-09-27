@@ -153,6 +153,53 @@ describe('buildActiveOrderCardModel', () => {
     expect(model.destination).toEqual({ kind: 'refunds' });
     expect(model.ctaDefault).toBe('Manage Refund');
   });
+
+  it('resolves display total from line items when total_amount is zero', () => {
+    const model = buildActiveOrderCardModel(
+      order({
+        id: 'o1',
+        current_status: 'preparing',
+        total_amount: 0,
+        subtotal: 0,
+        order_items: [
+          {
+            id: 'i1',
+            quantity: 1,
+            item_name: 'Plate',
+            unit_price: 300,
+            total_price: 300,
+          },
+        ],
+      }),
+      t,
+      'en-US'
+    );
+    expect(model.totalLabel).toMatch(/300/);
+    expect(model.totalLabel).not.toMatch(/\b0\b/);
+  });
+
+  it('resolves display total from subtotal when credits zeroed total_amount', () => {
+    const model = buildActiveOrderCardModel(
+      order({
+        id: 'o1',
+        current_status: 'confirmed',
+        total_amount: 0,
+        subtotal: 300,
+        order_items: [
+          {
+            id: 'i1',
+            quantity: 1,
+            item_name: 'Plate',
+            unit_price: 300,
+            total_price: 300,
+          },
+        ],
+      }),
+      t,
+      'en-US'
+    );
+    expect(model.totalLabel).toMatch(/300/);
+  });
 });
 
 describe('sortActiveOrders', () => {

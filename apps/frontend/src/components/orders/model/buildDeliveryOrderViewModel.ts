@@ -90,10 +90,12 @@ function requirements(
   ctx: OrderViewModelContext
 ): DeliveryRequirement[] {
   const list: DeliveryRequirement[] = [];
+  const payAfterDelivery = order.pay_after_merchant_confirm === true;
   const pinOk =
-    order.payment_timing !== 'pay_at_delivery' &&
-    order.payment_timing !== 'pay_at_pickup' &&
-    order.payment_method !== 'pay_on_delivery';
+    payAfterDelivery ||
+    (order.payment_timing !== 'pay_at_delivery' &&
+      order.payment_timing !== 'pay_at_pickup' &&
+      order.payment_method !== 'pay_on_delivery');
   if (pinOk && ['out_for_delivery', 'assigned_to_agent', 'picked_up', 'in_transit'].includes(order.current_status)) {
     list.push({
       id: 'pin',

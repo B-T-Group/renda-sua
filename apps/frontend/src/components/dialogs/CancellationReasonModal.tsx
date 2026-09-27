@@ -8,6 +8,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -43,6 +44,13 @@ export interface CancellationReasonModalProps {
   onError?: (message: string) => void;
 }
 
+const COOKED_READY_CLIENT_REASON_VALUES = new Set([
+  'wont_make_it',
+  'something_came_up',
+  'momo_payment_issues',
+  'other',
+]);
+
 const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   open,
   onClose,
@@ -54,11 +62,21 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { reasons, loading: loadingReasons } = useCancellationReasons(persona, {
+  const { reasons: allReasons, loading: loadingReasons } = useCancellationReasons(persona, {
     enabled: open,
   });
   const { cancelOrder } = useBackendOrders();
   const { getCancellationFee, error: feeError } = useCancellationFee();
+
+  const cookedReadyChipMode =
+    persona === 'client' &&
+    order.current_status === 'ready_for_pickup' &&
+    (order.pay_after_merchant_confirm === true ||
+      order.is_cooked_food_pickup === true);
+
+  const reasons = cookedReadyChipMode
+    ? allReasons.filter((r) => COOKED_READY_CLIENT_REASON_VALUES.has(r.value))
+    : allReasons;
 
   const [selectedReasonId, setSelectedReasonId] = useState<number | null>(null);
   const [otherReasonText, setOtherReasonText] = useState('');
@@ -490,72 +508,110 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
         {/* Cancellation Reasons */}
         {!loadingReasons && !success && reasons.length > 0 && (
           <FormControl component="fieldset" sx={{ width: '100%' }}>
-            <RadioGroup
-              value={selectedReasonId?.toString() || ''}
-              onChange={handleReasonChange}
-            >
-              {reasons.map((reason) => (
-                <Box key={reason.id} sx={{ mb: 1 }}>
-                  <FormControlLabel
-                    value={reason.id.toString()}
-                    control={<Radio />}
-                    label={
-                      <Typography variant="body1" sx={{ ml: 1 }}>
-                        {reason.display}
-                      </Typography>
+            {cookedReadyChipMode ? (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                {reasons.map((reason) => (
+                  <Chip
+                    key={reason.id}
+                    label={reason.display}
+                    color={
+                      selectedReasonId === reason.id ? 'primary' : 'default'
                     }
-                    sx={{
-                      m: 0,
-                      p: 1.5,
-                      border: '1px solid',
-                      borderColor:
-                        selectedReasonId === reason.id
-                          ? 'primary.main'
-                          : 'divider',
-                      borderRadius: 1,
-                      bgcolor:
-                        selectedReasonId === reason.id
-                          ? 'primary.50'
-                          : 'transparent',
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        bgcolor: 'grey.50',
-                        borderColor: 'primary.light',
-                      },
-                    }}
+                    variant={
+                      selectedReasonId === reason.id ? 'filled' : 'outlined'
+                    }
+                    onClick={() => setSelectedReasonId(reason.id)}
+                    disabled={submitting}
                   />
+                ))}
+              </Box>
+            ) : (
+              <RadioGroup
+                value={selectedReasonId?.toString() || ''}
+                onChange={handleReasonChange}
+              >
+                {reasons.map((reason) => (
+                  <Box key={reason.id} sx={{ mb: 1 }}>
+                    <FormControlLabel
+                      value={reason.id.toString()}
+                      control={<Radio />}
+                      label={
+                        <Typography variant="body1" sx={{ ml: 1 }}>
+                          {reason.display}
+                        </Typography>
+                      }
+                      sx={{
+                        m: 0,
+                        p: 1.5,
+                        border: '1px solid',
+                        borderColor:
+                          selectedReasonId === reason.id
+                            ? 'primary.main'
+                            : 'divider',
+                        borderRadius: 1,
+                        bgcolor:
+                          selectedReasonId === reason.id
+                            ? 'primary.50'
+                            : 'transparent',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          bgcolor: 'grey.50',
+                          borderColor: 'primary.light',
+                        },
+                      }}
+                    />
 
-                  {/* Text field for "other" reason */}
-                  {reason.value === 'other' &&
-                    selectedReasonId === reason.id && (
-                      <Box sx={{ mt: 2, ml: 4 }}>
-                        <TextField
-                          fullWidth
-                          multiline
-                          rows={3}
-                          label={t(
-                            'orders.pleaseSpecify',
-                            'Please specify the reason'
-                          )}
-                          placeholder={t(
-                            'orders.otherReasonPlaceholder',
-                            'Enter your reason for canceling this order...'
-                          )}
-                          value={otherReasonText}
-                          onChange={(e) => setOtherReasonText(e.target.value)}
-                          disabled={submitting}
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              bgcolor: 'background.paper',
-                            },
-                          }}
-                        />
-                      </Box>
-                    )}
-                </Box>
-              ))}
-            </RadioGroup>
+                    {/* Text field for "other" reason */}
+                    {reason.value === 'other' &&
+                      selectedReasonId === reason.id && (
+                        <Box sx={{ mt: 2, ml: 4 }}>
+                          <TextField
+                            fullWidth
+                            multiline
+                            rows={3}
+                            label={t(
+                              'orders.pleaseSpecify',
+                              'Please specify the reason'
+                            )}
+                            placeholder={t(
+                              'orders.otherReasonPlaceholder',
+                              'Enter your reason for canceling this order...'
+                            )}
+                            value={otherReasonText}
+                            onChange={(e) => setOtherReasonText(e.target.value)}
+                            disabled={submitting}
+                            variant="outlined"
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                bgcolor: 'background.paper',
+                              },
+                            }}
+                          />
+                        </Box>
+                      )}
+                  </Box>
+                ))}
+              </RadioGroup>
+            )}
+            {cookedReadyChipMode &&
+              reasons.find((r) => r.id === selectedReasonId)?.value ===
+                'other' && (
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label={t('orders.pleaseSpecify', 'Please specify the reason')}
+                  placeholder={t(
+                    'orders.otherReasonPlaceholder',
+                    'Enter your reason for canceling this order...'
+                  )}
+                  value={otherReasonText}
+                  onChange={(e) => setOtherReasonText(e.target.value)}
+                  disabled={submitting}
+                  variant="outlined"
+                  sx={{ mt: 1 }}
+                />
+              )}
           </FormControl>
         )}
 

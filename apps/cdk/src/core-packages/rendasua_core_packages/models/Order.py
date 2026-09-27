@@ -33,6 +33,7 @@ class Order(BaseModel):
     payment_source: Optional[str] | None = None
     payment_status: Optional[str] | None = None
     payment_timing: Optional[str] | None = None
+    pay_after_merchant_confirm: Optional[bool] | None = None
     per_km_delivery_fee: float
     preferred_delivery_time: Optional[datetime.datetime] | None = None
     requires_fast_delivery: bool

@@ -183,6 +183,7 @@ export interface OrderLike {
   payment_timing?: string | null;
   payment_status?: string | null;
   payment_method?: string | null;
+  pay_after_merchant_confirm?: boolean | null;
   assigned_agent_id?: string | null;
   reconciliation_status?: string | null;
   acceptance_deadline_at?: string | null;

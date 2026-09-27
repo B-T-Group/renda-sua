@@ -7,7 +7,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
-import { ONBOARDING_10_MIN_SALE_TOTAL_KEY } from '../representative-compensation/compensation-rules';
+import {
+  BUSINESS_REFERRAL_MIN_ITEMS,
+  ONBOARDING_10_MIN_SALE_TOTAL_KEY,
+} from '../representative-compensation/compensation-rules';
 import {
   mapReferredBusinesses,
   REFERRED_BUSINESSES_LIST_SELECTION,
@@ -414,8 +417,8 @@ export class BusinessReferralsService {
     const isFr = resolved.preferredLanguage.toLowerCase().startsWith('fr');
     const title = isFr ? 'Nouveau commerce parrainé' : 'New business referral';
     const body = isFr
-      ? `${params.businessName} s'est inscrit avec votre code. Identifié + 10 articles approuvés = votre bonus.`
-      : `${params.businessName} signed up with your code. Identified + 10 approved items = your bonus.`;
+      ? `${params.businessName} s'est inscrit avec votre code. Identifié + ${BUSINESS_REFERRAL_MIN_ITEMS} articles approuvés = votre bonus.`
+      : `${params.businessName} signed up with your code. Identified + ${BUSINESS_REFERRAL_MIN_ITEMS} approved items = your bonus.`;
 
     try {
       if (resolved.userEmail?.trim()) {
@@ -603,7 +606,7 @@ export class BusinessReferralsService {
       referralAmount,
       currency,
       countryCode,
-      minApprovedItems: 10,
+      minApprovedItems: BUSINESS_REFERRAL_MIN_ITEMS,
       referredCount,
       paidCount,
       internal,
@@ -677,7 +680,7 @@ export class BusinessReferralsService {
       referralAmount,
       currency,
       countryCode,
-      minApprovedItems: 10,
+      minApprovedItems: BUSINESS_REFERRAL_MIN_ITEMS,
       referredCount: business.referred_businesses_aggregate?.aggregate?.count ?? 0,
       paidCount: business.referral_payouts_earned_aggregate?.aggregate?.count ?? 0,
     };

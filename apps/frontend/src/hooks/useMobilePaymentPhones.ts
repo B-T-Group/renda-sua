@@ -8,10 +8,13 @@ export interface MobilePaymentPhone {
   user_id: string;
   phone_e164: string;
   is_verified: boolean;
+  is_default?: boolean;
   verified_at: string | null;
   last_verification_transaction_id: string | null;
   created_at: string;
   updated_at: string;
+  locationCount?: number;
+  linkedToAgent?: boolean;
 }
 
 export interface MobilePaymentPhoneStatus {
@@ -74,21 +77,73 @@ export function useMobilePaymentPhones(autoFetch = true) {
   }, [autoFetch, fetchPhones]);
 
   const createPhone = useCallback(
-    async (countryCode: string, phoneNumber: string) => {
+    async (
+      countryCode: string,
+      phoneNumber: string,
+      options?: { setAsDefault?: boolean }
+    ) => {
       if (!apiClient) throw new Error('API client not available');
       const res = await apiClient.post<{ success: boolean; data: { phone: MobilePaymentPhone } }>(
         '/mobile-payment-phones',
-        { countryCode, phoneNumber }
+        {
+          countryCode,
+          phoneNumber,
+          setAsDefault: options?.setAsDefault === true,
+        }
       );
       const phone = res.data.data.phone;
       setPhones((prev) => {
-        const exists = prev.some((p) => p.id === phone.id);
-        return exists ? prev.map((p) => (p.id === phone.id ? phone : p)) : [phone, ...prev];
+        const next = prev.map((p) =>
+          phone.is_default ? { ...p, is_default: false } : p
+        );
+        const exists = next.some((p) => p.id === phone.id);
+        return exists
+          ? next.map((p) => (p.id === phone.id ? phone : p))
+          : [phone, ...next];
       });
       return phone;
     },
     [apiClient]
   );
+
+  const setDefaultPhone = useCallback(
+    async (id: string) => {
+      if (!apiClient) throw new Error('API client not available');
+      const res = await apiClient.post<{
+        success: boolean;
+        data: { phone: MobilePaymentPhone };
+      }>(`/mobile-payment-phones/${id}/default`);
+      const phone = res.data.data.phone;
+      setPhones((prev) =>
+        prev.map((p) =>
+          p.id === phone.id
+            ? phone
+            : { ...p, is_default: false }
+        )
+      );
+      return phone;
+    },
+    [apiClient]
+  );
+
+  const linkProfilePhone = useCallback(async () => {
+    if (!apiClient) throw new Error('API client not available');
+    const res = await apiClient.post<{
+      success: boolean;
+      data: { phone: MobilePaymentPhone | null; reason: string | null };
+    }>('/mobile-payment-phones/link-profile');
+    const phone = res.data.data.phone;
+    if (phone) {
+      setPhones((prev) => {
+        const cleared = prev.map((p) => ({ ...p, is_default: false }));
+        const exists = cleared.some((p) => p.id === phone.id);
+        return exists
+          ? cleared.map((p) => (p.id === phone.id ? phone : p))
+          : [phone, ...cleared];
+      });
+    }
+    return res.data.data;
+  }, [apiClient]);
 
   const updatePhone = useCallback(
     async (id: string, countryCode: string, phoneNumber: string) => {
@@ -188,6 +243,8 @@ export function useMobilePaymentPhones(autoFetch = true) {
     hasVerifiedPhone,
     fetchPhones,
     createPhone,
+    setDefaultPhone,
+    linkProfilePhone,
     updatePhone,
     deletePhone,
     startVerification,

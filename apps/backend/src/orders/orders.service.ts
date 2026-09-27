@@ -39,6 +39,7 @@ import {
   MobilePaymentIntegrationProvider,
   MobilePaymentsService,
 } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import {
   NotificationData,
@@ -117,7 +118,15 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
+import { collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
 import { FoodOrdersService } from '../food/food-orders.service';
+import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
+import {
+  isCookedFoodPickupOrder,
+  isCookedFoodFulfillmentOrder,
+  anyLineIsCookedFood,
+  lineIsCookedFood,
+} from '../food/cooked-food-flag.util';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
@@ -127,12 +136,14 @@ import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
 import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
+import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
 
 export interface OrderStatusChangeRequest {
   orderId: string;
   notes?: string;
   failure_reason_id?: string; // Required for fail_delivery endpoint
   cancellationReasonId?: number; // Required by cancelOrder, optional for other operations
+  viaSystem?: boolean;
 }
 
 export interface BatchOrderStatusChangeRequest {
@@ -170,6 +181,11 @@ export interface ConfirmOrderRequest {
    * how many portions are left once this order is in the kitchen.
    */
   food_stock_updates?: FoodConfirmationStockUpdate[];
+  /**
+   * Cooked-food ASAP pickup: minutes until ready (15/30/45/60 or custom 5–180).
+   * WhatsApp one-tap defaults to 30.
+   */
+  ready_in_minutes?: number;
 }
 
 export interface GetOrderRequest {
@@ -484,6 +500,7 @@ export class OrdersService {
     private readonly addressesService: AddressesService,
     private readonly mobilePaymentsService: MobilePaymentsService,
     private readonly mobilePaymentsDatabaseService: MobilePaymentsDatabaseService,
+    private readonly mobilePaymentPhonesService: MobilePaymentPhonesService,
     private readonly notificationsService: NotificationsService,
     private readonly orderRecipientNotifications: OrderRecipientNotificationsService,
     private readonly fxEstimateService: FxEstimateService,
@@ -520,6 +537,7 @@ export class OrdersService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
     private readonly foodOrdersService: FoodOrdersService,
+    private readonly cookedFoodPickupFlow: CookedFoodPickupFlowService,
     private readonly depositCalculationService: DepositCalculationService,
     private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
@@ -535,6 +553,15 @@ export class OrdersService {
 
   private emitOrderPaid(orderId: string): void {
     this.eventEmitter.emit(ORDER_PAID_EVENT, { orderId });
+  }
+
+  /** System cancel for cooked-food MoMo still unpaid after confirm timeout. */
+  async cancelUnpaidCookedFoodAfterConfirm(orderId: string): Promise<void> {
+    await this.orderCleanupService.cancelUnpaidPendingPaymentAsSystem(
+      orderId,
+      'Client did not pay within the allowed time after confirm',
+      { allowConfirmedUnpaid: true, releaseInventory: true }
+    );
   }
 
   private async canAccessAnyOrder(userId: string): Promise<boolean> {
@@ -671,6 +698,68 @@ export class OrdersService {
       overrides: businessInventory.variant_price_overrides ?? [],
     });
     return this.computeUnitPriceFromBase(base, deal);
+  }
+
+  private initialDepositQuote(
+    lineContexts: Array<{ inventory: any; variant: any }>,
+    items: Array<{ quantity: number }>,
+    dealsMap: Record<string, { discount_type: string; discount_value: number }>,
+    currency: string,
+    orderTotal: number
+  ) {
+    const lines = lineContexts.map((ctx, idx) =>
+      this.depositLineInput(ctx, items[idx]?.quantity ?? 0, dealsMap)
+    );
+    return this.depositCalculationService.calculateItemDeposit({
+      lines,
+      currency,
+      orderTotal,
+    });
+  }
+
+  private depositLineInput(
+    ctx: { inventory: any; variant: any },
+    quantity: number,
+    dealsMap: Record<string, { discount_type: string; discount_value: number }>
+  ) {
+    const item = ctx.inventory.item;
+    return {
+      unitPrice: this.computeUnitPriceFromVariantOrInventory(
+        ctx.inventory,
+        ctx.variant,
+        dealsMap[ctx.inventory.id]
+      ),
+      quantity,
+      initialDepositEnabled: item?.initial_deposit_enabled === true,
+      initialDepositPercent: item?.initial_deposit_percent ?? null,
+      isCookedFood: lineIsCookedFood(item),
+    };
+  }
+
+  private shouldCollectInitialDeposit(input: {
+    cookedFoodFulfillment: boolean;
+    paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
+    rail: 'mobile_money' | 'stripe' | 'wallet';
+    depositAmount: number;
+  }): boolean {
+    if (input.cookedFoodFulfillment || input.depositAmount <= 0) return false;
+    return this.depositCalculationService.isDepositRequired(
+      input.paymentTiming,
+      input.rail
+    );
+  }
+
+  private orderItemDepositSnapshot(
+    collect: boolean,
+    line?: { initialDepositPercent: number | null; initialDepositAmount: number | null }
+  ) {
+    if (!collect || !line?.initialDepositPercent) {
+      return { initial_deposit_percent: null, initial_deposit_amount: null };
+    }
+    return {
+      initial_deposit_percent: line.initialDepositPercent,
+      initial_deposit_amount: line.initialDepositAmount,
+    };
   }
 
   private primaryVariantImageUrl(variant: any): string | null {
@@ -1493,6 +1582,38 @@ export class OrdersService {
       }
     }
 
+    const isCookedFoodAsapReadyIn =
+      this.cookedFoodPickupFlow.isCookedFoodAsapReadyInCohort(order as any) &&
+      isAsapConfirm;
+    const payAfterConfirm =
+      isCookedFoodAsapReadyIn &&
+      this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order as any);
+    let cookedReadyInMinutes: number | undefined;
+    if (isCookedFoodAsapReadyIn) {
+      cookedReadyInMinutes = this.cookedFoodPickupFlow.normalizeReadyInMinutes(
+        request.ready_in_minutes
+      );
+      await this.cookedFoodPickupFlow.writeEstimatedPrepMinutes(
+        request.orderId,
+        cookedReadyInMinutes
+      );
+    }
+
+    // MoMo pay-after: request payment while still pending so a provider failure
+    // never leaves the order confirmed without a payment request or cancel timer.
+    if (payAfterConfirm) {
+      try {
+        await this.initiateCookedFoodFullPaymentAfterConfirm(request.orderId, {
+          allowPending: true,
+        });
+      } catch (error: any) {
+        await this.cookedFoodPickupFlow.clearEstimatedPrepMinutes(
+          request.orderId
+        );
+        throw error;
+      }
+    }
+
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'confirmed',
@@ -1511,7 +1632,10 @@ export class OrdersService {
       );
     }
 
-    await this.fulfillmentPromiseService.persistForOrder(request.orderId);
+    // Prep clock for pay-after-confirm starts when the client pays, not at confirm.
+    if (!payAfterConfirm) {
+      await this.fulfillmentPromiseService.persistForOrder(request.orderId);
+    }
 
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -1527,6 +1651,22 @@ export class OrdersService {
       userId,
       request.notes
     );
+
+    if (isCookedFoodAsapReadyIn && cookedReadyInMinutes != null) {
+      const cookedFoodResult = await this.afterCookedFoodConfirm(
+        request.orderId,
+        order as any,
+        cookedReadyInMinutes
+      );
+      return {
+        success: true,
+        order: cookedFoodResult.order ?? updatedOrder,
+        message: cookedFoodResult.message,
+        pay_after_merchant_confirm: cookedFoodResult.payAfterConfirm,
+        ready_in_minutes: cookedReadyInMinutes,
+      };
+    }
+
     void this.orderMarkReadyService.scheduleAfterConfirm({
       id: request.orderId,
       business_id: order.business_id,
@@ -1541,55 +1681,155 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Cooked-food ASAP after status confirmed: MoMo unpaid-cancel / zero-amount
+   * finalize, or prepare + auto-ready for Stripe/wallet pickup.
+   */
+  private async afterCookedFoodConfirm(
+    orderId: string,
+    order: {
+      business_id: string;
+      fulfillment_method?: string | null;
+      fulfillment_timing?: string | null;
+      pay_after_merchant_confirm?: boolean | null;
+      payment_status?: string | null;
+      total_amount?: number | null;
+      delivery_time_windows?: Array<{ id: string }>;
+    },
+    readyInMinutes: number
+  ): Promise<{
+    order?: any;
+    message: string;
+    payAfterConfirm: boolean;
+  }> {
+    if (this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order)) {
+      return this.afterCookedFoodPayAfterConfirm(orderId);
+    }
+
+    // Stripe/wallet are already paid/authorized; unpaid is rare. Auto-ready
+    // still waits for paid/authorized before marking ready.
+    await this.cookedFoodPickupFlow.enterPreparingAndScheduleReady(
+      orderId,
+      readyInMinutes
+    );
+    return {
+      order: await this.getOrderDetails(orderId),
+      message: `Order confirmed. Ready in ${readyInMinutes} minutes.`,
+      payAfterConfirm: false,
+    };
+  }
+
+  private async afterCookedFoodPayAfterConfirm(orderId: string): Promise<{
+    order?: any;
+    message: string;
+    payAfterConfirm: boolean;
+  }> {
+    const fresh = await this.getOrderDetails(orderId);
+    const paidOrZero =
+      fresh &&
+      ((fresh as any).payment_status === 'paid' ||
+        !(Number(fresh.total_amount) > 0));
+    if (paidOrZero && fresh) {
+      await this.finalizeCookedFoodPayAfterConfirm(fresh);
+      // Already collected (wallet or zero). Do not show the phone-request step.
+      return {
+        order: await this.getOrderDetails(orderId),
+        message: 'Order confirmed. Payment received. Start preparing now.',
+        payAfterConfirm: false,
+      };
+    }
+    await this.cookedFoodPickupFlow.scheduleUnpaidCancelAfterConfirm(orderId);
+    return {
+      message:
+        'Order confirmed. Payment request sent to the client. Start preparing after they pay.',
+      payAfterConfirm: true,
+    };
+  }
+
   async completePreparation(
     request: OrderStatusChangeRequest,
     actor?: AuthorizedBusinessActor
   ) {
-    const userId = await this.requireBusinessOrderAccess(
+    const viaSystem = actor === undefined && request.viaSystem === true;
+    const userId = await this.resolvePreparationActorUserId(
       request.orderId,
-      'Only business users can complete order preparation',
-      'Unauthorized to complete preparation for this order',
-      actor
+      actor,
+      viaSystem
     );
-    const order = await this.getOrderDetails(request.orderId);
-    if (!order)
-      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
-    if (!['confirmed', 'preparing'].includes(order.current_status))
-      throw new HttpException(
-        `Cannot complete preparation for order in ${order.current_status} status`,
-        HttpStatus.BAD_REQUEST
-      );
-    this.assertNotCarrierShipping(
-      order,
-      'Carrier shipping orders must be marked as shipped, not set ready for pickup'
-    );
+    const order = await this.requirePreparableOrder(request.orderId);
     await this.ensurePickupPinIfNeeded(order);
     await this.fulfillmentPromiseService.reanchorAsapAtReady(request.orderId);
-    // Persist the dispatch gate BEFORE flipping the status: the status write
-    // below fires an async event that triggers dispatchOrderOffers, which
-    // reads dispatch_ready_at to decide whether to dispatch immediately. If
-    // that event were allowed to race ahead of this write, it could see a
-    // null dispatch_ready_at and dispatch agents too early.
     const dispatchSchedule = await this.scheduleAgentDispatchGate(order);
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
+    const updatedOrder = await this.markReadyForPickup(
       request.orderId,
-      'ready_for_pickup',
+      viaSystem,
       actor
     );
-    await this.createStatusHistoryEntry(
-      request.orderId,
-      'ready_for_pickup',
-      'Order preparation completed, ready for pickup',
-      'business',
-      userId,
-      request.notes
-    );
+    await this.recordPreparationReadyHistory(request, viaSystem, userId);
     await this.scheduleDispatchRelease(order.id, dispatchSchedule);
     return {
       success: true,
       order: updatedOrder,
       message: 'Order preparation completed successfully',
     };
+  }
+
+  private async resolvePreparationActorUserId(
+    orderId: string,
+    actor: AuthorizedBusinessActor | undefined,
+    viaSystem: boolean
+  ): Promise<string | null> {
+    if (viaSystem) return null;
+    return this.requireBusinessOrderAccess(
+      orderId,
+      'Only business users can complete order preparation',
+      'Unauthorized to complete preparation for this order',
+      actor
+    );
+  }
+
+  private async requirePreparableOrder(orderId: string): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (!['confirmed', 'preparing'].includes(order.current_status)) {
+      throw new HttpException(
+        `Cannot complete preparation for order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    this.assertNotCarrierShipping(
+      order,
+      'Carrier shipping orders must be marked as shipped, not set ready for pickup'
+    );
+    this.assertPayAfterPaidBeforeReady(order);
+    return order;
+  }
+
+  private async markReadyForPickup(
+    orderId: string,
+    viaSystem: boolean,
+    actor?: AuthorizedBusinessActor
+  ) {
+    return this.orderStatusService.updateOrderStatus(
+      orderId,
+      'ready_for_pickup',
+      viaSystem ? { viaSystem: true } : actor
+    );
+  }
+
+  private async recordPreparationReadyHistory(
+    request: OrderStatusChangeRequest,
+    viaSystem: boolean,
+    userId: string | null
+  ): Promise<void> {
+    await this.createStatusHistoryEntry(
+      request.orderId,
+      'ready_for_pickup',
+      request.notes || 'Order preparation completed, ready for pickup',
+      viaSystem ? 'system' : 'business',
+      userId,
+      request.notes
+    );
   }
 
   /**
@@ -2007,9 +2247,26 @@ export class OrdersService {
     }
   }
 
+  /** Pay-after cooked food cannot be marked ready until the client has paid. */
+  private assertPayAfterPaidBeforeReady(order: Orders): void {
+    if ((order as any).pay_after_merchant_confirm !== true) return;
+    const paymentStatus = (order as any).payment_status;
+    if (paymentStatus === 'paid' || paymentStatus === 'authorized') return;
+    throw new HttpException(
+      {
+        success: false,
+        error: 'PAYMENT_REQUIRED',
+        message:
+          'Wait for the client to complete payment before marking this order ready.',
+      },
+      HttpStatus.PAYMENT_REQUIRED
+    );
+  }
+
   /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
   private async ensurePickupPinIfNeeded(order: Orders): Promise<void> {
-    if ((order as any).fulfillment_method !== 'pickup') return;
+    // Store pickup is completed by the client tapping Complete — no PIN.
+    if ((order as any).fulfillment_method === 'pickup') return;
     if ((order as any).payment_timing === 'pay_at_pickup') return;
     const paymentStatus = (order as any).payment_status;
     if (paymentStatus !== 'authorized' && paymentStatus !== 'paid') return;
@@ -3519,7 +3776,8 @@ export class OrdersService {
     }
 
     const phoneNumber =
-      phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
+      phoneNumberOverride?.trim() ||
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Client phone number is required to initiate payment',
@@ -3730,7 +3988,8 @@ export class OrdersService {
     }
 
     const phoneNumber =
-      phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
+      phoneNumberOverride?.trim() ||
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Client phone number is required to initiate payment',
@@ -3861,7 +4120,356 @@ export class OrdersService {
   }
 
   /**
-   * Client: retry pay-now payment for an existing pending-payment order.
+   * Cooked-food MoMo: after merchant confirm, settle from wallet if funded,
+   * otherwise push full-amount MoMo. When `allowPending` is set, may run before
+   * status flips to confirmed so a provider failure never leaves the order
+   * confirmed without a payment request or cancel timer.
+   */
+  private async initiateCookedFoodFullPaymentAfterConfirm(
+    orderId: string,
+    options?: { allowPending?: boolean }
+  ): Promise<'wallet' | 'momo' | 'skipped'> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (!this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order as any)) {
+      throw new HttpException(
+        'Order is not configured for pay after merchant confirm',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if ((order as any).payment_status === 'paid') return 'skipped';
+    const statusOk =
+      order.current_status === 'confirmed' ||
+      (options?.allowPending === true && order.current_status === 'pending');
+    if (!statusOk) {
+      throw new HttpException(
+        'Payment can only be requested after confirm',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const chargeAmount = Number(order.total_amount) || 0;
+    if (chargeAmount <= 0) {
+      if (order.current_status === 'confirmed') {
+        await this.finalizeCookedFoodPayAfterConfirm(order);
+      }
+      return 'skipped';
+    }
+
+    if (await this.trySettleCookedFoodPayAfterFromWallet(order, chargeAmount)) {
+      return 'wallet';
+    }
+
+    await this.initiateCookedFoodMomoAfterConfirm(order, orderId);
+    return 'momo';
+  }
+
+  /** Hold from client wallet when available balance covers the order total. */
+  private async trySettleCookedFoodPayAfterFromWallet(
+    order: Orders,
+    chargeAmount: number
+  ): Promise<boolean> {
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    if (Number(account.available_balance ?? 0) < chargeAmount) return false;
+    // Hold + mark paid first; only then stamp wallet source so a failed hold
+    // never leaves an unpaid order labeled as wallet-paid.
+    await this.finalizeCookedFoodPayAfterConfirm(order);
+    await this.markOrderPaidFromWallet(order.id);
+    return true;
+  }
+
+  private async markOrderPaidFromWallet(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation MarkOrderPaidFromWallet($id: uuid!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: {
+            payment_source: wallet
+            payer_payment_rail: "wallet"
+          }
+        ) { id }
+      }`,
+      { id: orderId }
+    );
+  }
+
+  private async initiateCookedFoodMomoAfterConfirm(
+    order: Orders,
+    orderId: string
+  ): Promise<void> {
+    const phoneNumber = this.resolveOrderMobileMoneyPhone(order as any);
+    if (!phoneNumber.trim()) {
+      throw new HttpException(
+        'Client phone number is required to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const existing =
+      await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
+        order.order_number
+      );
+    if (existing && existing.status === 'pending') return;
+
+    const momo = this.orderMomoContext(order);
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
+      order.order_number
+    );
+    const chargeAmount = Number(order.total_amount) || 0;
+
+    const tx = await this.mobilePaymentsDatabaseService.createTransaction({
+      reference: paymentAttemptReference,
+      amount: chargeAmount,
+      currency: order.currency,
+      description: `order ${order.order_number} (after confirm)`,
+      provider: momo.provider,
+      payment_method: 'mobile_money',
+      customer_phone: phoneNumber,
+      ...(order.client.user.email
+        ? { customer_email: order.client.user.email }
+        : {}),
+      account_id: account.id,
+      transaction_type: 'PAYMENT',
+      payment_entity: 'order' as const,
+      entity_id: order.order_number,
+    });
+
+    const paymentTransaction = await this.mobilePaymentsService.initiatePayment(
+      {
+        amount: chargeAmount,
+        currency: order.currency,
+        description: `Order ${order.order_number}`,
+        customerPhone: phoneNumber,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        ownerCharge: 'MERCHANT' as const,
+        transactionType: 'PAYMENT' as const,
+      },
+      paymentAttemptReference,
+      momo.payerUserId
+    );
+
+    if (!paymentTransaction.success) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        status: 'failed',
+        error_message: paymentTransaction.message,
+        error_code: paymentTransaction.errorCode,
+      });
+      throw new HttpException(
+        paymentTransaction.message || 'Failed to initiate payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (paymentTransaction.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        transaction_id: paymentTransaction.transactionId,
+      });
+    }
+    await this.resetOrderPaymentFailure(orderId);
+  }
+
+  /**
+   * Client marks a store-pickup order complete (no PIN). Settles paid/authorized
+   * orders, or requests MoMo remainder for classic pay-at-pickup.
+   */
+  async completeClientPickup(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (!this.userOwnsOrderAsClient(order, user)) {
+      throw new HttpException(
+        'Unauthorized to complete this order',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if ((order as any).fulfillment_method !== 'pickup') {
+      throw new HttpException(
+        'Only store pickup orders can be completed this way',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (order.current_status !== 'ready_for_pickup') {
+      throw new HttpException(
+        `Cannot complete pickup for order in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const paymentStatus = (order as any).payment_status;
+    const paymentTiming = (order as any).payment_timing;
+    const paidOrAuthorized =
+      paymentStatus === 'paid' || paymentStatus === 'authorized';
+
+    if (paidOrAuthorized) {
+      await this.captureStripeAuthorizedOrderIfNeeded(order);
+      await this.processOrderPayment(orderId);
+      await this.processOrderDeliveryPayment(orderId);
+      await this.completeOrderWithSideEffects(
+        order,
+        'Order completed by client after store pickup'
+      );
+      return {
+        success: true,
+        order: await this.getOrderDetails(orderId),
+        message: 'Order completed',
+      };
+    }
+
+    // Pay-after-confirm is full MoMo hold, not classic PAP remainder.
+    if (
+      paymentTiming === 'pay_at_pickup' &&
+      !(order as any).pay_after_merchant_confirm
+    ) {
+      return this.initiatePayAtPickupPayment(orderId);
+    }
+
+    throw new HttpException(
+      'Order payment must be authorized or paid before completing pickup',
+      HttpStatus.PAYMENT_REQUIRED
+    );
+  }
+
+  /** MoMo pay-after-confirm success: hold funds, then prepare once confirmed. */
+  private async finalizeCookedFoodPayAfterConfirm(
+    order: Orders
+  ): Promise<void> {
+    const fresh = (await this.getOrderDetails(order.id)) ?? order;
+    const status = fresh.current_status;
+    const alreadyPaid = (fresh as any).payment_status === 'paid';
+
+    // Idempotent: payment callback and confirm path may both arrive here.
+    if (
+      alreadyPaid &&
+      (status === 'preparing' ||
+        status === 'ready_for_pickup' ||
+        status === 'complete')
+    ) {
+      return;
+    }
+
+    if (!alreadyPaid) {
+      const account = await this.hasuraSystemService.getAccount(
+        order.client.user_id,
+        order.currency
+      );
+      await this.finalizeClientOrderPayment(order, account.id, {
+        skipOrderPlacedNotifications: true,
+      });
+    } else {
+      // Paid earlier without a successful hold (e.g. legacy silent hold fail).
+      await this.ensureClientOrderHolds(fresh);
+    }
+
+    await this.enterCookedFoodPreparingAfterPayment(order.id);
+  }
+
+  /** Wallet holds for an order already marked paid (idempotent if hold exists). */
+  private async ensureClientOrderHolds(order: Orders): Promise<void> {
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
+    await this.placeMissingClientHolds(
+      order,
+      account.id,
+      itemAmount,
+      deliveryAmount
+    );
+    const orderHold = await this.getOrCreateOrderHold(order.id);
+    await this.updateOrderHold(orderHold.id, {
+      client_hold_amount: itemAmount,
+      delivery_fees: deliveryAmount,
+    });
+  }
+
+  private async placeMissingClientHolds(
+    order: Orders,
+    accountId: string,
+    itemAmount: number,
+    deliveryAmount: number
+  ): Promise<void> {
+    const needed = itemAmount + deliveryAmount;
+    if (needed <= 0) return;
+    const held = await this.sumHoldAmountForOrder(accountId, order.id);
+    if (held >= needed) return;
+    await this.requireSuccessfulHold({
+      accountId,
+      amount: itemAmount,
+      memo: `Hold for order ${order.order_number}`,
+      referenceId: order.id,
+    });
+    await this.requireSuccessfulHold({
+      accountId,
+      amount: deliveryAmount,
+      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
+      referenceId: order.id,
+    });
+  }
+
+  private async sumHoldAmountForOrder(
+    accountId: string,
+    orderId: string
+  ): Promise<number> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `
+      query SumOrderHolds($accountId: uuid!, $orderId: uuid!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $orderId }
+            transaction_type: { _eq: hold }
+          }
+        ) { amount }
+      }
+    `,
+      { accountId, orderId }
+    );
+    const rows = result.account_transactions ?? [];
+    return rows.reduce(
+      (sum: number, row: { amount?: number }) => sum + Number(row.amount || 0),
+      0
+    );
+  }
+
+  /** Confirmed + paid pay-after: start prep clock and schedule auto-ready. */
+  private async enterCookedFoodPreparingAfterPayment(
+    orderId: string
+  ): Promise<void> {
+    const afterPay = await this.getOrderDetails(orderId);
+    if (!afterPay) return;
+    // Fast MoMo callback can beat merchant confirm. Hold funds while still
+    // pending, but do not enter preparing — confirm would then 409.
+    if (afterPay.current_status === 'pending') return;
+    if (afterPay.current_status !== 'confirmed') return;
+
+    await this.orderStatusService.updateOrderStatus(orderId, 'preparing', {
+      viaSystem: true,
+    });
+    await this.cookedFoodPickupFlow.clearPromisedReady(orderId);
+    await this.fulfillmentPromiseService.persistForOrder(orderId);
+    const readySeconds = this.cookedFoodPickupFlow.readySecondsFromEstimatedPrep(
+      afterPay as any
+    );
+    await this.cookedFoodPickupFlow.scheduleAutoMarkReady(
+      orderId,
+      readySeconds
+    );
+  }
+
+  /**
+   * Client: retry MoMo for pay-after-confirm cooked food, or pay-now pending_payment.
    * Mobile money: new MM transaction. Stripe: new Checkout session or PaymentIntent.
    */
   async retryOrderPayment(
@@ -3886,6 +4494,34 @@ export class OrdersService {
       );
     }
 
+    if ((order as any).payment_status === 'paid') {
+      return { success: true, message: 'Order is already paid' };
+    }
+
+    if (
+      (order as any).pay_after_merchant_confirm === true &&
+      order.current_status === 'confirmed'
+    ) {
+      const settlement = await this.initiateCookedFoodFullPaymentAfterConfirm(
+        orderId
+      );
+      if (settlement === 'wallet' || settlement === 'skipped') {
+        return {
+          success: true,
+          message:
+            settlement === 'wallet'
+              ? 'Paid from your Rendasua wallet.'
+              : 'Order is already paid',
+          payment_rail: 'wallet' as const,
+        };
+      }
+      return {
+        success: true,
+        message: 'Payment request sent. Approve it on your phone.',
+        payment_rail: 'mobile_money' as const,
+      };
+    }
+
     const paymentTiming = (order as any).payment_timing as
       | 'pay_now'
       | 'pay_at_delivery'
@@ -3901,9 +4537,6 @@ export class OrdersService {
         'Payment retry is only available when order is pending payment',
         HttpStatus.BAD_REQUEST
       );
-    }
-    if ((order as any).payment_status === 'paid') {
-      return { success: true, message: 'Order is already paid' };
     }
 
     if ((order as any).payment_source === 'credit_card') {
@@ -4026,7 +4659,9 @@ export class OrdersService {
       };
     }
 
-    const phoneNumber = phoneNumberOverride?.trim() || order.client?.user?.phone_number || '';
+    const phoneNumber =
+      phoneNumberOverride?.trim() ||
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Phone number is required to retry payment',
@@ -4271,8 +4906,7 @@ export class OrdersService {
 
     const phoneNumber =
       phoneNumberOverride?.trim() ||
-      order.client?.user?.phone_number ||
-      '';
+      this.resolveOrderMobileMoneyPhone(order as any);
     if (!phoneNumber.trim()) {
       throw new HttpException(
         'Phone number is required for mobile payment',
@@ -5057,6 +5691,382 @@ export class OrdersService {
     };
   }
 
+  async failPickup(request: {
+    orderId: string;
+    failure_reason_id: string;
+    notes?: string;
+  }) {
+    const userId = await this.requireBusinessOrderAccess(
+      request.orderId,
+      'Only business users can mark pickups as failed',
+      'Unauthorized to fail pickup for this order'
+    );
+    if (!request.failure_reason_id) {
+      throw new HttpException(
+        'failure_reason_id is required when marking a pickup as failed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const order = await this.getOrderDetails(request.orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    const existing = await this.findFailedPickupByOrderId(request.orderId);
+    if (order.current_status === 'failed' && existing) {
+      return {
+        success: true,
+        order,
+        refund_amount: existing.refund_amount,
+        fee_retained: existing.fee_retained,
+        message: 'Pickup already marked as failed',
+      };
+    }
+
+    if (order.current_status === 'failed' && !existing) {
+      return this.repairFailedPickupWithoutRecord(
+        order,
+        request,
+        await this.resolveFailPickupAmounts({
+          ...order,
+          current_status: 'ready_for_pickup',
+        } as Orders)
+      );
+    }
+
+    this.assertCookedFoodFailPickupEligible(order);
+    await this.assertActivePickupFailureReason(request.failure_reason_id);
+
+    const { feeRetained, refundAmount } =
+      await this.resolveFailPickupAmounts(order);
+    await this.releaseStripeAuthorizationIfNeeded(order);
+
+    return this.commitFailPickup({
+      order,
+      request,
+      userId,
+      feeRetained,
+      refundAmount,
+      existing,
+    });
+  }
+
+  private async commitFailPickup(params: {
+    order: Orders;
+    request: { orderId: string; failure_reason_id: string; notes?: string };
+    userId: string;
+    feeRetained: number;
+    refundAmount: number;
+    existing: { id: string } | null;
+  }) {
+    const { order, request, userId, feeRetained, refundAmount, existing } =
+      params;
+    if (!existing) {
+      await this.insertFailedPickupRecord({
+        orderId: request.orderId,
+        businessId: order.business_id,
+        reasonId: request.failure_reason_id,
+        notes: request.notes,
+        refundAmount,
+        feeRetained,
+        currency: order.currency,
+        fulfillmentMethod: order.fulfillment_method ?? null,
+      });
+    }
+
+    const previousStatus = order.current_status;
+    let updatedOrder;
+    try {
+      updatedOrder = await this.orderStatusService.updateOrderStatus(
+        request.orderId,
+        'failed',
+        { viaFailPickupEndpoint: true }
+      );
+    } catch (error: any) {
+      if (!existing) {
+        await this.deleteFailedPickupByOrderId(request.orderId);
+      }
+      throw error;
+    }
+
+    await this.finishFailPickupSideEffects(
+      order,
+      request.orderId,
+      previousStatus,
+      userId,
+      request.notes
+    );
+
+    return {
+      success: true,
+      order: updatedOrder,
+      refund_amount: refundAmount,
+      fee_retained: feeRetained,
+      message: 'Pickup marked as failed',
+    };
+  }
+
+  private async repairFailedPickupWithoutRecord(
+    order: Orders,
+    request: { orderId: string; failure_reason_id: string; notes?: string },
+    amounts: { feeRetained: number; refundAmount: number }
+  ) {
+    await this.assertActivePickupFailureReason(request.failure_reason_id);
+    await this.insertFailedPickupRecord({
+      orderId: request.orderId,
+      businessId: order.business_id,
+      reasonId: request.failure_reason_id,
+      notes: request.notes,
+      refundAmount: amounts.refundAmount,
+      feeRetained: amounts.feeRetained,
+      currency: order.currency,
+      fulfillmentMethod: order.fulfillment_method ?? null,
+    });
+    try {
+      await this.orderQueueService.sendOrderCancelledMessage(
+        request.orderId,
+        'client',
+        request.notes,
+        'ready_for_pickup'
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to enqueue fail-pickup refund for ${request.orderId}: ${error?.message}`
+      );
+    }
+    return {
+      success: true,
+      order,
+      refund_amount: amounts.refundAmount,
+      fee_retained: amounts.feeRetained,
+      message: 'Pickup marked as failed',
+    };
+  }
+
+  private async findFailedPickupByOrderId(orderId: string): Promise<{
+    id: string;
+    refund_amount: number;
+    fee_retained: number;
+  } | null> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `
+      query FailedPickupByOrder($orderId: uuid!) {
+        failed_pickups(where: { order_id: { _eq: $orderId } }, limit: 1) {
+          id
+          refund_amount
+          fee_retained
+        }
+      }
+      `,
+      { orderId }
+    );
+    return result.failed_pickups?.[0] ?? null;
+  }
+
+  private async assertActivePickupFailureReason(reasonId: string): Promise<void> {
+    const reasonResult = await this.hasuraSystemService.executeQuery(
+      `
+      query ValidatePickupFailureReason($reasonId: uuid!) {
+        pickup_failure_reasons_by_pk(id: $reasonId) {
+          id
+          is_active
+        }
+      }
+      `,
+      { reasonId }
+    );
+    if (!reasonResult.pickup_failure_reasons_by_pk) {
+      throw new HttpException(
+        'Invalid failure reason ID',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (!reasonResult.pickup_failure_reasons_by_pk.is_active) {
+      throw new HttpException(
+        'The selected failure reason is not active',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async resolveFailPickupAmounts(order: Orders): Promise<{
+    feeRetained: number;
+    refundAmount: number;
+  }> {
+    const countryCode =
+      (order.business_location as any)?.address?.country ??
+      (order as any).business_location?.country_code ??
+      'GA';
+    const policy = await this.cancellationPolicyService.getPolicy(
+      {
+        id: order.id,
+        current_status: order.current_status,
+        assigned_agent_id: order.assigned_agent_id,
+        total_amount: order.total_amount,
+        currency: order.currency,
+        payment_source: (order as any).payment_source,
+        payment_status: order.payment_status,
+        payment_timing: (order as any).payment_timing,
+        pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
+        is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
+        business_location: { country_code: countryCode },
+      },
+      'client'
+    );
+    const feeRetained = policy.cancellationFee ?? 0;
+    return {
+      feeRetained,
+      refundAmount: Math.max(0, order.total_amount - feeRetained),
+    };
+  }
+
+  private async insertFailedPickupRecord(params: {
+    orderId: string;
+    businessId: string;
+    reasonId: string;
+    notes?: string;
+    refundAmount: number;
+    feeRetained: number;
+    currency: string;
+    fulfillmentMethod: string | null;
+  }): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation CreateFailedPickup($failedPickup: failed_pickups_insert_input!) {
+        insert_failed_pickups_one(object: $failedPickup) {
+          id
+          order_id
+        }
+      }
+      `,
+      {
+        failedPickup: {
+          order_id: params.orderId,
+          business_id: params.businessId,
+          reason_id: params.reasonId,
+          notes: params.notes || null,
+          status: 'completed',
+          refund_amount: params.refundAmount,
+          fee_retained: params.feeRetained,
+          currency: params.currency,
+          fulfillment_method: params.fulfillmentMethod,
+        },
+      }
+    );
+  }
+
+  private async deleteFailedPickupByOrderId(orderId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation DeleteFailedPickup($orderId: uuid!) {
+          delete_failed_pickups(where: { order_id: { _eq: $orderId } }) {
+            affected_rows
+          }
+        }
+        `,
+        { orderId }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to roll back failed_pickups for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async finishFailPickupSideEffects(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    userId: string,
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.createStatusHistoryEntry(
+        orderId,
+        'failed',
+        'Pickup failed',
+        'business',
+        userId,
+        notes
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to write fail-pickup history for ${orderId}: ${error?.message}`
+      );
+    }
+
+    try {
+      await this.updateReservedQuantities(order.order_items || [], 'decrement');
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to update reserved quantities after fail pickup: ${error?.message}`
+      );
+    }
+
+    try {
+      await this.purchaseCreditsService?.restore(orderId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Purchase credit restore failed for ${orderId}: ${error?.message}`
+      );
+    }
+
+    try {
+      await this.orderQueueService.sendOrderCancelledMessage(
+        orderId,
+        'client',
+        notes,
+        previousStatus
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to enqueue fail-pickup refund for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private assertCookedFoodFailPickupEligible(order: Orders): void {
+    if (order.current_status !== 'ready_for_pickup') {
+      throw new HttpException(
+        `Cannot mark pickup as failed in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const payment = (order.payment_status || '').toLowerCase();
+    if (payment !== 'paid' && payment !== 'authorized') {
+      throw new HttpException(
+        'Order must be paid before marking pickup as failed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const cooked =
+      (order as any).is_cooked_food_pickup === true ||
+      (order as any).pay_after_merchant_confirm === true ||
+      isCookedFoodFulfillmentOrder({
+        fulfillmentMethod: order.fulfillment_method,
+        itemFlags: (order.order_items || []).map((oi: any) => ({
+          is_cooked_food: oi.is_cooked_food ?? oi.item?.is_cooked_food,
+        })),
+      });
+    if (!cooked) {
+      throw new HttpException(
+        'Fail pickup is only available for cooked-food orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (
+      order.fulfillment_method === 'delivery' &&
+      order.assigned_agent_id
+    ) {
+      throw new HttpException(
+        'Use fail delivery after an agent is assigned',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   private businessMayCancelDeferredUncollectedOrder(order: Orders): boolean {
     const timing = (
       order as Orders & { payment_timing?: string | null }
@@ -5079,6 +6089,19 @@ export class OrdersService {
   }
 
   private businessMayCancelOrder(order: Orders): boolean {
+    if ((order as any).pay_after_merchant_confirm === true) {
+      const payment = ((order as any).payment_status || '').toLowerCase();
+      if (payment === 'paid' || payment === 'authorized') {
+        const status = order.current_status;
+        if (
+          status === 'confirmed' ||
+          status === 'preparing' ||
+          status === 'ready_for_pickup'
+        ) {
+          return false;
+        }
+      }
+    }
     const early = [
       'pending_payment',
       'pending',
@@ -5423,6 +6446,8 @@ export class OrdersService {
       payment_source: (order as any).payment_source,
       payment_status: order.payment_status,
       payment_timing: (order as any).payment_timing,
+      pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
+      is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
       business_location: { country_code: countryCode },
     };
 
@@ -6143,6 +7168,8 @@ export class OrdersService {
           payment_source
           payment_timing
           reconciliation_status
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           verified_agent_delivery
           created_at
           updated_at
@@ -6225,12 +7252,14 @@ export class OrdersService {
             id
             quantity
             special_instructions
+            is_cooked_food
             item {
               weight
               weight_unit
               dimensions
               is_fragile
               is_perishable
+              is_cooked_food
               item_sub_category {
                 name
                 item_category {
@@ -6369,6 +7398,8 @@ export class OrdersService {
           payment_source
           payment_timing
           reconciliation_status
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           verified_agent_delivery
           deposit_amount
           deposit_mobile_payment_transaction_id
@@ -6463,6 +7494,7 @@ export class OrdersService {
             quantity
             total_price
             special_instructions
+            is_cooked_food
             item {
               id
               sku
@@ -6474,6 +7506,7 @@ export class OrdersService {
               weight
               weight_unit
               dimensions
+              is_cooked_food
               brand {
                 id
                 name
@@ -7062,7 +8095,10 @@ export class OrdersService {
           payment_timing
           payment_failed_at
           payment_failure_message
+          payer_phone
           reconciliation_status
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           deposit_amount
           deposit_mobile_payment_transaction_id
           deposit_status
@@ -7471,20 +8507,22 @@ export class OrdersService {
       const orderWithDetails = await this.requireOrderDetailsByNumber(
         order.order_number
       );
-      const deliveryPin = this.deliveryPinService.generatePin();
-      const deliveryPinHash = this.deliveryPinService.hashPin(
-        orderWithDetails.id,
-        deliveryPin
-      );
-      await this.setOrderDeliveryPinHash(orderWithDetails.id, deliveryPinHash);
-      await this.deliveryPinService.setPinForClient(
-        orderWithDetails.id,
-        deliveryPin
-      );
-      await this.shareDeliveryPinWithRecipient(
-        orderWithDetails.id,
-        deliveryPin
-      );
+      if ((orderWithDetails as any).fulfillment_method !== 'pickup') {
+        const deliveryPin = this.deliveryPinService.generatePin();
+        const deliveryPinHash = this.deliveryPinService.hashPin(
+          orderWithDetails.id,
+          deliveryPin
+        );
+        await this.setOrderDeliveryPinHash(orderWithDetails.id, deliveryPinHash);
+        await this.deliveryPinService.setPinForClient(
+          orderWithDetails.id,
+          deliveryPin
+        );
+        await this.shareDeliveryPinWithRecipient(
+          orderWithDetails.id,
+          deliveryPin
+        );
+      }
       try {
         await this.orderAcceptanceService.startAcceptanceSla(order.id);
       } catch (slaError: any) {
@@ -7525,6 +8563,11 @@ export class OrdersService {
         paymentTiming === 'pay_now' &&
         (order as any).payment_status === 'paid'
       ) {
+        return;
+      }
+
+      if ((order as any).pay_after_merchant_confirm === true) {
+        await this.finalizeCookedFoodPayAfterConfirm(order);
         return;
       }
 
@@ -8379,23 +9422,21 @@ export class OrdersService {
    */
   private async finalizeClientOrderPayment(
     order: Orders,
-    accountId: string
+    accountId: string,
+    options?: { skipOrderPlacedNotifications?: boolean }
   ): Promise<void> {
     const wasAuthorized = (order as any).payment_status === 'authorized';
     const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
 
-    await this.accountsService.registerTransaction({
+    await this.requireSuccessfulHold({
       accountId,
       amount: itemAmount,
-      transactionType: 'hold',
       memo: `Hold for order ${order.order_number}`,
       referenceId: order.id,
     });
-
-    await this.accountsService.registerTransaction({
+    await this.requireSuccessfulHold({
       accountId,
       amount: deliveryAmount,
-      transactionType: 'hold',
       memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
       referenceId: order.id,
     });
@@ -8429,14 +9470,37 @@ export class OrdersService {
       return;
     }
 
-    const deliveryPin = this.deliveryPinService.generatePin();
-    const deliveryPinHash =
-      this.deliveryPinService.hashPin(order.id, deliveryPin);
-    await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
-    await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
-    await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
+    // Store pickup completes via client Complete (no PIN).
+    if ((order as any).fulfillment_method !== 'pickup') {
+      const deliveryPin = this.deliveryPinService.generatePin();
+      const deliveryPinHash =
+        this.deliveryPinService.hashPin(order.id, deliveryPin);
+      await this.setOrderDeliveryPinHash(order.id, deliveryPinHash);
+      await this.deliveryPinService.setPinForClient(order.id, deliveryPin);
+      await this.shareDeliveryPinWithRecipient(order.id, deliveryPin);
+    }
 
-    await this.sendOrderPlacedNotifications(order, 'pending');
+    if (!options?.skipOrderPlacedNotifications) {
+      await this.sendOrderPlacedNotifications(order, 'pending');
+    }
+  }
+
+  private async requireSuccessfulHold(request: {
+    accountId: string;
+    amount: number;
+    memo: string;
+    referenceId: string;
+  }): Promise<void> {
+    if (request.amount <= 0) return;
+    const result = await this.accountsService.registerTransaction({
+      ...request,
+      transactionType: 'hold',
+    });
+    if (result.success) return;
+    throw new HttpException(
+      result.error || 'Failed to hold funds for order payment',
+      HttpStatus.PAYMENT_REQUIRED
+    );
   }
 
   private async sendOrderPlacedNotifications(
@@ -9372,6 +10436,41 @@ export class OrdersService {
    * ASAP (no window): merchant must be open now.
    * Future slot: slot must fall fully within operating hours on that date.
    */
+  private assertCookedFoodAsapOnly(
+    businessInventories: Array<{
+      item?: {
+        is_cooked_food?: boolean | null;
+        item_sub_category?: {
+          item_category?: { name?: string | null } | null;
+        } | null;
+      } | null;
+    }>,
+    deliveryWindow?: {
+      slot_id?: string;
+      preferred_date?: string;
+    } | null
+  ): void {
+    const slotId = deliveryWindow?.slot_id?.trim();
+    if (!slotId) return;
+    const hasCookedFood = anyLineIsCookedFood(
+      businessInventories.map((inv) => inv.item)
+    );
+    if (!hasCookedFood) return;
+    throw new HttpException(
+      {
+        success: false,
+        error: 'COOKED_FOOD_ASAP_ONLY',
+        message:
+          'Cooked food orders are ASAP only. Please place the order when the store is open.',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  /**
+   * ASAP (no window): merchant must be open now.
+   * Future slot: slot must fall fully within operating hours on that date.
+   */
   private async assertMerchantOpenForCheckout(
     locationHours: unknown,
     deliveryWindow?: {
@@ -9383,9 +10482,11 @@ export class OrdersService {
       country: string;
       prepMinutes: number;
       isFastDelivery: boolean;
+      foodSlots?: ReturnType<typeof collectCookedFoodSlots>;
     }
   ): Promise<void> {
-    if (!locationHours) return;
+    const foodSlots = asapContext?.foodSlots ?? [];
+    if (!locationHours && foodSlots.length === 0) return;
 
     const slotId = deliveryWindow?.slot_id?.trim();
     const preferredDate = deliveryWindow?.preferred_date?.trim();
@@ -9428,6 +10529,7 @@ export class OrdersService {
     );
     const availability = this.fulfillmentPromiseService.evaluateAsap({
       operatingHours: locationHours,
+      foodSlots: foodSlots.length > 0 ? foodSlots : undefined,
       prepMinutes: asapContext?.prepMinutes ?? 30,
       fulfillmentMethod: asapContext?.fulfillmentMethod ?? 'delivery',
       timezone,
@@ -9456,6 +10558,50 @@ export class OrdersService {
   /**
    * MoMo integration from the order's item location country (not the payer phone).
    */
+  /** Checkout override, then stored payer snapshot, then registry default, then profile phone. */
+  private resolveOrderMobileMoneyPhone(order: {
+    payer_phone?: string | null;
+    client?: {
+      user_id?: string | null;
+      user?: { phone_number?: string | null } | null;
+    } | null;
+  }): string {
+    const snap = String(order.payer_phone || '').trim();
+    if (snap) return snap;
+    return order.client?.user?.phone_number?.trim() || '';
+  }
+
+  private async resolveCheckoutChargePhone(params: {
+    userId: string;
+    mobilePaymentPhoneId?: string | null;
+    phoneNumberOverride?: string | null;
+    profilePhone?: string | null;
+    profileCountry?: string | null;
+  }): Promise<string> {
+    const override = params.phoneNumberOverride?.trim();
+    if (override && !params.mobilePaymentPhoneId) {
+      return override;
+    }
+    const resolved =
+      await this.mobilePaymentPhonesService.resolveCheckoutPaymentPhone({
+        userId: params.userId,
+        mobilePaymentPhoneId: params.mobilePaymentPhoneId,
+        profilePhone: params.profilePhone,
+        profileCountry: params.profileCountry,
+        linkProfileIfNeeded: true,
+      });
+    return resolved.phoneE164?.trim() || override || '';
+  }
+
+  private applyCheckoutPaymentPhone<T extends { payer_phone: string | null }>(
+    payer: T,
+    checkoutPhone?: string | null
+  ): T {
+    const phone = checkoutPhone?.trim();
+    if (!phone) return payer;
+    return { ...payer, payer_phone: phone };
+  }
+
   private orderMomoContext(order: Orders): {
     provider: MobilePaymentIntegrationProvider;
     itemCountry: string | null;
@@ -9769,6 +10915,9 @@ export class OrdersService {
             weight
             max_order_quantity
             preparation_minutes
+            is_cooked_food
+            initial_deposit_enabled
+            initial_deposit_percent
             stripe_tax_code_id
             item_sub_category {
               item_category { name }
@@ -9830,7 +10979,7 @@ export class OrdersService {
       this.hasuraSystemService
     );
 
-    const paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
+    let paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
       orderData.payment_timing === 'pay_at_delivery'
         ? 'pay_at_delivery'
         : orderData.payment_timing === 'pay_at_pickup'
@@ -9903,6 +11052,8 @@ export class OrdersService {
       );
     }
 
+    this.assertCookedFoodAsapOnly(businessInventories, orderData.delivery_window);
+
     await this.assertMerchantOpenForCheckout(
       businessInventories[0].business_location?.operating_hours,
       orderData.delivery_window,
@@ -9918,6 +11069,7 @@ export class OrdersService {
             )
           ).defaultEstimatedPrepMinutes,
         isFastDelivery: !!orderData.requires_fast_delivery,
+        foodSlots: collectCookedFoodSlots(businessInventories),
       }
     );
 
@@ -9984,7 +11136,8 @@ export class OrdersService {
       const requestedQuantity =
         requestedQuantityByInventoryId.get(item.business_inventory_id) || 0;
       const ignoresStock = cookedFoodIgnoresStock(
-        businessInventory.item?.item_sub_category?.item_category?.name
+        businessInventory.item?.item_sub_category?.item_category?.name,
+        businessInventory.item?.is_cooked_food
       );
       if (
         !ignoresStock &&
@@ -10004,7 +11157,18 @@ export class OrdersService {
     // Use the first item's currency (all items should have the same currency from same business)
     const currency = businessInventories[0].item.currency;
 
-    if (paymentTiming === 'pay_at_delivery') {
+    const itemCookedFlags = businessInventories.map((inv: any) => ({
+      is_cooked_food: inv.item?.is_cooked_food,
+      item_sub_category: inv.item?.item_sub_category,
+    }));
+    const cookedFoodFulfillment = isCookedFoodFulfillmentOrder({
+      fulfillmentMethod,
+      itemFlags: itemCookedFlags,
+    });
+
+    // Classic PAD requires pay_on_delivery_enabled. Cooked-food orders never
+    // use classic PAD deposits — pay-after or pay_now / pay_at_pickup only.
+    if (paymentTiming === 'pay_at_delivery' && !cookedFoodFulfillment) {
       const anyNotEligible = businessInventories.some(
         (inv) => inv?.item?.pay_on_delivery_enabled !== true
       );
@@ -10175,7 +11339,15 @@ export class OrdersService {
       }
     }
 
-    const phoneNumber = orderData.phone_number || user.phone_number || '';
+    const phoneNumber = await this.resolveCheckoutChargePhone({
+      userId: user.id,
+      mobilePaymentPhoneId: orderData.mobile_payment_phone_id,
+      phoneNumberOverride: orderData.phone_number,
+      profilePhone: user.phone_number,
+      profileCountry: await this.paymentRoutingService.getUserCountryCode(
+        user.id
+      ),
+    });
     const requiredAmountForHold = total_amount;
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
@@ -10192,9 +11364,9 @@ export class OrdersService {
           : address?.country
       ) ?? normalizeCountryCode(itemCountry);
 
-    const payer = await this.resolveTrustedOrderPayer(
-      user,
-      orderData.payer_country
+    const payer = this.applyCheckoutPaymentPhone(
+      await this.resolveTrustedOrderPayer(user, orderData.payer_country),
+      phoneNumber
     );
     
     // If recipient_id is provided, fetch the saved recipient and use it
@@ -10234,11 +11406,13 @@ export class OrdersService {
     });
 
     // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
-    // Block MoMo pay_now + delivery when flag is false (default)
+    // Block MoMo pay_now + delivery when flag is false (default).
+    // Cooked-food MoMo pay-after also stores pay_now but is not classic pay-now.
     if (
       paymentTiming === 'pay_now' &&
       fulfillmentMethod === 'delivery' &&
-      railResolution.rail === 'mobile_money'
+      railResolution.rail === 'mobile_money' &&
+      !cookedFoodFulfillment
     ) {
       const momoPayNowDeliveryEnabled =
         await this.isMarketFlagEnabled(
@@ -10339,19 +11513,62 @@ export class OrdersService {
           : 'mobile_payment';
       return payment_source === 'wallet' ? 'wallet' : 'mobile_money';
     };
-    
-    // Determine initial status for pay_at_delivery/pickup orders
-    // When deposit is required, start in pending_payment (not pending)
-    // to avoid triggering acceptance SLA before deposit is paid
-    let current_status: string;
-    if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
-      const railForDepositCheck = getDepositRailForPayAtTiming();
-      const requiresDeposit = this.depositCalculationService.isDepositRequired(
-        paymentTiming,
-        railForDepositCheck
+
+    const isCookedFoodPickup = isCookedFoodPickupOrder({
+      fulfillmentMethod,
+      itemFlags: itemCookedFlags,
+    });
+    const payAfterMerchantConfirm =
+      cookedFoodFulfillment &&
+      railResolution.rail === 'mobile_money' &&
+      !canPayWithWallet &&
+      !isZeroOrNegativeOrder;
+
+    // Persist prepaid timing for delivery pay-after so agents get Complete+PIN
+    // (not classic PAD), even if the client still sent pay_at_delivery.
+    if (payAfterMerchantConfirm) {
+      paymentTiming =
+        fulfillmentMethod === 'pickup' ? 'pay_at_pickup' : 'pay_now';
+    }
+
+    if (
+      paymentTiming === 'pay_at_delivery' &&
+      cookedFoodFulfillment &&
+      !payAfterMerchantConfirm
+    ) {
+      const anyNotEligible = businessInventories.some(
+        (inv) => inv?.item?.pay_on_delivery_enabled !== true
       );
-      // If deposit required, start in pending_payment until deposit is captured
-      current_status = requiresDeposit ? 'pending_payment' : 'pending';
+      if (anyNotEligible) {
+        throw new HttpException(
+          'Pay at delivery is not enabled for one or more items in this order',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+    
+    const depositQuote = this.initialDepositQuote(
+      lineContexts,
+      orderData.items,
+      dealsMap,
+      currency,
+      total_amount
+    );
+    // When a deposit is required, start in pending_payment (not pending)
+    // so acceptance SLA does not start before the deposit is paid.
+    let collectInitialDeposit = false;
+    let current_status: string;
+    if (payAfterMerchantConfirm) {
+      current_status = 'pending';
+    } else if (paymentTiming === 'pay_at_delivery' || paymentTiming === 'pay_at_pickup') {
+      const railForDepositCheck = getDepositRailForPayAtTiming();
+      collectInitialDeposit = this.shouldCollectInitialDeposit({
+        cookedFoodFulfillment,
+        paymentTiming,
+        rail: railForDepositCheck,
+        depositAmount: depositQuote.depositAmount,
+      });
+      current_status = collectInitialDeposit ? 'pending_payment' : 'pending';
     } else {
       current_status = 'pending_payment';
     }
@@ -10446,7 +11663,9 @@ export class OrdersService {
         $presentmentAmount: numeric,
         $presentmentFxRate: numeric,
         $presentmentFxSource: String,
-        $metaCapiContext: jsonb
+        $metaCapiContext: jsonb,
+        $isCookedFoodPickup: Boolean!,
+        $payAfterMerchantConfirm: Boolean!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -10497,6 +11716,8 @@ export class OrdersService {
           presentment_fx_rate: $presentmentFxRate,
           presentment_fx_source: $presentmentFxSource,
           meta_capi_context: $metaCapiContext,
+          is_cooked_food_pickup: $isCookedFoodPickup,
+          pay_after_merchant_confirm: $payAfterMerchantConfirm,
           order_items: {
             data: $orderItems
           }
@@ -10547,6 +11768,8 @@ export class OrdersService {
           presentment_amount
           presentment_fx_rate
           presentment_fx_source
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           order_items {
             id
             business_inventory_id
@@ -10558,6 +11781,7 @@ export class OrdersService {
             quantity
             unit_price
             total_price
+            is_cooked_food
           }
         }
       }
@@ -10592,6 +11816,11 @@ export class OrdersService {
           ...(snapshot && { variant_snapshot: snapshot }),
         }),
         ...(choseBaseWithOptions && { variant_name: 'Default' }),
+        is_cooked_food: lineIsCookedFood({
+          is_cooked_food: businessInventory.item?.is_cooked_food,
+          item_sub_category: businessInventory.item?.item_sub_category,
+        }),
+        ...this.orderItemDepositSnapshot(collectInitialDeposit, depositQuote.lines[idx]),
         stripe_tax_code_id:
           businessInventory.item.stripe_tax_code_id ||
           STRIPE_TAX_CODE_GENERAL_TANGIBLE,
@@ -10659,6 +11888,8 @@ export class OrdersService {
           actionSource: orderData.metaActionSource,
           eventSourceUrl: orderData.eventSourceUrl,
         }),
+        isCookedFoodPickup,
+        payAfterMerchantConfirm,
       }
     );
 
@@ -10686,34 +11917,16 @@ export class OrdersService {
       throw error;
     }
 
-    // Create order status history after order is created
-    const createStatusHistoryMutation = `
-      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId,
-          status: $status,
-          notes: $notes,
-          changed_by_type: $changedByType,
-          changed_by_user_id: $changedByUserId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-
-    await this.hasuraSystemService.executeMutation(
-      createStatusHistoryMutation,
-      {
-        orderId: order.id,
-        status: current_status,
-        notes:
-          current_status === 'pending_payment'
-            ? 'Order created, awaiting payment'
-            : 'Order created',
-        changedByType: 'client',
-        changedByUserId: user.id,
-      }
-    );
+    await writeOrderStatusHistory(this.hasuraSystemService, {
+      orderId: order.id,
+      status: current_status,
+      notes:
+        current_status === 'pending_payment'
+          ? 'Order created, awaiting payment'
+          : 'Order created',
+      changedByType: 'client',
+      changedByUserId: user.id,
+    });
 
     // Create delivery/pickup window before acceptance SLA so future orders defer correctly
     let deliveryWindow = null;
@@ -10766,24 +11979,10 @@ export class OrdersService {
       }
     }
 
-    if (
-      paymentTiming === 'pay_at_delivery' ||
-      paymentTiming === 'pay_at_pickup'
-    ) {
-      // MoMo reservation deposit collection for pay_at_delivery/pickup
-      // Use same rail logic as status decision above
-      const railForDeposit = getDepositRailForPayAtTiming();
-      const requiresDeposit = this.depositCalculationService.isDepositRequired(
-        paymentTiming,
-        railForDeposit
-      );
-
-      if (requiresDeposit) {
-        try {
-          const depositCalc = this.depositCalculationService.calculateDeposit(
-            total_amount,
-            currency
-          );
+    if (collectInitialDeposit) {
+      // MoMo reservation deposit for opted-in items on pay_at_delivery/pickup
+      try {
+        const depositCalc = depositQuote;
 
           // Generate references: long for DB, short for MyPVIT (≤15 chars)
           const depositLongReference = `${order.order_number}-DEP-${Date.now()}`;
@@ -10844,6 +12043,7 @@ export class OrdersService {
             mutation UpdateOrderDeposit(
               $orderId: uuid!,
               $depositAmount: numeric!,
+              $depositMinimumApplied: Boolean!,
               $depositMobilePaymentTransactionId: uuid!,
               $currentStatus: order_status!
             ) {
@@ -10851,6 +12051,7 @@ export class OrdersService {
                 pk_columns: { id: $orderId }
                 _set: {
                   deposit_amount: $depositAmount
+                  deposit_minimum_applied: $depositMinimumApplied
                   deposit_mobile_payment_transaction_id: $depositMobilePaymentTransactionId
                   deposit_status: "pending"
                   current_status: $currentStatus
@@ -10864,6 +12065,7 @@ export class OrdersService {
           await this.hasuraSystemService.executeMutation(updateDepositMutation, {
             orderId: order.id,
             depositAmount: depositCalc.depositAmount,
+            depositMinimumApplied: depositCalc.minimumApplied,
             depositMobilePaymentTransactionId: depositTransaction.id,
             currentStatus: 'pending_payment',
           });
@@ -10889,6 +12091,7 @@ export class OrdersService {
             current_status: 'pending_payment',
             total_amount: total_amount,
             deposit_amount: depositCalc.depositAmount,
+            deposit_minimum_applied: depositCalc.minimumApplied,
             deposit_status: 'pending',
             amount_due: depositCalc.amountDue,
             delivery_window: deliveryWindow,
@@ -10917,10 +12120,16 @@ export class OrdersService {
             { allowPendingUnpaid: true }
           );
           throw error;
-        }
       }
+    }
 
-      // No deposit required (non-XAF, Stripe rail, etc.) - proceed with normal deferred payment
+    if (
+      !payAfterMerchantConfirm &&
+      !cookedFoodFulfillment &&
+      (paymentTiming === 'pay_at_delivery' ||
+        paymentTiming === 'pay_at_pickup')
+    ) {
+    // No deposit required — proceed with normal deferred payment
       // Deferred-payment orders are not finalized at placement time, but we still want the
       // "order placed" notifications to go out immediately.
       try {
@@ -11128,6 +12337,14 @@ export class OrdersService {
       }
     }
 
+    if (payAfterMerchantConfirm) {
+      return this.finishPayAfterMerchantConfirmCreate(
+        order,
+        total_amount,
+        deliveryWindow
+      );
+    }
+
     if (
       paymentTiming === 'pay_now' &&
       !canPayWithWallet &&
@@ -11189,7 +12406,22 @@ export class OrdersService {
       }
     }
 
-    // Wallet-funded or zero-amount orders: hold funds then CAS to pending + paid.
+    // Wallet-funded or zero-amount only — never hold for unpaid MoMo pay-after.
+    if (!canPayWithWallet && !isZeroOrNegativeOrder) {
+      await this.compensateUnpaidCreate(
+        order.id,
+        'Create failed: no payment path resolved'
+      );
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Unable to determine payment path for this order',
+          error: 'PAYMENT_PATH_UNRESOLVED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     try {
       const orderWithDetails = await this.requireOrderDetailsByNumber(
         order.order_number
@@ -11219,6 +12451,41 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Cooked-food MoMo: leave unpaid with no wallet hold until merchant confirm
+   * triggers the full-amount payment request.
+   */
+  private async finishPayAfterMerchantConfirmCreate(
+    order: { id: string; order_number: string },
+    totalAmount: number,
+    deliveryWindow: unknown
+  ) {
+    try {
+      const orderWithDetails = await this.requireOrderDetailsByNumber(
+        order.order_number
+      );
+      await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send pay-after create notifications for ${order.order_number}: ${error?.message}`
+      );
+    }
+    return {
+      ...order,
+      total_amount: totalAmount,
+      delivery_window: deliveryWindow,
+      payment_source: 'mobile_money' as const,
+      payment_rail: 'mobile_money' as const,
+      payment_transaction: {
+        success: true,
+        transaction_id: null,
+        message: 'Awaiting merchant confirmation before payment',
+        mode: 'mobile_money' as const,
+      },
+      database_transaction: null,
+    };
   }
 
   private async schedulePendingPaymentTimeout(orderId: string): Promise<void> {
@@ -12198,30 +13465,30 @@ export class OrdersService {
     status: string,
     notes: string,
     changedByType: string,
-    changedByUserId: string,
+    changedByUserId?: string | null,
     additionalNotes?: string
   ): Promise<void> {
     const finalNotes = additionalNotes ? `${notes}. ${additionalNotes}` : notes;
-    const mutation = `
-      mutation CreateStatusHistory($orderId: uuid!, $status: order_status!, $notes: String!, $changedByType: String!, $changedByUserId: uuid!) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId,
-          status: $status,
-          notes: $notes,
-          changed_by_type: $changedByType,
-          changed_by_user_id: $changedByUserId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
+    await writeOrderStatusHistory(this.hasuraSystemService, {
       orderId,
       status,
       notes: finalNotes,
       changedByType,
       changedByUserId,
     });
+  }
+
+  /**
+   * Pay-after-confirm holds full GMV like pay-now. Settlement must release that
+   * hold even when payment_timing is still pay_at_pickup from checkout.
+   */
+  private settlesViaClientHoldRelease(order: {
+    payment_timing?: string | null;
+    pay_after_merchant_confirm?: boolean | null;
+  }): boolean {
+    if (order.pay_after_merchant_confirm === true) return true;
+    const timing = order.payment_timing;
+    return timing !== 'pay_at_delivery' && timing !== 'pay_at_pickup';
   }
 
   /**
@@ -12278,37 +13545,17 @@ export class OrdersService {
     }
 
     if (subtotalPortion > 0 && !skipClient) {
-      if (
-        paymentTiming === 'pay_at_delivery' ||
-        paymentTiming === 'pay_at_pickup'
-      ) {
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
+      const clientAccount = await this.hasuraSystemService.getAccount(
+        order.client.user_id,
+        order.currency
+      );
+      if (!clientAccount) {
+        throw new HttpException(
+          'Client account not found',
+          HttpStatus.NOT_FOUND
         );
-        if (!clientAccount) {
-          throw new HttpException(
-            'Client account not found',
-            HttpStatus.NOT_FOUND
-          );
-        }
-        // Release withheld deposit into available before full GMV payment debit
-        await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: subtotalPortion,
-          transactionType: 'payment',
-          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
-          referenceId: orderId,
-        });
-      } else {
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
-        );
-        if (!clientAccount) {
-          throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
-        }
+      }
+      if (this.settlesViaClientHoldRelease(order as any)) {
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
           amount: subtotalPortion,
@@ -12321,6 +13568,16 @@ export class OrdersService {
           amount: subtotalPortion,
           transactionType: 'payment',
           memo: `Order item payment for order ${order.order_number}`,
+          referenceId: orderId,
+        });
+      } else {
+        // Classic PAD/PAP: release deposit hold, then debit full GMV.
+        await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: subtotalPortion,
+          transactionType: 'payment',
+          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
           referenceId: orderId,
         });
       }
@@ -12414,36 +13671,16 @@ export class OrdersService {
 
     const deliveryAmt = Number(orderHold.delivery_fees);
     if (deliveryAmt > 0) {
-      if (
-        paymentTiming === 'pay_at_delivery' ||
-        paymentTiming === 'pay_at_pickup'
-      ) {
-        if (!skipClient) {
-          const clientAccount = await this.hasuraSystemService.getAccount(
-            order.client.user_id,
-            order.currency
-          );
-          if (!clientAccount) {
-            throw new HttpException(
-              'Client account not found',
-              HttpStatus.NOT_FOUND
-            );
-          }
-          await this.accountsService.registerTransaction({
-            accountId: clientAccount.id,
-            amount: deliveryAmt,
-            transactionType: 'payment',
-            memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
-            referenceId: orderId,
-          });
-        }
-      } else {
+      if (this.settlesViaClientHoldRelease(order as any)) {
         const clientAccount = await this.hasuraSystemService.getAccount(
           order.client.user_id,
           order.currency
         );
         if (!clientAccount) {
-          throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+          throw new HttpException(
+            'Client account not found',
+            HttpStatus.NOT_FOUND
+          );
         }
         await this.accountsService.registerTransaction({
           accountId: clientAccount.id,
@@ -12457,6 +13694,24 @@ export class OrdersService {
           amount: deliveryAmt,
           transactionType: 'payment',
           memo: `Order delivery payment for order ${order.order_number}`,
+          referenceId: orderId,
+        });
+      } else if (!skipClient) {
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new HttpException(
+            'Client account not found',
+            HttpStatus.NOT_FOUND
+          );
+        }
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: deliveryAmt,
+          transactionType: 'payment',
+          memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
           referenceId: orderId,
         });
       }
@@ -13162,6 +14417,7 @@ export class OrdersService {
       business_inventory: Array<{
         id: string;
         item?: {
+          is_cooked_food?: boolean | null;
           item_sub_category?: {
             item_category?: { name?: string | null } | null;
           } | null;
@@ -13172,6 +14428,7 @@ export class OrdersService {
         business_inventory(where: { id: { _in: $ids } }) {
           id
           item {
+            is_cooked_food
             item_sub_category {
               item_category { name }
             }
@@ -13184,7 +14441,8 @@ export class OrdersService {
     for (const row of result.business_inventory ?? []) {
       if (
         !cookedFoodIgnoresStock(
-          row.item?.item_sub_category?.item_category?.name
+          row.item?.item_sub_category?.item_category?.name,
+          row.item?.is_cooked_food
         )
       ) {
         stocked.add(row.id);
@@ -13344,24 +14602,7 @@ export class OrdersService {
     userId: string,
     changedByType: string
   ): Promise<void> {
-    const mutation = `
-      mutation InsertShippingStatusHistory(
-        $orderId: uuid!,
-        $status: order_status!,
-        $changedByType: String!,
-        $changedByUserId: uuid!
-      ) {
-        insert_order_status_history(objects: [{
-          order_id: $orderId
-          status: $status
-          changed_by_type: $changedByType
-          changed_by_user_id: $changedByUserId
-        }]) {
-          affected_rows
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
+    await writeOrderStatusHistory(this.hasuraSystemService, {
       orderId,
       status,
       changedByType,

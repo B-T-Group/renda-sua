@@ -25,6 +25,12 @@ export class UpdateItemDto {
   estimated_delivery_time?: number | null;
   /** Typical minutes to cook the dish (cooked food only). */
   preparation_minutes?: number | null;
+  /** True when this is a cooked/restaurant dish. */
+  is_cooked_food?: boolean;
+  /** When true, Mobile Money pay-later collects an initial deposit. Not allowed on cooked food. */
+  initial_deposit_enabled?: boolean;
+  /** Whole-number percent from 1 to 25. Required when the deposit is enabled. */
+  initial_deposit_percent?: number | null;
   min_order_quantity?: number;
   max_order_quantity?: number | null;
   is_active?: boolean;

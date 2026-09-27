@@ -89,7 +89,10 @@ describe('ItemsService privileged field filtering', () => {
 
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
       name: 'Griot',
+      is_cooked_food: true,
       min_order_quantity: 1,
+      initial_deposit_enabled: false,
+      initial_deposit_percent: null,
     });
   });
 
@@ -117,6 +120,9 @@ describe('ItemsService privileged field filtering', () => {
       is_active: false,
       moderation_status: 'draft',
       min_order_quantity: 1,
+      is_cooked_food: false,
+      initial_deposit_enabled: false,
+      initial_deposit_percent: null,
     });
   });
 
@@ -135,6 +141,98 @@ describe('ItemsService privileged field filtering', () => {
 
     expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
       name: 'New name',
+    });
+  });
+
+  it('writes is_cooked_food when moving into Restaurant & Cooked Food', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      is_cooked_food: false,
+      item_sub_category_id: 10,
+      item_sub_category: {
+        item_category: { name: 'Electronics' },
+      },
+    });
+    hasuraSystem.executeQuery.mockResolvedValue({
+      item_sub_categories_by_pk: {
+        item_category: { name: 'Restaurant & Cooked Food' },
+      },
+      supported_country_states: [{ country_code: 'CM', service_status: 'active' }],
+      item_export_markets_aggregate: { aggregate: { count: 1 } },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', is_cooked_food: true },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      item_sub_category_id: 42,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      item_sub_category_id: 42,
+      is_cooked_food: true,
+      min_order_quantity: 1,
+      initial_deposit_enabled: false,
+      initial_deposit_percent: null,
+    });
+  });
+
+  it('keeps is_cooked_food when the flag is true outside the food category', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      is_cooked_food: true,
+      item_sub_category_id: 42,
+      item_sub_category: {
+        item_category: { name: 'Restaurant & Cooked Food' },
+      },
+    });
+    hasuraSystem.executeQuery.mockResolvedValue({
+      item_sub_categories_by_pk: {
+        item_category: { name: 'Electronics' },
+      },
+      supported_country_states: [{ country_code: 'CM', service_status: 'active' }],
+      item_export_markets_aggregate: { aggregate: { count: 1 } },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', name: 'Griot' },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      item_sub_category_id: 99,
+    });
+
+    const itemData = hasuraSystem.executeMutation.mock.calls[0][1].itemData;
+    expect(itemData).toEqual({
+      item_sub_category_id: 99,
+      is_cooked_food: true,
+      min_order_quantity: 1,
+      initial_deposit_enabled: false,
+      initial_deposit_percent: null,
+    });
+  });
+
+  it('persists an explicit is_cooked_food update', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      is_cooked_food: false,
+      item_sub_category_id: 10,
+      item_sub_category: {
+        item_category: { name: 'Electronics' },
+      },
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1', is_cooked_food: true },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      is_cooked_food: true,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      is_cooked_food: true,
+      min_order_quantity: 1,
+      initial_deposit_enabled: false,
+      initial_deposit_percent: null,
     });
   });
 
@@ -270,6 +368,9 @@ describe('ItemsService privileged field filtering', () => {
       is_active: false,
       moderation_status: 'draft',
       min_order_quantity: 1,
+      is_cooked_food: false,
+      initial_deposit_enabled: false,
+      initial_deposit_percent: null,
     });
   });
 
@@ -530,5 +631,72 @@ describe('ItemsService privileged field filtering', () => {
         String(call[0]).includes('item_export_markets')
       )
     ).toBe(false);
+  });
+
+  it('persists an initial deposit percent for a non-food item', async () => {
+    const { service, hasuraSystem } = createService();
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1' },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      initial_deposit_enabled: true,
+      initial_deposit_percent: 15,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      initial_deposit_enabled: true,
+      initial_deposit_percent: 15,
+    });
+  });
+
+  it('keeps the deposit on when only the percent is updated', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      initial_deposit_enabled: true,
+      initial_deposit_percent: 10,
+    });
+    hasuraSystem.executeMutation.mockResolvedValue({
+      update_items_by_pk: { id: 'item-1' },
+    });
+
+    await service.updateItem('business-1', 'item-1', {
+      initial_deposit_percent: 20,
+    });
+
+    expect(hasuraSystem.executeMutation.mock.calls[0][1].itemData).toEqual({
+      initial_deposit_enabled: true,
+      initial_deposit_percent: 20,
+    });
+  });
+
+  it('rejects a deposit on a cooked-food item', async () => {
+    const { service, hasuraSystem } = createService({
+      ...ownedItem,
+      is_cooked_food: true,
+      item_sub_category: {
+        item_category: { name: 'Restaurant & Cooked Food' },
+      },
+    });
+
+    await expect(
+      service.updateItem('business-1', 'item-1', {
+        initial_deposit_enabled: true,
+        initial_deposit_percent: 10,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a deposit percent outside 1 to 25', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await expect(
+      service.updateItem('business-1', 'item-1', {
+        initial_deposit_enabled: true,
+        initial_deposit_percent: 30,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(hasuraSystem.executeMutation).not.toHaveBeenCalled();
   });
 });

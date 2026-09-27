@@ -9,6 +9,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | Internal key | Meta name | Category | Body variables (positional) | Button |
 |--------------|-----------|----------|-------------------------------|--------|
 | `order_created_business` | `rs_order_created` | UTILITY | orderNumber, customerName, pickupWindow | URL CTA → `/app/orders/{{1}}` |
+| `order_created_cooked_food_business` | `rs_order_created_cooked_food` | UTILITY | orderNumber, customerName | QUICK_REPLY: Confirm (ready in 30 min) / Need more time / Decline — body must say Confirm = ready in 30 minutes; open the app for 15/45/60/custom |
 | `order_action_business` | `rs_order_action` | UTILITY | orderNumber, customerName, pickupWindow | QUICK_REPLY: Confirm / Need more time / Decline |
 | `order_offer_agent` | `rs_delivery_offer` | **MARKETING** | pickupArea, distance | URL CTA → `/app/deliveries/{{1}}` |
 | `order_status_client` | `rs_order_status` | UTILITY | orderNumber, statusLabel | URL CTA → `/app/orders/{{1}}` |
@@ -75,6 +76,32 @@ Nom du client : {{2}}
 Veuillez confirmer sous {{3}} pour ne pas faire attendre le client.
 
 Appuyez ci-dessous pour ouvrir la commande dans Rendasua.
+```
+
+## 1a. `rs_order_created_cooked_food` (pending Meta approval)
+
+**Internal key:** `order_created_cooked_food_business`  
+**Vars:** `{{1}}` orderNumber · `{{2}}` customerName  
+**Buttons:** QUICK_REPLY Confirm (ready in 30 min) / Need more time / Decline  
+
+Until approved, cooked-food pickup still uses `rs_order_created` / `rs_order_action`; WhatsApp Yes still confirms as ready in 30 minutes, and the reply text explains the default.
+
+**en**
+```
+Rendasua: new cooked-food pickup order.
+
+Order number: {{1}}
+Customer name: {{2}}
+Confirm means ready in 30 minutes. To choose 15, 45, 60, or a custom time, open the app instead of tapping Confirm.
+```
+
+**fr**
+```
+Rendasua : nouvelle commande plats à emporter.
+
+Numéro de commande : {{1}}
+Nom du client : {{2}}
+Confirmer signifie prêt dans 30 minutes. Pour choisir 15, 45, 60 ou un délai personnalisé, ouvrez l'application au lieu de toucher Confirmer.
 ```
 
 ## 1b. `rs_order_action`

@@ -1,5 +1,6 @@
 import { isFirstOrderGuidanceForced } from '../config/firstOrderDebug';
 import type { JourneyIllustrationId } from './clientOrderJourney';
+import { resolvePickupReadyCopyMode } from './cookedFoodOrder';
 import {
   getFirstOrderFulfillmentPath,
   isFirstOrderCountEligible,
@@ -159,6 +160,13 @@ const READY_PICKUP_PAY_AT_PICKUP: StepTemplate = {
     'When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.',
 };
 
+const READY_PICKUP_COMPLETE_PAID: StepTemplate = {
+  ...READY_PICKUP,
+  whatHappensKey: 'client.firstOrder.steps.readyForPickup.whatHappensCompletePaid',
+  whatHappensDefault:
+    'When you arrive, tap Complete order so the merchant gets paid, then collect your order.',
+};
+
 const PICKED_UP: StepTemplate = {
   id: 'picked_up',
   titleKey: 'client.firstOrder.steps.pickedUp.title',
@@ -228,12 +236,33 @@ export function isClientFirstOrderCheckoutEligible(
   return ordersTotal <= justPlacedCount;
 }
 
+function readyPickupTemplate(
+  order: Pick<
+    ClientFirstOrderOrder,
+    | 'payment_timing'
+    | 'payment_status'
+    | 'pay_after_merchant_confirm'
+    | 'is_cooked_food_pickup'
+  >
+): StepTemplate {
+  const mode = resolvePickupReadyCopyMode(order);
+  if (mode === 'pay_at_pickup') return READY_PICKUP_PAY_AT_PICKUP;
+  if (mode === 'complete_paid') return READY_PICKUP_COMPLETE_PAID;
+  return READY_PICKUP;
+}
+
 function templatesForPath(
   path: FirstOrderFulfillmentPath,
   includePendingPayment: boolean,
-  payAtPickup = false
+  order?: Pick<
+    ClientFirstOrderOrder,
+    | 'payment_timing'
+    | 'payment_status'
+    | 'pay_after_merchant_confirm'
+    | 'is_cooked_food_pickup'
+  >
 ): StepTemplate[] {
-  const readyPickup = payAtPickup ? READY_PICKUP_PAY_AT_PICKUP : READY_PICKUP;
+  const readyPickup = order ? readyPickupTemplate(order) : READY_PICKUP;
   const base =
     path === 'pickup'
       ? [RECEIVED, CONFIRMED, PREPARING_PICKUP, readyPickup, PICKED_UP]
@@ -244,6 +273,19 @@ function templatesForPath(
 }
 
 function isPinEligible(order: ClientFirstOrderOrder): boolean {
+  if (order.is_cooked_food_pickup === true) return false;
+  if (
+    order.pay_after_merchant_confirm === true &&
+    order.fulfillment_method === 'pickup'
+  ) {
+    return false;
+  }
+  if (
+    order.pay_after_merchant_confirm === true &&
+    order.fulfillment_method !== 'pickup'
+  ) {
+    return true;
+  }
   if (order.payment_timing === 'pay_at_delivery') return false;
   if (order.payment_timing === 'pay_at_pickup') return false;
   if (order.payment_method === 'pay_on_delivery') return false;
@@ -353,12 +395,11 @@ export function resolveClientFirstOrderJourney(input: {
   const isSuccess = isFirstOrderSuccessStatus(status);
   const pin = pinExplainerFor(fulfillmentPath, currentStepId, input.order);
   const includePendingPayment = currentStepId === 'pending_payment';
-  const payAtPickup = input.order.payment_timing === 'pay_at_pickup';
   const steps =
     currentStepId === 'cancelled'
       ? [{ ...CANCELLED, state: 'current' as const }]
       : withStates(
-          templatesForPath(fulfillmentPath, includePendingPayment, payAtPickup),
+          templatesForPath(fulfillmentPath, includePendingPayment, input.order),
           currentStepId
         );
 

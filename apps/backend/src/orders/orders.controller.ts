@@ -191,6 +191,12 @@ export class OrdersController {
         special_instructions: { type: 'string' },
         verified_agent_delivery: { type: 'boolean' },
         phone_number: { type: 'string' },
+        mobile_payment_phone_id: {
+          type: 'string',
+          format: 'uuid',
+          description:
+            'Client Mobile Money registry phone to charge. Preferred over phone_number.',
+        },
         requires_fast_delivery: { type: 'boolean' },
         payment_timing: {
           type: 'string',
@@ -384,7 +390,7 @@ export class OrdersController {
   async getPendingAcceptance() {
     const user = await this.hasuraUserService.getUser();
     if (!isActivePersona(user, 'business') || !user.business?.id) {
-      return { active: false, order: null };
+      return { active: false, order: null, queue: [] };
     }
     return this.orderAcceptanceService.getPendingAcceptanceForBusiness(
       user.business.id
@@ -671,7 +677,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Confirm client picked up a store-pickup order (business only)',
     description:
-      'For paid or card-authorized pickup orders in ready_for_pickup, the business enters the client PIN to confirm collection. Captures the authorized card payment (Stripe manual capture), settles, and marks the order complete. Pay-at-pickup (mobile money) orders are completed by their payment callback instead.',
+      'Legacy PIN confirmation for store pickup. Prefer client Complete order. Delivery still uses PIN.',
   })
   @ApiBody({
     schema: {
@@ -706,6 +712,21 @@ export class OrdersController {
       useLatestSharedPin: body?.useLatestSharedPin,
       pinMessageId: body?.pinMessageId,
     });
+  }
+
+  @Post(':id/complete-pickup')
+  @ApiOperation({
+    summary: 'Client completes a store-pickup order (no PIN)',
+    description:
+      'When ready_for_pickup: if paid/authorized, settles merchant and commission and completes. If pay_at_pickup with remainder due, initiates MoMo remainder; completion follows payment callback.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Order completed or payment requested' })
+  @ApiResponse({ status: 400, description: 'Invalid order state' })
+  @ApiResponse({ status: 402, description: 'Payment required' })
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async completeClientPickup(@Param('id') orderId: string) {
+    return this.ordersService.completeClientPickup(orderId);
   }
 
   @Post(':id/mark-paid-in-cash-exception')
@@ -828,6 +849,34 @@ export class OrdersController {
   @ApiResponse({ status: 404, description: 'Order not found' })
   async getCancellationPreview(@Param('orderId') orderId: string) {
     return this.ordersService.getCancellationPreview(orderId);
+  }
+
+  @Post(':orderId/fail-pickup')
+  @ApiOperation({
+    summary: 'Mark cooked-food pickup as failed',
+    description:
+      'Business marks a ready cooked-food order as failed. Retains country cancellation fee and enqueues partial client refund.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['failure_reason_id'],
+      properties: {
+        failure_reason_id: { type: 'string', format: 'uuid' },
+        notes: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Pickup marked as failed' })
+  async failPickup(
+    @Param('orderId') orderId: string,
+    @Body() body: { failure_reason_id: string; notes?: string }
+  ) {
+    return this.ordersService.failPickup({
+      orderId,
+      failure_reason_id: body.failure_reason_id,
+      notes: body.notes,
+    });
   }
 
   @Post('cancel')
@@ -1368,7 +1417,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry order payment (client only)',
     description:
-      'Re-initiates payment for a pending_payment pay-now order. Mobile money creates a new MM request; Stripe (credit_card) returns a Checkout URL or PaymentIntent client secret when stripe_payment_method is payment_sheet.',
+      'Re-initiates payment for a pending_payment pay-now order, or for a confirmed cooked-food MoMo pay-after-confirm order awaiting client payment. Mobile money creates a new MM request; Stripe (credit_card) returns a Checkout URL or PaymentIntent client secret when stripe_payment_method is payment_sheet.',
   })
   @ApiBody({
     required: false,

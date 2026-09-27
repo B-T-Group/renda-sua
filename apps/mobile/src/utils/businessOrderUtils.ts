@@ -1,4 +1,5 @@
 import type { BusinessOrder } from '../types/business/orders';
+import { isCookedFoodPayAfterPaid } from './cookedFoodOrder';
 
 const BUSINESS_EARLY_CANCEL_STATUSES = [
   'pending_payment',
@@ -42,7 +43,22 @@ export function businessMayCancelDeferredUncollectedOrder(
   );
 }
 
+/**
+ * Business cancel is blocked once cooked-food pay-after is paid
+ * (confirmed race, preparing, or ready) — Fail pickup / client cancel-with-fee
+ * handle those stages. Unpaid confirmed pay-after may still cancel.
+ */
 export function businessMayCancelOrder(order: BusinessOrder): boolean {
+  if (isCookedFoodPayAfterPaid(order)) {
+    const status = order.current_status;
+    if (
+      status === 'confirmed' ||
+      status === 'preparing' ||
+      status === 'ready_for_pickup'
+    ) {
+      return false;
+    }
+  }
   if (
     BUSINESS_EARLY_CANCEL_STATUSES.includes(
       order.current_status as (typeof BUSINESS_EARLY_CANCEL_STATUSES)[number]

@@ -50,6 +50,63 @@ describe('FulfillmentPromiseService', () => {
     expect(service.inferTiming(false, 'shipping')).toBeNull();
   });
 
+  it('uses serving hours when the location is closed', () => {
+    const saturdayAfternoon = new Date('2026-08-22T15:00:00.000Z');
+    const result = service.evaluateAsap({
+      operatingHours: weekdayHours,
+      foodSlots: [{ day_of_week: 6, start_time: '08:00', end_time: '20:00' }],
+      prepMinutes: 30,
+      fulfillmentMethod: 'delivery',
+      timezone: 'UTC',
+      now: saturdayAfternoon,
+    });
+    expect(result.available).toBe(true);
+  });
+
+  it('measures the close buffer against the serving window, not location hours', () => {
+    const locationOpenLate = {
+      ...weekdayHours,
+      saturday: { closed: false, open: '08:00', close: '23:00' },
+    };
+    const slots = [{ day_of_week: 6, start_time: '08:00', end_time: '20:00' }];
+    const nearServingClose = new Date('2026-08-22T18:30:00.000Z');
+    const shared = {
+      operatingHours: locationOpenLate,
+      foodSlots: slots,
+      prepMinutes: 30,
+      timezone: 'UTC',
+      now: nearServingClose,
+    };
+    const pickup = service.evaluateAsap({
+      ...shared,
+      fulfillmentMethod: 'pickup',
+    });
+    const delivery = service.evaluateAsap({
+      ...shared,
+      fulfillmentMethod: 'delivery',
+    });
+    expect(pickup.available).toBe(false);
+    expect(pickup.reason).toBe('too_close_to_close');
+    expect(delivery.available).toBe(true);
+  });
+
+  it('uses the next serving window as the next opening', () => {
+    const afterService = new Date('2026-08-22T21:00:00.000Z');
+    const result = service.evaluateAsap({
+      operatingHours: weekdayHours,
+      foodSlots: [
+        { day_of_week: 6, start_time: '08:00', end_time: '20:00' },
+        { day_of_week: 0, start_time: '08:00', end_time: '20:00' },
+      ],
+      prepMinutes: 30,
+      fulfillmentMethod: 'pickup',
+      timezone: 'UTC',
+      now: afterService,
+    });
+    expect(result.available).toBe(false);
+    expect(result.opensAt).toBe('2026-08-23T08:00:00.000Z');
+  });
+
   it('requires a slot when the store is closed', () => {
     const sunday = new Date('2026-08-23T12:00:00.000Z');
     const result = service.evaluateAsap({

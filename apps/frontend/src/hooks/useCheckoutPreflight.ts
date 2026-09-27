@@ -14,6 +14,7 @@ export interface CheckoutPreflightRequest {
   fulfillment_method?: 'delivery' | 'pickup';
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
   phone_number?: string;
+  mobile_payment_phone_id?: string;
   /** ISO 3166-1 alpha-2 billing country of the payer. */
   payer_country?: string;
   /** Set when the shopper is buying for a different recipient. */
@@ -51,12 +52,27 @@ export interface CheckoutPreflightGroup {
   deposit_required?: boolean;
   deposit_amount?: number;
   amount_due?: number;
+  deposit_minimum_applied?: boolean;
+  deposit_percent?: number | null;
   momo_pay_now_delivery_enabled?: boolean;
+}
+
+export interface CookedFoodStoreClosedHourSlot {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface CookedFoodStoreClosedDetails {
+  timezone: string;
+  next_opens_at: string | null;
+  hours: CookedFoodStoreClosedHourSlot[];
 }
 
 export interface CheckoutPreflightBlocker {
   code: string;
   message: string;
+  details?: CookedFoodStoreClosedDetails;
 }
 
 export interface CheckoutPreflightResult {
@@ -76,6 +92,15 @@ export interface CheckoutPreflightResult {
    * unavailable." message and steer the user to store pickup.
    */
   delivery_availability?: CheckoutDeliveryAvailability | null;
+  /** False when the cart includes cooked food (ASAP-only). */
+  schedule_allowed?: boolean;
+  schedule_required?: boolean;
+  /** True when every group is cooked-food MoMo pay-after (no deposit). */
+  pay_after_merchant_confirm_eligible?: boolean;
+  requires_payment_phone?: boolean;
+  suggested_payment_phone?: string | null;
+  suggested_payment_phone_id?: string | null;
+  payment_phone_source?: 'registry' | 'profile' | 'none';
   purchase_credits?: {
     total: number;
     currency: string;

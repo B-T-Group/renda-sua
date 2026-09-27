@@ -1,4 +1,4 @@
-import { type ComponentProps } from 'react';
+import { type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,6 @@ import { useTheme } from '../../contexts/ThemeContext';
 export type OrderFulfillment = 'delivery' | 'pickup' | 'shipping';
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
-type ThemeColors = ReturnType<typeof useTheme>['colors'];
 type Translate = ReturnType<typeof useTranslation>['t'];
 
 export interface FulfillmentPickupLocation {
@@ -29,99 +28,18 @@ interface PlaceOrderFulfillmentChoiceProps {
   deliveryPriceLabel?: string;
   deliveryPriceLoading?: boolean;
   deliveryPriceHint?: string;
+  /** Compact segmented control for sticky checkout bars. */
+  compact?: boolean;
 }
 
-interface FulfillmentOption {
+interface SegmentOption {
   key: OrderFulfillment;
-  title: string;
-  subtitle: string;
+  label: string;
   icon: IconName;
   disabled: boolean;
 }
 
-function FulfillmentTile({
-  option,
-  selected,
-  colors,
-  onSelect,
-}: {
-  option: FulfillmentOption;
-  selected: boolean;
-  colors: ThemeColors;
-  onSelect: (key: OrderFulfillment) => void;
-}) {
-  const { spacing, borderRadius, typography, shadows } = useTheme();
-  const disabled = option.disabled;
-  return (
-    <Pressable
-      onPress={disabled ? undefined : () => onSelect(option.key)}
-      disabled={disabled}
-      accessibilityRole="radio"
-      accessibilityState={{ checked: selected, disabled }}
-      accessibilityLabel={`${option.title}. ${option.subtitle}`}
-      style={[
-        styles.tile,
-        shadows.sm,
-        {
-          paddingVertical: spacing.md,
-          paddingHorizontal: spacing.sm,
-          borderRadius: borderRadius.md,
-          borderColor: selected ? colors.primary.main : colors.divider,
-          backgroundColor: selected
-            ? colors.primaryTint
-            : disabled
-              ? colors.pageBackground
-              : colors.surface,
-        },
-        disabled && styles.tileDisabled,
-      ]}
-    >
-      {selected ? (
-        <View style={[styles.check, { backgroundColor: colors.primary.main }]}>
-          <MaterialCommunityIcons name="check" size={12} color={colors.primary.contrast} />
-        </View>
-      ) : null}
-      <MaterialCommunityIcons
-        name={option.icon}
-        size={28}
-        color={disabled ? colors.disabledText : selected ? colors.primary.main : colors.text.secondary}
-      />
-      <Text
-        numberOfLines={1}
-        style={[
-          typography.subtitle2,
-          {
-            marginTop: spacing.xs,
-            fontWeight: '700',
-            textAlign: 'center',
-            color: disabled
-              ? colors.disabledText
-              : selected
-                ? colors.primary.dark
-                : colors.text.primary,
-          },
-        ]}
-      >
-        {option.title}
-      </Text>
-      <Text
-        numberOfLines={2}
-        style={[
-          typography.caption,
-          {
-            marginTop: 2,
-            textAlign: 'center',
-            color: disabled ? colors.disabledText : colors.text.secondary,
-          },
-        ]}
-      >
-        {option.subtitle}
-      </Text>
-    </Pressable>
-  );
-}
-
-function buildOptions(
+function buildSegments(
   t: Translate,
   args: {
     deliveryDisabled: boolean;
@@ -129,30 +47,26 @@ function buildOptions(
     shippingAvailable: boolean;
     shippingDisabled: boolean;
   }
-): FulfillmentOption[] {
-  const options: FulfillmentOption[] = [
-    {
-      key: 'delivery',
-      title: t('client.placeOrder.delivery', 'Delivery'),
-      subtitle: t('client.placeOrder.deliveryChoiceHint', 'To your address'),
-      icon: 'truck-delivery-outline',
-      disabled: args.deliveryDisabled,
-    },
-  ];
+): SegmentOption[] {
+  const options: SegmentOption[] = [];
   if (args.pickupAvailable) {
     options.push({
       key: 'pickup',
-      title: t('client.placeOrder.pickup', 'Pickup'),
-      subtitle: t('client.placeOrder.pickupChoiceHint', 'At the store'),
+      label: t('client.placeOrder.pickup', 'Pickup'),
       icon: 'store-marker-outline',
       disabled: false,
     });
   }
+  options.push({
+    key: 'delivery',
+    label: t('client.placeOrder.delivery', 'Delivery'),
+    icon: 'truck-delivery-outline',
+    disabled: args.deliveryDisabled,
+  });
   if (args.shippingAvailable || args.shippingDisabled) {
     options.push({
       key: 'shipping',
-      title: t('client.placeOrder.shipping', 'Shipping'),
-      subtitle: t('client.placeOrder.shippingChoiceHint', 'By carrier'),
+      label: t('client.placeOrder.shipping', 'Shipping'),
       icon: 'package-variant-closed',
       disabled: args.shippingDisabled,
     });
@@ -160,78 +74,38 @@ function buildOptions(
   return options;
 }
 
-function SelectedDetail({
+function pickupSummary(locations: FulfillmentPickupLocation[]): string | null {
+  const lines = locations
+    .map((loc) => [loc.name, loc.address].filter(Boolean).join(' · '))
+    .filter((line) => line.length > 0);
+  return lines[0] ?? null;
+}
+
+function ContextLine({
   icon,
-  title,
-  lines,
+  children,
   loading,
 }: {
   icon: IconName;
-  title: string;
-  lines: string[];
+  children: ReactNode;
   loading?: boolean;
 }) {
-  const { colors, spacing, borderRadius, typography } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   return (
-    <View
-      style={[
-        styles.detail,
-        {
-          padding: spacing.sm,
-          borderRadius: borderRadius.md,
-          backgroundColor: colors.pageBackground,
-          gap: spacing.xs,
-        },
-      ]}
-    >
-      <View style={styles.detailHeader}>
-        <MaterialCommunityIcons name={icon} size={18} color={colors.text.secondary} />
-        <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '600' }]}>
-          {title}
-        </Text>
-      </View>
+    <View style={[styles.contextRow, { gap: spacing.xs }]}>
+      <MaterialCommunityIcons name={icon} size={14} color={colors.text.secondary} />
       {loading ? (
         <ActivityIndicator size="small" color={colors.primary.main} />
       ) : (
-        lines.map((line, i) => (
-          <Text key={`${i}-${line}`} style={[typography.body2, { color: colors.text.primary }]}>
-            {line}
-          </Text>
-        ))
+        <Text
+          numberOfLines={2}
+          style={[typography.caption, { color: colors.text.secondary, flex: 1 }]}
+        >
+          {children}
+        </Text>
       )}
     </View>
   );
-}
-
-function pickupDetailLines(locations: FulfillmentPickupLocation[]): string[] {
-  return locations
-    .map((loc) => [loc.name, loc.address].filter(Boolean).join(' · '))
-    .filter((line) => line.length > 0);
-}
-
-function disabledHelper(
-  t: Translate,
-  deliveryDisabled: boolean,
-  deliveryDisabledReason: string | undefined,
-  shippingDisabled: boolean,
-  shippingDisabledReason: string | undefined
-): string | null {
-  if (deliveryDisabled) {
-    return (
-      deliveryDisabledReason ??
-      t('client.placeOrder.deliveryUnavailable', 'Delivery is currently unavailable.')
-    );
-  }
-  if (shippingDisabled) {
-    return (
-      shippingDisabledReason ??
-      t(
-        'client.placeOrder.shippingUnavailableMixed',
-        'Shipping is only available when every item in your cart can be shipped.'
-      )
-    );
-  }
-  return null;
 }
 
 export function PlaceOrderFulfillmentChoice({
@@ -247,104 +121,150 @@ export function PlaceOrderFulfillmentChoice({
   deliveryPriceLabel,
   deliveryPriceLoading = false,
   deliveryPriceHint,
+  compact = true,
 }: PlaceOrderFulfillmentChoiceProps) {
   const { t } = useTranslation();
-  const { colors, spacing } = useTheme();
-  const options = buildOptions(t, {
+  const { colors, spacing, borderRadius, typography } = useTheme();
+  const segments = buildSegments(t, {
     deliveryDisabled,
     pickupAvailable,
     shippingAvailable,
     shippingDisabled,
   });
-  const helper = disabledHelper(
-    t,
-    deliveryDisabled,
-    deliveryDisabledReason,
-    shippingDisabled,
-    shippingDisabledReason
-  );
-  const pickupLines = pickupDetailLines(pickupLocations);
-  const deliveryLines = deliveryPriceHint
-    ? [deliveryPriceHint]
-    : deliveryPriceLabel
-      ? [deliveryPriceLabel]
-      : [];
-  const showPickup = value === 'pickup' && pickupLines.length > 0;
-  const showDelivery =
-    value === 'delivery' && !deliveryDisabled && (deliveryPriceLoading || deliveryLines.length > 0);
+
+  const helper = deliveryDisabled
+    ? deliveryDisabledReason ??
+      t('client.placeOrder.deliveryUnavailable', 'Delivery is currently unavailable.')
+    : shippingDisabled
+      ? shippingDisabledReason ??
+        t(
+          'client.placeOrder.shippingUnavailableMixed',
+          'Shipping is only available when every item in your cart can be shipped.'
+        )
+      : null;
+
+  const storeLine = pickupSummary(pickupLocations);
+  const showPickupContext = value === 'pickup' && !!storeLine;
+  const showDeliveryContext =
+    value === 'delivery' &&
+    !deliveryDisabled &&
+    (deliveryPriceLoading || !!deliveryPriceLabel || !!deliveryPriceHint);
 
   return (
-    <View accessibilityRole="radiogroup" style={{ marginBottom: spacing.md, gap: spacing.sm }}>
-      <Text variant="titleMedium" style={{ color: colors.text.primary, fontWeight: '700' }}>
-        {t('client.placeOrder.fulfillmentQuestion', 'How do you want it?')}
-      </Text>
-      <View style={[styles.row, { gap: spacing.sm }]}>
-        {options.map((option) => (
-          <FulfillmentTile
-            key={option.key}
-            option={option}
-            selected={value === option.key}
-            colors={colors}
-            onSelect={onChange}
-          />
-        ))}
-      </View>
-      {showPickup ? (
-        <SelectedDetail
-          icon="map-marker-outline"
-          title={t('orders.pickupAddressLabel', 'Store address')}
-          lines={pickupLines}
-        />
-      ) : null}
-      {showDelivery ? (
-        <SelectedDetail
-          icon="cash"
-          title={t('client.placeOrder.summary.deliveryFee', 'Delivery fee')}
-          lines={deliveryLines}
-          loading={deliveryPriceLoading}
-        />
-      ) : null}
-      {helper ? (
-        <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-          {helper}
+    <View
+      accessibilityRole="radiogroup"
+      style={{ gap: compact ? spacing.xs : spacing.sm }}
+    >
+      {!compact ? (
+        <Text variant="titleMedium" style={{ color: colors.text.primary, fontWeight: '700' }}>
+          {t('client.placeOrder.fulfillmentQuestion', 'How do you want it?')}
         </Text>
+      ) : null}
+
+      <View
+        style={[
+          styles.segmentTrack,
+          {
+            backgroundColor: colors.pageBackground,
+            borderRadius: borderRadius.md,
+            padding: 3,
+            gap: 2,
+          },
+        ]}
+      >
+        {segments.map((option) => {
+          const selected = value === option.key;
+          return (
+            <Pressable
+              key={option.key}
+              onPress={option.disabled ? undefined : () => onChange(option.key)}
+              disabled={option.disabled}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected, disabled: option.disabled }}
+              accessibilityLabel={option.label}
+              style={[
+                styles.segment,
+                {
+                  borderRadius: borderRadius.sm,
+                  backgroundColor: selected ? colors.surface : 'transparent',
+                  opacity: option.disabled ? 0.45 : 1,
+                },
+                selected && styles.segmentSelected,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name={option.icon}
+                size={16}
+                color={
+                  option.disabled
+                    ? colors.disabledText
+                    : selected
+                      ? colors.primary.main
+                      : colors.text.secondary
+                }
+              />
+              <Text
+                numberOfLines={1}
+                style={[
+                  typography.caption,
+                  {
+                    fontWeight: selected ? '700' : '600',
+                    color: option.disabled
+                      ? colors.disabledText
+                      : selected
+                        ? colors.primary.dark
+                        : colors.text.secondary,
+                  },
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {showPickupContext ? (
+        <ContextLine icon="map-marker-outline">{storeLine}</ContextLine>
+      ) : null}
+      {showDeliveryContext ? (
+        <ContextLine icon="cash" loading={deliveryPriceLoading}>
+          {deliveryPriceHint ??
+            t('client.placeOrder.summary.deliveryFee', 'Delivery fee') +
+              (deliveryPriceLabel ? ` · ${deliveryPriceLabel}` : '')}
+        </ContextLine>
+      ) : null}
+      {helper && (value === 'delivery' || value === 'shipping') ? (
+        <Text style={[typography.caption, { color: colors.warning.main }]}>{helper}</Text>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  segmentTrack: {
     flexDirection: 'row',
     alignItems: 'stretch',
   },
-  tile: {
+  segment: {
     flex: 1,
-    minWidth: 0,
-    minHeight: 108,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tileDisabled: {
-    opacity: 0.7,
-  },
-  check: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detail: {
-    width: '100%',
-  },
-  detailHeader: {
+    minHeight: 36,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+  },
+  segmentSelected: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
 });

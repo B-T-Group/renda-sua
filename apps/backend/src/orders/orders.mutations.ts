@@ -43,9 +43,9 @@ export const CREATE_STATUS_HISTORY = gql`
   mutation CreateStatusHistory(
     $orderId: uuid!
     $status: order_status!
-    $notes: String!
+    $notes: String
     $changedByType: String!
-    $changedByUserId: uuid!
+    $changedByUserId: uuid
   ) {
     insert_order_status_history(
       objects: [

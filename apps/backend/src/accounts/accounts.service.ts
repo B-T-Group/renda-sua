@@ -23,6 +23,11 @@ export interface TransactionRequest {
   allowNegative?: boolean;
   /** Facility cap. Required for cash_advance so concurrent draws cannot exceed it. */
   maxCashAdvanceDebt?: number;
+  /**
+   * When true, deposits credit available balance only and do not repay cash
+   * advance. Used for order / order-deposit MoMo so funds stay available to hold.
+   */
+  skipCashAdvanceRepayment?: boolean;
 }
 
 export interface TransactionResult {
@@ -136,8 +141,10 @@ export class AccountsService {
       }
 
       if (request.transactionType === 'deposit') {
-        const repaid = await this.repayAdvanceOnDeposit(request, account);
-        if (repaid) return repaid;
+        if (!request.skipCashAdvanceRepayment) {
+          const repaid = await this.repayAdvanceOnDeposit(request, account);
+          if (repaid) return repaid;
+        }
       }
 
       if (request.transactionType === 'cash_advance') {
@@ -217,7 +224,11 @@ export class AccountsService {
   async registerDepositIfNotExists(
     request: Pick<
       TransactionRequest,
-      'accountId' | 'amount' | 'memo' | 'referenceId'
+      | 'accountId'
+      | 'amount'
+      | 'memo'
+      | 'referenceId'
+      | 'skipCashAdvanceRepayment'
     >
   ): Promise<IdempotentTransactionResult> {
     if (!request.referenceId) {
@@ -226,7 +237,8 @@ export class AccountsService {
     const remaining = await this.unappliedDepositAmount(
       request.accountId,
       request.referenceId,
-      request.amount
+      request.amount,
+      request.skipCashAdvanceRepayment === true
     );
     if (remaining <= 0) return { success: true, alreadyExists: true };
     const result = await this.registerTransaction({
@@ -238,7 +250,8 @@ export class AccountsService {
       const stillOpen = await this.unappliedDepositAmount(
         request.accountId,
         request.referenceId,
-        request.amount
+        request.amount,
+        request.skipCashAdvanceRepayment === true
       );
       if (stillOpen <= 0) return { success: true, alreadyExists: true };
     }
@@ -248,23 +261,32 @@ export class AccountsService {
   private async unappliedDepositAmount(
     accountId: string,
     referenceId: string,
-    amount: number
+    amount: number,
+    depositsOnly = false
   ): Promise<number> {
-    const applied = await this.sumAppliedDeposit(accountId, referenceId);
+    const applied = await this.sumAppliedDeposit(
+      accountId,
+      referenceId,
+      depositsOnly
+    );
     return Number((amount - applied).toFixed(2));
   }
 
   private async sumAppliedDeposit(
     accountId: string,
-    referenceId: string
+    referenceId: string,
+    depositsOnly = false
   ): Promise<number> {
+    const types = depositsOnly
+      ? ['deposit']
+      : ['deposit', 'cash_advance_repayment'];
     const query = `
-      query SumAppliedDeposit($accountId: uuid!, $referenceId: uuid!) {
+      query SumAppliedDeposit($accountId: uuid!, $referenceId: uuid!, $types: [transaction_type_enum!]!) {
         account_transactions(
           where: {
             account_id: { _eq: $accountId }
             reference_id: { _eq: $referenceId }
-            transaction_type: { _in: ["deposit", "cash_advance_repayment"] }
+            transaction_type: { _in: $types }
           }
         ) { amount }
       }
@@ -272,6 +294,7 @@ export class AccountsService {
     const result = await this.hasuraSystemService.executeQuery(query, {
       accountId,
       referenceId,
+      types,
     });
     const rows = result.account_transactions ?? [];
     return rows.reduce(

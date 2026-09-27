@@ -32,54 +32,38 @@ type PaymentSource =
   | 'mobile_money'
   | 'credit_card';
 
-interface OrderConfirmationData {
-  order?: {
-    id: string;
-    order_number: string;
-    total_amount: number;
-    currency: string;
-    current_status: string;
-    created_at: string;
-    payment_source?: PaymentSource;
-    payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
-    recipient_name?: string | null;
-    is_third_party_recipient?: boolean | null;
-    payment_transaction: {
-      transaction_id: string | null;
-      success: boolean;
-      message: string;
-      mode?: string;
-    };
-    database_transaction: {
-      id: string;
-      reference: string;
-      status: string;
-    } | null;
+interface OrderConfirmationOrder {
+  id: string;
+  order_number: string;
+  total_amount: number;
+  currency: string;
+  current_status: string;
+  created_at: string;
+  payment_source?: PaymentSource;
+  payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
+  pay_after_merchant_confirm?: boolean | null;
+  fulfillment_method?: 'delivery' | 'pickup' | 'shipping' | null;
+  recipient_name?: string | null;
+  is_third_party_recipient?: boolean | null;
+  payment_transaction: {
+    transaction_id: string | null;
+    success: boolean;
+    message: string;
+    mode?: string;
   };
-  orders?: Array<{
+  database_transaction: {
     id: string;
-    order_number: string;
-    total_amount: number;
-    currency: string;
-    current_status: string;
-    created_at: string;
-    payment_source?: PaymentSource;
-    payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
-    recipient_name?: string | null;
-    is_third_party_recipient?: boolean | null;
-    payment_transaction: {
-      transaction_id: string | null;
-      success: boolean;
-      message: string;
-      mode?: string;
-    };
-    database_transaction: {
-      id: string;
-      reference: string;
-      status: string;
-    } | null;
-  }>;
+    reference: string;
+    status: string;
+  } | null;
+}
+
+interface OrderConfirmationData {
+  order?: OrderConfirmationOrder;
+  orders?: OrderConfirmationOrder[];
   multipleOrders?: boolean;
+  /** Passed from checkout when create response may omit the DB flag. */
+  pay_after_merchant_confirm?: boolean;
 }
 
 const OrderConfirmationPage: React.FC = () => {
@@ -133,23 +117,38 @@ const OrderConfirmationPage: React.FC = () => {
 
   // Wallet = paid from balance (no phone step). API uses mobile_money for MM; DB enum may use mobile_payment.
   const isWalletPayment = (src?: PaymentSource) => src === 'wallet';
-  const hasPayAtDelivery = orders.some((o) => o.payment_timing === 'pay_at_delivery');
-  const hasPayAtPickup = orders.some((o) => o.payment_timing === 'pay_at_pickup');
+  const hasPayAfterMerchantConfirm =
+    orderData.pay_after_merchant_confirm === true ||
+    orders.some((o) => o.pay_after_merchant_confirm === true);
+  const isCookedFoodPickup =
+    hasPayAfterMerchantConfirm &&
+    orders.some(
+      (o) =>
+        o.fulfillment_method === 'pickup' || o.payment_timing === 'pay_at_pickup'
+    );
+  const hasPayAtDelivery =
+    !hasPayAfterMerchantConfirm &&
+    orders.some((o) => o.payment_timing === 'pay_at_delivery');
+  const hasPayAtPickup =
+    !hasPayAfterMerchantConfirm &&
+    orders.some((o) => o.payment_timing === 'pay_at_pickup');
   // Diaspora orders name the person receiving them, not the person who paid.
   const recipientName =
     orders
       .find((o) => o.is_third_party_recipient && o.recipient_name?.trim())
       ?.recipient_name?.trim() ?? null;
-  const showMobilePaymentConfirmation = isMultipleOrders
-    ? orders.some(
-        (o) =>
-          o.payment_timing !== 'pay_at_delivery' &&
-          o.payment_timing !== 'pay_at_pickup' &&
-          !isWalletPayment(o.payment_source)
-      )
-    : orders[0]?.payment_timing !== 'pay_at_delivery' &&
-      orders[0]?.payment_timing !== 'pay_at_pickup' &&
-      !isWalletPayment(orders[0]?.payment_source);
+  const showMobilePaymentConfirmation =
+    !hasPayAfterMerchantConfirm &&
+    (isMultipleOrders
+      ? orders.some(
+          (o) =>
+            o.payment_timing !== 'pay_at_delivery' &&
+            o.payment_timing !== 'pay_at_pickup' &&
+            !isWalletPayment(o.payment_source)
+        )
+      : orders[0]?.payment_timing !== 'pay_at_delivery' &&
+        orders[0]?.payment_timing !== 'pay_at_pickup' &&
+        !isWalletPayment(orders[0]?.payment_source));
 
   const handleGoToDashboard = () => {
     navigate('/dashboard');
@@ -232,7 +231,17 @@ const OrderConfirmationPage: React.FC = () => {
           useFlexGap
           sx={{ mt: 2, my: 2, rowGap: 1, columnGap: 1 }}
         >
-          {hasPayAtDelivery ? (
+          {hasPayAfterMerchantConfirm ? (
+            <Chip
+              icon={<Schedule />}
+              label={t(
+                'orders.cookedFood.payAfterConfirm.chip',
+                'Pay after kitchen confirms'
+              )}
+              color="info"
+              variant="outlined"
+            />
+          ) : hasPayAtDelivery ? (
             <Chip
               icon={<Schedule />}
               label={t('orders.payAtDelivery.confirmationTitle', 'Payment at delivery')}
@@ -291,8 +300,62 @@ const OrderConfirmationPage: React.FC = () => {
         )}
       </Box>
 
-      {/* Payment confirmation: pay-now mobile payments vs pay-at-delivery */}
-      {showMobilePaymentConfirmation ? (
+      {/* Payment confirmation: pay-after kitchen / pay-now / PAD / pickup */}
+      {hasPayAfterMerchantConfirm ? (
+        <Card
+          sx={{
+            mb: { xs: 3, sm: 4 },
+            bgcolor: 'info.50',
+            border: '1px solid',
+            borderColor: 'info.main',
+            boxShadow: '0 4px 20px rgba(2, 136, 209, 0.12)',
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                mb: 2,
+                flexDirection: { xs: 'column', sm: 'row' },
+                textAlign: { xs: 'center', sm: 'left' },
+              }}
+            >
+              <Schedule
+                sx={{
+                  mr: { xs: 0, sm: 1 },
+                  mb: { xs: 1, sm: 0 },
+                  color: 'info.main',
+                }}
+              />
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 'bold',
+                  color: 'info.dark',
+                  fontSize: { xs: '1.1rem', sm: '1.25rem' },
+                }}
+              >
+                {t(
+                  'orders.cookedFood.payAfterConfirm.title',
+                  'Pay after the kitchen confirms'
+                )}
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
+              {isCookedFoodPickup
+                ? t(
+                    'orders.cookedFood.payAfterConfirm.bodyPickup',
+                    'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.'
+                  )
+                : t(
+                    'orders.cookedFood.payAfterConfirm.bodyDelivery',
+                    'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.'
+                  )}
+            </Typography>
+          </CardContent>
+        </Card>
+      ) : showMobilePaymentConfirmation ? (
         <Card
           sx={{
             mb: { xs: 3, sm: 4 },
@@ -720,7 +783,39 @@ const OrderConfirmationPage: React.FC = () => {
             </Typography>
           </Box>
 
-          {showMobilePaymentConfirmation ? (
+          {hasPayAfterMerchantConfirm ? (
+            <Box component="ol" sx={{ pl: 2 }}>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.cookedFood.payAfterConfirm.step1',
+                    'Your order has been sent to the kitchen.'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li" sx={{ mb: 2 }}>
+                <Typography variant="body1">
+                  {t(
+                    'orders.cookedFood.payAfterConfirm.step2',
+                    'When the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Approve it so they can start preparing.'
+                  )}
+                </Typography>
+              </Box>
+              <Box component="li">
+                <Typography variant="body1">
+                  {isCookedFoodPickup
+                    ? t(
+                        'orders.cookedFood.payAfterConfirm.step3Pickup',
+                        'When your order is ready, pick it up and tap Complete order in the app. Track progress in My Orders.'
+                      )
+                    : t(
+                        'orders.cookedFood.payAfterConfirm.step3Delivery',
+                        'We’ll notify you as your order is prepared and delivered. Track progress in My Orders.'
+                      )}
+                </Typography>
+              </Box>
+            </Box>
+          ) : showMobilePaymentConfirmation ? (
             <Box component="ol" sx={{ pl: 2 }}>
               <Box component="li" sx={{ mb: 2 }}>
                 <Typography variant="body1">

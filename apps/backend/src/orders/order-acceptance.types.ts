@@ -32,6 +32,10 @@ export interface PendingAcceptanceOrder {
   total_amount: number;
   currency: string;
   fulfillment_method?: string | null;
+  fulfillment_timing?: 'asap' | 'scheduled' | null;
+  /** Cooked-food MoMo: client pays after merchant confirm. */
+  pay_after_merchant_confirm?: boolean | null;
+  is_cooked_food_pickup?: boolean | null;
   business_id: string;
   client?: {
     user?: {
@@ -42,5 +46,12 @@ export interface PendingAcceptanceOrder {
   order_items?: Array<{
     item_name?: string | null;
     quantity?: number | null;
+    item?: {
+      is_cooked_food?: boolean | null;
+      item_sub_category?: {
+        name?: string | null;
+        item_category?: { name?: string | null } | null;
+      } | null;
+    } | null;
   }>;
 }

@@ -12,6 +12,7 @@ export interface FoodSettingsRow {
 
 export interface FoodAvailabilityRow {
   item?: {
+    is_cooked_food?: boolean | null;
     preparation_minutes?: number | null;
     item_sub_category?: {
       item_category?: { name?: string | null } | null;
@@ -38,6 +39,8 @@ export function isFoodCategoryName(name?: string | null): boolean {
 }
 
 export function isFoodRow(row: FoodAvailabilityRow): boolean {
+  if (row?.item?.is_cooked_food === true) return true;
+  if (row?.item?.is_cooked_food === false) return false;
   return isFoodCategoryName(row?.item?.item_sub_category?.item_category?.name);
 }
 

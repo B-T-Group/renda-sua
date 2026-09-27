@@ -272,6 +272,9 @@ const orders = {
   complete: (body: { orderId: string; notes?: string }): Promise<OrderActionResponse> =>
     api.post<OrderActionResponse>('/orders/complete', body),
 
+  completePickup: (orderId: string): Promise<OrderActionResponse> =>
+    api.post<OrderActionResponse>(`/orders/${orderId}/complete-pickup`, {}),
+
   confirmReceipt: async (orderId: string): Promise<OrderActionResponse> => {
     const res = await api.post<OrderActionResponse>(
       `/orders/${orderId}/confirm-receipt`,

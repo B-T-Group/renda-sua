@@ -1,6 +1,7 @@
 import {
   Alert,
   Box,
+  CircularProgress,
   Container,
   Typography,
 } from '@mui/material';
@@ -49,7 +50,7 @@ import SEOHead from '../seo/SEOHead';
 const BusinessDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { profile } = useUserProfileContext();
+  const { profile, loading: profileLoading } = useUserProfileContext();
   const { getPending } = useAiImageCleanup();
   const { hydrateActivity } = useImageEnhancements();
   const {
@@ -335,6 +336,14 @@ const BusinessDashboard: React.FC = () => {
     aggregatesError || !aggregates?.topViewedProducts?.length
       ? []
       : aggregates.topViewedProducts;
+
+  if (profileLoading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
 
   if (!profile?.business) {
     return (

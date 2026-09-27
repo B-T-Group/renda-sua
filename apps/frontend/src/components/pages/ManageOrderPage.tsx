@@ -284,8 +284,9 @@ const ManageOrderPageContent: React.FC = () => {
 
   const showPayCta =
     phaseInfo.primaryActionId === 'pay' &&
-    order.payment_timing === 'pay_now' &&
-    order.payment_status !== 'paid';
+    order.payment_status !== 'paid' &&
+    (order.payment_timing === 'pay_now' ||
+      order.pay_after_merchant_confirm === true);
   const canShowRatePrimary = !!(
     eligibility?.canRateAgent ||
     eligibility?.canRateItem ||

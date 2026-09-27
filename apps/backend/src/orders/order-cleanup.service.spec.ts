@@ -1117,6 +1117,112 @@ describe('OrderCleanupService', () => {
         )
       ).toBe(true);
     });
+
+    it('cancels a confirmed unpaid cooked-food order when allowed', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'confirmed',
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+            order_items: [],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_money',
+          },
+        });
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 1 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Client did not pay within the allowed time after confirm',
+        { allowConfirmedUnpaid: true, releaseInventory: true }
+      );
+
+      expect(result).toEqual({ cancelled: true });
+      const claim = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('CleanupClaimCancel')
+      );
+      expect(claim?.[1].expectedStatus).toBe('confirmed');
+    });
+
+    it('does not cancel confirmed orders unless allowConfirmedUnpaid is set', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'confirmed',
+          payment_status: 'pending',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout'
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'status_confirmed',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('does not cancel a paid confirmed order even when unpaid-cancel is allowed', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'confirmed',
+          payment_status: 'Paid',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout',
+        { allowConfirmedUnpaid: true }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'already_paid',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('does not cancel a preparing order with the confirmed-unpaid flag', async () => {
+      hasura.executeQuery.mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'o1',
+          current_status: 'preparing',
+          payment_status: 'pending',
+          order_items: [],
+        },
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Timeout',
+        { allowConfirmedUnpaid: true }
+      );
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'status_preparing',
+      });
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
   });
 });
 

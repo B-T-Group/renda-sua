@@ -24,6 +24,8 @@ export interface CartLine {
     minOrderQuantity?: number;
     /** From catalog at add time; used for cart checkout payment options. */
     payOnDeliveryEnabled?: boolean;
+    /** Snapshotted at add time; reservation deposits never apply to cooked food. */
+    isCookedFood?: boolean;
     /** False when merchant is visible but not yet accepting orders. Undefined on legacy cart lines. */
     merchantCanAcceptOrders?: boolean;
   };

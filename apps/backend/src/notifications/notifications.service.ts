@@ -46,10 +46,15 @@ import type {
   SaleItemAiProposalEmailPayload,
 } from './notification-types';
 import {
+  acceptanceDigestDedupeKey,
   merchantOrderCreatedSmsBody,
   merchantOrderReminderSmsBody,
+  merchantOrderWhatsAppBurstSince,
+  merchantPushSmsChannels,
   normalizeAlertPhone,
+  pendingOrdersDigestPushMessage,
   phonesEqual,
+  recentOrderWhatsAppMatch,
 } from './merchant-order-notify.util';
 import {
   smsFirstOrderShareCode,
@@ -1703,6 +1708,7 @@ export class NotificationsService {
       locale,
       acceptanceTimeoutSeconds: data.acceptanceTimeoutSeconds,
     });
+    const recent = await this.hasRecentOrderCreatedWhatsApp({ userId });
     const result = await this.notifyMerchantWithWaFallback({
       type: 'order.created',
       userId,
@@ -1730,8 +1736,165 @@ export class NotificationsService {
       ctaUrl: links.universal,
       smsBody,
       phoneE164: undefined,
+      omitWhatsApp: recent,
     });
-    return result;
+    // A suppressed WhatsApp still counts as handled so the email fallback
+    // does not add a third message on top of push and SMS.
+    return recent ? true : result;
+  }
+
+  private async hasRecentOrderCreatedWhatsApp(params: {
+    userId?: string | null;
+    phone?: string | null;
+  }): Promise<boolean> {
+    const or = recentOrderWhatsAppMatch(params);
+    if (!or.length) return false;
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        notification_events?: Array<{ id: string }>;
+      }>(
+        `query RecentOrderCreatedWa($since: timestamptz!, $or: [notification_events_bool_exp!]!) {
+          notification_events(
+            where: {
+              channel: { _eq: "whatsapp" }
+              notification_type: { _eq: "order.created" }
+              status: { _eq: "sent" }
+              created_at: { _gte: $since }
+              _or: $or
+            }
+            limit: 1
+          ) { id }
+        }`,
+        { since: merchantOrderWhatsAppBurstSince(), or }
+      );
+      return (res.notification_events?.length ?? 0) > 0;
+    } catch (error: any) {
+      this.logger.warn(
+        `recent order WhatsApp lookup failed: ${error?.message ?? error}`
+      );
+      return false;
+    }
+  }
+
+  private async hasNotificationDedupe(dedupeKey: string): Promise<boolean> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        notification_events?: Array<{ id: string }>;
+      }>(
+        `query DedupeHit($key: String!) {
+          notification_events(where: { dedupe_key: { _eq: $key } }, limit: 1) { id }
+        }`,
+        { key: dedupeKey }
+      );
+      return (res.notification_events?.length ?? 0) > 0;
+    } catch (error: any) {
+      this.logger.warn(`dedupe lookup failed: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
+  private async recordNotificationDedupe(
+    dedupeKey: string,
+    businessId: string
+  ): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation RecordDedupe($object: notification_events_insert_input!) {
+          insert_notification_events_one(object: $object) { id }
+        }`,
+        {
+          object: {
+            notification_type: 'order.acceptance.reminder',
+            category: 'actionable',
+            channel: 'push',
+            status: 'sent',
+            dedupe_key: dedupeKey,
+            entity_type: 'business',
+            entity_id: businessId,
+          },
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(`dedupe record failed: ${error?.message ?? error}`);
+    }
+  }
+
+  private async pushPendingAcceptanceDigest(params: {
+    businessUserId?: string | null;
+    orderId: string;
+    preferredLanguage?: string | null;
+    businessLocationId?: string | null;
+    count: number;
+  }): Promise<boolean> {
+    const locale = normalizeLanguage(params.preferredLanguage);
+    const { title, body } = pendingOrdersDigestPushMessage(params.count, locale);
+    const userId = params.businessUserId?.trim();
+    const data = this.acceptanceDigestPushData(params);
+    const ownerSent = await this.pushDigestOwner(userId, title, body, data);
+    const managersSent = await this.fanOutPushToOrderManagers(
+      params.businessLocationId,
+      {
+        title,
+        body,
+        data,
+        excludeUserId: userId,
+        expoOptions: MERCHANT_INCOMING_ORDER_PUSH,
+      }
+    );
+    return ownerSent || managersSent;
+  }
+
+  private acceptanceDigestPushData(params: {
+    orderId: string;
+    count: number;
+  }): Record<string, string> {
+    return {
+      url: `/orders/${params.orderId}`,
+      orderId: params.orderId,
+      event: 'order_acceptance_reminder',
+      persona: 'business',
+      waitingCount: String(params.count),
+    };
+  }
+
+  private async pushDigestOwner(
+    userId: string | undefined,
+    title: string,
+    body: string,
+    data: Record<string, string>
+  ): Promise<boolean> {
+    const enabled = this.configService.get<Configuration['push']>('push')?.enabled;
+    if (!userId || !enabled) return false;
+    try {
+      const counts = await this.sendPushNotificationByUserId(
+        userId,
+        title,
+        body,
+        data,
+        MERCHANT_INCOMING_ORDER_PUSH
+      );
+      return counts.webSent + counts.expoSent > 0;
+    } catch (error: any) {
+      this.logger.warn(`digest push failed: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
+  /** One push per business while several orders are still awaiting confirm. */
+  async sendPendingAcceptanceDigestPush(params: {
+    businessId: string;
+    businessUserId?: string | null;
+    orderId: string;
+    preferredLanguage?: string | null;
+    businessLocationId?: string | null;
+    count: number;
+  }): Promise<void> {
+    const dedupeKey = acceptanceDigestDedupeKey(params.businessId);
+    if (await this.hasNotificationDedupe(dedupeKey)) return;
+    const delivered = await this.pushPendingAcceptanceDigest(params);
+    if (delivered) {
+      await this.recordNotificationDedupe(dedupeKey, params.businessId);
+    }
   }
 
   private async notifyMerchantWithWaFallback(params: {
@@ -1750,11 +1913,16 @@ export class NotificationsService {
     ctaUrl: string;
     smsBody: string;
     phoneE164?: string;
+    omitWhatsApp?: boolean;
   }): Promise<boolean> {
     const pushEnabled =
       !!this.configService.get<Configuration['push']>('push')?.enabled;
     const phone =
       params.phoneE164 || (await this.getUserPhone(params.userId)) || '';
+    if (params.omitWhatsApp) {
+      await this.notifyMerchantPushSms(params, phone, pushEnabled);
+      return false;
+    }
     const templateKeys = [
       'order_action_business',
       'order_created_business',
@@ -1811,6 +1979,43 @@ export class NotificationsService {
     return false;
   }
 
+  private async notifyMerchantPushSms(
+    params: {
+      type: 'order.created' | 'order.acceptance.reminder';
+      userId: string;
+      locale: EmailLocale;
+      orderId: string;
+      dedupeKey: string;
+      push: {
+        title: string;
+        body: string;
+        interruptible?: boolean;
+        data: Record<string, string | undefined>;
+      };
+      smsBody: string;
+    },
+    phone: string,
+    pushEnabled: boolean
+  ): Promise<void> {
+    await this.orchestrator.notify({
+      type: params.type,
+      category: 'actionable',
+      recipientUserId: params.userId,
+      locale: params.locale,
+      preferenceCategory: 'order_updates',
+      allowSmsFallback: true,
+      entityType: 'order',
+      entityId: params.orderId,
+      dedupeKey: `${params.dedupeKey}:push`,
+      channels: merchantPushSmsChannels({
+        pushEnabled,
+        phone,
+        push: params.push,
+        smsBody: params.smsBody,
+      }),
+    });
+  }
+
   private async fanOutMerchantOrderCreatedChannels(
     data: NotificationData,
     ownerUserId: string
@@ -1854,6 +2059,7 @@ export class NotificationsService {
     locale: EmailLocale
   ): Promise<void> {
     if (!this.whatsappService?.isConfigured?.()) return;
+    if (await this.hasRecentOrderCreatedWhatsApp({ phone })) return;
     const vars = {
       orderNumber: data.orderNumber,
       customerName: data.clientName || 'Customer',
@@ -1888,7 +2094,9 @@ export class NotificationsService {
         });
         await this.bindWhatsAppMessageToOrder(
           result.messages[0]?.id,
-          data.orderId
+          data.orderId,
+          'order.created',
+          phone
         );
         return;
       } catch (error: any) {
@@ -1903,9 +2111,11 @@ export class NotificationsService {
   private async bindWhatsAppMessageToOrder(
     wamid: string | undefined,
     orderId?: string | null,
-    notificationType = 'order.created'
+    notificationType = 'order.created',
+    phone?: string | null
   ): Promise<void> {
     if (!wamid || !orderId) return;
+    const normalized = normalizeAlertPhone(phone);
     try {
       await this.hasuraSystemService.executeMutation(
         `mutation BindWaOrder($object: notification_events_insert_input!) {
@@ -1920,6 +2130,7 @@ export class NotificationsService {
             provider_message_id: wamid,
             entity_type: 'order',
             entity_id: orderId,
+            meta: normalized ? { phone: normalized } : null,
           },
         }
       );
@@ -3631,6 +3842,23 @@ export class NotificationsService {
     };
   }
 
+  private prepaidPickupReadyPush(
+    orderNumber: string,
+    language?: string | null
+  ): { title: string; body: string } {
+    const isFr = (language || '').toLowerCase().startsWith('fr');
+    if (isFr) {
+      return {
+        title: 'Prêt au retrait',
+        body: `Commande ${orderNumber} prête. À votre arrivée, appuyez sur Terminer la commande dans l'application (sans code PIN).`,
+      };
+    }
+    return {
+      title: 'Ready for pickup',
+      body: `Order ${orderNumber} is ready. When you arrive, tap Complete order in the app (no pickup PIN).`,
+    };
+  }
+
   /**
    * Get title and body for push notification by order status.
    */
@@ -3639,18 +3867,31 @@ export class NotificationsService {
     orderNumber: string,
     data?: NotificationData
   ): { title: string; body: string } {
+    if (
+      status === 'confirmed' &&
+      data?.readyInMinutes &&
+      (data.isCookedFoodPickup || data.payAfterMerchantConfirm)
+    ) {
+      return this.cookedFoodConfirmedPush(orderNumber, data);
+    }
+
     if (status === 'ready_for_pickup') {
       if (data?.fulfillmentMethod === 'pickup') {
-        if (data.paymentTiming === 'pay_at_pickup') {
+        // Classic PAP still asks for MoMo at the store. Pay-after already
+        // collected payment after confirm — use Complete copy.
+        const classicPayAtPickup =
+          data.paymentTiming === 'pay_at_pickup' &&
+          data.payAfterMerchantConfirm !== true;
+        if (classicPayAtPickup) {
           return this.payAtPickupReadyPush(
             orderNumber,
             data.clientPreferredLanguage
           );
         }
-        return {
-          title: 'Ready for pickup',
-          body: `Order ${orderNumber} is ready at the store. Send your PIN to confirm pickup.`,
-        };
+        return this.prepaidPickupReadyPush(
+          orderNumber,
+          data.clientPreferredLanguage
+        );
       }
       return {
         title: 'Ready for pickup',
@@ -3668,13 +3909,16 @@ export class NotificationsService {
       confirmed: {
         title: 'Order confirmed',
         body:
-          data?.fulfillmentMethod === 'pickup' && data.estimatedDeliveryTime
-            ? `Order ${orderNumber} confirmed. Pickup: ${data.estimatedDeliveryTime}.`
-            : data?.fulfillmentMethod === 'pickup'
-              ? data?.fulfillmentTiming === 'asap'
-                ? `Order ${orderNumber} has been confirmed. Come as soon as it is ready.`
-                : `Order ${orderNumber} has been confirmed. Check your pickup date and time slot.`
-              : `Order ${orderNumber} has been confirmed.`,
+          data?.readyInMinutes &&
+          (data?.isCookedFoodPickup || data?.payAfterMerchantConfirm)
+            ? this.cookedFoodConfirmedPushBody(orderNumber, data)
+            : data?.fulfillmentMethod === 'pickup' && data.estimatedDeliveryTime
+              ? `Order ${orderNumber} confirmed. Pickup: ${data.estimatedDeliveryTime}.`
+              : data?.fulfillmentMethod === 'pickup'
+                ? data?.fulfillmentTiming === 'asap'
+                  ? `Order ${orderNumber} has been confirmed. Come as soon as it is ready.`
+                  : `Order ${orderNumber} has been confirmed. Check your pickup date and time slot.`
+                : `Order ${orderNumber} has been confirmed.`,
       },
       preparing: {
         title: 'Order preparing',
@@ -3727,6 +3971,42 @@ export class NotificationsService {
         body: `Order ${orderNumber} status has been updated.`,
       }
     );
+  }
+
+  private cookedFoodConfirmedPush(
+    orderNumber: string,
+    data: NotificationData
+  ): { title: string; body: string } {
+    const isFr = (data.clientPreferredLanguage || '')
+      .toLowerCase()
+      .startsWith('fr');
+    return {
+      title: isFr ? 'Commande confirmée' : 'Order confirmed',
+      body: this.cookedFoodConfirmedPushBody(orderNumber, data, isFr),
+    };
+  }
+
+  private cookedFoodConfirmedPushBody(
+    orderNumber: string,
+    data: NotificationData,
+    isFr?: boolean
+  ): string {
+    const fr =
+      isFr ??
+      (data.clientPreferredLanguage || '').toLowerCase().startsWith('fr');
+    const minutes = data.readyInMinutes!;
+    const awaitingPayment =
+      data.payAfterMerchantConfirm === true &&
+      data.paymentStatus !== 'paid' &&
+      data.paymentStatus !== 'authorized';
+    if (awaitingPayment) {
+      return fr
+        ? `Commande ${orderNumber} confirmée. Prête dans environ ${minutes} minutes après paiement.`
+        : `Order ${orderNumber} confirmed. Ready in about ${minutes} minutes after payment.`;
+    }
+    return fr
+      ? `Commande ${orderNumber} confirmée. Prête dans environ ${minutes} minutes.`
+      : `Order ${orderNumber} confirmed. Ready in about ${minutes} minutes.`;
   }
 
   /**
@@ -5396,27 +5676,50 @@ export class NotificationsService {
       excludeUserId?: string;
       expoOptions?: ExpoPushOptions;
     }
-  ) {
+  ): Promise<boolean> {
     const delegates = await this.listOrderManagerDelegates(locationId);
-    const orderId = payload.data.orderId;
-    const data = {
-      ...payload.data,
-      url: orderId ? `/delegate/orders/${orderId}` : payload.data.url,
-      locationId: locationId ?? payload.data.locationId,
-    };
+    const data = this.delegateFanOutData(locationId, payload);
+    let delivered = false;
     for (const delegate of delegates) {
       if (payload.excludeUserId && delegate.userId === payload.excludeUserId) {
         continue;
       }
-      await this.sendPushNotificationByUserId(
-        delegate.userId,
+      delivered =
+        (await this.pushOneDelegate(delegate.userId, payload, data)) ||
+        delivered;
+    }
+    return delivered;
+  }
+
+  private delegateFanOutData(
+    locationId: string | null | undefined,
+    payload: { data: Record<string, string | undefined> }
+  ): Record<string, string | undefined> {
+    const orderId = payload.data.orderId;
+    return {
+      ...payload.data,
+      url: orderId ? `/delegate/orders/${orderId}` : payload.data.url,
+      locationId: locationId ?? payload.data.locationId,
+    };
+  }
+
+  private async pushOneDelegate(
+    userId: string,
+    payload: { title: string; body: string; expoOptions?: ExpoPushOptions },
+    data: Record<string, string | undefined>
+  ): Promise<boolean> {
+    try {
+      const counts = await this.sendPushNotificationByUserId(
+        userId,
         payload.title,
         payload.body,
         data,
         payload.expoOptions
-      ).catch((error: any) => {
-        this.logger.warn(`Delegate fan-out push failed: ${error?.message}`);
-      });
+      );
+      return counts.webSent + counts.expoSent > 0;
+    } catch (error: any) {
+      this.logger.warn(`Delegate fan-out push failed: ${error?.message}`);
+      return false;
     }
   }
 

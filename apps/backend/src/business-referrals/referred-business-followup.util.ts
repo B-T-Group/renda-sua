@@ -1,8 +1,9 @@
 import { currencyForReferralPayout } from '../business-referral-payouts/business-referral-payout.constants';
 import {
+  AGENT_ONBOARDING_MIN_ITEMS,
   BUSINESS_REFERRAL_10_ITEMS,
   ONBOARDING_10_FIRST_SALE,
-  ONBOARDING_10_ITEMS,
+  BUSINESS_REFERRAL_MIN_ITEMS,
   defaultOnboardingMinSaleTotal,
   inWindowSaleTotal,
   onboardingWindowEndsAt,
@@ -185,6 +186,35 @@ function inWindowSalesForRow(row: ReferredBusinessRow, currency: string): number
   });
 }
 
+function minItemsForKind(kind: ReferredBusinessReferrerKind): number {
+  return kind === 'agent' ? AGENT_ONBOARDING_MIN_ITEMS : BUSINESS_REFERRAL_MIN_ITEMS;
+}
+
+function commissionRequirements(
+  row: ReferredBusinessRow,
+  kind: ReferredBusinessReferrerKind,
+  currency: string,
+  minSalesTotal?: number
+): ReferredBusinessCommissionRequirements {
+  const requiresSale = kind === 'agent';
+  const configuredMin = minSalesTotal ?? defaultOnboardingMinSaleTotal(currency);
+  return {
+    itemsApproved: Number(row.items_approved?.aggregate?.count ?? 0),
+    minItems: minItemsForKind(kind),
+    salesTotal: requiresSale ? inWindowSalesForRow(row, currency) : 0,
+    minSalesTotal: requiresSale ? configuredMin : 0,
+    windowEndsAt: saleWindowEnd(requiresSale, row.created_at),
+    requiresSale,
+  };
+}
+
+function saleWindowEnd(
+  requiresSale: boolean,
+  createdAt: string | null | undefined
+): string | null {
+  return requiresSale ? onboardingWindowEndsAt(createdAt ?? undefined) : null;
+}
+
 export function mapCommission(
   row: ReferredBusinessRow,
   referrerKind?: ReferredBusinessReferrerKind,
@@ -192,21 +222,12 @@ export function mapCommission(
 ): ReferredBusinessCommission {
   const kind = inferReferrerKind(row, referrerKind ?? 'agent');
   const currency = currencyForReferralPayout(row.user?.country ?? null);
-  const requiresSale = kind === 'agent';
-  const itemsApproved = Number(row.items_approved?.aggregate?.count ?? 0);
-  const configuredMin =
-    minSalesTotal ?? defaultOnboardingMinSaleTotal(currency);
-  const requirements: ReferredBusinessCommissionRequirements = {
-    itemsApproved,
-    minItems: ONBOARDING_10_ITEMS,
-    salesTotal: requiresSale ? inWindowSalesForRow(row, currency) : 0,
-    minSalesTotal: requiresSale ? configuredMin : 0,
-    windowEndsAt: requiresSale
-      ? onboardingWindowEndsAt(row.created_at ?? undefined)
-      : null,
-    requiresSale,
-  };
-  return commissionFromState(row, kind, currency, requirements);
+  return commissionFromState(
+    row,
+    kind,
+    currency,
+    commissionRequirements(row, kind, currency, minSalesTotal)
+  );
 }
 
 function commissionFromState(

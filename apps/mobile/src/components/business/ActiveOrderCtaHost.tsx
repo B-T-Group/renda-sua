@@ -15,10 +15,13 @@ import {
   type BusinessOrderActionId,
 } from '../../utils/businessOrderActions';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
+import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
+import { shouldUseCookedFoodConfirmModal } from '../../utils/cookedFoodOrder';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
 import { BusinessPickupPaymentDialog } from './BusinessPickupPaymentDialog';
+import { FailPickupSheet } from './FailPickupSheet';
 import { ReconcileCashDialog } from './ReconcileCashDialog';
 import type { BusinessRootStackParamList } from '@/navigation/types';
 
@@ -74,7 +77,9 @@ export function ActiveOrderCtaHost({
 
   const acting = !!order && actingId === order.id;
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cookedConfirmOpen, setCookedConfirmOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
+  const [failPickupOpen, setFailPickupOpen] = useState(false);
   const [pickupPinOpen, setPickupPinOpen] = useState(false);
   const [pickupPinError, setPickupPinError] = useState<string | null>(null);
   const {
@@ -123,7 +128,11 @@ export function ActiveOrderCtaHost({
   const handlePrimary = useCallback(
     (actionOrder: BusinessOrder, actionId: BusinessOrderActionId) => {
       if (actionId === 'confirm') {
-        setConfirmOpen(true);
+        if (shouldUseCookedFoodConfirmModal(actionOrder)) {
+          setCookedConfirmOpen(true);
+        } else {
+          setConfirmOpen(true);
+        }
         return;
       }
       if (actionId === 'reconcileCash') {
@@ -132,6 +141,10 @@ export function ActiveOrderCtaHost({
       }
       if (actionId === 'requestPickupPayment') {
         setPickupOpen(true);
+        return;
+      }
+      if (actionId === 'failPickup') {
+        setFailPickupOpen(true);
         return;
       }
       if (actionId === 'manageRefunds') {
@@ -294,6 +307,12 @@ export function ActiveOrderCtaHost({
         onDismiss={() => setConfirmOpen(false)}
         onConfirm={confirmOrder}
       />
+      <CookedFoodConfirmOrderDialog
+        visible={cookedConfirmOpen}
+        order={order}
+        onDismiss={() => setCookedConfirmOpen(false)}
+        onConfirm={confirmOrder}
+      />
       <BusinessMarkShippedSheet
         visible={shipOpen}
         mode={shipMode}
@@ -331,6 +350,17 @@ export function ActiveOrderCtaHost({
           });
         }}
       />
+      {order ? (
+        <FailPickupSheet
+          visible={failPickupOpen}
+          order={order}
+          onDismiss={() => setFailPickupOpen(false)}
+          onSuccess={() => {
+            setFailPickupOpen(false);
+            onSuccess?.();
+          }}
+        />
+      ) : null}
       <BusinessConfirmPickupPinDialog
         visible={pickupPinOpen}
         onDismiss={() => {

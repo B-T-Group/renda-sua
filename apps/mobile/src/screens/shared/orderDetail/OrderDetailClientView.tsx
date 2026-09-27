@@ -429,7 +429,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const runCompleteOrder = async () => {
     setActionLoading(true);
     try {
-      await agentApi.orders.complete({ orderId });
+      if (
+        status === 'ready_for_pickup' &&
+        resolveOrderPhase(orderToPhaseInput(order), 'client').primaryActionId ===
+          'complete'
+      ) {
+        await agentApi.orders.completePickup(orderId);
+      } else {
+        await agentApi.orders.complete({ orderId });
+      }
       setSnack(t('messages.orderCompleteSuccess', 'Order completed successfully'));
       void refetch();
     } catch (e: unknown) {
@@ -594,6 +602,14 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       // Check for deposit pending first
       if (depositIsPending) {
         void runPayDeposit();
+        return;
+      }
+      // Cooked-food MoMo after confirm: retry lives in the payment summary card.
+      if (
+        order.pay_after_merchant_confirm === true &&
+        order.current_status === 'confirmed'
+      ) {
+        scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true });
         return;
       }
       // Then check for pay at pickup

@@ -3,6 +3,7 @@ import {
   Checkbox,
   FormControlLabel,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -26,7 +27,16 @@ export interface FirstSaleItemDescriptionStepProps {
   onPriceChange: (price: string) => void;
   onFoodItemChange: (isFoodItem: boolean) => void;
   onPreparationMinutesChange: (minutes: string) => void;
+  initialDepositEnabled: boolean;
+  initialDepositPercent: string;
+  onInitialDepositEnabledChange: (enabled: boolean) => void;
+  onInitialDepositPercentChange: (percent: string) => void;
   onContinue: () => void;
+}
+
+function isWholePercent(value: string): boolean {
+  const n = Number.parseInt(value, 10);
+  return String(n) === value.trim() && n >= 1 && n <= 25;
 }
 
 function isValidPrice(price: string): boolean {
@@ -46,13 +56,21 @@ const FirstSaleItemDescriptionStep: React.FC<
   onPriceChange,
   onFoodItemChange,
   onPreparationMinutesChange,
+  initialDepositEnabled,
+  initialDepositPercent,
+  onInitialDepositEnabledChange,
+  onInitialDepositPercentChange,
   onContinue,
 }) => {
   const { t } = useTranslation();
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [phKey, phDefault] = PLACEHOLDERS[placeholderIndex];
   const priceOk = isValidPrice(price);
-  const canContinue = hint.trim().length > 0 && priceOk;
+  const depositOk =
+    isFoodItem ||
+    !initialDepositEnabled ||
+    isWholePercent(initialDepositPercent);
+  const canContinue = hint.trim().length > 0 && priceOk && depositOk;
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -128,6 +146,42 @@ const FirstSaleItemDescriptionStep: React.FC<
         }
         label={t('business.items.isFoodItem', 'This is a cooked food item')}
       />
+      {!isFoodItem && (
+        <>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={initialDepositEnabled}
+                onChange={(e) => onInitialDepositEnabledChange(e.target.checked)}
+              />
+            }
+            label={t(
+              'business.items.initialDepositEnabled',
+              'Require an initial deposit'
+            )}
+          />
+          <Typography variant="caption" color="text.secondary">
+            {t(
+              'business.items.initialDepositHelp',
+              'Buyers who pay at delivery or pickup with mobile money pay this percent of the item price now. You can set 1 to 25.'
+            )}
+          </Typography>
+          {initialDepositEnabled && (
+            <TextField
+              fullWidth
+              type="number"
+              value={initialDepositPercent}
+              onChange={(e) => onInitialDepositPercentChange(e.target.value)}
+              label={t('business.items.initialDepositPercent', 'Deposit percent')}
+              inputProps={{ min: 1, max: 25, step: 1 }}
+              helperText={t(
+                'business.items.initialDepositPercentHelp',
+                'Whole number from 1 to 25.'
+              )}
+            />
+          )}
+        </>
+      )}
       {isFoodItem && (
         <TextField
           fullWidth

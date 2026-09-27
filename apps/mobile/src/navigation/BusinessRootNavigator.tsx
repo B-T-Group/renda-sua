@@ -14,6 +14,7 @@ import BusinessOrderDetailScreen from '../screens/business/BusinessOrderDetailSc
 import BusinessPickupPaymentAwaitingScreen from '../screens/business/BusinessPickupPaymentAwaitingScreen';
 import UserOrderMessagesScreen from '../screens/shared/UserOrderMessagesScreen';
 import BusinessFailedDeliveriesListScreen from '../screens/business/BusinessFailedDeliveriesListScreen';
+import BusinessFailedPickupsListScreen from '../screens/business/BusinessFailedPickupsListScreen';
 import BusinessRefundsListScreen from '../screens/business/BusinessRefundsListScreen';
 import BusinessLocationsListScreen from '../screens/business/BusinessLocationsListScreen';
 import BusinessTeamScreen from '../screens/business/BusinessTeamScreen';
@@ -326,6 +327,14 @@ export function BusinessRootNavigator() {
           component={BusinessFailedDeliveriesListScreen}
           options={{
             title: t('business.failedDeliveries.title', 'Failed deliveries'),
+            headerBackTitle: t('business.tabs.dashboard', 'Dashboard'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessFailedPickupsList"
+          component={BusinessFailedPickupsListScreen}
+          options={{
+            title: t('business.failedPickups.title', 'Failed pickups'),
             headerBackTitle: t('business.tabs.dashboard', 'Dashboard'),
           }}
         />

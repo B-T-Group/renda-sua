@@ -2889,6 +2889,8 @@
       "adminAccessDenied": "You do not have access to admin tools.",
       "failedDeliveries": "Failed Deliveries",
       "failedDeliveriesDescription": "Manage and resolve failed deliveries for your business",
+      "failedPickups": "Failed pickups",
+      "failedPickupsDescription": "Cooked-food pickups marked as failed with partial refunds.",
       "cashReconciliationTitle": "Cash reconciliation",
       "cashReconciliationDescription": "Pay-at-delivery orders with a cash exception—open the list and collect mobile payment per order.",
       "refundsTitle": "Refund requests",
@@ -3418,6 +3420,14 @@
       "resolveDialog": {
         "title": "Resolve Failed Delivery"
       }
+    },
+    "failedPickups": {
+      "title": "Failed pickups",
+      "description": "Cooked-food pickups marked as failed by your business",
+      "empty": "No failed pickups",
+      "fetchError": "Failed to fetch failed pickups",
+      "refundChip": "Refund {{amount}} {{currency}}",
+      "feeRetained": "Fee retained: {{amount}} {{currency}}"
     },
     "inventory": {
       "active": "Active",
@@ -4110,7 +4120,12 @@
       "dimensions": "Dimensions (Optional)",
       "isUsed": "Used",
       "isFoodItem": "This is a cooked food item",
-      "isFoodItemHelp": "Cooked dishes get serving hours per location, and can be marked sold out for the day.",
+      "isFoodItemHelp": "Cooked dishes get serving hours per location and can be marked sold out for the day. Category can be anything — this flag is separate.",
+      "initialDepositEnabled": "Require an initial deposit",
+      "initialDepositHelp": "Buyers who pay at delivery or pickup with mobile money pay this percent of the item price now. You can set 1 to 25.",
+      "initialDepositPercent": "Deposit percent",
+      "initialDepositPercentHelp": "Whole number from 1 to 25.",
+      "initialDepositPercentInvalid": "Enter a deposit percent from 1 to 25.",
       "preparationMinutes": "Preparation time (minutes)",
       "preparationMinutesHelp": "Roughly how long this dish takes to cook."
     },
@@ -4401,6 +4416,7 @@
         "outForDeliveryPaymentPending": "The agent will send a payment request when they arrive. Keep your phone nearby to approve it."
       },
       "storeReadyPayAtPickup": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
+      "storeReadyCompletePaid": "When you arrive, tap Complete order so the merchant gets paid, then collect your order.",
       "storeReadySendPin": "Your order is ready at the store. Come during your pickup slot and send your PIN so the seller can confirm pickup.",
       "pickedUpNotice": "🏃‍♂️ Your order is on the move! Our agent has picked it up and is heading your way. Get ready to enjoy your purchase!",
       "refundedNotice": "💰 Your {{orderTotal}} refund has been processed and should appear in your account within 3-5 business days. Thank you for your patience.",
@@ -4923,6 +4939,7 @@
     "markAsShipped": "Mark as shipped",
     "markAsDelivered": "Mark as Delivered",
     "markAsFailed": "Mark as Failed",
+    "failPickup": "Mark pickup failed",
     "markAsInTransit": "Mark as In Transit",
     "markAsOutForDelivery": "Mark as Out for Delivery",
     "pickUp": "Pick Up",
@@ -5037,6 +5054,7 @@
       "storePickupTitle": "Pick up at the store (no delivery fee)",
       "payAtPickupHint": "You will pay when you arrive. Tap Pay in the app and approve the request on your phone.",
       "clientPaymentHint": "Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.",
+      "cookedFoodPayAfterConfirmHint": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.",
       "requestPaymentTitle": "Request pickup payment",
       "notEligibleForPaymentRequest": "This order is not configured for pay at pickup.",
       "businessInitiateHelp": "If the client needs help, send a mobile payment request. When they approve it, the order will complete automatically.",
@@ -5608,6 +5626,14 @@
       "preferredDate": "Preferred delivery date",
       "pickupDate": "Pickup date",
       "pickupTimeTitle": "When will you pick up your order?",
+      "cookedFoodAsapOnly": "We’ll start preparing when the kitchen confirms.",
+      "cookedFoodAsapOnlyPickup": "Pick up as soon as the kitchen marks it ready.",
+      "cookedFoodAsapPayAfterConfirm": "We’ll start preparing once the kitchen confirms and receives your payment.",
+      "kitchenClosed": {
+        "title": "Kitchen closed",
+        "nextOpening": "Next opening",
+        "availableHours": "Available hours"
+      },
       "pickupReviewSummary": "Pickup on {{date}} between {{start}} and {{end}}.",
       "flexible": "I'm flexible with timing",
       "alternativeDates": "Alternative dates",
@@ -5648,6 +5674,19 @@
       "selectReasonRequired": "Please select a failure reason",
       "loadReasonsError": "Failed to load failure reasons",
       "noReasonsAvailable": "No failure reasons available. Please try again later."
+    },
+    "failPickup": {
+      "title": "Mark pickup as failed",
+      "orderNumber": "Order #{{orderNumber}}",
+      "feeNote": "The client receives a partial refund after the standard cancellation fee is retained.",
+      "reasonLabel": "Why did the pickup fail?",
+      "notesLabel": "Please describe the reason",
+      "notesOptional": "Notes (optional)",
+      "confirm": "Mark as failed",
+      "success": "Pickup marked as failed",
+      "error": "Failed to mark pickup as failed",
+      "selectReasonRequired": "Please select a failure reason",
+      "loadReasonsError": "Failed to load failure reasons"
     },
     "filters": {
       "allStatuses": "All Statuses",
@@ -5766,6 +5805,7 @@
     "selectCancellationReason": "Please select a cancellation reason",
     "specialInstructionsPlaceholder": "Add any special instructions for this order (optional)",
     "specialInstructionsHint": "Add any additional delivery details for the driver (optional).",
+    "addSpecialInstructions": "Add special instructions",
     "stats": {
       "active": "Active",
       "byStatus": "Orders by status",
@@ -5886,6 +5926,44 @@
       "pickupInstead": "You can still pick up this order at the store.",
       "groupUnavailable": "This seller cannot deliver right now."
     },
+    "cookedFood": {
+      "confirmTitle": "When will it be ready?",
+      "waitPaymentTitle": "Do not start cooking yet",
+      "orderLabel": "Order #{{number}}",
+      "pickup": "Pickup",
+      "delivery": "Delivery",
+      "readyHint": "Tell the client how long you need. They pay after you confirm. Start cooking only after that payment arrives.",
+      "readyIn": "Ready in {{m}} minutes",
+      "customHelp": "Whole number from {{min}} to {{max}}.",
+      "confirmReadyMinutes": "Confirm · {{m}} min",
+      "waitStepSent": "A Mobile Money request is on the client’s phone.",
+      "waitStepWait": "Wait for the payment notification.",
+      "waitStepCook": "Start cooking only after you see that payment.",
+      "waitPickup": "When it is ready, the client picks it up and completes the order in the app.",
+      "waitDelivery": "When it is ready, a courier picks it up for delivery.",
+      "minutesChip": "{{m}} min",
+      "customChip": "Custom",
+      "customMinutes": "Minutes until ready",
+      "invalidReadyMinutes": "Enter a ready time between {{min}} and {{max}} minutes.",
+      "confirmReady": "Confirm ready time",
+      "waitPaymentBody": "We sent the client a mobile money payment request. Wait until you receive a payment notification before you start cooking.",
+      "returnDashboard": "Return to dashboard",
+      "viewOrdersToCook": "View orders to cook",
+      "startCookingTitle": "Start cooking",
+      "startCookingOne": "Order #{{number}} is paid and ready for your kitchen.",
+      "startCookingMany": "{{count}} cooked-food orders need your kitchen now.",
+      "openOrder": "Open order",
+      "payAfterConfirm": {
+        "chip": "Pay after kitchen confirms",
+        "title": "Pay after the kitchen confirms",
+        "bodyPickup": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.",
+        "bodyDelivery": "After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.",
+        "step1": "Your order has been sent to the kitchen.",
+        "step2": "When the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Approve it so they can start preparing.",
+        "step3Pickup": "When your order is ready, pick it up and tap Complete order in the app. Track progress in My Orders.",
+        "step3Delivery": "We’ll notify you as your order is prepared and delivered. Track progress in My Orders."
+      }
+    },
     "phases": {
       "pay": "Payment needed",
       "confirm": "Awaiting confirmation",
@@ -5921,6 +5999,9 @@
       "prepareClient": "The business is preparing your order.",
       "prepareBusiness": "Mark the order ready when it is packed.",
       "readyPickupClient": "Your order is ready for pickup at the store.",
+      "readyPickupCookedFoodClient": "Your food is ready. Tap Complete order when you arrive — no pickup PIN needed.",
+      "cookedFoodWaitPaymentBusiness": "Waiting for the client to pay. Do not start cooking until payment succeeds.",
+      "cookedFoodWaitPaymentClient": "Approve the payment request on your phone so the restaurant can start cooking.",
       "readyPickupPayAtPickupClient": "When you arrive, tap Pay and approve the mobile money request on your phone. The store will see the payment, then you can collect your order.",
       "readyPickupWaitClientPayBusiness": "The client will pay in the app when they arrive. You can still request a payment if they need help.",
       "readyPickupBusiness": "Ask for the client’s pickup PIN when they arrive. Payment is captured when you confirm pickup.",
@@ -5942,7 +6023,10 @@
       "completeClient": "This order is complete. You can leave a rating.",
       "completeBusiness": "This order is complete.",
       "completeAgent": "This delivery is complete.",
-      "refundRequested": "A refund request needs attention."
+      "refundRequested": "A refund request needs attention.",
+      "readyPickupCompleteClient": "Food is ready. Tap Complete order when you collect it so the merchant gets paid.",
+      "readyPickupCompleteOrderClient": "Your order is ready. Tap Complete order when you collect it so the merchant gets paid.",
+      "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid."
     },
     "pickupSla": {
       "pausedTitle": "Pickup monitoring paused",
@@ -7175,6 +7259,9 @@
     "basedOnYourCountry": "Based on your country",
     "yourMoMoNumber": "Your MoMo number",
     "momoPhoneHelper": "Must match your MoMo number",
+    "linkMoMoRequired": "Link a Mobile Money number to continue.",
+    "selectedForPayment": "Selected for payment",
+    "useSavedPhone": "Use {{phone}}",
     "heldUntilAccepted": "Held until store accepts",
     "contactNumber": "Contact Number",
     "useDifferentPhone": "Use different phone number",
@@ -7428,6 +7515,15 @@
   "mobilePaymentPhone": {
     "verifyCta": "Confirm mobile money number",
     "confirmCta": "Confirm mobile money number",
+    "addOrLinkCta": "Add or link mobile money number",
+    "locationAddOrLinkCta": "Link a verified mobile money number, or add a new one, so customers can purchase from this location.",
+    "linkTitle": "Link mobile money number",
+    "chooseExisting": "Choose a number you already added, or add a new one for this location.",
+    "backToExisting": "Back to existing numbers",
+    "unverified": "Unverified",
+    "needsConfirm": "Unverified — confirm to use",
+    "verified": "Verified",
+    "addNew": "Add new number…",
     "businessDashboardCta": "Verify your mobile money number so locations can accept customer payments.",
     "businessDashboardCtaWithItems": "You have products listed. Verify your mobile money number so customers can pay and you can receive payouts.",
     "questionWhy": "Confirm that this number is registered to receive Mobile Money so we can send your payouts there.",
@@ -7436,7 +7532,13 @@
     "questionYes": "Yes, it receives Mobile Money",
     "questionNoDifferent": "No, use a different number",
     "questionContinue": "Continue",
-    "questionSuccess": "Number confirmed. You can use it for Mobile Money payouts."
+    "questionSuccess": "Number confirmed. You can use it for Mobile Money payouts.",
+    "profileTitle": "Mobile Money number",
+    "profileHelper": "Payment requests go to this number.",
+    "noneYet": "No Mobile Money number linked yet.",
+    "linkNumber": "Link a Mobile Money number",
+    "useProfilePhone": "Use {{phone}} for Mobile Money",
+    "profileNotMobileMoney": "Your profile phone is not a Mobile Money number"
   },
   "businessOrderTiming": {
     "title": "Order confirmation timing",
@@ -7898,7 +8000,8 @@
     "kitchenHint": "Keep this tab open. Sound starts after you tap Start kitchen mode.",
     "armed": "Kitchen mode is on",
     "kitchenAlert": "New order alert",
-    "orderNumber": "Order {{number}}"
+    "orderNumber": "Order {{number}}",
+    "moreWaiting": "{{count}} more waiting"
   },
   "kitchenMode": {
     "title": "Kitchen mode",
@@ -7968,5 +8071,15 @@
       "line1": "Loading orders and inventory",
       "line2": "Almost ready"
     }
+  },
+  "deposit": {
+    "reservationTitle": "Reservation deposit",
+    "minimumLabel": "Minimum deposit for this order",
+    "percentageLabel": "{{percentage}}% of items that require a deposit",
+    "mixedItemsLabel": "Deposit on items this store requires a deposit for",
+    "refundableUntilSent": "Refundable until we send it for delivery, or until it is ready for pickup",
+    "appliedToTotal": "Applied to your order — not an extra fee",
+    "dueNow": "Due now (deposit)",
+    "amountDue": "Amount due"
   }
 }

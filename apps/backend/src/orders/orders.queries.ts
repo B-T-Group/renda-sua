@@ -32,6 +32,9 @@ export const GET_ORDERS = gql`
       fulfillment_timing
       promised_ready_at
       promised_fulfill_by
+      estimated_prep_minutes
+      is_cooked_food_pickup
+      pay_after_merchant_confirm
       shipping_tracking_number
       shipping_carrier
       shipped_at
@@ -105,6 +108,7 @@ export const GET_ORDERS = gql`
         item_variant_id
         variant_name
         variant_snapshot
+        is_cooked_food
         item {
           sku
           currency
@@ -114,6 +118,7 @@ export const GET_ORDERS = gql`
           weight
           weight_unit
           dimensions
+          is_cooked_food
           brand {
             id
             name
@@ -218,6 +223,7 @@ export const GET_ORDER_BY_ID = gql`
       payment_status
       verified_agent_delivery
       deposit_amount
+      deposit_minimum_applied
       deposit_mobile_payment_transaction_id
       deposit_status
       deposit_refund_status
@@ -229,6 +235,9 @@ export const GET_ORDER_BY_ID = gql`
       fulfillment_timing
       promised_ready_at
       promised_fulfill_by
+      estimated_prep_minutes
+      is_cooked_food_pickup
+      pay_after_merchant_confirm
       shipping_tracking_number
       shipping_carrier
       shipped_at
@@ -325,6 +334,7 @@ export const GET_ORDER_BY_ID = gql`
         quantity
         total_price
         special_instructions
+        is_cooked_food
         item {
           id
           sku
@@ -337,6 +347,7 @@ export const GET_ORDER_BY_ID = gql`
           weight
           weight_unit
           dimensions
+          is_cooked_food
           brand {
             id
             name

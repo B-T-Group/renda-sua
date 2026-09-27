@@ -3,12 +3,14 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { ActivityIndicator, Button, Card, Chip, Snackbar, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Chip, Snackbar, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useClientProfileForPlaceOrder } from '../../hooks/useClientProfileForPlaceOrder';
 import { useClientOrders } from '../../hooks/useClientOrders';
 import { FirstOrderNextStepsPreview } from './FirstOrderNextStepsPreview';
+import { OrderNextStepsCard } from './OrderNextStepsCard';
+import { resolveOrderNextSteps } from './orderPlacedNextSteps';
 import { isFirstOrderGuidanceForced } from '../../config/firstOrderDebug';
 import { isClientFirstOrderCheckoutEligible } from '../../utils/firstOrderClientJourney';
 import { trackFirstOrderClientPlaced } from '../../utils/firstOrderClientAnalytics';
@@ -30,225 +32,6 @@ export type OrderPlacedSuccessViewProps = OrderPlacedSuccessParams & {
   secondaryAction: OrderPlacedSuccessAction;
 };
 
-function PayNowNextSteps() {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  return (
-    <Card style={{ marginBottom: spacing.md, backgroundColor: colors.primary.dark, borderRadius: borderRadius.md }}>
-      <Card.Content style={{ paddingVertical: spacing.md }}>
-        <Text variant="titleMedium" style={{ color: colors.primary.contrast, marginBottom: spacing.sm }}>
-          {t('client.placeOrder.successScreen.payNowTitle', 'Payment confirmation required')}
-        </Text>
-        <Text variant="bodyMedium" style={{ color: colors.primary.contrast, marginBottom: spacing.sm, lineHeight: 22 }}>
-          {t(
-            'client.placeOrder.successScreen.payNowBody',
-            'A payment request has been sent to your mobile phone. Please confirm the payment to complete your order.'
-          )}
-        </Text>
-        <Text variant="bodySmall" style={{ color: 'rgba(255,255,255,0.9)', lineHeight: 20 }}>
-          {t(
-            'client.placeOrder.successScreen.payNowDeadline',
-            'Your order will be transmitted to the merchant within 24 hours once payment is confirmed.'
-          )}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
-
-function PaidNextSteps() {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  return (
-    <Card
-      mode="outlined"
-      style={{
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.success.main,
-        backgroundColor: colors.success.main + '14',
-      }}
-    >
-      <Card.Content style={{ paddingVertical: spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-          <MaterialCommunityIcons name="check-circle" size={24} color={colors.success.main} />
-          <Text
-            variant="titleMedium"
-            style={{ color: colors.success.dark, fontWeight: '700', flex: 1, minWidth: 0 }}
-          >
-            {t('client.placeOrder.successScreen.paidTitle', 'Order confirmed and paid')}
-          </Text>
-        </View>
-        <Text variant="bodyMedium" style={{ color: colors.text.primary, lineHeight: 22 }}>
-          {t(
-            'client.placeOrder.successScreen.paidBody',
-            'Your payment was completed successfully. No further action is required.'
-          )}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
-
-function DepositConfirmedNextSteps({ remainingAmountLabel }: { remainingAmountLabel?: string }) {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  return (
-    <Card
-      mode="outlined"
-      style={{
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.success.main,
-        backgroundColor: colors.success.main + '14',
-      }}
-    >
-      <Card.Content style={{ paddingVertical: spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-          <MaterialCommunityIcons name="check-circle" size={24} color={colors.success.main} />
-          <Text
-            variant="titleMedium"
-            style={{ color: colors.success.dark, fontWeight: '700', flex: 1, minWidth: 0 }}
-          >
-            {t('deposit.paidTitle', 'Deposit confirmed')}
-          </Text>
-        </View>
-        <Text variant="bodyMedium" style={{ color: colors.text.primary, lineHeight: 22 }}>
-          {t(
-            'deposit.paidBody',
-            'Your deposit payment is confirmed. The store will prepare your order. You will pay the remaining {{amount}} when you receive your order.',
-            { amount: remainingAmountLabel ?? '' }
-          )}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
-
-function CardAuthorizedNextSteps({ isPickup }: { isPickup: boolean }) {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  const body = isPickup
-    ? t(
-        'client.placeOrder.successScreen.cardAuthorizedBodyPickup',
-        'Your card has been authorized. You will only be charged when you collect your order at the store.'
-      )
-    : t(
-        'client.placeOrder.successScreen.cardAuthorizedBody',
-        'Your card has been authorized. You will only be charged when the delivery agent picks up your order from the business.'
-      );
-  return (
-    <Card
-      mode="outlined"
-      style={{
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.info.main + '55',
-        backgroundColor: colors.info.main + '12',
-      }}
-    >
-      <Card.Content style={{ paddingVertical: spacing.md }}>
-        <Text variant="titleMedium" style={{ color: colors.info.dark, marginBottom: spacing.sm }}>
-          {t('client.placeOrder.successScreen.cardAuthorizedTitle', 'Card authorized')}
-        </Text>
-        <Text variant="bodyMedium" style={{ color: colors.info.dark, lineHeight: 22 }}>
-          {body}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
-
-function StripeNextSteps() {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  return (
-    <Card
-      mode="outlined"
-      style={{
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.info.main + '55',
-        backgroundColor: colors.info.main + '12',
-      }}
-    >
-      <Card.Content style={{ paddingVertical: spacing.md }}>
-        <Text variant="titleMedium" style={{ color: colors.info.dark, marginBottom: spacing.sm }}>
-          {t('client.placeOrder.successScreen.cardPaymentTitle', 'Card payment')}
-        </Text>
-        <Text variant="bodyMedium" style={{ color: colors.info.dark, lineHeight: 22 }}>
-          {t(
-            'client.placeOrder.successScreen.cardPaymentBody',
-            'You can complete any remaining payment step securely by card from your order details.'
-          )}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
-
-function PayAtDeliveryNextSteps() {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  return (
-    <Card
-      mode="outlined"
-      style={{
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.info.main + '55',
-        backgroundColor: colors.info.main + '12',
-      }}
-    >
-      <Card.Content style={{ paddingVertical: spacing.md }}>
-        <Text variant="titleMedium" style={{ color: colors.info.dark, marginBottom: spacing.sm }}>
-          {t('client.placeOrder.successScreen.payAtDeliveryTitle', 'Payment at delivery')}
-        </Text>
-        <Text variant="bodyMedium" style={{ color: colors.info.dark, lineHeight: 22 }}>
-          {t(
-            'client.placeOrder.successScreen.payAtDeliveryBody',
-            'You chose pay at delivery. When the agent arrives, they will send a mobile payment request. Approve it on your phone.'
-          )}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
-
-function PayAtPickupNextSteps() {
-  const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  return (
-    <Card
-      mode="outlined"
-      style={{
-        marginBottom: spacing.md,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.info.main + '55',
-        backgroundColor: colors.info.main + '12',
-      }}
-    >
-      <Card.Content style={{ paddingVertical: spacing.md }}>
-        <Text variant="titleMedium" style={{ color: colors.info.dark, marginBottom: spacing.sm }}>
-          {t('client.placeOrder.successScreen.payAtPickupTitle', 'Pay when you pick up')}
-        </Text>
-        <Text variant="bodyMedium" style={{ color: colors.info.dark, lineHeight: 22 }}>
-          {t(
-            'client.placeOrder.successScreen.payAtPickupBody',
-            'Pay at the store when you pick up. When your order is ready, tap Pay in the app and approve the request on your phone. The store will see the payment, then you can collect your order.'
-          )}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
-}
-
 function paymentChipLabel(
   t: ReturnType<typeof useTranslation>['t'],
   params: {
@@ -256,6 +39,7 @@ function paymentChipLabel(
     cardAuthorized?: boolean;
     paymentCompleted?: boolean;
     paymentTiming: OrderPlacedSuccessParams['paymentTiming'];
+    cookedFoodPayAfterConfirm?: boolean;
   }
 ) {
   if (params.depositConfirmed) {
@@ -263,6 +47,13 @@ function paymentChipLabel(
   }
   if (params.cardAuthorized) {
     return t('client.placeOrder.successScreen.chipCardAuthorized', 'Card authorized');
+  }
+  // Food MoMo: order is placed unpaid; payment request comes after kitchen confirm.
+  if (params.cookedFoodPayAfterConfirm) {
+    return t(
+      'client.placeOrder.successScreen.chipCookedFoodPayAfterConfirm',
+      'Pay after kitchen confirms'
+    );
   }
   if (params.paymentCompleted) {
     return t('client.placeOrder.successScreen.chipPaid', 'Order confirmed and paid');
@@ -276,19 +67,10 @@ function paymentChipLabel(
   return t('client.placeOrder.successScreen.chipPayNow', 'Payment confirmation required');
 }
 
-function SuccessNextSteps(props: OrderPlacedSuccessViewProps & { isPickup: boolean; isStripeRail: boolean }) {
-  const { depositConfirmed, paymentCompleted, cardAuthorized, paymentTiming, isPickup, isStripeRail } =
-    props;
-  if (depositConfirmed) {
-    return <DepositConfirmedNextSteps remainingAmountLabel={props.remainingAmountLabel} />;
-  }
-  if (paymentCompleted) return <PaidNextSteps />;
-  if (cardAuthorized) return <CardAuthorizedNextSteps isPickup={isPickup} />;
-  if (isStripeRail) return <StripeNextSteps />;
-  if (paymentTiming === 'pay_now') return <PayNowNextSteps />;
-  if (paymentTiming === 'pay_at_delivery') return <PayAtDeliveryNextSteps />;
-  if (paymentTiming === 'pay_at_pickup') return <PayAtPickupNextSteps />;
-  return null;
+function SuccessNextSteps(props: OrderPlacedSuccessViewProps & { isStripeRail: boolean }) {
+  const steps = resolveOrderNextSteps(props);
+  if (!steps) return null;
+  return <OrderNextStepsCard content={steps} />;
 }
 
 export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
@@ -301,14 +83,13 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
     cardAuthorized,
     fulfillment,
     depositConfirmed,
-    remainingAmountLabel,
+    cookedFoodPayAfterConfirm,
     primaryAction,
     secondaryAction,
   } = props;
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
-  const isPickup = fulfillment === 'pickup' || paymentTiming === 'pay_at_pickup';
   const primaryOrderLabel = orderNumbers.length === 1 ? orderNumbers[0] : orderNumbers.join(', ');
   const { user: meUser, loading: profileLoading, refetch: refetchProfile } = useClientProfileForPlaceOrder();
   const { isStripeRail, loading: stripeRailLoading } = useIsStripeRail();
@@ -324,11 +105,12 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
   const { nudge } = useStore();
   const [contactSnack, setContactSnack] = useState<string | null>(null);
   const isContentReady = !profileLoading && !stripeRailLoading;
-  const chipIcon = depositConfirmed || paymentCompleted
-    ? 'check-circle-outline'
-    : cardAuthorized
-      ? 'credit-card-check-outline'
-      : 'information-outline';
+  const chipIcon =
+    depositConfirmed || (paymentCompleted && !cookedFoodPayAfterConfirm)
+      ? 'check-circle-outline'
+      : cardAuthorized
+        ? 'credit-card-check-outline'
+        : 'information-outline';
 
   useEffect(() => {
     if (!showFirstOrderPreview || placedTrackedRef.current) return;
@@ -399,6 +181,7 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
                 cardAuthorized,
                 paymentCompleted,
                 paymentTiming,
+                cookedFoodPayAfterConfirm,
               })}
             </Chip>
             <Chip icon="clipboard-text-outline">
@@ -411,12 +194,7 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
           <FirstOrderNextStepsPreview fulfillmentPath={fulfillmentPath} />
         ) : null}
 
-        <SuccessNextSteps
-          {...props}
-          remainingAmountLabel={remainingAmountLabel}
-          isPickup={isPickup}
-          isStripeRail={isStripeRail}
-        />
+        <SuccessNextSteps {...props} isStripeRail={isStripeRail} />
 
         {showContactNudge && missingField ? (
           <View style={{ marginBottom: spacing.md }}>

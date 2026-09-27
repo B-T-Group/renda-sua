@@ -23,6 +23,10 @@ export interface IncomingOrderDetails {
   currency: string;
   fulfillment_method?: string | null;
   fulfillment_timing?: 'asap' | 'scheduled' | null;
+  /** Cooked-food MoMo: client pays after merchant confirm. */
+  pay_after_merchant_confirm?: boolean | null;
+  /** Durable pickup flag for ready-in confirm modal. */
+  is_cooked_food_pickup?: boolean | null;
   promised_ready_at?: string | null;
   promised_fulfill_by?: string | null;
   business_id: string;
@@ -39,6 +43,11 @@ export interface IncomingOrderDetails {
     variant_snapshot?: { image_url?: string | null } | null;
     item?: {
       name?: string | null;
+      is_cooked_food?: boolean | null;
+      item_sub_category?: {
+        name?: string | null;
+        item_category?: { name?: string | null } | null;
+      } | null;
       item_images?: Array<{
         image_url?: string | null;
         image_type?: string | null;

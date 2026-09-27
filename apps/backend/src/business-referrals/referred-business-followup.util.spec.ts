@@ -5,6 +5,10 @@ import {
   mapReferredBusinessRow,
 } from './referred-business-followup.util';
 
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 describe('referred-business-followup', () => {
   it('derives contract pending for created', () => {
     expect(deriveFollowUpStatus('created', false)).toBe('contract_pending');
@@ -103,7 +107,7 @@ describe('referred-business-followup', () => {
       {
         id: 'b1',
         name: 'Shop',
-        created_at: '2026-08-10T00:00:00.000Z',
+        created_at: daysAgo(10),
         referred_by_agent_id: 'agent-1',
         user: { country: 'CM' },
         items_approved: { aggregate: { count: 12 } },
@@ -165,12 +169,12 @@ describe('referred-business-followup', () => {
       {
         id: 'b1',
         name: 'Shop',
-        created_at: '2026-08-10T00:00:00.000Z',
+        created_at: daysAgo(10),
         referred_by_agent_id: 'agent-1',
         user: { country: 'CM' },
         items_approved: { aggregate: { count: 10 } },
         completed_orders: [
-          { subtotal: 3000, currency: 'XAF', completed_at: '2026-08-12T00:00:00.000Z' },
+          { subtotal: 3000, currency: 'XAF', completed_at: daysAgo(8) },
         ],
       },
       'agent',
@@ -180,24 +184,24 @@ describe('referred-business-followup', () => {
     expect(item.commission.status).toBe('pending');
   });
 
-  it('shows partial agent progress toward 10 items and 2500 XAF', () => {
+  it('shows partial agent progress toward 2 items and 2500 XAF', () => {
     const item = mapReferredBusinessRow(
       {
         id: 'b1',
         name: 'Shop',
-        created_at: '2026-08-10T00:00:00.000Z',
+        created_at: daysAgo(10),
         referred_by_agent_id: 'agent-1',
         user: { country: 'CM' },
-        items_approved: { aggregate: { count: 6 } },
+        items_approved: { aggregate: { count: 1 } },
         completed_orders: [
-          { subtotal: 1200, currency: 'XAF', completed_at: '2026-08-12T00:00:00.000Z' },
+          { subtotal: 1200, currency: 'XAF', completed_at: daysAgo(8) },
         ],
       },
       'agent'
     );
     expect(item.commission.status).toBe('pending');
-    expect(item.commission.requirements.itemsApproved).toBe(6);
-    expect(item.commission.requirements.minItems).toBe(10);
+    expect(item.commission.requirements.itemsApproved).toBe(1);
+    expect(item.commission.requirements.minItems).toBe(2);
     expect(item.commission.requirements.salesTotal).toBe(1200);
     expect(item.commission.requirements.minSalesTotal).toBe(2500);
     expect(item.commission.requirements.requiresSale).toBe(true);
@@ -221,7 +225,7 @@ describe('referred-business-followup', () => {
     expect(item.commission.status).toBe('window_expired');
   });
 
-  it('requires only 10 items for a B2B referrer', () => {
+  it('requires 5 items for a B2B referrer', () => {
     const item = mapReferredBusinessRow(
       {
         id: 'b1',
@@ -229,7 +233,7 @@ describe('referred-business-followup', () => {
         created_at: '2026-05-01T00:00:00.000Z',
         referred_by_business_id: 'biz-ref',
         user: { country: 'CM' },
-        items_approved: { aggregate: { count: 6 } },
+        items_approved: { aggregate: { count: 4 } },
       },
       'business'
     );
@@ -237,6 +241,7 @@ describe('referred-business-followup', () => {
     expect(item.commission.requirements.requiresSale).toBe(false);
     expect(item.commission.requirements.minSalesTotal).toBe(0);
     expect(item.commission.requirements.windowEndsAt).toBeNull();
+    expect(item.commission.requirements.minItems).toBe(5);
   });
 
   it('keeps a null created_at pending instead of expiring the window', () => {

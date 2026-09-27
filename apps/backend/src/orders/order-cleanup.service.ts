@@ -194,6 +194,8 @@ export class OrderCleanupService {
     options?: {
       reason?: 'timeout' | 'payment_failed_grace';
       allowPendingUnpaid?: boolean;
+      /** Cooked-food MoMo: cancel after confirm if still unpaid. */
+      allowConfirmedUnpaid?: boolean;
       releaseInventory?: boolean;
     }
   ): Promise<{ cancelled: boolean; skipped?: boolean; reason?: string }> {
@@ -222,12 +224,14 @@ export class OrderCleanupService {
     options?: {
       reason?: 'timeout' | 'payment_failed_grace';
       allowPendingUnpaid?: boolean;
+      allowConfirmedUnpaid?: boolean;
     }
   ): string | null {
     const status = order.current_status;
     const allowed =
       status === 'pending_payment' ||
-      (options?.allowPendingUnpaid === true && status === 'pending');
+      (options?.allowPendingUnpaid === true && status === 'pending') ||
+      (options?.allowConfirmedUnpaid === true && status === 'confirmed');
     if (!allowed) {
       return `status_${status}`;
     }

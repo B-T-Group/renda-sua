@@ -170,6 +170,7 @@ describe('firstOrderClientJourney', () => {
         current_status: 'ready_for_pickup',
         fulfillment_method: 'pickup',
         payment_timing: 'pay_at_pickup',
+        payment_status: 'pending',
         created_at: '2026-09-03T12:00:00.000Z',
       },
       clientOrders: [
@@ -182,6 +183,31 @@ describe('firstOrderClientJourney', () => {
       'client.firstOrder.steps.readyForPickup.whatHappensPayAtPickup'
     );
     expect(readyStep?.whatHappensDefault).toMatch(/tap Pay/i);
+  });
+
+  it('uses Complete-order copy when cooked food is already paid at ready', () => {
+    const view = resolveClientFirstOrderJourney({
+      order: {
+        id: 'o1',
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+        is_cooked_food_pickup: true,
+        created_at: '2026-09-03T12:00:00.000Z',
+      },
+      clientOrders: [
+        { current_status: 'ready_for_pickup', created_at: '2026-09-03T12:00:00.000Z' },
+      ],
+    });
+    expect(view.pinExplainerKey).toBeNull();
+    const readyStep = view.steps.find((step) => step.id === 'ready_for_pickup');
+    expect(readyStep?.whatHappensKey).toBe(
+      'client.firstOrder.steps.readyForPickup.whatHappensCompletePaid'
+    );
+    expect(readyStep?.whatHappensDefault).toMatch(/Complete order/i);
+    expect(readyStep?.whatHappensDefault).not.toMatch(/tap Pay/i);
   });
 
   it('uses shipping-specific steps', () => {

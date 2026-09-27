@@ -40,6 +40,18 @@ describe('isFoodCatalogItem', () => {
     expect(isFoodCatalogItem(cookedFood('Food & Beverages'))).toBe(false);
     expect(isFoodCatalogItem({})).toBe(false);
   });
+
+  it('keeps food-category dishes even when is_cooked_food is false', () => {
+    expect(
+      isFoodCatalogItem({
+        is_cooked_food: false,
+        item: {
+          is_cooked_food: false,
+          item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
+        },
+      })
+    ).toBe(true);
+  });
 });
 
 describe('applyFoodOnlyCatalogFilter', () => {

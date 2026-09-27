@@ -42,6 +42,8 @@ export interface OrderData {
   grace_deadline_at?: string | null;
   busy_extra_prep_minutes?: number | null;
   estimated_prep_minutes?: number | null;
+  is_cooked_food_pickup?: boolean | null;
+  pay_after_merchant_confirm?: boolean | null;
   estimated_delivery_time?: string;
   actual_delivery_time?: string;
   special_instructions?: string;
@@ -161,6 +163,7 @@ export interface OrderData {
     special_instructions?: string;
     item: {
       id?: string;
+      is_cooked_food?: boolean | null;
       sku?: string;
       name?: string;
       description?: string;

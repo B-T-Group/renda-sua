@@ -22,6 +22,7 @@ import { useLocation } from 'react-router-dom';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useIncomingOrderInterrupt } from '../../hooks/useIncomingOrderInterrupt';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
+import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrderModal';
 
 function formatCurrency(amount = 0, currency = 'XAF'): string {
   return new Intl.NumberFormat(undefined, {
@@ -113,6 +114,13 @@ export function IncomingOrderOverlay() {
                   <Typography variant="h6" color="primary.main">
                     {t('incomingOrder.orderNumber', 'Order {{number}}', {
                       number: order.order_number,
+                    })}
+                  </Typography>
+                ) : null}
+                {interrupt.waitingCount > 0 ? (
+                  <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                    {t('incomingOrder.moreWaiting', '{{count}} more waiting', {
+                      count: interrupt.waitingCount,
                     })}
                   </Typography>
                 ) : null}
@@ -217,6 +225,18 @@ export function IncomingOrderOverlay() {
           order={order}
           persona="business"
           onSuccess={interrupt.onDeclineSuccess}
+        />
+      ) : null}
+
+      {order ? (
+        <CookedFoodConfirmOrderModal
+          open={interrupt.cookedFoodConfirmOpen}
+          order={order}
+          onClose={() => {
+            interrupt.closeCookedFoodConfirm();
+          }}
+          onConfirm={interrupt.confirmWithData}
+          loading={isConfirming}
         />
       ) : null}
     </>

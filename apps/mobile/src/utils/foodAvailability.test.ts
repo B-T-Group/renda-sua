@@ -67,6 +67,18 @@ describe('isFoodCatalogItem', () => {
     expect(isFoodCatalogItem(grocery)).toBe(false);
     expect(filterFoodCatalogItems([dish, grocery, kettle])).toEqual([dish]);
   });
+
+  it('keeps food-category dishes even when is_cooked_food is false', () => {
+    expect(
+      isFoodCatalogItem({
+        is_cooked_food: false,
+        item: {
+          is_cooked_food: false,
+          item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
+        },
+      })
+    ).toBe(true);
+  });
 });
 
 describe('resolveFoodAvailabilityStatus', () => {

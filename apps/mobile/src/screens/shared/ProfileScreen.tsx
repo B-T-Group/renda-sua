@@ -43,6 +43,7 @@ import { agentInitial } from '../../utils/agentProfileDisplay';
 import type { Theme } from '../../theme';
 import { ConfirmActionDialog } from '../../components/dialogs/ConfirmActionDialog';
 import { ProfileCompletenessCard } from '../../components/profile/ProfileCompletenessCard';
+import { ProfileMobileMoneySection } from '../../components/profile/ProfileMobileMoneySection';
 import { CustomerActivationChecklist } from '../../components/client/CustomerActivationChecklist';
 import { ProfileRolesSection } from '../../components/enroll/ProfileRolesSection';
 import { AgentReferralCodeCard } from '../../components/profile/AgentReferralCodeCard';
@@ -703,6 +704,11 @@ function ProfileScreen() {
           style={{ marginTop: 16 }}
         />
       ) : null}
+
+      <ProfileMobileMoneySection
+        profilePhone={me?.phone_number}
+        profileCountry={me?.country}
+      />
 
       <View style={[styles.card, cardStyle, shadows.sm, { marginTop: 16 }]}>
         <Text variant="titleMedium" style={{ color: colors.text.primary, marginBottom: 8, fontWeight: '600' }}>

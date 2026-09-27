@@ -85,14 +85,16 @@ export function buildReadyNextStepHtml(
   locale: EmailLocale
 ): string {
   const isPickup = data.fulfillmentMethod === 'pickup';
-  const isPayAtPickup = data.paymentTiming === 'pay_at_pickup';
+  const classicPayAtPickup =
+    data.paymentTiming === 'pay_at_pickup' &&
+    data.payAfterMerchantConfirm !== true;
   if (!isPickup) {
     return locale === 'fr'
       ? `<p>Votre commande est prête. Un livreur sera bientôt assigné pour la récupérer et vous la livrer.</p>`
       : `<p>Your order is now ready for pickup. A delivery agent will be assigned shortly to collect and deliver your order.</p>`;
   }
   const asap = data.fulfillmentTiming === 'asap';
-  if (isPayAtPickup) {
+  if (classicPayAtPickup) {
     return locale === 'fr'
       ? asap
         ? `<p>Votre commande est prête au magasin. Venez dès qu'elle est prête. À votre arrivée, appuyez sur Payer dans l'application et approuvez la demande de paiement mobile sur votre téléphone. Une fois payée, vous pouvez récupérer votre commande.</p>`
@@ -103,11 +105,11 @@ export function buildReadyNextStepHtml(
   }
   return locale === 'fr'
     ? asap
-      ? `<p>Votre commande est prête au magasin. Venez dès qu'elle est prête. Envoyez votre code PIN au vendeur pour confirmer le retrait.</p>`
-      : `<p>Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait. Envoyez votre code PIN au vendeur pour confirmer le retrait.</p>`
+      ? `<p>Votre commande est prête au magasin. Venez dès qu'elle est prête. À votre arrivée, appuyez sur Terminer la commande dans l'application (sans code PIN).</p>`
+      : `<p>Votre commande est prête au magasin. Rendez-vous pendant le créneau de retrait. À votre arrivée, appuyez sur Terminer la commande dans l'application (sans code PIN).</p>`
     : asap
-      ? `<p>Your order is ready at the store. Come as soon as it is ready. Send your PIN to the seller to confirm pickup.</p>`
-      : `<p>Your order is ready at the store. Come during your pickup slot. Send your PIN to the seller to confirm pickup.</p>`;
+      ? `<p>Your order is ready at the store. Come as soon as it is ready. When you arrive, tap Complete order in the app (no pickup PIN).</p>`
+      : `<p>Your order is ready at the store. Come during your pickup slot. When you arrive, tap Complete order in the app (no pickup PIN).</p>`;
 }
 
 export function buildOrderItemsHtml(

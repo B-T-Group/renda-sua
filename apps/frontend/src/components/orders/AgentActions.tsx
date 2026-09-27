@@ -30,6 +30,7 @@ import ConfirmationModal from '../common/ConfirmationModal';
 import CompleteDeliveryDialog from '../dialogs/CompleteDeliveryDialog';
 import MarkDeliveryAsFailedDialog from '../dialogs/MarkDeliveryAsFailedDialog';
 import RequestPayAtDeliveryPaymentDialog from '../dialogs/RequestPayAtDeliveryPaymentDialog';
+import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 import ClaimOrderDialog from './ClaimOrderDialog';
 
 interface AgentActionsProps {
@@ -661,10 +662,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         break;
 
       case 'out_for_delivery':
-        if (
-          order.payment_timing === 'pay_at_delivery' ||
-          order.payment_method === 'pay_on_delivery'
-        ) {
+        if (orderNeedsPayAtDeliveryAgentActions(order)) {
           actions.push({
             label: t('orderActions.requestPayment', 'Request payment'),
             action: () => setShowRequestPaymentDialog(true),

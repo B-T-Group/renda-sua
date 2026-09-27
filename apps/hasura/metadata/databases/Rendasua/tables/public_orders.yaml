@@ -66,6 +66,15 @@ array_relationships:
         remote_table:
           name: failed_deliveries
           schema: public
+  - name: failed_pickup
+    using:
+      manual_configuration:
+        column_mapping:
+          id: order_id
+        insertion_order: null
+        remote_table:
+          name: failed_pickups
+          schema: public
   - name: order_holds
     using:
       manual_configuration:
@@ -245,6 +254,8 @@ select_permissions:
         - pickup_reminder_last_sent_at
         - client_ready_nudge_sent_at
         - fulfillment_timing
+        - is_cooked_food_pickup
+        - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by
         - dispatch_round
@@ -266,6 +277,7 @@ select_permissions:
         - is_diaspora_order
         - fulfillment_country
         - deposit_amount
+        - deposit_minimum_applied
         - deposit_mobile_payment_transaction_id
         - deposit_status
         - deposit_refund_status
@@ -347,6 +359,8 @@ select_permissions:
         - pickup_reminder_last_sent_at
         - client_ready_nudge_sent_at
         - fulfillment_timing
+        - is_cooked_food_pickup
+        - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by
         - dispatch_round
@@ -368,6 +382,7 @@ select_permissions:
         - is_diaspora_order
         - fulfillment_country
         - deposit_amount
+        - deposit_minimum_applied
         - deposit_mobile_payment_transaction_id
         - deposit_status
         - deposit_refund_status
@@ -448,6 +463,8 @@ select_permissions:
         - pickup_reminder_last_sent_at
         - client_ready_nudge_sent_at
         - fulfillment_timing
+        - is_cooked_food_pickup
+        - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by
         - dispatch_round
@@ -473,6 +490,7 @@ select_permissions:
         - presentment_fx_rate
         - presentment_fx_source
         - deposit_amount
+        - deposit_minimum_applied
         - deposit_mobile_payment_transaction_id
         - deposit_status
         - deposit_refund_status

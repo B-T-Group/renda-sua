@@ -15,93 +15,159 @@ describe('DepositCalculationService', () => {
     service = module.get<DepositCalculationService>(DepositCalculationService);
   });
 
-  describe('calculateDeposit', () => {
-    it('should calculate 10% deposit for orders under 5000 XAF', () => {
-      const result = service.calculateDeposit(1000, 'XAF');
+  describe('calculateItemDeposit', () => {
+    it('sums opted-in item percents and ignores delivery in the base', () => {
+      const result = service.calculateItemDeposit({
+        currency: 'XAF',
+        orderTotal: 6000,
+        lines: [
+          {
+            unitPrice: 4000,
+            quantity: 1,
+            initialDepositEnabled: true,
+            initialDepositPercent: 10,
+          },
+        ],
+      });
 
-      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF); // floor wins (100 < 150)
-      expect(result.rate).toBe(0.1);
-      expect(result.amountDue).toBe(1000 - MOMO_DEPOSIT_MIN_XAF);
-      expect(result.totalAmount).toBe(1000);
+      expect(result.depositAmount).toBe(400);
+      expect(result.percent).toBe(10);
+      expect(result.minimumApplied).toBe(false);
+      expect(result.amountDue).toBe(5600);
+      expect(result.lines[0]).toEqual({
+        initialDepositPercent: 10,
+        initialDepositAmount: 400,
+      });
     });
 
-    it('should calculate 10% deposit for orders just under threshold', () => {
-      const result = service.calculateDeposit(4999, 'XAF');
+    it('uses each line percent when a cart mixes rates', () => {
+      const result = service.calculateItemDeposit({
+        currency: 'GNF',
+        orderTotal: 3000,
+        lines: [
+          {
+            unitPrice: 1000,
+            quantity: 1,
+            initialDepositEnabled: true,
+            initialDepositPercent: 10,
+          },
+          {
+            unitPrice: 1000,
+            quantity: 2,
+            initialDepositEnabled: true,
+            initialDepositPercent: 20,
+          },
+        ],
+      });
 
-      expect(result.depositAmount).toBe(500); // round(4999 * 0.10) = 500
-      expect(result.rate).toBe(0.1);
-      expect(result.amountDue).toBe(4499);
-      expect(result.totalAmount).toBe(4999);
+      expect(result.depositAmount).toBe(500);
+      expect(result.percent).toBeNull();
+      expect(result.lines[1]?.initialDepositAmount).toBe(400);
     });
 
-    it('should calculate 5% deposit for orders at 5000 XAF', () => {
-      const result = service.calculateDeposit(5000, 'XAF');
+    it('raises XAF deposits under 150 to the minimum and caps at the order total', () => {
+      const small = service.calculateItemDeposit({
+        currency: 'XAF',
+        orderTotal: 1000,
+        lines: [
+          {
+            unitPrice: 1000,
+            quantity: 1,
+            initialDepositEnabled: true,
+            initialDepositPercent: 10,
+          },
+        ],
+      });
+      const tiny = service.calculateItemDeposit({
+        currency: 'XAF',
+        orderTotal: 100,
+        lines: [
+          {
+            unitPrice: 100,
+            quantity: 1,
+            initialDepositEnabled: true,
+            initialDepositPercent: 10,
+          },
+        ],
+      });
 
-      expect(result.depositAmount).toBe(250); // round(5000 * 0.05) = 250
-      expect(result.rate).toBe(0.05);
-      expect(result.amountDue).toBe(4750);
-      expect(result.totalAmount).toBe(5000);
+      expect(small.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF);
+      expect(small.minimumApplied).toBe(true);
+      expect(small.percent).toBeNull();
+      expect(small.amountDue).toBe(850);
+      expect(tiny.depositAmount).toBe(100);
+      expect(tiny.minimumApplied).toBe(true);
+      expect(tiny.amountDue).toBe(0);
     });
 
-    it('should calculate 5% deposit for large orders', () => {
-      const result = service.calculateDeposit(20000, 'XAF');
+    it('does not apply the XAF floor to other currencies', () => {
+      const result = service.calculateItemDeposit({
+        currency: 'GNF',
+        orderTotal: 1000,
+        lines: [
+          {
+            unitPrice: 1000,
+            quantity: 1,
+            initialDepositEnabled: true,
+            initialDepositPercent: 5,
+          },
+        ],
+      });
 
-      expect(result.depositAmount).toBe(1000); // round(20000 * 0.05) = 1000
-      expect(result.rate).toBe(0.05);
-      expect(result.amountDue).toBe(19000);
-      expect(result.totalAmount).toBe(20000);
+      expect(result.depositAmount).toBe(50);
+      expect(result.minimumApplied).toBe(false);
     });
 
-    it('should cap deposit at total for tiny XAF orders (floor would exceed total)', () => {
-      const result = service.calculateDeposit(100, 'XAF');
-
-      expect(result.depositAmount).toBe(100); // capped at total
-      expect(result.rate).toBe(0.1);
-      expect(result.amountDue).toBe(0);
-      expect(result.totalAmount).toBe(100);
-    });
-
-    it('should handle edge case where deposit equals total', () => {
-      const result = service.calculateDeposit(MOMO_DEPOSIT_MIN_XAF, 'XAF');
-
-      expect(result.depositAmount).toBe(MOMO_DEPOSIT_MIN_XAF);
-      expect(result.amountDue).toBe(0);
-    });
-
-    it('should round fractional amounts', () => {
-      const result = service.calculateDeposit(2567, 'XAF');
-
-      // 2567 * 0.10 = 256.7 → round to 257
-      expect(result.depositAmount).toBe(257);
-      expect(result.amountDue).toBe(2310);
-    });
-
-    it('should use 10% with no floor for non-XAF currencies', () => {
-      const result = service.calculateDeposit(1000, 'GNF');
-
-      expect(result.depositAmount).toBe(100);
-      expect(result.rate).toBe(0.1);
-      expect(result.amountDue).toBe(900);
-    });
-
-    it('should not apply XAF floor for other currencies on tiny totals', () => {
-      const result = service.calculateDeposit(50, 'GNF');
-
-      expect(result.depositAmount).toBe(5);
-      expect(result.amountDue).toBe(45);
-    });
-
-    it('should throw error for negative total', () => {
-      expect(() => service.calculateDeposit(-100, 'XAF')).toThrow(
-        'Grand total cannot be negative'
-      );
-    });
-
-    it('should handle zero amount', () => {
-      const result = service.calculateDeposit(0, 'XAF');
+    it('returns zero when nothing is opted in', () => {
+      const result = service.calculateItemDeposit({
+        currency: 'XAF',
+        orderTotal: 10000,
+        lines: [
+          {
+            unitPrice: 10000,
+            quantity: 1,
+            initialDepositEnabled: false,
+            initialDepositPercent: null,
+          },
+        ],
+      });
 
       expect(result.depositAmount).toBe(0);
-      expect(result.amountDue).toBe(0);
+      expect(result.amountDue).toBe(10000);
+      expect(result.lines[0]?.initialDepositAmount).toBeNull();
+    });
+
+    it('ignores cooked-food lines even when a deposit flag is set', () => {
+      const result = service.calculateItemDeposit({
+        currency: 'XAF',
+        orderTotal: 5000,
+        lines: [
+          {
+            unitPrice: 2000,
+            quantity: 1,
+            initialDepositEnabled: true,
+            initialDepositPercent: 25,
+            isCookedFood: true,
+          },
+          {
+            unitPrice: 3000,
+            quantity: 1,
+            initialDepositEnabled: false,
+          },
+        ],
+      });
+
+      expect(result.depositAmount).toBe(0);
+    });
+
+    it('throws when the order total is negative', () => {
+      expect(() =>
+        service.calculateItemDeposit({
+          currency: 'XAF',
+          orderTotal: -1,
+          lines: [],
+        })
+      ).toThrow('Grand total cannot be negative');
     });
   });
 

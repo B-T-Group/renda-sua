@@ -19,13 +19,17 @@ const mockInterrupt = {
   message: null,
   secondsLeft: 120,
   showDeclineDialog: false,
+  cookedFoodConfirmOpen: false,
+  closeCookedFoodConfirm: jest.fn(),
   refreshPending: jest.fn(),
   dismiss: jest.fn(),
   openDeclineDialog: jest.fn(),
   closeDeclineDialog: jest.fn(),
   onDeclineSuccess: jest.fn(),
   confirm: jest.fn(),
+  confirmWithData: jest.fn(),
   markBusy: jest.fn(),
+  waitingCount: 2,
 };
 
 jest.mock('../../hooks/useIncomingOrderInterrupt', () => ({
@@ -34,11 +38,22 @@ jest.mock('../../hooks/useIncomingOrderInterrupt', () => ({
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback ?? _key,
+    t: (
+      _key: string,
+      fallback?: string,
+      vars?: Record<string, unknown>
+    ) => {
+      const template = fallback ?? _key;
+      if (!vars) return template;
+      return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
+        String(vars[name] ?? '')
+      );
+    },
   }),
 }));
 
 jest.mock('../dialogs/CancellationReasonModal', () => () => null);
+jest.mock('../business/food/CookedFoodConfirmOrderModal', () => () => null);
 
 describe('IncomingOrderOverlay', () => {
   it('keeps the dialog open and ignores backdrop dismiss', () => {
@@ -49,6 +64,7 @@ describe('IncomingOrderOverlay', () => {
     );
 
     expect(screen.getByText('New order')).toBeTruthy();
+    expect(screen.getByText('2 more waiting')).toBeTruthy();
     expect(screen.getByText('Confirm order')).toBeTruthy();
     expect(screen.getByText('Need more time')).toBeTruthy();
   });

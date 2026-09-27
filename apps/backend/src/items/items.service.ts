@@ -10,6 +10,7 @@ import {
   assertItemDecimalField,
   rethrowNumericOverflow,
 } from './item-numeric-fields';
+import { resolveInitialDepositSave } from './initial-deposit.util';
 
 /** Payload for `items` insert; `business_id` is set by the service. */
 export type ItemsInsertInput = Record<string, unknown>;
@@ -34,6 +35,9 @@ const MUTABLE_ITEM_FIELDS = [
   'max_delivery_distance',
   'estimated_delivery_time',
   'preparation_minutes',
+  'is_cooked_food',
+  'initial_deposit_enabled',
+  'initial_deposit_percent',
   'min_order_quantity',
   'max_order_quantity',
   'is_active',
@@ -59,6 +63,7 @@ const GET_ITEM_BY_ID = `
       shipping_price
       price
       export_available
+      is_cooked_food
       item_sub_category_id
       item_sub_category {
         item_category {
@@ -167,14 +172,21 @@ export class ItemsService {
     const categoryName = await this.resolveCategoryNameForSubCategory(
       mutable.item_sub_category_id
     );
+    const isCookedFood =
+      typeof mutable.is_cooked_food === 'boolean'
+        ? mutable.is_cooked_food || cookedFoodIgnoresStock(categoryName)
+        : cookedFoodIgnoresStock(categoryName);
     const itemData = {
       ...mutable,
+      ...this.requireInitialDepositFields(mutable, isCookedFood, true),
+      is_cooked_food: isCookedFood,
       min_order_quantity: resolveCookedFoodMinOrderQuantity({
         requestedMin:
           typeof mutable.min_order_quantity === 'number'
             ? mutable.min_order_quantity
             : null,
         categoryName,
+        isCookedFood,
       }),
       business_id: businessId,
       // Never allow clients to activate on create; moderation must approve first
@@ -239,6 +251,7 @@ export class ItemsService {
       shipping_price?: number | null;
       price?: number | null;
       export_available?: boolean | null;
+      is_cooked_food?: boolean | null;
       item_sub_category_id?: number | null;
       item_sub_category?: {
         item_category?: { name?: string | null } | null;
@@ -561,6 +574,7 @@ export class ItemsService {
     shipping_price?: number | null;
     price?: number | null;
     export_available?: boolean | null;
+    is_cooked_food?: boolean | null;
     item_sub_category_id?: number | null;
     item_sub_category?: {
       item_category?: { name?: string | null } | null;
@@ -576,6 +590,7 @@ export class ItemsService {
         shipping_price?: number | null;
         price?: number | null;
         export_available?: boolean | null;
+        is_cooked_food?: boolean | null;
         item_sub_category_id?: number | null;
         item_sub_category?: {
           item_category?: { name?: string | null } | null;
@@ -592,9 +607,16 @@ export class ItemsService {
     return item;
   }
 
+  /**
+   * Persist cooked-food when the client sends the flag or the item is under
+   * Restaurant & Cooked Food — either wins. Recategorize alone does not clear
+   * an existing true flag (flag stays until an explicit false is sent and the
+   * category is no longer food).
+   */
   private async normalizeUpdatePayloadWithFoodMin(
     existing: {
       item_sub_category_id?: number | null;
+      is_cooked_food?: boolean | null;
       item_sub_category?: {
         item_category?: { name?: string | null } | null;
       } | null;
@@ -621,21 +643,80 @@ export class ItemsService {
       typeof withDescription.min_order_quantity === 'number'
         ? withDescription.min_order_quantity
         : null;
-    if (cookedFoodIgnoresStock(categoryName)) {
-      return { ...withDescription, min_order_quantity: 1 };
+    const explicitFlag = withDescription.is_cooked_food;
+    const hasExplicitFlag = typeof explicitFlag === 'boolean';
+    const isCookedFood = hasExplicitFlag
+      ? explicitFlag || cookedFoodIgnoresStock(categoryName)
+      : this.resolveExistingCookedFoodFlag(existing, categoryName);
+
+    if (!hasExplicitFlag) {
+      delete withDescription.is_cooked_food;
     }
+
+    if (cookedFoodIgnoresStock(categoryName, isCookedFood)) {
+      return this.withInitialDeposit(withDescription, isCookedFood, {
+        ...withDescription,
+        is_cooked_food: true,
+        min_order_quantity: 1,
+      });
+    }
+
     if (Object.prototype.hasOwnProperty.call(withDescription, 'min_order_quantity')) {
-      return {
+      return this.withInitialDeposit(withDescription, isCookedFood, {
         ...withDescription,
         min_order_quantity: resolveCookedFoodMinOrderQuantity({
           requestedMin,
           categoryName,
+          isCookedFood,
         }),
-      };
+      });
     }
-    return withDescription;
+    return this.withInitialDeposit(withDescription, isCookedFood, withDescription);
   }
 
+  private withInitialDeposit(
+    source: Record<string, unknown>,
+    isCookedFood: boolean,
+    payload: Record<string, unknown>
+  ): Record<string, unknown> {
+    return {
+      ...payload,
+      ...this.requireInitialDepositFields(source, isCookedFood, false),
+    };
+  }
+
+  private requireInitialDepositFields(
+    source: Record<string, unknown>,
+    isCookedFood: boolean,
+    force: boolean
+  ): Record<string, unknown> {
+    const touchDeposit =
+      force ||
+      Object.prototype.hasOwnProperty.call(source, 'initial_deposit_enabled') ||
+      Object.prototype.hasOwnProperty.call(source, 'initial_deposit_percent');
+    const resolved = resolveInitialDepositSave({
+      isCookedFood,
+      enabled: source.initial_deposit_enabled,
+      percent: source.initial_deposit_percent,
+      touchDeposit,
+    });
+    if (resolved.error) {
+      throw new HttpException(
+        { success: false, message: resolved.error },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return resolved.fields ?? {};
+  }
+
+  private resolveExistingCookedFoodFlag(
+    existing: {
+      is_cooked_food?: boolean | null;
+    },
+    categoryName?: string | null
+  ): boolean {
+    return cookedFoodIgnoresStock(categoryName, existing.is_cooked_food);
+  }
   private async resolveCategoryNameForSubCategory(
     subCategoryId: unknown
   ): Promise<string | null> {

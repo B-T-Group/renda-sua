@@ -47,6 +47,12 @@ import {
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { capAcceptanceTimeoutForFood } from '../food/food-acceptance-timeout.util';
+import {
+  actionableAcceptanceCountQuery,
+  mapPendingAcceptance,
+  pendingAcceptanceQuery,
+  type PendingAcceptanceResult,
+} from './pending-acceptance.query';
 
 interface SlaOrder {
   id: string;
@@ -493,90 +499,68 @@ export class OrderAcceptanceService {
 
   async getPendingAcceptanceForBusiness(
     businessId: string
-  ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
+  ): Promise<PendingAcceptanceResult> {
     return this.queryPendingAcceptance({ businessId });
   }
 
   async getPendingAcceptanceForLocation(
     businessId: string,
     locationId: string
-  ): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
+  ): Promise<PendingAcceptanceResult> {
     return this.queryPendingAcceptance({ businessId, locationId });
   }
 
   private async queryPendingAcceptance(params: {
     businessId: string;
     locationId?: string;
-  }): Promise<{ active: boolean; order: PendingAcceptanceOrder | null }> {
-    const snoozeCutoff = busySnoozeCutoffIso(
+  }): Promise<PendingAcceptanceResult> {
+    const snoozeCutoff = this.pendingSnoozeCutoff();
+    const includeLocation = !!params.locationId;
+    const res = await this.hasura.executeQuery(
+      pendingAcceptanceQuery(includeLocation),
+      this.pendingQueryVars(params, snoozeCutoff)
+    );
+    return mapPendingAcceptance(res);
+  }
+
+  private pendingSnoozeCutoff(): string {
+    return busySnoozeCutoffIso(
       this.orderConfig().busyInterruptSnoozeMinutes ||
         DEFAULT_BUSY_INTERRUPT_SNOOZE_MINUTES
     );
-    const res = await this.hasura.executeQuery(
-      params.locationId
-        ? `query PendingAcceptanceLoc($bid: uuid!, $lid: uuid!, $snoozeCutoff: timestamptz!) {
-            orders(
-              where: {
-                business_id: { _eq: $bid }
-                business_location_id: { _eq: $lid }
-                current_status: { _eq: pending }
-                acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
-                _not: {
-                  _and: [
-                    { acceptance_state: { _eq: awaiting_acceptance } }
-                    { busy_extra_prep_minutes: { _gt: 0 } }
-                    { updated_at: { _gte: $snoozeCutoff } }
-                  ]
-                }
-              }
-              order_by: { created_at: asc }
-              limit: 1
-            ) {
-              id order_number current_status acceptance_state
-              acceptance_deadline_at grace_deadline_at
-              busy_extra_prep_minutes estimated_prep_minutes
-              created_at total_amount currency fulfillment_method
-              fulfillment_timing promised_ready_at promised_fulfill_by business_id
-              client { user { first_name last_name } }
-              order_items { item_name quantity }
-            }
-          }`
-        : `query PendingAcceptance($bid: uuid!, $snoozeCutoff: timestamptz!) {
-            orders(
-              where: {
-                business_id: { _eq: $bid }
-                current_status: { _eq: pending }
-                acceptance_state: { _in: [awaiting_acceptance, no_response, grace] }
-                _not: {
-                  _and: [
-                    { acceptance_state: { _eq: awaiting_acceptance } }
-                    { busy_extra_prep_minutes: { _gt: 0 } }
-                    { updated_at: { _gte: $snoozeCutoff } }
-                  ]
-                }
-              }
-              order_by: { created_at: asc }
-              limit: 1
-            ) {
-              id order_number current_status acceptance_state
-              acceptance_deadline_at grace_deadline_at
-              busy_extra_prep_minutes estimated_prep_minutes
-              created_at total_amount currency fulfillment_method
-              fulfillment_timing promised_ready_at promised_fulfill_by business_id
-              client { user { first_name last_name } }
-              order_items { item_name quantity }
-            }
-          }`,
-      params.locationId
-        ? {
-            bid: params.businessId,
-            lid: params.locationId,
-            snoozeCutoff,
-          }
-        : { bid: params.businessId, snoozeCutoff }
-    );
-    const order = res.orders?.[0] ?? null;
-    return { active: !!order, order };
+  }
+
+  private pendingQueryVars(
+    params: { businessId: string; locationId?: string },
+    snoozeCutoff: string
+  ): { bid: string; lid?: string; snoozeCutoff: string } {
+    if (!params.locationId) {
+      return { bid: params.businessId, snoozeCutoff };
+    }
+    return {
+      bid: params.businessId,
+      lid: params.locationId,
+      snoozeCutoff,
+    };
+  }
+
+  private async safeAcceptanceCount(businessId: string): Promise<number> {
+    try {
+      return await this.countActionableAcceptance(businessId);
+    } catch (error: any) {
+      this.logger.warn(`acceptance count failed: ${error?.message ?? error}`);
+      return 1;
+    }
+  }
+
+  private async countActionableAcceptance(businessId: string): Promise<number> {
+    const res = await this.hasura.executeQuery<{
+      orders_aggregate?: { aggregate?: { count?: number | null } | null };
+    }>(actionableAcceptanceCountQuery(), {
+      bid: businessId,
+      snoozeCutoff: this.pendingSnoozeCutoff(),
+    });
+    return res.orders_aggregate?.aggregate?.count ?? 0;
   }
 
   async recordMerchantCancelOfPending(businessId: string): Promise<void> {
@@ -1312,6 +1296,11 @@ export class OrderAcceptanceService {
     remainingSeconds: number
   ): Promise<void> {
     try {
+      const pendingCount = await this.safeAcceptanceCount(order.business_id);
+      if (pendingCount > 1) {
+        await this.notifyAcceptanceDigest(order, pendingCount);
+        return;
+      }
       await this.notifications.sendOrderAcceptanceReminderPush({
         businessUserId: order.business?.user_id,
         orderId: order.id,
@@ -1323,6 +1312,20 @@ export class OrderAcceptanceService {
     } catch (error: any) {
       this.logger.error(`Acceptance reminder notify failed: ${error?.message}`);
     }
+  }
+
+  private async notifyAcceptanceDigest(
+    order: SlaOrder,
+    pendingCount: number
+  ): Promise<void> {
+    await this.notifications.sendPendingAcceptanceDigestPush({
+      businessId: order.business_id,
+      businessUserId: order.business?.user_id,
+      orderId: order.id,
+      preferredLanguage: order.business?.user?.preferred_language,
+      businessLocationId: order.business_location_id,
+      count: pendingCount,
+    });
   }
 
   private async beginScheduledAcceptance(

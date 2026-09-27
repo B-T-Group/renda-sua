@@ -246,6 +246,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "Mark ready prompt",
             )
 
+        if event_type == "order.auto_mark_ready":
+            return _call_backend_internal(
+                "auto-mark-ready",
+                {"orderId": order_id},
+                "Auto mark ready",
+            )
+
+        if event_type == "order.cooked_food_unpaid_cancel":
+            return _call_backend_internal(
+                "cooked-food-unpaid-cancel",
+                {"orderId": order_id},
+                "Cooked food unpaid cancel",
+            )
+
         if event_type == "order.acceptance_grace_deadline":
             return _call_backend_internal(
                 "acceptance-grace-deadline",

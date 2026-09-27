@@ -213,6 +213,17 @@ export function useBusinessDashboardModules({
         color: '#00897b',
         path: '/business/refunds',
       },
+      {
+        title: t('business.dashboard.failedPickups', 'Failed pickups'),
+        description: t(
+          'business.dashboard.failedPickupsDescription',
+          'Cooked-food pickups marked as failed with partial refunds.'
+        ),
+        icon: <ErrorIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#d32f2f',
+        path: '/business/failed-pickups',
+      },
     ];
 
     const rentalModules: BusinessDashboardModule[] = [

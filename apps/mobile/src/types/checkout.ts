@@ -44,9 +44,22 @@ export type CheckoutErrorCode =
   | 'MERCHANT_NOT_ACCEPTING_ORDERS'
   | string; // forward-compatible
 
+export interface CookedFoodStoreClosedHourSlot {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface CookedFoodStoreClosedDetails {
+  timezone: string;
+  next_opens_at: string | null;
+  hours: CookedFoodStoreClosedHourSlot[];
+}
+
 export interface CheckoutBlocker {
   code: CheckoutErrorCode;
   message: string;
+  details?: CookedFoodStoreClosedDetails;
 }
 
 export interface CheckoutItemLine {
@@ -101,11 +114,17 @@ export interface CheckoutGroup {
   estimated_ready_at?: string;
   estimated_fulfill_by?: string;
   schedule_required?: boolean;
+  /** False when this group contains cooked food (ASAP-only). */
+  schedule_allowed?: boolean;
+  /** True when every line is cooked food on MoMo — pay after kitchen confirm. */
+  pay_after_merchant_confirm_eligible?: boolean;
   /** MoMo deposit configuration (when available). */
   deposit_required?: boolean | null;
   deposit_amount?: number | null;
   deposit_paid?: number | null;
   amount_due?: number | null;
+  deposit_minimum_applied?: boolean | null;
+  deposit_percent?: number | null;
   deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
 }
 
@@ -182,15 +201,21 @@ export interface ResolvedCheckoutConfig {
   estimated_ready_at?: string;
   estimated_fulfill_by?: string;
   schedule_required?: boolean;
+  /** False when the cart includes cooked food (ASAP-only). */
+  schedule_allowed?: boolean;
+  /** True when every group is cooked-food MoMo pay-after (no deposit). */
+  pay_after_merchant_confirm_eligible?: boolean;
   /** Diaspora checkout context (when cross-border or someone-else receiving). */
   diaspora?: CheckoutDiaspora | null;
   /** True when MoMo pay-now for delivery is enabled (default false; hide full pay-now). */
   momo_pay_now_delivery_enabled?: boolean | null;
-  /** Server-authoritative deposit amount (XAF). UI always prefers this when present. */
+  /** Server-authoritative deposit amount. UI always prefers this when present. */
   deposit_required?: boolean | null;
   deposit_amount?: number | null;
   deposit_paid?: number | null;
   amount_due?: number | null;
+  deposit_minimum_applied?: boolean | null;
+  deposit_percent?: number | null;
   deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
   /** Purchase credits that will auto-apply to item subtotals. */
   purchase_credits?: {
@@ -215,6 +240,8 @@ export interface CheckoutPreflightRequest {
   provisional_country?: string;
   fulfillment_method?: FulfillmentMethod;
   payment_timing?: PaymentTiming;
+  mobile_payment_phone_id?: string;
+  /** @deprecated Prefer mobile_payment_phone_id */
   phone_number?: string;
   discount_code?: string;
   requires_fast_delivery?: boolean;

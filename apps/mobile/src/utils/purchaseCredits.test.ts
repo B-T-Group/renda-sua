@@ -1,4 +1,5 @@
 import {
+  appliedPurchaseCredit,
   isCampaignPurchaseCredit,
   isUsablePurchaseCredit,
   purchaseCreditShopTarget,
@@ -24,6 +25,17 @@ describe('purchaseCredits utils', () => {
     expect(isUsablePurchaseCredit(base)).toBe(true);
     expect(isUsablePurchaseCredit({ ...base, remaining_amount: 0 })).toBe(false);
     expect(isUsablePurchaseCredit({ ...base, revoked_at: '2026-01-01' })).toBe(false);
+  });
+
+  it('applies store credit up to item subtotal and order total', () => {
+    expect(
+      appliedPurchaseCredit({
+        itemSubtotal: 2000,
+        orderTotal: 2500,
+        creditTotal: 5000,
+        depositNow: 150,
+      })
+    ).toEqual({ applied: 2000, remaining: 500, dueAtFulfillment: 350 });
   });
 
   it('rejects expired grants', () => {
