@@ -312,6 +312,30 @@ describe('AccountsService', () => {
       });
       expect(insert?.[1].transactionType).not.toBe('cash_advance_repayment');
     });
+
+    it('does not replay a cash-advance repayment as a second deposit', async () => {
+      executeQuery.mockResolvedValue({
+        account_transactions: [{ amount: 400 }, { amount: 600 }],
+      });
+
+      await expect(
+        service.registerDepositIfNotExists({
+          accountId,
+          amount: 1000,
+          memo: 'order payment replay',
+          referenceId,
+          skipCashAdvanceRepayment: true,
+        })
+      ).resolves.toEqual({ success: true, alreadyExists: true });
+
+      const sumCall = executeQuery.mock.calls.find(([query]) =>
+        String(query).includes('SumAppliedDeposit')
+      );
+      expect(sumCall?.[1]).toMatchObject({
+        types: ['deposit', 'cash_advance_repayment'],
+      });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
   });
 
   describe('registerTransaction', () => {

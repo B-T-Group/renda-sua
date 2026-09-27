@@ -4400,10 +4400,48 @@ export class OrdersService {
     itemAmount: number,
     deliveryAmount: number
   ): Promise<void> {
-    const needed = itemAmount + deliveryAmount;
+    const needed = this.finiteHoldNumeric(itemAmount + deliveryAmount);
     if (needed <= 0) return;
-    const held = await this.sumHoldAmountForOrder(accountId, order.id);
-    if (held >= needed) return;
+    const missing = await this.missingClientHoldAmount(
+      accountId,
+      order.id,
+      needed
+    );
+    if (missing == null) return;
+    if (missing === needed) {
+      await this.placeSplitClientHolds(
+        order,
+        accountId,
+        itemAmount,
+        deliveryAmount
+      );
+      return;
+    }
+    await this.requireSuccessfulHold({
+      accountId,
+      amount: missing,
+      memo: `Hold for order ${order.order_number}`,
+      referenceId: order.id,
+    });
+  }
+
+  /** Null when the order is already held for the full client amount. */
+  private async missingClientHoldAmount(
+    accountId: string,
+    orderId: string,
+    needed: number
+  ): Promise<number | null> {
+    const held = await this.sumHoldAmountForOrder(accountId, orderId);
+    const missing = this.finiteHoldNumeric(needed - held);
+    return missing <= 0 ? null : missing;
+  }
+
+  private async placeSplitClientHolds(
+    order: Orders,
+    accountId: string,
+    itemAmount: number,
+    deliveryAmount: number
+  ): Promise<void> {
     await this.requireSuccessfulHold({
       accountId,
       amount: itemAmount,
@@ -4436,7 +4474,7 @@ export class OrdersService {
     `,
       { accountId, orderId }
     );
-    const rows = result.account_transactions ?? [];
+    const rows = result?.account_transactions ?? [];
     return rows.reduce(
       (sum: number, row: { amount?: number }) => sum + Number(row.amount || 0),
       0
@@ -9428,18 +9466,12 @@ export class OrdersService {
     const wasAuthorized = (order as any).payment_status === 'authorized';
     const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
 
-    await this.requireSuccessfulHold({
+    await this.placeMissingClientHolds(
+      order,
       accountId,
-      amount: itemAmount,
-      memo: `Hold for order ${order.order_number}`,
-      referenceId: order.id,
-    });
-    await this.requireSuccessfulHold({
-      accountId,
-      amount: deliveryAmount,
-      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
-      referenceId: order.id,
-    });
+      itemAmount,
+      deliveryAmount
+    );
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
     await this.updateOrderHold(orderHold.id, {
