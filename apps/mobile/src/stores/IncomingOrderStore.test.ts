@@ -203,8 +203,8 @@ describe('IncomingOrderStore present-first', () => {
 
     await vi.waitFor(() => {
       expect(store.orderId).toBe('ord-2');
+      expect(store.visible).toBe(true);
     });
-    expect(store.visible).toBe(true);
     expect(getById).toHaveBeenCalledWith('ord-2', BUSINESS_PERSONA_HEADERS);
   });
 
@@ -239,8 +239,8 @@ describe('IncomingOrderStore present-first', () => {
 
     await vi.waitFor(() => {
       expect(store.orderId).toBe('ord-2');
+      expect(store.visible).toBe(true);
     });
-    expect(store.visible).toBe(true);
   });
 
   it('does not reopen a confirmed order after the review-later window', async () => {
