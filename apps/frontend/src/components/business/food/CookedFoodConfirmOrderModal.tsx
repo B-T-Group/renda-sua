@@ -1,9 +1,9 @@
-import { CheckCircle, Close } from '@mui/icons-material';
+import { CheckCircle } from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
-  Chip,
+  ButtonBase,
   Dialog,
   DialogActions,
   DialogContent,
@@ -24,6 +24,7 @@ import type { OrderData } from '../../../hooks/useOrderById';
 import type { FoodConfirmationStockUpdate } from '../../../types/food';
 import FoodOrderStockPrompt, { type FoodOrderLine } from './FoodOrderStockPrompt';
 import { CookedFoodReadyClockIllustration } from './CookedFoodReadyClockIllustration';
+import { CookedFoodWaitPaymentIllustration } from './CookedFoodWaitPaymentIllustration';
 
 const PRESET_MINUTES = [15, 30, 45, 60] as const;
 const MIN_CUSTOM = 5;
@@ -136,116 +137,293 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
   if (!order) return null;
 
   const busy = loading || submitting;
+  const isPickup = order.fulfillment_method === 'pickup';
+  const readyMinutes = resolveReadyMinutes();
 
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6">
-            {step === 1
-              ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
-              : t('orders.cookedFood.waitPaymentTitle', 'Waiting for payment')}
-            {' · '}
-            #{order.order_number}
-          </Typography>
-          {step === 1 ? (
-            <Button onClick={onClose} size="small" startIcon={<Close />} disabled={busy}>
-              {t('common.close', 'Close')}
-            </Button>
-          ) : null}
-        </Box>
+      <DialogTitle sx={{ pb: 1 }}>
+        <Typography variant="overline" color="text.secondary">
+          {t('orders.cookedFood.orderLabel', 'Order #{{number}}', {
+            number: order.order_number,
+          })}
+          {' · '}
+          {isPickup
+            ? t('orders.cookedFood.pickup', 'Pickup')
+            : t('orders.cookedFood.delivery', 'Delivery')}
+        </Typography>
+        <Typography variant="h6">
+          {step === 1
+            ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
+            : t('orders.cookedFood.waitPaymentTitle', 'Do not start cooking yet')}
+        </Typography>
       </DialogTitle>
 
       <DialogContent>
         {step === 1 ? (
-          <Stack spacing={2}>
-            <CookedFoodReadyClockIllustration />
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              {t(
-                'orders.cookedFood.readyHint',
-                'Choose how long you need to prepare this cooked-food pickup order.'
-              )}
-            </Typography>
-            <Stack direction="row" flexWrap="wrap" gap={1} justifyContent="center">
-              {PRESET_MINUTES.map((m) => (
-                <Chip
-                  key={m}
-                  label={t('orders.cookedFood.minutesChip', '{{m}} min', { m })}
-                  color={selectedMinutes === m ? 'primary' : 'default'}
-                  variant={selectedMinutes === m ? 'filled' : 'outlined'}
-                  onClick={() => setSelectedMinutes(m)}
-                  disabled={busy}
-                />
-              ))}
-              <Chip
-                label={t('orders.cookedFood.customChip', 'Custom')}
-                color={selectedMinutes === 'custom' ? 'primary' : 'default'}
-                variant={selectedMinutes === 'custom' ? 'filled' : 'outlined'}
-                onClick={() => setSelectedMinutes('custom')}
-                disabled={busy}
-              />
-            </Stack>
-            {selectedMinutes === 'custom' ? (
-              <TextField
-                type="number"
-                label={t('orders.cookedFood.customMinutes', 'Minutes until ready')}
-                value={customMinutes}
-                onChange={(e) => setCustomMinutes(e.target.value.replace(/\D/g, ''))}
-                inputProps={{ min: MIN_CUSTOM, max: MAX_CUSTOM }}
-                disabled={busy}
-                fullWidth
-              />
-            ) : null}
-            <FoodOrderStockPrompt
-              lines={foodLines}
-              updates={foodStockUpdates}
-              onChange={setFoodStockUpdates}
-              disabled={busy}
-            />
-            {error ? <Alert severity="error">{error}</Alert> : null}
-          </Stack>
+          <ReadyTimeStep
+            lines={foodLines}
+            selectedMinutes={selectedMinutes}
+            customMinutes={customMinutes}
+            readyMinutes={readyMinutes}
+            busy={busy}
+            error={error}
+            foodStockUpdates={foodStockUpdates}
+            onSelect={setSelectedMinutes}
+            onCustomChange={setCustomMinutes}
+            onStockChange={setFoodStockUpdates}
+          />
         ) : (
-          <Stack spacing={2}>
-            <Alert severity="info">
-              {t(
-                'orders.cookedFood.waitPaymentBody',
-                'We sent the client a mobile money payment request. Wait until you receive a payment notification before you start cooking.'
-              )}
-            </Alert>
-          </Stack>
+          <WaitPaymentStep isPickup={isPickup} />
         )}
       </DialogContent>
 
       <DialogActions sx={{ p: 2, flexDirection: 'column', alignItems: 'stretch' }}>
         {step === 1 ? (
-          <Box display="flex" gap={2} justifyContent="flex-end" width="100%">
-            <Button onClick={onClose} disabled={busy}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => void handleConfirmReady()}
-              disabled={busy}
-              startIcon={<CheckCircle />}
-            >
-              {busy
-                ? t('orders.confirmModal.confirming', 'Confirming...')
-                : t('orders.cookedFood.confirmReady', 'Confirm ready time')}
-            </Button>
-          </Box>
+          <ConfirmActions
+            busy={busy}
+            readyMinutes={readyMinutes}
+            onClose={onClose}
+            onConfirm={() => void handleConfirmReady()}
+          />
         ) : (
-          <Stack spacing={1.5} width="100%">
-            <Button variant="contained" onClick={() => navigate('/dashboard')}>
-              {t('orders.cookedFood.returnDashboard', 'Return to dashboard')}
-            </Button>
-            <Button variant="outlined" onClick={() => navigate('/orders?queue=prep')}>
-              {t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
-            </Button>
-          </Stack>
+          <WaitActions onDashboard={() => navigate('/dashboard')} onOrders={() => navigate('/orders?queue=prep')} />
         )}
       </DialogActions>
     </Dialog>
   );
 };
+
+function ReadyTimeStep({
+  lines,
+  selectedMinutes,
+  customMinutes,
+  readyMinutes,
+  busy,
+  error,
+  foodStockUpdates,
+  onSelect,
+  onCustomChange,
+  onStockChange,
+}: {
+  lines: FoodOrderLine[];
+  selectedMinutes: number | 'custom';
+  customMinutes: string;
+  readyMinutes: number | null;
+  busy: boolean;
+  error: string;
+  foodStockUpdates: Record<string, FoodConfirmationStockUpdate>;
+  onSelect: (value: number | 'custom') => void;
+  onCustomChange: (value: string) => void;
+  onStockChange: (updates: Record<string, FoodConfirmationStockUpdate>) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Stack spacing={2}>
+      <CookedFoodReadyClockIllustration />
+      <DishSummary lines={lines} />
+      <Typography variant="body2" color="text.secondary" textAlign="center">
+        {t(
+          'orders.cookedFood.readyHint',
+          'Tell the client how long you need. They pay after you confirm. Start cooking only after that payment arrives.'
+        )}
+      </Typography>
+      <ReadyMinuteGrid selected={selectedMinutes} disabled={busy} onSelect={onSelect} />
+      {selectedMinutes === 'custom' ? (
+        <TextField
+          type="number"
+          label={t('orders.cookedFood.customMinutes', 'Minutes until ready')}
+          value={customMinutes}
+          onChange={(e) => onCustomChange(e.target.value.replace(/\D/g, ''))}
+          helperText={t('orders.cookedFood.customHelp', 'Whole number from {{min}} to {{max}}.', {
+            min: MIN_CUSTOM,
+            max: MAX_CUSTOM,
+          })}
+          inputProps={{ min: MIN_CUSTOM, max: MAX_CUSTOM }}
+          disabled={busy}
+          fullWidth
+        />
+      ) : null}
+      {readyMinutes != null ? (
+        <Typography variant="subtitle1" textAlign="center" fontWeight={700}>
+          {t('orders.cookedFood.readyIn', 'Ready in {{m}} minutes', { m: readyMinutes })}
+        </Typography>
+      ) : null}
+      <FoodOrderStockPrompt
+        lines={lines}
+        updates={foodStockUpdates}
+        onChange={onStockChange}
+        disabled={busy}
+      />
+      {error ? <Alert severity="error">{error}</Alert> : null}
+    </Stack>
+  );
+}
+
+function DishSummary({ lines }: { lines: FoodOrderLine[] }) {
+  if (lines.length === 0) return null;
+  return (
+    <Stack spacing={0.5}>
+      {lines.map((line) => (
+        <Typography key={line.order_item_id} variant="body1" textAlign="center" fontWeight={600}>
+          {line.quantity}× {line.name}
+        </Typography>
+      ))}
+    </Stack>
+  );
+}
+
+function ReadyMinuteGrid({
+  selected,
+  disabled,
+  onSelect,
+}: {
+  selected: number | 'custom';
+  disabled: boolean;
+  onSelect: (value: number | 'custom') => void;
+}) {
+  const { t } = useTranslation();
+  const options: Array<number | 'custom'> = [...PRESET_MINUTES, 'custom'];
+  return (
+    <Box display="grid" gridTemplateColumns="1fr 1fr" gap={1}>
+      {options.map((option) => (
+        <MinuteTile
+          key={String(option)}
+          selected={selected === option}
+          disabled={disabled}
+          label={
+            option === 'custom'
+              ? t('orders.cookedFood.customChip', 'Custom')
+              : t('orders.cookedFood.minutesChip', '{{m}} min', { m: option })
+          }
+          onPress={() => onSelect(option)}
+        />
+      ))}
+    </Box>
+  );
+}
+
+function MinuteTile({
+  selected,
+  disabled,
+  label,
+  onPress,
+}: {
+  selected: boolean;
+  disabled: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <ButtonBase
+      disabled={disabled}
+      onClick={onPress}
+      sx={{
+        py: 1.75,
+        borderRadius: 2,
+        border: 2,
+        borderColor: selected ? 'primary.main' : 'divider',
+        bgcolor: selected ? 'primary.main' : 'background.paper',
+        color: selected ? 'primary.contrastText' : 'text.primary',
+      }}
+    >
+      <Typography variant="subtitle1" fontWeight={700}>
+        {label}
+      </Typography>
+    </ButtonBase>
+  );
+}
+
+function WaitPaymentStep({ isPickup }: { isPickup: boolean }) {
+  const { t } = useTranslation();
+  const steps = [
+    t('orders.cookedFood.waitStepSent', 'A Mobile Money request is on the client’s phone.'),
+    t('orders.cookedFood.waitStepWait', 'Wait for the payment notification.'),
+    t('orders.cookedFood.waitStepCook', 'Start cooking only after you see that payment.'),
+  ];
+  return (
+    <Stack spacing={2}>
+      <CookedFoodWaitPaymentIllustration />
+      {steps.map((label, index) => (
+        <WaitRow key={label} index={index + 1} label={label} />
+      ))}
+      <Alert severity="warning">
+        {isPickup
+          ? t(
+              'orders.cookedFood.waitPickup',
+              'When it is ready, the client picks it up and completes the order in the app.'
+            )
+          : t(
+              'orders.cookedFood.waitDelivery',
+              'When it is ready, a courier picks it up for delivery.'
+            )}
+      </Alert>
+    </Stack>
+  );
+}
+
+function WaitRow({ index, label }: { index: number; label: string }) {
+  return (
+    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      <Typography variant="subtitle2" color="warning.dark" fontWeight={700} width={20}>
+        {index}
+      </Typography>
+      <Typography variant="body2">{label}</Typography>
+    </Stack>
+  );
+}
+
+function ConfirmActions({
+  busy,
+  readyMinutes,
+  onClose,
+  onConfirm,
+}: {
+  busy: boolean;
+  readyMinutes: number | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  const label =
+    readyMinutes == null
+      ? t('orders.cookedFood.confirmReady', 'Confirm ready time')
+      : t('orders.cookedFood.confirmReadyMinutes', 'Confirm · {{m}} min', { m: readyMinutes });
+  return (
+    <Box display="flex" gap={2} justifyContent="flex-end" width="100%">
+      <Button onClick={onClose} disabled={busy}>
+        {t('common.cancel', 'Cancel')}
+      </Button>
+      <Button
+        variant="contained"
+        onClick={onConfirm}
+        disabled={busy || readyMinutes == null}
+        startIcon={<CheckCircle />}
+      >
+        {busy ? t('orders.confirmModal.confirming', 'Confirming...') : label}
+      </Button>
+    </Box>
+  );
+}
+
+function WaitActions({
+  onDashboard,
+  onOrders,
+}: {
+  onDashboard: () => void;
+  onOrders: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Stack spacing={1.5} width="100%">
+      <Button variant="contained" onClick={onDashboard}>
+        {t('orders.cookedFood.returnDashboard', 'Return to dashboard')}
+      </Button>
+      <Button variant="outlined" onClick={onOrders}>
+        {t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
+      </Button>
+    </Stack>
+  );
+}
 
 export default CookedFoodConfirmOrderModal;

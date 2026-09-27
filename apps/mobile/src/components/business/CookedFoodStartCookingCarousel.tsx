@@ -8,7 +8,7 @@ import { isCookedFoodStartCookingPriority } from '../../utils/cookedFoodOrder';
 
 interface Props {
   orders: BusinessOrder[];
-  onOpenOrder: (orderId: string) => void;
+  onOpenOrder: (order: BusinessOrder) => void;
 }
 
 export function CookedFoodStartCookingCarousel({ orders, onOpenOrder }: Props) {
@@ -48,7 +48,7 @@ export function CookedFoodStartCookingCarousel({ orders, onOpenOrder }: Props) {
                 'Paid cooked-food pickup — start preparing now.'
               )}
             </Text>
-            <Button mode="contained" onPress={() => onOpenOrder(order.id)}>
+            <Button mode="contained" onPress={() => onOpenOrder(order)}>
               {t('orders.cookedFood.openOrder', 'Open order')}
             </Button>
           </View>

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Button, Chip, Modal, Portal, Text, TextInput } from 'react-native-paper';
+import { Button, Modal, Portal, Text, TextInput } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { CommonActions } from '@react-navigation/native';
@@ -107,6 +107,9 @@ export function CookedFoodConfirmOrderDialog({
 
   if (!order) return null;
 
+  const isPickup = order.fulfillment_method === 'pickup' || order.is_cooked_food_pickup === true;
+  const readyMinutes = resolveMinutes();
+
   return (
     <>
       <Portal>
@@ -124,75 +127,58 @@ export function CookedFoodConfirmOrderDialog({
             },
           ]}
         >
-          <Text variant="titleLarge" style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.sm }}>
-            {step === 1
-              ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
-              : t('orders.cookedFood.waitPaymentTitle', 'Waiting for payment')}
-            {' · '}
-            #{order.order_number}
-          </Text>
-          <ScrollView contentContainerStyle={{ padding: spacing.lg }} keyboardShouldPersistTaps="handled">
+          <View style={{ paddingHorizontal: spacing.lg }}>
+            <Text variant="labelLarge" style={{ color: colors.text.secondary }}>
+              {t('orders.cookedFood.orderLabel', 'Order #{{number}}', {
+                number: order.order_number,
+              })}
+              {' · '}
+              {isPickup
+                ? t('orders.cookedFood.pickup', 'Pickup')
+                : t('orders.cookedFood.delivery', 'Delivery')}
+            </Text>
+            <Text variant="titleLarge" style={{ marginTop: spacing.xs }}>
+              {step === 1
+                ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
+                : t('orders.cookedFood.waitPaymentTitle', 'Do not start cooking yet')}
+            </Text>
+          </View>
+          <ScrollView
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+            keyboardShouldPersistTaps="handled"
+          >
             {step === 1 ? (
-              <View style={{ alignItems: 'center', gap: spacing.md }}>
-                <ReadyClock color={colors.primary.main} />
-                <Text variant="bodyMedium" style={{ color: colors.text.secondary, textAlign: 'center' }}>
-                  {t(
-                    'orders.cookedFood.readyHint',
-                    'Choose how long you need to prepare this cooked-food pickup order.'
-                  )}
-                </Text>
-                <View style={styles.chips}>
-                  {PRESETS.map((m) => (
-                    <Chip
-                      key={m}
-                      selected={selected === m}
-                      onPress={() => setSelected(m)}
-                      disabled={submitting}
-                    >
-                      {t('orders.cookedFood.minutesChip', '{{m}} min', { m })}
-                    </Chip>
-                  ))}
-                  <Chip
-                    selected={selected === 'custom'}
-                    onPress={() => setSelected('custom')}
-                    disabled={submitting}
-                  >
-                    {t('orders.cookedFood.customChip', 'Custom')}
-                  </Chip>
-                </View>
-                {selected === 'custom' ? (
-                  <TextInput
-                    mode="outlined"
-                    label={t('orders.cookedFood.customMinutes', 'Minutes until ready')}
-                    value={customMinutes}
-                    onChangeText={(v) => setCustomMinutes(v.replace(/\D/g, ''))}
-                    keyboardType="number-pad"
-                    disabled={submitting}
-                  />
-                ) : null}
-                {error ? (
-                  <Text style={{ color: colors.error.main }} variant="bodySmall">
-                    {error}
-                  </Text>
-                ) : null}
-              </View>
+              <ReadyTimeBody
+                order={order}
+                selected={selected}
+                customMinutes={customMinutes}
+                readyMinutes={readyMinutes}
+                error={error}
+                submitting={submitting}
+                onSelect={setSelected}
+                onCustomChange={setCustomMinutes}
+              />
             ) : (
-              <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
-                {t(
-                  'orders.cookedFood.waitPaymentBody',
-                  'We sent the client a mobile money payment request. Wait until you receive a payment notification before you start cooking.'
-                )}
-              </Text>
+              <WaitPaymentBody isPickup={isPickup} />
             )}
           </ScrollView>
           <View style={[styles.actions, { paddingHorizontal: spacing.lg, gap: spacing.sm }]}>
             {step === 1 ? (
               <>
+                <Button
+                  mode="contained"
+                  loading={submitting}
+                  disabled={readyMinutes == null}
+                  onPress={() => void handleSubmit()}
+                >
+                  {readyMinutes == null
+                    ? t('orders.cookedFood.confirmReady', 'Confirm ready time')
+                    : t('orders.cookedFood.confirmReadyMinutes', 'Confirm · {{m}} min', {
+                        m: readyMinutes,
+                      })}
+                </Button>
                 <Button onPress={onDismiss} disabled={submitting}>
                   {t('common.cancel', 'Cancel')}
-                </Button>
-                <Button mode="contained" loading={submitting} onPress={() => void handleSubmit()}>
-                  {t('orders.cookedFood.confirmReady', 'Confirm ready time')}
                 </Button>
               </>
             ) : (
@@ -225,8 +211,178 @@ export function CookedFoodConfirmOrderDialog({
   );
 }
 
+function ReadyTimeBody({
+  order,
+  selected,
+  customMinutes,
+  readyMinutes,
+  error,
+  submitting,
+  onSelect,
+  onCustomChange,
+}: {
+  order: BusinessOrder;
+  selected: number | 'custom';
+  customMinutes: string;
+  readyMinutes: number | null;
+  error: string | null;
+  submitting: boolean;
+  onSelect: (value: number | 'custom') => void;
+  onCustomChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  const options: Array<number | 'custom'> = [...PRESETS, 'custom'];
+  return (
+    <View style={{ gap: spacing.md }}>
+      <View style={{ alignItems: 'center' }}>
+        <ReadyClock color={colors.primary.main} />
+      </View>
+      <DishSummary order={order} />
+      <Text variant="bodyMedium" style={{ color: colors.text.secondary, textAlign: 'center' }}>
+        {t(
+          'orders.cookedFood.readyHint',
+          'Tell the client how long you need. They pay after you confirm. Start cooking only after that payment arrives.'
+        )}
+      </Text>
+      <View style={styles.grid}>
+        {options.map((option) => (
+          <MinuteTile
+            key={String(option)}
+            label={
+              option === 'custom'
+                ? t('orders.cookedFood.customChip', 'Custom')
+                : t('orders.cookedFood.minutesChip', '{{m}} min', { m: option })
+            }
+            selected={selected === option}
+            disabled={submitting}
+            onPress={() => onSelect(option)}
+          />
+        ))}
+      </View>
+      {selected === 'custom' ? (
+        <TextInput
+          mode="outlined"
+          label={t('orders.cookedFood.customMinutes', 'Minutes until ready')}
+          value={customMinutes}
+          onChangeText={(value) => onCustomChange(value.replace(/\D/g, ''))}
+          keyboardType="number-pad"
+          disabled={submitting}
+        />
+      ) : null}
+      {selected === 'custom' ? (
+        <Text variant="bodySmall" style={{ color: colors.text.secondary, textAlign: 'center' }}>
+          {t('orders.cookedFood.customHelp', 'Whole number from {{min}} to {{max}}.', {
+            min: MIN_CUSTOM,
+            max: MAX_CUSTOM,
+          })}
+        </Text>
+      ) : null}
+      {readyMinutes != null ? (
+        <Text variant="titleMedium" style={{ textAlign: 'center', fontWeight: '700' }}>
+          {t('orders.cookedFood.readyIn', 'Ready in {{m}} minutes', { m: readyMinutes })}
+        </Text>
+      ) : null}
+      {error ? (
+        <Text style={{ color: colors.error.main, textAlign: 'center' }} variant="bodySmall">
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function DishSummary({ order }: { order: BusinessOrder }) {
+  const lines = order.order_items ?? [];
+  if (lines.length === 0) return null;
+  return (
+    <View style={{ gap: 4 }}>
+      {lines.map((line) => (
+        <Text key={line.id} variant="titleMedium" style={{ textAlign: 'center', fontWeight: '700' }}>
+          {line.quantity}× {line.item_name || line.item?.name || ''}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function MinuteTile({
+  label,
+  selected,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const { colors, borderRadius } = useTheme();
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        flexBasis: '48%',
+        flexGrow: 1,
+        paddingVertical: 16,
+        borderRadius: borderRadius.md,
+        borderWidth: 2,
+        borderColor: selected ? colors.primary.main : colors.divider,
+        backgroundColor: selected ? colors.primary.main : colors.surface,
+        alignItems: 'center',
+      }}
+    >
+      <Text
+        variant="titleMedium"
+        style={{ color: selected ? colors.primary.contrast : colors.text.primary, fontWeight: '700' }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function WaitPaymentBody({ isPickup }: { isPickup: boolean }) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  const steps = [
+    t('orders.cookedFood.waitStepSent', 'A Mobile Money request is on the client’s phone.'),
+    t('orders.cookedFood.waitStepWait', 'Wait for the payment notification.'),
+    t('orders.cookedFood.waitStepCook', 'Start cooking only after you see that payment.'),
+  ];
+  return (
+    <View style={{ gap: spacing.md }}>
+      <View style={{ alignItems: 'center' }}>
+        <ReadyClock color={colors.warning.main} />
+      </View>
+      {steps.map((label, index) => (
+        <View key={label} style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <Text variant="titleMedium" style={{ fontWeight: '700', width: 22 }}>
+            {index + 1}
+          </Text>
+          <Text variant="bodyMedium" style={{ flex: 1, color: colors.text.primary }}>
+            {label}
+          </Text>
+        </View>
+      ))}
+      <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+        {isPickup
+          ? t(
+              'orders.cookedFood.waitPickup',
+              'When it is ready, the client picks it up and completes the order in the app.'
+            )
+          : t(
+              'orders.cookedFood.waitDelivery',
+              'When it is ready, a courier picks it up for delivery.'
+            )}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   sheet: { margin: 0 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actions: { marginTop: 'auto' },
 });
