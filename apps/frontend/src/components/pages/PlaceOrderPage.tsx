@@ -3046,7 +3046,11 @@ const PlaceOrderPage: React.FC = () => {
                       variant="checkout"
                       requireLinkedPhone={!itemCountrySupportsStripe}
                       profilePhone={profile?.phone_number}
-                      profileCountry={profile?.country}
+                      profileCountry={
+                        checkoutPreflight?.checkout_method === 'STRIPE'
+                          ? undefined
+                          : selectedItem?.business_location?.address?.country
+                      }
                       selectedPhoneId={
                         linkedPaymentPhoneId ||
                         checkoutPreflight?.suggested_payment_phone_id ||
@@ -3968,7 +3972,11 @@ const PlaceOrderPage: React.FC = () => {
                         variant="checkout"
                         requireLinkedPhone={!itemCountrySupportsStripe}
                         profilePhone={profile?.phone_number}
-                        profileCountry={profile?.country}
+                        profileCountry={
+                          checkoutPreflight?.checkout_method === 'STRIPE'
+                            ? undefined
+                            : selectedItem?.business_location?.address?.country
+                        }
                         selectedPhoneId={
                           linkedPaymentPhoneId ||
                           checkoutPreflight?.suggested_payment_phone_id ||
