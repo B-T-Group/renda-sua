@@ -1,5 +1,6 @@
 import {
   isCookedFoodAwaitingClientPayment,
+  isCookedFoodReadyFailEligible,
   isCookedFoodStartCookingPriority,
   shouldUseCookedFoodConfirmModal,
 } from './cookedFoodOrder';
@@ -143,5 +144,61 @@ describe('cooked-food payment and cooking priority', () => {
         payment_status: 'paid',
       })
     ).toBe(false);
+  });
+});
+
+describe('isCookedFoodReadyFailEligible', () => {
+  const readyPaid = {
+    ...asapPickup,
+    current_status: 'ready_for_pickup' as const,
+    payment_status: 'paid' as const,
+    is_cooked_food_pickup: true,
+  };
+
+  it('allows a paid or authorized cooked-food pickup', () => {
+    expect(isCookedFoodReadyFailEligible(readyPaid)).toBe(true);
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        payment_status: 'authorized',
+      })
+    ).toBe(true);
+  });
+
+  it('blocks unpaid, unready, retail, and delivery after an agent is assigned', () => {
+    expect(
+      isCookedFoodReadyFailEligible({ ...readyPaid, payment_status: 'pending' })
+    ).toBe(false);
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        current_status: 'preparing',
+      })
+    ).toBe(false);
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        is_cooked_food_pickup: false,
+        pay_after_merchant_confirm: false,
+        order_items: [{ is_cooked_food: false }],
+      })
+    ).toBe(false);
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        fulfillment_method: 'delivery',
+        assigned_agent_id: 'agent-1',
+      })
+    ).toBe(false);
+  });
+
+  it('allows a cooked-food delivery handoff before an agent is assigned', () => {
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        fulfillment_method: 'delivery',
+        assigned_agent_id: null,
+      })
+    ).toBe(true);
   });
 });
