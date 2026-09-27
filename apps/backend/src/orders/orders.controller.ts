@@ -390,7 +390,7 @@ export class OrdersController {
   async getPendingAcceptance() {
     const user = await this.hasuraUserService.getUser();
     if (!isActivePersona(user, 'business') || !user.business?.id) {
-      return { active: false, order: null };
+      return { active: false, order: null, queue: [] };
     }
     return this.orderAcceptanceService.getPendingAcceptanceForBusiness(
       user.business.id

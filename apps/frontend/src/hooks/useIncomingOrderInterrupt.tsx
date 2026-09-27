@@ -14,8 +14,12 @@ import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { withOrdersApiPrefix } from '../contexts/OrdersApiPrefixContext';
 import {
   incomingInterruptSecondsLeft,
+  incomingWaitingCount,
   isActionableIncomingOrder,
+  nextIncomingOrderId,
+  pendingAcceptanceQueue,
   readIncomingInterruptPayload,
+  shouldKeepVisibleIncomingOrder,
   resolveIncomingInterruptDeadline,
   shouldOpenIncomingInterrupt,
 } from '../utils/incomingOrderInterrupt';
@@ -43,6 +47,7 @@ type IncomingOrderInterruptContextValue = {
   uiState: InterruptUiState;
   message: string | null;
   secondsLeft: number | null;
+  waitingCount: number;
   showDeclineDialog: boolean;
   cookedFoodConfirmOpen: boolean;
   closeCookedFoodConfirm: () => void;
@@ -73,6 +78,7 @@ export function IncomingOrderInterruptProvider({
   const [message, setMessage] = useState<string | null>(null);
   const [showDeclineDialog, setShowDeclineDialog] = useState(false);
   const [cookedFoodConfirmOpen, setCookedFoodConfirmOpen] = useState(false);
+  const [waitingCount, setWaitingCount] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const loadEpochRef = useRef(0);
   const snoozedUntilRef = useRef<Record<string, number>>({});
@@ -93,6 +99,7 @@ export function IncomingOrderInterruptProvider({
     setMessage(null);
     setShowDeclineDialog(false);
     setCookedFoodConfirmOpen(false);
+    setWaitingCount(0);
   }, []);
 
   const isSnoozed = useCallback((orderId: string) => {
@@ -145,18 +152,22 @@ export function IncomingOrderInterruptProvider({
       const response = await apiClient.get<{
         active: boolean;
         order: { id: string } | null;
+        queue?: Array<{ id: string }> | null;
       }>(orderPath('/orders/acceptance/pending'));
-      const pendingId = response.data?.order?.id ?? null;
-      if (!response.data?.active || !pendingId) {
-        if (visible) {
-          clearVisibleState();
-        }
+      const queue = pendingAcceptanceQueue(response.data ?? {});
+      const shownId = visible && order?.id ? order.id : null;
+      if (shouldKeepVisibleIncomingOrder(queue, shownId) && shownId) {
+        setWaitingCount(incomingWaitingCount(queue, shownId, isSnoozed));
         return;
       }
-      if (isSnoozed(pendingId)) return;
-      // Keep the order the merchant was interrupted about; do not replace mid-view.
-      if (visible && order?.id && order.id !== pendingId) return;
-      await loadOrder(pendingId);
+      const nextId = nextIncomingOrderId(queue, isSnoozed);
+      if (!nextId) {
+        setWaitingCount(0);
+        if (visible) clearVisibleState();
+        return;
+      }
+      setWaitingCount(incomingWaitingCount(queue, nextId, isSnoozed));
+      await loadOrder(nextId);
     } catch {
       // no-op
     }
@@ -199,17 +210,13 @@ export function IncomingOrderInterruptProvider({
     const handleMessage = (event: MessageEvent) => {
       const payload = readIncomingInterruptPayload(event);
       if (!shouldOpenIncomingInterrupt(payload.eventName)) return;
-      if (payload.orderId) {
-        void loadOrder(payload.orderId);
-        return;
-      }
       void refreshPending();
     };
     navigator.serviceWorker.addEventListener('message', handleMessage);
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleMessage);
     };
-  }, [interruptEnabled, loadOrder, refreshPending]);
+  }, [interruptEnabled, refreshPending]);
 
   useEffect(() => {
     if (!visible || uiState !== 'active') return undefined;
@@ -356,6 +363,7 @@ export function IncomingOrderInterruptProvider({
         resolveIncomingInterruptDeadline(order),
         nowMs
       ),
+      waitingCount,
       showDeclineDialog,
       cookedFoodConfirmOpen,
       closeCookedFoodConfirm,
@@ -386,6 +394,7 @@ export function IncomingOrderInterruptProvider({
       showDeclineDialog,
       uiState,
       visible,
+      waitingCount,
     ]
   );
 

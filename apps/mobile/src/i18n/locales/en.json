@@ -6596,6 +6596,7 @@
     "busyNotified": "We'll remind you in 15 minutes.",
     "busyFailed": "Could not mark as busy.",
     "dismiss": "Review later",
+    "moreWaiting": "{{count}} more waiting",
     "scheduledDelivery": "Scheduled delivery",
     "asapDelivery": "ASAP delivery",
     "asapPickup": "ASAP pickup",

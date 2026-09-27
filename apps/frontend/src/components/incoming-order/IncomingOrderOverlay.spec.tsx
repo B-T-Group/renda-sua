@@ -29,6 +29,7 @@ const mockInterrupt = {
   confirm: jest.fn(),
   confirmWithData: jest.fn(),
   markBusy: jest.fn(),
+  waitingCount: 2,
 };
 
 jest.mock('../../hooks/useIncomingOrderInterrupt', () => ({
@@ -37,7 +38,17 @@ jest.mock('../../hooks/useIncomingOrderInterrupt', () => ({
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback ?? _key,
+    t: (
+      _key: string,
+      fallback?: string,
+      vars?: Record<string, unknown>
+    ) => {
+      const template = fallback ?? _key;
+      if (!vars) return template;
+      return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
+        String(vars[name] ?? '')
+      );
+    },
   }),
 }));
 
@@ -53,6 +64,7 @@ describe('IncomingOrderOverlay', () => {
     );
 
     expect(screen.getByText('New order')).toBeTruthy();
+    expect(screen.getByText('2 more waiting')).toBeTruthy();
     expect(screen.getByText('Confirm order')).toBeTruthy();
     expect(screen.getByText('Need more time')).toBeTruthy();
   });

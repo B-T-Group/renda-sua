@@ -8000,7 +8000,8 @@
     "kitchenHint": "Keep this tab open. Sound starts after you tap Start kitchen mode.",
     "armed": "Kitchen mode is on",
     "kitchenAlert": "New order alert",
-    "orderNumber": "Order {{number}}"
+    "orderNumber": "Order {{number}}",
+    "moreWaiting": "{{count}} more waiting"
   },
   "kitchenMode": {
     "title": "Kitchen mode",

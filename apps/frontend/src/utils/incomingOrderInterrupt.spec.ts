@@ -1,8 +1,11 @@
 import {
   incomingInterruptSecondsLeft,
+  incomingWaitingCount,
   isActionableIncomingOrder,
+  nextIncomingOrderId,
   readIncomingInterruptPayload,
   resolveIncomingInterruptDeadline,
+  shouldKeepVisibleIncomingOrder,
   shouldOpenIncomingInterrupt,
 } from './incomingOrderInterrupt';
 
@@ -59,5 +62,14 @@ describe('incomingOrderInterrupt', () => {
     expect(shouldOpenIncomingInterrupt('order_acceptance_activate')).toBe(true);
     expect(shouldOpenIncomingInterrupt('order_status_changed')).toBe(false);
     expect(shouldOpenIncomingInterrupt(null)).toBe(false);
+  });
+
+  it('keeps the open order and advances to the next unsnoozed id', () => {
+    const queue = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    expect(shouldKeepVisibleIncomingOrder(queue, 'a')).toBe(true);
+    expect(shouldKeepVisibleIncomingOrder(queue, 'missing')).toBe(false);
+    expect(incomingWaitingCount(queue, 'a', () => false)).toBe(2);
+    expect(nextIncomingOrderId(queue, (id) => id === 'a')).toBe('b');
+    expect(incomingWaitingCount(queue, 'b', (id) => id === 'a')).toBe(1);
   });
 });

@@ -8016,7 +8016,8 @@
     "kitchenHint": "Gardez cet onglet ouvert. Le son démarre après « Démarrer le mode cuisine ».",
     "armed": "Mode cuisine activé",
     "kitchenAlert": "Alerte nouvelle commande",
-    "orderNumber": "Commande {{number}}"
+    "orderNumber": "Commande {{number}}",
+    "moreWaiting": "{{count}} de plus en attente"
   },
   "kitchenMode": {
     "title": "Mode cuisine",

@@ -158,6 +158,7 @@ function IncomingOrderOverlayBase() {
             secondsLeft={secondsLeft}
             isSlotPast={slotPast}
             showFirstOrderGuidance={showFirstOrderGuidance}
+            waitingCount={incomingOrder.waitingCount}
             onDismiss={() => incomingOrder.dismiss()}
             onConfirm={handleConfirm}
             onBusy={() => void incomingOrder.markBusy()}

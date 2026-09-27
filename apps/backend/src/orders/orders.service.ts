@@ -1731,10 +1731,11 @@ export class OrdersService {
         !(Number(fresh.total_amount) > 0));
     if (paidOrZero && fresh) {
       await this.finalizeCookedFoodPayAfterConfirm(fresh);
+      // Already collected (wallet or zero). Do not show the phone-request step.
       return {
         order: await this.getOrderDetails(orderId),
         message: 'Order confirmed. Payment received. Start preparing now.',
-        payAfterConfirm: true,
+        payAfterConfirm: false,
       };
     }
     await this.cookedFoodPickupFlow.scheduleUnpaidCancelAfterConfirm(orderId);

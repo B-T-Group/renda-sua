@@ -129,6 +129,7 @@ export const businessApi = {
     ): Promise<{
       active: boolean;
       order: import('../types/incomingOrder').IncomingOrderDetails | null;
+      queue?: Array<{ id: string }>;
     }> => api.get('/orders/acceptance/pending', headerOverrides),
 
     markBusy: async (

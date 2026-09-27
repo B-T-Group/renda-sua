@@ -117,6 +117,13 @@ export function IncomingOrderOverlay() {
                     })}
                   </Typography>
                 ) : null}
+                {interrupt.waitingCount > 0 ? (
+                  <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                    {t('incomingOrder.moreWaiting', '{{count}} more waiting', {
+                      count: interrupt.waitingCount,
+                    })}
+                  </Typography>
+                ) : null}
                 {clientName(order) ? (
                   <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
                     {clientName(order)}

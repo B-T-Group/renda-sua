@@ -6516,6 +6516,7 @@
     "busyNotified": "Nous vous rappellerons dans 15 minutes.",
     "busyFailed": "Impossible de marquer comme occupé.",
     "dismiss": "Revoir plus tard",
+    "moreWaiting": "{{count}} de plus en attente",
     "scheduledDelivery": "Livraison programmée",
     "asapDelivery": "Livraison dès que possible",
     "asapPickup": "Retrait dès que possible",

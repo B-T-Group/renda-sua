@@ -20,6 +20,7 @@ interface Props {
   secondsLeft: number | null;
   isSlotPast: boolean;
   showFirstOrderGuidance?: boolean;
+  waitingCount?: number;
   onDismiss: () => void;
   onConfirm: () => void;
   onBusy: () => void;
@@ -127,11 +128,13 @@ function IncomingOrderHeader({
   details,
   isDismissLocked,
   showFirstOrderGuidance,
+  waitingCount = 0,
   onDismiss,
 }: {
   details: IncomingOrderDetails | null;
   isDismissLocked: boolean;
   showFirstOrderGuidance?: boolean;
+  waitingCount?: number;
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
@@ -162,6 +165,16 @@ function IncomingOrderHeader({
             {t('incomingOrder.loading', 'Loading…')}
           </Text>
         )}
+        {waitingCount > 0 ? (
+          <Text
+            variant="bodyMedium"
+            style={{ color: colors.text.secondary, marginTop: 2 }}
+          >
+            {t('incomingOrder.moreWaiting', '{{count}} more waiting', {
+              count: waitingCount,
+            })}
+          </Text>
+        ) : null}
         {name ? (
           <Text
             variant="bodyMedium"
@@ -246,6 +259,7 @@ export function IncomingOrderView({
   secondsLeft,
   isSlotPast,
   showFirstOrderGuidance = false,
+  waitingCount = 0,
   onDismiss,
   onConfirm,
   onBusy,
@@ -279,6 +293,7 @@ export function IncomingOrderView({
         details={details}
         isDismissLocked={isDismissLocked}
         showFirstOrderGuidance={showFirstOrderGuidance}
+        waitingCount={waitingCount}
         onDismiss={onDismiss}
       />
       {showIllustration ? (

@@ -9,6 +9,38 @@ import { isDeliverySlotPast } from '../utils/isDeliverySlotPast';
 import type { RootStore } from './RootStore';
 import { syncFirstOrderPinAfterOrderUpdate } from '../utils/firstOrderPinSync';
 
+type PendingQueueResponse = {
+  active?: boolean;
+  order?: { id: string } | null;
+  queue?: Array<{ id: string }> | null;
+} | null;
+
+function queueIds(res: PendingQueueResponse): string[] {
+  if (res?.queue?.length) {
+    return res.queue.map((row) => row.id).filter((id) => !!id);
+  }
+  return res?.order?.id ? [res.order.id] : [];
+}
+
+function nextQueuedId(
+  res: PendingQueueResponse,
+  isSnoozed: (id: string) => boolean
+): string | null {
+  return queueIds(res).find((id) => !isSnoozed(id)) ?? null;
+}
+
+function waitingAfter(
+  res: PendingQueueResponse,
+  shownId: string | null,
+  isSnoozed: (id: string) => boolean
+): number {
+  if (!shownId) return 0;
+  const open = queueIds(res).filter((id) => !isSnoozed(id));
+  const index = open.indexOf(shownId);
+  if (index < 0) return open.length;
+  return Math.max(0, open.length - index - 1);
+}
+
 export type IncomingOrderUiState =
   | 'loading'
   | 'active'
@@ -72,10 +104,12 @@ export class IncomingOrderStore {
   showCancelDialog = false;
   /** Bumped on foreground location/delegate pushes so open-order lists can refresh. */
   ordersRefreshEpoch = 0;
+  /** Other unsnoozed pending orders behind the one on screen. */
+  waitingCount = 0;
 
   private root: RootStore;
   private reminderTimer: ReturnType<typeof setInterval> | null = null;
-  private busyReminderTimer: ReturnType<typeof setTimeout> | null = null;
+  private busyReminderTimers: Record<string, ReturnType<typeof setTimeout>> = {};
   /** Invalidates in-flight present() loads (incl. their timeout timers) on re-present/dismiss. */
   private loadEpoch = 0;
   /** Presents in flight (visibility is deferred, so `visible` alone can't dedupe). */
@@ -129,15 +163,9 @@ export class IncomingOrderStore {
       this.notifyDelegateForegroundOrder();
       return;
     }
-    // Mid-window reminders re-fire the same event; do not reset a healthy overlay.
-    // Still allow retry when the first present ended in error with the sheet open.
-    if (
-      this.orderId === orderId &&
-      (this.presentsInFlight > 0 ||
-        this.uiState === 'confirming' ||
-        this.uiState === 'busy' ||
-        (this.visible && this.uiState !== 'error'))
-    ) {
+    if (this.orderId === orderId && this.isHealthyOverlay()) return;
+    if (this.isDifferentOrderHeld(orderId)) {
+      await this.refreshWaitingCount();
       return;
     }
     if (!this.canPresent) {
@@ -145,7 +173,14 @@ export class IncomingOrderStore {
       this.pendingCheck = true;
       return;
     }
-    await this.present(orderId);
+    const epoch = this.claimInterrupt(orderId);
+    const nextId = await this.resolveQueuedOrderId(orderId);
+    if (epoch !== this.loadEpoch) return;
+    if (!nextId || this.isSnoozed(nextId)) {
+      this.hideOverlay();
+      return;
+    }
+    await this.present(nextId);
   }
 
   /** Vibrate + list refresh without presenting the owner acceptance overlay. */
@@ -159,40 +194,34 @@ export class IncomingOrderStore {
       this.pendingCheck = true;
       return;
     }
-    if (this.visible || this.presentsInFlight > 0) return;
-    if (this.pendingOrderId) {
-      const id = this.pendingOrderId;
-      this.pendingOrderId = null;
-      if (!this.isSnoozed(id)) {
-        await this.present(id);
-        return;
-      }
+    if (this.visible || this.presentsInFlight > 0) {
+      await this.refreshWaitingCount();
+      return;
     }
+    const fallback = this.pendingOrderId;
+    this.pendingOrderId = null;
     try {
       const res = await businessApi.orders.getPendingAcceptance(
         BUSINESS_PERSONA_HEADERS
       );
-      if (!res.active || !res.order || this.isSnoozed(res.order.id)) return;
-      // Load full order (windows/address) via present — pending payload is slim.
-      await this.present(res.order.id);
+      const nextId =
+        nextQueuedId(res, (id) => this.isSnoozed(id)) ??
+        (fallback && !this.isSnoozed(fallback) ? fallback : null);
+      runInAction(() => {
+        this.waitingCount = waitingAfter(res, nextId, (id) => this.isSnoozed(id));
+      });
+      if (!nextId) return;
+      await this.present(nextId);
     } catch {
-      // ignore
+      if (fallback && !this.isSnoozed(fallback)) await this.present(fallback);
     }
   }
 
   flushPending(): void {
     if (!this.canPresent) return;
-    if (this.pendingOrderId) {
-      const id = this.pendingOrderId;
-      this.pendingOrderId = null;
-      this.pendingCheck = false;
-      if (!this.isSnoozed(id)) void this.present(id);
-      return;
-    }
-    if (this.pendingCheck) {
-      this.pendingCheck = false;
-      void this.checkPendingIncoming();
-    }
+    if (!this.pendingOrderId && !this.pendingCheck) return;
+    this.pendingCheck = false;
+    void this.checkPendingIncoming();
   }
 
   async present(orderId: string): Promise<void> {
@@ -321,7 +350,7 @@ export class IncomingOrderStore {
 
   onConfirmed(): void {
     this.showConfirmDialog = false;
-    this.dismiss();
+    this.advanceQueue();
   }
 
   openCancel(): void {
@@ -369,22 +398,27 @@ export class IncomingOrderStore {
     this.snoozedUntilMs[orderId] = until;
     this.hideOverlay();
     this.scheduleBusyReminder(orderId, Math.max(1000, until - Date.now()));
+    void this.checkPendingIncoming();
   }
 
   private scheduleBusyReminder(orderId: string, delayMs: number): void {
-    this.clearBusyReminderTimer();
-    this.busyReminderTimer = setTimeout(() => {
-      this.busyReminderTimer = null;
+    this.clearBusyReminder(orderId);
+    this.busyReminderTimers[orderId] = setTimeout(() => {
+      delete this.busyReminderTimers[orderId];
       this.clearSnooze(orderId);
-      if (!this.visible) void this.present(orderId);
+      if (!this.visible) {
+        void this.present(orderId);
+        return;
+      }
+      void this.refreshWaitingCount();
     }, delayMs);
   }
 
-  private clearBusyReminderTimer(): void {
-    if (this.busyReminderTimer) {
-      clearTimeout(this.busyReminderTimer);
-      this.busyReminderTimer = null;
-    }
+  private clearBusyReminder(orderId: string): void {
+    const timer = this.busyReminderTimers[orderId];
+    if (!timer) return;
+    clearTimeout(timer);
+    delete this.busyReminderTimers[orderId];
   }
 
   async decline(notes: string): Promise<void> {
@@ -405,14 +439,33 @@ export class IncomingOrderStore {
     await syncFirstOrderPinAfterOrderUpdate(snapshot, {
       convertNudge: (id) => this.root.ftue.convertNudge(id),
     });
-    this.dismiss();
+    this.advanceQueue();
+  }
+
+  /** Confirm or decline: leave this order unsnoozed and open the next one. */
+  private advanceQueue(): void {
+    const orderId = this.orderId;
+    if (orderId) {
+      this.clearBusyReminder(orderId);
+      this.clearSnooze(orderId);
+    }
+    const shouldCheck = !!orderId;
+    this.hideOverlay();
+    if (shouldCheck) void this.checkPendingIncoming();
   }
 
   dismiss(): void {
     const orderId = this.orderId;
+    const advance = this.visible && !!orderId;
+    if (advance && orderId) {
+      this.snoozedUntilMs[orderId] = Date.now() + BUSY_SNOOZE_MS;
+      this.scheduleBusyReminder(orderId, BUSY_SNOOZE_MS);
+    } else if (orderId) {
+      this.clearBusyReminder(orderId);
+      this.clearSnooze(orderId);
+    }
     this.hideOverlay();
-    this.clearBusyReminderTimer();
-    if (orderId) this.clearSnooze(orderId);
+    if (advance) void this.checkPendingIncoming();
   }
 
   private hideOverlay(): void {
@@ -426,7 +479,70 @@ export class IncomingOrderStore {
       this.message = null;
       this.showConfirmDialog = false;
       this.showCancelDialog = false;
+      this.waitingCount = 0;
     });
+  }
+
+  private isHealthyOverlay(): boolean {
+    return (
+      this.presentsInFlight > 0 ||
+      this.uiState === 'confirming' ||
+      this.uiState === 'busy' ||
+      (this.visible && this.uiState !== 'error')
+    );
+  }
+
+  private isDifferentOrderHeld(orderId: string): boolean {
+    if (!this.orderId || this.orderId === orderId) return false;
+    return (
+      this.presentsInFlight > 0 ||
+      this.visible ||
+      this.uiState === 'confirming' ||
+      this.uiState === 'busy'
+    );
+  }
+
+  private claimInterrupt(orderId: string): number {
+    const epoch = this.loadEpoch + 1;
+    runInAction(() => {
+      this.loadEpoch = epoch;
+      this.orderId = orderId;
+      this.uiState = 'loading';
+      this.message = null;
+    });
+    return epoch;
+  }
+
+  private async resolveQueuedOrderId(fallbackId: string): Promise<string | null> {
+    try {
+      const res = await businessApi.orders.getPendingAcceptance(
+        BUSINESS_PERSONA_HEADERS
+      );
+      const nextId =
+        nextQueuedId(res, (id) => this.isSnoozed(id)) ??
+        (this.isSnoozed(fallbackId) ? null : fallbackId);
+      runInAction(() => {
+        this.waitingCount = waitingAfter(res, nextId, (id) => this.isSnoozed(id));
+      });
+      return nextId;
+    } catch {
+      return this.isSnoozed(fallbackId) ? null : fallbackId;
+    }
+  }
+
+  private async refreshWaitingCount(): Promise<void> {
+    try {
+      const res = await businessApi.orders.getPendingAcceptance(
+        BUSINESS_PERSONA_HEADERS
+      );
+      runInAction(() => {
+        this.waitingCount = waitingAfter(res, this.orderId, (id) =>
+          this.isSnoozed(id)
+        );
+      });
+    } catch {
+      // ignore
+    }
   }
 
   private isSnoozed(orderId: string): boolean {

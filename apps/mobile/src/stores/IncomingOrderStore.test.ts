@@ -160,6 +160,118 @@ describe('IncomingOrderStore present-first', () => {
     expect(getById).toHaveBeenCalledTimes(2);
     expect(store.uiState).toBe('active');
   });
+
+  it('does not replace an open order when another push arrives', async () => {
+    const store = new IncomingOrderStore(
+      makeRoot({ activePersona: 'business' })
+    );
+    await store.handleIncomingPush('ord-1');
+    getPendingAcceptance.mockResolvedValue({
+      active: true,
+      order: { id: 'ord-1' },
+      queue: [{ id: 'ord-1' }, { id: 'ord-2' }],
+    });
+
+    await store.handleIncomingPush('ord-2');
+
+    expect(store.orderId).toBe('ord-1');
+    expect(store.visible).toBe(true);
+    expect(getById).toHaveBeenCalledTimes(1);
+    expect(store.waitingCount).toBe(1);
+  });
+
+  it('opens the next queued order after review later', async () => {
+    const store = new IncomingOrderStore(
+      makeRoot({ activePersona: 'business' })
+    );
+    await store.handleIncomingPush('ord-1');
+    getPendingAcceptance.mockResolvedValue({
+      active: true,
+      order: { id: 'ord-1' },
+      queue: [{ id: 'ord-1' }, { id: 'ord-2' }],
+    });
+    getById.mockResolvedValue({
+      order: {
+        id: 'ord-2',
+        current_status: 'pending',
+        acceptance_state: 'awaiting_acceptance',
+        delivery_time_windows: [],
+      },
+    });
+
+    store.dismiss();
+
+    await vi.waitFor(() => {
+      expect(store.orderId).toBe('ord-2');
+    });
+    expect(store.visible).toBe(true);
+    expect(getById).toHaveBeenCalledWith('ord-2', BUSINESS_PERSONA_HEADERS);
+  });
+
+  it('opens the next queued order after confirm', async () => {
+    const store = new IncomingOrderStore(
+      makeRoot({ activePersona: 'business' })
+    );
+    store.visible = true;
+    store.orderId = 'ord-1';
+    store.uiState = 'active';
+    store.details = {
+      id: 'ord-1',
+      current_status: 'pending',
+      delivery_time_windows: [],
+    } as IncomingOrderDetails;
+    confirm.mockResolvedValue({ success: true });
+    getPendingAcceptance.mockResolvedValue({
+      active: true,
+      order: { id: 'ord-2' },
+      queue: [{ id: 'ord-2' }],
+    });
+    getById.mockResolvedValue({
+      order: {
+        id: 'ord-2',
+        current_status: 'pending',
+        acceptance_state: 'awaiting_acceptance',
+        delivery_time_windows: [],
+      },
+    });
+
+    await store.confirm();
+
+    await vi.waitFor(() => {
+      expect(store.orderId).toBe('ord-2');
+    });
+    expect(store.visible).toBe(true);
+  });
+
+  it('does not reopen a confirmed order after the review-later window', async () => {
+    vi.useFakeTimers();
+    const store = new IncomingOrderStore(
+      makeRoot({ activePersona: 'business' })
+    );
+    store.visible = true;
+    store.orderId = 'ord-1';
+    store.uiState = 'active';
+    store.details = {
+      id: 'ord-1',
+      current_status: 'pending',
+      delivery_time_windows: [],
+    } as IncomingOrderDetails;
+    confirm.mockResolvedValue({ success: true });
+    getPendingAcceptance.mockResolvedValue({
+      active: false,
+      order: null,
+      queue: [],
+    });
+
+    try {
+      await store.confirm();
+      await vi.advanceTimersByTimeAsync(BUSY_SNOOZE_MS + 1000);
+      expect(getById).not.toHaveBeenCalled();
+      expect(store.visible).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function orderWithWindows(
