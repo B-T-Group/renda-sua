@@ -62,7 +62,13 @@ describe('DepositLedgerService', () => {
         })
       ).rejects.toThrow(/hold failed/i);
 
-      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
+        accountId: 'acct-1',
+        amount: 150,
+        referenceId: txnId,
+        memo: 'Deposit captured for order 123',
+        skipCashAdvanceRepayment: true,
+      });
       expect(accountsService.registerHoldIfNotExists).toHaveBeenCalledWith({
         accountId: 'acct-1',
         amount: 150,
