@@ -14,17 +14,13 @@ import {
   MobilePaymentPhone,
   useMobilePaymentPhones,
 } from '../../hooks/useMobilePaymentPhones';
+import { isMobileMoneyCountry } from '../../utils/mobileMoneyCountry';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
-
-function isLikelyMobileMoneyCountry(country?: string | null): boolean {
-  const code = (country || '').trim().toUpperCase();
-  return code === 'CM' || code === 'GA';
-}
 
 export type ClientMobileMoneyPhoneSectionProps = {
   /** Profile contact phone (users.phone_number). */
   profilePhone?: string | null;
-  /** ISO country from the user profile. */
+  /** ISO country that decides visibility. Profile uses the shopper; checkout uses the seller. */
   profileCountry?: string | null;
   /** Compact checkout layout vs profile card. */
   variant?: 'profile' | 'checkout';
@@ -44,6 +40,7 @@ export function ClientMobileMoneyPhoneSection({
   requireLinkedPhone = false,
 }: ClientMobileMoneyPhoneSectionProps) {
   const { t } = useTranslation();
+  const momoMarket = isMobileMoneyCountry(profileCountry);
   const {
     phones,
     loading,
@@ -51,7 +48,7 @@ export function ClientMobileMoneyPhoneSection({
     fetchPhones,
     setDefaultPhone,
     linkProfilePhone,
-  } = useMobilePaymentPhones(true);
+  } = useMobilePaymentPhones(momoMarket);
   const [modalOpen, setModalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -66,16 +63,13 @@ export function ClientMobileMoneyPhoneSection({
   // Seed parent selection when registry phones load but checkout never got a
   // preflight suggestion (parent gate would otherwise block Place Order).
   useEffect(() => {
-    if (!onSelectedPhoneChange || selectedPhoneId || !defaultPhone) return;
+    if (!momoMarket || !onSelectedPhoneChange || selectedPhoneId || !defaultPhone) {
+      return;
+    }
     onSelectedPhoneChange(defaultPhone);
-  }, [defaultPhone, onSelectedPhoneChange, selectedPhoneId]);
+  }, [defaultPhone, momoMarket, onSelectedPhoneChange, selectedPhoneId]);
 
-  const showSection =
-    phones.length > 0 ||
-    isLikelyMobileMoneyCountry(profileCountry) ||
-    Boolean(profilePhone?.trim());
-
-  if (!showSection && variant === 'profile') return null;
+  if (!momoMarket) return null;
 
   const handleSelect = async (phone: MobilePaymentPhone) => {
     setBusy(true);

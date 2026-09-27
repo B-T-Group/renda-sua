@@ -1,4 +1,16 @@
-import { pickMobileMoneyDefaultCountry } from './mobileMoneyCountry';
+import {
+  isMobileMoneyCountry,
+  pickMobileMoneyDefaultCountry,
+} from './mobileMoneyCountry';
+
+describe('isMobileMoneyCountry', () => {
+  it('accepts Cameroon and Gabon only', () => {
+    expect(isMobileMoneyCountry('cm')).toBe(true);
+    expect(isMobileMoneyCountry('GA')).toBe(true);
+    expect(isMobileMoneyCountry('CA')).toBe(false);
+    expect(isMobileMoneyCountry(undefined)).toBe(false);
+  });
+});
 
 describe('pickMobileMoneyDefaultCountry', () => {
   it('uses the item location when it is CM or GA', () => {

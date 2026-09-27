@@ -1576,7 +1576,10 @@ const CheckoutPage: React.FC = () => {
                   variant="checkout"
                   requireLinkedPhone
                   profilePhone={profile?.phone_number}
-                  profileCountry={profile?.country}
+                  profileCountry={
+                    preflightGroups.find((group) => group.seller_country)
+                      ?.seller_country
+                  }
                   selectedPhoneId={
                     linkedPaymentPhoneId ||
                     checkoutPreflight?.suggested_payment_phone_id ||
