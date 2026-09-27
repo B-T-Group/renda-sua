@@ -2814,7 +2814,7 @@ export class OrdersService {
         customerPhone: phoneNumber,
         provider: provider,
         itemCountry: momo.itemCountry ?? undefined,
-        ownerCharge: 'CUSTOMER' as const,
+        ownerCharge: 'MERCHANT' as const,
         transactionType: 'PAYMENT' as const,
         payment_entity: 'claim_order' as const,
       };

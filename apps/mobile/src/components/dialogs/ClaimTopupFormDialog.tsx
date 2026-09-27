@@ -2,16 +2,21 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Portal, Dialog, Button, Text, Card, Divider } from 'react-native-paper';
+import { Portal, Dialog, Button, Text, Card } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CountryCode } from 'libphonenumber-js';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { Order } from '../../types/agent';
-import PhoneNumberInput from '../PhoneNumberInput';
+import { MobilePaymentPhoneChooserSheet } from './MobilePaymentPhoneChooserSheet';
+import { MobilePaymentPhoneVerifyModal } from './MobilePaymentPhoneVerifyModal';
+import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { nationalDigitsToE164, seedPhoneInputFromE164 } from '../../utils/phoneLoginUsername';
 import { pickMobileMoneyDefaultCountry } from '../../utils/placeOrderPhoneValidation';
-
-const CHARGE_PCT = 3.5;
+import type {
+  MobilePaymentPhone,
+  MobilePaymentPhoneModalMode,
+  MobilePaymentPhoneSummary,
+} from '../../types/mobilePaymentPhone';
 
 function resolveIso4217Currency(order: Order): string {
   const raw = (order.currency ?? '').trim().toUpperCase();
@@ -49,7 +54,13 @@ export function ClaimTopupFormDialog({
     pickMobileMoneyDefaultCountry(itemCountry)
   );
   const [nationalDigits, setNationalDigits] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyMode, setVerifyMode] = useState<MobilePaymentPhoneModalMode>('add');
+  const [verifyInitial, setVerifyInitial] = useState<MobilePaymentPhoneSummary | null>(null);
   const userEditedRef = useRef(false);
+  const { phones, verificationMethod, fetchPhones, api } = useMobilePaymentPhones(visible);
 
   useEffect(() => {
     if (!visible) {
@@ -70,20 +81,28 @@ export function ClaimTopupFormDialog({
   const amounts = useMemo(() => {
     if (!order) return null;
     const holdAmount = order.agent_hold_amount ?? 0;
-    const chargeAmount = (holdAmount * CHARGE_PCT) / 100;
     const cur = resolveIso4217Currency(order);
     const fmt = (n: number) =>
       new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }).format(Number.isFinite(n) ? n : 0);
     return {
       holdAmount,
-      chargeAmount,
-      total: holdAmount + chargeAmount,
       commission: order.delivery_commission ?? order.base_delivery_fee ?? 0,
       fmt,
     };
   }, [order]);
 
   const claimPhoneE164 = nationalDigitsToE164(countryIso, nationalDigits);
+  const selectedPhoneId = phones.find((item) => item.phone_e164 === claimPhoneE164)?.id ?? null;
+
+  const applyLinkedPhone = (next: MobilePaymentPhone) => {
+    userEditedRef.current = true;
+    const seeded = seedPhoneInputFromE164(next.phone_e164, countryIso);
+    setCountryIso(seeded.countryIso);
+    setNationalDigits(seeded.nationalDigits);
+    onChangePhone(next.phone_e164);
+    setChooserOpen(false);
+    setVerifyOpen(false);
+  };
 
   if (!order) {
     return (
@@ -207,26 +226,17 @@ export function ClaimTopupFormDialog({
                     </Text>
                   </View>
                   <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: 4 }}>
-                    {t('agent.claimOrder.holdAmount', 'Hold amount')}
+                    {t('agent.claimOrder.holdAmount', 'Amount to approve')}
                   </Text>
-                  <Text variant="bodyLarge" style={{ color: colors.text.primary, marginBottom: 10 }}>
+                  <Text variant="headlineSmall" style={{ color: colors.text.primary, fontWeight: '700' }}>
                     {amounts ? amounts.fmt(amounts.holdAmount) : '—'}
                   </Text>
-                  <Text variant="bodySmall" style={{ color: colors.text.secondary, marginBottom: 4 }}>
-                    {t('agent.claimOrder.serviceCharge', { percentage: CHARGE_PCT, defaultValue: 'Service charge ({{percentage}}%)' })}
+                  <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 8, lineHeight: 18 }}>
+                    {t(
+                      'agent.claimOrder.feeCovered',
+                      'We cover the Mobile Money service charge.'
+                    )}
                   </Text>
-                  <Text variant="bodyLarge" style={{ color: colors.text.primary, marginBottom: 10 }}>
-                    {amounts ? amounts.fmt(amounts.chargeAmount) : '—'}
-                  </Text>
-                  <Divider style={{ marginVertical: 8 }} />
-                  <View style={styles.totalRow}>
-                    <Text variant="titleSmall" style={[styles.totalLabel, { color: colors.text.primary }]}>
-                      {t('agent.claimOrder.totalCharge', 'Total to be charged')}
-                    </Text>
-                    <Text variant="titleMedium" style={[styles.totalAmount, { color: colors.error.main }]}>
-                      {amounts ? amounts.fmt(amounts.total) : '—'}
-                    </Text>
-                  </View>
                 </Card.Content>
               </Card>
             </View>
@@ -255,7 +265,7 @@ export function ClaimTopupFormDialog({
               <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 8, lineHeight: 20 }}>
                 {t('agent.claimOrder.paymentExplanation.description', {
                   defaultValue:
-                    'To deliver an order you need to give us a guarantee (a percentage of the order value). The more orders you complete, the more trust you build and the hold amount can be reduced. After delivery, your delivery fee is credited and the hold is released.',
+                    'This is a hold, not a fee. It stays as a guarantee until you finish the delivery. Then we release it and pay your earnings.',
                 })}
               </Text>
             </View>
@@ -275,27 +285,48 @@ export function ClaimTopupFormDialog({
             >
               <View style={styles.cardHeader}>
                 <MaterialCommunityIcons name="phone-outline" size={22} color={colors.primary.main} />
-                <Text variant="titleSmall" style={{ color: colors.text.primary, marginLeft: 8 }}>
-                  {t('agent.claimOrder.phoneNumber', 'Phone Number')}
+                <Text variant="titleSmall" style={{ color: colors.text.primary, marginLeft: 8, flex: 1 }}>
+                  {t('agent.claimOrder.requestSentTo', 'Request will be sent to')}
                 </Text>
               </View>
-              <PhoneNumberInput
-                countryIso={countryIso}
-                nationalDigits={nationalDigits}
-                onCountryIsoChange={(iso) => {
-                  userEditedRef.current = true;
-                  setCountryIso(iso);
-                  onChangePhone(nationalDigitsToE164(iso, nationalDigits) ?? '');
-                }}
-                onNationalDigitsChange={(digits) => {
-                  userEditedRef.current = true;
-                  setNationalDigits(digits);
-                  onChangePhone(nationalDigitsToE164(countryIso, digits) ?? '');
-                }}
-                allowedIsos={['CM', 'GA']}
-                hasError={nationalDigits.length > 0 && !claimPhoneE164}
+              <Text variant="headlineSmall" style={{ color: colors.text.primary, fontWeight: '700' }}>
+                {claimPhoneE164 ||
+                  t('agent.claimOrder.noPhoneNumber', 'No Mobile Money number linked')}
+              </Text>
+              {phoneError ? (
+                <Text variant="bodySmall" style={{ color: colors.error.main, marginTop: 8 }}>
+                  {phoneError}
+                </Text>
+              ) : null}
+              <Button
+                mode="text"
+                compact
                 disabled={confirming}
-              />
+                onPress={() => {
+                  void (async () => {
+                    try {
+                      const listed = await api.list();
+                      const saved = listed.data?.phones ?? [];
+                      await fetchPhones();
+                      if (saved.length > 0) setChooserOpen(true);
+                      else {
+                        setVerifyMode('add');
+                        setVerifyInitial(null);
+                        setVerifyOpen(true);
+                      }
+                    } catch {
+                      setVerifyMode('add');
+                      setVerifyInitial(null);
+                      setVerifyOpen(true);
+                    }
+                  })();
+                }}
+                style={{ alignSelf: 'flex-start', marginTop: 4 }}
+              >
+                {phones.length > 0
+                  ? t('agent.claimOrder.changeNumber', 'Change number')
+                  : t('agent.claimOrder.linkNumber', 'Link a Mobile Money number')}
+              </Button>
             </View>
           </ScrollView>
         </Dialog.Content>
@@ -332,6 +363,51 @@ export function ClaimTopupFormDialog({
           </Button>
         </Dialog.Actions>
       </Dialog>
+      <MobilePaymentPhoneChooserSheet
+        visible={chooserOpen}
+        phones={phones}
+        selectedPhoneId={selectedPhoneId}
+        verificationMethod={verificationMethod}
+        explain={t(
+          'agent.claimOrder.changeNumberExplain',
+          'Choose the Mobile Money number that should receive this claim request.'
+        )}
+        onDismiss={() => setChooserOpen(false)}
+        onSelect={(next) => {
+          void (async () => {
+            try {
+              await api.setDefault(next.id);
+              setPhoneError(null);
+              applyLinkedPhone(next);
+            } catch (e: unknown) {
+              const message = e instanceof Error ? e.message : t('common.error', 'Something went wrong');
+              setPhoneError(message);
+              setChooserOpen(false);
+            }
+          })();
+        }}
+        onAddNew={() => {
+          setChooserOpen(false);
+          setVerifyMode('add');
+          setVerifyInitial(null);
+          setVerifyOpen(true);
+        }}
+        onVerify={(next) => {
+          setChooserOpen(false);
+          setVerifyMode('verify');
+          setVerifyInitial(next);
+          setVerifyOpen(true);
+        }}
+      />
+      <MobilePaymentPhoneVerifyModal
+        visible={verifyOpen}
+        mode={verifyMode}
+        initialPhone={verifyInitial}
+        setAsDefault
+        allowSkipVerification
+        onDismiss={() => setVerifyOpen(false)}
+        onCompleted={applyLinkedPhone}
+      />
     </Portal>
   );
 }
