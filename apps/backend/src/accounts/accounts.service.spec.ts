@@ -312,6 +312,24 @@ describe('AccountsService', () => {
       });
       expect(insert?.[1].transactionType).not.toBe('cash_advance_repayment');
     });
+
+    it('does not credit again when a prior repayment already covers the skip-repay deposit', async () => {
+      executeQuery.mockResolvedValue({
+        account_transactions: [{ amount: 300 }],
+      });
+
+      await expect(
+        service.registerDepositIfNotExists({
+          accountId,
+          amount: 300,
+          memo: 'order payment retry',
+          referenceId,
+          skipCashAdvanceRepayment: true,
+        })
+      ).resolves.toEqual({ success: true, alreadyExists: true });
+
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
   });
 
   describe('registerTransaction', () => {
