@@ -927,10 +927,7 @@
       "confirmReady": "Confirm ready time",
       "waitPaymentBody": "We sent the client a mobile money payment request. Wait until you receive a payment notification before you start cooking.",
       "returnDashboard": "Return to dashboard",
-      "viewOrdersToCook": "View orders to cook",
-      "startCookingTitle": "Start cooking",
-      "startCookingCard": "Paid cooked-food pickup — start preparing now.",
-      "openOrder": "Open order"
+      "viewOrdersToCook": "View orders to cook"
     },
     "phases": {
       "pay": "Payment needed",

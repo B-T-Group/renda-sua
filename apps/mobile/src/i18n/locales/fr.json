@@ -911,10 +911,7 @@
       "confirmReady": "Confirmer le délai",
       "waitPaymentBody": "Nous avons envoyé une demande de paiement mobile money au client. Attendez la notification de paiement avant de commencer à cuisiner.",
       "returnDashboard": "Retour au tableau de bord",
-      "viewOrdersToCook": "Voir les commandes à préparer",
-      "startCookingTitle": "Commencer à cuisiner",
-      "startCookingCard": "Plat à emporter payé — commencez la préparation.",
-      "openOrder": "Ouvrir la commande"
+      "viewOrdersToCook": "Voir les commandes à préparer"
     },
     "phases": {
       "pay": "Paiement requis",
