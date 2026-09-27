@@ -2357,18 +2357,83 @@ describe('OrdersService', () => {
         'account-1'
       );
 
-      expect(accountsService.registerTransaction).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ amount: 8000, transactionType: 'hold' })
-      );
-      expect(accountsService.registerTransaction).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ amount: 1000, transactionType: 'hold' })
+      expect(accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 9000, transactionType: 'hold' })
       );
       expect(updateOrderHoldSpy).toHaveBeenCalledWith('hold-1', {
         client_hold_amount: 8000,
         delivery_fees: 1000,
       });
+
+      updateOrderHoldSpy.mockRestore();
+    });
+
+    it('finalizeClientOrderPayment only holds the remaining gap after a partial hold', async () => {
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest
+        .spyOn(service as any, 'updateOrderPaymentStatusOnly')
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        account_transactions: [{ amount: 8000 }],
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          payment_status: 'authorized',
+          subtotal: 10000,
+          total_amount: 9000,
+          base_delivery_fee: 1000,
+          per_km_delivery_fee: 0,
+        },
+        'account-1'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 1000, transactionType: 'hold' })
+      );
+
+      updateOrderHoldSpy.mockRestore();
+    });
+
+    it('finalizeClientOrderPayment does not hold again when the ledger already covers the order', async () => {
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest
+        .spyOn(service as any, 'updateOrderPaymentStatusOnly')
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        account_transactions: [{ amount: 8000 }, { amount: 1000 }],
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          payment_status: 'authorized',
+          subtotal: 10000,
+          total_amount: 9000,
+          base_delivery_fee: 1000,
+          per_km_delivery_fee: 0,
+        },
+        'account-1'
+      );
+
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
 
       updateOrderHoldSpy.mockRestore();
     });
