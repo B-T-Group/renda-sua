@@ -12,6 +12,7 @@ import {
   isFoodCatalogItem,
   isFoodCategoryName,
   isFoodOrderBlocked,
+  isFoodServingNow,
   isMarkedUnavailableToday,
   isOvernightSlot,
   resolveFoodAvailabilityStatus,
@@ -104,6 +105,28 @@ describe('resolveFoodAvailabilityStatus', () => {
         availability({ is_open_now: false, is_available_now: false })
       )
     ).toBe('closed');
+  });
+});
+
+describe('isFoodServingNow', () => {
+  it('is true only inside a scheduled open window', () => {
+    expect(isFoodServingNow(availability())).toBe(true);
+  });
+
+  it('is false when the restaurant is closed or sold out', () => {
+    expect(
+      isFoodServingNow(availability({ is_open_now: false, is_available_now: false }))
+    ).toBe(false);
+    expect(
+      isFoodServingNow(
+        availability({ is_marked_unavailable_today: true, is_available_now: false })
+      )
+    ).toBe(false);
+  });
+
+  it('is false when the dish has no serving hours', () => {
+    expect(isFoodServingNow(availability({ has_schedule: false }))).toBe(false);
+    expect(isFoodServingNow(null)).toBe(false);
   });
 });
 

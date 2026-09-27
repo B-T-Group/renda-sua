@@ -13,7 +13,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { APP_FEATURES } from '../../constants/appFeatures';
@@ -23,7 +23,9 @@ import {
   useAgentOrders,
 } from '../../hooks/useAgentOrders';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
+import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
+import { pickClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -54,6 +56,11 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { profile } = useUserProfileContext();
+  const { phones: momoPhones } = useMobilePaymentPhones(true);
+  const claimPhone = useMemo(
+    () => pickClaimTopupPhone(momoPhones, profile?.phone_number),
+    [momoPhones, profile?.phone_number]
+  );
   const { canClaim: ordersCanClaim } = useOpenOrders();
   const { startOnboarding, status: connectStatus } = useStripeConnect();
   const isStripeRail = connectStatus?.paymentRail === 'stripe';
@@ -781,7 +788,7 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         onClose={handleCloseClaimDialog}
         onConfirm={handleClaimWithTopup}
         order={order}
-        userPhoneNumber={profile?.phone_number}
+        userPhoneNumber={claimPhone}
         loading={loading}
         success={claimSuccess}
         error={claimError}

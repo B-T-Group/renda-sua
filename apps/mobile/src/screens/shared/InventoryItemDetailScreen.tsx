@@ -487,12 +487,20 @@ function InventoryItemDetailScreen() {
   const acceptsOrders = merchantCanAcceptOrders(loc.business);
   const openingSoon = isOpeningSoonMerchant(loc.business);
   const paymentsEnabled = item.payments_enabled !== false;
+  const canPurchase =
+    !orderBlocked && paymentsEnabled && acceptsOrders && variantSelectionReady;
+  const showStickyBar = isExportInterestOnly || !orderBlocked;
   const showLowStock = !isFood && qty > 0 && qty <= LOW_STOCK_THRESHOLD;
   const showInStock = !isFood && qty > LOW_STOCK_THRESHOLD;
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 152 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + (showStickyBar ? 152 : spacing.lg),
+        }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Amazon-style: brand / title / rating above the gallery */}
         <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
           <View style={styles.brandRatingRow}>
@@ -933,6 +941,7 @@ function InventoryItemDetailScreen() {
         </View>
       </ScrollView>
 
+        {showStickyBar ? (
         <View
           style={[
             styles.bottomBarWrap,
@@ -973,16 +982,8 @@ function InventoryItemDetailScreen() {
                 {t('productInterest.cta', "I'm interested")}
               </Button>
             </View>
-          ) : outOfStock ? (
-            <Text style={[typography.body2, { color: colors.error.main, textAlign: 'center', marginBottom: spacing.sm, fontWeight: '600' }]}>
-              {t('items.detail.outOfStock', 'Out of stock')}
-            </Text>
-          ) : foodBlocked ? (
-            <Text style={[typography.body2, { color: colors.warning.dark, textAlign: 'center', marginBottom: spacing.sm, fontWeight: '600' }]}>
-              {t('foods.status.notServingNow', 'Not serving now')}
-            </Text>
           ) : (
-            <View style={{ alignItems: 'center', marginBottom: spacing.sm }}>
+            <View style={{ alignItems: 'center', marginBottom: canPurchase ? spacing.sm : 0 }}>
               <Text style={[typography.subtitle1, { color: colors.text.primary, fontWeight: '700' }]}>
                 {needsVariantPick
                   ? t('public.items.card.fromPrice', 'From {{price}}', {
@@ -1007,19 +1008,13 @@ function InventoryItemDetailScreen() {
               </Text>
             </View>
           )}
-          {!isExportInterestOnly ? (
+          {canPurchase ? (
           <View style={styles.bottomBarRow}>
             <Button
               mode={inCart ? 'contained-tonal' : 'outlined'}
               icon={inCart ? 'cart-check' : 'cart-plus'}
               onPress={onAddToCart}
-              disabled={
-                orderBlocked ||
-                !variantSelectionReady ||
-                !paymentsEnabled ||
-                !acceptsOrders
-              }
-              style={{ flex: 1, borderRadius: borderRadius.button }}
+              style={{ width: '100%', borderRadius: borderRadius.button }}
               contentStyle={styles.ctaBtnContent}
               labelStyle={styles.ctaBtnLabel}
               accessibilityLabel={
@@ -1035,27 +1030,14 @@ function InventoryItemDetailScreen() {
             <Button
               mode="contained"
               onPress={onBuy}
-              disabled={orderBlocked || !acceptsOrders || !paymentsEnabled || !variantSelectionReady}
-              style={{ flex: 1.12, borderRadius: borderRadius.button }}
+              style={{ width: '100%', borderRadius: borderRadius.button }}
               contentStyle={styles.ctaBtnContent}
               labelStyle={styles.ctaBtnLabel}
-              accessibilityLabel={
-                outOfStock
-                  ? t('items.detail.outOfStock', 'Out of stock')
-                  : foodBlocked
-                    ? t('foods.status.notServingNow', 'Not serving now')
-                  : !acceptsOrders
-                    ? t('checkout.merchantNotAcceptingOrders', 'This merchant is not yet accepting orders.')
-                    : !variantSelectionReady
-                      ? t('client.placeOrder.selectVariant', 'Select an option')
-                    : t('public.items.card.buyNowA11y', 'Buy {{name}}', { name: item.item.name })
-              }
+              accessibilityLabel={t('public.items.card.buyNowA11y', 'Buy {{name}}', {
+                name: item.item.name,
+              })}
             >
-              {foodBlocked
-                ? t('foods.status.notServingNow', 'Not serving now')
-                : !outOfStock && (!acceptsOrders || !paymentsEnabled)
-                ? t('catalog.paymentsComingSoon', 'Coming soon')
-                : t('public.items.buyNow', 'Buy')}
+              {t('public.items.buyNow', 'Buy')}
             </Button>
           </View>
           ) : null}
@@ -1071,6 +1053,7 @@ function InventoryItemDetailScreen() {
             </View>
           ) : null}
         </View>
+        ) : null}
 
       <ProductInterestSheet
         visible={interestOpen}
@@ -1143,7 +1126,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   bottomBarRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 10,
   },
   /** 52dp height for CTA buttons (design spec: preferred 52dp) */

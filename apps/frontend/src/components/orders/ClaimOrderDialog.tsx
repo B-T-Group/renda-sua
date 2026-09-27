@@ -28,7 +28,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimingOrderOverlay from '../common/ClaimingOrderOverlay';
@@ -62,6 +62,10 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
   const [phoneNumber, setPhoneNumber] = useState(userPhoneNumber || '');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState('');
+
+  useEffect(() => {
+    if (!isEditingPhone) setPhoneNumber(userPhoneNumber || '');
+  }, [isEditingPhone, userPhoneNumber]);
 
   // Use hold amount from order (calculated by backend)
   const holdAmount = order.agent_hold_amount || 0;

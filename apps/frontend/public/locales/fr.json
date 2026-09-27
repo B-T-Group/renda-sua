@@ -5955,22 +5955,22 @@
     "switchError": "Impossible de changer de profil. Veuillez réessayer.",
     "selectKicker": "Bon retour",
     "selectTitle": "Comment souhaitez-vous utiliser Rendasua ?",
-    "selectSubtitle": "Choisissez ce que vous voulez faire aujourd’hui. Vous pourrez changer de mode à tout moment depuis votre profil ou l’en-tête.",
+    "selectSubtitle": "Choisissez-en un. Vous pourrez changer plus tard.",
     "selectLoading": "Chargement de votre compte",
     "selectLoadingSubtitle": "Veuillez patienter",
     "selectCard": {
       "cta": "Continuer en tant que {{label}}",
       "client": {
         "title": "Client",
-        "description": "Parcourez les articles, passez commande et suivez les livraisons jusqu’à votre porte."
+        "description": "Achetez près de chez vous et suivez la livraison."
       },
       "agent": {
         "title": "Agent",
-        "description": "Consultez les courses disponibles, effectuez les enlèvements et soyez rémunéré pour chaque livraison."
+        "description": "Livrez près de chez vous et soyez payé."
       },
       "business": {
         "title": "Entreprise",
-        "description": "Gérez votre catalogue, vos commandes, vos points de vente et vos locations au même endroit."
+        "description": "Vendez depuis votre boutique."
       }
     }
   },

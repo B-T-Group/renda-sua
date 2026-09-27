@@ -7,6 +7,7 @@ describe('DashboardService', () => {
   let hasuraSystemService: { executeQuery: jest.Mock };
   let paymentRouting: { resolveRailForUser: jest.Mock };
   let stripeConnectService: { isPayoutReady: jest.Mock };
+  let ordersService: { getOpenOrders: jest.Mock };
 
   beforeEach(() => {
     hasuraUserService = { getUser: jest.fn() };
@@ -26,6 +27,9 @@ describe('DashboardService', () => {
     stripeConnectService = {
       isPayoutReady: jest.fn().mockResolvedValue(false),
     };
+    ordersService = {
+      getOpenOrders: jest.fn().mockResolvedValue({ success: true, orders: [] }),
+    };
     service = new DashboardService(
       hasuraUserService as any,
       hasuraSystemService as any,
@@ -38,7 +42,8 @@ describe('DashboardService', () => {
       } as any,
       { listPending: jest.fn().mockResolvedValue({ jobs: [], pendingResultCount: 0 }) } as any,
       paymentRouting as any,
-      stripeConnectService as any
+      stripeConnectService as any,
+      ordersService as any
     );
   });
 
@@ -229,12 +234,7 @@ describe('DashboardService', () => {
         names: ['id_card', 'passport', 'driver_license'],
       });
 
-      const openOrdersCall = hasuraSystemService.executeQuery.mock.calls.find(
-        ([query]) => String(query).includes('AgentOpenOrdersCount')
-      );
-      expect(String(openOrdersCall?.[0])).toContain(
-        'business_locations: { address: { country: { _eq: $country } } }'
-      );
+      expect(ordersService.getOpenOrders).toHaveBeenCalled();
 
       expect(result.actions).toEqual([
         expect.objectContaining({
@@ -242,6 +242,32 @@ describe('DashboardService', () => {
           kind: 'id_verification',
           priority: 'critical',
           count: 1,
+        }),
+      ]);
+    });
+
+    it('counts open deliveries from the available-orders list', async () => {
+      paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
+      stripeConnectService.isPayoutReady.mockResolvedValue(true);
+      ordersService.getOpenOrders.mockResolvedValue({
+        success: true,
+        orders: [{ id: 'o1' }, { id: 'o2' }],
+      });
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'agent',
+        active_persona: 'agent',
+        agent: { id: 'agent-1' },
+      });
+
+      const result = await service.getActionsNeeded();
+
+      expect(ordersService.getOpenOrders).toHaveBeenCalled();
+      expect(result.actions).toEqual([
+        expect.objectContaining({
+          id: 'open_deliveries',
+          kind: 'open_deliveries',
+          count: 2,
         }),
       ]);
     });
@@ -325,7 +351,8 @@ describe('DashboardService', () => {
             .mockResolvedValue({ jobs: [], pendingResultCount: 0 }),
         } as any,
         paymentRouting as any,
-        stripeConnectService as any
+        stripeConnectService as any,
+        ordersService as any
       );
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',

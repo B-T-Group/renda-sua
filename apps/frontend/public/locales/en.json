@@ -6236,22 +6236,22 @@
     "switchError": "Could not switch persona. Please try again.",
     "selectKicker": "Welcome back",
     "selectTitle": "How do you want to use Rendasua?",
-    "selectSubtitle": "Choose what you want to do today. You can switch anytime from your profile or the header.",
+    "selectSubtitle": "Pick one. You can switch later.",
     "selectLoading": "Loading your account",
     "selectLoadingSubtitle": "Please wait",
     "selectCard": {
       "cta": "Continue as {{label}}",
       "client": {
         "title": "Client",
-        "description": "Browse items, place orders, and track deliveries to your door."
+        "description": "Shop nearby and track delivery."
       },
       "agent": {
         "title": "Agent",
-        "description": "See available runs, complete pickups, and get paid for each delivery."
+        "description": "Deliver nearby and get paid."
       },
       "business": {
         "title": "Business",
-        "description": "Manage your catalog, orders, locations, and rentals in one place."
+        "description": "Sell from your storefront."
       }
     }
   },

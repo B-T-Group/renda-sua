@@ -906,7 +906,9 @@ export default observer(function CartCheckoutScreen() {
     }
 
     // Keep cart until MoMo succeeds so deposit-fail can return to checkout with items.
+    // Cooked-food MoMo stays unpaid until the kitchen confirms and sends the request.
     const momoWaitingRequired =
+      !isCookedFoodMoMoPayAfter &&
       !resolvedIsStripeRail &&
       outcome.type === 'pending' &&
       outcome.paymentRail === 'mobile_money' &&
@@ -1462,7 +1464,9 @@ export default observer(function CartCheckoutScreen() {
                       amount: depositAmount,
                       currency,
                     })
-                  : t('checkout.payWithMoMo', 'Pay with MoMo')
+                  : isCookedFoodMoMoPayAfter
+                    ? t('client.placeOrder.submit', 'Place order')
+                    : t('checkout.payWithMoMo', 'Pay with MoMo')
             }
             onPress={() => { if (!submitting) void onSubmit(); }}
             loading={submitting}

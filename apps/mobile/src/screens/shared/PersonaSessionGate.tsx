@@ -17,18 +17,23 @@ import { useStore } from '../../stores/RootStore';
 import { PERSONA_ACCENT } from '../../constants/personaTheme';
 import type { PersonaSlug } from '../../types/persona';
 import { orderedSupportedAppPersonas } from '../../utils/personaFromMe';
-import { PersonaBenefitBullets } from '../../components/signup/PersonaBenefitBullets';
-import { benefitPersonaFromSignupPersona } from '../../constants/signupBenefits';
+import { PersonaPickIllustration } from '../../components/illustrations/PersonaPickIllustration';
 
 type PickerPersona = 'client' | 'agent' | 'business';
 
-const PERSONA_ICONS: Record<
-  PickerPersona,
-  React.ComponentProps<typeof MaterialCommunityIcons>['name']
-> = {
-  client: 'account-circle-outline',
-  agent: 'bike-fast',
-  business: 'store-outline',
+const PERSONA_LINES: Record<PickerPersona, { key: string; fallback: string }> = {
+  client: {
+    key: 'persona.clientDescription',
+    fallback: 'Shop nearby and track delivery.',
+  },
+  agent: {
+    key: 'persona.agentDescription',
+    fallback: 'Deliver nearby and get paid.',
+  },
+  business: {
+    key: 'persona.businessDescription',
+    fallback: 'Sell from your storefront.',
+  },
 };
 
 function PersonaLoadingView() {
@@ -194,6 +199,7 @@ type PersonaPickerCardProps = {
   title: string;
   selecting: boolean;
   disabled: boolean;
+  compact: boolean;
   onSelect: () => void;
 };
 
@@ -202,6 +208,7 @@ function PersonaPickerCard({
   title,
   selecting,
   disabled,
+  compact,
   onSelect,
 }: PersonaPickerCardProps) {
   const { t } = useTranslation();
@@ -249,7 +256,7 @@ function PersonaPickerCard({
   return (
     <Animated.View
       style={[
-        { transform: [{ scale }], opacity: dim, marginBottom: 16 },
+        { transform: [{ scale }], opacity: dim, marginBottom: compact ? 8 : 16 },
         selecting ? shadows.md : shadows.sm,
       ]}
     >
@@ -268,51 +275,52 @@ function PersonaPickerCard({
           {
             borderColor: selecting ? accent : colors.border,
             backgroundColor: colors.surface,
-            borderRadius: borderRadius.md,
-            borderLeftWidth: 4,
-            borderLeftColor: accent,
+            borderRadius: borderRadius.lg,
+            alignItems: 'center',
+            paddingVertical: compact ? 8 : 22,
           },
         ]}
       >
-        <View style={styles.cardRow}>
-          <View
-            style={[
-              styles.iconWrap,
-              { backgroundColor: accent + '14', borderRadius: borderRadius.full },
-            ]}
-          >
-            {selecting ? (
-              <ActivityIndicator color={accent} size="small" />
-            ) : (
-              <MaterialCommunityIcons
-                name={PERSONA_ICONS[persona]}
-                size={28}
-                color={accent}
-              />
-            )}
-          </View>
-          <View style={styles.cardTextCol}>
-            <Text style={[typography.subtitle1, { color: colors.text.primary }]}>{title}</Text>
-            <View style={{ marginTop: 8 }}>
-              <PersonaBenefitBullets
-                persona={benefitPersonaFromSignupPersona(persona)}
-                compact
-              />
-            </View>
-          </View>
-        </View>
-
-        <View style={[styles.ctaRow, { marginTop: 16 }]}>
+        <View style={[styles.artWrap, compact && styles.artWrapCompact]}>
           {selecting ? (
-            <Text style={[typography.button, { color: accent }]}>
-              {t('persona.selectOpening', 'Opening {{label}}…', { label: title })}
-            </Text>
+            <ActivityIndicator color={accent} size={compact ? 'small' : 'large'} />
           ) : (
-            <Text style={[typography.button, { color: colors.primary.main }]}>
-              {t('persona.selectCardCta', 'Continue as {{label}}', { label: title })}
-            </Text>
+            <PersonaPickIllustration
+              persona={persona}
+              accent={accent}
+              size={compact ? 64 : 128}
+            />
           )}
         </View>
+        <Text
+          style={[
+            compact ? typography.h6 : typography.h4,
+            {
+              color: accent,
+              textAlign: 'center',
+              marginTop: compact ? 0 : 4,
+              fontWeight: '800',
+            },
+          ]}
+        >
+          {title}
+        </Text>
+        <Text
+          style={[
+            typography.body2,
+            {
+              color: colors.text.secondary,
+              textAlign: 'center',
+              marginTop: compact ? 2 : 6,
+              fontSize: compact ? 13 : undefined,
+            },
+          ]}
+          numberOfLines={2}
+        >
+          {selecting
+            ? t('persona.selectOpening', 'Opening {{label}}…', { label: title })
+            : t(PERSONA_LINES[persona].key, PERSONA_LINES[persona].fallback)}
+        </Text>
       </Pressable>
     </Animated.View>
   );
@@ -325,6 +333,7 @@ function PersonaPickerView() {
   const insets = useSafeAreaInsets();
   const list = orderedSupportedAppPersonas(persona.personas) as PickerPersona[];
   const busy = persona.pickingPersona !== null || persona.pickingDelegationId !== null;
+  const compactTrio = list.length >= 3;
   const titleDefaults: Record<PickerPersona, string> = {
     client: 'Client',
     agent: 'Agent',
@@ -335,8 +344,8 @@ function PersonaPickerView() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.pageBackground }}
       contentContainerStyle={{
-        paddingTop: insets.top + 24,
-        paddingBottom: insets.bottom + 32,
+        paddingTop: insets.top + (compactTrio ? 12 : 24),
+        paddingBottom: insets.bottom + (compactTrio ? 12 : 32),
         paddingHorizontal: 20,
         maxWidth: 440,
         width: '100%',
@@ -354,10 +363,16 @@ function PersonaPickerView() {
         {t('persona.selectKicker', 'Welcome back')}
       </Text>
       <Text
-        style={[typography.h4, { color: colors.text.primary, textAlign: 'center', marginTop: 8 }]}
+        style={[
+          compactTrio ? typography.h5 : typography.h4,
+          { color: colors.text.primary, textAlign: 'center', marginTop: compactTrio ? 4 : 8 },
+        ]}
       >
         {t('persona.selectTitle', 'How do you want to use Rendasua?')}
       </Text>
+      {compactTrio ? (
+        <View style={{ height: 12 }} />
+      ) : (
       <Text
         style={[
           typography.body2,
@@ -369,11 +384,9 @@ function PersonaPickerView() {
           },
         ]}
       >
-        {t(
-          'persona.selectSubtitle',
-          'Choose what you want to do today. You can switch anytime from your profile or the header on the website.'
-        )}
+        {t('persona.selectSubtitle', 'Pick one. You can switch later.')}
       </Text>
+      )}
 
       {list.map((p) => {
         const title = t(personaTitleKey(p), titleDefaults[p]);
@@ -385,6 +398,7 @@ function PersonaPickerView() {
             title={title}
             selecting={selecting}
             disabled={busy}
+            compact={compactTrio}
             onSelect={() => void persona.selectPersona(p as PersonaSlug)}
           />
         );
@@ -438,11 +452,11 @@ function PersonaPickerView() {
                     ]}
                   >
                     {selecting ? (
-                      <ActivityIndicator color={PERSONA_ACCENT.business} size="small" />
+                      <ActivityIndicator color={PERSONA_ACCENT.business} size="large" />
                     ) : (
                       <MaterialCommunityIcons
                         name="map-marker-outline"
-                        size={28}
+                        size={40}
                         color={PERSONA_ACCENT.business}
                       />
                     )}
@@ -511,16 +525,29 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   card: {
-    padding: 18,
+    paddingVertical: 22,
+    paddingHorizontal: 18,
     borderWidth: 1,
+  },
+  artWrap: {
+    width: 144,
+    height: 144,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  artWrapCompact: {
+    width: 72,
+    height: 72,
+    marginBottom: 0,
   },
   cardRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   iconWrap: {
-    width: 48,
-    height: 48,
+    width: 72,
+    height: 72,
     alignItems: 'center',
     justifyContent: 'center',
   },
