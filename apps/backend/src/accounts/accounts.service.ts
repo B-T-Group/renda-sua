@@ -237,8 +237,7 @@ export class AccountsService {
     const remaining = await this.unappliedDepositAmount(
       request.accountId,
       request.referenceId,
-      request.amount,
-      request.skipCashAdvanceRepayment === true
+      request.amount
     );
     if (remaining <= 0) return { success: true, alreadyExists: true };
     const result = await this.registerTransaction({
@@ -250,8 +249,7 @@ export class AccountsService {
       const stillOpen = await this.unappliedDepositAmount(
         request.accountId,
         request.referenceId,
-        request.amount,
-        request.skipCashAdvanceRepayment === true
+        request.amount
       );
       if (stillOpen <= 0) return { success: true, alreadyExists: true };
     }
@@ -261,32 +259,23 @@ export class AccountsService {
   private async unappliedDepositAmount(
     accountId: string,
     referenceId: string,
-    amount: number,
-    depositsOnly = false
+    amount: number
   ): Promise<number> {
-    const applied = await this.sumAppliedDeposit(
-      accountId,
-      referenceId,
-      depositsOnly
-    );
+    const applied = await this.sumAppliedDeposit(accountId, referenceId);
     return Number((amount - applied).toFixed(2));
   }
 
   private async sumAppliedDeposit(
     accountId: string,
-    referenceId: string,
-    depositsOnly = false
+    referenceId: string
   ): Promise<number> {
-    const types = depositsOnly
-      ? ['deposit']
-      : ['deposit', 'cash_advance_repayment'];
     const query = `
-      query SumAppliedDeposit($accountId: uuid!, $referenceId: uuid!, $types: [transaction_type_enum!]!) {
+      query SumAppliedDeposit($accountId: uuid!, $referenceId: uuid!) {
         account_transactions(
           where: {
             account_id: { _eq: $accountId }
             reference_id: { _eq: $referenceId }
-            transaction_type: { _in: $types }
+            transaction_type: { _in: ["deposit", "cash_advance_repayment"] }
           }
         ) { amount }
       }
@@ -294,7 +283,6 @@ export class AccountsService {
     const result = await this.hasuraSystemService.executeQuery(query, {
       accountId,
       referenceId,
-      types,
     });
     const rows = result.account_transactions ?? [];
     return rows.reduce(

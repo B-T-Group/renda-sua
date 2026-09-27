@@ -4400,20 +4400,15 @@ export class OrdersService {
     itemAmount: number,
     deliveryAmount: number
   ): Promise<void> {
-    const needed = itemAmount + deliveryAmount;
+    const needed = Number((itemAmount + deliveryAmount).toFixed(2));
     if (needed <= 0) return;
     const held = await this.sumHoldAmountForOrder(accountId, order.id);
-    if (held >= needed) return;
+    const missing = Number((needed - held).toFixed(2));
+    if (missing <= 0) return;
     await this.requireSuccessfulHold({
       accountId,
-      amount: itemAmount,
+      amount: missing,
       memo: `Hold for order ${order.order_number}`,
-      referenceId: order.id,
-    });
-    await this.requireSuccessfulHold({
-      accountId,
-      amount: deliveryAmount,
-      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
       referenceId: order.id,
     });
   }
@@ -4436,7 +4431,7 @@ export class OrdersService {
     `,
       { accountId, orderId }
     );
-    const rows = result.account_transactions ?? [];
+    const rows = result?.account_transactions ?? [];
     return rows.reduce(
       (sum: number, row: { amount?: number }) => sum + Number(row.amount || 0),
       0
@@ -9428,18 +9423,12 @@ export class OrdersService {
     const wasAuthorized = (order as any).payment_status === 'authorized';
     const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
 
-    await this.requireSuccessfulHold({
+    await this.placeMissingClientHolds(
+      order,
       accountId,
-      amount: itemAmount,
-      memo: `Hold for order ${order.order_number}`,
-      referenceId: order.id,
-    });
-    await this.requireSuccessfulHold({
-      accountId,
-      amount: deliveryAmount,
-      memo: `Hold for order ${order.order_number} delivery fees (base: ${order.base_delivery_fee ?? 0}, per-km: ${order.per_km_delivery_fee ?? 0})`,
-      referenceId: order.id,
-    });
+      itemAmount,
+      deliveryAmount
+    );
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
     await this.updateOrderHold(orderHold.id, {
