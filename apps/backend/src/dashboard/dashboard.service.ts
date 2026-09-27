@@ -6,6 +6,7 @@ import { BusinessLocationTransferService } from '../business-items/business-loca
 import { isDefaultOperatingHours } from '../common/operating-hours.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { OrdersService } from '../orders/orders.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
 import { ID_DOCUMENT_TYPE_NAMES, parseIdRejectionReason } from '../services/upload.service';
@@ -103,7 +104,8 @@ export class DashboardService {
     private readonly businessLocationTransferService: BusinessLocationTransferService,
     private readonly aiImageCleanupService: AiImageCleanupService,
     private readonly paymentRouting: PaymentRoutingService,
-    private readonly stripeConnectService: StripeConnectService
+    private readonly stripeConnectService: StripeConnectService,
+    private readonly ordersService: OrdersService
   ) {}
 
   async getAggregates(): Promise<DashboardAggregatesDto> {
@@ -299,7 +301,7 @@ export class DashboardService {
   private async getAgentActions(userId: string): Promise<ActionsNeededDto> {
     const [openOrders, activeOrders, activation, pendingPlans] =
       await Promise.all([
-        this.countAgentOpenOrders(userId),
+        this.countAgentOpenOrders(),
         this.countAgentActiveOrders(userId),
         this.getAgentActivationAction(userId),
         this.listPendingPaymentPlans(userId),
@@ -468,39 +470,14 @@ export class DashboardService {
     return r?.orders_aggregate?.aggregate?.count ?? 0;
   }
 
-  private async countAgentOpenOrders(userId: string): Promise<number> {
-    const q = `
-      query AgentOpenOrdersByCountry($userId: uuid!) {
-        agents(where: { user_id: { _eq: $userId } }) {
-          agent_addresses(
-            where: { address: { status: { _eq: active } } }
-            order_by: { address: { is_primary: desc } }
-            limit: 1
-          ) {
-            address { country }
-          }
-        }
-      }
-    `;
-    const r = await this.hasuraSystemService.executeQuery(q, { userId });
-    const country: string | null =
-      r?.agents?.[0]?.agent_addresses?.[0]?.address?.country ?? null;
-    if (!country) return 0;
-    const countQ = `
-      query AgentOpenOrdersCount($country: String!) {
-        orders_aggregate(
-          where: {
-            current_status: { _eq: "pending" }
-            assigned_agent_id: { _is_null: true }
-            business: {
-              business_locations: { address: { country: { _eq: $country } } }
-            }
-          }
-        ) { aggregate { count } }
-      }
-    `;
-    const countR = await this.hasuraSystemService.executeQuery(countQ, { country });
-    return countR?.orders_aggregate?.aggregate?.count ?? 0;
+  /** Same list as GET /orders/open (Available Orders), not a separate status query. */
+  private async countAgentOpenOrders(): Promise<number> {
+    try {
+      const result = await this.ordersService.getOpenOrders();
+      return result.orders?.length ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   private async countAgentActiveOrders(userId: string): Promise<number> {

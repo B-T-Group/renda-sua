@@ -563,6 +563,8 @@ function InventoryCatalogCardInner({
             </Text>
           </View>
         ) : null}
+        {exportAvailable || !buyDisabled ? (
+        <>
         <Divider style={{ marginTop: spacing.sm }} />
 
         <View style={[styles.ctaRow, { marginTop: spacing.xs }]}>
@@ -594,7 +596,6 @@ function InventoryCatalogCardInner({
               mode={inCart ? 'contained' : 'outlined'}
               size={20}
               onPress={() => onAddToCart(selectionId)}
-              disabled={outOfStock || foodBlocked || !paymentsEnabled || !acceptsOrders}
               accessibilityLabel={
                 inCart
                   ? t(
@@ -606,52 +607,27 @@ function InventoryCatalogCardInner({
               }
               containerColor={inCart ? colors.primary.main : undefined}
               iconColor={inCart ? colors.primary.contrast : undefined}
-              style={[
-                styles.cartIconBtn,
-                {
-                  borderColor: outOfStock
-                    ? colors.text.disabled
-                    : colors.primary.main,
-                },
-              ]}
+              style={[styles.cartIconBtn, { borderColor: colors.primary.main }]}
             />
           ) : null}
           <Button
             mode="contained"
-            icon={buyDisabled ? undefined : 'cart-outline'}
+            icon="cart-outline"
             onPress={() => onPrimaryPress(selectionId)}
-            disabled={buyDisabled}
-            accessibilityLabel={
-              outOfStock
-                ? t('public.items.outOfStock', 'Out of stock')
-                : foodBlocked
-                  ? t('foods.status.notServingNow', 'Not serving now')
-                  : !acceptsOrders
-                    ? t(
-                        'checkout.merchantNotAcceptingOrders',
-                        'This merchant is not yet accepting orders.'
-                      )
-                    : buyA11y
-            }
-            buttonColor={
-              buyDisabled ? colors.text.disabled : colors.primary.main
-            }
+            accessibilityLabel={buyA11y}
+            buttonColor={colors.primary.main}
             textColor={colors.primary.contrast}
             style={{ flex: 1, minWidth: 0 }}
             contentStyle={styles.ctaContent}
             labelStyle={styles.ctaLabel}
           >
-            {outOfStock
-              ? t('public.items.outOfStock', 'Out of stock')
-              : foodBlocked
-                ? t('foods.status.notServingNow', 'Not serving now')
-                : !paymentsEnabled || !acceptsOrders
-                  ? t('catalog.paymentsComingSoon', 'Coming soon')
-                  : primaryLabel}
+            {primaryLabel}
           </Button>
             </>
           )}
         </View>
+        </>
+        ) : null}
       </View>
     </Card>
   );

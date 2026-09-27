@@ -24,13 +24,15 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import type { Order } from '../../hooks/useAgentOrders';
 import { useApiClient } from '../../hooks/useApiClient';
+import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
+import { pickClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimOrderDialog from '../orders/ClaimOrderDialog';
 import ClaimingOrderOverlay from './ClaimingOrderOverlay';
@@ -69,6 +71,11 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   const navigate = useNavigate();
   const apiClient = useApiClient();
   const { profile } = useUserProfileContext();
+  const { phones: momoPhones } = useMobilePaymentPhones(true);
+  const claimPhone = useMemo(
+    () => pickClaimTopupPhone(momoPhones, profile?.phone_number),
+    [momoPhones, profile?.phone_number]
+  );
   const { startOnboarding, loading: connectLoading } = useStripeConnect();
 
   const isAssignedToMe = Boolean(
@@ -770,7 +777,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         onClose={handleCloseClaimDialog}
         onConfirm={handleClaimWithTopup}
         order={order as unknown as OrderData}
-        userPhoneNumber={profile?.phone_number}
+        userPhoneNumber={claimPhone}
         loading={claimLoading}
         success={claimSuccess}
         error={claimError}

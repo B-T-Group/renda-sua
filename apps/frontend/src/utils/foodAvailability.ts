@@ -12,6 +12,14 @@ export function resolveFoodAvailabilityStatus(
   return 'available';
 }
 
+/** True only while a scheduled serving window is open and the dish is on the menu. */
+export function isFoodServingNow(
+  availability?: FoodAvailability | null
+): boolean {
+  if (!availability?.has_schedule) return false;
+  return resolveFoodAvailabilityStatus(availability) === 'available';
+}
+
 function parseSlotMinutes(time: string): number | null {
   const match = /^(\d{1,2}):(\d{2})/.exec((time ?? '').trim());
   if (!match) return null;

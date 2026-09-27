@@ -8,9 +8,9 @@ const floatY = keyframes`
   50% { transform: translateY(-6px); }
 `;
 
-const artSx = (delay: string, compact?: boolean) => ({
+const artSx = (delay: string, compact?: boolean, height?: number) => ({
   width: '100%',
-  maxHeight: compact ? 68 : 120,
+  maxHeight: height ?? (compact ? 68 : 148),
   height: 'auto',
   display: 'block',
   animation: `${floatY} 3.4s ease-in-out infinite`,
@@ -21,6 +21,7 @@ interface ArtProps {
   accent: string;
   delay?: string;
   compact?: boolean;
+  height?: number;
 }
 
 /** Shopping — client */
@@ -28,6 +29,7 @@ const ClientPersonaArt: React.FC<ArtProps> = ({
   accent,
   delay = '0s',
   compact,
+  height,
 }) => (
   <Box
     component="svg"
@@ -35,7 +37,7 @@ const ClientPersonaArt: React.FC<ArtProps> = ({
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden
-    sx={artSx(delay, compact)}
+    sx={artSx(delay, compact, height)}
   >
     <path
       d="M38 48h44l-6 52H44L38 48z"
@@ -67,6 +69,7 @@ const AgentPersonaArt: React.FC<ArtProps> = ({
   accent,
   delay = '0.1s',
   compact,
+  height,
 }) => (
   <Box
     component="svg"
@@ -74,7 +77,7 @@ const AgentPersonaArt: React.FC<ArtProps> = ({
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden
-    sx={artSx(delay, compact)}
+    sx={artSx(delay, compact, height)}
   >
     <ellipse
       cx="40"
@@ -125,6 +128,7 @@ const BusinessPersonaArt: React.FC<ArtProps> = ({
   accent,
   delay = '0.05s',
   compact,
+  height,
 }) => (
   <Box
     component="svg"
@@ -132,7 +136,7 @@ const BusinessPersonaArt: React.FC<ArtProps> = ({
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden
-    sx={artSx(delay, compact)}
+    sx={artSx(delay, compact, height)}
   >
     <path
       d="M28 52h64v48H28V52z"
@@ -157,18 +161,20 @@ export function PersonaPickIllustration({
   persona,
   accent,
   compact = false,
+  height,
 }: {
   persona: PersonaSlug;
   accent: string;
   compact?: boolean;
+  height?: number;
 }) {
   switch (persona) {
     case 'client':
-      return <ClientPersonaArt accent={accent} compact={compact} />;
+      return <ClientPersonaArt accent={accent} compact={compact} height={height} />;
     case 'agent':
-      return <AgentPersonaArt accent={accent} compact={compact} />;
+      return <AgentPersonaArt accent={accent} compact={compact} height={height} />;
     case 'business':
-      return <BusinessPersonaArt accent={accent} compact={compact} />;
+      return <BusinessPersonaArt accent={accent} compact={compact} height={height} />;
     default:
       return null;
   }

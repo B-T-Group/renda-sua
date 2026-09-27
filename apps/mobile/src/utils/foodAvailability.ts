@@ -54,6 +54,14 @@ export function resolveFoodAvailabilityStatus(
   return 'available';
 }
 
+/** True only while a scheduled serving window is open and the dish is on the menu. */
+export function isFoodServingNow(
+  availability?: FoodAvailability | null
+): boolean {
+  if (!availability?.has_schedule) return false;
+  return resolveFoodAvailabilityStatus(availability) === 'available';
+}
+
 /** True when a cooked dish cannot be ordered right now. */
 export function isFoodOrderBlocked(
   availability?: FoodAvailability | null

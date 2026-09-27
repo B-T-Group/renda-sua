@@ -888,21 +888,18 @@ export default function ItemDetailPage() {
   const displayPriceText = exportAvailable
     ? t('productInterest.priceNotApplicable', 'Price on request')
     : checkoutPriceText;
-  const showMobileStickyOrderBar =
-    isMobile &&
+  const canPurchase =
+    !exportAvailable &&
     hasStock &&
-    merchantCanAcceptOrders &&
     paymentsEnabled &&
-    !exportAvailable;
-  const showInlineOrderNow = !showMobileStickyOrderBar;
+    merchantCanAcceptOrders &&
+    variantSelectionReady;
+  const showMobileStickyOrderBar = isMobile && canPurchase;
+  const showInlineOrderNow = canPurchase && !showMobileStickyOrderBar;
+  const showAddToCart = isClientUser && canPurchase;
+  const showCartChip = isClientUser && inCart && !exportAvailable;
   const showOrderCtaStack =
-    exportAvailable ||
-    !hasStock ||
-    !paymentsEnabled ||
-    !merchantCanAcceptOrders ||
-    isClientUser ||
-    !isMobile ||
-    variantSel.requiresSelection;
+    exportAvailable || showAddToCart || showInlineOrderNow || showCartChip;
 
   const ratingCount = ratings.length;
   const ratingAvg =
@@ -1478,9 +1475,8 @@ export default function ItemDetailPage() {
               </Box>
             )}
 
-            {/* CTAs: on mobile, Order Now is only in the sticky bar when in stock; Add to Cart stays here for clients */}
             {showOrderCtaStack ? (
-              <Stack direction="column" spacing={1} sx={{ pt: 1 }}>
+              <Stack direction="column" spacing={1} sx={{ pt: 1, width: '100%', minWidth: 0 }}>
                 {exportAvailable ? (
                   <Button
                     variant="contained"
@@ -1506,83 +1502,79 @@ export default function ItemDetailPage() {
                   >
                     {t('productInterest.cta', 'I’m interested')}
                   </Button>
-                ) : !hasStock || deliveryBlocked.blocked ? (
-                  <Button variant="outlined" disabled size="medium">
-                    {deliveryBlocked.blocked
-                      ? deliveryBlocked.reason
-                      : isFoodClosed
-                        ? foodStatus === 'sold_out'
-                          ? t('foods.status.soldOutToday', 'Sold out today')
-                          : t('foods.status.notServingNow', 'Not serving now')
-                        : inventoryItem.computed_available_quantity === 0
-                          ? t('items.outOfStock', 'Out of Stock')
-                          : t('items.notAvailable', 'Not Available')}
+                ) : null}
+                {showAddToCart ? (
+                  <Button
+                    variant={inCart ? 'contained' : 'outlined'}
+                    color="primary"
+                    startIcon={<ShoppingCart />}
+                    onClick={() => handleAddToCart(inventoryItem)}
+                    size="medium"
+                    fullWidth
+                    aria-label={
+                      inCart
+                        ? t(
+                            'cart.inCartA11y',
+                            'In cart, quantity {{count}}. Add more',
+                            { count: inCartQuantity }
+                          )
+                        : t('cart.addToCart', 'Add to cart')
+                    }
+                    sx={{
+                      maxWidth: '100%',
+                      height: 'auto',
+                      minHeight: 48,
+                      whiteSpace: 'normal',
+                      lineHeight: 1.25,
+                      textAlign: 'center',
+                      px: { xs: 1.5, sm: 2 },
+                      py: 1.25,
+                      '& .MuiButton-startIcon': { marginLeft: 0, marginRight: 0.75 },
+                    }}
+                  >
+                    {addToCartLabel}
                   </Button>
-                ) : !paymentsEnabled || !merchantCanAcceptOrders ? (
-                  <Button variant="outlined" disabled size="medium" fullWidth>
-                    {t('catalog.paymentsComingSoon', 'Coming soon')}
+                ) : null}
+                {showCartChip ? (
+                  <Chip
+                    icon={<CheckCircleIcon sx={{ fontSize: '16px !important' }} />}
+                    label={inCartLabel}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    sx={{ alignSelf: 'flex-start', height: 24, maxWidth: '100%' }}
+                  />
+                ) : null}
+                {showInlineOrderNow ? (
+                  <Button
+                    variant="contained"
+                    color="cta"
+                    startIcon={<MobileMoneyOrderIcon />}
+                    onClick={handleOrderClick}
+                    size="medium"
+                    fullWidth
+                    sx={(btnTheme) => ({
+                      maxWidth: '100%',
+                      height: 'auto',
+                      minHeight: 48,
+                      whiteSpace: 'normal',
+                      lineHeight: 1.25,
+                      fontWeight: 800,
+                      textTransform: 'none',
+                      borderRadius: 2.5,
+                      px: { xs: 1.5, sm: 2 },
+                      py: 1.25,
+                      boxShadow: `0 4px 18px ${alpha(btnTheme.palette.cta.main, 0.45)}`,
+                      background: `linear-gradient(160deg, ${btnTheme.palette.cta.light} 0%, ${btnTheme.palette.cta.main} 45%, ${btnTheme.palette.cta.dark} 100%)`,
+                      '&:hover': {
+                        boxShadow: `0 6px 24px ${alpha(btnTheme.palette.cta.main, 0.55)}`,
+                        background: `linear-gradient(160deg, ${btnTheme.palette.cta.main} 0%, ${btnTheme.palette.cta.dark} 100%)`,
+                      },
+                    })}
+                  >
+                    {t('common.orderNow', 'Order Now')}
                   </Button>
-                ) : (
-                  <>
-                    {isClientUser && (
-                      <Button
-                        variant={inCart ? 'contained' : 'outlined'}
-                        color="primary"
-                        startIcon={<ShoppingCart />}
-                        onClick={() => handleAddToCart(inventoryItem)}
-                        size="medium"
-                        fullWidth
-                        disabled={!variantSelectionReady}
-                        aria-label={
-                          inCart
-                            ? t(
-                                'cart.inCartA11y',
-                                'In cart, quantity {{count}}. Add more',
-                                { count: inCartQuantity }
-                              )
-                            : t('cart.addToCart', 'Add to Cart')
-                        }
-                      >
-                        {addToCartLabel}
-                      </Button>
-                    )}
-                    {inCart ? (
-                      <Chip
-                        icon={<CheckCircleIcon sx={{ fontSize: '16px !important' }} />}
-                        label={inCartLabel}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                        sx={{ alignSelf: 'flex-start', height: 24 }}
-                      />
-                    ) : null}
-                    {showInlineOrderNow ? (
-                      <Button
-                        variant="contained"
-                        color="cta"
-                        startIcon={<MobileMoneyOrderIcon />}
-                        onClick={handleOrderClick}
-                        size="medium"
-                        fullWidth
-                        disabled={!variantSelectionReady || deliveryBlocked.blocked}
-                        sx={(btnTheme) => ({
-                          minHeight: 48,
-                          fontWeight: 800,
-                          textTransform: 'none',
-                          borderRadius: 2.5,
-                          boxShadow: `0 4px 18px ${alpha(btnTheme.palette.cta.main, 0.45)}`,
-                          background: `linear-gradient(160deg, ${btnTheme.palette.cta.light} 0%, ${btnTheme.palette.cta.main} 45%, ${btnTheme.palette.cta.dark} 100%)`,
-                          '&:hover': {
-                            boxShadow: `0 6px 24px ${alpha(btnTheme.palette.cta.main, 0.55)}`,
-                            background: `linear-gradient(160deg, ${btnTheme.palette.cta.main} 0%, ${btnTheme.palette.cta.dark} 100%)`,
-                          },
-                        })}
-                      >
-                        {t('common.orderNow', 'Order Now')}
-                      </Button>
-                    ) : null}
-                  </>
-                )}
+                ) : null}
               </Stack>
             ) : null}
           </Stack>
@@ -1848,7 +1840,6 @@ export default function ItemDetailPage() {
         visible={showMobileStickyOrderBar}
         priceText={checkoutPriceText}
         orderLabel={t('common.orderNow', 'Order Now')}
-        orderDisabled={!variantSelectionReady || deliveryBlocked.blocked}
         topRow={
           stickyRatingLabel ? (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ width: 'max-content', pr: 1 }}>

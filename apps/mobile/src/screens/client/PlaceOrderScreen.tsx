@@ -1144,7 +1144,9 @@ export default function PlaceOrderScreen() {
     // 1. Deposit orders (deposit collect initiated), OR
     // 2. Pay_now full-pay MoMo orders
     // Non-deposit PAD/PAP MoMo must NOT enter await (would poll-timeout).
+    // Cooked-food MoMo stays unpaid until the kitchen confirms and sends the request.
     const momoWaitingRequired =
+      !isCookedFoodMoMoPayAfter &&
       !resolvedIsStripeRail &&
       outcome.type === 'pending' &&
       outcome.paymentRail === 'mobile_money' &&
@@ -1718,9 +1720,9 @@ export default function PlaceOrderScreen() {
                       amount: depositAmount,
                       currency,
                     })
-                  : payTiming === 'pay_now'
-                    ? t('checkout.payWithMoMo', 'Pay with MoMo')
-                    : t('client.placeOrder.submit', 'Place order')
+                  : isCookedFoodMoMoPayAfter || payTiming !== 'pay_now'
+                    ? t('client.placeOrder.submit', 'Place order')
+                    : t('checkout.payWithMoMo', 'Pay with MoMo')
             }
             onPress={() => { if (!submitting) void onSubmit(); }}
             loading={submitting}

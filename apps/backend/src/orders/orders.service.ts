@@ -2647,6 +2647,22 @@ export class OrdersService {
     return { success: true, message: 'Offer declined' };
   }
 
+  /** Edited claim phone, else the linked Mobile Money number, else users.phone_number. */
+  private async resolveClaimTopupPhone(
+    userId: string,
+    explicitPhone: string | undefined,
+    profilePhone: string | undefined | null
+  ): Promise<string> {
+    const explicit = explicitPhone?.trim();
+    if (explicit) return explicit;
+    const resolved = await this.mobilePaymentPhonesService.resolveCheckoutPaymentPhone({
+      userId,
+      profilePhone,
+      linkProfileIfNeeded: false,
+    });
+    return resolved.phoneE164?.trim() || profilePhone?.trim() || '';
+  }
+
   async claimOrderWithTopup(request: GetOrderRequest, platformHeader?: string) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
@@ -2753,7 +2769,11 @@ export class OrdersService {
     );
 
     // Get payment provider from the order item country (not the agent's phone).
-    const phoneNumber = request.phone_number || user.phone_number || '';
+    const phoneNumber = await this.resolveClaimTopupPhone(
+      user.id,
+      request.phone_number,
+      user.phone_number
+    );
     if (!phoneNumber) {
       throw new HttpException(
         {
@@ -2794,7 +2814,7 @@ export class OrdersService {
         customerPhone: phoneNumber,
         provider: provider,
         itemCountry: momo.itemCountry ?? undefined,
-        ownerCharge: 'CUSTOMER' as const,
+        ownerCharge: 'MERCHANT' as const,
         transactionType: 'PAYMENT' as const,
         payment_entity: 'claim_order' as const,
       };

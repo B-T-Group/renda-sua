@@ -33,7 +33,8 @@ describe('DashboardService moderation soft-delete filters', () => {
           .mockResolvedValue({ jobs: [], pendingResultCount: 0 }),
       } as any,
       { resolveRailForUser: jest.fn().mockResolvedValue('mobile_money') } as any,
-      { isPayoutReady: jest.fn().mockResolvedValue(false) } as any
+      { isPayoutReady: jest.fn().mockResolvedValue(false) } as any,
+      { getOpenOrders: jest.fn().mockResolvedValue({ orders: [] }) } as any
     );
   });
 

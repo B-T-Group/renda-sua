@@ -1,7 +1,6 @@
 import {
   AttachMoney,
   CheckCircle,
-  Edit,
   Info,
   LocalShipping,
   Phone,
@@ -19,21 +18,21 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  IconButton,
   Paper,
   Stack,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
+import {
+  MobilePaymentPhone,
+  useMobilePaymentPhones,
+} from '../../hooks/useMobilePaymentPhones';
 import ClaimingOrderOverlay from '../common/ClaimingOrderOverlay';
-import PhoneInput from '../common/PhoneInput';
-import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 
 interface ClaimOrderDialogProps {
   open: boolean;
@@ -60,42 +59,41 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [phoneNumber, setPhoneNumber] = useState(userPhoneNumber || '');
-  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [phoneOverridden, setPhoneOverridden] = useState(false);
   const [phoneError, setPhoneError] = useState('');
+  const [linkOpen, setLinkOpen] = useState(false);
+  const { phones, setDefaultPhone } = useMobilePaymentPhones(open);
 
-  // Use hold amount from order (calculated by backend)
+  useEffect(() => {
+    if (!open) {
+      setPhoneOverridden(false);
+      return;
+    }
+    if (!phoneOverridden) setPhoneNumber(userPhoneNumber || '');
+  }, [open, phoneOverridden, userPhoneNumber]);
+
   const holdAmount = order.agent_hold_amount || 0;
 
-  // Calculate charge amount (3.5% of hold amount)
-  const chargePercentage = 3.5;
-  const chargeAmount = (holdAmount * chargePercentage) / 100;
-
-  // Total amount to be charged
-  const totalChargeAmount = holdAmount + chargeAmount;
-
-  const handlePhoneChange = (value: string | undefined) => {
-    setPhoneNumber(value || '');
+  const useLinkedPhone = async (phone: MobilePaymentPhone) => {
     setPhoneError('');
-  };
-
-  const handleEditPhone = () => {
-    setIsEditingPhone(true);
-  };
-
-  const handleCancelEditPhone = () => {
-    setIsEditingPhone(false);
-    setPhoneNumber(userPhoneNumber || '');
-    setPhoneError('');
+    try {
+      const updated = await setDefaultPhone(phone.id);
+      setPhoneOverridden(true);
+      setPhoneNumber(updated.phone_e164);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : t('common.error', 'Something went wrong');
+      setPhoneError(message);
+    }
   };
 
   const handleConfirm = async () => {
-    if (isEditingPhone && !phoneNumber.trim()) {
+    if (!phoneNumber.trim()) {
       setPhoneError(t('validation.phoneRequired', 'Phone number is required'));
       return;
     }
 
     try {
-      await onConfirm(isEditingPhone ? phoneNumber : undefined);
+      await onConfirm(phoneNumber.trim() || undefined);
     } catch {
       // Error handling is done in the parent component
     }
@@ -263,44 +261,14 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
                     >
                       {t('agent.claimOrder.holdAmount', 'Hold Amount')}
                     </Typography>
-                    <Typography variant="body1" fontWeight="medium">
+                    <Typography variant="h6" fontWeight="bold">
                       {formatCurrency(holdAmount, order.currency)}
                     </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                       {t(
-                        'agent.claimOrder.serviceCharge',
-                        'Service Charge (3.5%)',
-                        { percentage: chargePercentage }
+                        'agent.claimOrder.feeCovered',
+                        'We cover the Mobile Money service charge.'
                       )}
-                    </Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {formatCurrency(chargeAmount, order.currency)}
-                    </Typography>
-                  </Box>
-
-                  <Divider />
-
-                  <Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      {t('agent.claimOrder.totalCharge', 'Total to be Charged')}
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      fontWeight="bold"
-                      color="error.main"
-                    >
-                      {formatCurrency(totalChargeAmount, order.currency)}
                     </Typography>
                   </Box>
                 </Stack>
@@ -331,10 +299,10 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
           </Stack>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t(
-              'agent.claimOrder.paymentExplanation.description',
-              'To deliver an order you need to give us some guarantee which is a certain percentage of the value of the order. The more orders you complete, the more trust you build with the system and the hold amount will be reduced. Once the order is delivered, your account is credited with the delivery fee and your amount on hold is released.'
-            )}
+              {t(
+                'agent.claimOrder.paymentExplanation.description',
+                'This is a hold, not a fee. It stays as a guarantee until you finish the delivery. Then we release it and pay your earnings.'
+              )}
           </Typography>
 
           <Stack spacing={1}>
@@ -425,76 +393,38 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
             <Stack direction="row" alignItems="center" spacing={1}>
               <Phone color="primary" />
               <Typography variant="h6" fontWeight="bold">
-                {t('agent.claimOrder.phoneNumber', 'Phone Number')}
+                {t('agent.claimOrder.requestSentTo', 'Request will be sent to')}
               </Typography>
             </Stack>
-            {!isEditingPhone && userPhoneNumber && (
-              <IconButton
-                size="small"
-                onClick={handleEditPhone}
-                sx={{
-                  bgcolor: 'primary.50',
-                  '&:hover': { bgcolor: 'primary.100' },
-                }}
-              >
-                <Edit fontSize="small" />
-              </IconButton>
-            )}
           </Stack>
-
-          {isEditingPhone ? (
-            <Stack spacing={2}>
-              <PhoneInput
-                value={phoneNumber}
-                onChange={handlePhoneChange}
-                label={t(
-                  'agent.claimOrder.enterPhoneNumber',
-                  'Enter phone number'
-                )}
-                error={!!phoneError}
-                helperText={phoneError}
-                defaultCountry={pickMobileMoneyDefaultCountry(
-                  order.business_location?.address?.country
-                )}
-                onlyCountries={['CM', 'GA']}
-                fullWidth
-              />
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+            {phoneNumber ||
+              t('agent.claimOrder.noPhoneNumber', 'No Mobile Money number linked')}
+          </Typography>
+          {phoneError ? (
+            <Typography variant="body2" color="error" sx={{ mb: 1 }}>
+              {phoneError}
+            </Typography>
+          ) : null}
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {phones
+              .filter((item) => item.phone_e164 !== phoneNumber)
+              .map((item) => (
                 <Button
+                  key={item.id}
                   size="small"
-                  variant="outlined"
-                  onClick={handleCancelEditPhone}
+                  variant="text"
+                  onClick={() => void useLinkedPhone(item)}
                 >
-                  {t('common.cancel', 'Cancel')}
+                  {t('agent.claimOrder.useSavedPhone', 'Use {{phone}}', {
+                    phone: item.phone_e164,
+                  })}
                 </Button>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => setIsEditingPhone(false)}
-                  disabled={!phoneNumber.trim()}
-                >
-                  {t('common.save', 'Save')}
-                </Button>
-              </Stack>
-            </Stack>
-          ) : (
-            <TextField
-              value={
-                userPhoneNumber ||
-                t('agent.claimOrder.noPhoneNumber', 'No phone number on file')
-              }
-              disabled
-              fullWidth
-              variant="outlined"
-              size="small"
-              sx={{
-                '& .MuiInputBase-input': {
-                  fontWeight: userPhoneNumber ? 'medium' : 'normal',
-                  color: userPhoneNumber ? 'text.primary' : 'text.secondary',
-                },
-              }}
-            />
-          )}
+              ))}
+            <Button size="small" variant="outlined" onClick={() => setLinkOpen(true)}>
+              {t('agent.claimOrder.linkNumber', 'Link a different number')}
+            </Button>
+          </Stack>
         </Paper>
       </DialogContent>
 
@@ -528,7 +458,7 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
             <Button
               onClick={handleConfirm}
               variant="contained"
-              disabled={loading || (isEditingPhone && !phoneNumber.trim())}
+              disabled={loading || !phoneNumber.trim()}
               startIcon={loading ? <CircularProgress size={20} /> : null}
               fullWidth={isMobile}
               size="large"
@@ -546,6 +476,18 @@ const ClaimOrderDialog: React.FC<ClaimOrderDialogProps> = ({
       </DialogActions>
     </Dialog>
     <ClaimingOrderOverlay open={loading} />
+    <MobilePaymentPhoneVerifyModal
+      open={linkOpen}
+      mode="add"
+      setAsDefault
+      allowSkipVerification
+      onClose={() => setLinkOpen(false)}
+      onCompleted={(phone) => {
+        setPhoneOverridden(true);
+        setPhoneNumber(phone.phone_e164);
+        setLinkOpen(false);
+      }}
+    />
     </>
   );
 };

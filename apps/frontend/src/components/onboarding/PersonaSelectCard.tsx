@@ -2,12 +2,13 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 import { alpha, keyframes } from '@mui/material/styles';
 import React from 'react';
 import type { PersonaSlug } from '../../constants/personaTheme';
-import { benefitPersonaFromUserType } from '../../constants/signupBenefits';
-import { PersonaBenefitBullets } from './PersonaBenefitBullets';
 import { PersonaPickIllustration } from './PersonaPickIllustration';
 
-/** Fixed card height so every persona tile matches (mobile + desktop). */
-const CARD_HEIGHT_PX = { xs: 260, sm: 272 };
+/** Taller tiles for one or two choices; shorter when three must share one screen. */
+const CARD_HEIGHT = {
+  regular: { xs: 328, sm: 344 },
+  compact: { xs: 156, sm: 176 },
+} as const;
 
 const shimmer = keyframes`
   0% { opacity: 0.45; }
@@ -19,23 +20,29 @@ export interface PersonaSelectCardProps {
   persona: PersonaSlug;
   accent: string;
   title: string;
+  tagline: string;
   ctaText: string;
   busy: boolean;
   isSelecting: boolean;
   onSelect: () => void;
-  mainInterest?: 'sell_items' | 'rent_items';
+  /** Shorter tile so three personas fit on one screen. */
+  compact?: boolean;
 }
 
 export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
   persona,
   accent,
   title,
+  tagline,
   ctaText,
   busy,
   isSelecting,
   onSelect,
-  mainInterest,
-}) => (
+  compact = false,
+}) => {
+  const cardHeight = compact ? CARD_HEIGHT.compact : CARD_HEIGHT.regular;
+  const artHeight = compact ? 56 : 148;
+  return (
   <Box
     component="button"
     type="button"
@@ -51,8 +58,8 @@ export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
     sx={{
       width: '100%',
       height: '100%',
-      minHeight: CARD_HEIGHT_PX,
-      textAlign: 'left',
+      minHeight: cardHeight,
+      textAlign: 'center',
       cursor: busy ? 'default' : 'pointer',
       border: 'none',
       p: 0,
@@ -69,12 +76,12 @@ export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
         overflow: 'hidden',
         boxSizing: 'border-box',
         width: '100%',
-        height: CARD_HEIGHT_PX,
+        height: cardHeight,
         flexShrink: 0,
-        p: { xs: 1.5, sm: 1.75 },
+        p: compact ? { xs: 1, sm: 1.25 } : { xs: 1.5, sm: 1.75 },
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'stretch',
+        alignItems: 'center',
         border: '1.5px solid',
         borderColor: alpha(accent, 0.35),
         bgcolor: alpha(accent, 0.06),
@@ -121,40 +128,68 @@ export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
         }}
       />
 
-      <Box sx={{ position: 'relative', mb: 0.75, px: 0.5, maxHeight: 72 }}>
-        <PersonaPickIllustration persona={persona} accent={accent} compact />
+      <Box
+        sx={{
+          position: 'relative',
+          width: compact ? 72 : 160,
+          height: artHeight,
+          mx: 'auto',
+          mb: compact ? 0.25 : 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <PersonaPickIllustration
+          persona={persona}
+          accent={accent}
+          height={artHeight}
+        />
       </Box>
 
       <Typography
-        variant="subtitle2"
+        component="h2"
         sx={{
           position: 'relative',
           fontWeight: 800,
           color: accent,
-          letterSpacing: '-0.01em',
-          fontSize: { xs: '0.9rem', sm: '0.95rem' },
-          lineHeight: 1.25,
-          mb: 0.5,
+          letterSpacing: '-0.02em',
+          fontSize: compact
+            ? { xs: '1.05rem', sm: '1.15rem' }
+            : { xs: '1.45rem', sm: '1.6rem' },
+          lineHeight: 1.15,
+          mb: compact ? 0 : 0.5,
+          textAlign: 'center',
         }}
       >
         {title}
       </Typography>
-      <Box sx={{ position: 'relative', flex: 1, minHeight: 0, mb: 1 }}>
-        <PersonaBenefitBullets
-          persona={benefitPersonaFromUserType(persona, mainInterest)}
-          compact
-        />
-      </Box>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          position: 'relative',
+          textAlign: 'center',
+          lineHeight: 1.3,
+          fontSize: compact ? '0.75rem' : undefined,
+          px: 0.5,
+          mb: compact ? 0.25 : 1,
+        }}
+      >
+        {tagline}
+      </Typography>
 
       <Box
         sx={{
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'center',
           gap: 1,
-          minHeight: 40,
-          pt: 0.75,
+          width: '100%',
+          minHeight: compact ? 28 : 40,
+          mt: 'auto',
+          pt: compact ? 0.5 : 0.75,
           borderTop: '1px solid',
           borderColor: alpha(accent, 0.2),
         }}
@@ -165,9 +200,11 @@ export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
           sx={{
             color: accent,
             letterSpacing: '0.04em',
-            fontSize: { xs: '0.65rem', sm: '0.7rem' },
+            fontSize: compact
+              ? { xs: '0.65rem', sm: '0.7rem' }
+              : { xs: '0.75rem', sm: '0.8rem' },
             lineHeight: 1.3,
-            textAlign: 'left',
+            textAlign: 'center',
           }}
         >
           {ctaText}
@@ -190,4 +227,5 @@ export const PersonaSelectCard: React.FC<PersonaSelectCardProps> = ({
       </Box>
     </Box>
   </Box>
-);
+  );
+};

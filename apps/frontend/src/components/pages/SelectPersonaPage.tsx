@@ -97,6 +97,13 @@ const SelectPersonaPage: React.FC = () => {
         ? t('persona.selectCard.agent.title', 'Agent')
         : t('persona.selectCard.business.title', 'Business');
 
+  const cardTagline = (p: UserType) =>
+    p === 'client'
+      ? t('persona.selectCard.client.description', 'Shop nearby and track delivery.')
+      : p === 'agent'
+        ? t('persona.selectCard.agent.description', 'Deliver nearby and get paid.')
+        : t('persona.selectCard.business.description', 'Sell from your storefront.');
+
   if (loading) {
     return (
       <LoadingPage
@@ -108,6 +115,7 @@ const SelectPersonaPage: React.FC = () => {
   }
 
   const hasAnyContext = orderedPersonas.length > 0 || delegations.length > 0;
+  const compactTrio = orderedPersonas.length >= 3;
   if (!needsContextSelection && hasAnyContext) {
     if (activeContext?.kind === 'delegation') {
       navigate('/delegate/orders', { replace: true });
@@ -123,7 +131,7 @@ const SelectPersonaPage: React.FC = () => {
     <Box
       sx={{
         minHeight: { xs: 'min(100dvh - 72px, auto)', md: '60vh' },
-        py: { xs: 2, sm: 4, md: 5 },
+        py: compactTrio ? { xs: 1, sm: 2, md: 3 } : { xs: 2, sm: 4, md: 5 },
         pl: {
           xs: 'calc(16px + env(safe-area-inset-left, 0px))',
           sm: 'calc(16px + env(safe-area-inset-left, 0px))',
@@ -145,7 +153,7 @@ const SelectPersonaPage: React.FC = () => {
           spacing={{ xs: 0.75, sm: 1 }}
           alignItems="center"
           sx={{
-            mb: { xs: 2, sm: 3 },
+            mb: compactTrio ? { xs: 1, sm: 1.5 } : { xs: 2, sm: 3 },
             textAlign: 'center',
             px: { xs: 0.5, sm: 0 },
             width: '100%',
@@ -173,7 +181,9 @@ const SelectPersonaPage: React.FC = () => {
               fontWeight: 800,
               letterSpacing: '-0.02em',
               lineHeight: 1.25,
-              fontSize: { xs: '1.35rem', sm: '1.75rem', md: '2rem' },
+              fontSize: compactTrio
+                ? { xs: '1.15rem', sm: '1.45rem', md: '1.75rem' }
+                : { xs: '1.35rem', sm: '1.75rem', md: '2rem' },
               px: { xs: 0.5, sm: 0 },
             }}
           >
@@ -184,6 +194,7 @@ const SelectPersonaPage: React.FC = () => {
                 )
               : t('persona.selectTitle', 'How do you want to use Rendasua?')}
           </Typography>
+          {!compactTrio ? (
           <Typography
             color="text.secondary"
             component="p"
@@ -204,16 +215,14 @@ const SelectPersonaPage: React.FC = () => {
                   'delegation.context.selectSubtitle',
                   'Choose a persona or a location you were invited to manage.'
                 )
-              : t(
-                  'persona.selectSubtitle',
-                  'Choose what you want to do today. You can switch anytime from your profile or the header.'
-                )}
+              : t('persona.selectSubtitle', 'Pick one. You can switch later.')}
           </Typography>
+          ) : null}
         </Stack>
 
         <Grid
           container
-          spacing={{ xs: 1.5, sm: 2 }}
+          spacing={compactTrio ? { xs: 1, sm: 1.5 } : { xs: 1.5, sm: 2 }}
           justifyContent="center"
           alignItems="stretch"
         >
@@ -237,6 +246,7 @@ const SelectPersonaPage: React.FC = () => {
                     persona={p}
                     accent={colors.main}
                     title={cardLabel(p)}
+                    tagline={cardTagline(p)}
                     ctaText={t('persona.selectCard.cta', 'Continue as {{label}}', {
                       label: cardLabel(p),
                     })}
@@ -245,6 +255,7 @@ const SelectPersonaPage: React.FC = () => {
                       picking?.kind === 'persona' && picking.persona === p
                     }
                     onSelect={() => void onPickPersona(p)}
+                    compact={compactTrio}
                   />
                 </Box>
               </Grid>
@@ -280,18 +291,20 @@ const SelectPersonaPage: React.FC = () => {
                     sx={{ height: '100%', minHeight: 180 }}
                   >
                     <CardContent>
-                      <Stack spacing={1.25} alignItems="flex-start">
+                      <Stack spacing={1} alignItems="center" sx={{ textAlign: 'center' }}>
                         <StorefrontOutlined
-                          sx={{ color: brandTokens.secondary.main }}
+                          sx={{ color: brandTokens.secondary.main, fontSize: 56 }}
                         />
-                        <Typography variant="h6" fontWeight={800}>
+                        <Typography
+                          component="h2"
+                          fontWeight={800}
+                          sx={{ fontSize: { xs: '1.35rem', sm: '1.5rem' }, lineHeight: 1.15 }}
+                        >
                           {grant.locationName}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {grant.businessName}
-                        </Typography>
-                        <Typography variant="caption" fontWeight={700}>
-                          {grant.role.name}
+                          {grant.role?.name ? ` · ${grant.role.name}` : ''}
                         </Typography>
                         <Stack direction="row" spacing={1} alignItems="center">
                           {selecting ? (
