@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isCookedFoodAwaitingClientPayment,
+  isCookedFoodReadyFailEligible,
   isCookedFoodStartCookingPriority,
   shouldUseCookedFoodConfirmModal,
 } from './cookedFoodOrder';
@@ -98,6 +99,48 @@ describe('cooked-food payment and cooking priority', () => {
         is_cooked_food_pickup: true,
         current_status: 'pending',
         payment_status: 'paid',
+      })
+    ).toBe(false);
+  });
+});
+
+describe('isCookedFoodReadyFailEligible', () => {
+  const readyPaid = {
+    ...asapPickup,
+    current_status: 'ready_for_pickup' as const,
+    payment_status: 'paid' as const,
+    is_cooked_food_pickup: true,
+  };
+
+  it('allows a paid cooked-food pickup and a delivery before agent assignment', () => {
+    expect(isCookedFoodReadyFailEligible(readyPaid)).toBe(true);
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        fulfillment_method: 'delivery',
+        assigned_agent_id: null,
+        payment_status: 'authorized',
+      })
+    ).toBe(true);
+  });
+
+  it('blocks unpaid orders and delivery after an agent is assigned', () => {
+    expect(
+      isCookedFoodReadyFailEligible({ ...readyPaid, payment_status: 'pending' })
+    ).toBe(false);
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        fulfillment_method: 'delivery',
+        assigned_agent_id: 'agent-1',
+      })
+    ).toBe(false);
+    expect(
+      isCookedFoodReadyFailEligible({
+        ...readyPaid,
+        is_cooked_food_pickup: false,
+        pay_after_merchant_confirm: false,
+        order_items: [{ is_cooked_food: false }],
       })
     ).toBe(false);
   });

@@ -76,6 +76,16 @@ describe('order cancellation utilities', () => {
       expect(businessMayCancelOrder(order)).toBe(false);
     });
 
+    it('blocks cancel for paid cooked-food pay-after at ready for pickup', () => {
+      const order = buildOrder({
+        current_status: 'ready_for_pickup',
+        payment_status: 'authorized',
+        pay_after_merchant_confirm: true,
+      });
+
+      expect(businessMayCancelOrder(order)).toBe(false);
+    });
+
     it('allows cancel for unpaid cooked-food pay-after while confirmed', () => {
       const order = buildOrder({
         current_status: 'confirmed',
