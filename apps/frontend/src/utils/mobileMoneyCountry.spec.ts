@@ -7,7 +7,10 @@ describe('isMobileMoneyCountry', () => {
   it('accepts Cameroon and Gabon only', () => {
     expect(isMobileMoneyCountry('cm')).toBe(true);
     expect(isMobileMoneyCountry('GA')).toBe(true);
+    expect(isMobileMoneyCountry('  cm ')).toBe(true);
     expect(isMobileMoneyCountry('CA')).toBe(false);
+    expect(isMobileMoneyCountry('')).toBe(false);
+    expect(isMobileMoneyCountry(null)).toBe(false);
     expect(isMobileMoneyCountry(undefined)).toBe(false);
   });
 });

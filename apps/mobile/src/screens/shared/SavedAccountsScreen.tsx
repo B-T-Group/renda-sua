@@ -23,6 +23,7 @@ import Logo from '../../components/Logo';
 import SessionService from '../../services/session/SessionService';
 import type { SavedAccountsScreenProps } from '../../navigation/types';
 import { getAuthFlowErrorKey } from '../../utils/authErrorI18nKey';
+import { freshCodeSignInParams } from '../../utils/freshCodeSignIn';
 
 function SavedAccountsScreenBase() {
   const { t } = useTranslation();
@@ -98,14 +99,10 @@ function SavedAccountsScreenBase() {
       navigation.navigate('Login');
       return;
     }
-    const email = accountNeedingSignIn.email?.trim();
-    const phone = accountNeedingSignIn.phone?.trim();
-    navigation.navigate('Login', {
-      prefillEmail: email || undefined,
-      prefillPhoneE164: !email && phone ? phone : undefined,
-      autoStartOtp: Boolean(email || phone),
-      autoStartNonce: Date.now(),
-    });
+    navigation.navigate(
+      'Login',
+      freshCodeSignInParams(accountNeedingSignIn, Date.now())
+    );
   }, [accountNeedingSignIn, navigation]);
 
   const signInRequiredMessage = t(
