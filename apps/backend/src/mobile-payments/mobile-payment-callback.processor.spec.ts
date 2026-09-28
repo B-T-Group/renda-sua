@@ -234,6 +234,23 @@ describe('MobilePaymentCallbackProcessor', () => {
     });
   });
 
+  it('skips cash-advance repayment when crediting a claim-order top-up', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...baseTx,
+      payment_entity: 'claim_order',
+    });
+
+    await processor.processMypvitCallback(successCallback);
+
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
+      accountId: baseTx.account_id,
+      amount: baseTx.amount,
+      memo: `Mobile payment deposit - ${baseTx.reference}`,
+      referenceId: baseTx.id,
+      skipCashAdvanceRepayment: true,
+    });
+  });
+
   it('leaves pending and does not mark success when wallet credit fails', async () => {
     databaseService.getTransactionByReference.mockResolvedValue({ ...baseTx });
     accountsService.registerDepositIfNotExists.mockResolvedValue({

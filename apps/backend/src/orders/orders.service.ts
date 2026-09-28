@@ -2532,10 +2532,9 @@ export class OrdersService {
       });
 
       if (holdAmount > 0) {
-        await this.accountsService.registerTransaction({
+        await this.requireSuccessfulHold({
           accountId: agentAccount.id,
           amount: holdAmount,
-          transactionType: 'hold',
           memo: `Hold for order ${order.order_number}`,
           referenceId: order.id,
         });
@@ -9970,21 +9969,18 @@ export class OrdersService {
 
       const orderHold = await this.getOrCreateOrderHold(order.id);
 
+      await this.requireSuccessfulHold({
+        accountId: account.id,
+        amount: transaction.amount,
+        memo: `Hold for order ${order.order_number}`,
+        referenceId: order.id,
+      });
+
       await this.updateOrderHold(orderHold.id, {
         agent_hold_amount: transaction.amount,
         agent_id: user.agent.id,
       });
 
-      // Register hold transaction
-      await this.accountsService.registerTransaction({
-        accountId: account.id,
-        amount: transaction.amount,
-        transactionType: 'hold',
-        memo: `Hold for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-
-      // Assign order to agent
       await this.assignOrderToAgent(
         order.id,
         user.agent.id,
