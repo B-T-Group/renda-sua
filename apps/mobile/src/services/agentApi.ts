@@ -11,6 +11,7 @@ import type {
   OpenOrdersResponse,
   OrdersResponse,
   OrderActionResponse,
+  ClaimOrderTopupResponse,
   OrderCancelResponse,
   CancellationPreview,
   AgentEarningsSummaryResponse,
@@ -391,8 +392,12 @@ const orders = {
   claimOrder: (orderId: string): Promise<OrderActionResponse> =>
     api.post<OrderActionResponse>('/orders/claim_order', { orderId }),
 
-  claimOrderWithTopup: (orderId: string, phone_number?: string): Promise<OrderActionResponse> =>
-    api.post<OrderActionResponse>('/orders/claim_order_with_topup', { orderId, phone_number }),
+  claimOrderWithTopup: (orderId: string, phone_number?: string): Promise<ClaimOrderTopupResponse> =>
+    api.post<ClaimOrderTopupResponse>('/orders/claim_order_with_topup', { orderId, phone_number }),
+  getMobilePaymentTransaction: (transactionId: string): Promise<{ status?: string }> =>
+    api.get<{ success?: boolean; data?: { status?: string }; status?: string }>(
+      `/mobile-payments/transactions/${transactionId}`
+    ).then((body) => ({ status: body.data?.status ?? body.status })),
 
   dropOrder: (orderId: string): Promise<OrderActionResponse> =>
     api.post<OrderActionResponse>('/orders/drop_order', { orderId }),

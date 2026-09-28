@@ -26,6 +26,7 @@ import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { pickClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
+import { buildClaimAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -68,7 +69,6 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const backendOrders = useBackendOrders();
   const [loading, setLoading] = useState(false);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
-  const [claimSuccess, setClaimSuccess] = useState(false);
   const [claimError, setClaimError] = useState<string | undefined>();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
@@ -276,7 +276,6 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     await runExclusiveAction(async () => {
       setLoading(true);
       setClaimError(undefined);
-      setClaimSuccess(false);
 
       try {
         const claimAvailability = await agentOrders.checkClaimAvailability(
@@ -304,9 +303,23 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           return;
         }
 
-        await agentOrders.claimOrderWithTopup(order.id, phoneNumber);
-        setClaimSuccess(true);
+        const result = await agentOrders.claimOrderWithTopup(order.id, phoneNumber);
+        const claimTransactionId = result?.paymentTransaction?.id;
+        if (!claimTransactionId) {
+          throw new Error(
+            t('messages.orderClaimWithTopupError', 'Failed to claim order with topup')
+          );
+        }
+        setShowClaimDialog(false);
         onActionComplete?.();
+        navigate(
+          buildClaimAwaitingPaymentTo({
+            orderId: order.id,
+            orderNumber: order.order_number,
+            phoneE164: result?.phoneNumber || phoneNumber || '',
+            claimTransactionId,
+          })
+        );
       } catch (error: any) {
         setClaimError(
           error.message ||
@@ -323,7 +336,6 @@ const AgentActions: React.FC<AgentActionsProps> = ({
 
   const handleCloseClaimDialog = () => {
     setShowClaimDialog(false);
-    setClaimSuccess(false);
     setClaimError(undefined);
   };
 
@@ -790,7 +802,6 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         order={order}
         userPhoneNumber={claimPhone}
         loading={loading}
-        success={claimSuccess}
         error={claimError}
       />
 

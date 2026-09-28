@@ -180,6 +180,16 @@ export interface OrderActionResponse {
   ready_in_minutes?: number;
 }
 
+export interface ClaimOrderTopupResponse extends OrderActionResponse {
+  holdAmount?: number;
+  phoneNumber?: string;
+  paymentTransaction?: {
+    id?: string;
+    transactionId?: string;
+    success?: boolean;
+  };
+}
+
 export interface OrderCancelResponse {
   success: boolean;
   order?: Order;

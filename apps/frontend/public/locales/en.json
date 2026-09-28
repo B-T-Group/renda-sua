@@ -5087,6 +5087,7 @@
       "waitingHint": "Waiting for payment to complete…",
       "paidTitle": "Payment confirmed",
       "paidBodyCheckout": "Your payment went through. The merchant will confirm your order next.",
+      "paidBodyClaim": "The hold is approved. This order is now assigned to you.",
       "paidBodyPickup": "Your payment went through. You can collect your order at the store.",
       "failedTitle": "Payment didn't go through",
       "failedBody": "We couldn't complete your payment via MoMo. Please check and try again.",

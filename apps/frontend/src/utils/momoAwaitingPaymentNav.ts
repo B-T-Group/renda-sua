@@ -1,4 +1,4 @@
-export type MobileMoneyAwaitingSource = 'checkout' | 'pickup' | 'retry';
+export type MobileMoneyAwaitingSource = 'checkout' | 'pickup' | 'retry' | 'claim';
 
 export type MobileMoneyAwaitingPaymentState = {
   orderIds: string[];
@@ -7,6 +7,8 @@ export type MobileMoneyAwaitingPaymentState = {
   orderNumbers?: string[];
   /** Optional confirmation payload to resume after paid (checkout). */
   confirmationState?: Record<string, unknown>;
+  /** Local claim-hold payment id when source is claim. */
+  claimTransactionId?: string;
 };
 
 export function momoAwaitingStorageKey(orderIds: string[]): string {
@@ -49,7 +51,9 @@ function splitCsv(value: string | null): string[] {
 }
 
 function parseSource(value: string | undefined | null): MobileMoneyAwaitingSource {
-  if (value === 'pickup' || value === 'retry' || value === 'checkout') return value;
+  if (value === 'pickup' || value === 'retry' || value === 'checkout' || value === 'claim') {
+    return value;
+  }
   return 'checkout';
 }
 
@@ -68,6 +72,9 @@ export function buildMomoAwaitingPaymentTo(
   params.set('source', state.source);
   if (state.orderNumbers?.length) {
     params.set('orderNumbers', state.orderNumbers.join(','));
+  }
+  if (state.claimTransactionId) {
+    params.set('claimTransactionId', state.claimTransactionId);
   }
   return {
     pathname: '/orders/awaiting-payment',
@@ -92,5 +99,22 @@ export function parseMomoAwaitingPaymentParams(
     : locationState?.orderNumbers;
   const confirmationState =
     locationState?.confirmationState || readMomoAwaitingConfirmation(orderIds);
-  return { orderIds, phoneE164, source, orderNumbers, confirmationState };
+  const claimTransactionId =
+    query.get('claimTransactionId')?.trim() || locationState?.claimTransactionId;
+  return { orderIds, phoneE164, source, orderNumbers, confirmationState, claimTransactionId };
+}
+
+export function buildClaimAwaitingPaymentTo(input: {
+  orderId: string;
+  orderNumber?: string;
+  phoneE164: string;
+  claimTransactionId?: string;
+}) {
+  return buildMomoAwaitingPaymentTo({
+    orderIds: [input.orderId],
+    phoneE164: input.phoneE164,
+    source: 'claim',
+    orderNumbers: input.orderNumber ? [input.orderNumber] : undefined,
+    claimTransactionId: input.claimTransactionId,
+  });
 }

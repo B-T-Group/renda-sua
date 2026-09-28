@@ -2879,6 +2879,7 @@ export class OrdersService {
       return {
         success: true,
         paymentTransaction: {
+          id: transaction.id,
           transactionId: paymentTransaction.transactionId,
           success: paymentTransaction.success,
         },

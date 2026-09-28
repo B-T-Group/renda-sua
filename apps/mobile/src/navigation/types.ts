@@ -102,6 +102,15 @@ export type MobileMoneyCheckoutReturn =
   | { to: 'place-order'; inventoryItemId: string; variantId?: string }
   | { to: 'cart-checkout' };
 
+/** Agent claim hold: wait for the agent to approve Mobile Money. */
+export type ClaimAwaitingPaymentParams = {
+  orderId: string;
+  orderNumber?: string;
+  phoneE164: string;
+  transactionId: string;
+  currency?: string;
+};
+
 /** MoMo push pending: wait for customer to approve on their phone. */
 export type MobileMoneyAwaitingPaymentParams = {
   orderIds: string[];

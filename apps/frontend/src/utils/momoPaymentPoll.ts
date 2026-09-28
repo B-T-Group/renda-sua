@@ -12,3 +12,17 @@ export function resolveMomoPaymentStatuses(
 
 export const MOMO_POLL_INTERVAL_MS = 5000;
 export const MOMO_POLL_TIMEOUT_MS = 3 * 60 * 1000;
+
+/** Claim-hold Mobile Money transaction status. */
+export function resolveClaimPaymentPhase(
+  status?: string | null
+): MomoPaymentPollPhase {
+  const value = (status ?? '').toLowerCase();
+  if (value === 'success' || value === 'paid' || value === 'completed') {
+    return 'paid';
+  }
+  if (value === 'failed' || value === 'cancelled' || value === 'canceled') {
+    return 'failed';
+  }
+  return 'waiting';
+}

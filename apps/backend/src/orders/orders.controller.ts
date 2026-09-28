@@ -1660,7 +1660,14 @@ export class OrdersController {
       properties: {
         success: { type: 'boolean', example: true },
         order: { type: 'object' },
-        paymentTransaction: { type: 'object' },
+        paymentTransaction: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Local claim payment id' },
+            transactionId: { type: 'string' },
+            success: { type: 'boolean' },
+          },
+        },
         holdAmount: { type: 'number' },
         phoneNumber: {
           type: 'string',

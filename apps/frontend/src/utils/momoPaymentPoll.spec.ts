@@ -1,4 +1,4 @@
-import { resolveMomoPaymentStatuses } from './momoPaymentPoll';
+import { resolveClaimPaymentPhase, resolveMomoPaymentStatuses } from './momoPaymentPoll';
 
 describe('resolveMomoPaymentStatuses', () => {
   it('returns waiting when empty or still pending', () => {
@@ -10,6 +10,12 @@ describe('resolveMomoPaymentStatuses', () => {
   it('returns paid when every order is paid', () => {
     expect(resolveMomoPaymentStatuses(['paid'])).toBe('paid');
     expect(resolveMomoPaymentStatuses(['paid', 'paid'])).toBe('paid');
+  });
+
+  it('maps claim hold statuses', () => {
+    expect(resolveClaimPaymentPhase('success')).toBe('paid');
+    expect(resolveClaimPaymentPhase('failed')).toBe('failed');
+    expect(resolveClaimPaymentPhase('pending')).toBe('waiting');
   });
 
   it('returns failed when any order failed', () => {
