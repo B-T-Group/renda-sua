@@ -2302,6 +2302,48 @@ describe('OrdersService', () => {
       ).rejects.toThrow(/Insufficient funds/i);
     });
 
+    it('processClaimOrderPayment does not assign when the agent hold fails', async () => {
+      accountsService.registerTransaction.mockResolvedValue({
+        success: false,
+        error: 'Insufficient funds for this transaction',
+      });
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+        });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const updateHold = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' } as any);
+      const assign = jest
+        .spyOn(service as any, 'assignOrderToAgent')
+        .mockResolvedValue({});
+
+      await expect(
+        service.processClaimOrderPayment({
+          entity_id: 'ORD-1',
+          account_id: 'account-1',
+          amount: 8000,
+          currency: 'XAF',
+        })
+      ).rejects.toThrow(/Insufficient funds/i);
+
+      expect(updateHold).not.toHaveBeenCalled();
+      expect(assign).not.toHaveBeenCalled();
+    });
+
     it('finalizeClientOrderPayment coerces stripped subtotal and fees to 0', async () => {
       const updateOrderHoldSpy = jest
         .spyOn(service, 'updateOrderHold')
@@ -2839,6 +2881,51 @@ describe('OrdersService', () => {
         },
         status: HttpStatus.FORBIDDEN,
       });
+    });
+
+    it('reverts assignment when the wallet hold fails', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        ...mockAgentUser,
+        agent: { id: 'agent-123', user_id: 'agent-123', is_verified: true },
+      });
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+      });
+      jest.spyOn(service as any, 'getOrderWithItems').mockResolvedValue({
+        ...mockReadyOrder,
+        fulfillment_method: 'delivery',
+        currency: 'XAF',
+        verified_agent_delivery: false,
+      });
+      jest.spyOn(service as any, 'assertClaimableFulfillment').mockReturnValue(undefined);
+      jest.spyOn(service as any, 'getAgentStatus').mockResolvedValue('active');
+      jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue(8000);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: 8000,
+      });
+      const assign = jest
+        .spyOn(service as any, 'assignOrderToAgent')
+        .mockResolvedValue({ id: 'order-123' });
+      const revert = jest
+        .spyOn(service as any, 'revertOrderAssignment')
+        .mockResolvedValue(undefined);
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' } as any);
+      accountsService.registerTransaction.mockResolvedValue({
+        success: false,
+        error: 'Insufficient funds for this transaction',
+      });
+
+      await expect(
+        service.claimOrder({ orderId: 'order-123' })
+      ).rejects.toThrow(/Insufficient funds/i);
+
+      expect(assign).toHaveBeenCalled();
+      expect(revert).toHaveBeenCalledWith('order-123');
     });
   });
 

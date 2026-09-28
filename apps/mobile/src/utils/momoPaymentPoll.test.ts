@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { resolveMomoPaymentStatuses } from './momoPaymentPoll';
+import { resolveClaimPaymentPhase, resolveMomoPaymentStatuses } from './momoPaymentPoll';
+
+describe('resolveClaimPaymentPhase', () => {
+  it('treats a successful hold as paid and a pending hold as waiting', () => {
+    expect(resolveClaimPaymentPhase('success')).toBe('paid');
+    expect(resolveClaimPaymentPhase('cancelled')).toBe('failed');
+    expect(resolveClaimPaymentPhase('pending')).toBe('waiting');
+  });
+});
 
 describe('resolveMomoPaymentStatuses', () => {
   it('returns waiting when no orders', () => {

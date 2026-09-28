@@ -167,6 +167,34 @@ describe('StripePaymentCallbackProcessor', () => {
     expect(callbackHandler.onPaymentFailure).not.toHaveBeenCalled();
   });
 
+  it('skips cash-advance repayment when crediting a claim-order top-up', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue(
+      makeTransaction({ status: 'authorized', payment_entity: 'claim_order' })
+    );
+    databaseService.getTransactionById.mockResolvedValue(
+      makeTransaction({ status: 'success', payment_entity: 'claim_order' })
+    );
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+    });
+
+    await processor.onPaymentIntentSucceeded(
+      {
+        id: 'pi_123',
+        metadata: { reference: 'stripe-ref-123' },
+      } as never,
+      req
+    );
+
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
+      accountId: 'account-123',
+      amount: 125,
+      memo: 'Stripe payment deposit - stripe-ref-123',
+      referenceId: 'tx-123',
+      skipCashAdvanceRepayment: true,
+    });
+  });
+
   it('credits capture_pending webhooks through the idempotent deposit path', async () => {
     databaseService.getTransactionByReference.mockResolvedValue(
       makeTransaction({ status: 'capture_pending' })

@@ -37,6 +37,7 @@ import { OrderViewToggle } from '../../components/agent/OrderViewToggle';
 import type { OrderViewMode } from '../../components/agent/OrderViewToggle';
 import { useStore } from '../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
+import { claimAwaitingParams } from '../../utils/claimAwaitingNav';
 import {
   agentIdVerificationPending,
   agentNeedsIdUpload,
@@ -342,14 +343,29 @@ export default function OpenOrdersScreen() {
       setTopupModalOrderId(null);
       setTopupPhone('');
       if (!locationCanClaim) { handleLocationBlocked(); return; }
-      await claimOrderWithTopup(id, phoneE164);
-      setInfoDialog({ title: t('agent.claimOrder.paymentApprovalTitle', { defaultValue: 'Check your phone' }), message: t('agent.claimOrder.successMessage', { defaultValue: 'Payment request sent!' }) });
+      const response = await claimOrderWithTopup(id, phoneE164);
+      const order = openOrders.find((item) => item.id === id);
+      const awaiting = claimAwaitingParams({
+        orderId: id,
+        orderNumber: order?.order_number,
+        phoneE164,
+        currency: order?.currency,
+        response,
+      });
+      if (!awaiting) {
+        setInfoDialog({
+          title: t('common.error'),
+          message: t('messages.orderClaimError', { defaultValue: 'Failed to claim order' }),
+        });
+        return;
+      }
+      navigation.navigate('ClaimAwaitingPayment', awaiting);
     } catch (e) {
       setInfoDialog({ title: t('common.error'), message: e instanceof Error ? e.message : 'Failed to claim order' });
     } finally {
       setClaimingId(null);
     }
-  }, [locationCanClaim, claimOrderWithTopup, handleLocationBlocked, isStripeRail, openOrders, refetch, showStripeClaimFundingUnavailable, t, topupModalOrderId]);
+  }, [locationCanClaim, claimOrderWithTopup, handleLocationBlocked, isStripeRail, navigation, openOrders, refetch, showStripeClaimFundingUnavailable, t, topupModalOrderId]);
 
   const closeTopupModal = useCallback(() => {
     setTopupModalOrderId(null);

@@ -45,7 +45,8 @@ import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersona
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { AgentStatusBar } from '../components/agent/AgentStatusBar';
 import { PersistentActiveDeliveryHeader } from '../components/agent/PersistentActiveDeliveryHeader';
-import type { CashAdvanceDrawSuccessParams, EnrollPersonaParams } from './types';
+import ClaimAwaitingPaymentScreen from '../screens/agent/ClaimAwaitingPaymentScreen';
+import type { CashAdvanceDrawSuccessParams, ClaimAwaitingPaymentParams, EnrollPersonaParams } from './types';
 import {
   TabBarIconContent,
   useFloatingTabBarSafeAreaInsets,
@@ -70,7 +71,8 @@ export type MainTabParamList = {
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 export type RootStackParamList = {
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  ClaimAwaitingPayment: ClaimAwaitingPaymentParams;
   NotificationsCenter: undefined;
   NotificationPermission: undefined;
   Earnings: undefined;
@@ -372,6 +374,11 @@ export function AgentRootNavigator() {
             name="NotificationsCenter"
             component={NotificationsScreen}
             options={{ title: 'Notifications' }}
+          />
+          <RootStack.Screen
+            name="ClaimAwaitingPayment"
+            component={ClaimAwaitingPaymentScreen}
+            options={{ title: t('orders.momoAwaiting.navTitle', 'Approve payment') }}
           />
         </RootStack.Navigator>
       </SafeAreaInsetsContext.Provider>

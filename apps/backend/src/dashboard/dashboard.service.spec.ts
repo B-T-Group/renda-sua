@@ -246,6 +246,55 @@ describe('DashboardService', () => {
       ]);
     });
 
+    it('keeps active orders when the available-orders list fails', async () => {
+      paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
+      stripeConnectService.isPayoutReady.mockResolvedValue(true);
+      ordersService.getOpenOrders.mockRejectedValue(new Error('orders down'));
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'agent',
+        active_persona: 'agent',
+        agent: { id: 'agent-1' },
+      });
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('AgentActiveOrders')) {
+            return {
+              agents: [{ orders_aggregate: { aggregate: { count: 3 } } }],
+            };
+          }
+          return { agents: [], user_uploads: [] };
+        }
+      );
+
+      const result = await service.getActionsNeeded();
+
+      expect(result.actions).toEqual([
+        expect.objectContaining({
+          id: 'active_orders',
+          kind: 'active_orders',
+          count: 3,
+        }),
+      ]);
+    });
+
+    it('counts a missing open-orders payload as zero', async () => {
+      paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
+      stripeConnectService.isPayoutReady.mockResolvedValue(true);
+      ordersService.getOpenOrders.mockResolvedValue({ success: true });
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'agent',
+        active_persona: 'agent',
+        agent: { id: 'agent-1' },
+      });
+
+      await expect(service.getActionsNeeded()).resolves.toEqual({
+        actions: [],
+        totalCount: 0,
+      });
+    });
+
     it('counts open deliveries from the available-orders list', async () => {
       paymentRouting.resolveRailForUser.mockResolvedValue('stripe');
       stripeConnectService.isPayoutReady.mockResolvedValue(true);

@@ -5,7 +5,6 @@ import {
   LocalShipping as DeliveryIcon,
   FlashOn,
   LocationOn as LocationIcon,
-  Phone,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -33,6 +32,7 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { pickClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
+import { buildClaimAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimOrderDialog from '../orders/ClaimOrderDialog';
 import ClaimingOrderOverlay from './ClaimingOrderOverlay';
@@ -94,7 +94,6 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   // Claim dialog state
   const [showClaimDialog, setShowClaimDialog] = useState(false);
   const [showClaimConfirmation, setShowClaimConfirmation] = useState(false);
-  const [showPaymentApprovalConfirmation, setShowPaymentApprovalConfirmation] = useState(false);
   const [showOrderUnavailableDialog, setShowOrderUnavailableDialog] =
     useState(false);
   const [orderUnavailableMessage, setOrderUnavailableMessage] = useState('');
@@ -323,12 +322,22 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         '/orders/claim_order_with_topup',
         payload
       );
-      if (response.data.success) {
-        setClaimSuccess(true);
+      const claimTransactionId = response.data.paymentTransaction?.id;
+      if (response.data.success && claimTransactionId) {
         setShowClaimDialog(false);
-        // Show payment approval confirmation screen first
-        // Don't call onClaimSuccess or navigate yet - wait for user confirmation
-        setShowPaymentApprovalConfirmation(true);
+        onClaimSuccess?.();
+        navigate(
+          buildClaimAwaitingPaymentTo({
+            orderId: order.id,
+            orderNumber: order.order_number,
+            phoneE164: response.data.phoneNumber || phoneNumber || '',
+            claimTransactionId,
+          })
+        );
+      } else if (response.data.success) {
+        throw new Error(
+          t('messages.orderClaimWithTopupError', 'Failed to claim order with topup')
+        );
       } else {
         throw new Error(
           response.data.error || 'Failed to claim order with topup'
@@ -351,13 +360,6 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
     setShowClaimDialog(false);
     setClaimSuccess(false);
     setClaimError(undefined);
-  };
-
-  const handleGoToOrder = () => {
-    setShowPaymentApprovalConfirmation(false);
-    // Now call onClaimSuccess and navigate after user has acknowledged payment approval
-    onClaimSuccess?.();
-    navigate(`/orders/${order.id}`);
   };
 
   const formatAddress = (address: any) => {
@@ -855,94 +857,6 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
         <DialogActions>
           <Button onClick={() => setShowOrderUnavailableDialog(false)}>
             {t('common.ok', 'OK')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Payment Approval Confirmation Dialog */}
-      <Dialog
-        open={showPaymentApprovalConfirmation}
-        onClose={undefined} // Prevent closing without action
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-          },
-        }}
-      >
-        <DialogTitle>
-          <Stack direction="row" alignItems="center" spacing={2}>
-            <Box
-              sx={{
-                p: 1.5,
-                borderRadius: 2,
-                bgcolor: 'warning.50',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Phone color="warning" sx={{ fontSize: 28 }} />
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight="bold">
-                {t(
-                  'agent.paymentApproval.title',
-                  'Approve Payment on Your Phone'
-                )}
-              </Typography>
-            </Box>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" sx={{ mb: 3 }} icon={<Phone />}>
-            <Typography variant="body2" fontWeight="medium">
-              {t(
-                'agent.paymentApproval.message',
-                'A payment request has been sent to your phone. Please check your phone and approve the payment request to complete claiming this order.'
-              )}
-            </Typography>
-          </Alert>
-
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="body1" color="text.secondary" gutterBottom>
-              <strong>{t('agent.paymentApproval.orderNumber', 'Order Number')}:</strong>{' '}
-              {order.order_number}
-            </Typography>
-          </Box>
-
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="body2">
-              {t(
-                'agent.paymentApproval.instruction',
-                'Once you approve the payment on your phone, the order will be assigned to you. You can then proceed to view the order details and start the delivery process.'
-              )}
-            </Typography>
-          </Alert>
-
-          <Alert severity="success" icon={<CheckCircle />}>
-            <Typography variant="body2" fontWeight="medium">
-              {t(
-                'agent.paymentApproval.note',
-                'After approving the payment, click "Go to Order" below to view the order details.'
-              )}
-            </Typography>
-          </Alert>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button
-            onClick={handleGoToOrder}
-            variant="contained"
-            color="primary"
-            size="large"
-            fullWidth
-            startIcon={<CheckCircle />}
-            sx={{
-              fontWeight: 'bold',
-            }}
-          >
-            {t('agent.paymentApproval.goToOrder', 'Go to Order')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -42,6 +42,7 @@ import {
 } from '../../../components/delivery';
 import { useStore } from '../../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../../utils/defaultClaimTopupPhone';
+import { claimAwaitingParams } from '../../../utils/claimAwaitingNav';
 import {
   agentIdVerificationPending,
   agentNeedsIdUpload,
@@ -177,7 +178,6 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
   const [claimLoading, setClaimLoading] = useState(false);
   const [showClaimTopupModal, setShowClaimTopupModal] = useState(false);
   const [claimTopupPhone, setClaimTopupPhone] = useState('');
-  const [showPaymentApprovalModal, setShowPaymentApprovalModal] = useState(false);
   const [claimConfirmHold, setClaimConfirmHold] = useState<number | null>(null);
   const [claimInfoDialog, setClaimInfoDialog] = useState<{ title: string; message: string } | null>(null);
   const [lifecycleActionConfirm, setLifecycleActionConfirm] = useState<LifecycleActionKey | null>(null);
@@ -656,10 +656,24 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         showStripeClaimFundingUnavailable();
         return;
       }
-      await agentApi.orders.claimOrderWithTopup(orderId, phoneE164);
+      const response = await agentApi.orders.claimOrderWithTopup(orderId, phoneE164);
       setShowClaimTopupModal(false);
       setClaimTopupPhone('');
-      setShowPaymentApprovalModal(true);
+      const awaiting = claimAwaitingParams({
+        orderId,
+        orderNumber: order.order_number,
+        phoneE164,
+        currency: order.currency,
+        response,
+      });
+      if (!awaiting) {
+        setClaimInfoDialog({
+          title: t('common.error'),
+          message: t('agent.claimOrder.failure', 'Could not claim this order.'),
+        });
+        return;
+      }
+      navigation.navigate('ClaimAwaitingPayment', awaiting);
     } catch (e) {
       setClaimInfoDialog({
         title: t('common.error'),
@@ -668,12 +682,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     } finally {
       setClaimLoading(false);
     }
-  }, [isStripeRail, order, orderId, refetchOrder, showStripeClaimFundingUnavailable, t]);
-
-  const handleGoToOrderAfterPayment = useCallback(() => {
-    setShowPaymentApprovalModal(false);
-    void refreshAfterOrderAction();
-  }, [refreshAfterOrderAction]);
+  }, [isStripeRail, navigation, order, orderId, refetchOrder, showStripeClaimFundingUnavailable, t]);
 
   const cardStyle = {
     backgroundColor: colors.surface,
@@ -1208,25 +1217,6 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         onConfirm={handleCashExceptionConfirm}
         submitting={payAtDeliveryDialogLoading}
       />
-
-      <Portal>
-        <Dialog visible={showPaymentApprovalModal} dismissable={false}>
-          <Dialog.Content>
-            <MaterialCommunityIcons name="cellphone-check" size={48} color={colors.primary.main} style={{ alignSelf: 'center', marginBottom: 12 }} />
-            <Text style={[styles.modalTitle, { color: colors.text.primary }, typography.h6]}>
-              {t('agent.claimOrder.paymentApprovalTitle', 'Vérifiez votre téléphone')}
-            </Text>
-            <Text style={[styles.modalLabel, { color: colors.text.secondary }, typography.body2, { marginBottom: 16 }]}>
-              {t('agent.claimOrder.successMessage', 'Demande de paiement envoyée ! Acceptez la demande sur votre téléphone pour réclamer la commande.')}
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button mode="contained" onPress={handleGoToOrderAfterPayment}>
-              {t('agent.claimOrder.paymentApprovalGoToOrder', 'Voir la commande')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
 
       <AgentClaimConfirmDialog
         visible={claimConfirmHold !== null}

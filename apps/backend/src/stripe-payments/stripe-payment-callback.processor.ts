@@ -370,7 +370,7 @@ export class StripePaymentCallbackProcessor {
       amount: tx.amount,
       memo: `Stripe payment deposit - ${tx.reference}`,
       referenceId: tx.id,
-      ...(tx.payment_entity === 'order'
+      ...(tx.payment_entity === 'order' || tx.payment_entity === 'claim_order'
         ? { skipCashAdvanceRepayment: true }
         : {}),
     });

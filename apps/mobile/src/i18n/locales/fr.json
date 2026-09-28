@@ -771,6 +771,7 @@
       "viewOrder": "Voir la commande",
       "continue": "Continuer",
       "paidBodyWaitingForStore": "En attente de l'acceptation du magasin. Nous vous préviendrons dès qu'ils confirmeront.",
+      "paidBodyClaim": "La garantie est approuvée. Cette commande vous est maintenant assignée.",
       "usuallyWithin": "Habituellement sous 15 min",
       "refundIfNotAccepted": "Si non accepté, vous obtenez un remboursement",
       "trackOnMap": "Suivre sur la carte"

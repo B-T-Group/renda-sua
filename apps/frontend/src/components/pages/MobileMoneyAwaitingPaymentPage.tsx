@@ -14,11 +14,14 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import type { AxiosInstance } from 'axios';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
+import { useApiClient } from '../../hooks/useApiClient';
+import { useClaimPaymentPoll } from '../../hooks/useClaimPaymentPoll';
 import { useMobileMoneyPaymentPoll } from '../../hooks/useMobileMoneyPaymentPoll';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 import {
@@ -33,6 +36,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const backendOrders = useBackendOrders();
+  const apiClient = useApiClient();
   const params = useMemo(
     () =>
       parseMomoAwaitingPaymentParams(
@@ -45,8 +49,10 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
   const phoneE164 = params.phoneE164;
   const source = params.source;
   const confirmationState = params.confirmationState;
-
-  const { state, error, stop, restart } = useMobileMoneyPaymentPoll(orderIds);
+  const [claimTransactionId, setClaimTransactionId] = useState(params.claimTransactionId ?? '');
+  const claimPoll = useClaimPaymentPoll(source === 'claim' ? claimTransactionId : null);
+  const orderPoll = useMobileMoneyPaymentPoll(source === 'claim' ? [] : orderIds);
+  const { state, error, stop, restart } = source === 'claim' ? claimPoll : orderPoll;
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const masked = useMemo(() => maskPhoneE164(phoneE164), [phoneE164]);
@@ -76,13 +82,18 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
     setRetryError(null);
     try {
       const phone = phoneE164.trim() || undefined;
-      await Promise.all(
-        orderIds.map((id) =>
-          source === 'pickup'
-            ? backendOrders.initiatePayAtPickupPayment(id, phone)
-            : backendOrders.retryOrderPayment(id)
-        )
-      );
+      if (source === 'claim') {
+        const nextId = await retryClaimHold(apiClient, orderIds[0], phone);
+        setClaimTransactionId(nextId);
+      } else {
+        await Promise.all(
+          orderIds.map((id) =>
+            source === 'pickup'
+              ? backendOrders.initiatePayAtPickupPayment(id, phone)
+              : backendOrders.retryOrderPayment(id)
+          )
+        );
+      }
       restart();
     } catch (e: any) {
       setRetryError(
@@ -156,7 +167,12 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
 
         <Typography variant="body1" color="text.secondary" sx={{ mt: 1.5, lineHeight: 1.6 }}>
           {phase === 'paid'
-            ? source === 'pickup'
+            ? source === 'claim'
+              ? t(
+                  'orders.momoAwaiting.paidBodyClaim',
+                  'The hold is approved. This order is now assigned to you.'
+                )
+              : source === 'pickup'
               ? t(
                   'orders.momoAwaiting.paidBodyPickup',
                   'Your payment went through. You can collect your order at the store.'
@@ -245,7 +261,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
         ) : null}
 
         {/* Post-payment next steps - only show on paid phase */}
-        {phase === 'paid' && (
+        {phase === 'paid' && source !== 'claim' && (
           <Box sx={{ mt: 3 }}>
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
@@ -357,7 +373,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
         <Stack spacing={1.5} sx={{ mt: 4 }}>
           {phase === 'paid' ? (
             <Button variant="contained" size="large" onClick={onContinueAfterPaid}>
-              {source === 'pickup'
+              {source === 'pickup' || source === 'claim'
                 ? t('orders.momoAwaiting.viewOrder', 'View order')
                 : t('orders.momoAwaiting.continue', 'Continue')}
             </Button>
@@ -382,7 +398,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
         </Stack>
 
         {/* Good news: order is still reserved */}
-        {phase === 'failed' && (
+        {phase === 'failed' && source !== 'claim' && (
           <Box
             sx={{
               mt: 3,
@@ -411,5 +427,21 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
     </Container>
   );
 };
+
+async function retryClaimHold(
+  apiClient: AxiosInstance,
+  orderId: string,
+  phone?: string
+): Promise<string> {
+  const response = await apiClient.post('/orders/claim_order_with_topup', {
+    orderId,
+    phone_number: phone,
+  });
+  const nextId = response.data?.paymentTransaction?.id?.trim();
+  if (!response.data?.success || !nextId) {
+    throw new Error(response.data?.message || 'Failed to claim order with topup');
+  }
+  return nextId;
+}
 
 export default MobileMoneyAwaitingPaymentPage;

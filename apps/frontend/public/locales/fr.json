@@ -4809,6 +4809,7 @@
       "waitingHint": "En attente de la confirmation du paiement…",
       "paidTitle": "Paiement confirmé",
       "paidBodyCheckout": "Votre paiement a réussi. Le commerçant confirmera ensuite votre commande.",
+      "paidBodyClaim": "La garantie est approuvée. Cette commande vous est maintenant assignée.",
       "paidBodyPickup": "Votre paiement a réussi. Vous pouvez récupérer votre commande au magasin.",
       "failedTitle": "Paiement n'a pas abouti",
       "failedBody": "Nous n'avons pas pu compléter votre paiement via MoMo. Veuillez vérifier et réessayer.",

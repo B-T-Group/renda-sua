@@ -522,7 +522,8 @@ export class MobilePaymentCallbackProcessor {
       amount: transaction.amount,
       memo: `Mobile payment deposit - ${transaction.reference}`,
       referenceId: transaction.id,
-      ...(transaction.payment_entity === 'order'
+      ...(transaction.payment_entity === 'order' ||
+      transaction.payment_entity === 'claim_order'
         ? { skipCashAdvanceRepayment: true }
         : {}),
     });
