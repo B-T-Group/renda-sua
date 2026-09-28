@@ -194,24 +194,16 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
           tabBarAccessibilityLabel: t('nav.clientTabs.rentals', { defaultValue: 'Rentals' }),
           tabBarIcon: ({ color, focused }) => (
             <TabBarIconContent focused={focused} label={t('nav.clientTabs.rentals', { defaultValue: 'Rentals' })}>
-              <MaterialCommunityIcons name={focused ? 'key' : 'key-outline'} size={24} color={color} />
+              <MaterialCommunityIcons name={focused ? 'hand-coin' : 'hand-coin-outline'} size={24} color={color} />
             </TabBarIconContent>
           ),
         }}
       />
       <ClientTab.Screen
         name="ClientFoods"
-        listeners={({ navigation }) => ({
-          focus: () => {
-            if (flags.floating_nav_enabled) {
-              navigation.navigate('ClientBrowse', { segment: 'food' });
-            }
-          },
-        })}
         options={{
           tabBarLabel: t('nav.clientTabs.foods', { defaultValue: 'Food' }),
           tabBarAccessibilityLabel: t('nav.clientTabs.foods', { defaultValue: 'Food' }),
-          tabBarButton: flags.floating_nav_enabled ? () => null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <TabBarIconContent focused={focused} label={t('nav.clientTabs.foods', { defaultValue: 'Food' })}>
               <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />

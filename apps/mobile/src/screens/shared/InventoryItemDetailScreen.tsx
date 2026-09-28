@@ -311,14 +311,14 @@ function InventoryItemDetailScreen() {
     const foodTab = Boolean(item?.food_availability);
     if (isGuest) {
       nav.navigate('GuestTabs', {
-        screen: 'GuestBrowse',
-        params: foodTab ? { segment: 'food' } : { segment: 'all' },
+        screen: foodTab ? 'GuestFoods' : 'GuestBrowse',
+        params: foodTab ? undefined : { segment: 'all' },
       });
       return;
     }
     nav.navigate('ClientMainTabs', {
-      screen: 'ClientBrowse',
-      params: foodTab ? { segment: 'food' } : { segment: 'all' },
+      screen: foodTab ? 'ClientFoods' : 'ClientBrowse',
+      params: foodTab ? undefined : { segment: 'all' },
     });
   }, [isGuest, item?.food_availability, navigation]);
 
