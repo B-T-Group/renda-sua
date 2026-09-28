@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -22,7 +22,7 @@ import Logo from '../../components/Logo';
 import PhoneNumberInput from '../../components/PhoneNumberInput';
 import { getDeviceDefaultCountryCode } from '../../utils/deviceDefaultCountry';
 import { getDefaultLoginMethod, type LoginIdentifierMode } from '../../utils/authDefaults';
-import { nationalDigitsToE164 } from '../../utils/phoneLoginUsername';
+import { nationalDigitsToE164, seedPhoneInputFromE164 } from '../../utils/phoneLoginUsername';
 import type { LoginScreenProps } from '../../navigation/types';
 import { getAuthFlowErrorKey } from '../../utils/authErrorI18nKey';
 import {
@@ -39,7 +39,7 @@ import { MobileOtpChannelPicker } from '../../components/auth/MobileOtpChannelPi
 type EmailSignInMode = 'password' | 'otp';
 type LoginStep = 'identifier' | 'channel';
 
-function LoginScreen({ navigation }: LoginScreenProps) {
+function LoginScreen({ navigation, route }: LoginScreenProps) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing } = useTheme();
   const insets = useSafeAreaInsets();
@@ -166,7 +166,77 @@ function LoginScreen({ navigation }: LoginScreenProps) {
     [auth, navigateToOtp]
   );
 
+  const autoStartNonce = useRef<number | null>(null);
+  const autoStartInFlight = useRef(false);
+  const [autoStarting, setAutoStarting] = useState(false);
+  useEffect(() => {
+    const prefill = route.params;
+    const nonce = prefill?.autoStartNonce;
+    if (!prefill?.autoStartOtp || nonce == null || autoStartNonce.current === nonce) return;
+    if (autoStartInFlight.current) return;
+    autoStartNonce.current = nonce;
+    autoStartInFlight.current = true;
+    setAutoStarting(true);
+    const emailAddress = prefill.prefillEmail?.trim();
+    const phoneE164 = prefill.prefillPhoneE164?.trim();
+    void (async () => {
+      try {
+      if (emailAddress) {
+        setLoginMethod('email');
+        setEmailSignInMode('otp');
+        setEmail(emailAddress);
+        const contact = { email: emailAddress };
+        const optionsResult = await fetchLoginOtpOptions({ email: contact.email });
+        if (!optionsResult.ok) {
+          setValidationError(optionsResult.error);
+          return;
+        }
+        if (optionsResult.options.availableChannels.length <= 1) {
+          await startOtpForContact(
+            contact,
+            optionsResult.options.defaultChannel,
+            optionsResult.options
+          );
+          return;
+        }
+        setPendingContact(contact);
+        setChannelOptions(optionsResult.options);
+        setSelectedChannel(optionsResult.options.defaultChannel);
+        setLoginStep('channel');
+        return;
+      }
+      if (!phoneE164) return;
+      const seeded = seedPhoneInputFromE164(phoneE164, getDeviceDefaultCountryCode());
+      setLoginMethod('phone');
+      setPhoneCountry(seeded.countryIso);
+      setPhoneNationalDigits(seeded.nationalDigits);
+      const contact = { phoneE164 };
+      const optionsResult = await fetchLoginOtpOptions({ phone_number: phoneE164 });
+      if (!optionsResult.ok) {
+        setValidationError(optionsResult.error);
+        return;
+      }
+      if (optionsResult.options.availableChannels.length <= 1) {
+        await startOtpForContact(
+          contact,
+          optionsResult.options.defaultChannel,
+          optionsResult.options
+        );
+        return;
+      }
+      setPendingContact(contact);
+      setChannelOptions(optionsResult.options);
+      setSelectedChannel(optionsResult.options.defaultChannel);
+      setLoginStep('channel');
+      } finally {
+        autoStartInFlight.current = false;
+        setAutoStarting(false);
+      }
+    })();
+  }, [route.params, startOtpForContact]);
+
   const handleLogin = async () => {
+    if (autoStarting) return;
     setValidationError(null);
     auth.clearError();
 
@@ -465,7 +535,8 @@ function LoginScreen({ navigation }: LoginScreenProps) {
           <AppButton
             label={ctaLabel}
             onPress={() => void handleLogin()}
-            loading={auth.isLoading}
+            loading={auth.isLoading || autoStarting}
+            disabled={autoStarting}
             fullWidth
             style={styles.ctaButton}
           />

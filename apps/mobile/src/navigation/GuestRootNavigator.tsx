@@ -166,7 +166,7 @@ function GuestTabsNavigator({
           tabBarAccessibilityLabel: t('nav.guestTabs.rentals', 'Rentals'),
           tabBarIcon: ({ color, focused }) => (
             <TabBarIconContent focused={focused} label={t('nav.guestTabs.rentals', 'Rentals')}>
-              <MaterialCommunityIcons name={focused ? 'calendar-clock' : 'calendar-clock-outline'} size={24} color={color} />
+              <MaterialCommunityIcons name={focused ? 'key' : 'key-outline'} size={24} color={color} />
             </TabBarIconContent>
           ),
         }}

@@ -36,6 +36,7 @@ function SavedAccountsScreenBase() {
   const route = useRoute<SavedAccountsScreenProps['route']>();
   const mode = route.params?.mode ?? 'continue';
   const [signingInId, setSigningInId] = useState<string | null>(null);
+  const [freshSignInAccountId, setFreshSignInAccountId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   useFocusEffect(
@@ -63,6 +64,9 @@ function SavedAccountsScreenBase() {
       setSigningInId(null);
 
       if (!ok) {
+        if (auth.error === 'savedAccounts.errors.signInRequired') {
+          setFreshSignInAccountId(accountId);
+        }
         if (auth.error?.startsWith('savedAccounts.')) {
           setLocalError(t(auth.error, 'Unable to sign in. Try again or use another account.'));
         } else if (auth.error) {
@@ -85,11 +89,31 @@ function SavedAccountsScreenBase() {
     navigation.navigate('Login');
   }, [mode, navigation]);
 
+  const accountNeedingSignIn = savedAccounts.sortedAccounts.find(
+    (account) => account.id === freshSignInAccountId
+  );
+
+  const startFreshSignIn = useCallback(() => {
+    if (!accountNeedingSignIn) {
+      navigation.navigate('Login');
+      return;
+    }
+    const email = accountNeedingSignIn.email?.trim();
+    const phone = accountNeedingSignIn.phone?.trim();
+    navigation.navigate('Login', {
+      prefillEmail: email || undefined,
+      prefillPhoneE164: !email && phone ? phone : undefined,
+      autoStartOtp: Boolean(email || phone),
+      autoStartNonce: Date.now(),
+    });
+  }, [accountNeedingSignIn, navigation]);
+
   const signInRequiredMessage = t(
     'savedAccounts.errors.signInRequired',
     'This account needs a fresh sign-in. Sign in again with your code to continue.'
   );
-  const needsFreshSignIn = auth.error === 'savedAccounts.errors.signInRequired';
+  const needsFreshSignIn =
+    auth.error === 'savedAccounts.errors.signInRequired' || Boolean(accountNeedingSignIn);
   const displayError =
     localError ?? (needsFreshSignIn ? signInRequiredMessage : null);
 
@@ -152,11 +176,15 @@ function SavedAccountsScreenBase() {
           <Button
             mode="contained"
             icon="login"
-            onPress={handleUseAnother}
+            onPress={startFreshSignIn}
             disabled={!!signingInId}
             style={{ marginBottom: spacing.md }}
           >
-            {t('savedAccounts.signInAgain', 'Sign in again')}
+            {accountNeedingSignIn
+              ? t('savedAccounts.signInAs', 'Sign in as {{name}}', {
+                  name: accountNeedingSignIn.label || accountNeedingSignIn.displayName,
+                })
+              : t('savedAccounts.signInAgain', 'Sign in again')}
           </Button>
         ) : null}
 

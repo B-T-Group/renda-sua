@@ -1381,6 +1381,7 @@
     "orLabel": "ou",
     "signInWithCode": "Se connecter avec un code",
     "signInAgain": "Se reconnecter",
+    "signInAs": "Se connecter en tant que {{name}}",
     "cancelSwitch": "Annuler",
     "backToSavedAccounts": "Retour aux comptes enregistrés"
   },
