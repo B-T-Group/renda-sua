@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { CommonActions } from '@react-navigation/native';
+import { NavigatorScreenParams, StackActions } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 
 import HomeScreen from '../screens/agent/HomeScreen';
@@ -63,7 +63,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 export type MainTabParamList = {
   Dashboard: undefined;
   OpenOrders: undefined;
-  Orders: undefined;
+  Orders: NavigatorScreenParams<OrdersStackParamList> | undefined;
   Menu: undefined;
 };
 
@@ -178,16 +178,18 @@ function MainTabsScreen() {
         listeners={({ navigation }) => ({
           // Always land on the orders list when the tab is pressed, even when a
           // previously opened order detail was preserved in the nested stack.
-          tabPress: () => {
+          tabPress: (e) => {
+            e.preventDefault();
             const state = navigation.getState();
             const ordersRoute = state.routes.find((r) => r.name === 'Orders');
             const nestedStack = ordersRoute?.state;
             if (nestedStack?.key && (nestedStack.index ?? 0) > 0) {
               navigation.dispatch({
-                ...CommonActions.reset({ index: 0, routes: [{ name: 'OrdersList' }] }),
+                ...StackActions.popToTop(),
                 target: nestedStack.key,
               });
             }
+            navigation.navigate('Orders', { screen: 'OrdersList' });
           },
         })}
         options={{

@@ -1450,6 +1450,7 @@
     "orLabel": "or",
     "signInWithCode": "Sign in with a code",
     "signInAgain": "Sign in again",
+    "signInAs": "Sign in as {{name}}",
     "cancelSwitch": "Cancel",
     "backToSavedAccounts": "Back to saved accounts"
   },

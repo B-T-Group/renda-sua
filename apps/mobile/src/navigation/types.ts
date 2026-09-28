@@ -33,9 +33,18 @@ export type OtpVerificationParams = {
   maskedPhone?: string;
 };
 
+export type LoginParams = {
+  /** Prefill and start a code sign-in for a saved profile. */
+  prefillEmail?: string;
+  prefillPhoneE164?: string;
+  autoStartOtp?: boolean;
+  /** Changes on every saved-profile sign-in so a reused Login screen sends a new code. */
+  autoStartNonce?: number;
+};
+
 export type AuthStackParamList = {
   SavedAccounts: { mode?: 'continue' | 'switch' } | undefined;
-  Login: undefined;
+  Login: LoginParams | undefined;
   Signup: SignupParams | undefined;
   ResetPassword: undefined;
   OtpVerification: OtpVerificationParams;
