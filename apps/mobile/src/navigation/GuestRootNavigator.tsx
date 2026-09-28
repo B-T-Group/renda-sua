@@ -166,24 +166,16 @@ function GuestTabsNavigator({
           tabBarAccessibilityLabel: t('nav.guestTabs.rentals', 'Rentals'),
           tabBarIcon: ({ color, focused }) => (
             <TabBarIconContent focused={focused} label={t('nav.guestTabs.rentals', 'Rentals')}>
-              <MaterialCommunityIcons name={focused ? 'key' : 'key-outline'} size={24} color={color} />
+              <MaterialCommunityIcons name={focused ? 'hand-coin' : 'hand-coin-outline'} size={24} color={color} />
             </TabBarIconContent>
           ),
         }}
       />
       <GuestTab.Screen
         name="GuestFoods"
-        listeners={({ navigation }) => ({
-          focus: () => {
-            if (flags.floating_nav_enabled) {
-              navigation.navigate('GuestBrowse', { segment: 'food' });
-            }
-          },
-        })}
         options={{
           tabBarLabel: t('nav.guestTabs.foods', 'Food'),
           tabBarAccessibilityLabel: t('nav.guestTabs.foods', 'Food'),
-          tabBarButton: flags.floating_nav_enabled ? () => null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <TabBarIconContent focused={focused} label={t('nav.guestTabs.foods', 'Food')}>
               <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />

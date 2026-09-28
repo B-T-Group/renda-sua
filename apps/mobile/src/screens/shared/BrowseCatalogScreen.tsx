@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Chip, SegmentedButtons, Text } from 'react-native-paper';
+import { Chip, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { TabAwareSnackbar } from '../../components/feedback/TabAwareSnackbar';
@@ -49,7 +49,6 @@ import { FOOD_CATEGORY_NAME } from '../../utils/foodAvailability';
 import { useCatalogOrigin } from '../../hooks/useCatalogOrigin';
 import { useHeroCarouselActions } from '../../hooks/useHeroCarouselActions';
 import { BrowseFtueNudge } from '../../hooks/useBrowseFtueNudge';
-import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { useReportTabBarScroll } from '../../navigation/floatingTabBarVisibility';
 
 const CatalogCardRow = memo(function CatalogCardRow({
@@ -209,7 +208,6 @@ function BrowseCatalogScreenInner({
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const { colors, typography, spacing } = theme;
-  const { flags } = useClientFlags();
   const { onScroll: reportTabBarScroll } = useReportTabBarScroll();
   const [catalogSegment, setCatalogSegment] = useState<'all' | 'food'>(
     legacyFoodOnly ? 'food' : initialSegment
@@ -815,25 +813,6 @@ function BrowseCatalogScreenInner({
           },
         ]}
       >
-        {flags.floating_nav_enabled && !legacyFoodOnly ? (
-          <SegmentedButtons
-            value={catalogSegment}
-            onValueChange={(value) => setCatalogSegment(value as 'all' | 'food')}
-            buttons={[
-              {
-                value: 'all',
-                label: t('public.items.segmentAll', 'All'),
-                accessibilityLabel: t('public.items.segmentAllA11y', 'Browse all items'),
-              },
-              {
-                value: 'food',
-                label: t('nav.guestTabs.foods', 'Food'),
-                accessibilityLabel: t('foods.segmentA11y', 'Browse food'),
-              },
-            ]}
-            style={{ marginBottom: spacing.sm }}
-          />
-        ) : null}
         <View style={styles.searchRow}>
           <View style={styles.searchFlex}>
             <CatalogBrowseSearchBar
