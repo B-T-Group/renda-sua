@@ -313,6 +313,48 @@ describe('AccountsService', () => {
       expect(insert?.[1].transactionType).not.toBe('cash_advance_repayment');
     });
 
+    it('credits only the unpaid remainder when skip-repay still counts a prior repayment', async () => {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('SumAppliedDeposit')) {
+          return { account_transactions: [{ amount: 100 }] };
+        }
+        if (query.includes('GetAccountById')) {
+          return {
+            accounts_by_pk: { ...activeAccount, cash_advance_balance: -500 },
+          };
+        }
+        return { account_transactions: [] };
+      });
+      executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx-gap' } };
+        }
+        return { update_accounts_by_pk: { id: accountId } };
+      });
+
+      const result = await service.registerDepositIfNotExists({
+        accountId,
+        amount: 300,
+        memo: 'order payment retry',
+        referenceId,
+        skipCashAdvanceRepayment: true,
+      });
+
+      expect(result.success).toBe(true);
+      const sumCall = executeQuery.mock.calls.find(([query]) =>
+        String(query).includes('SumAppliedDeposit')
+      );
+      expect(String(sumCall?.[0])).toContain('cash_advance_repayment');
+      expect(sumCall?.[1]).toEqual({ accountId, referenceId });
+      const insert = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('InsertTransaction')
+      );
+      expect(insert?.[1]).toMatchObject({
+        amount: 200,
+        transactionType: 'deposit',
+      });
+    });
+
     it('does not credit again when a prior repayment already covers the skip-repay deposit', async () => {
       executeQuery.mockResolvedValue({
         account_transactions: [{ amount: 300 }],
