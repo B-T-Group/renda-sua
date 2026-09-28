@@ -25,7 +25,8 @@ export interface TransactionRequest {
   maxCashAdvanceDebt?: number;
   /**
    * When true, deposits credit available balance only and do not repay cash
-   * advance. Used for order / order-deposit MoMo so funds stay available to hold.
+   * advance. Used for order / claim_order / order-deposit so funds stay
+   * available to hold.
    */
   skipCashAdvanceRepayment?: boolean;
 }
