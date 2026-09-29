@@ -560,10 +560,16 @@ export class MobilePaymentCallbackProcessor {
           error?.message || error
         )}`
       );
-      if (transaction.payment_entity === 'order_deposit') {
+      if (this.shouldFailClosedOnHandlerError(transaction.payment_entity)) {
         throw error;
       }
     }
+  }
+
+  private shouldFailClosedOnHandlerError(
+    paymentEntity?: string | null
+  ): boolean {
+    return paymentEntity === 'order_deposit' || paymentEntity === 'claim_order';
   }
 
   private async applyMypvitFailureSideEffects(

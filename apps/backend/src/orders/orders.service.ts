@@ -226,6 +226,17 @@ type InventoryQuantityRequest = {
   quantity?: number;
 };
 
+type ClaimPaymentContext = {
+  order: Orders;
+  account: { id: string; user_id: string };
+  user: {
+    id: string;
+    first_name?: string | null;
+    last_name?: string | null;
+  };
+  agentId: string;
+};
+
 type OrderDeliveryFeeInfo = {
   deliveryFee: number;
   method: 'distance_based' | 'flat_fee';
@@ -9944,70 +9955,110 @@ export class OrdersService {
   }
 
   /**
-   * Process claim order payment - credits agent account with hold amount
+   * Process claim order payment - hold funds, then assign. If assignment
+   * (or later finalize steps) fail, release the hold so the MoMo credit
+   * stays available instead of stranded in withheld.
    */
   async processClaimOrderPayment(transaction: any): Promise<void> {
     try {
-      // Get order details by order number (reference)
-      const order = await this.requireOrderDetailsByNumber(transaction.entity_id);
-
-      const account = await this.hasuraSystemService.getAccountById(
-        transaction.account_id
-      );
-
-      if (!account) {
-        throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
-      }
-
-      const user = await this.hasuraSystemService.getUserById(account.user_id);
-
-      if (!user || !userHasPersona(user, 'agent') || !user.agent) {
-        throw new HttpException(
-          'User or agent not found',
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      const orderHold = await this.getOrCreateOrderHold(order.id);
-
-      await this.requireSuccessfulHold({
-        accountId: account.id,
-        amount: transaction.amount,
-        memo: `Hold for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-
-      await this.updateOrderHold(orderHold.id, {
-        agent_hold_amount: transaction.amount,
-        agent_id: user.agent.id,
-      });
-
-      await this.assignOrderToAgent(
-        order.id,
-        user.agent.id,
-        'assigned_to_agent'
-      );
-
-      await this.createStatusHistoryEntry(
-        order.id,
-        'assigned_to_agent',
-        `Order assigned to agent ${user.first_name} ${user.last_name} with topup payment`,
-        'agent',
-        user.id
-      );
-
-      await this.onOrderAssignedToAgent(order.id, user.agent.id);
-
+      const ctx = await this.loadClaimPaymentContext(transaction);
+      await this.holdThenAssignClaim(ctx, transaction);
       this.logger.log(
-        `Successfully processed claim order payment for order ${order.order_number}, amount: ${transaction.amount} ${transaction.currency}`
+        `Successfully processed claim order payment for order ${ctx.order.order_number}, amount: ${transaction.amount} ${transaction.currency}`
       );
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Failed to process claim order payment: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
       throw error;
+    }
+  }
+
+  private async loadClaimPaymentContext(transaction: {
+    entity_id?: string;
+    account_id?: string;
+  }): Promise<ClaimPaymentContext> {
+    const order = await this.requireOrderDetailsByNumber(
+      String(transaction.entity_id ?? '')
+    );
+    const account = await this.hasuraSystemService.getAccountById(
+      String(transaction.account_id ?? '')
+    );
+    if (!account) {
+      throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
+    }
+    const user = await this.hasuraSystemService.getUserById(account.user_id);
+    if (!user || !userHasPersona(user, 'agent') || !user.agent) {
+      throw new HttpException('User or agent not found', HttpStatus.NOT_FOUND);
+    }
+    return { order, account, user, agentId: user.agent.id };
+  }
+
+  private async holdThenAssignClaim(
+    ctx: ClaimPaymentContext,
+    transaction: { amount: number }
+  ): Promise<void> {
+    const orderHold = await this.getOrCreateOrderHold(ctx.order.id);
+    await this.requireSuccessfulHold({
+      accountId: ctx.account.id,
+      amount: transaction.amount,
+      memo: `Hold for order ${ctx.order.order_number}`,
+      referenceId: ctx.order.id,
+    });
+    try {
+      await this.finishClaimAssignment(ctx, orderHold, transaction);
+    } catch (error: any) {
+      await this.revertOrderAssignment(ctx.order.id);
+      await this.releaseClaimHold(ctx.account.id, transaction.amount, ctx.order);
+      throw error;
+    }
+  }
+
+  private async finishClaimAssignment(
+    ctx: ClaimPaymentContext,
+    orderHold: { id: string },
+    transaction: { amount: number }
+  ): Promise<void> {
+    await this.updateOrderHold(orderHold.id, {
+      agent_hold_amount: transaction.amount,
+      agent_id: ctx.agentId,
+    });
+    await this.assignOrderToAgent(
+      ctx.order.id,
+      ctx.agentId,
+      'assigned_to_agent'
+    );
+    await this.createStatusHistoryEntry(
+      ctx.order.id,
+      'assigned_to_agent',
+      `Order assigned to agent ${ctx.user.first_name} ${ctx.user.last_name} with topup payment`,
+      'agent',
+      ctx.user.id
+    );
+    await this.onOrderAssignedToAgent(ctx.order.id, ctx.agentId);
+  }
+
+  private async releaseClaimHold(
+    accountId: string,
+    amount: number,
+    order: { id: string; order_number: string }
+  ): Promise<void> {
+    if (amount <= 0) return;
+    const result = await this.accountsService.registerTransaction({
+      accountId,
+      amount,
+      transactionType: 'release',
+      memo: `Release hold after failed claim for order ${order.order_number}`,
+      referenceId: order.id,
+    });
+    if (!result.success) {
+      this.logger.error(
+        `Failed to release claim hold for ${order.order_number}: ${
+          result.error || 'unknown error'
+        }`
+      );
     }
   }
 

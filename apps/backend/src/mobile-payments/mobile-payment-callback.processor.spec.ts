@@ -251,6 +251,30 @@ describe('MobilePaymentCallbackProcessor', () => {
     });
   });
 
+  it('fails closed when claim_order handler throws during finalize', async () => {
+    const onPaymentSuccess = jest
+      .fn()
+      .mockRejectedValue(new Error('ALREADY_ASSIGNED'));
+    paymentCallbackRegistry.getHandlers.mockReturnValue([
+      {
+        supportsPaymentEntity: (e: string) => e === 'claim_order',
+        onPaymentSuccess,
+        onPaymentFailure: jest.fn(),
+        finalizeCashReconciliationAfterPayment: jest.fn(),
+      },
+    ]);
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...baseTx,
+      payment_entity: 'claim_order',
+    });
+
+    await expect(processor.processMypvitCallback(successCallback)).rejects.toThrow(
+      'ALREADY_ASSIGNED'
+    );
+
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
   it('leaves pending and does not mark success when wallet credit fails', async () => {
     databaseService.getTransactionByReference.mockResolvedValue({ ...baseTx });
     accountsService.registerDepositIfNotExists.mockResolvedValue({

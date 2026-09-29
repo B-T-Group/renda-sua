@@ -2344,6 +2344,70 @@ describe('OrdersService', () => {
       expect(assign).not.toHaveBeenCalled();
     });
 
+    it('processClaimOrderPayment releases the hold when assignment fails', async () => {
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-123',
+          order_number: 'ORD-1',
+        });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest.spyOn(service, 'updateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const revert = jest
+        .spyOn(service as any, 'revertOrderAssignment')
+        .mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'assignOrderToAgent').mockRejectedValue(
+        new HttpException(
+          {
+            message:
+              'This order has already been assigned to another agent. Please choose another order.',
+            error: 'ALREADY_ASSIGNED',
+          },
+          HttpStatus.CONFLICT
+        )
+      );
+
+      await expect(
+        service.processClaimOrderPayment({
+          entity_id: 'ORD-1',
+          account_id: 'account-1',
+          amount: 8000,
+          currency: 'XAF',
+        })
+      ).rejects.toThrow(/already been assigned/i);
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-1',
+          amount: 8000,
+          transactionType: 'hold',
+          referenceId: 'order-123',
+        })
+      );
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-1',
+          amount: 8000,
+          transactionType: 'release',
+          referenceId: 'order-123',
+        })
+      );
+      expect(revert).toHaveBeenCalledWith('order-123');
+    });
+
     it('finalizeClientOrderPayment coerces stripped subtotal and fees to 0', async () => {
       const updateOrderHoldSpy = jest
         .spyOn(service, 'updateOrderHold')
