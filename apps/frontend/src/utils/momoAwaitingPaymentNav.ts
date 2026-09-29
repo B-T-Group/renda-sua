@@ -118,3 +118,22 @@ export function buildClaimAwaitingPaymentTo(input: {
     claimTransactionId: input.claimTransactionId,
   });
 }
+
+/** Local claim-hold id required before the awaiting screen can poll. */
+export function claimHoldTransactionId(
+  body:
+    | {
+        success?: boolean;
+        message?: string;
+        paymentTransaction?: { id?: string | null } | null;
+      }
+    | null
+    | undefined,
+  fallbackMessage = 'Failed to claim order with topup'
+): string {
+  const nextId = body?.paymentTransaction?.id?.trim();
+  if (!body?.success || !nextId) {
+    throw new Error(body?.message || fallbackMessage);
+  }
+  return nextId;
+}

@@ -12,6 +12,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useClaimPaymentPoll } from '../../hooks/useClaimPaymentPoll';
 import type { ClaimAwaitingPaymentParams } from '../../navigation/types';
 import { agentApi } from '../../services/agentApi';
+import { claimHoldTransactionId } from '../../utils/claimAwaitingNav';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 
 type ClaimAwaitingParamList = {
@@ -267,11 +268,7 @@ function claimRetryTips(
 
 async function resendClaimPayment(orderId: string, phoneE164: string): Promise<string> {
   const res = await agentApi.orders.claimOrderWithTopup(orderId, phoneE164);
-  const nextId = res.paymentTransaction?.id?.trim();
-  if (!res.success || !nextId) {
-    throw new Error(res.message || 'Failed to claim order');
-  }
-  return nextId;
+  return claimHoldTransactionId(res);
 }
 
 function retryMessage(error: unknown, t: (key: string, fallback: string) => string): string {

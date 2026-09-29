@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiClient } from './useApiClient';
 import {
   MOMO_POLL_INTERVAL_MS,
-  MOMO_POLL_TIMEOUT_MS,
+  claimPollTerminalPhase,
+  claimTransactionStatusFromBody,
   resolveClaimPaymentPhase,
   type MomoPaymentPollPhase,
 } from '../utils/momoPaymentPoll';
@@ -37,7 +38,7 @@ export function useClaimPaymentPoll(transactionId: string | null) {
     const id = idRef.current;
     if (!id || !apiClient) return 'waiting';
     const response = await apiClient.get(`/mobile-payments/transactions/${id}`);
-    const status = response.data?.data?.status ?? response.data?.status;
+    const status = claimTransactionStatusFromBody(response.data);
     return resolveClaimPaymentPhase(status);
   }, [apiClient]);
 
@@ -97,15 +98,9 @@ async function applyClaimPollTick(
 ): Promise<void> {
   const phase = await args.checkOnce();
   if (args.isStopped()) return;
-  if (phase === 'paid' || phase === 'failed') {
-    args.onPhase({ phase });
-    const intervalId = getInterval();
-    if (intervalId) clearInterval(intervalId);
-    return;
-  }
-  if (Date.now() - startedAt >= MOMO_POLL_TIMEOUT_MS) {
-    args.onPhase({ phase: 'timeout' });
-    const intervalId = getInterval();
-    if (intervalId) clearInterval(intervalId);
-  }
+  const terminal = claimPollTerminalPhase(phase, Date.now() - startedAt);
+  if (!terminal) return;
+  args.onPhase({ phase: terminal });
+  const intervalId = getInterval();
+  if (intervalId) clearInterval(intervalId);
 }

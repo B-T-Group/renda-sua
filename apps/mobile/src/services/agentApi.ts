@@ -67,6 +67,7 @@ import {
   normalizeRecipientResponse,
   normalizeRecipientsList,
 } from '../utils/recipientsApi';
+import { claimTransactionStatusFromBody } from '../utils/momoPaymentPoll';
 
 export type { MeResponse, MeUser, SetMyPhoneResponse, UpdateMeResponse, UpdateMyEmailResponse };
 
@@ -397,7 +398,9 @@ const orders = {
   getMobilePaymentTransaction: (transactionId: string): Promise<{ status?: string }> =>
     api.get<{ success?: boolean; data?: { status?: string }; status?: string }>(
       `/mobile-payments/transactions/${transactionId}`
-    ).then((body) => ({ status: body.data?.status ?? body.status })),
+    ).then((body) => ({
+      status: claimTransactionStatusFromBody(body) ?? undefined,
+    })),
 
   dropOrder: (orderId: string): Promise<OrderActionResponse> =>
     api.post<OrderActionResponse>('/orders/drop_order', { orderId }),
