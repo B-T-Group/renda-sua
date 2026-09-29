@@ -197,6 +197,7 @@ describe('OrdersService', () => {
     const mockAccountsService = {
       registerTransaction: jest.fn().mockResolvedValue({ success: true }),
       registerDepositIfNotExists: jest.fn(),
+      hasTransactionForReference: jest.fn().mockResolvedValue(false),
     };
 
     const mockOrderStatusService = {
@@ -241,6 +242,7 @@ describe('OrdersService', () => {
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
+          updateTransaction: jest.fn().mockResolvedValue({}),
         } },
         {
           provide: require('../mobile-payment-phones/mobile-payment-phones.service')
@@ -2317,7 +2319,7 @@ describe('OrdersService', () => {
       ).rejects.toThrow(/Insufficient funds/i);
     });
 
-    it('processClaimOrderPayment does not assign when the agent hold fails', async () => {
+    it('processClaimOrderPayment reverts assignment when the agent hold fails', async () => {
       accountsService.registerTransaction.mockResolvedValue({
         success: false,
         error: 'Insufficient funds for this transaction',
@@ -2327,6 +2329,7 @@ describe('OrdersService', () => {
         .mockResolvedValue({
           id: 'order-123',
           order_number: 'ORD-1',
+          assigned_agent_id: null,
         });
       hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
         id: 'account-1',
@@ -2345,6 +2348,9 @@ describe('OrdersService', () => {
       const assign = jest
         .spyOn(service as any, 'assignOrderToAgent')
         .mockResolvedValue({});
+      const revert = jest
+        .spyOn(service as any, 'revertOrderAssignment')
+        .mockResolvedValue(undefined);
 
       await expect(
         service.processClaimOrderPayment({
@@ -2355,8 +2361,103 @@ describe('OrdersService', () => {
         })
       ).rejects.toThrow(/Insufficient funds/i);
 
+      expect(assign).toHaveBeenCalled();
+      expect(revert).toHaveBeenCalledWith('order-123');
       expect(updateHold).not.toHaveBeenCalled();
+    });
+
+    it('processClaimOrderPayment does not hold when another agent already has the order', async () => {
+      const requireOrder = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          assigned_agent_id: null,
+        })
+        .mockResolvedValueOnce({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          assigned_agent_id: 'other-agent',
+        });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      jest
+        .spyOn(service as any, 'assignOrderToAgent')
+        .mockRejectedValue(
+          new HttpException(
+            { message: 'taken', error: 'ALREADY_ASSIGNED' },
+            HttpStatus.CONFLICT
+          )
+        );
+      const updateHold = jest.spyOn(service, 'updateOrderHold');
+      const db = module.get(MobilePaymentsDatabaseService) as {
+        updateTransaction: jest.Mock;
+      };
+
+      await service.processClaimOrderPayment({
+        id: 'tx-claim-1',
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+        amount: 8000,
+        currency: 'XAF',
+      });
+
+      expect(requireOrder).toHaveBeenCalledTimes(2);
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(updateHold).not.toHaveBeenCalled();
+      expect(db.updateTransaction).toHaveBeenCalledWith('tx-claim-1', {
+        error_code: 'CLAIM_ORDER_TAKEN',
+        error_message: 'This order was assigned to another agent',
+      });
+    });
+
+    it('processClaimOrderPayment does not hold again when this agent already has the order', async () => {
+      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
+        id: 'order-123',
+        order_number: 'ORD-1',
+        assigned_agent_id: 'agent-123',
+      });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const updateHold = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' } as any);
+      const assign = jest.spyOn(service as any, 'assignOrderToAgent');
+      const history = jest
+        .spyOn(service as any, 'createStatusHistoryEntry')
+        .mockResolvedValue(undefined);
+
+      await service.processClaimOrderPayment({
+        id: 'tx-claim-1',
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+        amount: 8000,
+        currency: 'XAF',
+      });
+
       expect(assign).not.toHaveBeenCalled();
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(history).not.toHaveBeenCalled();
+      expect(updateHold).toHaveBeenCalledWith('hold-1', {
+        agent_hold_amount: 8000,
+        agent_id: 'agent-123',
+      });
     });
 
     it('finalizeClientOrderPayment coerces stripped subtotal and fees to 0', async () => {

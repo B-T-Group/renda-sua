@@ -140,7 +140,7 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
         {phase === 'failed' ? (
           <ErrorOutline sx={{ fontSize: 72, color: 'error.main' }} />
         ) : null}
-        {phase === 'timeout' ? (
+        {phase === 'timeout' || phase === 'taken' ? (
           <ScheduleOutlined sx={{ fontSize: 72, color: 'warning.main' }} />
         ) : null}
 
@@ -154,13 +154,17 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
                 ? 'success.main'
                 : phase === 'failed'
                   ? 'error.main'
-                  : 'text.primary',
+                  : phase === 'taken'
+                    ? 'warning.main'
+                    : 'text.primary',
           }}
         >
           {phase === 'paid'
             ? t('orders.momoAwaiting.paidTitle', 'Payment confirmed')
             : phase === 'failed'
               ? t('orders.momoAwaiting.failedTitle', 'Payment failed')
+              : phase === 'taken'
+                ? t('orders.momoAwaiting.takenTitle', 'Order no longer available')
               : phase === 'timeout'
                 ? t('orders.momoAwaiting.timeoutTitle', 'Still waiting')
                 : t('orders.momoAwaiting.waitingTitle', 'Approve on your phone')}
@@ -187,6 +191,11 @@ const MobileMoneyAwaitingPaymentPage: React.FC = () => {
                   'orders.momoAwaiting.failedBody',
                   'We could not complete your payment via MoMo. Please check and try again.'
                 )
+              : phase === 'taken'
+                ? t(
+                    'orders.momoAwaiting.takenBody',
+                    'This order is no longer available. The payment is available in your Rendasua wallet, so you can claim a different order.'
+                  )
               : phase === 'timeout'
                 ? t(
                     'orders.momoAwaiting.timeoutBody',

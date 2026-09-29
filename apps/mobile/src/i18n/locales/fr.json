@@ -772,6 +772,8 @@
       "continue": "Continuer",
       "paidBodyWaitingForStore": "En attente de l'acceptation du magasin. Nous vous préviendrons dès qu'ils confirmeront.",
       "paidBodyClaim": "La garantie est approuvée. Cette commande vous est maintenant assignée.",
+      "takenTitle": "Commande indisponible",
+      "takenBody": "Cette commande n'est plus disponible. Le paiement est disponible dans votre portefeuille Rendasua, vous pouvez réclamer une autre commande.",
       "usuallyWithin": "Habituellement sous 15 min",
       "refundIfNotAccepted": "Si non accepté, vous obtenez un remboursement",
       "trackOnMap": "Suivre sur la carte"
