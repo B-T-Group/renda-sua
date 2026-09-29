@@ -1,11 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { resolveClaimPaymentPhase, resolveMomoPaymentStatuses } from './momoPaymentPoll';
+import {
+  MOMO_POLL_TIMEOUT_MS,
+  claimPollTerminalPhase,
+  claimTransactionStatusFromBody,
+  resolveClaimPaymentPhase,
+  resolveMomoPaymentStatuses,
+} from './momoPaymentPoll';
 
 describe('resolveClaimPaymentPhase', () => {
   it('treats a successful hold as paid and a pending hold as waiting', () => {
     expect(resolveClaimPaymentPhase('success')).toBe('paid');
+    expect(resolveClaimPaymentPhase('SUCCESS')).toBe('paid');
     expect(resolveClaimPaymentPhase('cancelled')).toBe('failed');
+    expect(resolveClaimPaymentPhase('canceled')).toBe('failed');
     expect(resolveClaimPaymentPhase('pending')).toBe('waiting');
+    expect(resolveClaimPaymentPhase('ambiguous')).toBe('waiting');
+    expect(resolveClaimPaymentPhase(null)).toBe('waiting');
+  });
+
+  it('reads the nested transaction status ahead of a top-level status', () => {
+    expect(
+      claimTransactionStatusFromBody({
+        data: { status: 'success' },
+        status: 'failed',
+      })
+    ).toBe('success');
+    expect(claimTransactionStatusFromBody({ status: 'cancelled' })).toBe('cancelled');
+    expect(claimTransactionStatusFromBody(undefined)).toBeUndefined();
+  });
+
+  it('times out a claim that is still waiting and stops immediately when it fails', () => {
+    expect(claimPollTerminalPhase('waiting', MOMO_POLL_TIMEOUT_MS - 1)).toBeNull();
+    expect(claimPollTerminalPhase('waiting', MOMO_POLL_TIMEOUT_MS)).toBe('timeout');
+    expect(claimPollTerminalPhase('failed', 0)).toBe('failed');
+    expect(claimPollTerminalPhase('paid', MOMO_POLL_TIMEOUT_MS)).toBe('paid');
   });
 });
 

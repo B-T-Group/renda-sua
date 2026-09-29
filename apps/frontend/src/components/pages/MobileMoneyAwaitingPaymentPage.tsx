@@ -25,6 +25,7 @@ import { useClaimPaymentPoll } from '../../hooks/useClaimPaymentPoll';
 import { useMobileMoneyPaymentPoll } from '../../hooks/useMobileMoneyPaymentPoll';
 import { maskPhoneE164 } from '../../utils/maskPhoneE164';
 import {
+  claimHoldTransactionId,
   parseMomoAwaitingPaymentParams,
   type MobileMoneyAwaitingPaymentState,
 } from '../../utils/momoAwaitingPaymentNav';
@@ -437,11 +438,7 @@ async function retryClaimHold(
     orderId,
     phone_number: phone,
   });
-  const nextId = response.data?.paymentTransaction?.id?.trim();
-  if (!response.data?.success || !nextId) {
-    throw new Error(response.data?.message || 'Failed to claim order with topup');
-  }
-  return nextId;
+  return claimHoldTransactionId(response.data);
 }
 
 export default MobileMoneyAwaitingPaymentPage;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentApi } from '../services/agentApi';
 import {
   MOMO_POLL_INTERVAL_MS,
-  MOMO_POLL_TIMEOUT_MS,
+  claimPollTerminalPhase,
   resolveClaimPaymentPhase,
   type MomoPaymentPollPhase,
 } from '../utils/momoPaymentPoll';
@@ -94,15 +94,9 @@ async function applyClaimPollTick(
 ): Promise<void> {
   const phase = await args.checkOnce();
   if (args.isStopped()) return;
-  if (phase === 'paid' || phase === 'failed') {
-    args.onPhase({ phase });
-    const intervalId = getInterval();
-    if (intervalId) clearInterval(intervalId);
-    return;
-  }
-  if (Date.now() - startedAt >= MOMO_POLL_TIMEOUT_MS) {
-    args.onPhase({ phase: 'timeout' });
-    const intervalId = getInterval();
-    if (intervalId) clearInterval(intervalId);
-  }
+  const terminal = claimPollTerminalPhase(phase, Date.now() - startedAt);
+  if (!terminal) return;
+  args.onPhase({ phase: terminal });
+  const intervalId = getInterval();
+  if (intervalId) clearInterval(intervalId);
 }
