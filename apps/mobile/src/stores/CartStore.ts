@@ -243,11 +243,11 @@ export class CartStore {
       return 'updated';
     }
 
-    const quantity = clampQty(incoming, incoming.quantity, this.items);
-    if (quantity <= 0) return 'added';
+    const clampedQty = clampQty(incoming, incoming.quantity, this.items);
+    if (clampedQty <= 0) return 'added';
 
     runInAction(() => {
-      this.items = [...this.items, { ...incoming, quantity }];
+      this.items = [...this.items, { ...incoming, quantity: clampedQty }];
     });
     this.schedulePersist();
     return 'added';
