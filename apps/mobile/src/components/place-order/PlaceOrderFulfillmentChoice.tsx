@@ -19,6 +19,8 @@ interface PlaceOrderFulfillmentChoiceProps {
   value: OrderFulfillment;
   onChange: (value: OrderFulfillment) => void;
   deliveryDisabled?: boolean;
+  /** Omit Delivery until the shared availability check says it is available. */
+  deliveryHidden?: boolean;
   deliveryDisabledReason?: string;
   pickupAvailable?: boolean;
   shippingAvailable?: boolean;
@@ -43,6 +45,7 @@ function buildSegments(
   t: Translate,
   args: {
     deliveryDisabled: boolean;
+    deliveryHidden: boolean;
     pickupAvailable: boolean;
     shippingAvailable: boolean;
     shippingDisabled: boolean;
@@ -57,12 +60,14 @@ function buildSegments(
       disabled: false,
     });
   }
-  options.push({
-    key: 'delivery',
-    label: t('client.placeOrder.delivery', 'Delivery'),
-    icon: 'truck-delivery-outline',
-    disabled: args.deliveryDisabled,
-  });
+  if (!args.deliveryHidden) {
+    options.push({
+      key: 'delivery',
+      label: t('client.placeOrder.delivery', 'Delivery'),
+      icon: 'truck-delivery-outline',
+      disabled: args.deliveryDisabled,
+    });
+  }
   if (args.shippingAvailable || args.shippingDisabled) {
     options.push({
       key: 'shipping',
@@ -112,6 +117,7 @@ export function PlaceOrderFulfillmentChoice({
   value,
   onChange,
   deliveryDisabled = false,
+  deliveryHidden = false,
   deliveryDisabledReason,
   pickupAvailable = true,
   shippingAvailable = false,
@@ -127,21 +133,25 @@ export function PlaceOrderFulfillmentChoice({
   const { colors, spacing, borderRadius, typography } = useTheme();
   const segments = buildSegments(t, {
     deliveryDisabled,
+    deliveryHidden,
     pickupAvailable,
     shippingAvailable,
     shippingDisabled,
   });
 
-  const helper = deliveryDisabled
-    ? deliveryDisabledReason ??
-      t('client.placeOrder.deliveryUnavailable', 'Delivery is currently unavailable.')
-    : shippingDisabled
+  const helper =
+    !deliveryHidden && deliveryDisabled
+      ? deliveryDisabledReason ??
+        t('client.placeOrder.deliveryUnavailable', 'Delivery is currently unavailable.')
+      : shippingDisabled
       ? shippingDisabledReason ??
         t(
           'client.placeOrder.shippingUnavailableMixed',
           'Shipping is only available when every item in your cart can be shipped.'
         )
       : null;
+
+  if (segments.length === 0) return null;
 
   const storeLine = pickupSummary(pickupLocations);
   const showPickupContext = value === 'pickup' && !!storeLine;

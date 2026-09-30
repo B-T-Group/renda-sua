@@ -14,6 +14,7 @@ import { PurchaseCreditsService } from '../payment-programs/purchase-credits.ser
 import type { CreditAllocation, CreditLine } from '../payment-programs/purchase-credit.allocator';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
+import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
@@ -10729,37 +10730,25 @@ export class OrdersService {
   ): Promise<void> {
     const inventory = inventories[0];
     const address = inventory?.business_location?.address;
-    const result = await this.deliveryAvailabilityService.evaluate({
-      businessId: inventory?.business_location?.business?.id ?? '',
-      // Same normalization as checkout preflight so both gates agree and the
-      // country_delivery_configs radius lookup (keyed by uppercase ISO code)
-      // resolves identically.
-      sellerCountry: (address?.country ?? '').trim().toUpperCase(),
-      sellerState: (address?.state ?? '').trim(),
-      pickupLat: address?.latitude != null ? Number(address.latitude) : null,
-      pickupLon: address?.longitude != null ? Number(address.longitude) : null,
-      deliveryAddressId: deliveryAddress?.id,
-      deliveryLat:
-        deliveryAddress?.latitude != null
-          ? Number(deliveryAddress.latitude)
-          : null,
-      deliveryLon:
-        deliveryAddress?.longitude != null
-          ? Number(deliveryAddress.longitude)
-          : null,
-      deliveryCountry: deliveryAddress?.country ?? undefined,
-      deliveryState: deliveryAddress?.state ?? undefined,
-      itemIds: [
-        ...new Set(
-          inventories.map((inv) => inv?.item?.id).filter(Boolean) as string[]
-        ),
-      ],
-      inventoryIds: inventories.map((inv) => inv?.id).filter(Boolean),
-      requiresFastDelivery,
-      verifiedAgentDelivery,
-      clientId,
-      evaluatedAt: new Date(),
-    });
+    const result = await this.deliveryAvailabilityService.evaluate(
+      buildDeliveryAvailabilityContext({
+        businessId: inventory?.business_location?.business?.id ?? '',
+        sellerCountry: address?.country,
+        sellerState: address?.state,
+        pickupLat: address?.latitude,
+        pickupLon: address?.longitude,
+        deliveryAddressId: deliveryAddress?.id,
+        deliveryLat: deliveryAddress?.latitude,
+        deliveryLon: deliveryAddress?.longitude,
+        deliveryCountry: deliveryAddress?.country,
+        deliveryState: deliveryAddress?.state,
+        itemIds: inventories.map((inv) => inv?.item?.id),
+        inventoryIds: inventories.map((inv) => inv?.id),
+        requiresFastDelivery,
+        verifiedAgentDelivery,
+        clientId,
+      })
+    );
     if (result.available) return;
 
     const enforce =

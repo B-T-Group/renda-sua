@@ -34,7 +34,7 @@ export interface CheckoutDeliveryAvailability {
 export interface CheckoutPreflightGroup {
   business_id: string;
   business_name?: string;
-  /** Null when fulfillment is pickup. */
+  /** Present for every fulfillment so the client can decide whether to offer delivery. */
   delivery_availability?: CheckoutDeliveryAvailability | null;
   /** True when every item in this seller group supports store pickup. */
   pickup_eligible?: boolean;
@@ -87,9 +87,8 @@ export interface CheckoutPreflightResult {
    */
   diaspora?: CheckoutDiaspora | null;
   /**
-   * Aggregated delivery availability. Null when fulfillment is pickup.
-   * When `available` is false, show the generic "Delivery is currently
-   * unavailable." message and steer the user to store pickup.
+   * Aggregated delivery availability, including before delivery is selected.
+   * Offer delivery only when `available` is true.
    */
   delivery_availability?: CheckoutDeliveryAvailability | null;
   /** False when the cart includes cooked food (ASAP-only). */
@@ -112,23 +111,26 @@ export interface CheckoutPreflightResult {
   } | null;
 }
 
-export function useCheckoutPreflight(
+export function useCheckoutPreflightState(
   request: CheckoutPreflightRequest | null,
   enabled = true
-): CheckoutPreflightResult | null {
+): { config: CheckoutPreflightResult | null; loading: boolean } {
   const apiClient = useApiClient();
   const [config, setConfig] = useState<CheckoutPreflightResult | null>(null);
+  const [loading, setLoading] = useState(false);
   const requestIdRef = useRef('');
 
   useEffect(() => {
     if (!enabled || !request || !apiClient) {
       setConfig(null);
+      setLoading(false);
       return;
     }
 
     const requestId = JSON.stringify(request);
     requestIdRef.current = requestId;
     let cancelled = false;
+    setLoading(true);
 
     void apiClient
       .post<CheckoutPreflightResult>('/orders/checkout/preflight', request)
@@ -139,6 +141,10 @@ export function useCheckoutPreflight(
       .catch(() => {
         if (cancelled || requestIdRef.current !== requestId) return;
         setConfig(null);
+      })
+      .finally(() => {
+        if (cancelled || requestIdRef.current !== requestId) return;
+        setLoading(false);
       });
 
     return () => {
@@ -146,5 +152,12 @@ export function useCheckoutPreflight(
     };
   }, [apiClient, enabled, request]);
 
-  return config;
+  return { config, loading };
+}
+
+export function useCheckoutPreflight(
+  request: CheckoutPreflightRequest | null,
+  enabled = true
+): CheckoutPreflightResult | null {
+  return useCheckoutPreflightState(request, enabled).config;
 }
