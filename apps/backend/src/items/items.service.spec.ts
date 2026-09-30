@@ -481,6 +481,12 @@ describe('ItemsService privileged field filtering', () => {
       price: 0,
     });
 
+    const marketsCall = hasuraSystem.executeQuery.mock.calls.find((call) =>
+      String(call[0]).includes('ActiveExportMarkets')
+    );
+    expect(String(marketsCall?.[0])).toContain('$codes: [bpchar!]!');
+    expect(String(marketsCall?.[0])).not.toContain('$codes: [String!]!');
+
     const replaceCall = hasuraSystem.executeMutation.mock.calls.find((call) =>
       String(call[0]).includes('insert_item_export_markets')
     );

@@ -444,7 +444,7 @@ export class ItemsService {
         service_status: string;
       }>;
     }>(
-      `query ActiveExportMarkets($codes: [String!]!) {
+      `query ActiveExportMarkets($codes: [bpchar!]!) {
         supported_country_states(
           where: {
             country_code: { _in: $codes }
