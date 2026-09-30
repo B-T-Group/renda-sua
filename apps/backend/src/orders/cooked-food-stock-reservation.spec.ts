@@ -193,4 +193,26 @@ describe('OrdersService cooked-food stock sentinel', () => {
 
     expect(executeMutation).not.toHaveBeenCalled();
   });
+
+  it('releases pack-size base units when restoring reserved stock', async () => {
+    const { service, executeMutation } = createService([
+      stockRow('inv-retail', 'Retail & Shopping'),
+    ]);
+
+    await service.updateReservedQuantities(
+      [
+        {
+          business_inventory_id: 'inv-retail',
+          quantity: 1,
+          variant_snapshot: { quantity: 12 },
+        },
+      ],
+      'decrement'
+    );
+
+    expect(executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('try_release_business_inventory'),
+      { inventoryId: 'inv-retail', qty: 12 }
+    );
+  });
 });
