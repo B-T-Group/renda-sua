@@ -98,6 +98,11 @@ export const SITE_EVENT_AUTH_REAUTH_NOTICE_ACTION =
   'auth_reauth_notice_action' as const;
 export const SITE_EVENT_AUTH_SESSION_OBSERVED = 'auth_session_observed' as const;
 
+export const SITE_EVENT_CATALOG_MODULE_IMPRESSION =
+  'catalog.module.impression' as const;
+export const SITE_EVENT_CATALOG_MODULE_CLICK =
+  'catalog.module.click' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -136,7 +141,9 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_AUTH_PASSWORD_USED
   | typeof SITE_EVENT_AUTH_REAUTH_NOTICE_SHOWN
   | typeof SITE_EVENT_AUTH_REAUTH_NOTICE_ACTION
-  | typeof SITE_EVENT_AUTH_SESSION_OBSERVED;
+  | typeof SITE_EVENT_AUTH_SESSION_OBSERVED
+  | typeof SITE_EVENT_CATALOG_MODULE_IMPRESSION
+  | typeof SITE_EVENT_CATALOG_MODULE_CLICK;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

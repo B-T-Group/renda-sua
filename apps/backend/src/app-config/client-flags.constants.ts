@@ -6,6 +6,7 @@ export const CLIENT_FLAG_KEYS = [
   'floating_nav_enabled',
   'reorder_v1',
   'auth_web_inapp_gates',
+  'catalog_experience_v1',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -23,4 +24,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   reorder_v1: isNonProduction,
   /** Off by default for a 2-week baseline before enabling in-app auth gates. */
   auth_web_inapp_gates: false,
+  /** On in non-production when no DB row exists; off in production until configured. */
+  catalog_experience_v1: isNonProduction,
 };

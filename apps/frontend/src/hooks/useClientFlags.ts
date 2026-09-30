@@ -8,7 +8,8 @@ export type ClientFlagKey =
   | 'reels_merchant_allowlist_only'
   | 'floating_nav_enabled'
   | 'reorder_v1'
-  | 'auth_web_inapp_gates';
+  | 'auth_web_inapp_gates'
+  | 'catalog_experience_v1';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -19,6 +20,7 @@ const DEFAULT_FLAGS: ClientFlags = {
   floating_nav_enabled: false,
   reorder_v1: false,
   auth_web_inapp_gates: false,
+  catalog_experience_v1: false,
 };
 
 export function useClientFlags() {

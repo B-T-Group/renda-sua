@@ -138,6 +138,8 @@ export interface RentalImageSuggestionResult {
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly openaiImagesEditsUrl = 'https://api.openai.com/v1/images/edits';
+  private readonly openaiImagesGenerationsUrl =
+    'https://api.openai.com/v1/images/generations';
   private static readonly IMAGE_ITEM_VISION_MAX_IMAGES = 10;
   private static readonly IMAGE_FETCH_MAX_BYTES = 10 * 1024 * 1024;
   private static readonly IMAGE_SOURCE_HARD_MAX_BYTES = 25 * 1024 * 1024;
@@ -275,6 +277,24 @@ export class AiService {
     return prompt;
   }
 
+  async generateCatalogArtwork(prompt: string): Promise<{ b64_json: string }> {
+    const apiKey = this.configService.get<string>('openai.apiKey');
+    if (!apiKey?.trim()) {
+      throw new HttpException(
+        'OpenAI API key not configured',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    const b64_json = await this.requestCatalogArtwork(apiKey, prompt);
+    if (!b64_json) {
+      throw new HttpException(
+        'No image data returned',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    return { b64_json };
+  }
+
   async cleanupProductImage(
     input: string | CleanupProductImageInput
   ): Promise<CleanupProductImageResponse> {
@@ -327,6 +347,32 @@ export class AiService {
     } catch (error: unknown) {
       this.throwCleanupImageError(error);
     }
+  }
+
+  private async requestCatalogArtwork(
+    apiKey: string,
+    prompt: string
+  ): Promise<string | undefined> {
+    const response = await axios.post<OpenAIImageEditResponse>(
+      this.openaiImagesGenerationsUrl,
+      this.catalogArtworkBody(prompt),
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: 120000,
+      }
+    );
+    return response.data?.data?.[0]?.b64_json;
+  }
+
+  private catalogArtworkBody(prompt: string): Record<string, unknown> {
+    return {
+      model: 'gpt-image-1.5',
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      quality: 'medium',
+      output_format: 'jpeg',
+    };
   }
 
   private buildCleanupImageForm(

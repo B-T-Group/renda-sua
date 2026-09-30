@@ -94,6 +94,8 @@ import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payme
 import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { DelegationsModule } from '../delegations/delegations.module';
+import { CatalogArtworkModule } from '../catalog-artwork/catalog-artwork.module';
+import { CatalogExperienceModule } from '../catalog-experience/catalog-experience.module';
 import { CatalogStopsModule } from '../catalog-stops/catalog-stops.module';
 import { CatalogCacheModule } from '../catalog-cache/catalog-cache.module';
 import { AppConfigModule } from '../app-config/app-config.module';
@@ -237,6 +239,8 @@ import { AppService } from './app.service';
     LaunchPromoModule,
     BusinessesModule,
     DelegationsModule,
+    CatalogArtworkModule,
+    CatalogExperienceModule,
     CatalogStopsModule,
     AccountRechargeModule,
     MobilePaymentPhonesModule,

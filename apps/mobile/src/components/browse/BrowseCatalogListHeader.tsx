@@ -25,6 +25,8 @@ export interface BrowseCatalogListHeaderProps {
   onHeroSlidePress?: (slideId: HeroSlideId) => void;
   /** Optional contextual FTUE nudge rendered under the hero. */
   nudgeSlot?: React.ReactNode;
+  /** Discovery modules such as the category rail. */
+  discoverySlot?: React.ReactNode;
   catalogFilters: CatalogFilterState;
   onClearFilterField: (field: keyof CatalogFilterState) => void;
   onClearAllFilters: () => void;
@@ -55,6 +57,7 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
   nearbyAgentsCount = 0,
   onHeroSlidePress,
   nudgeSlot,
+  discoverySlot,
   catalogFilters,
   onClearFilterField,
   onClearAllFilters,
@@ -111,6 +114,8 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
       {nudgeSlot ? (
         <View style={{ marginTop: spacing.md }}>{nudgeSlot}</View>
       ) : null}
+
+      {discoverySlot}
 
       <View style={[styles.toolbar, { marginTop: spacing.md }]}>
         {/* Filters — filled primary when active, outlined when empty */}

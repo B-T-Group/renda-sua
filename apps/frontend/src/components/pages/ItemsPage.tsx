@@ -38,6 +38,8 @@ import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
+import { useClientFlags } from '../../hooks/useClientFlags';
+import { CatalogExperience } from '../catalog-experience/CatalogExperience';
 import DashboardComposingOverlay from '../common/DashboardComposingOverlay';
 import {
   SITE_EVENT_INVENTORY_SORT_SELECT,
@@ -356,6 +358,14 @@ const ItemsPage: React.FC = () => {
       collectionSlug ||
       businessLocationId
   );
+
+  const { flags } = useClientFlags();
+  const [experienceUnavailable, setExperienceUnavailable] = useState(false);
+  const markExperienceUnavailable = useCallback(() => {
+    setExperienceUnavailable(true);
+  }, []);
+  const showExperience =
+    flags.catalog_experience_v1 && !hasActiveFilters && !experienceUnavailable;
 
   const theme = useTheme();
   const showCuratedSections = useMediaQuery(theme.breakpoints.up('md'));
@@ -1098,8 +1108,35 @@ const ItemsPage: React.FC = () => {
           })}
         </Box>
 
+        {showExperience ? (
+          <CatalogExperience
+            enabled
+            actions={{
+              formatCurrency,
+              onOrderClick: handleOrderClick,
+              onAddToCart: handleAddToCart,
+              isPublicView: !isAuthenticated,
+              canOrder: !isAuthenticated || isClientUser,
+              showCartButtons: isAuthenticated && isClientUser,
+              loginButtonText: t('public.items.login', 'Sign In to Order'),
+              orderButtonText: t('common.orderNow', 'Order Now'),
+              addToCartButtonText: t('cart.addToCart', 'Add to Cart'),
+              buyNowButtonText: t('cart.buyNow', 'Buy Now'),
+            }}
+            onCategorySelect={(name) =>
+              setFilters((current) => ({
+                ...current,
+                category: current.category === name ? '' : name,
+                subcategory: '',
+              }))
+            }
+            onSeeAllDeals={() => setSort('deals')}
+            onUnavailable={markExperienceUnavailable}
+          />
+        ) : null}
+
         {/* Featured collections */}
-        {!hasActiveFilters && (featuredCollections.length > 0 || collectionsLoading) ? (
+        {!hasActiveFilters && !showExperience && (featuredCollections.length > 0 || collectionsLoading) ? (
           <Box sx={{ px: { xs: 1, sm: 2 } }}>
             <FeaturedCollectionsRow
               collections={featuredCollections}
@@ -1124,6 +1161,8 @@ const ItemsPage: React.FC = () => {
         {/* Curated discovery sections (desktop only; hidden when filters/search active) */}
         {!hasActiveFilters && (
           <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+          {!showExperience ? (
+          <>
           <CatalogSection
             title={t('public.items.sections.dealsTitle', 'Deals near you')}
             subtitle={t(
@@ -1183,6 +1222,8 @@ const ItemsPage: React.FC = () => {
             addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
             buyNowButtonText={t('cart.buyNow', 'Buy Now')}
           />
+          </>
+          ) : null}
 
           <CatalogSection
             title={t('exportCatalog.sectionTitle', 'Available for export')}

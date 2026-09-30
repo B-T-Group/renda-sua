@@ -120,6 +120,27 @@ function inventoryItemsFilterKeyParts(
   ];
 }
 
+export const CATALOG_EXPERIENCE_TTL_SECONDS = 90;
+export const CATALOG_EXPERIENCE_RETURNING_TTL_SECONDS = 45;
+
+export function buildCatalogExperienceCacheKey(input: {
+  country?: string;
+  state?: string;
+  language: string;
+  bucket: 'cold' | 'returning';
+  userId?: string;
+}): string {
+  const who = input.bucket === 'returning' ? input.userId || 'user' : 'shared';
+  return [
+    'catalog-experience',
+    input.country || 'global',
+    input.state || 'all',
+    input.language,
+    input.bucket,
+    who,
+  ].join(':');
+}
+
 export function buildInventoryItemsCacheKey(
   input: InventoryItemsCacheKeyInput
 ): string {

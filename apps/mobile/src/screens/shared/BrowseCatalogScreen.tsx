@@ -9,6 +9,9 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { CatalogCategoryRail } from '../../components/browse/CatalogCategoryRail';
+import { useCatalogCategoryRail } from '../../hooks/useCatalogCategoryRail';
 import { observer } from 'mobx-react-lite';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Chip, Text } from 'react-native-paper';
@@ -203,7 +206,8 @@ function BrowseCatalogScreenInner({
   foodOnly: legacyFoodOnly = false,
   initialSegment = 'all',
 }: BrowseCatalogScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { flags } = useClientFlags();
   const { cart, auth, persona } = useStore();
   const { width } = useWindowDimensions();
   const theme = useTheme();
@@ -348,6 +352,13 @@ function BrowseCatalogScreenInner({
     foodOnly ||
     debouncedSearch.length > 0 ||
     activeFilterCount > 0;
+
+  const categoryRail = useCatalogCategoryRail({
+    enabled: flags.catalog_experience_v1 && !suppressStops && catalogReady,
+    countryCode: catalogCountryCode,
+    state: catalogState,
+    language: i18n.language,
+  });
 
   const dealsStopEnabled = stopsEnabled && !suppressStops && sort !== 'deals';
   // Top in category shows on All browse + when category filter active
@@ -631,6 +642,22 @@ function BrowseCatalogScreenInner({
           nearbyAgentsCount={nearbyAgentsCount}
           onHeroSlidePress={onHeroSlidePress}
           nudgeSlot={foodOnly ? undefined : <BrowseFtueNudge />}
+          discoverySlot={
+            categoryRail.items.length > 0 ? (
+              <CatalogCategoryRail
+                theme={theme}
+                title={categoryRail.title}
+                items={categoryRail.items}
+                onSelect={(name) =>
+                  setCatalogFilters((prev) => ({
+                    ...prev,
+                    category: prev.category === name ? '' : name,
+                    subcategory: '',
+                  }))
+                }
+              />
+            ) : undefined
+          }
           foodOnly={foodOnly}
           catalogFilters={catalogFilters}
           onClearFilterField={onClearFilterField}
@@ -663,6 +690,8 @@ function BrowseCatalogScreenInner({
       onSeeAllHomeOrders,
       nearbyAgentsCount,
       onHeroSlidePress,
+      categoryRail.items,
+      categoryRail.title,
       catalogFilters,
       onClearFilterField,
       onClearAllFilters,
