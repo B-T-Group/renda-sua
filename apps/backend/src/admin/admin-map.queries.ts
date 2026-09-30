@@ -61,7 +61,7 @@ export const ADMIN_MAP_LOCATIONS_QUERY = `
 `;
 
 export const ADMIN_MAP_REGIONS_QUERY = `
-  query AdminMapRegions($code: String!) {
+  query AdminMapRegions($code: bpchar!) {
     supported_country_states(
       where: { country_code: { _eq: $code } }
       order_by: { state_name: asc }

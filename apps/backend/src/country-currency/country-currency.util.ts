@@ -1,5 +1,5 @@
 const GQL_CURRENCY_BY_COUNTRY = `
-  query CurrencyByCountry($countryCode: String!) {
+  query CurrencyByCountry($countryCode: bpchar!) {
     supported_country_states(
       where: { country_code: { _eq: $countryCode } }
       limit: 1
