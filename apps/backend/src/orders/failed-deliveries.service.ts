@@ -247,7 +247,9 @@ export class FailedDeliveriesService {
             order_items {
               id
               business_inventory_id
+              item_variant_id
               quantity
+              variant_snapshot
             }
             delivery_address {
               id
@@ -569,7 +571,7 @@ export class FailedDeliveriesService {
       try {
         await this.ordersService.updateReservedQuantities(
           order.order_items,
-          'increment'
+          'decrement'
         );
       } catch (error: any) {
         this.logger.error(
