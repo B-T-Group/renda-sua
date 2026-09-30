@@ -117,4 +117,26 @@ describe('buildCartLineFromCatalog', () => {
     const line = buildCartLineFromCatalog(item, 8, null);
     expect(line.quantity).toBe(1);
   });
+
+  it('caps a pack of 10 at the base units in stock', () => {
+    const item = makeCatalogItem();
+    item.computed_available_quantity = 25;
+    item.item.item_variants = [
+      { id: 'pack', name: 'Pack of 10', price: 4000, quantity: 10 },
+    ];
+    const line = buildCartLineFromCatalog(item, 4, 'pack');
+    expect(line.quantity).toBe(2);
+    expect(line.itemData.packQuantity).toBe(10);
+    expect(line.itemData.availableQuantity).toBe(25);
+  });
+
+  it('adds zero packs when stock cannot fill one', () => {
+    const item = makeCatalogItem();
+    item.computed_available_quantity = 9;
+    item.item.item_variants = [
+      { id: 'pack', name: 'Pack of 10', price: 4000, quantity: 10 },
+    ];
+    const line = buildCartLineFromCatalog(item, 1, 'pack');
+    expect(line.quantity).toBe(0);
+  });
 });

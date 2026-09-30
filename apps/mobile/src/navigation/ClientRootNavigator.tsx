@@ -34,6 +34,7 @@ import NotificationPermissionScreen from '../screens/shared/NotificationPermissi
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import InventoryItemDetailScreen from '../screens/shared/InventoryItemDetailScreen';
 import CollectionDetailScreen from '../screens/shared/CollectionDetailScreen';
+import CategoriesBrowseScreen from '../screens/shared/CategoriesBrowseScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import PlaceOrderScreen from '../screens/client/PlaceOrderScreen';
@@ -278,6 +279,14 @@ export function ClientRootNavigator() {
           options={{
             headerShown: false,
             title: t('client.placeOrder.successScreen.backToHome', 'Home'),
+          }}
+        />
+        <ClientRootStack.Screen
+          name="CategoriesBrowse"
+          component={CategoriesBrowseScreen}
+          options={{
+            title: t('client.browse.categoriesTitle', 'Categories'),
+            headerBackTitle: t('public.items.detail.browseMore', 'Browse more items'),
           }}
         />
         <ClientRootStack.Screen

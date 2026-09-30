@@ -1,4 +1,5 @@
 import {
+  buildCatalogExperienceCacheKey,
   buildEssentialsCacheKey,
   buildInventoryItemsCacheKey,
   buildStoresCacheKey,
@@ -177,5 +178,35 @@ describe('buildInventoryItemsCacheKey', () => {
     expect(local.endsWith(':local')).toBe(true);
     expect(exported.endsWith(':export')).toBe(true);
     expect(local).not.toEqual(exported);
+  });
+});
+
+describe('buildCatalogExperienceCacheKey', () => {
+  it('shares one cold home across shoppers in the same market', () => {
+    const first = buildCatalogExperienceCacheKey({
+      country: 'CM',
+      language: 'en',
+      bucket: 'cold',
+      userId: 'user-1',
+    });
+    const second = buildCatalogExperienceCacheKey({
+      country: 'CM',
+      language: 'en',
+      bucket: 'cold',
+      userId: 'user-2',
+    });
+    expect(first).toBe('catalog-experience:CM:all:en:cold:shared');
+    expect(second).toBe(first);
+  });
+
+  it('keeps a returning shopper home off the shared cache', () => {
+    const key = buildCatalogExperienceCacheKey({
+      country: 'CM',
+      state: 'Centre',
+      language: 'fr',
+      bucket: 'returning',
+      userId: 'user-1',
+    });
+    expect(key).toBe('catalog-experience:CM:Centre:fr:returning:user-1');
   });
 });

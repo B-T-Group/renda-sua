@@ -326,6 +326,9 @@ export const DealsPage = lazy(() =>
 export const CollectionsIndexPage = lazy(() =>
   import('../components/pages/CollectionsIndexPage')
 );
+export const CategoriesBrowsePage = lazy(() =>
+  import('../components/pages/CategoriesBrowsePage')
+);
 export const CollectionLandingPage = lazy(() =>
   import('../components/pages/CollectionLandingPage')
 );

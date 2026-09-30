@@ -158,11 +158,14 @@ export type GuestRootStackParamList = {
       }
     | undefined;
   RentalListingDetail: { listingId: string };
+  CategoriesBrowse: undefined;
 };
 
 /** Guest shell: browse catalog + rentals + food + auth stack in bottom tabs. */
 export type GuestTabParamList = {
-  GuestBrowse: { segment?: 'all' | 'food' } | undefined;
+  GuestBrowse:
+    | { segment?: 'all' | 'food'; category?: string; categoryRequestId?: number }
+    | undefined;
   GuestRentals: undefined;
   GuestFoods: undefined;
   GuestReels: undefined;
@@ -170,7 +173,9 @@ export type GuestTabParamList = {
 };
 
 export type ClientMainTabParamList = {
-  ClientBrowse: { segment?: 'all' | 'food' } | undefined;
+  ClientBrowse:
+    | { segment?: 'all' | 'food'; category?: string; categoryRequestId?: number }
+    | undefined;
   ClientRentals: undefined;
   ClientFoods: undefined;
   ClientReels: undefined;
@@ -182,6 +187,7 @@ export type ClientRootStackParamList = {
   ClientMainTabs: NavigatorScreenParams<ClientMainTabParamList> | undefined;
   NotificationsCenter: undefined;
   InventoryItemDetail: InventoryItemDetailParams;
+  CategoriesBrowse: undefined;
   CollectionDetail: CollectionDetailParams;
   StoresList: StoresListParams | undefined;
   StoreDetail: StoreDetailParams;

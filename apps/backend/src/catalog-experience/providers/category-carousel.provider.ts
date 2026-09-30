@@ -31,6 +31,10 @@ const CATEGORY_QUERY = `query CatalogCategories($locationWhere: business_locatio
   }
 }`;
 
+function byListingCount(a: CatalogCategoryTile, b: CatalogCategoryTile): number {
+  return b.listingCount - a.listingCount || a.name.localeCompare(b.name);
+}
+
 interface CategoryRow {
   id: number;
   name: string;
@@ -65,18 +69,29 @@ export class CategoryCarouselProvider implements CatalogModuleProvider {
     };
   }
 
+  async listAll(context: CatalogExperienceContext): Promise<CatalogCategoryTile[]> {
+    const tiles = await this.tilesWithListings(context);
+    return [...tiles].sort(byListingCount);
+  }
+
   private async loadTiles(
     context: CatalogExperienceContext
   ): Promise<CatalogCategoryTile[]> {
-    const rows = await this.fetchRows(context);
-    const tiles = rows
-      .map((row) => this.toTile(row))
-      .filter((tile) => tile.listingCount >= MIN_CATEGORY_LISTINGS);
+    const tiles = await this.tilesWithListings(context);
     return rankBySignals(
       tiles,
       (tile) => ({ popularity: tile.listingCount }),
       CATALOG_CAROUSEL_LIMIT
     );
+  }
+
+  private async tilesWithListings(
+    context: CatalogExperienceContext
+  ): Promise<CatalogCategoryTile[]> {
+    const rows = await this.fetchRows(context);
+    return rows
+      .map((row) => this.toTile(row))
+      .filter((tile) => tile.listingCount >= MIN_CATEGORY_LISTINGS);
   }
 
   private toTile(row: CategoryRow): CatalogCategoryTile {

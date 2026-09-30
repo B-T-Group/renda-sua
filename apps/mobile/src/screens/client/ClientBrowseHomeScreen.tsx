@@ -100,6 +100,10 @@ function ClientBrowseHomeScreenBase({
     rootNav?.navigate('StoresList');
   }, [rootNav]);
 
+  const onBrowseCategories = useCallback(() => {
+    rootNav?.navigate('CategoriesBrowse');
+  }, [rootNav]);
+
   const onPlaceOrder = useCallback(
     (catalogItem: CatalogInventoryItem, cartVariantId?: string) => {
       rootNav?.navigate('PlaceOrder', {
@@ -190,6 +194,9 @@ function ClientBrowseHomeScreenBase({
       <BrowseCatalogScreen
         foodOnly={foodOnly}
         initialSegment={route.params?.segment}
+        requestedCategory={route.params?.category}
+        categoryRequestId={route.params?.categoryRequestId}
+        onBrowseCategories={foodOnly ? undefined : onBrowseCategories}
         applyTopSafeArea={false}
         onItemPress={onItemPress}
         onClientPlaceOrder={variantFlow.requestBuy}

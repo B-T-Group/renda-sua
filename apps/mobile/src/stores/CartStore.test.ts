@@ -148,6 +148,67 @@ describe('CartStore reorder merge', () => {
     expect(store.quantityForLine('inv-1', 'var-b')).toBe(2);
   });
 
+  it('does not add a pack when shared stock cannot hold one more', async () => {
+    const store = await makeStore();
+    store.items = [
+      makeLine({
+        quantity: 3,
+        itemData: {
+          name: 'Water',
+          price: 100,
+          currency: 'XAF',
+          packQuantity: 1,
+          availableQuantity: 12,
+        },
+      }),
+    ];
+    store.addLines([
+      makeLine({
+        variantId: 'pack',
+        quantity: 1,
+        itemData: {
+          name: 'Water',
+          price: 800,
+          currency: 'XAF',
+          packQuantity: 10,
+          availableQuantity: 12,
+        },
+      }),
+    ]);
+    expect(store.items).toHaveLength(1);
+    expect(store.quantityForLine('inv-1', 'pack')).toBe(0);
+  });
+
+  it('caps an added pack to the base units still available', async () => {
+    const store = await makeStore();
+    store.items = [
+      makeLine({
+        quantity: 2,
+        itemData: {
+          name: 'Water',
+          price: 100,
+          currency: 'XAF',
+          packQuantity: 1,
+          availableQuantity: 25,
+        },
+      }),
+    ];
+    store.addLines([
+      makeLine({
+        variantId: 'pack',
+        quantity: 3,
+        itemData: {
+          name: 'Water',
+          price: 800,
+          currency: 'XAF',
+          packQuantity: 10,
+          availableQuantity: 25,
+        },
+      }),
+    ]);
+    expect(store.quantityForLine('inv-1', 'pack')).toBe(2);
+  });
+
   it('addLines appends a new listing without a max cap', async () => {
     const store = await makeStore();
     store.items = [makeLine({ quantity: 2 })];

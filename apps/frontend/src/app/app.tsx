@@ -292,6 +292,7 @@ function App() {
             />
             <Route path="/stores" element={<LazyPages.StoresIndexPage />} />
             <Route path="/store/:businessId" element={<LazyPages.StorePage />} />
+            <Route path="/categories" element={<LazyPages.CategoriesBrowsePage />} />
             <Route path="/collections" element={<LazyPages.CollectionsIndexPage />} />
             <Route path="/collections/:slug" element={<LazyPages.CollectionLandingPage />} />
             <Route path="/exports" element={<LazyPages.ExportsPage />} />

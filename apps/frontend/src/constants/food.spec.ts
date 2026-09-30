@@ -150,4 +150,29 @@ describe('placeOrderMaxQuantity', () => {
       )
     ).toBe(0);
   });
+
+  it('divides a cooked-food merchant maximum by the pack size', () => {
+    const dish = cookedFood();
+    expect(
+      placeOrderMaxQuantity(
+        {
+          computed_available_quantity: 1,
+          item: { ...dish.item, max_order_quantity: 20 },
+        },
+        6
+      )
+    ).toBe(3);
+  });
+
+  it('caps a retail pack by stock and the merchant maximum', () => {
+    expect(
+      placeOrderMaxQuantity(
+        {
+          computed_available_quantity: 40,
+          item: { max_order_quantity: 15 },
+        },
+        10
+      )
+    ).toBe(1);
+  });
 });
