@@ -452,11 +452,9 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     const dropOff = await this.loadDropOff(dto.delivery_address_id);
     let deliveryCountry: string | null = null;
-    let deliveryCoords: { lat: number; lon: number } | null = null;
 
     if (dropOff.country && this.needsShipToAddress(fulfillment)) {
       deliveryCountry = dropOff.country;
-      deliveryCoords = dropOff.coords;
       this.pushCountryMismatch(blockers, deliveryCountry, sellerCountries);
     }
 
