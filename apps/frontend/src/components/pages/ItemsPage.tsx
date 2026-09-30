@@ -265,9 +265,15 @@ const ItemsPage: React.FC = () => {
   const collectionSlug = useMemo(() => {
     return new URLSearchParams(location.search).get('collection') ?? '';
   }, [location.search]);
+  const categoryFromUrl = useMemo(() => {
+    return new URLSearchParams(location.search).get('category') ?? '';
+  }, [location.search]);
 
   const [filters, setFilters] = useState<ItemsPageFilterState>(() => ({
-    category: '',
+    category:
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('category') ?? ''
+        : '',
     subcategory: '',
     brand: '',
     business: '',
@@ -282,6 +288,29 @@ const ItemsPage: React.FC = () => {
       setFilters((f) => ({ ...f, collection: collectionSlug }));
     }
   }, [collectionSlug]);
+
+  useEffect(() => {
+    if (categoryFromUrl === filters.category) return;
+    setFilters((current) => ({
+      ...current,
+      category: categoryFromUrl,
+      subcategory: '',
+    }));
+  }, [categoryFromUrl]);
+
+  useEffect(() => {
+    const current = new URLSearchParams(location.search).get('category') ?? '';
+    if (current === filters.category) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (filters.category) next.set('category', filters.category);
+        else next.delete('category');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [filters.category, location.search, setSearchParams]);
 
   const handleFiltersChange = useCallback(
     (next: ItemsPageFilterState) => {

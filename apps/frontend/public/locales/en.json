@@ -6895,7 +6895,19 @@
         "popularSubtitle": "Recommended based on what people browse and buy",
         "catalogGridTitle": "Full catalog",
         "catalogGridSubtitle": "All listings matching your filters and sort order.",
-        "categoryTileA11y": "Browse {{name}}"
+        "categoryTileA11y": "Browse {{name}}",
+        "categoryItemCount": "{{count}} items",
+        "moreCategories": "More",
+        "moreCategoriesHint": "All categories",
+        "moreCategoriesA11y": "Browse all categories"
+      },
+      "categoriesPage": {
+        "title": "Categories",
+        "description": "Browse every category available in your market",
+        "subtitle": "Find a category, then shop its items.",
+        "search": "Search categories",
+        "emptySearch": "No categories match that search",
+        "empty": "No categories in this market yet"
       },
       "authCta": {
         "button": "Sign In",

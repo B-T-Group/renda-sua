@@ -141,6 +141,13 @@ export function buildCatalogExperienceCacheKey(input: {
   ].join(':');
 }
 
+export function buildCatalogCategoriesCacheKey(input: {
+  country?: string;
+  state?: string;
+}): string {
+  return ['catalog-categories', input.country || 'global', input.state || 'all'].join(':');
+}
+
 export function buildInventoryItemsCacheKey(
   input: InventoryItemsCacheKeyInput
 ): string {

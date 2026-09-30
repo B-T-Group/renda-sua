@@ -6614,7 +6614,19 @@
         "popularSubtitle": "Suggérés d’après ce que les gens consultent et achètent",
         "catalogGridTitle": "Tout le catalogue",
         "catalogGridSubtitle": "Toutes les annonces correspondant à vos filtres et à votre tri.",
-        "categoryTileA11y": "Parcourir {{name}}"
+        "categoryTileA11y": "Parcourir {{name}}",
+        "categoryItemCount": "{{count}} articles",
+        "moreCategories": "Plus",
+        "moreCategoriesHint": "Toutes les catégories",
+        "moreCategoriesA11y": "Parcourir toutes les catégories"
+      },
+      "categoriesPage": {
+        "title": "Catégories",
+        "description": "Parcourez toutes les catégories disponibles sur votre marché",
+        "subtitle": "Choisissez une catégorie, puis ses articles.",
+        "search": "Rechercher une catégorie",
+        "emptySearch": "Aucune catégorie ne correspond à cette recherche",
+        "empty": "Aucune catégorie sur ce marché pour le moment"
       },
       "authCta": {
         "button": "Se connecter",

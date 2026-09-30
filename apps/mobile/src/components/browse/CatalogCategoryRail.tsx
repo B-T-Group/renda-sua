@@ -6,7 +6,8 @@ import { AppEventsService } from '../../services/analytics/AppEventsService';
 import type { CatalogCategoryTile } from '../../services/catalogExperienceApi';
 import type { Theme } from '../../theme';
 
-const TILE_WIDTH = 132;
+const TILE_WIDTH = 148;
+const TILE_HEIGHT = 180;
 
 export function CatalogCategoryRail({
   theme,
@@ -93,9 +94,11 @@ function CategoryTile({
       style={[styles.tile, shadow, { borderRadius: radius, backgroundColor: themeColors.background.paper }]}
     >
       <CategoryArt item={item} color={themeColors.primary.main} text={themeColors.primary.contrast} />
-      <Text numberOfLines={2} style={[styles.label, { color: themeColors.text.primary }]}>
-        {item.name}
-      </Text>
+      <View style={styles.overlay}>
+        <Text numberOfLines={2} style={styles.label}>
+          {item.name}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -110,7 +113,7 @@ function CategoryArt({
   text: string;
 }) {
   if (item.imageUrl) {
-    return <Image source={{ uri: item.imageUrl }} style={styles.art} />;
+    return <Image source={{ uri: item.imageUrl }} style={styles.art} resizeMode="cover" />;
   }
   return (
     <View style={[styles.art, styles.fallback, { backgroundColor: color }]}>
@@ -122,8 +125,18 @@ function CategoryArt({
 }
 
 const styles = StyleSheet.create({
-  tile: { width: TILE_WIDTH, marginRight: 12, overflow: 'hidden' },
-  art: { width: '100%', height: 96 },
+  tile: { width: TILE_WIDTH, height: TILE_HEIGHT, marginRight: 12, overflow: 'hidden' },
+  art: { ...StyleSheet.absoluteFillObject },
   fallback: { alignItems: 'center', justifyContent: 'center' },
-  label: { paddingHorizontal: 8, paddingVertical: 8, fontWeight: '700' },
+  overlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 10,
+    paddingTop: 28,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  label: { color: '#fff', fontWeight: '700', textAlign: 'center' },
 });

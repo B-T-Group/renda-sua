@@ -15,6 +15,18 @@ export class CatalogExperienceController {
   ) {}
 
   @Public()
+  @Get('categories')
+  @ApiOperation({ summary: 'All shopper categories in the current market' })
+  @ApiQuery({ name: 'country_code', required: false, type: String })
+  @ApiQuery({ name: 'state', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Categories with images and listing counts' })
+  async listCategories(@Query() query: CatalogExperienceQueryDto) {
+    const context = await this.contextBuilder.build(query);
+    const categories = await this.experience.listCategories(context);
+    return { success: true, data: { categories }, message: 'Catalog categories' };
+  }
+
+  @Public()
   @Get()
   @ApiOperation({
     summary: 'Discovery modules for the shopper catalog home',

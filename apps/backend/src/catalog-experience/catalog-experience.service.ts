@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  buildCatalogCategoriesCacheKey,
   buildCatalogExperienceCacheKey,
   CATALOG_EXPERIENCE_RETURNING_TTL_SECONDS,
   CATALOG_EXPERIENCE_TTL_SECONDS,
@@ -28,7 +29,7 @@ export class CatalogExperienceService {
 
   constructor(
     private readonly cache: CatalogCacheService,
-    categories: CategoryCarouselProvider,
+    private readonly categories: CategoryCarouselProvider,
     collections: CollectionCarouselProvider,
     deals: DealsCarouselProvider,
     popular: PopularCarouselProvider,
@@ -60,6 +61,14 @@ export class CatalogExperienceService {
       }),
       () => this.assemble(context),
       { ttlSeconds: ttl }
+    );
+  }
+
+  listCategories(context: CatalogExperienceContext) {
+    return this.cache.getOrCompute(
+      buildCatalogCategoriesCacheKey(context),
+      () => this.categories.listAll(context),
+      { ttlSeconds: CATALOG_EXPERIENCE_TTL_SECONDS }
     );
   }
 
