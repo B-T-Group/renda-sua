@@ -1018,6 +1018,17 @@ const PlaceOrderPage: React.FC = () => {
     return dbVariants.find((v) => v.id === selectedVariantId) ?? null;
   }, [dbVariants, selectedVariantId]);
 
+  const orderMaxQuantity = selectedItem
+    ? placeOrderMaxQuantity(selectedItem, selectedVariant?.quantity ?? 1)
+    : 1;
+
+  useEffect(() => {
+    setQuantity((current) => {
+      if (orderMaxQuantity < 1) return 0;
+      return Math.min(orderMaxQuantity, Math.max(1, current));
+    });
+  }, [orderMaxQuantity]);
+
   const listingUnitPricing = useMemo(() => {
     if (!selectedItem) {
       return {
@@ -1477,6 +1488,15 @@ const PlaceOrderPage: React.FC = () => {
   const handleSubmit = useCallback(async () => {
     if (!selectedItem || !apiClient) return;
     if (!isPickupOrder && !selectedAddressId) return;
+    if (quantity < 1 || orderMaxQuantity < 1) {
+      setError(
+        t(
+          'orders.variant.packUnavailable',
+          'Not enough stock for this pack.'
+        )
+      );
+      return;
+    }
     if (placingOrderRef.current) return;
 
     const needsMoMoPhone =
@@ -1652,6 +1672,7 @@ const PlaceOrderPage: React.FC = () => {
     navigate,
     paymentTiming,
     quantity,
+    orderMaxQuantity,
     requiresFastDelivery,
     specialInstructions,
     selectedAddressId,
@@ -2526,7 +2547,7 @@ const PlaceOrderPage: React.FC = () => {
                     formatCurrency={formatCurrency}
                   />
 
-                  {placeOrderMaxQuantity(selectedItem) > 10 ? (
+                  {orderMaxQuantity > 10 ? (
                     <TextField
                       fullWidth
                       type="number"
@@ -2535,13 +2556,13 @@ const PlaceOrderPage: React.FC = () => {
                       onChange={(e) => {
                         const next = parseInt(e.target.value, 10);
                         if (Number.isNaN(next)) return;
-                        const max = placeOrderMaxQuantity(selectedItem);
+                        const max = orderMaxQuantity;
                         setQuantity(Math.min(max, Math.max(1, next)));
                       }}
                       disabled={loading}
                       inputProps={{
                         min: 1,
-                        max: placeOrderMaxQuantity(selectedItem),
+                        max: orderMaxQuantity,
                         step: 1,
                       }}
                     />
@@ -2559,7 +2580,7 @@ const PlaceOrderPage: React.FC = () => {
                       >
                         {Array.from(
                           {
-                            length: placeOrderMaxQuantity(selectedItem),
+                            length: orderMaxQuantity,
                           },
                           (_, i) => i + 1
                         ).map((num) => (
@@ -3176,7 +3197,7 @@ const PlaceOrderPage: React.FC = () => {
               variantLabel={selectedVariant?.name ?? null}
               quantity={quantity}
               onQuantityChange={setQuantity}
-              maxOrderQuantity={placeOrderMaxQuantity(selectedItem)}
+              maxOrderQuantity={orderMaxQuantity}
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}
@@ -3606,7 +3627,18 @@ const PlaceOrderPage: React.FC = () => {
                             >
                               {isFoodCatalogItem(selectedItem)
                                 ? t('orders.availableToOrder', 'Available to order')
-                                : `${selectedItem.computed_available_quantity} ${t('common.inStock', 'in stock')}`}
+                                : (selectedVariant?.quantity ?? 1) > 1
+                                  ? t(
+                                      'orders.variant.packsInStock',
+                                      '{{count}} packs in stock',
+                                      {
+                                        count: Math.floor(
+                                          selectedItem.computed_available_quantity /
+                                            (selectedVariant?.quantity ?? 1)
+                                        ),
+                                      }
+                                    )
+                                  : `${selectedItem.computed_available_quantity} ${t('common.inStock', 'in stock')}`}
                             </Typography>
                           </Box>
                           {(specWeightDisplay != null || !!specDimensionsDisplay) && (
@@ -4009,7 +4041,7 @@ const PlaceOrderPage: React.FC = () => {
               variantLabel={selectedVariant?.name ?? null}
               quantity={quantity}
               onQuantityChange={setQuantity}
-              maxOrderQuantity={placeOrderMaxQuantity(selectedItem)}
+              maxOrderQuantity={orderMaxQuantity}
               deliveryFee={deliveryFee?.deliveryFee || null}
               deliveryFeeLoading={deliveryFeeLoading}
               deliveryFeeError={deliveryFeeError}

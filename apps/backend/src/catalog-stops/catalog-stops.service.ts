@@ -111,6 +111,7 @@ const INVENTORY_ITEM_SELECTION = `
       name
       sku
       price
+      quantity
       is_active
     }
   }

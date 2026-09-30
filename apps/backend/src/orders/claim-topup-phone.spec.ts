@@ -116,6 +116,11 @@ describe('claimOrderWithTopup phone and fee owner', () => {
       success: true,
       phoneNumber: '+241077000000',
       holdAmount: 2500,
+      paymentTransaction: {
+        id: 'tx-1',
+        transactionId: 'prov-1',
+        success: true,
+      },
     });
   });
 

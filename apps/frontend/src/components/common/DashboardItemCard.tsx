@@ -61,6 +61,7 @@ import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import ItemLikeButton from './ItemLikeButton';
 import { CatalogOptionChips } from './CatalogOptionChips';
 import FoodAvailabilityChip from './FoodAvailabilityChip';
+import { listingHasPackRebate } from '../../types/itemVariant';
 import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
 
 /** Strip HTML and collapse whitespace for card preview text. */
@@ -213,6 +214,20 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const pricing = useMemo(
     () => catalogUnitPriceForVariant(inventory, selectionId),
     [inventory, selectionId]
+  );
+  const hasPackSavings = useMemo(
+    () =>
+      listingHasPackRebate({
+        variants: inventory.item.item_variants,
+        listingSellingPrice: inventory.selling_price,
+        overrides: inventory.variant_price_overrides,
+        hasActiveDeal: inventory.hasActiveDeal,
+        originalPrice: inventory.original_price,
+        discountedPrice: inventory.discounted_price,
+        discountType: inventory.deal_discount_type,
+        discountValue: inventory.deal_discount_value,
+      }),
+    [inventory]
   );
 
   const hasDealPrices =
@@ -610,6 +625,11 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       {/* Content Section - Bottom */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <CardContent sx={{ flexGrow: 1, p: 1.5, pb: 1 }}>
+          {hasPackSavings && !exportAvailable ? (
+            <Typography variant="caption" color="success.dark" fontWeight={700} sx={{ display: 'block', mb: 0.5 }}>
+              {t('orders.variant.saveOnPacks', 'Save on packs')}
+            </Typography>
+          ) : null}
           {inventory.business_location.logo_url ? (
             <ButtonBase
               component="div"

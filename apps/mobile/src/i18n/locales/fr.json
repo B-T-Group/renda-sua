@@ -1710,6 +1710,11 @@
       "makeDefault": "Définir par défaut",
       "defaultSaved": "Variante par défaut mise à jour",
       "inheritsPrice": "Hérite du prix de l’inventaire",
+      "quantity": "Unités dans cette option",
+      "quantityHelp": "Combien de produits contient le lot. Utilisez 1 pour une unité.",
+      "packSavings": "Les clients paient {{each}} l'unité au lieu de {{single}} (économisez {{save}}).",
+      "packEach": "Les clients paient {{each}} l'unité.",
+      "unitsBadge": "{{count}} unités",
       "copyFromItem": "Copier les détails de l’article",
       "aiAnalyzing": "Analyse de la photo de variante…",
       "aiFilledBanner": "Rempli à partir de la photo de variante — modifiez librement",
@@ -3460,7 +3465,8 @@
       "orderInTransitBody": "Votre commande est en route.",
       "noActiveOrder": "Aucune livraison en cours pour le moment.",
       "orderCardPlaceholder": "Indicateur fictif jusqu’à liaison des commandes.",
-      "signedInAs": "Connecté en tant que"
+      "signedInAs": "Connecté en tant que",
+      "categoryTile": "Parcourir {{name}}"
     },
     "home": {
       "liveOrders": {
@@ -3748,6 +3754,9 @@
       "variantLabel": "Option",
       "selectVariant": "Choisissez une option",
       "chooseOption": "Choisissez une option",
+      "unitsEach": "{{count}} unités · {{each}} l'unité",
+      "saveAmount": "Économisez {{amount}}",
+      "saveOnPacks": "Économisez en lot",
       "quantity": "Quantité",
       "quantityHint": "Jusqu’à {{max}} disponibles",
       "fulfillment": "Retrait ou livraison",

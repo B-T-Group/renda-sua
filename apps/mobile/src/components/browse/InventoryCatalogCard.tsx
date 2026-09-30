@@ -27,6 +27,7 @@ import {
 } from '../../utils/shopperVariantSelection';
 import { CatalogOptionChips } from './CatalogOptionChips';
 import { ItemLikeButton } from './ItemLikeButton';
+import { listingHasPackRebate } from '../../types/business/itemVariant';
 import { FoodAvailabilityChip } from '../food/FoodAvailabilityChip';
 import { LOW_STOCK_THRESHOLD } from '../../constants/stock';
 import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
@@ -148,6 +149,18 @@ function InventoryCatalogCardInner({
     [hasVariantOptions, item, unitPrice]
   );
   const currency = item.item.currency || 'XAF';
+  const hasPackSavings = useMemo(
+    () =>
+      listingHasPackRebate({
+        variants: item.item.item_variants,
+        listingSellingPrice: item.selling_price,
+        overrides: item.variant_price_overrides,
+        hasActiveDeal: item.hasActiveDeal,
+        originalPrice: item.original_price,
+        discountedPrice: item.discounted_price,
+      }),
+    [item]
+  );
   const dealPercent = useMemo(() => {
     if (!hasDeal || !item.original_price) return 0;
     const disc = item.discounted_price ?? 0;
@@ -390,6 +403,16 @@ function InventoryCatalogCardInner({
                         ]}
                       >
                         {formatMoney(item.original_price!, currency)}
+                      </Text>
+                    ) : null}
+                    {hasPackSavings && !exportAvailable ? (
+                      <Text
+                        style={[
+                          typography.caption,
+                          { color: colors.success.dark, fontWeight: '700' },
+                        ]}
+                      >
+                        {t('client.placeOrder.saveOnPacks', 'Save on packs')}
                       </Text>
                     ) : null}
                   </>

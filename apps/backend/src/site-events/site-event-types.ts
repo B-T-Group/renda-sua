@@ -95,6 +95,8 @@ export const SITE_EVENT_TYPES_V1 = [
   'auth_reauth_notice_shown',
   'auth_reauth_notice_action',
   'auth_session_observed',
+  'catalog.module.impression',
+  'catalog.module.click',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];

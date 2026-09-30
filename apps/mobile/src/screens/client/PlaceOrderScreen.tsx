@@ -80,7 +80,9 @@ import {
 import { isFoodCatalogItem } from '../../utils/foodAvailability';
 import {
   effectiveVariantUnitPrice,
+  orderLineBounds,
   orderedVariantImages,
+  packQuantityOf,
   unitPriceWithListingDeal,
 } from '../../types/business/itemVariant';
 import {
@@ -372,34 +374,31 @@ export default function PlaceOrderScreen() {
     );
   }, [item, variantRowKey, variants, dbVariants.length, initialVariantId]);
 
-  useEffect(() => {
-    if (!item) return;
-    const minQ = Math.max(1, item.item.min_order_quantity ?? 1);
-    const ignoresStock = isFoodCatalogItem(item);
-    const maxQ = ignoresStock
-      ? Math.max(minQ, item.item.max_order_quantity ?? 99)
-      : Math.max(
-          minQ,
-          Math.min(
-            item.item.max_order_quantity ?? item.computed_available_quantity,
-            item.computed_available_quantity
-          )
-        );
-    setQuantity((q) => Math.min(Math.max(q, minQ), maxQ));
-  }, [item]);
+  const quantityBounds = useMemo(() => {
+    if (!item) return { min: 1, max: 1 };
+    const pack =
+      !variantId || isShopperBaseVariantId(variantId)
+        ? 1
+        : packQuantityOf(item.item.item_variants?.find((v) => v.id === variantId));
+    return orderLineBounds({
+      available: item.computed_available_quantity,
+      maxOrder: item.item.max_order_quantity,
+      minOrder: item.item.min_order_quantity,
+      packQuantity: pack,
+      ignoresStock: isFoodCatalogItem(item),
+      foodSoftMax: 99,
+    });
+  }, [item, variantId]);
 
-  const minQ = item ? Math.max(1, item.item.min_order_quantity ?? 1) : 1;
-  const maxQ = item
-    ? isFoodCatalogItem(item)
-      ? Math.max(minQ, item.item.max_order_quantity ?? 99)
-      : Math.max(
-          minQ,
-          Math.min(
-            item.item.max_order_quantity ?? item.computed_available_quantity,
-            item.computed_available_quantity
-          )
-        )
-    : 1;
+  useEffect(() => {
+    setQuantity((q) => {
+      if (quantityBounds.max < 1) return 0;
+      return Math.min(Math.max(q, quantityBounds.min), quantityBounds.max);
+    });
+  }, [quantityBounds.max, quantityBounds.min]);
+
+  const minQ = quantityBounds.min || 1;
+  const maxQ = quantityBounds.max;
 
   const wizardPhase = useMemo((): 'loading' | 'address' | 'checkout' => {
     if (itemLoading || !item) return 'loading';

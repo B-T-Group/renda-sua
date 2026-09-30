@@ -19,6 +19,8 @@ export type ReorderItemData = {
   business_name?: string | null;
   seller_country?: string | null;
   merchant_can_accept_orders?: boolean | null;
+  pack_quantity?: number | null;
+  available_quantity?: number | null;
 };
 
 export type ReorderLine = {

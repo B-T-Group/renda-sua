@@ -234,6 +234,14 @@ const VariantCard: React.FC<VariantCardProps> = ({
             <Typography fontWeight={600} noWrap>
               {variant.name}
             </Typography>
+            {(variant.quantity ?? 1) > 1 ? (
+              <Chip
+                size="small"
+                label={t('business.variants.unitsBadge', '{{count}} units', {
+                  count: variant.quantity,
+                })}
+              />
+            ) : null}
             {variant.is_default ? (
               <Chip
                 size="small"

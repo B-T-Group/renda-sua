@@ -1779,6 +1779,11 @@
       "makeDefault": "Make default",
       "defaultSaved": "Default variant updated",
       "inheritsPrice": "Inherits inventory price",
+      "quantity": "Units in this option",
+      "quantityHelp": "How many of this product are in the pack. Use 1 for a single unit.",
+      "packSavings": "Customers pay {{each}} each instead of {{single}} (save {{save}}).",
+      "packEach": "Customers pay {{each}} each.",
+      "unitsBadge": "{{count}} units",
       "copyFromItem": "Copy item details",
       "aiAnalyzing": "Analyzing variant photo…",
       "aiFilledBanner": "Filled from variant photo — edit anything",
@@ -3555,7 +3560,8 @@
       "orderInTransitBody": "You have an order on the way.",
       "noActiveOrder": "No active delivery right now.",
       "orderCardPlaceholder": "Placeholder until orders are linked here.",
-      "signedInAs": "Signed in as"
+      "signedInAs": "Signed in as",
+      "categoryTile": "Browse {{name}}"
     },
     "home": {
       "liveOrders": {
@@ -3843,6 +3849,9 @@
       "variantLabel": "Option",
       "selectVariant": "Select an option",
       "chooseOption": "Choose an option",
+      "unitsEach": "{{count}} units · {{each}} each",
+      "saveAmount": "Save {{amount}}",
+      "saveOnPacks": "Save on packs",
       "quantity": "Quantity",
       "quantityHint": "Max {{max}} available",
       "fulfillment": "Fulfillment",

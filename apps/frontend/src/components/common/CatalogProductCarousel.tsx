@@ -23,6 +23,7 @@ export interface CatalogProductCarouselProps {
   title: string;
   subtitle?: string;
   viewAllHref?: string;
+  onViewAll?: () => void;
   items: InventoryItem[];
   loading: boolean;
   formatCurrency: (amount: number, currency?: string) => string;
@@ -47,6 +48,7 @@ export function CatalogProductCarousel({
   title,
   subtitle,
   viewAllHref,
+  onViewAll,
   items,
   loading,
   formatCurrency,
@@ -86,8 +88,11 @@ export function CatalogProductCarousel({
             </Typography>
           ) : null}
         </Box>
-        {viewAllHref ? (
-          <Button size="small" onClick={() => navigate(viewAllHref)}>
+        {viewAllHref || onViewAll ? (
+          <Button
+            size="small"
+            onClick={() => (onViewAll ? onViewAll() : navigate(viewAllHref!))}
+          >
             {t('collections.viewAll', 'View all')}
           </Button>
         ) : null}

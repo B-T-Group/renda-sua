@@ -84,8 +84,8 @@ export function useCatalogVariantFlow(params: {
       const added = after - before;
       if (added > 0) {
         emitAddToCartMeta(item, selectionId, auth.isAuthenticated, added);
+        onCartResultRef.current?.(result);
       }
-      onCartResultRef.current?.(result);
       closePicker();
     },
     [auth.isAuthenticated, baseLabel, cart, closePicker]
@@ -131,8 +131,8 @@ export function useCatalogVariantFlow(params: {
       const added = after - before;
       if (added > 0) {
         emitAddToCartMeta(item, null, auth.isAuthenticated, added);
+        onCartResultRef.current?.(result);
       }
-      onCartResultRef.current?.(result);
     },
     [auth.isAuthenticated, baseLabel, cart, completeWithSelection]
   );

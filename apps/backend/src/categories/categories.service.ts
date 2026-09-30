@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { CatalogArtworkService } from '../catalog-artwork/catalog-artwork.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './categories.controller';
 
@@ -6,7 +7,10 @@ import { CreateCategoryDto, UpdateCategoryDto } from './categories.controller';
 export class CategoriesService {
   private readonly logger = new Logger(CategoriesService.name);
 
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    private readonly catalogArtwork: CatalogArtworkService
+  ) {}
 
   async listCategoryTree() {
     const query = `
@@ -43,6 +47,7 @@ export class CategoriesService {
           id
           name
           description
+          image_url
           status
           created_at
           updated_at
@@ -92,6 +97,7 @@ export class CategoriesService {
           id
           name
           description
+          image_url
           status
           created_at
           updated_at
@@ -144,6 +150,7 @@ export class CategoriesService {
           id
           name
           description
+          image_url
           status
           created_at
           updated_at
@@ -158,10 +165,12 @@ export class CategoriesService {
         status: createCategoryDto.status || 'draft',
       });
 
+      const created = result.insert_item_categories_one;
       this.logger.log(
-        `Category created: ${result.insert_item_categories_one.name} with status: ${result.insert_item_categories_one.status}`
+        `Category created: ${created.name} with status: ${created.status}`
       );
-      return result.insert_item_categories_one;
+      this.scheduleCategoryArtwork(created.id);
+      return created;
     } catch (error: any) {
       // Handle constraint violation errors
       if (
@@ -315,5 +324,15 @@ export class CategoriesService {
       );
     }
     return result.delete_item_categories_by_pk;
+  }
+
+  private scheduleCategoryArtwork(categoryId: number): void {
+    try {
+      this.catalogArtwork.scheduleCategoryArtwork(categoryId);
+    } catch (error: any) {
+      this.logger.warn(
+        `Category artwork schedule failed id=${categoryId}: ${error?.message ?? error}`
+      );
+    }
   }
 }

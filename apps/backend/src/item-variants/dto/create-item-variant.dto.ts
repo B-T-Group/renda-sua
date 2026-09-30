@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsInt,
   IsNumber,
   IsObject,
   IsOptional,
@@ -25,6 +26,16 @@ export class CreateItemVariantDto {
   @IsNumber()
   @Min(0)
   price?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Base units included in one sale of this variant. Defaults to 1.',
+    example: 10,
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

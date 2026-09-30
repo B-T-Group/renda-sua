@@ -1,12 +1,14 @@
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ImageNotSupportedOutlinedIcon from '@mui/icons-material/ImageNotSupportedOutlined';
-import { Box, ButtonBase, Stack, Typography } from '@mui/material';
+import { Box, ButtonBase, Chip, Stack, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type ItemVariant,
   type VariantPriceOverride,
   effectiveVariantUnitPrice,
+  packQuantityOf,
+  packRebate,
   primaryVariantImageUrl,
   unitPriceWithListingDeal,
 } from '../../types/itemVariant';
@@ -48,6 +50,16 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
     return null;
   }
 
+  const baseUnit = unitPriceWithListingDeal(
+    listingSellingPrice,
+    listingSellingPrice,
+    hasActiveDeal,
+    originalPrice,
+    discountedPrice,
+    discountType,
+    discountValue
+  ).unit;
+
   return (
     <Box sx={{ mt: 2 }} role="radiogroup" aria-label={t('orders.variant.selectLabel', 'Option')}>
       <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.75 }}>
@@ -87,6 +99,16 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
           const thumb = primaryVariantImageUrl(v);
           const priceLabel = formatCurrency(p.unit, currency);
           const colorHint = v.color?.trim();
+          const packQty = packQuantityOf(v);
+          const rebate = packRebate({
+            packQuantity: packQty,
+            packPrice: p.unit,
+            baseUnitPrice: baseUnit,
+          });
+          const eachLabel = formatCurrency(p.unit / packQty, currency);
+          const saveLabel = rebate
+            ? formatCurrency(rebate.saveAmount, currency)
+            : null;
 
           return (
             <ButtonBase
@@ -174,6 +196,24 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
                 <Typography variant="body2" color="primary" fontWeight={700}>
                   {priceLabel}
                 </Typography>
+                {packQty > 1 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('orders.variant.unitsEach', '{{count}} units · {{each}} each', {
+                      count: packQty,
+                      each: eachLabel,
+                    })}
+                  </Typography>
+                ) : null}
+                {saveLabel ? (
+                  <Chip
+                    size="small"
+                    color="success"
+                    label={t('orders.variant.saveAmount', 'Save {{amount}}', {
+                      amount: saveLabel,
+                    })}
+                    sx={{ alignSelf: 'flex-start', height: 22, fontWeight: 700 }}
+                  />
+                ) : null}
               </Stack>
             </ButtonBase>
           );

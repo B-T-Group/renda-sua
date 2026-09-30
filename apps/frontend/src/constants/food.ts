@@ -58,10 +58,22 @@ type PlaceOrderQuantityItem = FoodCatalogRow & {
 };
 
 /** Cooked food ignores the quantity-1 visibility sentinel. Retail stays stock-capped. */
-export function placeOrderMaxQuantity(item: PlaceOrderQuantityItem): number {
+export function placeOrderMaxQuantity(
+  item: PlaceOrderQuantityItem,
+  packQuantity = 1
+): number {
   if (isFoodCatalogItem(item)) {
     const merchantMax = item.item?.max_order_quantity ?? FOOD_ORDER_SOFT_MAX;
-    return Math.max(1, merchantMax);
+    const pack = packQuantity > 1 ? Math.floor(packQuantity) : 1;
+    return Math.max(1, Math.floor(merchantMax / pack));
+  }
+  if (packQuantity > 1) {
+    const pack = Math.floor(packQuantity);
+    const stockPacks = Math.floor(item.computed_available_quantity / pack);
+    const maxBase = item.item?.max_order_quantity;
+    const orderPacks =
+      maxBase != null ? Math.floor(maxBase / pack) : stockPacks;
+    return Math.max(0, Math.min(stockPacks, orderPacks, 10));
   }
   const stockCap = Math.min(
     item.computed_available_quantity,

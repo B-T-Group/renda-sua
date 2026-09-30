@@ -428,6 +428,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
           name
           sku
           price
+          quantity
           weight
           weight_unit
           dimensions
@@ -2569,6 +2570,7 @@ export class InventoryItemsService {
               name
               sku
               price
+              quantity
               weight
               weight_unit
               dimensions

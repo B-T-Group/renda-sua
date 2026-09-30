@@ -7,6 +7,7 @@ export interface CreateItemVariantPayload {
   name: string;
   sku?: string | null;
   price?: number | null;
+  quantity?: number | null;
   weight?: number | null;
   weight_unit?: string | null;
   dimensions?: string | null;

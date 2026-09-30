@@ -1,6 +1,11 @@
 import {
   activeCatalogVariants,
+  packQuantityForOrderLine,
+  packQuantityOf,
+  packRebate,
   resolveEffectiveUnitPrice,
+  stockUnitsForLine,
+  sumStockUnitsByInventory,
 } from './variant-pricing.util';
 
 describe('variant-pricing.util', () => {
@@ -50,6 +55,68 @@ describe('variant-pricing.util', () => {
         { id: 'c' },
       ]);
       expect(active.map((v) => v.id)).toEqual(['a', 'c']);
+    });
+  });
+
+  describe('pack stock units', () => {
+    it('treats missing quantity as one unit', () => {
+      expect(packQuantityOf(null)).toBe(1);
+      expect(stockUnitsForLine(2, 1)).toBe(2);
+    });
+
+    it('multiplies a pack of 10 by the line quantity', () => {
+      expect(packQuantityOf({ quantity: 10 })).toBe(10);
+      expect(stockUnitsForLine(2, 10)).toBe(20);
+    });
+
+    it('sums one pack of 10 plus 3 singles as 13 base units', () => {
+      const inventory = {
+        id: 'inv-1',
+        item: {
+          item_variants: [{ id: 'pack', quantity: 10 }],
+        },
+      };
+      const totals = sumStockUnitsByInventory(
+        [
+          { business_inventory_id: 'inv-1', quantity: 1, item_variant_id: 'pack' },
+          { business_inventory_id: 'inv-1', quantity: 3 },
+        ],
+        [inventory]
+      );
+      expect(totals.get('inv-1')).toBe(13);
+      expect(
+        packQuantityForOrderLine({
+          line: {
+            business_inventory_id: 'inv-1',
+            variant_snapshot: { quantity: 10 },
+          },
+          inventory,
+        })
+      ).toBe(10);
+    });
+  });
+
+  describe('packRebate', () => {
+    it('hides a rebate for a single unit', () => {
+      expect(
+        packRebate({ packQuantity: 1, packPrice: 4, baseUnitPrice: 5 })
+      ).toBeNull();
+    });
+
+    it('hides a rebate when the pack is not cheaper', () => {
+      expect(
+        packRebate({ packQuantity: 10, packPrice: 50, baseUnitPrice: 5 })
+      ).toBeNull();
+    });
+
+    it('shows savings for a cheaper pack', () => {
+      expect(
+        packRebate({ packQuantity: 10, packPrice: 40, baseUnitPrice: 5 })
+      ).toEqual({
+        saveAmount: 10,
+        perUnit: 4,
+        savePercent: 20,
+      });
     });
   });
 });

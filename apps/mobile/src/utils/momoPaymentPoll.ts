@@ -94,3 +94,26 @@ export function resolveClaimPaymentPhase(
   }
   return 'waiting';
 }
+
+/** GET /mobile-payments/transactions/:id JSON body. */
+export function claimTransactionStatusFromBody(
+  body:
+    | {
+        data?: { status?: string | null } | null;
+        status?: string | null;
+      }
+    | null
+    | undefined
+): string | null | undefined {
+  return body?.data?.status ?? body?.status;
+}
+
+/** Stop polling only on a terminal claim status or after the wait window. */
+export function claimPollTerminalPhase(
+  phase: MomoPaymentPollPhase,
+  elapsedMs: number
+): 'paid' | 'failed' | 'timeout' | null {
+  if (phase === 'paid' || phase === 'failed') return phase;
+  if (elapsedMs >= MOMO_POLL_TIMEOUT_MS) return 'timeout';
+  return null;
+}

@@ -47,6 +47,7 @@ interface CleanupOrderRow extends CleanupWindowOrder {
     id: string;
     business_inventory_id?: string | null;
     quantity?: number;
+    variant_snapshot?: { quantity?: number | string | null } | null;
   }>;
   /** Hasura array relationship on orders (singular name). */
   failed_delivery?: Array<{ id: string }>;
@@ -282,7 +283,7 @@ export class OrderCleanupService {
           payment_status
           payment_source
           payment_failed_at
-          order_items { id business_inventory_id quantity }
+          order_items { id business_inventory_id quantity variant_snapshot }
         }
       }
     `,
@@ -749,7 +750,7 @@ export class OrderCleanupService {
           updated_at
           client { user_id user { preferred_language timezone } }
           business { user_id user { preferred_language } }
-          order_items { id business_inventory_id quantity }
+          order_items { id business_inventory_id quantity variant_snapshot }
         }
       }
     `,
@@ -816,7 +817,7 @@ export class OrderCleanupService {
             preferred_date
             time_slot_end
           }
-          order_items { id business_inventory_id quantity }
+          order_items { id business_inventory_id quantity variant_snapshot }
           failed_delivery(limit: 1) { id }
         }
       }
@@ -853,7 +854,7 @@ export class OrderCleanupService {
           updated_at
           client { user_id user { preferred_language timezone } }
           business { user_id user { preferred_language } }
-          order_items { id business_inventory_id quantity }
+          order_items { id business_inventory_id quantity variant_snapshot }
           order_status_history(
             where: { status: { _eq: ready_for_pickup } }
             order_by: { created_at: asc }

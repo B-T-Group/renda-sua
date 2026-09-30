@@ -19,6 +19,7 @@ export interface ItemVariant {
   weight_unit?: string | null;
   dimensions?: string | null;
   color?: string | null;
+  quantity?: number | null;
   attributes?: Record<string, unknown> | null;
   is_default?: boolean;
   is_active?: boolean;
@@ -123,6 +124,109 @@ export function effectiveVariantUnitPrice(
     if (!Number.isNaN(n) && n >= 0) return n;
   }
   return sellingPrice;
+}
+
+/** Base units in one sale of this option. Missing or invalid values count as 1. */
+export function packQuantityOf(
+  source: { quantity?: number | null } | null | undefined
+): number {
+  const n = Number(source?.quantity ?? 1);
+  if (!Number.isFinite(n) || n <= 1) return 1;
+  return Math.floor(n);
+}
+
+export interface PackRebate {
+  saveAmount: number;
+  perUnit: number;
+  savePercent: number;
+}
+
+/** Savings versus buying the same number of singles. Null when not a cheaper pack. */
+export function packRebate(params: {
+  packQuantity?: number | null;
+  packPrice: number;
+  baseUnitPrice: number;
+}): PackRebate | null {
+  const qty = packQuantityOf({ quantity: params.packQuantity });
+  if (qty <= 1 || !(params.baseUnitPrice > 0) || !(params.packPrice >= 0)) {
+    return null;
+  }
+  const singles = params.baseUnitPrice * qty;
+  if (!(params.packPrice < singles)) return null;
+  const saveAmount = singles - params.packPrice;
+  return {
+    saveAmount,
+    perUnit: params.packPrice / qty,
+    savePercent: (saveAmount / singles) * 100,
+  };
+}
+
+export function listingHasPackRebate(params: {
+  variants?: ItemVariant[] | null;
+  listingSellingPrice: number;
+  overrides?: VariantPriceOverride[] | null;
+  hasActiveDeal?: boolean;
+  originalPrice?: number;
+  discountedPrice?: number;
+  discountType?: ListingDealType;
+  discountValue?: number;
+}): boolean {
+  const base = unitPriceWithListingDeal(
+    params.listingSellingPrice,
+    params.listingSellingPrice,
+    params.hasActiveDeal,
+    params.originalPrice,
+    params.discountedPrice,
+    params.discountType,
+    params.discountValue
+  ).unit;
+  return (params.variants ?? []).some((variant) => {
+    if (variant.is_active === false) return false;
+    const packBase = effectiveVariantUnitPrice(
+      variant,
+      params.listingSellingPrice,
+      params.overrides
+    );
+    const packPrice = unitPriceWithListingDeal(
+      packBase,
+      params.listingSellingPrice,
+      params.hasActiveDeal,
+      params.originalPrice,
+      params.discountedPrice,
+      params.discountType,
+      params.discountValue
+    ).unit;
+    return (
+      packRebate({
+        packQuantity: variant.quantity,
+        packPrice,
+        baseUnitPrice: base,
+      }) != null
+    );
+  });
+}
+
+/** Max packs the shopper can add, in line quantity. Undefined when nothing caps it. */
+export function lineQuantityCap(params: {
+  packQuantity?: number | null;
+  maxOrderBaseUnits?: number | null;
+  availableBaseUnits?: number | null;
+  otherLinesBaseUnits?: number;
+}): number | undefined {
+  const pack = packQuantityOf({ quantity: params.packQuantity });
+  const caps: number[] = [];
+  if (params.maxOrderBaseUnits != null && params.maxOrderBaseUnits > 0) {
+    caps.push(Math.floor(params.maxOrderBaseUnits / pack));
+  }
+  if (params.availableBaseUnits != null) {
+    const remaining = Math.max(
+      0,
+      params.availableBaseUnits - (params.otherLinesBaseUnits ?? 0)
+    );
+    caps.push(Math.floor(remaining / pack));
+  }
+  if (!caps.length) return undefined;
+  return Math.max(0, Math.min(...caps));
 }
 
 /** Apply a listing deal to an arbitrary base unit (e.g. variant-priced SKU). */

@@ -1,6 +1,10 @@
+import { sumStockUnitsByInventory } from '../item-variants/variant-pricing.util';
+
 export type ReservedInventoryLine = {
   business_inventory_id?: string | null;
   quantity?: number | null;
+  item_variant_id?: string | null;
+  variant_snapshot?: { quantity?: number | string | null } | null;
 };
 
 type HasuraMutator = {
@@ -21,21 +25,7 @@ const RELEASE_MUTATION = `
 export function aggregateReservedQuantities(
   orderItems: ReservedInventoryLine[] | null | undefined
 ): Map<string, number> {
-  const quantityChanges = new Map<string, number>();
-  for (const item of orderItems ?? []) {
-    addReservedQuantity(quantityChanges, item);
-  }
-  return quantityChanges;
-}
-
-function addReservedQuantity(
-  quantityChanges: Map<string, number>,
-  item: ReservedInventoryLine
-): void {
-  const id = item.business_inventory_id;
-  const qty = Number(item.quantity);
-  if (!id || !Number.isFinite(qty) || qty <= 0) return;
-  quantityChanges.set(id, (quantityChanges.get(id) || 0) + qty);
+  return sumStockUnitsByInventory(orderItems ?? []);
 }
 
 export async function releaseReservedInventory(
