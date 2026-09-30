@@ -32,6 +32,14 @@ const QUERY_PIPE = new ValidationPipe({
 export class AdminMapController {
   constructor(private readonly adminMapService: AdminMapService) {}
 
+  @Get('search')
+  @ApiOperation({ summary: 'Find an agent, merchant, or active order on the map' })
+  @ApiQuery({ name: 'q', required: true, example: 'Awa' })
+  @ApiResponse({ status: 200, description: 'Matching people and active orders' })
+  search(@Query('q') q = '') {
+    return this.adminMapService.search(q);
+  }
+
   @Get('regions')
   @ApiOperation({ summary: 'Market regions configured for a country' })
   @ApiQuery({ name: 'country', required: true, example: 'CM' })
@@ -43,7 +51,10 @@ export class AdminMapController {
   @Get('pins')
   @UsePipes(QUERY_PIPE)
   @ApiOperation({ summary: 'Agent and merchant pins for the superuser map' })
-  @ApiResponse({ status: 200, description: 'Pins with contact details' })
+  @ApiResponse({
+    status: 200,
+    description: 'Pins for the map, plus agent and merchant counts by status for the selected market',
+  })
   pins(@Query() query: AdminMapPinsQueryDto) {
     return this.adminMapService.getPins(query);
   }

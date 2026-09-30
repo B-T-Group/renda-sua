@@ -1,12 +1,14 @@
 import { Alert, Box, Stack, Typography } from '@mui/material';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { useSupportedCountries } from '../../../hooks/useSupportedCountries';
-import { useAdminMapPins, useAdminMapRegions } from '../../../hooks/useAdminMap';
+import { useAdminMapPins, useSeededMapMarket } from '../../../hooks/useAdminMap';
 import AdminMapCanvas from '../../admin/map/AdminMapCanvas';
 import AdminMapLegend from '../../admin/map/AdminMapLegend';
 import AdminMapPinPanel from '../../admin/map/AdminMapPinPanel';
+import AdminMapSearch from '../../admin/map/AdminMapSearch';
+import AdminMapSummaryBar from '../../admin/map/AdminMapSummary';
 import AdminMapToolbar from '../../admin/map/AdminMapToolbar';
 import { AdminMapKind, AdminMapPin } from '../../admin/map/adminMap.types';
 
@@ -31,8 +33,15 @@ function MapWorkspace() {
     <Stack spacing={2} sx={{ p: 2, height: 'calc(100vh - 120px)', minHeight: 640 }}>
       <MapHeading />
       <AdminMapToolbar {...model.toolbar} />
+      <AdminMapSearch onFocus={model.focusPin} />
+      {model.focusNote ? <OrderFocusNote orderNumber={model.focusNote} /> : null}
+      <AdminMapSummaryBar summary={model.pins.summary} />
       <AdminMapLegend />
-      <MapStatus loading={model.pins.loading} error={model.pins.error} empty={!model.pins.loading && model.pins.pins.length === 0} />
+      <MapStatus
+        loading={model.pins.loading}
+        error={model.pins.error}
+        empty={!model.pins.loading && model.pins.pins.length === 0 && !model.focus}
+      />
       <MapBody model={model} />
     </Stack>
   );
@@ -47,6 +56,15 @@ function MapHeading() {
         {t('admin.map.subtitle', 'Agents and merchants in your markets')}
       </Typography>
     </Box>
+  );
+}
+
+function OrderFocusNote({ orderNumber }: { orderNumber: string }) {
+  const { t } = useTranslation();
+  return (
+    <Alert severity="success">
+      {t('admin.map.orderHere', 'Order {{number}} is at this place.', { number: orderNumber })}
+    </Alert>
   );
 }
 
@@ -74,6 +92,8 @@ function MapBody({ model }: { model: ReturnType<typeof useMapModel> }) {
         activityLabel={activityLabel}
         onZoom={model.setZoom}
         onSelect={model.select}
+        focusPin={model.focus?.pin ?? null}
+        focusToken={model.focus?.token ?? 0}
       />
       {model.selected ? <AdminMapPinPanel pin={model.selected} onClose={model.clear} /> : null}
     </Stack>
@@ -86,29 +106,79 @@ function useMapModel() {
     { country: filters.country, state: filters.region, kind: filters.kind },
     filters.live
   );
+  const focus = useMapFocus(pins.pins);
+  const filterKey = `${filters.country}|${filters.region}|${filters.kind}`;
+  useDropFocusOnFilter(filterKey, focus.drop);
+  return { toolbar: filters, pins, filterKey, ...focus };
+}
+
+function useDropFocusOnFilter(filterKey: string, drop: () => void) {
+  const seen = useRef(filterKey);
+  useEffect(() => {
+    if (seen.current === filterKey) return;
+    seen.current = filterKey;
+    drop();
+  }, [filterKey, drop]);
+}
+
+function useMapFocus(pins: AdminMapPin[]) {
+  const bag = useFocusBag();
+  const selected = pins.find((pin) => pin.id === bag.selectedId) ?? focusedPin(bag.focus, bag.selectedId);
+  return {
+    zoom: bag.zoom, setZoom: bag.setZoom, selected, select: bag.select,
+    clear: bag.clear, drop: bag.drop, focus: bag.focus, focusPin: bag.focusPin, focusNote: bag.focusNote,
+  };
+}
+
+function useFocusBag() {
   const [zoom, setZoom] = useState(6);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = pins.pins.find((pin) => pin.id === selectedId) ?? null;
-  const select = useCallback((pin: AdminMapPin) => setSelectedId(pin.id), []);
-  const clear = useCallback(() => setSelectedId(null), []);
-  const filterKey = `${filters.country}|${filters.region}|${filters.kind}`;
-  return { toolbar: filters, pins, zoom, setZoom, selected, filterKey, select, clear };
+  const [focus, setFocus] = useState<{ pin: AdminMapPin; token: number } | null>(null);
+  const [focusNote, setFocusNote] = useState<string | null>(null);
+  const select = useCallback((pin: AdminMapPin) => {
+    setSelectedId(pin.id);
+    setFocusNote(null);
+  }, []);
+  const focusPin = useCallback((pin: AdminMapPin, orderNumber: string | null) => {
+    setSelectedId(pin.id);
+    setFocus({ pin, token: Date.now() });
+    setFocusNote(orderNumber);
+  }, []);
+  const clear = useCallback(() => {
+    setSelectedId(null);
+    setFocusNote(null);
+  }, []);
+  const drop = useCallback(() => {
+    setSelectedId(null);
+    setFocus(null);
+    setFocusNote(null);
+  }, []);
+  return { zoom, setZoom, selectedId, focus, focusNote, select, focusPin, clear, drop };
+}
+
+function focusedPin(
+  focus: { pin: AdminMapPin; token: number } | null,
+  selectedId: string | null
+): AdminMapPin | null {
+  return focus?.pin.id === selectedId ? focus.pin : null;
 }
 
 function useMapFilters() {
   const { countries } = useSupportedCountries();
-  const [country, setCountry] = useState('');
-  const [region, setRegion] = useState('');
+  const place = useSeededMapMarket();
   const [kind, setKind] = useState<AdminMapKind>('all');
   const [live, setLive] = useState(false);
-  const regions = useAdminMapRegions(country);
-  const onCountry = (value: string) => {
-    setCountry(value);
-    setRegion('');
-  };
   return {
-    countries, regions, country, region, kind, live,
-    onCountry, onRegion: setRegion, onKind: setKind, onLive: setLive,
+    countries,
+    regions: place.regions,
+    country: place.country,
+    region: place.region,
+    kind,
+    live,
+    onCountry: place.onCountry,
+    onRegion: place.onRegion,
+    onKind: setKind,
+    onLive: setLive,
   };
 }
 

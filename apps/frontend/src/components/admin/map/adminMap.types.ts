@@ -26,11 +26,33 @@ export interface AdminMapPin {
   state: string | null;
 }
 
+export interface AdminMapSummary {
+  agents: { active: number; unavailable: number; suspended: number };
+  merchants: { open: number; inactive: number };
+}
+
+export const EMPTY_MAP_SUMMARY: AdminMapSummary = {
+  agents: { active: 0, unavailable: 0, suspended: 0 },
+  merchants: { open: 0, inactive: 0 },
+};
+
 export interface AdminMapQuery {
   country: string;
   state: string;
   kind: AdminMapKind;
 }
 
+export type AdminMapSearchNotice = 'inactive' | 'no_location' | 'carrier';
+
+export interface AdminMapSearchHit {
+  id: string;
+  kind: 'agent' | 'business_location' | 'order';
+  title: string;
+  subtitle: string | null;
+  pin: AdminMapPin | null;
+  notice: AdminMapSearchNotice | null;
+}
+
 export const LIVE_POLL_MS = 15_000;
 export const LABEL_ZOOM = 13;
+export const FOCUS_ZOOM = 16;
