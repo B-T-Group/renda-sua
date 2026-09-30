@@ -62,7 +62,7 @@ import {
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
 import { useApiClient } from '../../hooks/useApiClient';
-import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
+import { useCheckoutPreflightState } from '../../hooks/useCheckoutPreflight';
 import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
@@ -265,6 +265,8 @@ interface OrderSummaryProps {
   showTaxAtCheckoutNotice?: boolean;
   /** True when the platform cannot currently deliver this order. */
   deliveryUnavailable?: boolean;
+  /** When false, delivery is not a choice and the pickup toggle is hidden. */
+  allowDelivery?: boolean;
   /** MoMo reservation deposit due now (from preflight). */
   depositAmount?: number | null;
   /** Remaining after deposit (from preflight). */
@@ -313,6 +315,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   error,
   showTaxAtCheckoutNotice = false,
   deliveryUnavailable = false,
+  allowDelivery = true,
   depositAmount = null,
   amountDueAfterDeposit = null,
   depositMinimumApplied = false,
@@ -326,7 +329,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
 
   const subtotal = unitPrice * quantity;
   // Delivery fee is the API delivery fee (already includes fast delivery charge if applicable)
-  const computedDeliveryFee = deliveryFee || 0;
+  const computedDeliveryFee =
+    !pickupSelected && !allowDelivery ? 0 : deliveryFee || 0;
   // Total = subtotal + delivery fee (fast delivery already included in deliveryFee from API)
   const total = subtotal + computedDeliveryFee;
   const discountAmount =
@@ -519,7 +523,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Alert>
           )}
 
-          {pickupEligible && onPickupChange && (
+          {pickupEligible && onPickupChange && allowDelivery && (
             <Paper
               variant="outlined"
               sx={{
@@ -577,7 +581,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Paper>
           )}
 
-          {!pickupSelected ? (
+          {!pickupSelected && allowDelivery ? (
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
               {t('orders.deliveryFee', 'Delivery Fee')}
@@ -637,6 +641,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             !deliveryAddressMissing &&
             !deliveryFeeError &&
             !pickupSelected &&
+            allowDelivery &&
             firstOrderBaseDeliveryDiscountAmount > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="success.main">
@@ -888,6 +893,7 @@ const PlaceOrderPage: React.FC = () => {
     'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'
   >('pay_now');
   const [pickupAtStore, setPickupAtStore] = useState(false);
+  const [pickupChosenByUser, setPickupChosenByUser] = useState(false);
   const { trackSiteEvent } = useTrackSiteEvent();
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [showSpecialInstructions, setShowSpecialInstructions] = useState(false);
@@ -1203,29 +1209,31 @@ const PlaceOrderPage: React.FC = () => {
 
   const checkoutPreflightRequest = useMemo(() => {
     if (!selectedItem) return null;
-    if (!isPickupOrder && !selectedAddressId) return null;
+    const line = {
+      business_inventory_id: selectedItem.id,
+      quantity,
+      ...(toOrderItemVariantId(selectedVariantId)
+        ? { item_variant_id: toOrderItemVariantId(selectedVariantId) }
+        : {}),
+    };
+    const address = selectedAddressId
+      ? { delivery_address_id: selectedAddressId }
+      : {};
+    if (isPickupOrder) {
+      return {
+        items: [line],
+        fulfillment_method: 'pickup' as const,
+        payment_timing: (itemCountrySupportsStripe
+          ? 'pay_now'
+          : 'pay_at_pickup') as const,
+        ...address,
+      };
+    }
     return {
-      items: [
-        {
-          business_inventory_id: selectedItem.id,
-          quantity,
-          ...(toOrderItemVariantId(selectedVariantId)
-            ? { item_variant_id: toOrderItemVariantId(selectedVariantId) }
-            : {}),
-        },
-      ],
-      ...(isPickupOrder
-        ? {
-            fulfillment_method: 'pickup' as const,
-            payment_timing: (itemCountrySupportsStripe
-              ? 'pay_now'
-              : 'pay_at_pickup') as const,
-          }
-        : {
-            delivery_address_id: selectedAddressId,
-            fulfillment_method: 'delivery' as const,
-            payment_timing: paymentTiming,
-          }),
+      items: [line],
+      fulfillment_method: 'delivery' as const,
+      payment_timing: paymentTiming,
+      ...address,
     };
   }, [
     isPickupOrder,
@@ -1237,10 +1245,35 @@ const PlaceOrderPage: React.FC = () => {
     selectedVariantId,
   ]);
 
-  const checkoutPreflight = useCheckoutPreflight(
+  const { config: checkoutPreflight, loading: deliveryCheckLoading } =
+    useCheckoutPreflightState(
+      checkoutPreflightRequest,
+      Boolean(checkoutPreflightRequest)
+    );
+
+  const deliveryOffered =
+    checkoutPreflight?.delivery_availability?.available === true;
+  const deliveryRuledOut =
+    checkoutPreflight?.delivery_availability?.available === false;
+
+  useEffect(() => {
+    if (!selectedItem || deliveryCheckLoading || !checkoutPreflightRequest) return;
+    if (deliveryRuledOut && isPickupEligible) {
+      setPickupAtStore(true);
+      return;
+    }
+    if (deliveryOffered && !pickupChosenByUser) {
+      setPickupAtStore(false);
+    }
+  }, [
     checkoutPreflightRequest,
-    Boolean(checkoutPreflightRequest)
-  );
+    deliveryCheckLoading,
+    deliveryOffered,
+    deliveryRuledOut,
+    isPickupEligible,
+    pickupChosenByUser,
+    selectedItem,
+  ]);
 
   useEffect(() => {
     if (linkedPaymentPhoneId) return;
@@ -2054,11 +2087,12 @@ const PlaceOrderPage: React.FC = () => {
     (checkoutPreflight?.checkout_method === 'STRIPE' ||
       itemCountrySupportsStripe);
 
-  // Reason-blind delivery availability from preflight: when false, delivery
-  // ordering is blocked and store pickup is promoted instead.
-  const deliveryUnavailable =
-    !isPickupOrder &&
-    checkoutPreflight?.delivery_availability?.available === false;
+  // Offer delivery only after the shared check returns available. A missing
+  // or in-flight result stays blocked so the place button cannot submit it.
+  const deliveryKnownUnavailable = deliveryRuledOut;
+  const showDeliveryUnavailable = deliveryRuledOut && !isPickupOrder;
+  const deliveryBlocked =
+    !isPickupOrder && (deliveryCheckLoading || !deliveryOffered);
 
   const preflightDeposit = useMemo(() => {
     const empty = {
@@ -2083,18 +2117,20 @@ const PlaceOrderPage: React.FC = () => {
   // Funnel analytics: track the first time the unavailable notice is shown.
   const unavailableTrackedRef = useRef(false);
   useEffect(() => {
-    if (deliveryUnavailable && !unavailableTrackedRef.current) {
+    if (deliveryKnownUnavailable && !unavailableTrackedRef.current) {
       unavailableTrackedRef.current = true;
       trackSiteEvent({
         eventType: SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
         metadata: { checkout_mode: 'single' },
       });
     }
-  }, [deliveryUnavailable, trackSiteEvent]);
+  }, [deliveryKnownUnavailable, trackSiteEvent]);
 
   const handlePickupChange = useCallback(
     (selected: boolean) => {
-      if (selected && deliveryUnavailable) {
+      if (!selected && !deliveryOffered) return;
+      setPickupChosenByUser(selected);
+      if (selected && !deliveryOffered) {
         trackSiteEvent({
           eventType: SITE_EVENT_CHECKOUT_SWITCHED_TO_PICKUP,
           metadata: { checkout_mode: 'single' },
@@ -2102,7 +2138,7 @@ const PlaceOrderPage: React.FC = () => {
       }
       setPickupAtStore(selected);
     },
-    [deliveryUnavailable, trackSiteEvent]
+    [deliveryOffered, trackSiteEvent]
   );
 
   // Show loading skeleton
@@ -2143,7 +2179,7 @@ const PlaceOrderPage: React.FC = () => {
   const baseCanPlaceOrder =
     !loading &&
     !paymentSystemsLoading &&
-    !deliveryUnavailable &&
+    !deliveryBlocked &&
     !cookedFoodClosedMessage &&
     (isPickupOrder || (!!selectedAddressId && addresses.length > 0));
   const needsLinkedMoMoPhone =
@@ -2163,6 +2199,7 @@ const PlaceOrderPage: React.FC = () => {
     if (isMobile) {
       switch (step) {
         case 0: // Delivery Options & Address (merged)
+          if (showDeliveryUnavailable) return false;
           return isPickupOrder || (!!selectedAddressId && addresses.length > 0);
         case 1: // Review & Place Order (includes quantity)
           return quantity >= 1 && !!canPlaceOrder;
@@ -2174,6 +2211,7 @@ const PlaceOrderPage: React.FC = () => {
       case 0: // Delivery Options
         return true; // Optional fields
       case 1: // Delivery Address
+        if (showDeliveryUnavailable) return false;
         return isPickupOrder || (!!selectedAddressId && addresses.length > 0);
       case 2: // Review & Place Order (includes quantity)
         return quantity >= 1 && !!canPlaceOrder;
@@ -2210,6 +2248,14 @@ const PlaceOrderPage: React.FC = () => {
     if (isMobile && step === 0) {
       return (
         <Stack spacing={2}>
+          {showDeliveryUnavailable && (
+            <Alert severity="warning">
+              {t(
+                'orders.deliveryAvailability.unavailable',
+                'Delivery is currently unavailable.'
+              )}
+            </Alert>
+          )}
           {isPickupOrder && selectedItem.business_location && (
             <Card>
               <CardContent sx={{ p: 1.5 }}>
@@ -2269,7 +2315,7 @@ const PlaceOrderPage: React.FC = () => {
           )}
 
           {/* Delivery Address (merged from former step 3) */}
-          {!isPickupOrder && (addressesLoading || addresses.length === 0) && (
+          {!isPickupOrder && !showDeliveryUnavailable && (addressesLoading || addresses.length === 0) && (
             <Card>
               <CardContent sx={{ p: 1.5 }}>
                 <Box
@@ -2328,6 +2374,7 @@ const PlaceOrderPage: React.FC = () => {
 
           {/* Delivery Options: fast delivery + time slot (merged from former step 1) */}
           {!isPickupOrder &&
+            !showDeliveryUnavailable &&
             fastDeliveryConfig &&
             isEnabledForLocation(userCountry, userState) && (
               <Card>
@@ -2344,7 +2391,7 @@ const PlaceOrderPage: React.FC = () => {
               </Card>
             )}
 
-          {!isPickupOrder && selectedAddress && (
+          {!isPickupOrder && !showDeliveryUnavailable && selectedAddress && (
             <Card sx={{ order: 2 }}>
               <CardContent sx={{ p: 2 }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
@@ -3236,7 +3283,8 @@ const PlaceOrderPage: React.FC = () => {
               isMobile
               error={error}
               showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
-              deliveryUnavailable={deliveryUnavailable}
+              deliveryUnavailable={showDeliveryUnavailable}
+              allowDelivery={deliveryOffered}
               depositAmount={preflightDeposit.depositAmount}
               amountDueAfterDeposit={preflightDeposit.amountDue}
               depositMinimumApplied={preflightDeposit.minimumApplied}
@@ -3785,8 +3833,17 @@ const PlaceOrderPage: React.FC = () => {
                 </Card>
               )}
 
+              {showDeliveryUnavailable && (
+                <Alert severity="warning">
+                  {t(
+                    'orders.deliveryAvailability.unavailable',
+                    'Delivery is currently unavailable.'
+                  )}
+                </Alert>
+              )}
+
               {/* Delivery Address Card */}
-              {!isPickupOrder && (
+              {!isPickupOrder && !showDeliveryUnavailable && (
               <Card>
                 <CardContent sx={{ p: 3 }}>
                   <Box
@@ -3879,6 +3936,7 @@ const PlaceOrderPage: React.FC = () => {
 
               {/* Fast Delivery Option Card */}
               {!isPickupOrder &&
+                !showDeliveryUnavailable &&
                 fastDeliveryConfig &&
                 isEnabledForLocation(userCountry, userState) && (
                   <Card>
@@ -3896,7 +3954,7 @@ const PlaceOrderPage: React.FC = () => {
                 )}
 
               {/* Delivery Time Window Selection Card */}
-              {!isPickupOrder && selectedAddress && (
+              {!isPickupOrder && !showDeliveryUnavailable && selectedAddress && (
                 <Card>
                   <CardContent sx={{ p: 3 }}>
                     <Typography variant="h6" gutterBottom>
@@ -4080,7 +4138,8 @@ const PlaceOrderPage: React.FC = () => {
               isMobile={isMobile}
               error={error}
               showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
-              deliveryUnavailable={deliveryUnavailable}
+              deliveryUnavailable={showDeliveryUnavailable}
+              allowDelivery={deliveryOffered}
               depositAmount={preflightDeposit.depositAmount}
               amountDueAfterDeposit={preflightDeposit.amountDue}
               depositMinimumApplied={preflightDeposit.minimumApplied}

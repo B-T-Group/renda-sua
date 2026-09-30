@@ -12,6 +12,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
+import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { toPublicDeliveryAvailability } from '../delivery-availability/delivery-availability.types';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -449,36 +450,12 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     // 5. Delivery country validation
     // -----------------------------------------------------------------------
+    const dropOff = await this.loadDropOff(dto.delivery_address_id);
     let deliveryCountry: string | null = null;
-    let deliveryCoords: { lat: number; lon: number } | null = null;
 
-    if (dto.delivery_address_id && this.needsShipToAddress(fulfillment)) {
-      try {
-        const addrResult = await this.hasuraSystemService.executeQuery(
-          ADDRESS_COUNTRY_QUERY,
-          { addressId: dto.delivery_address_id }
-        );
-        const addr = addrResult.addresses_by_pk;
-        deliveryCountry = (addr?.country ?? '').trim().toUpperCase() || null;
-        if (addr?.latitude != null && addr?.longitude != null) {
-          deliveryCoords = {
-            lat: Number(addr.latitude),
-            lon: Number(addr.longitude),
-          };
-        }
-      } catch (err: any) {
-        this.logger.warn('Preflight address fetch failed', err?.message);
-      }
-
-      if (deliveryCountry && sellerCountries.length > 0) {
-        const mismatch = sellerCountries.find((c) => c !== deliveryCountry);
-        if (mismatch) {
-          blockers.push({
-            code: 'DELIVERY_COUNTRY_MISMATCH',
-            message: `Your delivery address is in ${deliveryCountry}, but the items are only available for delivery within ${mismatch}. Please use an address in ${mismatch} or change the items in your cart.`,
-          });
-        }
-      }
+    if (dropOff.country && this.needsShipToAddress(fulfillment)) {
+      deliveryCountry = dropOff.country;
+      this.pushCountryMismatch(blockers, deliveryCountry, sellerCountries);
     }
 
     // -----------------------------------------------------------------------
@@ -547,9 +524,9 @@ export class CheckoutPreflightService {
     const availabilityByBusiness =
       await this.evaluateGroupsDeliveryAvailability(
         businessMap,
-        fulfillment,
         dto,
-        deliveryCoords
+        dropOff.coords,
+        dropOff.country
       );
 
     // -----------------------------------------------------------------------
@@ -1052,10 +1029,7 @@ export class CheckoutPreflightService {
       stripe_retry_unsupported: checkoutMethod !== CheckoutMethod.STRIPE,
       stripe_manual_capture: stripeManualCapture,
       tax_notice: taxNotice,
-      delivery_availability:
-        fulfillment === 'delivery'
-          ? this.aggregateDeliveryAvailability(groups)
-          : null,
+      delivery_availability: this.aggregateDeliveryAvailability(groups),
       asap_available: asapAvailable,
       asap_disabled_reason: firstBlocked?.asap_disabled_reason,
       opens_at: firstBlocked?.opens_at ?? asapGroups[0]?.opens_at ?? null,
@@ -1180,6 +1154,50 @@ export class CheckoutPreflightService {
     };
   }
 
+  private async loadDropOff(addressId?: string): Promise<{
+    country: string | null;
+    coords: { lat: number; lon: number } | null;
+  }> {
+    if (!addressId) return { country: null, coords: null };
+    try {
+      const addrResult = await this.hasuraSystemService.executeQuery(
+        ADDRESS_COUNTRY_QUERY,
+        { addressId }
+      );
+      return this.dropOffFromAddress(addrResult.addresses_by_pk);
+    } catch (err: any) {
+      this.logger.warn('Preflight address fetch failed', err?.message);
+      return { country: null, coords: null };
+    }
+  }
+
+  private dropOffFromAddress(addr: any): {
+    country: string | null;
+    coords: { lat: number; lon: number } | null;
+  } {
+    const country = (addr?.country ?? '').trim().toUpperCase() || null;
+    if (addr?.latitude == null || addr?.longitude == null) {
+      return { country, coords: null };
+    }
+    return {
+      country,
+      coords: { lat: Number(addr.latitude), lon: Number(addr.longitude) },
+    };
+  }
+
+  private pushCountryMismatch(
+    blockers: CheckoutBlockerDto[],
+    deliveryCountry: string,
+    sellerCountries: string[]
+  ): void {
+    const mismatch = sellerCountries.find((c) => c !== deliveryCountry);
+    if (!mismatch) return;
+    blockers.push({
+      code: 'DELIVERY_COUNTRY_MISMATCH',
+      message: `Your delivery address is in ${deliveryCountry}, but the items are only available for delivery within ${mismatch}. Please use an address in ${mismatch} or change the items in your cart.`,
+    });
+  }
+
   private needsShipToAddress(
     fulfillment: 'delivery' | 'pickup' | 'shipping'
   ): boolean {
@@ -1248,50 +1266,60 @@ export class CheckoutPreflightService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Evaluates delivery availability once per seller group. Returns an empty
-   * map for pickup fulfillment (delivery rules do not apply).
+   * Evaluates delivery availability for every seller group, including when
+   * the shopper has not chosen delivery yet.
    */
   private async evaluateGroupsDeliveryAvailability(
     businessMap: Map<string, any>,
-    fulfillment: string,
     dto: CheckoutPreflightDto,
-    deliveryCoords: { lat: number; lon: number } | null
+    deliveryCoords: { lat: number; lon: number } | null,
+    deliveryCountry: string | null
   ): Promise<Map<string, DeliveryAvailabilityDto>> {
     const map = new Map<string, DeliveryAvailabilityDto>();
-    if (fulfillment !== 'delivery') return map;
-
     await Promise.all(
       [...businessMap.entries()].map(async ([businessId, group]) => {
-        const address = group.inventoryRows[0]?.business_location?.address;
-        const result = await this.deliveryAvailabilityService.evaluate({
+        map.set(
           businessId,
-          sellerCountry: group.sellerCountry ?? '',
-          sellerState: (address?.state ?? '').trim(),
-          pickupLat:
-            address?.latitude != null ? Number(address.latitude) : null,
-          pickupLon:
-            address?.longitude != null ? Number(address.longitude) : null,
-          deliveryAddressId: dto.delivery_address_id,
-          deliveryLat: deliveryCoords?.lat ?? null,
-          deliveryLon: deliveryCoords?.lon ?? null,
-          itemIds: [
-            ...new Set(
-              group.inventoryRows
-                .map((inv: any) => inv?.item?.id)
-                .filter(Boolean) as string[]
-            ),
-          ],
-          inventoryIds: group.inventoryRows
-            .map((inv: any) => inv?.id)
-            .filter(Boolean),
-          requiresFastDelivery: dto.requires_fast_delivery === true,
-          verifiedAgentDelivery: dto.verified_agent_delivery === true,
-          evaluatedAt: new Date(),
-        });
-        map.set(businessId, toPublicDeliveryAvailability(result));
+          toPublicDeliveryAvailability(
+            await this.deliveryAvailabilityService.evaluate(
+              this.groupAvailabilityContext(
+                businessId,
+                group,
+                dto,
+                deliveryCoords,
+                deliveryCountry
+              )
+            )
+          )
+        );
       })
     );
     return map;
+  }
+
+  private groupAvailabilityContext(
+    businessId: string,
+    group: { inventoryRows: any[]; sellerCountry?: string },
+    dto: CheckoutPreflightDto,
+    deliveryCoords: { lat: number; lon: number } | null,
+    deliveryCountry: string | null
+  ) {
+    const address = group.inventoryRows[0]?.business_location?.address;
+    return buildDeliveryAvailabilityContext({
+      businessId,
+      sellerCountry: group.sellerCountry,
+      sellerState: address?.state,
+      pickupLat: address?.latitude,
+      pickupLon: address?.longitude,
+      deliveryAddressId: dto.delivery_address_id,
+      deliveryLat: deliveryCoords?.lat,
+      deliveryLon: deliveryCoords?.lon,
+      deliveryCountry,
+      itemIds: group.inventoryRows.map((inv: any) => inv?.item?.id),
+      inventoryIds: group.inventoryRows.map((inv: any) => inv?.id),
+      requiresFastDelivery: dto.requires_fast_delivery === true,
+      verifiedAgentDelivery: dto.verified_agent_delivery === true,
+    });
   }
 
   /** Delivery is available overall only when every seller group can deliver. */

@@ -28,7 +28,6 @@ import type { ClientRootStackParamList } from '../../navigation/types';
 import type { ClientDeliveryWindowPayload } from '../../types/deliveryWindow';
 import { agentApi } from '../../services/agentApi';
 import { checkoutAnalytics } from '../../services/checkoutAnalytics';
-import { nextDeliveryUnavailableLatch } from '../../utils/deliveryAvailabilityLatch';
 import { useClientAddresses } from '../../hooks/useClientAddresses';
 import { useClientProfileForPlaceOrder } from '../../hooks/useClientProfileForPlaceOrder';
 import { useCheckoutOrchestrator } from '../../hooks/useCheckoutOrchestrator';
@@ -181,18 +180,22 @@ export default observer(function CartCheckoutScreen() {
 
   const preflightRequest = useMemo(() => {
     if (cartItemsForPreflight.length === 0) return null;
+    const address = deliveryAddressId
+      ? { delivery_address_id: deliveryAddressId }
+      : {};
     if (fulfillmentNeedsAddress(fulfillment) && deliveryAddressId) {
       return {
         items: cartItemsForPreflight,
         fulfillment_method: fulfillment,
-        delivery_address_id: deliveryAddressId,
+        ...address,
       };
     }
-    if (provisionalCountry) {
+    if (provisionalCountry || deliveryAddressId) {
       return {
         items: cartItemsForPreflight,
         fulfillment_method: fulfillment,
-        provisional_country: provisionalCountry,
+        ...(provisionalCountry ? { provisional_country: provisionalCountry } : {}),
+        ...address,
       };
     }
     return null;
@@ -285,23 +288,21 @@ export default observer(function CartCheckoutScreen() {
     return t('diaspora.recipientAddressTitle', 'Recipient delivery address');
   }, [recipient.name, t]);
 
-  // Sticky latch: preflight only returns delivery_availability for delivery
-  // fulfillment. Keep Delivery grayed out after auto-switching to pickup.
-  const [deliveryUnavailable, setDeliveryUnavailable] = useState(false);
-  useEffect(() => {
-    setDeliveryUnavailable((prev) =>
-      nextDeliveryUnavailableLatch(prev, preflightConfig?.delivery_availability)
-    );
-  }, [preflightConfig?.delivery_availability]);
+  const deliveryOffered =
+    preflightConfig?.delivery_availability?.available === true;
+  const deliveryKnownUnavailable =
+    !preflightLoading &&
+    Boolean(preflightConfig) &&
+    preflightConfig?.delivery_availability?.available !== true;
 
   // Funnel analytics: track the first time the unavailable notice is shown.
   const unavailableTrackedRef = useRef(false);
   useEffect(() => {
-    if (deliveryUnavailable && !unavailableTrackedRef.current) {
+    if (deliveryKnownUnavailable && !unavailableTrackedRef.current) {
       unavailableTrackedRef.current = true;
       checkoutAnalytics.deliveryUnavailableShown({ checkout_mode: 'cart' });
     }
-  }, [deliveryUnavailable]);
+  }, [deliveryKnownUnavailable]);
 
   const switchToPickupFromUnavailable = useCallback(() => {
     checkoutAnalytics.switchedToPickup({ checkout_mode: 'cart' });
@@ -309,27 +310,37 @@ export default observer(function CartCheckoutScreen() {
     setHasChosenFulfillment(true);
   }, []);
 
-  // When delivery is unavailable and pickup exists, auto-select pickup.
   useEffect(() => {
-    if (deliveryUnavailable && pickupEligible && fulfillment === 'delivery') {
-      switchToPickupFromUnavailable();
+    if (preflightLoading || !preflightConfig) return;
+    if (!deliveryOffered && fulfillment === 'delivery') {
+      if (pickupEligible) switchToPickupFromUnavailable();
+      else if (shippingEligible) setFulfillment('shipping');
     }
-  }, [deliveryUnavailable, fulfillment, pickupEligible, switchToPickupFromUnavailable]);
+  }, [
+    deliveryOffered,
+    fulfillment,
+    pickupEligible,
+    preflightConfig,
+    preflightLoading,
+    shippingEligible,
+    switchToPickupFromUnavailable,
+  ]);
 
   const chooseFulfillment = useCallback(
     (value: Fulfillment) => {
-      if (value === 'delivery' && deliveryUnavailable) return;
+      if (value === 'delivery' && !deliveryOffered) return;
       setFulfillment(value);
       setHasChosenFulfillment(true);
     },
-    [deliveryUnavailable]
+    [deliveryOffered]
   );
 
   useEffect(() => {
-    if (fulfillment === 'pickup' && !pickupEligible) {
-      setFulfillment(shippingEligible ? 'shipping' : 'delivery');
-    }
-  }, [fulfillment, pickupEligible, shippingEligible]);
+    if (preflightLoading || !preflightConfig) return;
+    if (fulfillment !== 'pickup' || pickupEligible) return;
+    if (shippingEligible) setFulfillment('shipping');
+    else setFulfillment('delivery');
+  }, [fulfillment, pickupEligible, preflightConfig, preflightLoading, shippingEligible]);
 
   const unavailableBusinessIds = useMemo(
     () =>
@@ -722,7 +733,7 @@ export default observer(function CartCheckoutScreen() {
         compact
         value={fulfillment}
         onChange={chooseFulfillment}
-        deliveryDisabled={deliveryUnavailable}
+        deliveryHidden={!deliveryOffered}
         deliveryDisabledReason={t(
           'client.placeOrder.deliveryUnavailable',
           'Delivery is currently unavailable.'
@@ -856,14 +867,14 @@ export default observer(function CartCheckoutScreen() {
     }
     if (!deliveryAddressId || !deliveryScheduleOk || feeLoading) return false;
     if (stripeDeliveryAddressIncomplete) return false;
-    if (deliveryUnavailable) return false;
+    if (!deliveryOffered) return false;
     if (needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId) return false;
     return true;
   }, [
     deliveryAddressId,
     checkoutBlocker,
     deliveryScheduleOk,
-    deliveryUnavailable,
+    deliveryOffered,
     feeLoading,
     fulfillment,
     fulfillmentConfirmed,
@@ -1248,7 +1259,7 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        {fulfillment === 'delivery' && deliveryUnavailable ? (
+        {fulfillment === 'delivery' && deliveryKnownUnavailable ? (
           <NoticeBanner
             style={{ marginBottom: spacing.sm }}
             tone="warning"
