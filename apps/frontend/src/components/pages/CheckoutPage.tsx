@@ -103,6 +103,8 @@ interface BusinessDeliveryFee {
   isFirstOrderClient?: boolean;
   firstOrderBaseDeliveryDiscountAmount?: number;
   fullDeliveryFeeWithoutPromo?: number;
+  deliveryFeeWaived?: boolean;
+  deliveryFeeBeforeWaiver?: number | null;
 }
 
 function sharedDepositCopy(
@@ -191,6 +193,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       firstOrderBaseDeliveryDiscountAmount:
         deliveryFeeData?.firstOrderBaseDeliveryDiscountAmount ?? 0,
       fullDeliveryFeeWithoutPromo: deliveryFeeData?.fullDeliveryFeeWithoutPromo,
+      deliveryFeeWaived: deliveryFeeData?.deliveryFeeWaived === true,
+      deliveryFeeBeforeWaiver: deliveryFeeData?.deliveryFeeBeforeWaiver,
       orderTotal,
       deliveryFeeLoading: deliveryFeeData?.loading || false,
       deliveryFeeError: deliveryFeeData?.error || null,
@@ -292,6 +296,26 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                   <Typography variant="body2" color="error" component="span">
                     {t('checkout.deliveryFeeError', 'Error calculating')}
                   </Typography>
+                ) : business.deliveryFeeWaived ? (
+                  <>
+                    {business.deliveryFeeBeforeWaiver != null &&
+                    business.deliveryFeeBeforeWaiver > 0 ? (
+                      <Typography
+                        variant="body2"
+                        component="span"
+                        sx={{
+                          textDecoration: 'line-through',
+                          color: 'text.secondary',
+                          mr: 1,
+                        }}
+                      >
+                        {formatCurrency(business.deliveryFeeBeforeWaiver, currency)}
+                      </Typography>
+                    ) : null}
+                    <Typography variant="body2" fontWeight="medium" component="span" color="success.main">
+                      {t('orders.deliveryFeeWaived', 'Waived')}
+                    </Typography>
+                  </>
                 ) : business.fullDeliveryFeeWithoutPromo != null &&
                   business.fullDeliveryFeeWithoutPromo > business.deliveryFee &&
                   business.businessId === firstBusinessId ? (
@@ -862,6 +886,13 @@ const CheckoutPage: React.FC = () => {
           try {
             const params = new URLSearchParams();
             params.append('addressId', selectedAddressId);
+            const groupSubtotal = items.reduce(
+              (sum, item) => sum + item.itemData.price * item.quantity,
+              0
+            );
+            if (groupSubtotal > 0) {
+              params.append('subtotal', String(groupSubtotal));
+            }
             if (requiresFastDelivery) {
               params.append('requiresFastDelivery', 'true');
             }
@@ -894,9 +925,15 @@ const CheckoutPage: React.FC = () => {
                 fullDeliveryFeeWithoutPromo:
                   businessId === firstBizId &&
                   isFirstClient &&
-                  discountAmount > 0
+                  discountAmount > 0 &&
+                  d.deliveryFeeWaived !== true
                     ? fullNoPromo
                     : undefined,
+                deliveryFeeWaived: d.deliveryFeeWaived === true,
+                deliveryFeeBeforeWaiver:
+                  d.deliveryFeeBeforeWaiver != null
+                    ? Number(d.deliveryFeeBeforeWaiver)
+                    : null,
               });
             } else {
               feesMap.set(businessId, {

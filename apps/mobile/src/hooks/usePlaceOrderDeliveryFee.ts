@@ -7,12 +7,13 @@ export function usePlaceOrderDeliveryFee(params: {
   addressId: string;
   enabled: boolean;
   requiresFastDelivery?: boolean;
+  subtotal?: number;
 }) {
   const [data, setData] = useState<ItemDeliveryFeeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { itemId, addressId, enabled, requiresFastDelivery } = params;
+  const { itemId, addressId, enabled, requiresFastDelivery, subtotal } = params;
 
   const load = useCallback(async () => {
     if (!enabled || !itemId || !addressId) {
@@ -27,6 +28,7 @@ export function usePlaceOrderDeliveryFee(params: {
       const res = await agentApi.orders.getItemDeliveryFee(itemId, {
         addressId,
         requiresFastDelivery,
+        subtotal,
       });
       setData(res);
     } catch (e: unknown) {
@@ -35,7 +37,7 @@ export function usePlaceOrderDeliveryFee(params: {
     } finally {
       setLoading(false);
     }
-  }, [addressId, enabled, itemId, requiresFastDelivery]);
+  }, [addressId, enabled, itemId, requiresFastDelivery, subtotal]);
 
   useEffect(() => {
     void load();

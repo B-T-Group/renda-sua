@@ -4,6 +4,8 @@ import { haversineDistanceKm } from '../common/agent-proximity.util';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import { normalizeDeliveryCountryCode } from './delivery-pricing.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
@@ -100,7 +102,8 @@ export class OrderOffersService {
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly eligibleAgentsQueryService: EligibleAgentsQueryService,
-    private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService
+    private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
+    private readonly deliveryConfigService: DeliveryConfigService
   ) {}
 
   private get ttlSeconds(): number {
@@ -109,14 +112,6 @@ export class OrderOffersService {
 
   private get maxAgents(): number {
     return this.configService.get('orderOffers')?.maxAgents ?? 5;
-  }
-
-  private get round1RadiusKm(): number {
-    return this.configService.get('orderOffers')?.round1RadiusKm ?? 8;
-  }
-
-  private get round2RadiusKm(): number {
-    return this.configService.get('orderOffers')?.round2RadiusKm ?? 20;
   }
 
   private get roundGapSeconds(): number {
@@ -178,8 +173,13 @@ export class OrderOffersService {
         return;
       }
 
+      const country = normalizeDeliveryCountryCode(
+        order.business_location?.address?.country
+      );
       const maxDistanceKm =
-        round === 1 ? this.round1RadiusKm : this.round2RadiusKm;
+        await this.deliveryConfigService.getDeliveryAvailabilityRadiusKm(
+          country
+        );
       const candidates = await this.findClosestEligibleAgents(
         order,
         pickupLat,

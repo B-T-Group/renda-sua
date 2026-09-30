@@ -6,6 +6,7 @@ from rendasua_core_packages.hasura_client import (
     get_order_with_location,
     get_all_agent_locations,
 )
+from rendasua_core_packages.hasura_client.base import HasuraClient, HasuraClientConfig
 from rendasua_core_packages.hasura_client.orders_service import (
     get_pending_agent_notifications,
     update_notification_status,
@@ -23,6 +24,67 @@ def log_info(message: str, **kwargs):
     """Log info message with optional context."""
     context_str = " ".join([f"{k}={v}" for k, v in kwargs.items()])
     print(f"[INFO] {message}" + (f" | {context_str}" if context_str else ""))
+
+
+COUNTRY_CODES = {
+    "CAMEROON": "CM",
+    "GABON": "GA",
+    "CANADA": "CA",
+    "TOGO": "TG",
+    "BENIN": "BJ",
+    "COTE D'IVOIRE": "CI",
+    "IVORY COAST": "CI",
+    "CONGO": "CG",
+    "PHILIPPINES": "PH",
+}
+DEFAULT_AGENT_RADIUS_KM = 5.0
+
+
+def normalize_country_code(country: Optional[str]) -> str:
+    raw = (country or "").strip().upper()
+    if len(raw) == 2:
+        return raw
+    return COUNTRY_CODES.get(raw, raw[:2] if len(raw) >= 2 else "GA")
+
+
+def agent_radius_km(
+    country: Optional[str],
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    cache: Dict[str, float],
+) -> float:
+    """Eligibility radius for this order's country. Missing config falls back to 5 km."""
+    code = normalize_country_code(country)
+    if code in cache:
+        return cache[code]
+    radius = DEFAULT_AGENT_RADIUS_KM
+    try:
+        client = HasuraClient(
+            HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret)
+        )
+        data = client.execute(
+            """
+            query AgentRadius($code: bpchar!) {
+              country_delivery_configs(
+                where: {
+                  country_code: { _eq: $code }
+                  config_key: { _eq: "delivery_availability_radius_km" }
+                }
+                limit: 1
+              ) { config_value }
+            }
+            """,
+            {"code": code},
+        )
+        rows = data.get("country_delivery_configs") or []
+        if rows and rows[0].get("config_value") is not None:
+            parsed = float(rows[0]["config_value"])
+            if parsed > 0:
+                radius = parsed
+    except Exception as error:
+        log_error("Failed to load agent radius; using 5 km", error, country=code)
+    cache[code] = radius
+    return radius
 
 
 def log_error(message: str, error: Exception | None = None, **kwargs):
@@ -197,6 +259,7 @@ def process_all_notifications_aggregated(
         total_orders=len(valid_orders),
     )
     
+    radius_cache: Dict[str, float] = {}
     for agent_location in agent_locations:
         agent_id = agent_location.agent_id
         nearby_order_ids = []
@@ -212,8 +275,13 @@ def process_all_notifications_aggregated(
                 agent_location.latitude,
                 agent_location.longitude
             )
-            
-            if distance <= proximity_radius_km:
+            order_radius_km = agent_radius_km(
+                order_address.country,
+                hasura_endpoint,
+                hasura_admin_secret,
+                radius_cache,
+            )
+            if distance <= order_radius_km:
                 nearby_order_ids.append(order.id)
         
         if nearby_order_ids:
@@ -469,6 +537,12 @@ def process_notification(
     
     nearby_agents = []
     distances = []
+    order_radius_km = agent_radius_km(
+        address.country,
+        hasura_endpoint,
+        hasura_admin_secret,
+        {},
+    )
     
     for agent_location in agent_locations:
         distance = calculate_haversine_distance(
@@ -478,7 +552,7 @@ def process_notification(
             agent_location.longitude
         )
         
-        if distance <= proximity_radius_km:
+        if distance <= order_radius_km:
             nearby_agents.append(agent_location)
             distances.append(distance)
     
@@ -493,19 +567,19 @@ def process_notification(
         log_info(
             "No agents within proximity radius",
             order_id=order_id,
-            proximity_radius_km=proximity_radius_km,
+            proximity_radius_km=order_radius_km,
         )
         update_notification_status(
             notification_id=notification_id,
             status="complete",
-            error_message=f"No agents within {proximity_radius_km}km",
+            error_message=f"No agents within {order_radius_km}km",
             hasura_endpoint=hasura_endpoint,
             hasura_admin_secret=hasura_admin_secret
         )
         return {
             "success": True,
             "status": "complete",
-            "message": f"No agents within {proximity_radius_km}km",
+            "message": f"No agents within {order_radius_km}km",
             "notifications_sent": 0,
         }
     
@@ -586,7 +660,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Get configuration
         environment = os.environ.get("ENVIRONMENT", "development")
         hasura_endpoint = os.environ.get("GRAPHQL_ENDPOINT")
-        proximity_radius_km = float(os.environ.get("PROXIMITY_RADIUS_KM", "20"))
+        proximity_radius_km = float(os.environ.get("PROXIMITY_RADIUS_KM", "5"))
         proximity_en = os.environ.get("RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID", "")
         proximity_fr = os.environ.get("RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID_FR", "")
         summary_en = os.environ.get("RESEND_AGENT_ORDERS_NEARBY_SUMMARY_TEMPLATE_ID", "")

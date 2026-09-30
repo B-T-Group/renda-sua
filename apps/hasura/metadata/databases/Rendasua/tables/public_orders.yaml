@@ -244,6 +244,7 @@ select_permissions:
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo
+        - delivery_fee_waived
         - first_order_base_delivery_discount_amount
         - cancelled_at
         - cancelled_by
@@ -342,6 +343,7 @@ select_permissions:
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo
+        - delivery_fee_waived
         - first_order_base_delivery_discount_amount
         - cancelled_at
         - cancelled_by
@@ -446,6 +448,7 @@ select_permissions:
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo
+        - delivery_fee_waived
         - first_order_base_delivery_discount_amount
         - cancelled_at
         - cancelled_by

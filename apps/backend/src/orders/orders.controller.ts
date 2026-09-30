@@ -1864,6 +1864,13 @@ export class OrdersController {
     description:
       'Whether fast delivery is required (affects delivery fee calculation)',
   })
+  @ApiQuery({
+    name: 'subtotal',
+    required: false,
+    type: Number,
+    description:
+      'Checkout group subtotal used for the free-delivery commission check',
+  })
   @ApiResponse({
     status: 200,
     description:
@@ -1929,18 +1936,31 @@ export class OrdersController {
   async getItemDeliveryFee(
     @Param('itemId') itemId: string,
     @Query('addressId') addressId?: string,
-    @Query('requiresFastDelivery') requiresFastDelivery?: boolean
+    @Query('requiresFastDelivery') requiresFastDelivery?: boolean,
+    @Query('subtotal') subtotal?: string
   ) {
     try {
-      const deliveryFeeInfo = await this.ordersService.calculateItemDeliveryFee(
+      const priced = await this.ordersService.calculateItemDeliveryFee(
         itemId,
         addressId,
         requiresFastDelivery || false
+      );
+      const requestedSubtotal = Number(subtotal);
+      const commissionSubtotal =
+        Number.isFinite(requestedSubtotal) && requestedSubtotal > 0
+          ? requestedSubtotal
+          : priced.itemSubtotal ?? 0;
+      const deliveryFeeInfo = await this.ordersService.applyDeliveryWaiver(
+        priced,
+        priced.businessId,
+        commissionSubtotal
       );
 
       return {
         success: true,
         deliveryFee: deliveryFeeInfo.deliveryFee,
+        deliveryFeeWaived: deliveryFeeInfo.deliveryFeeWaived === true,
+        deliveryFeeBeforeWaiver: deliveryFeeInfo.deliveryFeeBeforeWaiver ?? null,
         isFirstOrderClient: deliveryFeeInfo.isFirstOrderClient,
         baseDeliveryFeeBeforeDiscount:
           deliveryFeeInfo.baseDeliveryFeeBeforeDiscount,

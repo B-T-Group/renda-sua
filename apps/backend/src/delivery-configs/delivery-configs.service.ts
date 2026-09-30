@@ -17,6 +17,11 @@ export interface FastDeliveryConfig {
 @Injectable()
 export class DeliveryConfigService {
   private readonly logger = new Logger(DeliveryConfigService.name);
+  private static readonly NORMAL_BASE_DEFAULT_BY_COUNTRY: Record<string, number> =
+    {
+      CM: 500,
+      GA: 500,
+    };
   private static readonly PER_KM_DEFAULT_BY_COUNTRY: Record<string, number> = {
     CM: 100,
     GA: 100,
@@ -156,14 +161,29 @@ export class DeliveryConfigService {
 
   /**
    * Max distance (km) between the business pickup location and an eligible
-   * agent for delivery to be offered at checkout. Fallback 20 km.
+   * agent for delivery to be offered, and the notification radius. Fallback 5 km.
    */
   async getDeliveryAvailabilityRadiusKm(countryCode: string): Promise<number> {
     const value = await this.getDeliveryConfig(
       countryCode,
       'delivery_availability_radius_km'
     );
-    return typeof value === 'number' && value > 0 ? value : 20;
+    return typeof value === 'number' && value > 0 ? value : 5;
+  }
+
+  async getMaxDeliveryFee(countryCode: string): Promise<number> {
+    const value = await this.getDeliveryConfig(countryCode, 'max_delivery_fee');
+    return typeof value === 'number' && value > 0 ? value : 0;
+  }
+
+  async getFreeDeliveryCommissionThreshold(
+    countryCode: string
+  ): Promise<number> {
+    const value = await this.getDeliveryConfig(
+      countryCode,
+      'free_delivery_commission_threshold'
+    );
+    return typeof value === 'number' && value > 0 ? value : 0;
   }
 
   /**
@@ -174,7 +194,11 @@ export class DeliveryConfigService {
       countryCode,
       'normal_delivery_base_fee'
     );
-    return typeof value === 'number' ? value : 1000; // Default fallback
+    if (typeof value === 'number') return value;
+    const code = countryCode.trim().toUpperCase();
+    return (
+      DeliveryConfigService.NORMAL_BASE_DEFAULT_BY_COUNTRY[code] ?? 1000
+    );
   }
 
   /**

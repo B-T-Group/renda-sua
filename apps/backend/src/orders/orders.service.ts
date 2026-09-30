@@ -99,6 +99,14 @@ import {
   sumStockUnitsByInventory,
 } from '../item-variants/variant-pricing.util';
 import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
+import { getCommissionForBusinessAccountType } from '../commissions/business-account-type';
+import {
+  capDeliveryFee,
+  maxClientDistanceKm,
+  normalizeDeliveryCountryCode,
+  shouldWaiveDeliveryFee,
+  waivedCustomerDeliveryFee,
+} from './delivery-pricing.util';
 import {
   resolveShopperVariant,
   ShopperVariantResolveException,
@@ -246,6 +254,10 @@ type OrderDeliveryFeeInfo = {
   firstOrderBaseDeliveryDiscountAmount: number;
   baseDeliveryFeeBeforeDiscount: number;
   distance?: number;
+  deliveryFeeWaived?: boolean;
+  deliveryFeeBeforeWaiver?: number;
+  itemSubtotal?: number;
+  businessId?: string;
 };
 
 // Custom interface for complex order data with all relationships
@@ -7199,6 +7211,7 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          delivery_fee_waived
           first_order_delivery_fee_promo
           currency
           current_status
@@ -7435,6 +7448,7 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          delivery_fee_waived
           first_order_delivery_fee_promo
           tax_amount
           total_amount
@@ -8144,6 +8158,7 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          delivery_fee_waived
           first_order_delivery_fee_promo
           first_order_base_delivery_discount_amount
           tax_amount
@@ -8345,6 +8360,7 @@ export class OrdersService {
           subtotal
           base_delivery_fee
           per_km_delivery_fee
+          delivery_fee_waived
           first_order_delivery_fee_promo
           tax_amount
           total_amount
@@ -9186,9 +9202,7 @@ export class OrdersService {
     }
     const orderId = snapshot.id;
     const subtotal = Number((snapshot as any).subtotal || 0);
-    const baseDel = Number((snapshot as any).base_delivery_fee || 0);
-    const perKm = Number((snapshot as any).per_km_delivery_fee || 0);
-    const feesTotal = baseDel + perKm;
+    const feesTotal = this.orderDeliveryFeesTotal(snapshot as any);
     const orderHold = await this.getOrCreateOrderHold(orderId);
     await this.updateOrderHold(orderHold.id, {
       client_hold_amount: subtotal,
@@ -10776,6 +10790,7 @@ export class OrdersService {
       firstOrderDeliveryFeePromo: false,
       firstOrderBaseDeliveryDiscountAmount: 0,
       baseDeliveryFeeBeforeDiscount: 0,
+      deliveryFeeWaived: false,
     };
   }
 
@@ -11364,6 +11379,15 @@ export class OrdersService {
       return sum + unitPrice * orderData.items[idx].quantity;
     }, 0);
 
+    if (fulfillmentMethod === 'delivery') {
+      const sellerBusinessId =
+        businessInventories[0]?.business_location?.business_id;
+      deliveryFeeInfo = await this.applyDeliveryWaiver(
+        deliveryFeeInfo,
+        sellerBusinessId,
+        totalAmount
+      );
+    }
     let total_amount = totalAmount + deliveryFeeInfo.deliveryFee;
     let discountCodeId: string | null = null;
     let discountAmount: number | null = null;
@@ -11725,6 +11749,7 @@ export class OrdersService {
         $requiresFastDelivery: Boolean!,
         $firstOrderDeliveryFeePromo: Boolean!,
         $firstOrderBaseDeliveryDiscountAmount: numeric!,
+        $deliveryFeeWaived: Boolean!,
         $recipientName: String,
         $recipientPhone: String,
         $recipientEmail: String,
@@ -11777,6 +11802,7 @@ export class OrdersService {
           requires_fast_delivery: $requiresFastDelivery,
           first_order_delivery_fee_promo: $firstOrderDeliveryFeePromo,
           first_order_base_delivery_discount_amount: $firstOrderBaseDeliveryDiscountAmount,
+          delivery_fee_waived: $deliveryFeeWaived,
           recipient_name: $recipientName,
           recipient_phone: $recipientPhone,
           recipient_email: $recipientEmail,
@@ -11942,6 +11968,7 @@ export class OrdersService {
         firstOrderDeliveryFeePromo: deliveryFeeInfo.firstOrderDeliveryFeePromo,
         firstOrderBaseDeliveryDiscountAmount:
           deliveryFeeInfo.firstOrderBaseDeliveryDiscountAmount,
+        deliveryFeeWaived: deliveryFeeInfo.deliveryFeeWaived === true,
         recipientName: recipient.recipient_name,
         recipientPhone: recipient.recipient_phone,
         recipientEmail: recipient.recipient_email,
@@ -12336,8 +12363,7 @@ export class OrdersService {
         const taxCheckoutParams = this.buildStripeTaxCheckoutParams({
           currency,
           orderItemsData,
-          deliveryFee:
-            deliveryFeeInfo.baseDeliveryFee + deliveryFeeInfo.perKmDeliveryFee,
+          deliveryFee: deliveryFeeInfo.deliveryFee,
           discountAmount: discountAmount ?? 0,
           deliveryAddress: this.usesDestinationTaxAddress(fulfillmentMethod)
             ? address ?? null
@@ -12879,6 +12905,7 @@ export class OrdersService {
           total_amount
           base_delivery_fee
           per_km_delivery_fee
+          delivery_fee_waived
           discount_amount
           fulfillment_method
           delivery_address {
@@ -12908,6 +12935,7 @@ export class OrdersService {
         total_amount: number;
         base_delivery_fee: number;
         per_km_delivery_fee: number;
+        delivery_fee_waived?: boolean | null;
         discount_amount?: number | null;
         fulfillment_method?: string | null;
         delivery_address?: Record<string, string> | null;
@@ -12925,8 +12953,9 @@ export class OrdersService {
     if (!row) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    const deliveryFee =
-      Number(row.base_delivery_fee) + Number(row.per_km_delivery_fee);
+    const deliveryFee = row.delivery_fee_waived
+      ? 0
+      : Number(row.base_delivery_fee) + Number(row.per_km_delivery_fee);
     const discountAmount = Number(row.discount_amount ?? 0);
     const fulfillmentMethod = this.resolveOrderFulfillmentMethod(
       row.fulfillment_method
@@ -13850,7 +13879,9 @@ export class OrdersService {
   private orderDeliveryFeesTotal(order: {
     base_delivery_fee?: number | null;
     per_km_delivery_fee?: number | null;
+    delivery_fee_waived?: boolean | null;
   }): number {
+    if (order.delivery_fee_waived) return 0;
     return (
       Number(order.base_delivery_fee ?? 0) + Number(order.per_km_delivery_fee ?? 0)
     );
@@ -13870,6 +13901,7 @@ export class OrdersService {
     total_amount?: number | string | null;
     base_delivery_fee?: number | null;
     per_km_delivery_fee?: number | null;
+    delivery_fee_waived?: boolean | null;
   }): { itemAmount: number; deliveryAmount: number } {
     const delivery = this.orderDeliveryFeesTotal(order);
     const netDue = this.clientNetDue(order, this.orderSubtotal(order) + delivery);
@@ -14075,9 +14107,12 @@ export class OrdersService {
           this.logger.log(`Distance-based delivery fee calculated: ${distanceKm}`);
 
           // Calculate fee using tiered pricing model
+          const sellerCountry = normalizeDeliveryCountryCode(
+            businessAddress.country
+          );
           const feeComponents = await this.calculateTieredDeliveryFee(
             distanceKm,
-            businessAddress.country,
+            sellerCountry,
             requiresFastDelivery
           );
 
@@ -14100,12 +14135,14 @@ export class OrdersService {
             distance: distanceKm,
             method: 'distance_based',
             currency: item.item.currency,
-            country: businessAddress.country,
+            country: sellerCountry,
             isFirstOrderClient,
             firstOrderDeliveryFeePromo: promo.firstOrderDeliveryFeePromo,
             firstOrderBaseDeliveryDiscountAmount:
               promo.firstOrderBaseDeliveryDiscountAmount,
             baseDeliveryFeeBeforeDiscount: promo.baseDeliveryFeeBeforeDiscount,
+            itemSubtotal: Number(item.selling_price) || 0,
+            businessId: item.business_location?.business_id,
           };
         }
       } catch (distanceError) {
@@ -14145,7 +14182,7 @@ export class OrdersService {
         deliveryFee: finalDeliveryFee,
         method: 'flat_fee',
         currency: item.item.currency,
-        country: businessAddress.country,
+        country: normalizeDeliveryCountryCode(businessAddress.country),
         baseDeliveryFee: promo.baseDeliveryFee,
         perKmDeliveryFee: 0,
         isFirstOrderClient,
@@ -14153,6 +14190,8 @@ export class OrdersService {
         firstOrderBaseDeliveryDiscountAmount:
           promo.firstOrderBaseDeliveryDiscountAmount,
         baseDeliveryFeeBeforeDiscount: promo.baseDeliveryFeeBeforeDiscount,
+        itemSubtotal: Number(item.selling_price) || 0,
+        businessId: item.business_location?.business_id,
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -14340,49 +14379,107 @@ export class OrdersService {
    * Calculate delivery fee using tiered pricing model based on country_delivery_configs
    * Returns base fee and per-km fee components separately
    */
+  async applyDeliveryWaiver(
+    info: OrderDeliveryFeeInfo,
+    businessId: string | undefined,
+    subtotal: number
+  ): Promise<OrderDeliveryFeeInfo> {
+    if (info.distance == null || !info.country) {
+      return { ...info, deliveryFeeWaived: false };
+    }
+    const waived = await this.qualifiesForFreeDelivery(
+      info.country,
+      info.distance,
+      businessId,
+      subtotal
+    );
+    if (!waived) return { ...info, deliveryFeeWaived: false };
+    return {
+      ...info,
+      ...waivedCustomerDeliveryFee(info),
+      deliveryFeeWaived: true,
+    };
+  }
+
+  private async qualifiesForFreeDelivery(
+    countryCode: string,
+    distanceKm: number,
+    businessId: string | undefined,
+    subtotal: number
+  ): Promise<boolean> {
+    const country = normalizeDeliveryCountryCode(countryCode);
+    const [threshold, normalBase, perKm, maxFee] = await Promise.all([
+      this.deliveryConfigService.getFreeDeliveryCommissionThreshold(country),
+      this.deliveryConfigService.getNormalDeliveryBaseFee(country),
+      this.deliveryConfigService.getPerKmDeliveryFee(country),
+      this.deliveryConfigService.getMaxDeliveryFee(country),
+    ]);
+    const commission = await this.platformCommissionAmount(
+      businessId,
+      country,
+      subtotal
+    );
+    return shouldWaiveDeliveryFee({
+      distanceKm,
+      maxClientKm: maxClientDistanceKm(normalBase, perKm, maxFee),
+      commissionAmount: commission,
+      threshold,
+    });
+  }
+
+  private async platformCommissionAmount(
+    businessId: string | undefined,
+    countryCode: string,
+    subtotal: number
+  ): Promise<number> {
+    if (!businessId || subtotal <= 0) return 0;
+    const result = await this.hasuraSystemService.executeQuery(
+      `query BusinessAccountType($id: uuid!) {
+        businesses_by_pk(id: $id) { account_type }
+      }`,
+      { id: businessId }
+    );
+    const percent = getCommissionForBusinessAccountType(
+      result?.businesses_by_pk?.account_type,
+      countryCode
+    );
+    return (subtotal * percent) / 100;
+  }
+
   private async calculateTieredDeliveryFee(
     distanceKm: number,
     countryCode = 'GA',
     requiresFastDelivery = false
   ): Promise<{ baseFee: number; perKmFee: number; totalFee: number }> {
+    const country = normalizeDeliveryCountryCode(countryCode);
     try {
-      // Get configurations from country_delivery_configs
-      const [baseFee, ratePerKm, maxPerKmFee] = await Promise.all([
-        requiresFastDelivery
-          ? this.deliveryConfigService.getFastDeliveryBaseFee(countryCode)
-          : this.deliveryConfigService.getNormalDeliveryBaseFee(countryCode),
-        this.deliveryConfigService.getPerKmDeliveryFee(countryCode),
-        this.deliveryConfigService.getMaxPerKmDeliveryFee(countryCode),
-      ]);
-
-      // Use fallback values if configurations are not found
+      const [baseFee, ratePerKm, maxPerKmFee, maxDeliveryFee] =
+        await Promise.all([
+          requiresFastDelivery
+            ? this.deliveryConfigService.getFastDeliveryBaseFee(country)
+            : this.deliveryConfigService.getNormalDeliveryBaseFee(country),
+          this.deliveryConfigService.getPerKmDeliveryFee(country),
+          this.deliveryConfigService.getMaxPerKmDeliveryFee(country),
+          this.deliveryConfigService.getMaxDeliveryFee(country),
+        ]);
       const finalBaseFee = baseFee || (requiresFastDelivery ? 1500 : 1000);
       const finalRatePerKm = ratePerKm || 200;
-      const finalMaxPerKmFee = maxPerKmFee || 0;
-
-      this.logger.log(
-        `Calculating delivery fee for country ${countryCode}: base=${finalBaseFee}, rate=${finalRatePerKm}/km, maxPerKmFee=${finalMaxPerKmFee}, distance=${distanceKm}km, fast=${requiresFastDelivery}`
-      );
-
-      const perKmCalculated = distanceKm * finalRatePerKm;
-      const perKmFee = Math.min(finalMaxPerKmFee, perKmCalculated);
-      const calculatedFee = finalBaseFee + perKmFee;
-      const totalFee = calculatedFee;
-
-      this.logger.log(
-        `Delivery fee calculated: base=${finalBaseFee}, perKm=${perKmFee}, total=${totalFee})`
-      );
-
-      return { baseFee: finalBaseFee, perKmFee, totalFee };
+      return capDeliveryFee({
+        baseFee: finalBaseFee,
+        perKmRate: finalRatePerKm,
+        distanceKm,
+        maxDeliveryFee,
+        maxPerKmFee: maxPerKmFee || 0,
+      });
     } catch (error: any) {
       this.logger.error(
-        `Failed to calculate tiered delivery fee for country ${countryCode}:`,
+        `Failed to calculate tiered delivery fee for country ${country}:`,
         error
       );
 
       return calculateDeliveryFeeFallback({
         distanceKm,
-        countryCode,
+        countryCode: country,
         requiresFastDelivery,
       });
     }
@@ -14427,6 +14524,10 @@ export class OrdersService {
           }
           business_location {
             address_id
+            business_id
+            business {
+              account_type
+            }
           }
         }
       }

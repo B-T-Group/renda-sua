@@ -5,6 +5,7 @@ import { DeliveryAvailabilityService } from './delivery-availability.service';
 import { DELIVERY_AVAILABILITY_RULES } from './delivery-availability.types';
 import { EligibleAgentsQueryService } from './eligible-agents-query.service';
 import { AgentInRegionRule } from './rules/agent-in-region.rule';
+import { FeeDerivedRangeRule } from './rules/fee-derived-range.rule';
 import { ItemMaxDeliveryDistanceRule } from './rules/item-max-delivery-distance.rule';
 import { ServiceAreaEnabledRule } from './rules/service-area-enabled.rule';
 
@@ -19,17 +20,20 @@ import { ServiceAreaEnabledRule } from './rules/service-area-enabled.rule';
     EligibleAgentsQueryService,
     ServiceAreaEnabledRule,
     ItemMaxDeliveryDistanceRule,
+    FeeDerivedRangeRule,
     AgentInRegionRule,
     {
       provide: DELIVERY_AVAILABILITY_RULES,
       useFactory: (
         serviceArea: ServiceAreaEnabledRule,
         itemMaxDistance: ItemMaxDeliveryDistanceRule,
+        feeDerivedRange: FeeDerivedRangeRule,
         agentInRegion: AgentInRegionRule
-      ) => [serviceArea, itemMaxDistance, agentInRegion],
+      ) => [serviceArea, itemMaxDistance, feeDerivedRange, agentInRegion],
       inject: [
         ServiceAreaEnabledRule,
         ItemMaxDeliveryDistanceRule,
+        FeeDerivedRangeRule,
         AgentInRegionRule,
       ],
     },

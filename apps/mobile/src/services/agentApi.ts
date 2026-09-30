@@ -368,11 +368,12 @@ const orders = {
 
   getItemDeliveryFee: async (
     itemId: string,
-    opts?: { addressId?: string; requiresFastDelivery?: boolean }
+    opts?: { addressId?: string; requiresFastDelivery?: boolean; subtotal?: number }
   ): Promise<ItemDeliveryFeeResponse> => {
     const qs = new URLSearchParams();
     if (opts?.addressId) qs.set('addressId', opts.addressId);
     if (opts?.requiresFastDelivery) qs.set('requiresFastDelivery', 'true');
+    if (opts?.subtotal != null && opts.subtotal > 0) qs.set('subtotal', String(opts.subtotal));
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     const res = await api.get<ItemDeliveryFeeResponse>(`/orders/item/${itemId}/deliveryFee${suffix}`);
     if (!res.success) throw new Error(res.message || 'Failed to get delivery fee');

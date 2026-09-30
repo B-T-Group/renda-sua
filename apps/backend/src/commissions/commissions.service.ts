@@ -144,6 +144,7 @@ export class CommissionsService {
           order_number
           base_delivery_fee
           per_km_delivery_fee
+          delivery_fee_waived
           first_order_delivery_fee_promo
           currency
           subtotal
@@ -179,21 +180,26 @@ export class CommissionsService {
 
       const partners = await this.getActivePartners();
 
-      const baseDeliveryFeeBreakdown = this.calculateBaseDeliveryFeeCommissions(
-        order.base_delivery_fee,
-        order.assigned_agent?.is_verified || false,
-        config,
-        partners,
-        !!order.first_order_delivery_fee_promo
+      const baseDeliveryFeeBreakdown = this.withoutCollectedDeliveryRevenue(
+        this.calculateBaseDeliveryFeeCommissions(
+          order.base_delivery_fee,
+          order.assigned_agent?.is_verified || false,
+          config,
+          partners,
+          !!order.first_order_delivery_fee_promo
+        ),
+        !!order.delivery_fee_waived
       );
 
-      const perKmDeliveryFeeBreakdown =
+      const perKmDeliveryFeeBreakdown = this.withoutCollectedDeliveryRevenue(
         this.calculatePerKmDeliveryFeeCommissions(
           order.per_km_delivery_fee,
           order.assigned_agent?.is_verified || false,
           config,
           partners
-        );
+        ),
+        !!order.delivery_fee_waived
+      );
 
       const itemCommissionBreakdown = this.calculateItemCommission(
         order.subtotal,
@@ -446,6 +452,15 @@ export class CommissionsService {
       verifiedAgentPerKmDeliveryCommission:
         configMap.verified_agent_per_km_delivery_commission || 20.0,
     };
+  }
+
+  /** Agent and partner shares stay; uncollected delivery fee is not platform revenue. */
+  private withoutCollectedDeliveryRevenue(
+    breakdown: { agent: number; partner: number; rendasua: number },
+    deliveryFeeWaived: boolean
+  ): { agent: number; partner: number; rendasua: number } {
+    if (!deliveryFeeWaived) return breakdown;
+    return { ...breakdown, rendasua: 0 };
   }
 
   /**

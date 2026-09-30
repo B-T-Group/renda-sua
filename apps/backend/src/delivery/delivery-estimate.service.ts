@@ -5,6 +5,10 @@ import {
   calculateDeliveryFeeFallback,
   isCfaDeliveryFallbackCountry,
 } from '../orders/delivery-fee-fallback';
+import {
+  capDeliveryFee,
+  maxClientDistanceKm,
+} from '../orders/delivery-pricing.util';
 import type {
   DeliveryEstimateResponse,
   DeliveryFee,
@@ -225,42 +229,54 @@ export class DeliveryEstimateService {
     itemInfo: ItemInfo,
     qty: number
   ): Promise<Omit<DeliveryFee, 'currency'>> {
-    if (areaInfo.isCountryWide) {
-      const baseFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
-        areaInfo.countryCode
-      );
-      const maxPerKm = await this.deliveryConfigService.getMaxPerKmDeliveryFee(
-        areaInfo.countryCode
-      );
-
-      const isCfa = isCfaDeliveryFallbackCountry(areaInfo.countryCode);
-      const maxFee = isCfa ? 1500 : Math.max(baseFee, maxPerKm);
-
-      return {
-        min: baseFee,
-        max: maxFee,
-        exact: null,
-        confidence: 'range',
-      };
-    }
-
     const baseFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
       areaInfo.countryCode
     );
+    const cappedMax = await this.cappedEstimateMax(areaInfo.countryCode, baseFee);
+    if (cappedMax != null) {
+      return { min: baseFee, max: cappedMax, exact: null, confidence: 'range' };
+    }
 
-    const estimatedDistance = 10;
+    if (areaInfo.isCountryWide) {
+      const maxPerKm = await this.deliveryConfigService.getMaxPerKmDeliveryFee(
+        areaInfo.countryCode
+      );
+      const isCfa = isCfaDeliveryFallbackCountry(areaInfo.countryCode);
+      const maxFee = isCfa ? 1500 : Math.max(baseFee, maxPerKm);
+      return { min: baseFee, max: maxFee, exact: null, confidence: 'range' };
+    }
+
     const fallback = calculateDeliveryFeeFallback({
-      distanceKm: estimatedDistance,
+      distanceKm: 10,
       countryCode: areaInfo.countryCode,
       requiresFastDelivery: false,
     });
-
     return {
       min: baseFee,
       max: fallback.totalFee,
       exact: null,
       confidence: 'range',
     };
+  }
+
+  private async cappedEstimateMax(
+    countryCode: string,
+    baseFee: number
+  ): Promise<number | null> {
+    const [perKm, maxFee, maxPerKm] = await Promise.all([
+      this.deliveryConfigService.getPerKmDeliveryFee(countryCode),
+      this.deliveryConfigService.getMaxDeliveryFee(countryCode),
+      this.deliveryConfigService.getMaxPerKmDeliveryFee(countryCode),
+    ]);
+    const maxClientKm = maxClientDistanceKm(baseFee, perKm, maxFee);
+    if (!(maxFee > 0) || maxClientKm == null) return null;
+    return capDeliveryFee({
+      baseFee,
+      perKmRate: perKm,
+      distanceKm: maxClientKm,
+      maxDeliveryFee: maxFee,
+      maxPerKmFee: maxPerKm,
+    }).totalFee;
   }
 
   private async getServingStatus(

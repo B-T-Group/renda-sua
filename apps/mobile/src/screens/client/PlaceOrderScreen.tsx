@@ -684,6 +684,7 @@ export default function PlaceOrderScreen() {
         !addrLoading
     ),
     requiresFastDelivery: false,
+    subtotal: (item ? unitPrice(item, variantId) : 0) * quantity,
   });
 
   const discountCode = usePlaceOrderDiscountCode();
@@ -852,6 +853,14 @@ export default function PlaceOrderScreen() {
         value: t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate'),
         tone: 'secondary',
       });
+    } else if (deliveryFeeState.data?.deliveryFeeWaived) {
+      const before = Number(deliveryFeeState.data.deliveryFeeBeforeWaiver) || 0;
+      lines.push({
+        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
+        value: t('client.placeOrder.summary.deliveryFeeWaived', 'Waived'),
+        strike: before > 0 ? formatCatalogMoney(before, currency) : undefined,
+        tone: 'success',
+      });
     } else {
       lines.push({
         label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
@@ -921,6 +930,7 @@ export default function PlaceOrderScreen() {
     currency,
     deliveryAddressMissing,
     deliveryAmount,
+    deliveryFeeState.data,
     deliveryFeeState.error,
     deliveryFeeState.loading,
     depositAmount,

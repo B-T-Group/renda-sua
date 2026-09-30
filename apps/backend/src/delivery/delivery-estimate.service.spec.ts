@@ -20,6 +20,8 @@ describe('DeliveryEstimateService', () => {
       getCurrency: jest.fn(),
       getNormalDeliveryBaseFee: jest.fn(),
       getMaxPerKmDeliveryFee: jest.fn(),
+      getPerKmDeliveryFee: jest.fn().mockResolvedValue(0),
+      getMaxDeliveryFee: jest.fn().mockResolvedValue(0),
       getTimezone: jest.fn(),
     };
 

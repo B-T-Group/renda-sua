@@ -46,6 +46,7 @@ import { AdminService } from './admin.service';
 import { ApplyReferralDto } from './dto/apply-referral.dto';
 import { ThreadsService } from '../threads/threads.service';
 import { ApplicationSetupResponse } from './dto/application-setup.dto';
+import type { DeliveryPricingInput } from './application-setup.service';
 import { RentalListingModerationService } from './rental-listing-moderation.service';
 import { ItemModerationService } from './item-moderation.service';
 import { RentalListingAiReviewAdminService } from '../rental-listing-ai-review/rental-listing-ai-review-admin.service';
@@ -1402,6 +1403,53 @@ export class AdminController {
       return {
         success: false,
         error: error.message || 'Failed to fetch application setup',
+      };
+    }
+  }
+
+  @Post('application-setup/delivery-pricing')
+  @RequirePermissions(PlatformPermissions.CONFIG_APPLICATION_SETUP)
+  @ApiOperation({
+    summary: 'Upsert delivery pricing for a country',
+    description:
+      'Updates only delivery price keys. Does not replace slots, states, or other configs.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: [
+        'countryCode',
+        'normal_delivery_base_fee',
+        'per_km_delivery_fee',
+        'max_delivery_fee',
+        'delivery_availability_radius_km',
+        'free_delivery_commission_threshold',
+      ],
+      properties: {
+        countryCode: { type: 'string' },
+        normal_delivery_base_fee: { type: 'number' },
+        per_km_delivery_fee: { type: 'number' },
+        max_delivery_fee: { type: 'number' },
+        delivery_availability_radius_km: { type: 'number' },
+        free_delivery_commission_threshold: { type: 'number' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Pricing saved' })
+  async upsertDeliveryPricing(
+    @Body() body: DeliveryPricingInput & { countryCode?: string }
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { countryCode, ...pricing } = body;
+      await this.applicationSetupService.upsertDeliveryPricing(
+        countryCode || '',
+        pricing
+      );
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to save delivery pricing',
       };
     }
   }
