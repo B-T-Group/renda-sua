@@ -540,6 +540,8 @@ describe('OrderReorderService', () => {
     expect(result.lines[0].item_data.price).toBe(750);
     expect(result.lines[0].item_data.currency).toBe('XAF');
     expect(result.lines[0].item_data.seller_country).toBe('CM');
+    expect(result.lines[0].item_data.pack_quantity).toBe(1);
+    expect(result.lines[0].item_data.available_quantity).toBe(10);
     expect(result.navigation_hint).toBe('checkout');
   });
 
@@ -579,6 +581,8 @@ describe('OrderReorderService', () => {
     expect(result.lines).toHaveLength(1);
     expect(result.lines[0].quantity).toBe(8);
     expect(result.lines[0].ordered_quantity).toBe(8);
+    expect(result.lines[0].item_data.pack_quantity).toBe(1);
+    expect(result.lines[0].item_data.available_quantity).toBeNull();
     expect(result.skipped).toHaveLength(0);
     expect(result.navigation_hint).toBe('checkout');
   });

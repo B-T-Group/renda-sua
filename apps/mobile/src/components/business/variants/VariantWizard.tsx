@@ -40,6 +40,7 @@ const emptyDraft = (): VariantDraft => ({
   weightUnit: 'g',
   dimensions: '',
   color: '',
+  quantity: '1',
   isActive: true,
   isDefault: false,
 });
@@ -54,6 +55,7 @@ function draftForVariant(variant?: ItemVariant | null): VariantDraft {
     weightUnit: (variant.weight_unit ?? 'g').toLowerCase(),
     dimensions: variant.dimensions ?? '',
     color: variant.color ?? '',
+    quantity: variant.quantity && variant.quantity > 1 ? String(variant.quantity) : '1',
     isActive: variant.is_active !== false,
     isDefault: variant.is_default === true,
   };
@@ -76,6 +78,7 @@ function inputFromDraft(draft: VariantDraft): ItemVariantInput {
     weight_unit: weight != null && unit ? unit : null,
     dimensions: draft.dimensions.trim() || null,
     color: draft.color.trim() || null,
+    quantity: Math.max(1, Math.floor(Number(draft.quantity) || 1)),
     is_active: draft.isActive,
     is_default: draft.isDefault,
   };

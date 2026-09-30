@@ -43,7 +43,7 @@ import {
   normalizeCountryCode,
   normalizeRecipientPhone,
 } from '../diaspora/diaspora-order.util';
-import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import { resolveEffectiveUnitPrice, sumStockUnitsByInventory } from '../item-variants/variant-pricing.util';
 import {
   resolveShopperVariant,
   ShopperVariantResolveException,
@@ -130,14 +130,16 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           id
           name
           price
+          quantity
           weight
           is_default
         }
       }
-      item_variant {
+        item_variant {
         id
         name
         price
+        quantity
       }
     }
   }
@@ -662,13 +664,10 @@ export class CheckoutPreflightService {
       }
 
       // Stock validation
-      const quantityByInv = new Map<string, number>();
-      for (const line of group.items) {
-        quantityByInv.set(
-          line.business_inventory_id,
-          (quantityByInv.get(line.business_inventory_id) ?? 0) + line.quantity
-        );
-      }
+      const quantityByInv = sumStockUnitsByInventory(
+        group.items,
+        inventoryById
+      );
       for (const inv of group.inventoryRows) {
         const requested = quantityByInv.get(inv.id) ?? 0;
         if (

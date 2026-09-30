@@ -8,7 +8,10 @@ import {
   fetchStripeEnabledCountries,
   isLocationPaymentsEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
-import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import {
+  packQuantityOf,
+  resolveEffectiveUnitPrice,
+} from '../item-variants/variant-pricing.util';
 import {
   resolveActivePersonaWithDefault,
   type UserPersonaShape,
@@ -119,10 +122,11 @@ const INVENTORY_FOR_REORDER_QUERY = `
           id
           name
           price
+          quantity
           is_default
         }
       }
-      item_variant { id name price }
+      item_variant { id name price quantity }
     }
   }
 `;
@@ -383,10 +387,23 @@ export class OrderReorderService {
       const resolved = resolveShopperVariant({
         requestedVariantId: item.item_variant_id,
         inventoryRow: inv,
-      }) as { id?: string; name?: string; price?: number } | null;
+      }) as {
+        id?: string;
+        name?: string;
+        price?: number;
+        quantity?: number;
+      } | null;
+      if (this.packExceedsStock(inv, resolved)) {
+        return { ok: false, skipped: { name, reason: 'out_of_stock' } };
+      }
       const variant =
         resolved?.id != null
-          ? { id: resolved.id, name: resolved.name, price: resolved.price }
+          ? {
+              id: resolved.id,
+              name: resolved.name,
+              price: resolved.price,
+              quantity: resolved.quantity,
+            }
           : null;
       return {
         ok: true,
@@ -428,29 +445,50 @@ export class OrderReorderService {
     return null;
   }
 
+  private packExceedsStock(
+    inv: { computed_available_quantity?: number; item?: { is_cooked_food?: boolean; item_sub_category?: { item_category?: { name?: string } } } },
+    variant: { quantity?: number | null } | null
+  ): boolean {
+    const ignoresStock = cookedFoodIgnoresStock(
+      inv.item?.item_sub_category?.item_category?.name,
+      inv.item?.is_cooked_food
+    );
+    if (ignoresStock) return false;
+    const pack = packQuantityOf(variant);
+    const stock = Number(inv.computed_available_quantity ?? 0);
+    return Math.floor(stock / pack) < 1;
+  }
+
   private toReorderLine(
     item: ReorderOrderRow['order_items'][number],
     inv: any,
-    variant: { id: string; name?: string; price?: number } | null,
+    variant: {
+      id: string;
+      name?: string;
+      price?: number;
+      quantity?: number | null;
+    } | null,
     accepting: boolean
   ): ReorderLineDto {
     const ordered = Math.max(1, Number(item.quantity) || 1);
+    const pack = packQuantityOf(variant);
     const ignoresStock = cookedFoodIgnoresStock(
       inv.item?.item_sub_category?.item_category?.name,
       inv.item?.is_cooked_food
     );
     const stock = ignoresStock
       ? ordered
-      : Number(inv.computed_available_quantity ?? 0);
-    const maxQty = inv.item?.max_order_quantity
+      : Math.floor(Number(inv.computed_available_quantity ?? 0) / pack);
+    const maxBase = inv.item?.max_order_quantity
       ? Number(inv.item.max_order_quantity)
-      : ignoresStock
-        ? ordered
-        : stock;
-    const quantity = Math.max(
-      1,
-      Math.min(ordered, ignoresStock ? ordered : stock, maxQty)
-    );
+      : null;
+    const maxPacks =
+      maxBase != null
+        ? Math.floor(maxBase / pack)
+        : ignoresStock
+          ? ordered
+          : stock;
+    const quantity = Math.max(1, Math.min(ordered, stock, maxPacks));
     const unitPrice = resolveEffectiveUnitPrice({
       inventorySellingPrice: inv.selling_price,
       variant,
@@ -479,6 +517,10 @@ export class OrderReorderService {
         business_name: inv.business_location?.business?.name ?? null,
         seller_country: sellerCountry,
         merchant_can_accept_orders: accepting,
+        pack_quantity: pack,
+        available_quantity: ignoresStock
+          ? null
+          : Number(inv.computed_available_quantity ?? 0),
       },
     };
   }

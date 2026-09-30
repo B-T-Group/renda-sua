@@ -90,7 +90,7 @@ import VariantSelector from '../common/VariantSelector';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
-import { orderedVariantImages } from '../../types/itemVariant';
+import { orderedVariantImages, packQuantityOf } from '../../types/itemVariant';
 import FoodAvailabilityChip from '../common/FoodAvailabilityChip';
 import FoodScheduleList from '../common/FoodScheduleList';
 import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
@@ -659,6 +659,10 @@ export default function ItemDetailPage() {
           item.business_location.business.is_verified ??
           false,
         minOrderQuantity: item.item.min_order_quantity || undefined,
+        packQuantity: isBase ? 1 : packQuantityOf(variantSel.selectedVariant),
+        ...(item.item.is_cooked_food
+          ? {}
+          : { availableQuantity: item.computed_available_quantity }),
         originalPrice: hasMetaDeal ? lp.strikeOriginal : undefined,
         discountedPrice: hasMetaDeal ? lp.unit : undefined,
         hasActiveDeal: hasMetaDeal,

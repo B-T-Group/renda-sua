@@ -52,6 +52,7 @@ insert_permissions:
         - name
         - sku
         - price
+        - quantity
         - weight
         - weight_unit
         - dimensions
@@ -69,6 +70,7 @@ select_permissions:
         - name
         - sku
         - price
+        - quantity
         - weight
         - weight_unit
         - dimensions
@@ -90,6 +92,7 @@ select_permissions:
         - name
         - sku
         - price
+        - quantity
         - weight
         - weight_unit
         - dimensions
@@ -111,6 +114,7 @@ select_permissions:
         - name
         - sku
         - price
+        - quantity
         - weight
         - weight_unit
         - dimensions
@@ -135,6 +139,7 @@ select_permissions:
         - name
         - sku
         - price
+        - quantity
         - weight
         - weight_unit
         - dimensions
@@ -156,6 +161,7 @@ select_permissions:
         - name
         - sku
         - price
+        - quantity
         - weight
         - weight_unit
         - dimensions
@@ -176,6 +182,7 @@ update_permissions:
         - name
         - sku
         - price
+        - quantity
         - weight
         - weight_unit
         - dimensions

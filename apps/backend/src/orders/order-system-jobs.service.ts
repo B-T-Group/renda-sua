@@ -739,6 +739,7 @@ export class OrderSystemJobsService {
             id
             business_inventory_id
             quantity
+            variant_snapshot
           }
         }
       }

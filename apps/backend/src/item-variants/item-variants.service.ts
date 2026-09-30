@@ -16,6 +16,7 @@ const VARIANT_FIELDS = `
   name
   sku
   price
+  quantity
   weight
   weight_unit
   dimensions
@@ -175,6 +176,7 @@ export class ItemVariantsService {
       name: dto.name,
       ...(dto.sku !== undefined && { sku: dto.sku }),
       ...(dto.price !== undefined && { price: dto.price }),
+      ...(dto.quantity !== undefined && { quantity: dto.quantity }),
       ...(dto.weight !== undefined && { weight: dto.weight }),
       ...(dto.weight_unit !== undefined && {
         weight_unit: this.resolveWeightUnit(dto.weight_unit),

@@ -44,6 +44,18 @@ describe('releaseReservedInventory', () => {
     );
   });
 
+  it('releases base units for a pack snapshot', () => {
+    const qty = aggregateReservedQuantities([
+      {
+        business_inventory_id: 'inv-1',
+        quantity: 2,
+        variant_snapshot: { quantity: 10 },
+      },
+      { business_inventory_id: 'inv-1', quantity: 3 },
+    ]);
+    expect([...qty.entries()]).toEqual([['inv-1', 23]]);
+  });
+
   it('counts a no-op release as skipped instead of throwing', async () => {
     const executeMutation = jest.fn().mockResolvedValue({
       try_release_business_inventory: [],

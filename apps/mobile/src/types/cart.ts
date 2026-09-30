@@ -22,6 +22,8 @@ export interface CartLine {
     imageUrl?: string;
     maxOrderQuantity?: number;
     minOrderQuantity?: number;
+    packQuantity?: number;
+    availableQuantity?: number;
     /** From catalog at add time; used for cart checkout payment options. */
     payOnDeliveryEnabled?: boolean;
     /** Snapshotted at add time; reservation deposits never apply to cooked food. */

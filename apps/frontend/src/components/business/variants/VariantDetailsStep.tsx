@@ -12,7 +12,10 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { WEIGHT_UNITS } from '../../../constants/enums';
 import type { CreateItemVariantPayload } from '../../../hooks/useItemVariants';
-import type { VariantParentDefaults } from '../../../types/itemVariant';
+import {
+  packRebate,
+  type VariantParentDefaults,
+} from '../../../types/itemVariant';
 
 export interface VariantDetailsStepProps {
   form: CreateItemVariantPayload;
@@ -40,6 +43,21 @@ const VariantDetailsStep: React.FC<VariantDetailsStepProps> = ({
   const priceLabel = t('business.variants.priceWithCurrency', 'Price ({{currency}})', {
     currency,
   });
+  const units = form.quantity && form.quantity > 1 ? Math.floor(form.quantity) : 1;
+  const packPrice = form.price;
+  const rebate =
+    units > 1 && packPrice != null
+      ? packRebate({
+          packQuantity: units,
+          packPrice,
+          baseUnitPrice: parentItem.price,
+        })
+      : null;
+  const money = (amount: number) =>
+    new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'XAF',
+    }).format(amount);
 
   return (
     <Stack spacing={2} sx={{ pt: 1 }}>
@@ -103,6 +121,38 @@ const VariantDetailsStep: React.FC<VariantDetailsStepProps> = ({
           'Leave empty to use the listing price from inventory.'
         )}
       />
+      <TextField
+        type="number"
+        label={t('business.variants.quantity', 'Units in this option')}
+        value={form.quantity ?? 1}
+        onChange={(e) => {
+          const next = e.target.value === '' ? 1 : Math.floor(Number(e.target.value));
+          onChange({ quantity: Number.isFinite(next) && next >= 1 ? next : 1 });
+        }}
+        fullWidth
+        inputProps={{ min: 1, step: 1 }}
+        helperText={t(
+          'business.variants.quantityHelp',
+          'How many of this product are in the pack. Use 1 for a single unit.'
+        )}
+      />
+      {units > 1 && packPrice != null ? (
+        <Typography variant="body2" color={rebate ? 'success.dark' : 'text.secondary'}>
+          {rebate
+            ? t(
+                'business.variants.packSavings',
+                'Customers pay {{each}} each instead of {{single}} (save {{save}}).',
+                {
+                  each: money(rebate.perUnit),
+                  single: money(parentItem.price),
+                  save: money(rebate.saveAmount),
+                }
+              )
+            : t('business.variants.packEach', 'Customers pay {{each}} each.', {
+                each: money(packPrice / units),
+              })}
+        </Typography>
+      ) : null}
       <Stack direction="row" spacing={1}>
         <TextField
           type="number"

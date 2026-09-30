@@ -13,6 +13,7 @@ import {
   catalogUnitPriceForSelection,
   shopperVariantOptionCount,
 } from '../../utils/buildCartLineFromCatalog';
+import { listingHasPackRebate } from '../../types/business/itemVariant';
 import { ItemLikeButton } from './ItemLikeButton';
 
 function formatMoney(amount: number, currency: string): string {
@@ -69,6 +70,18 @@ function InventoryCatalogGridTileInner({
     [hasVariantOptions, item, unitPrice]
   );
   const currency = item.item.currency || 'XAF';
+  const hasPackSavings = useMemo(
+    () =>
+      listingHasPackRebate({
+        variants: item.item.item_variants,
+        listingSellingPrice: item.selling_price,
+        overrides: item.variant_price_overrides,
+        hasActiveDeal: item.hasActiveDeal,
+        originalPrice: item.original_price,
+        discountedPrice: item.discounted_price,
+      }),
+    [item]
+  );
 
   const dealPercent = useMemo(() => {
     if (!hasDeal || !item.original_price) return 0;
@@ -164,6 +177,18 @@ function InventoryCatalogGridTileInner({
               : formatMoney(unitPrice, currency)}
           </Text>
         )}
+
+        {hasPackSavings && !exportAvailable ? (
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.success.dark, fontWeight: '700', marginTop: 2 },
+            ]}
+            numberOfLines={1}
+          >
+            {t('client.placeOrder.saveOnPacks', 'Save on packs')}
+          </Text>
+        ) : null}
 
         {!exportAvailable && hasDeal && dealPercent > 0 ? (
           <StatusPill

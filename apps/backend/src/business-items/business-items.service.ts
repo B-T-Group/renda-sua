@@ -150,6 +150,7 @@ const GET_ITEMS = `
         name
         sku
         price
+        quantity
         weight
         weight_unit
         dimensions
@@ -413,6 +414,7 @@ const GET_SINGLE_ITEM = `
         name
         sku
         price
+        quantity
         weight
         weight_unit
         dimensions

@@ -40,6 +40,14 @@ export class ReorderItemDataDto {
 
   @ApiPropertyOptional()
   merchant_can_accept_orders?: boolean | null;
+
+  @ApiPropertyOptional({ description: 'Base units in one sale of this option' })
+  pack_quantity?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Shared stock in base units. Omitted for cooked food.',
+  })
+  available_quantity?: number | null;
 }
 
 export class ReorderLineDto {

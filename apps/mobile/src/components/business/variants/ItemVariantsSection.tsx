@@ -97,7 +97,12 @@ export function ItemVariantsSection({ item, businessId, onChanged, onMessage }: 
           >
             {image ? <Image source={{ uri: image }} style={styles.thumb} resizeMode="cover" /> : null}
             <View style={styles.body}>
-              <Text variant="titleSmall" numberOfLines={2}>{variant.name}</Text>
+              <Text variant="titleSmall" numberOfLines={2}>
+                {variant.name}
+                {(variant.quantity ?? 1) > 1
+                  ? ` · ${t('business.variants.unitsBadge', '{{count}} units', { count: variant.quantity })}`
+                  : ''}
+              </Text>
               <View style={styles.pills}>
                 {variant.is_default ? (
                   <StatusPill

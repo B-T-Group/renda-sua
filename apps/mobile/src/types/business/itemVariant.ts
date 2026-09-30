@@ -19,6 +19,7 @@ export interface ItemVariant {
   weight_unit?: string | null;
   dimensions?: string | null;
   color?: string | null;
+  quantity?: number | null;
   attributes?: Record<string, unknown> | null;
   is_default?: boolean;
   is_active?: boolean;
@@ -79,6 +80,116 @@ export function effectiveVariantUnitPrice(
   if (override?.selling_price != null) return Number(override.selling_price);
   if (variant?.price != null) return Number(variant.price);
   return Number(inventoryPrice);
+}
+
+export function packQuantityOf(
+  source: { quantity?: number | null } | null | undefined
+): number {
+  const n = Number(source?.quantity ?? 1);
+  if (!Number.isFinite(n) || n <= 1) return 1;
+  return Math.floor(n);
+}
+
+export interface PackRebate {
+  saveAmount: number;
+  perUnit: number;
+  savePercent: number;
+}
+
+export function packRebate(params: {
+  packQuantity?: number | null;
+  packPrice: number;
+  baseUnitPrice: number;
+}): PackRebate | null {
+  const qty = packQuantityOf({ quantity: params.packQuantity });
+  if (qty <= 1 || !(params.baseUnitPrice > 0) || !(params.packPrice >= 0)) {
+    return null;
+  }
+  const singles = params.baseUnitPrice * qty;
+  if (!(params.packPrice < singles)) return null;
+  const saveAmount = singles - params.packPrice;
+  return {
+    saveAmount,
+    perUnit: params.packPrice / qty,
+    savePercent: (saveAmount / singles) * 100,
+  };
+}
+
+export function listingHasPackRebate(params: {
+  variants?: ItemVariant[] | null;
+  listingSellingPrice: number;
+  overrides?: InventoryVariantPriceOverride[] | null;
+  hasActiveDeal?: boolean;
+  originalPrice?: number;
+  discountedPrice?: number;
+}): boolean {
+  const base = unitPriceWithListingDeal(
+    params.listingSellingPrice,
+    params.listingSellingPrice,
+    params.hasActiveDeal,
+    params.originalPrice,
+    params.discountedPrice
+  ).unit;
+  return (params.variants ?? []).some((variant) => {
+    if (variant.is_active === false) return false;
+    const override = params.overrides?.find((row) => row.item_variant_id === variant.id);
+    const packBase = effectiveVariantUnitPrice(variant, params.listingSellingPrice, override);
+    const packPrice = unitPriceWithListingDeal(
+      packBase,
+      params.listingSellingPrice,
+      params.hasActiveDeal,
+      params.originalPrice,
+      params.discountedPrice
+    ).unit;
+    return packRebate({
+      packQuantity: variant.quantity,
+      packPrice,
+      baseUnitPrice: base,
+    }) != null;
+  });
+}
+
+export function orderLineBounds(params: {
+  available: number;
+  maxOrder?: number | null;
+  minOrder?: number | null;
+  packQuantity?: number | null;
+  ignoresStock: boolean;
+  foodSoftMax?: number;
+}): { min: number; max: number } {
+  const pack = packQuantityOf({ quantity: params.packQuantity });
+  if (params.ignoresStock) {
+    const merchantMax = params.maxOrder ?? params.foodSoftMax ?? 99;
+    return { min: 1, max: Math.max(1, Math.floor(merchantMax / pack)) };
+  }
+  const min = pack > 1 ? 1 : Math.max(1, params.minOrder ?? 1);
+  const stockPacks = Math.floor(Math.max(0, params.available) / pack);
+  const orderPacks =
+    params.maxOrder != null ? Math.floor(params.maxOrder / pack) : stockPacks;
+  if (stockPacks < 1) return { min: 0, max: 0 };
+  return { min, max: Math.max(min, Math.min(stockPacks, orderPacks)) };
+}
+
+export function lineQuantityCap(params: {
+  packQuantity?: number | null;
+  maxOrderBaseUnits?: number | null;
+  availableBaseUnits?: number | null;
+  otherLinesBaseUnits?: number;
+}): number | undefined {
+  const pack = packQuantityOf({ quantity: params.packQuantity });
+  const caps: number[] = [];
+  if (params.maxOrderBaseUnits != null && params.maxOrderBaseUnits > 0) {
+    caps.push(Math.floor(params.maxOrderBaseUnits / pack));
+  }
+  if (params.availableBaseUnits != null) {
+    const remaining = Math.max(
+      0,
+      params.availableBaseUnits - (params.otherLinesBaseUnits ?? 0)
+    );
+    caps.push(Math.floor(remaining / pack));
+  }
+  if (!caps.length) return undefined;
+  return Math.max(0, Math.min(...caps));
 }
 
 /** Applies a listing deal ratio to the effective override/variant/inventory base. */

@@ -131,5 +131,23 @@ describe('placeOrderMaxQuantity', () => {
         item: { max_order_quantity: 4 },
       })
     ).toBe(4);
+    expect(
+      placeOrderMaxQuantity(
+        {
+          computed_available_quantity: 40,
+          item: { max_order_quantity: null },
+        },
+        10
+      )
+    ).toBe(4);
+    expect(
+      placeOrderMaxQuantity(
+        {
+          computed_available_quantity: 5,
+          item: { max_order_quantity: null },
+        },
+        10
+      )
+    ).toBe(0);
   });
 });

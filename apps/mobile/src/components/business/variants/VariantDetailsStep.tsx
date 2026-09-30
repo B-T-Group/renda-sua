@@ -4,6 +4,7 @@ import { Button, SegmentedButtons, Switch, Text, TextInput } from 'react-native-
 import { useTheme } from '@/contexts/ThemeContext';
 import { ITEM_FORM_WEIGHT_UNITS } from '@/constants/businessItemForm';
 import type { BusinessCatalogItem } from '@/types/business/items';
+import { packRebate } from '@/types/business/itemVariant';
 
 export interface VariantDraft {
   name: string;
@@ -13,6 +14,7 @@ export interface VariantDraft {
   weightUnit: string;
   dimensions: string;
   color: string;
+  quantity: string;
   isActive: boolean;
   isDefault: boolean;
 }
@@ -69,6 +71,18 @@ export function VariantDetailsStep({
     )
       ? value.weightUnit
       : 'g';
+  const units = Math.max(1, Math.floor(Number(value.quantity) || 1));
+  const packPrice = value.price.trim() ? Number(value.price) : null;
+  const parentPrice = Number(item.price ?? 0);
+  const rebate =
+    units > 1 && packPrice != null && Number.isFinite(packPrice)
+      ? packRebate({
+          packQuantity: units,
+          packPrice,
+          baseUnitPrice: parentPrice,
+        })
+      : null;
+  const currency = item.currency ?? 'XAF';
 
   return (
     <View style={{ gap: spacing.sm }}>
@@ -120,6 +134,39 @@ export function VariantDetailsStep({
         keyboardType="decimal-pad"
         onChangeText={(text) => set('price', text)}
       />
+      <TextInput
+        mode="outlined"
+        label={t('business.variants.quantity', 'Units in this option')}
+        value={value.quantity}
+        keyboardType="number-pad"
+        onChangeText={(text) => set('quantity', text.replace(/[^0-9]/g, ''))}
+      />
+      <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+        {t(
+          'business.variants.quantityHelp',
+          'How many of this product are in the pack. Use 1 for a single unit.'
+        )}
+      </Text>
+      {units > 1 && packPrice != null && Number.isFinite(packPrice) ? (
+        <Text
+          variant="bodySmall"
+          style={{ color: rebate ? colors.success.dark : colors.text.secondary }}
+        >
+          {rebate
+            ? t(
+                'business.variants.packSavings',
+                'Customers pay {{each}} each instead of {{single}} (save {{save}}).',
+                {
+                  each: `${rebate.perUnit.toFixed(2)} ${currency}`,
+                  single: `${parentPrice.toFixed(2)} ${currency}`,
+                  save: `${rebate.saveAmount.toFixed(2)} ${currency}`,
+                }
+              )
+            : t('business.variants.packEach', 'Customers pay {{each}} each.', {
+                each: `${(packPrice / units).toFixed(2)} ${currency}`,
+              })}
+        </Text>
+      ) : null}
       <TextInput
         mode="outlined"
         label={t('business.variants.weight', 'Weight')}

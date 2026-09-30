@@ -4146,6 +4146,11 @@
       "priceOverride": "Price override (optional)",
       "priceWithCurrency": "Price ({{currency}})",
       "priceHelp": "Leave empty to use the listing price from inventory.",
+      "quantity": "Units in this option",
+      "quantityHelp": "How many of this product are in the pack. Use 1 for a single unit.",
+      "packSavings": "Customers pay {{each}} each instead of {{single}} (save {{save}}).",
+      "packEach": "Customers pay {{each}} each.",
+      "unitsBadge": "{{count}} units",
       "weight": "Weight",
       "weightUnit": "Unit",
       "color": "Color",
@@ -5036,6 +5041,11 @@
       "selectRequired": "Select an option",
       "chooseOption": "Choose an option",
       "defaultOption": "Default",
+      "unitsEach": "{{count}} units · {{each}} each",
+      "saveAmount": "Save {{amount}}",
+      "saveOnPacks": "Save on packs",
+      "packsInStock": "{{count}} packs in stock",
+      "packUnavailable": "Not enough stock for this pack.",
       "selectDialogTitle": "Choose an option",
       "confirmSelection": "Add to cart",
       "confirmOrder": "Continue"
@@ -6884,7 +6894,8 @@
         "popularTitle": "Popular picks",
         "popularSubtitle": "Recommended based on what people browse and buy",
         "catalogGridTitle": "Full catalog",
-        "catalogGridSubtitle": "All listings matching your filters and sort order."
+        "catalogGridSubtitle": "All listings matching your filters and sort order.",
+        "categoryTileA11y": "Browse {{name}}"
       },
       "authCta": {
         "button": "Sign In",

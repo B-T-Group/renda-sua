@@ -3840,6 +3840,11 @@
       "priceOverride": "Prix spécifique (facultatif)",
       "priceWithCurrency": "Prix ({{currency}})",
       "priceHelp": "Laisser vide pour utiliser le prix du catalogue (inventaire).",
+      "quantity": "Unités dans cette option",
+      "quantityHelp": "Combien de produits contient le lot. Utilisez 1 pour une unité.",
+      "packSavings": "Les clients paient {{each}} l'unité au lieu de {{single}} (économisez {{save}}).",
+      "packEach": "Les clients paient {{each}} l'unité.",
+      "unitsBadge": "{{count}} unités",
       "weight": "Poids",
       "weightUnit": "Unité",
       "color": "Couleur",
@@ -4758,6 +4763,11 @@
       "selectRequired": "Choisissez une option",
       "chooseOption": "Choisissez une option",
       "defaultOption": "Par défaut",
+      "unitsEach": "{{count}} unités · {{each}} l'unité",
+      "saveAmount": "Économisez {{amount}}",
+      "saveOnPacks": "Économisez en lot",
+      "packsInStock": "{{count}} lots en stock",
+      "packUnavailable": "Stock insuffisant pour ce lot.",
       "selectDialogTitle": "Choisissez une option",
       "confirmSelection": "Ajouter au panier",
       "confirmOrder": "Continuer"
@@ -6603,7 +6613,8 @@
         "popularTitle": "Sélection populaire",
         "popularSubtitle": "Suggérés d’après ce que les gens consultent et achètent",
         "catalogGridTitle": "Tout le catalogue",
-        "catalogGridSubtitle": "Toutes les annonces correspondant à vos filtres et à votre tri."
+        "catalogGridSubtitle": "Toutes les annonces correspondant à vos filtres et à votre tri.",
+        "categoryTileA11y": "Parcourir {{name}}"
       },
       "authCta": {
         "button": "Se connecter",

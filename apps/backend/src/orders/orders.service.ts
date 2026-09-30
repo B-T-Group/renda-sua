@@ -91,7 +91,11 @@ import {
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
 import { buildOrderMetaCapiContext } from '../meta-conversions/order-meta-capi.util';
-import { resolveEffectiveUnitPrice } from '../item-variants/variant-pricing.util';
+import {
+  packQuantityOf,
+  resolveEffectiveUnitPrice,
+  sumStockUnitsByInventory,
+} from '../item-variants/variant-pricing.util';
 import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
 import {
   resolveShopperVariant,
@@ -224,6 +228,8 @@ type OrderHoldWithSettlement = Order_Holds & {
 type InventoryQuantityRequest = {
   business_inventory_id?: string;
   quantity?: number;
+  item_variant_id?: string | null;
+  variant_snapshot?: { quantity?: number | string | null } | null;
 };
 
 type OrderDeliveryFeeInfo = {
@@ -674,17 +680,32 @@ export class OrdersService {
   }
 
   private getRequestedQuantitiesByInventory(
-    items: InventoryQuantityRequest[]
+    items: InventoryQuantityRequest[],
+    inventories?: Array<{ id?: string }> | null
   ): Map<string, number> {
-    const quantitiesByInventory = new Map<string, number>();
-    for (const item of items) {
-      if (!item.business_inventory_id || !item.quantity) {
-        continue;
-      }
-      const current = quantitiesByInventory.get(item.business_inventory_id) ?? 0;
-      quantitiesByInventory.set(item.business_inventory_id, current + item.quantity);
+    return sumStockUnitsByInventory(items, inventories);
+  }
+
+  private assertBaseUnitLimits(
+    inventory: {
+      computed_available_quantity: number;
+      item?: { name?: string; max_order_quantity?: number | null };
+    },
+    requestedBaseUnits: number,
+    ignoresStock: boolean
+  ): void {
+    const maxOrderQuantity = inventory.item?.max_order_quantity;
+    const name = inventory.item?.name ?? 'item';
+    if (maxOrderQuantity != null && requestedBaseUnits > maxOrderQuantity) {
+      throw new Error(
+        `Item ${name} exceeds max order quantity. Max: ${maxOrderQuantity}, Requested: ${requestedBaseUnits}`
+      );
     }
-    return quantitiesByInventory;
+    if (!ignoresStock && requestedBaseUnits > inventory.computed_available_quantity) {
+      throw new Error(
+        `Insufficient quantity for item ${name}. Available: ${inventory.computed_available_quantity}, Requested: ${requestedBaseUnits}`
+      );
+    }
   }
 
   private computeUnitPriceFromVariantOrInventory(
@@ -783,6 +804,7 @@ export class OrdersService {
       price: variant.price ?? null,
       resolved_unit_price:
         resolvedUnitPrice != null ? resolvedUnitPrice : null,
+      quantity: packQuantityOf(variant),
       weight: variant.weight ?? null,
       weight_unit: variant.weight_unit ?? null,
       dimensions: variant.dimensions ?? null,
@@ -10847,6 +10869,7 @@ export class OrdersService {
             name
             sku
             price
+            quantity
             weight
             weight_unit
             dimensions
@@ -10936,6 +10959,7 @@ export class OrdersService {
               name
               sku
               price
+              quantity
               weight
               weight_unit
               dimensions
@@ -11080,7 +11104,7 @@ export class OrdersService {
     );
 
     const requestedQuantityByInventoryId =
-      this.getRequestedQuantitiesByInventory(orderData.items);
+      this.getRequestedQuantitiesByInventory(orderData.items, businessInventories);
 
     // Validate all items are active, respect max_order_quantity, have sufficient quantity, and resolve variants
     const lineContexts: Array<{ inventory: any; variant: any | null }> = [];
@@ -11132,26 +11156,17 @@ export class OrdersService {
         throw new HttpException(foodBlock.message, HttpStatus.BAD_REQUEST);
       }
 
-      const maxOrderQuantity = businessInventory.item?.max_order_quantity;
-      if (maxOrderQuantity != null && item.quantity > maxOrderQuantity) {
-        throw new Error(
-          `Item ${businessInventory.item.name} exceeds max order quantity. Max: ${maxOrderQuantity}, Requested: ${item.quantity}`
-        );
-      }
-
       const requestedQuantity =
         requestedQuantityByInventoryId.get(item.business_inventory_id) || 0;
       const ignoresStock = cookedFoodIgnoresStock(
         businessInventory.item?.item_sub_category?.item_category?.name,
         businessInventory.item?.is_cooked_food
       );
-      if (
-        !ignoresStock &&
-        !validatedInventoryIds.has(item.business_inventory_id) &&
-        requestedQuantity > businessInventory.computed_available_quantity
-      ) {
-        throw new Error(
-          `Insufficient quantity for item ${businessInventory.item.name}. Available: ${businessInventory.computed_available_quantity}, Requested: ${requestedQuantity}`
+      if (!validatedInventoryIds.has(item.business_inventory_id)) {
+        this.assertBaseUnitLimits(
+          businessInventory,
+          requestedQuantity,
+          ignoresStock
         );
       }
       validatedInventoryIds.add(item.business_inventory_id);

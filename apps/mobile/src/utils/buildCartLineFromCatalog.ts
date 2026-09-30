@@ -4,6 +4,8 @@ import { catalogOrderedImages } from './catalogInventoryDisplay';
 import { merchantCanAcceptOrders } from './merchantLifecycle';
 import {
   effectiveVariantUnitPrice,
+  orderLineBounds,
+  packQuantityOf,
   primaryVariantImageUrl,
   unitPriceWithListingDeal,
 } from '../types/business/itemVariant';
@@ -118,19 +120,17 @@ export function buildCartLineFromCatalog(
       ? item.item.item_variants?.find((candidate) => candidate.id === selection)
       : undefined;
   const variantImage = primaryVariantImageUrl(variant);
-  const minQ = Math.max(1, item.item.min_order_quantity ?? 1);
   const ignoresStock = isFoodCatalogItem(item);
-  const merchantMax = item.item.max_order_quantity;
-  const maxQ = ignoresStock
-    ? Math.max(minQ, merchantMax ?? FOOD_ORDER_SOFT_MAX)
-    : Math.max(
-        minQ,
-        Math.min(
-          merchantMax ?? item.computed_available_quantity,
-          item.computed_available_quantity
-        )
-      );
-  const qty = Math.min(Math.max(quantity, minQ), maxQ);
+  const pack = isShopperBaseVariantId(selection) ? 1 : packQuantityOf(variant);
+  const bounds = orderLineBounds({
+    available: item.computed_available_quantity,
+    maxOrder: item.item.max_order_quantity,
+    minOrder: item.item.min_order_quantity,
+    packQuantity: pack,
+    ignoresStock,
+    foodSoftMax: FOOD_ORDER_SOFT_MAX,
+  });
+  const qty = bounds.max < 1 ? 0 : Math.min(Math.max(quantity, bounds.min), bounds.max);
 
   const rawCountry = item.business_location?.address?.country;
   const sellerCountry =
@@ -157,8 +157,12 @@ export function buildCartLineFromCatalog(
       price,
       currency: item.item.currency || 'XAF',
       imageUrl: variantImage ?? imgs[0]?.image_url,
-      maxOrderQuantity: maxQ,
-      minOrderQuantity: minQ,
+      maxOrderQuantity: item.item.max_order_quantity ?? (ignoresStock ? FOOD_ORDER_SOFT_MAX : undefined),
+      minOrderQuantity: bounds.min,
+      packQuantity: pack,
+      ...(ignoresStock
+        ? {}
+        : { availableQuantity: item.computed_available_quantity }),
       payOnDeliveryEnabled: Boolean(item.item.pay_on_delivery_enabled),
       isCookedFood: isFoodCatalogItem(item),
       merchantCanAcceptOrders: merchantCanAcceptOrders(

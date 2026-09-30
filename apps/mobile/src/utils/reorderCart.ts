@@ -35,7 +35,20 @@ export function mapReorderLineToCartLine(
       minOrderQuantity: line.item_data.min_order_quantity ?? undefined,
       payOnDeliveryEnabled: line.item_data.pay_on_delivery_enabled ?? undefined,
       merchantCanAcceptOrders: line.item_data.merchant_can_accept_orders ?? undefined,
+      ...packFields(line),
     },
+  };
+}
+
+function packFields(line: ReorderLine): {
+  packQuantity?: number;
+  availableQuantity?: number;
+} {
+  const pack = line.item_data.pack_quantity;
+  const stock = line.item_data.available_quantity;
+  return {
+    ...(pack != null ? { packQuantity: pack } : {}),
+    ...(stock != null ? { availableQuantity: stock } : {}),
   };
 }
 

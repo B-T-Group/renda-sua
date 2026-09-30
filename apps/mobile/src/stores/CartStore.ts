@@ -2,15 +2,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { makeAutoObservable, runInAction } from 'mobx';
 import type { CartCountryInfo, CartLine } from '../types/cart';
 import type { CatalogInventoryItem } from '../types/inventoryCatalog';
+import { lineQuantityCap, packQuantityOf } from '../types/business/itemVariant';
 import { buildCartLineFromCatalog } from '../utils/buildCartLineFromCatalog';
 import { cartLineKey } from '../utils/cartLineKey';
 
 const CART_STORAGE_KEY = '@RendasuaAgent:shoppingCart';
 
-function clampQty(line: CartLine, qty: number): number {
+function clampQty(line: CartLine, qty: number, lines: CartLine[]): number {
   const min = line.itemData.minOrderQuantity ?? 1;
-  const max = line.itemData.maxOrderQuantity ?? qty;
-  return Math.min(Math.max(qty, min), max);
+  const key = cartLineKey(line.inventoryItemId, line.variantId);
+  const other = lines
+    .filter((row) => row.inventoryItemId === line.inventoryItemId)
+    .filter((row) => cartLineKey(row.inventoryItemId, row.variantId) !== key)
+    .reduce(
+      (sum, row) =>
+        sum + row.quantity * packQuantityOf({ quantity: row.itemData.packQuantity }),
+      0
+    );
+  const cap = lineQuantityCap({
+    packQuantity: line.itemData.packQuantity,
+    maxOrderBaseUnits: line.itemData.maxOrderQuantity,
+    availableBaseUnits: line.itemData.availableQuantity,
+    otherLinesBaseUnits: other,
+  });
+  const max = cap ?? qty;
+  return Math.min(Math.max(qty, min), Math.max(0, max));
 }
 
 export class CartStore {
@@ -163,14 +179,14 @@ export class CartStore {
         );
         if (idx >= 0) {
           const existing = next[idx];
-          const max = existing.itemData.maxOrderQuantity;
           const merged = existing.quantity + incoming.quantity;
           next[idx] = {
             ...existing,
-            quantity: max ? Math.min(merged, max) : merged,
+            quantity: clampQty(existing, merged, next),
           };
         } else {
-          next.push(incoming);
+          const quantity = clampQty(incoming, incoming.quantity, next);
+          if (quantity > 0) next.push({ ...incoming, quantity });
         }
       }
       this.items = next;
@@ -216,9 +232,8 @@ export class CartStore {
 
     if (idx >= 0) {
       const existing = this.items[idx];
-      const max = existing.itemData.maxOrderQuantity;
       const nextQty = existing.quantity + incoming.quantity;
-      const finalQty = max ? Math.min(nextQty, max) : nextQty;
+      const finalQty = clampQty(existing, nextQty, this.items);
       runInAction(() => {
         const next = [...this.items];
         next[idx] = { ...existing, quantity: finalQty };
@@ -228,8 +243,11 @@ export class CartStore {
       return 'updated';
     }
 
+    const quantity = clampQty(incoming, incoming.quantity, this.items);
+    if (quantity <= 0) return 'added';
+
     runInAction(() => {
-      this.items = [...this.items, incoming];
+      this.items = [...this.items, { ...incoming, quantity }];
     });
     this.schedulePersist();
     return 'added';
@@ -244,7 +262,7 @@ export class CartStore {
       return;
     }
     const line = this.items[idx];
-    const q = clampQty(line, quantity);
+    const q = clampQty(line, quantity, this.items);
     runInAction(() => {
       const next = [...this.items];
       next[idx] = { ...line, quantity: q };

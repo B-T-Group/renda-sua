@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cartLineKey } from './cartLineKey';
+import { cappedCartQuantity } from '../utils/cartLineCap';
 
 export interface CartItem {
   inventoryItemId: string;
@@ -28,6 +29,10 @@ export interface CartItem {
     weight?: number;
     maxOrderQuantity?: number;
     minOrderQuantity?: number;
+    /** Base units in one purchase of this line. Defaults to 1. */
+    packQuantity?: number;
+    /** Shared stock in base units at add time. Omitted for cooked food. */
+    availableQuantity?: number;
     /** For Meta Pixel Purchase `content_category` (from item taxonomy when known). */
     contentCategory?: string;
     /** For Meta Pixel Purchase `google_product_category` when known. */
@@ -149,16 +154,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
           // Update quantity if item already exists
           const updatedItems = [...prevItems];
           const existing = updatedItems[existingItemIndex];
-          const max = existing.itemData.maxOrderQuantity;
           const nextQuantity = existing.quantity + item.quantity;
-          const finalQuantity = max ? Math.min(nextQuantity, max) : nextQuantity;
+          const finalQuantity = cappedCartQuantity(
+            existing,
+            nextQuantity,
+            prevItems
+          );
 
-          if (max && nextQuantity > max) {
+          if (finalQuantity < nextQuantity) {
             enqueueSnackbar(
               t(
                 'cart.maxQuantityReached',
                 'Maximum {{count}} per order for this item',
-                { count: max }
+                { count: finalQuantity }
               ),
               { variant: 'warning' }
             );
@@ -187,6 +195,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
                     variantImageUrl:
                       item.itemData.variantImageUrl ??
                       existing.itemData.variantImageUrl,
+                    packQuantity:
+                      item.itemData.packQuantity ?? existing.itemData.packQuantity,
+                    availableQuantity:
+                      item.itemData.availableQuantity ??
+                      existing.itemData.availableQuantity,
                   }
                 : !existing.itemData.variantImageUrl &&
                     item.itemData.variantImageUrl
@@ -200,15 +213,30 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
           );
           return updatedItems;
         } else {
-          const max = item.itemData.maxOrderQuantity;
-          const initialQuantity = max ? Math.min(item.quantity, max) : item.quantity;
+          const initialQuantity = cappedCartQuantity(
+            item,
+            item.quantity,
+            prevItems
+          );
 
-          if (max && item.quantity > max) {
+          if (initialQuantity <= 0) {
             enqueueSnackbar(
               t(
                 'cart.maxQuantityReached',
                 'Maximum {{count}} per order for this item',
-                { count: max }
+                { count: 0 }
+              ),
+              { variant: 'warning' }
+            );
+            return prevItems;
+          }
+
+          if (initialQuantity < item.quantity) {
+            enqueueSnackbar(
+              t(
+                'cart.maxQuantityReached',
+                'Maximum {{count}} per order for this item',
+                { count: initialQuantity }
               ),
               { variant: 'warning' }
             );
@@ -266,15 +294,17 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
             return;
           }
 
-          const max = item.itemData.maxOrderQuantity;
-          const finalQuantity = max && quantity > max ? max : quantity;
+          const finalQuantity = cappedCartQuantity(item, quantity, prevItems);
+          if (finalQuantity <= 0) {
+            return;
+          }
 
-          if (max && quantity > max) {
+          if (finalQuantity < quantity) {
             enqueueSnackbar(
               t(
                 'cart.maxQuantityReached',
                 'Maximum {{count}} per order for this item',
-                { count: max }
+                { count: finalQuantity }
               ),
               { variant: 'warning' }
             );
@@ -316,14 +346,18 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
         );
         if (idx >= 0) {
           const existing = next[idx];
-          const max = existing.itemData.maxOrderQuantity;
           const merged = existing.quantity + incoming.quantity;
           next[idx] = {
             ...existing,
-            quantity: max ? Math.min(merged, max) : merged,
+            quantity: cappedCartQuantity(existing, merged, next),
           };
         } else {
-          next.push(incoming);
+          const quantity = cappedCartQuantity(
+            incoming,
+            incoming.quantity,
+            next
+          );
+          if (quantity > 0) next.push({ ...incoming, quantity });
         }
       }
       return next;

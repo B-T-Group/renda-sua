@@ -1,4 +1,4 @@
-import { unitPriceWithListingDeal } from './itemVariant';
+import { unitPriceWithListingDeal, packRebate } from './itemVariant';
 
 describe('unitPriceWithListingDeal', () => {
   it('subtracts a fixed listing discount from a variant price', () => {
@@ -51,5 +51,20 @@ describe('unitPriceWithListingDeal', () => {
     const pricing = unitPriceWithListingDeal(150, 100, true, 100, 80);
 
     expect(pricing.unit).toBe(120);
+  });
+});
+
+describe('packRebate', () => {
+  it('hides a single unit and a pack that is not cheaper', () => {
+    expect(packRebate({ packQuantity: 1, packPrice: 4, baseUnitPrice: 5 })).toBeNull();
+    expect(packRebate({ packQuantity: 10, packPrice: 50, baseUnitPrice: 5 })).toBeNull();
+  });
+
+  it('shows the rebate for a cheaper pack of 10', () => {
+    expect(packRebate({ packQuantity: 10, packPrice: 40, baseUnitPrice: 5 })).toEqual({
+      saveAmount: 10,
+      perUnit: 4,
+      savePercent: 20,
+    });
   });
 });

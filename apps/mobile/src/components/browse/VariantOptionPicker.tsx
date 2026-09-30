@@ -8,6 +8,9 @@ import { useImageFallback } from '../../hooks/useImageFallback';
 import type { ItemVariant, InventoryVariantPriceOverride } from '../../types/business/itemVariant';
 import {
   effectiveVariantUnitPrice,
+  listingHasPackRebate,
+  packQuantityOf,
+  packRebate,
   primaryVariantImageUrl,
   unitPriceWithListingDeal,
 } from '../../types/business/itemVariant';
@@ -79,6 +82,14 @@ function VariantOptionPickerInner({
 
   if (variants.length === 0) return null;
 
+  const baseUnit = unitPriceWithListingDeal(
+    listingSellingPrice,
+    listingSellingPrice,
+    hasActiveDeal,
+    originalPrice,
+    discountedPrice
+  ).unit;
+
   return (
     <View style={{ marginTop: hideHeading ? 0 : spacing.md }} accessibilityRole="radiogroup">
       {!hideHeading ? (
@@ -121,6 +132,13 @@ function VariantOptionPickerInner({
           );
           const thumbUri = primaryVariantImageUrl(variant);
           const colorHint = variant.color?.trim();
+          const packQty = packQuantityOf(variant);
+          const rebate = packRebate({
+            packQuantity: packQty,
+            packPrice: pricing.unit,
+            baseUnitPrice: baseUnit,
+          });
+          const eachLabel = formatCatalogMoney(pricing.unit / packQty, currency);
 
           return (
             <Pressable
@@ -175,6 +193,27 @@ function VariantOptionPickerInner({
               >
                 {formatCatalogMoney(pricing.unit, currency)}
               </Text>
+              {packQty > 1 ? (
+                <Text
+                  style={[typography.caption, { color: colors.text.secondary }]}
+                  numberOfLines={2}
+                >
+                  {t('client.placeOrder.unitsEach', '{{count}} units · {{each}} each', {
+                    count: packQty,
+                    each: eachLabel,
+                  })}
+                </Text>
+              ) : null}
+              {rebate ? (
+                <Text
+                  style={[typography.caption, { color: colors.success.dark, fontWeight: '700' }]}
+                  numberOfLines={1}
+                >
+                  {t('client.placeOrder.saveAmount', 'Save {{amount}}', {
+                    amount: formatCatalogMoney(rebate.saveAmount, currency),
+                  })}
+                </Text>
+              ) : null}
             </Pressable>
           );
         })}
