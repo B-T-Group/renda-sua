@@ -548,6 +548,37 @@
     }
   },
   "admin": {
+    "map": {
+      "title": "Map",
+      "subtitle": "Agents and merchants in your markets",
+      "country": "Country",
+      "allCountries": "All countries",
+      "region": "Region",
+      "allRegions": "All regions",
+      "kindAgents": "Agents",
+      "kindMerchants": "Merchants",
+      "kindAll": "All",
+      "live": "Live",
+      "liveHint": "Refresh agent positions every 15 seconds",
+      "loading": "Loading map…",
+      "empty": "No agents or merchants with a location in this view.",
+      "loadError": "Could not load the map.",
+      "accessDenied": "Only a superuser can open the map.",
+      "close": "Close",
+      "phone": "Phone",
+      "email": "Email",
+      "address": "Address",
+      "lastSeen": "Last position",
+      "positionLive": "Live GPS",
+      "positionAddress": "Registered address",
+      "activity": {
+        "active": "Active",
+        "unavailable": "Unavailable",
+        "suspended": "Suspended",
+        "open": "Open",
+        "inactive": "Inactive"
+      }
+    },
     "operatingHours": {
       "closed": "Closed",
       "days": {
@@ -2938,6 +2969,8 @@
       "siteEventsModuleDescription": "Reporting and CSV export for client analytics events",
       "broadcastsModule": "Global messaging",
       "broadcastsModuleDescription": "Send targeted push notifications to users by persona and filters",
+      "mapModule": "Map",
+      "mapModuleDescription": "See agents and merchants on a map for a market",
       "performanceModule": "Platform performance",
       "performanceModuleDescription": "Enrollment and catalog growth by market, plus top performing agents",
       "firstItem": {

@@ -62,6 +62,7 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/admin/site-events',
     '/admin/broadcasts',
     '/admin/performance',
+    '/admin/map',
     '/users/me',
     '/auth/email-availability',
     '/auth/phone-availability',

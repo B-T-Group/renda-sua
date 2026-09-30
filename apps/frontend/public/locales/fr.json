@@ -291,6 +291,37 @@
     }
   },
   "admin": {
+    "map": {
+      "title": "Carte",
+      "subtitle": "Agents et commerçants dans vos marchés",
+      "country": "Pays",
+      "allCountries": "Tous les pays",
+      "region": "Région",
+      "allRegions": "Toutes les régions",
+      "kindAgents": "Agents",
+      "kindMerchants": "Commerçants",
+      "kindAll": "Tous",
+      "live": "Direct",
+      "liveHint": "Actualise la position des agents toutes les 15 secondes",
+      "loading": "Chargement de la carte…",
+      "empty": "Aucun agent ou commerçant avec une position dans cette vue.",
+      "loadError": "Impossible de charger la carte.",
+      "accessDenied": "Seul un super utilisateur peut ouvrir la carte.",
+      "close": "Fermer",
+      "phone": "Téléphone",
+      "email": "E-mail",
+      "address": "Adresse",
+      "lastSeen": "Dernière position",
+      "positionLive": "GPS en direct",
+      "positionAddress": "Adresse enregistrée",
+      "activity": {
+        "active": "Actif",
+        "unavailable": "Indisponible",
+        "suspended": "Suspendu",
+        "open": "Ouvert",
+        "inactive": "Inactif"
+      }
+    },
     "operatingHours": {
       "closed": "Fermé",
       "days": {
@@ -2661,6 +2692,8 @@
       "siteEventsModuleDescription": "Rapports et export CSV des événements d’analytique client",
       "broadcastsModule": "Messagerie globale",
       "broadcastsModuleDescription": "Envoyez des notifications push ciblées par persona et filtres",
+      "mapModule": "Carte",
+      "mapModuleDescription": "Voir les agents et les commerçants sur une carte pour un marché",
       "performanceModule": "Performance de la plateforme",
       "performanceModuleDescription": "Croissance des inscriptions et du catalogue par marché, plus les meilleurs agents",
       "firstItem": {

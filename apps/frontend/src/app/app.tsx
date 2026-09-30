@@ -561,6 +561,10 @@ function App() {
                 element={<LazyPages.AdminPerformancePage />}
               />
               <Route
+                path="/admin/map"
+                element={<LazyPages.AdminMapPage />}
+              />
+              <Route
                 path="/admin/follow-ups"
                 element={<LazyPages.AdminCreditsPage />}
               />
