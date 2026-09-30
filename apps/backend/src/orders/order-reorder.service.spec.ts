@@ -632,4 +632,68 @@ describe('OrderReorderService', () => {
     );
     expect(inventoryCall?.[1]).toEqual({ ids: ['inv-1'] });
   });
+
+  function packInventory(stock: number, pack: number, max?: number) {
+    return {
+      ...baseInventory,
+      computed_available_quantity: stock,
+      item: {
+        ...baseInventory.item,
+        max_order_quantity: max ?? null,
+        item_variants: [
+          { id: 'pack-10', name: 'Pack', price: 8000, quantity: pack },
+        ],
+      },
+    };
+  }
+
+  function packOrder(ordered: number) {
+    return {
+      ...baseOrder,
+      order_items: [
+        {
+          ...baseOrder.order_items[0],
+          item_variant_id: 'pack-10',
+          quantity: ordered,
+        },
+      ],
+    };
+  }
+
+  it('skips a pack when stock cannot fill one pack', async () => {
+    mockOrderAndInventory(packOrder(1), [packInventory(9, 10)]);
+    const result = await service.reorder('order-1');
+    expect(result.lines).toHaveLength(0);
+    expect(result.skipped).toEqual([{ name: 'Rice', reason: 'out_of_stock' }]);
+    expect(result.navigation_hint).toBe('none');
+  });
+
+  it('caps a reorder at the number of packs that fit in stock', async () => {
+    mockOrderAndInventory(packOrder(3), [packInventory(25, 10)]);
+    const result = await service.reorder('order-1');
+    expect(result.lines[0].quantity).toBe(2);
+    expect(result.lines[0].ordered_quantity).toBe(3);
+    expect(result.lines[0].item_data.pack_quantity).toBe(10);
+    expect(result.lines[0].item_data.available_quantity).toBe(25);
+    expect(result.navigation_hint).toBe('checkout');
+  });
+
+  it('caps pack reorders at the merchant maximum in base units', async () => {
+    mockOrderAndInventory(packOrder(3), [packInventory(25, 10, 15)]);
+    const result = await service.reorder('order-1');
+    expect(result.lines[0].quantity).toBe(1);
+    expect(result.lines[0].item_data.pack_quantity).toBe(10);
+  });
+
+  it('divides a cooked-food pack by the merchant maximum and ignores stock', async () => {
+    const inventory = packInventory(0, 6, 20);
+    mockOrderAndInventory(packOrder(8), [
+      { ...inventory, item: { ...inventory.item, is_cooked_food: true } },
+    ]);
+    const result = await service.reorder('order-1');
+    expect(result.lines[0].quantity).toBe(3);
+    expect(result.lines[0].item_data.pack_quantity).toBe(6);
+    expect(result.lines[0].item_data.available_quantity).toBeNull();
+    expect(result.skipped).toHaveLength(0);
+  });
 });
