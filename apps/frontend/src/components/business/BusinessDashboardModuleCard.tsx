@@ -32,6 +32,8 @@ export interface BusinessDashboardModule {
   orderCountByStatus?: Record<string, number>;
   /** Platform permission required to show this admin module */
   requiredPermission?: string;
+  /** Visible only to superusers, even when they pass every permission check */
+  superuserOnly?: boolean;
   /** Admin tools category for side-nav grouping */
   section?: AdminModuleSection;
   showBadge?: boolean;

@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Payments as PaymentsIcon,
   Public as PublicIcon,
+  Map as MapIcon,
   MoneyOff as RefundsIcon,
   AccountBalanceWallet as CashReconciliationIcon,
   MoreHoriz as MoreIcon,
@@ -378,6 +379,19 @@ export function useBusinessDashboardModules({
         path: '/admin/orders',
       },
       {
+        title: t('business.dashboard.mapModule', 'Map'),
+        description: t(
+          'business.dashboard.mapModuleDescription',
+          'See agents and merchants on a map for a market'
+        ),
+        icon: <MapIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: '#1565c0',
+        superuserOnly: true,
+        section: 'operations',
+        path: '/admin/map',
+      },
+      {
         title: t('business.dashboard.pickupOps', 'Pickup health'),
         description: t(
           'business.dashboard.pickupOpsDescription',
@@ -685,7 +699,8 @@ export function useBusinessDashboardModules({
 
     const visibleAdminModules = adminModules.filter(
       (m) =>
-        !m.requiredPermission || can(m.requiredPermission)
+        (!m.superuserOnly || isSuperuser) &&
+        (!m.requiredPermission || can(m.requiredPermission))
     );
 
     return {

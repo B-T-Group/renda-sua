@@ -50,6 +50,8 @@ import { AdminWhatsAppTemplatesController } from './admin-whatsapp-templates.con
 import { AdminWhatsAppTemplatesService } from './admin-whatsapp-templates.service';
 import { AdminWhatsAppInboxController } from './admin-whatsapp-inbox.controller';
 import { AdminWhatsAppInboxService } from './admin-whatsapp-inbox.service';
+import { AdminMapController } from './admin-map.controller';
+import { AdminMapService } from './admin-map.service';
 
 @Module({
   imports: [
@@ -89,6 +91,7 @@ import { AdminWhatsAppInboxService } from './admin-whatsapp-inbox.service';
     AdminBroadcastInternalController,
     AdminWhatsAppTemplatesController,
     AdminWhatsAppInboxController,
+    AdminMapController,
   ],
   providers: [
     AdminPerformanceService,
@@ -108,6 +111,7 @@ import { AdminWhatsAppInboxService } from './admin-whatsapp-inbox.service';
     AdminBroadcastQueueService,
     AdminWhatsAppTemplatesService,
     AdminWhatsAppInboxService,
+    AdminMapService,
   ],
   exports: [
     AdminAuthModule,

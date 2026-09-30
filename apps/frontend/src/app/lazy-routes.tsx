@@ -45,6 +45,9 @@ export const PaymentScheduleDetailPage = lazy(() =>
 export const AdminPerformancePage = lazy(() =>
   import('../components/pages/AdminPerformancePage')
 );
+export const AdminMapPage = lazy(() =>
+  import('../components/pages/admin/AdminMapPage')
+);
 export const AdminCreditsPage = lazy(() =>
   import('../components/pages/AdminCreditsPage')
 );

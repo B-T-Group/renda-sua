@@ -45,6 +45,8 @@ const getEnvironment = () => {
     googleMapsBrowserApiKey:
       process.env.REACT_APP_GOOGLE_MAPS_API_KEY ||
       'AIzaSyDpI80RcSNpjLNybedvZ62QFyV4485tiyI',
+    /** Cloud Map ID for advanced markers. DEMO_MAP_ID works without a styled map. */
+    googleMapId: process.env.REACT_APP_GOOGLE_MAP_ID || 'DEMO_MAP_ID',
     /** AI image cleanup (OpenAI); business + rental library endpoints */
     imageCleanupRequestTimeoutMs: 180_000,
     enableDebugLogging: isDevelopment,
