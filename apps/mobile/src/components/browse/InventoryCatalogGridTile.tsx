@@ -13,7 +13,7 @@ import {
   catalogUnitPriceForSelection,
   shopperVariantOptionCount,
 } from '../../utils/buildCartLineFromCatalog';
-import { listingHasPackRebate } from '../../types/business/itemVariant';
+import { bestPackSavings } from '../../types/business/itemVariant';
 import { ItemLikeButton } from './ItemLikeButton';
 
 function formatMoney(amount: number, currency: string): string {
@@ -70,9 +70,9 @@ function InventoryCatalogGridTileInner({
     [hasVariantOptions, item, unitPrice]
   );
   const currency = item.item.currency || 'XAF';
-  const hasPackSavings = useMemo(
+  const packSavings = useMemo(
     () =>
-      listingHasPackRebate({
+      bestPackSavings({
         variants: item.item.item_variants,
         listingSellingPrice: item.selling_price,
         overrides: item.variant_price_overrides,
@@ -178,15 +178,18 @@ function InventoryCatalogGridTileInner({
           </Text>
         )}
 
-        {hasPackSavings && !exportAvailable ? (
+        {packSavings && !exportAvailable ? (
           <Text
             style={[
               typography.caption,
               { color: colors.success.dark, fontWeight: '700', marginTop: 2 },
             ]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
-            {t('client.placeOrder.saveOnPacks', 'Save on packs')}
+            {t('client.placeOrder.saveOnPack', 'Save {{pct}}% by buying a pack of {{count}} units', {
+              pct: packSavings.pct,
+              count: packSavings.count,
+            })}
           </Text>
         ) : null}
 

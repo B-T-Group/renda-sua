@@ -4,6 +4,7 @@ import { catalogOrderedImages } from './catalogInventoryDisplay';
 import { merchantCanAcceptOrders } from './merchantLifecycle';
 import {
   effectiveVariantUnitPrice,
+  availableBaseUnitsForSelection,
   orderLineBounds,
   packQuantityOf,
   primaryVariantImageUrl,
@@ -122,8 +123,13 @@ export function buildCartLineFromCatalog(
   const variantImage = primaryVariantImageUrl(variant);
   const ignoresStock = isFoodCatalogItem(item);
   const pack = isShopperBaseVariantId(selection) ? 1 : packQuantityOf(variant);
+  const available = availableBaseUnitsForSelection(
+    item.computed_available_quantity,
+    variant,
+    isShopperBaseVariantId(selection)
+  );
   const bounds = orderLineBounds({
-    available: item.computed_available_quantity,
+    available,
     maxOrder: item.item.max_order_quantity,
     minOrder: item.item.min_order_quantity,
     packQuantity: pack,
@@ -162,7 +168,7 @@ export function buildCartLineFromCatalog(
       packQuantity: pack,
       ...(ignoresStock
         ? {}
-        : { availableQuantity: item.computed_available_quantity }),
+        : { availableQuantity: available }),
       payOnDeliveryEnabled: Boolean(item.item.pay_on_delivery_enabled),
       isCookedFood: isFoodCatalogItem(item),
       merchantCanAcceptOrders: merchantCanAcceptOrders(

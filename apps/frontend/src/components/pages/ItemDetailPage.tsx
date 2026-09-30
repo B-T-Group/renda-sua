@@ -90,7 +90,14 @@ import VariantSelector from '../common/VariantSelector';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
-import { orderedVariantImages, packQuantityOf } from '../../types/itemVariant';
+import {
+  availableBaseUnitsForSelection,
+  listingHasSellableStock,
+  orderedVariantImages,
+  packQuantityOf,
+  selectedAvailableUnits,
+  selectionHasPurchasableStock,
+} from '../../types/itemVariant';
 import FoodAvailabilityChip from '../common/FoodAvailabilityChip';
 import FoodScheduleList from '../common/FoodScheduleList';
 import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
@@ -140,7 +147,12 @@ function salePriceForInventory(inv: InventoryItem): number {
 }
 
 function availabilitySchemaUrl(inv: InventoryItem): string {
-  const inStock = inv.computed_available_quantity > 0 && inv.is_active;
+  const inStock =
+    inv.is_active &&
+    listingHasSellableStock(
+      inv.computed_available_quantity,
+      inv.item.item_variants
+    );
   return inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
 }
 
@@ -662,7 +674,13 @@ export default function ItemDetailPage() {
         packQuantity: isBase ? 1 : packQuantityOf(variantSel.selectedVariant),
         ...(item.item.is_cooked_food
           ? {}
-          : { availableQuantity: item.computed_available_quantity }),
+          : {
+              availableQuantity: availableBaseUnitsForSelection(
+                item.computed_available_quantity,
+                variantSel.selectedVariant,
+                isBase
+              ),
+            }),
         originalPrice: hasMetaDeal ? lp.strikeOriginal : undefined,
         discountedPrice: hasMetaDeal ? lp.unit : undefined,
         hasActiveDeal: hasMetaDeal,
@@ -864,12 +882,27 @@ export default function ItemDetailPage() {
   const foodStatus = resolveFoodAvailabilityStatus(foodAvailability);
   const isFoodClosed = foodStatus != null && foodStatus !== 'available';
 
+  const variantSelectionReady = variantSel.selectionComplete;
+  const selectedAvailable = selectedAvailableUnits(
+    inventoryItem.computed_available_quantity,
+    variantSel.selectedVariant,
+    variantSel.isBaseSelected || !variantSel.selectedVariant
+  );
+  const optionHasStock = variantSelectionReady
+    ? selectionHasPurchasableStock(
+        inventoryItem.computed_available_quantity,
+        variantSel.selectedVariant,
+        variantSel.isBaseSelected || !variantSel.selectedVariant
+      )
+    : listingHasSellableStock(
+        inventoryItem.computed_available_quantity,
+        item.item_variants
+      );
   const hasStock =
-    inventoryItem.computed_available_quantity > 0 &&
+    optionHasStock &&
     inventoryItem.is_active &&
     !isFoodClosed &&
     !deliveryBlocked.blocked;
-  const variantSelectionReady = variantSel.selectionComplete;
   const cartLineVariantId = toCartVariantId(variantSel.selectedVariantId);
   const inCartQuantity = cartLineVariantId
     ? getLineQuantityInCart(inventoryItem.id, cartLineVariantId)
@@ -1328,7 +1361,9 @@ export default function ItemDetailPage() {
             />
 
             {!foodAvailability ? (
-              <ItemDetailScarcityBadge quantity={inventoryItem.computed_available_quantity} />
+              <ItemDetailScarcityBadge
+                quantity={optionHasStock ? selectedAvailable : 0}
+              />
             ) : null}
 
             <ItemDetailTrustStrip

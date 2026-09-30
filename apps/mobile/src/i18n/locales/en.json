@@ -3861,6 +3861,7 @@
       "unitsEach": "{{count}} units · {{each}} each",
       "saveAmount": "Save {{amount}}",
       "saveOnPacks": "Save on packs",
+      "saveOnPack": "Save {{pct}}% by buying a pack of {{count}} units",
       "quantity": "Quantity",
       "quantityHint": "Max {{max}} available",
       "fulfillment": "Fulfillment",

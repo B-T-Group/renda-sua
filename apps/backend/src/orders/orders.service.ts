@@ -28,6 +28,7 @@ import {
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
+import { VariantInventoryService } from '../item-variants/variant-inventory.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { resolveOrderNotificationAddress } from './order-notification-address.util';
 import { resetOrderPaymentFailure as writePaymentFailureReset } from './reset-order-payment-failure.util';
@@ -94,6 +95,7 @@ import { buildOrderMetaCapiContext } from '../meta-conversions/order-meta-capi.u
 import {
   packQuantityOf,
   resolveEffectiveUnitPrice,
+  sumBaseUnitsForItem,
   sumStockUnitsByInventory,
 } from '../item-variants/variant-pricing.util';
 import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
@@ -547,6 +549,7 @@ export class OrdersService {
     private readonly depositCalculationService: DepositCalculationService,
     private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
+    private readonly variantInventory: VariantInventoryService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -686,26 +689,46 @@ export class OrdersService {
     return sumStockUnitsByInventory(items, inventories);
   }
 
+  private baseUnitsForStockChoice(
+    items: OrderItem[],
+    inventories: Array<{ id?: string }> | null,
+    parentId: string,
+    variantId: string | null
+  ): number {
+    const lines = items.filter(
+      (line) =>
+        line.business_inventory_id === parentId &&
+        (line.item_variant_id ?? null) === variantId
+    );
+    const totals = this.getRequestedQuantitiesByInventory(lines, inventories);
+    return totals.get(parentId) ?? 0;
+  }
+
+  private assertMaxOrderQuantity(
+    inventory: { item?: { name?: string; max_order_quantity?: number | null } },
+    requestedBaseUnits: number
+  ): void {
+    const maxOrderQuantity = inventory.item?.max_order_quantity;
+    if (maxOrderQuantity == null || requestedBaseUnits <= maxOrderQuantity) return;
+    const name = inventory.item?.name ?? 'item';
+    throw new Error(
+      `Item ${name} exceeds max order quantity. Max: ${maxOrderQuantity}, Requested: ${requestedBaseUnits}`
+    );
+  }
+
   private assertBaseUnitLimits(
     inventory: {
       computed_available_quantity: number;
-      item?: { name?: string; max_order_quantity?: number | null };
+      item?: { name?: string };
     },
     requestedBaseUnits: number,
     ignoresStock: boolean
   ): void {
-    const maxOrderQuantity = inventory.item?.max_order_quantity;
+    if (ignoresStock || requestedBaseUnits <= inventory.computed_available_quantity) return;
     const name = inventory.item?.name ?? 'item';
-    if (maxOrderQuantity != null && requestedBaseUnits > maxOrderQuantity) {
-      throw new Error(
-        `Item ${name} exceeds max order quantity. Max: ${maxOrderQuantity}, Requested: ${requestedBaseUnits}`
-      );
-    }
-    if (!ignoresStock && requestedBaseUnits > inventory.computed_available_quantity) {
-      throw new Error(
-        `Insufficient quantity for item ${name}. Available: ${inventory.computed_available_quantity}, Requested: ${requestedBaseUnits}`
-      );
-    }
+    throw new Error(
+      `Insufficient quantity for item ${name}. Available: ${inventory.computed_available_quantity}, Requested: ${requestedBaseUnits}`
+    );
   }
 
   private computeUnitPriceFromVariantOrInventory(
@@ -11105,12 +11128,17 @@ export class OrdersService {
       }
     );
 
-    const requestedQuantityByInventoryId =
-      this.getRequestedQuantitiesByInventory(orderData.items, businessInventories);
-
     // Validate all items are active, respect max_order_quantity, have sufficient quantity, and resolve variants
-    const lineContexts: Array<{ inventory: any; variant: any | null }> = [];
+    const lineContexts: Array<{
+      inventory: any;
+      variant: any | null;
+      stockInventoryId: string;
+    }> = [];
     const validatedInventoryIds = new Set<string>();
+    const requestedUnits = this.getRequestedQuantitiesByInventory(
+      orderData.items,
+      businessInventories
+    );
 
     for (let i = 0; i < orderData.items.length; i++) {
       const item = orderData.items[i];
@@ -11158,23 +11186,50 @@ export class OrdersService {
         throw new HttpException(foodBlock.message, HttpStatus.BAD_REQUEST);
       }
 
-      const requestedQuantity =
-        requestedQuantityByInventoryId.get(item.business_inventory_id) || 0;
+      const variant = this.resolveVariantForOrderLine(item, businessInventory);
+      const stockRow = variant?.id
+        ? await this.variantInventory.stockForPurchase(
+            businessInventory.id,
+            variant.id
+          )
+        : null;
+      const stockKey = `${businessInventory.id}:${variant?.id ?? 'base'}`;
       const ignoresStock = cookedFoodIgnoresStock(
         businessInventory.item?.item_sub_category?.item_category?.name,
         businessInventory.item?.is_cooked_food
       );
-      if (!validatedInventoryIds.has(item.business_inventory_id)) {
+      this.assertMaxOrderQuantity(
+        businessInventory,
+        sumBaseUnitsForItem(
+          businessInventories,
+          businessInventory.item?.id,
+          requestedUnits
+        )
+      );
+      if (!validatedInventoryIds.has(stockKey)) {
         this.assertBaseUnitLimits(
-          businessInventory,
-          requestedQuantity,
+          stockRow
+            ? {
+                ...businessInventory,
+                computed_available_quantity:
+                  stockRow.computed_available_quantity,
+              }
+            : businessInventory,
+          this.baseUnitsForStockChoice(
+            orderData.items,
+            businessInventories,
+            businessInventory.id,
+            variant?.id ?? null
+          ),
           ignoresStock
         );
       }
-      validatedInventoryIds.add(item.business_inventory_id);
-
-      const variant = this.resolveVariantForOrderLine(item, businessInventory);
-      lineContexts.push({ inventory: businessInventory, variant });
+      validatedInventoryIds.add(stockKey);
+      lineContexts.push({
+        inventory: businessInventory,
+        variant,
+        stockInventoryId: stockRow?.id ?? businessInventory.id,
+      });
     }
 
     // Use the first item's currency (all items should have the same currency from same business)
@@ -11826,7 +11881,7 @@ export class OrdersService {
       const choseBaseWithOptions =
         !variant && Array.isArray(activeVariants) && activeVariants.length > 0;
       return {
-        business_inventory_id: item.business_inventory_id,
+        business_inventory_id: ctx.stockInventoryId,
         item_id: businessInventory.item.id,
         item_name: businessInventory.item.name,
         item_description: businessInventory.item.description,

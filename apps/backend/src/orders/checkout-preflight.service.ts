@@ -43,7 +43,11 @@ import {
   normalizeCountryCode,
   normalizeRecipientPhone,
 } from '../diaspora/diaspora-order.util';
-import { resolveEffectiveUnitPrice, sumStockUnitsByInventory } from '../item-variants/variant-pricing.util';
+import {
+  resolveEffectiveUnitPrice,
+  sumBaseUnitsForItem,
+  sumStockUnitsByInventory,
+} from '../item-variants/variant-pricing.util';
 import {
   resolveShopperVariant,
   ShopperVariantResolveException,
@@ -68,6 +72,7 @@ import {
 import type { DepositLineInput } from './deposit-calculation.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
+import { VariantInventoryService } from '../item-variants/variant-inventory.service';
 
 const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
   query GetInventoryForPreflight($ids: [uuid!]!) {
@@ -174,6 +179,7 @@ export class CheckoutPreflightService {
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
     private readonly fxEstimateService: FxEstimateService,
     private readonly depositCalculationService: DepositCalculationService,
+    private readonly variantInventory: VariantInventoryService,
     @Optional()
     private readonly purchaseCreditsService?: PurchaseCreditsService
   ) {}
@@ -338,6 +344,8 @@ export class CheckoutPreflightService {
     }
 
     if (blockers.length > 0) return this.earlyExit(blockers, dto);
+
+    await this.variantInventory.retargetLines(dto.items, inventoryById);
 
     // -----------------------------------------------------------------------
     // 3. Derive per-business groups
@@ -682,14 +690,8 @@ export class CheckoutPreflightService {
             message: `Insufficient stock for ${inv.item?.name ?? inv.id}. Available: ${inv.computed_available_quantity}, requested: ${requested}.`,
           });
         }
-        const maxQty = inv.item?.max_order_quantity;
-        if (maxQty != null && requested > maxQty) {
-          blockers.push({
-            code: 'MAX_ORDER_QUANTITY_EXCEEDED',
-            message: `${inv.item?.name ?? inv.id} has a maximum order quantity of ${maxQty}.`,
-          });
-        }
       }
+      this.pushMaxOrderBlockers(group.inventoryRows, quantityByInv, blockers);
 
       let mobileMoneyProvider: string | null = null;
       if (rail === 'mobile_money') {
@@ -1493,6 +1495,37 @@ export class CheckoutPreflightService {
   }): boolean {
     if (input.rail !== 'mobile_money' || input.groupIsCookedFood) return false;
     return input.timing === 'pay_at_delivery' || input.timing === 'pay_at_pickup';
+  }
+
+  private pushMaxOrderBlockers(
+    rows: Array<{
+      id: string;
+      item?: { id?: string; name?: string; max_order_quantity?: number | null };
+    }>,
+    unitsByInventory: Map<string, number>,
+    blockers: CheckoutBlockerDto[]
+  ): void {
+    const seen = new Set<string>();
+    for (const row of rows) this.pushMaxOrderBlocker(row, rows, unitsByInventory, seen, blockers);
+  }
+
+  private pushMaxOrderBlocker(
+    row: { item?: { id?: string; name?: string; max_order_quantity?: number | null } },
+    rows: Array<{ id?: string | null; item?: { id?: string | null } | null }>,
+    unitsByInventory: Map<string, number>,
+    seen: Set<string>,
+    blockers: CheckoutBlockerDto[]
+  ): void {
+    const itemId = row.item?.id;
+    const maxQty = row.item?.max_order_quantity;
+    if (!itemId || maxQty == null || seen.has(itemId)) return;
+    seen.add(itemId);
+    const requested = sumBaseUnitsForItem(rows, itemId, unitsByInventory);
+    if (requested <= maxQty) return;
+    blockers.push({
+      code: 'MAX_ORDER_QUANTITY_EXCEEDED',
+      message: `${row.item?.name ?? itemId} has a maximum order quantity of ${maxQty}.`,
+    });
   }
 }
 

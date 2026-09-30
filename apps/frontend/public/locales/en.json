@@ -5044,6 +5044,7 @@
       "unitsEach": "{{count}} units · {{each}} each",
       "saveAmount": "Save {{amount}}",
       "saveOnPacks": "Save on packs",
+      "saveOnPack": "Save {{pct}}% by buying a pack of {{count}} units",
       "packsInStock": "{{count}} packs in stock",
       "packUnavailable": "Not enough stock for this pack.",
       "selectDialogTitle": "Choose an option",

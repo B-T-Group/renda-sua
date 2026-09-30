@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CatalogStopsService } from './catalog-stops.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { CollectionsService } from '../collections/collections.service';
+import { VariantInventoryService } from '../item-variants/variant-inventory.service';
 
 describe('CatalogStopsService', () => {
   let service: CatalogStopsService;
@@ -27,6 +28,12 @@ describe('CatalogStopsService', () => {
         {
           provide: CollectionsService,
           useValue: mockCollectionsService,
+        },
+        {
+          provide: VariantInventoryService,
+          useValue: {
+            attachAvailableQuantities: jest.fn(async (items: unknown[]) => items),
+          },
         },
       ],
     }).compile();

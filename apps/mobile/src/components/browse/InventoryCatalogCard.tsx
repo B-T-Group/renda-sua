@@ -22,12 +22,17 @@ import {
   merchantCanAcceptOrders,
 } from '../../utils/merchantLifecycle';
 import {
+  isShopperBaseVariantId,
   SHOPPER_BASE_VARIANT_ID,
   shopperVariantOptions,
 } from '../../utils/shopperVariantSelection';
 import { CatalogOptionChips } from './CatalogOptionChips';
 import { ItemLikeButton } from './ItemLikeButton';
-import { listingHasPackRebate } from '../../types/business/itemVariant';
+import {
+  bestPackSavings,
+  selectedAvailableUnits,
+  selectionHasPurchasableStock,
+} from '../../types/business/itemVariant';
 import { FoodAvailabilityChip } from '../food/FoodAvailabilityChip';
 import { LOW_STOCK_THRESHOLD } from '../../constants/stock';
 import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
@@ -149,9 +154,9 @@ function InventoryCatalogCardInner({
     [hasVariantOptions, item, unitPrice]
   );
   const currency = item.item.currency || 'XAF';
-  const hasPackSavings = useMemo(
+  const packSavings = useMemo(
     () =>
-      listingHasPackRebate({
+      bestPackSavings({
         variants: item.item.item_variants,
         listingSellingPrice: item.selling_price,
         overrides: item.variant_price_overrides,
@@ -167,17 +172,31 @@ function InventoryCatalogCardInner({
     if (item.original_price <= 0) return 0;
     return Math.max(0, Math.round((1 - disc / item.original_price) * 100));
   }, [hasDeal, item.discounted_price, item.original_price]);
+  const isBaseSelection = !selectionId || isShopperBaseVariantId(selectionId);
+  const selectedVariant = item.item.item_variants?.find(
+    (variant) => variant.id === selectionId
+  );
+  const selectedAvailable = selectedAvailableUnits(
+    item.computed_available_quantity,
+    selectedVariant,
+    isBaseSelection
+  );
+  const selectedCanBuy = selectionHasPurchasableStock(
+    item.computed_available_quantity,
+    selectedVariant,
+    isBaseSelection
+  );
   const showLowStock =
     !item.food_availability &&
     !isFoodCatalogItem(item) &&
-    item.computed_available_quantity > 0 &&
-    item.computed_available_quantity <= LOW_STOCK_THRESHOLD;
+    selectedCanBuy &&
+    selectedAvailable > 0 &&
+    selectedAvailable <= LOW_STOCK_THRESHOLD;
   const loc = item.business_location;
   const acceptsOrders = merchantCanAcceptOrders(loc.business);
   const openingSoon = isOpeningSoonMerchant(loc.business);
   const paymentsEnabled = item.payments_enabled !== false;
-  const outOfStock =
-    !isFoodCatalogItem(item) && item.computed_available_quantity <= 0;
+  const outOfStock = !isFoodCatalogItem(item) && !selectedCanBuy;
   const foodBlocked = isFoodOrderBlocked(item.food_availability);
   const buyDisabled =
     outOfStock || foodBlocked || !acceptsOrders || !paymentsEnabled;
@@ -405,14 +424,17 @@ function InventoryCatalogCardInner({
                         {formatMoney(item.original_price!, currency)}
                       </Text>
                     ) : null}
-                    {hasPackSavings && !exportAvailable ? (
+                    {packSavings && !exportAvailable ? (
                       <Text
                         style={[
                           typography.caption,
                           { color: colors.success.dark, fontWeight: '700' },
                         ]}
                       >
-                        {t('client.placeOrder.saveOnPacks', 'Save on packs')}
+                        {t('client.placeOrder.saveOnPack', 'Save {{pct}}% by buying a pack of {{count}} units', {
+                          pct: packSavings.pct,
+                          count: packSavings.count,
+                        })}
                       </Text>
                     ) : null}
                   </>
@@ -480,7 +502,7 @@ function InventoryCatalogCardInner({
           <View style={[styles.lowStockRow, { marginTop: spacing.xs }]}>
             <StatusPill
               label={t('public.items.card.lowStock', 'Only {{count}} left', {
-                count: item.computed_available_quantity,
+                count: selectedAvailable,
               })}
               backgroundColor={colors.warning.light + '30'}
               textColor={colors.warning.dark}

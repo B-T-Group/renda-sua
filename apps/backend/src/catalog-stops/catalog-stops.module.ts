@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { HasuraModule } from '../hasura/hasura.module';
 import { InventoryItemsModule } from '../inventory-items/inventory-items.module';
 import { CollectionsModule } from '../collections/collections.module';
+import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { CatalogStopsController } from './catalog-stops.controller';
 import { CatalogStopsService } from './catalog-stops.service';
 
@@ -10,6 +11,7 @@ import { CatalogStopsService } from './catalog-stops.service';
     HasuraModule,
     InventoryItemsModule,
     CollectionsModule,
+    ItemVariantsModule,
   ],
   controllers: [CatalogStopsController],
   providers: [CatalogStopsService],

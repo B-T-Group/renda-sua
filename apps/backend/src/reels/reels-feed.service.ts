@@ -37,6 +37,7 @@ const INVENTORY_FOR_ITEMS_QUERY = `query($itemIds:[uuid!]!, $country:String!){
     where:{
       item_id:{_in:$itemIds}
       is_active:{_eq:true}
+      item_variant_id:{_is_null:true}
       business_location:{
         is_active:{_eq:true}
         address:{country:{_eq:$country}}

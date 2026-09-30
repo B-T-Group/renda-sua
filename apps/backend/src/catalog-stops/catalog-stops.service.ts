@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import {
+  SELLABLE_PARENT_STOCK_GQL,
+  VariantInventoryService,
+} from '../item-variants/variant-inventory.service';
 import type { InventoryItem } from '../inventory-items/inventory-items.service';
 import {
   CollectionsService,
@@ -135,7 +139,8 @@ const INVENTORY_ITEM_SELECTION = `
 export class CatalogStopsService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly collectionsService: CollectionsService
+    private readonly collectionsService: CollectionsService,
+    private readonly variantInventory: VariantInventoryService
   ) {}
 
   /**
@@ -158,7 +163,8 @@ export class CatalogStopsService {
         business_inventory(
           where: {
             is_active: { _eq: true }
-            computed_available_quantity: { _gt: 0 }
+            item_variant_id: { _is_null: true }
+            ${SELLABLE_PARENT_STOCK_GQL}
             item: $itemWhere
             business_location: $locationWhere
           }
@@ -175,6 +181,7 @@ export class CatalogStopsService {
       locationWhere,
     });
     const listings = (result.business_inventory || []) as InventoryItem[];
+    await this.variantInventory.attachAvailableQuantities(listings);
     const categoryName = this.resolveCategoryName(
       listings,
       category,
@@ -210,7 +217,8 @@ export class CatalogStopsService {
             end_at: { _gte: $now }
             business_inventory: {
               is_active: { _eq: true }
-              computed_available_quantity: { _gt: 0 }
+              item_variant_id: { _is_null: true }
+              ${SELLABLE_PARENT_STOCK_GQL}
               item: { is_active: { _eq: true } }
               business_location: $locationWhere
             }
@@ -242,6 +250,8 @@ export class CatalogStopsService {
       business_inventory: InventoryItem;
     }>;
 
+    const listings = deals.map((deal) => deal.business_inventory);
+    await this.variantInventory.attachAvailableQuantities(listings);
     return { items: deals.map((deal) => this.mapDealItem(deal)) };
   }
 
@@ -300,7 +310,8 @@ export class CatalogStopsService {
           business_inventory_aggregate(
             where: {
               is_active: { _eq: true }
-              computed_available_quantity: { _gt: 0 }
+              item_variant_id: { _is_null: true }
+              ${SELLABLE_PARENT_STOCK_GQL}
             }
           ) {
             aggregate {
@@ -348,7 +359,8 @@ export class CatalogStopsService {
         business_inventory(
           where: {
             is_active: { _eq: true }
-            computed_available_quantity: { _gt: 0 }
+            item_variant_id: { _is_null: true }
+            ${SELLABLE_PARENT_STOCK_GQL}
             id: { _nin: $excludeIds }
             item: {
               is_active: { _eq: true }
@@ -375,6 +387,7 @@ export class CatalogStopsService {
       }
     );
     const listings = (result.business_inventory || []) as InventoryItem[];
+    await this.variantInventory.attachAvailableQuantities(listings);
     const items = listings.map((item) => ({
       ...item,
       reason_label: 'Popular in same category',

@@ -5,6 +5,7 @@ import {
   packRebate,
   resolveEffectiveUnitPrice,
   stockUnitsForLine,
+  sumBaseUnitsForItem,
   sumStockUnitsByInventory,
 } from './variant-pricing.util';
 
@@ -151,6 +152,20 @@ describe('variant-pricing.util', () => {
           inventory,
         })
       ).toBe(10);
+    });
+
+    it('adds parent singles and a variant pack for the same item', () => {
+      const units = new Map<string, number>([
+        ['parent', 8],
+        ['pack-row', 10],
+        ['other-item', 4],
+      ]);
+      const rows = [
+        { id: 'parent', item: { id: 'item-1' } },
+        { id: 'pack-row', item: { id: 'item-1' } },
+        { id: 'other-item', item: { id: 'item-2' } },
+      ];
+      expect(sumBaseUnitsForItem(rows, 'item-1', units)).toBe(18);
     });
   });
 

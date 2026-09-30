@@ -4766,6 +4766,7 @@
       "unitsEach": "{{count}} unités · {{each}} l'unité",
       "saveAmount": "Économisez {{amount}}",
       "saveOnPacks": "Économisez en lot",
+      "saveOnPack": "Économisez {{pct}} % en achetant un lot de {{count}} unités",
       "packsInStock": "{{count}} lots en stock",
       "packUnavailable": "Stock insuffisant pour ce lot.",
       "selectDialogTitle": "Choisissez une option",

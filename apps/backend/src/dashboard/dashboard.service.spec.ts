@@ -533,6 +533,19 @@ describe('DashboardService', () => {
       expect(result.reelCount).toBe(2);
       expect(result.approvedReelCount).toBe(1);
       expect(result.topViewedOutOfStockCount).toBe(1);
+      const withPackStock = (service as any).mergeTopViewedByItem([
+        {
+          id: 'inv-pack',
+          item_id: 'item-3',
+          computed_available_quantity: 0,
+          item: { id: 'item-3', name: 'Juice', item_images: [] },
+          item_view_events_aggregate: { aggregate: { count: 4 } },
+          sibling_inventory_aggregate: {
+            aggregate: { sum: { quantity: 10, reserved_quantity: 2 } },
+          },
+        },
+      ]);
+      expect(withPackStock[0].availableQty).toBe(8);
       expect(result.ordersByStatus).toEqual({ pending: 1, confirmed: 2 });
       expect(result.ordersTotal).toBe(3);
       expect(

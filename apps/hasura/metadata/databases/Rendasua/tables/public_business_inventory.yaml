@@ -54,6 +54,16 @@ array_relationships:
         table:
           name: business_inventory_variant_price_overrides
           schema: public
+  - name: sibling_inventory
+    using:
+      manual_configuration:
+        column_mapping:
+          business_location_id: business_location_id
+          item_id: item_id
+        insertion_order: null
+        remote_table:
+          name: business_inventory
+          schema: public
 computed_fields:
   - name: computed_available_quantity
     definition:
@@ -62,6 +72,13 @@ computed_fields:
         schema: public
       table_argument: business_inventory_row
     comment: Computed field that returns quantity minus reserved_quantity
+  - name: can_sell_one
+    definition:
+      function:
+        name: inventory_can_sell_one
+        schema: public
+      table_argument: business_inventory_row
+    comment: True when available units cover one sale of this option
 insert_permissions:
   - role: business
     permission:

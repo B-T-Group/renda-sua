@@ -1,4 +1,10 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
@@ -9,6 +15,10 @@ import {
 import { isUuid } from '../common/uuid.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import {
+  sellableParentStockWhere,
+  VariantInventoryService,
+} from '../item-variants/variant-inventory.service';
 import { RbacService } from '../rbac/rbac.service';
 import {
   fetchStripeEnabledCountries,
@@ -533,7 +543,9 @@ export class InventoryItemsService {
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly configService: ConfigService,
     private readonly itemEmbeddingService: ItemEmbeddingService,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    @Optional()
+    private readonly variantInventory?: VariantInventoryService
   ) {}
 
   private async resolveInventoryListGeo(
@@ -705,7 +717,12 @@ export class InventoryItemsService {
     items: InventoryItem[]
   ): Promise<InventoryItem[]> {
     const stripeCountries = await this.getStripeEnabledCountries();
-    return this.attachPaymentsEnabledToItems(items, stripeCountries);
+    const withPayments = this.attachPaymentsEnabledToItems(
+      items,
+      stripeCountries
+    );
+    if (!this.variantInventory) return withPayments;
+    return this.variantInventory.attachAvailableQuantities(withPayments);
   }
 
   private async buildInventoryCatalogWhere(params: {
@@ -769,6 +786,9 @@ export class InventoryItemsService {
 
     const whereConditions: any[] = [];
     whereConditions.push({ is_active: { _eq: is_active } });
+    if (!ownerPreview) {
+      whereConditions.push({ item_variant_id: { _is_null: true } });
+    }
     whereConditions.push({
       item: { moderation_status: { _eq: 'approved' } },
     });
@@ -793,7 +813,7 @@ export class InventoryItemsService {
       whereConditions.push({ business_location: locationFilter });
     }
     if (!include_unavailable) {
-      whereConditions.push({ computed_available_quantity: { _gt: 0 } });
+      whereConditions.push(sellableParentStockWhere);
     }
     if (business_location_id?.trim()) {
       whereConditions.push({
@@ -2932,7 +2952,8 @@ export class InventoryItemsService {
           { id: { _neq: inventoryItemId } },
           { item_id: { _neq: itemId } },
           { is_active: { _eq: true } },
-          { computed_available_quantity: { _gt: 0 } },
+          { item_variant_id: { _is_null: true } },
+          sellableParentStockWhere,
           {
             business_location: {
               is_active: { _eq: true },

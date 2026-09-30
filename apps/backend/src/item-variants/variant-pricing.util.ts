@@ -5,9 +5,8 @@
  * Listing deals are applied to that base elsewhere (orders / catalog).
  *
  * v1 notes:
- * - Shared stock on business_inventory; overrides are price-only.
- * - Shopify per-variant inventory rows (item_variant_id on business_inventory)
- *   remain valid but are outside the merchant override UX.
+ * - Each variant has its own business_inventory row, seeded from the parent.
+ * - Price overrides stay price-only. A pack purchase decrements that variant row.
  * - Public browse may surface one listing per item_id; overrides on non-winning
  *   location rows are invisible until that location is the surfaced listing.
  * - Browse min_price/max_price still filter on inventory selling_price only.
@@ -89,6 +88,30 @@ export function packQuantityForOrderLine(params: {
     (v) => v?.id === requested
   );
   return packQuantityOf(match);
+}
+
+/** Base units of one item across its parent row and variant stock rows. */
+export function sumBaseUnitsForItem(
+  rows: Array<{ id?: string | null; item?: { id?: string | null } | null }>,
+  itemId: string | null | undefined,
+  unitsByInventory: Map<string, number>
+): number {
+  if (!itemId) return 0;
+  const ids = inventoryIdsForItem(rows, itemId);
+  let total = 0;
+  for (const id of ids) total += unitsByInventory.get(id) ?? 0;
+  return total;
+}
+
+function inventoryIdsForItem(
+  rows: Array<{ id?: string | null; item?: { id?: string | null } | null }>,
+  itemId: string
+): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.item?.id === itemId && row.id) ids.add(row.id);
+  }
+  return ids;
 }
 
 /** Sum base units per inventory id. One pack of 10 plus 3 singles is 13. */

@@ -54,6 +54,7 @@ import {
   toCartVariantId,
 } from '../../utils/catalogVariantCart';
 import {
+  isShopperBaseVariantId,
   SHOPPER_BASE_VARIANT_ID,
   shopperVariantOptions,
 } from '../../utils/shopperVariantSelection';
@@ -61,7 +62,12 @@ import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import ItemLikeButton from './ItemLikeButton';
 import { CatalogOptionChips } from './CatalogOptionChips';
 import FoodAvailabilityChip from './FoodAvailabilityChip';
-import { listingHasPackRebate } from '../../types/itemVariant';
+import {
+  bestPackSavings,
+  listingHasSellableStock,
+  selectedAvailableUnits,
+  selectionHasPurchasableStock,
+} from '../../types/itemVariant';
 import { resolveFoodAvailabilityStatus } from '../../utils/foodAvailability';
 
 /** Strip HTML and collapse whitespace for card preview text. */
@@ -215,9 +221,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     () => catalogUnitPriceForVariant(inventory, selectionId),
     [inventory, selectionId]
   );
-  const hasPackSavings = useMemo(
+  const packSavings = useMemo(
     () =>
-      listingHasPackRebate({
+      bestPackSavings({
         variants: inventory.item.item_variants,
         listingSellingPrice: inventory.selling_price,
         overrides: inventory.variant_price_overrides,
@@ -274,8 +280,27 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
 
   const foodStatus = resolveFoodAvailabilityStatus(inventory.food_availability);
   const isFoodClosed = foodStatus != null && foodStatus !== 'available';
+  const isBaseSelection = !selectionId || isShopperBaseVariantId(selectionId);
+  const selectedVariant = inventory.item.item_variants?.find(
+    (variant) => variant.id === selectionId
+  );
+  const selectedAvailable = selectedAvailableUnits(
+    inventory.computed_available_quantity,
+    selectedVariant,
+    isBaseSelection
+  );
   const isUnavailable =
-    inventory.computed_available_quantity <= 0 || isFoodClosed;
+    isFoodClosed ||
+    !listingHasSellableStock(
+      inventory.computed_available_quantity,
+      inventory.item.item_variants
+    );
+  const selectedCanBuy = selectionHasPurchasableStock(
+    inventory.computed_available_quantity,
+    selectedVariant,
+    isBaseSelection
+  );
+  const selectedSoldOut = !isFoodClosed && !selectedCanBuy;
 
   const viewDetailsLabel = t('items.itemCard.viewDetails', 'View details');
   const noImageLabel = t('items.itemCard.noImage', 'No image');
@@ -625,9 +650,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       {/* Content Section - Bottom */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <CardContent sx={{ flexGrow: 1, p: 1.5, pb: 1 }}>
-          {hasPackSavings && !exportAvailable ? (
+          {packSavings && !exportAvailable ? (
             <Typography variant="caption" color="success.dark" fontWeight={700} sx={{ display: 'block', mb: 0.5 }}>
-              {t('orders.variant.saveOnPacks', 'Save on packs')}
+              {t('orders.variant.saveOnPack', 'Save {{pct}}% by buying a pack of {{count}} units', packSavings)}
             </Typography>
           ) : null}
           {inventory.business_location.logo_url ? (
@@ -804,13 +829,9 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   label={t(
                     'items.itemCard.availableCount',
                     '{{count}} available',
-                    { count: inventory.computed_available_quantity }
+                    { count: selectedAvailable }
                   )}
-                  color={
-                    inventory.computed_available_quantity > 0
-                      ? 'success'
-                      : 'error'
-                  }
+                  color={selectedCanBuy ? 'success' : 'error'}
                   size="small"
                   sx={{ fontSize: '0.7rem' }}
                 />
@@ -1194,7 +1215,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 ? t('foods.status.soldOutToday', 'Sold out today')
                 : t('foods.status.notServingNow', 'Not serving now')}
             </Button>
-          ) : inventory.computed_available_quantity === 0 ? (
+          ) : selectedSoldOut ? (
             <Button
               variant="outlined"
               disabled

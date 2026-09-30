@@ -501,6 +501,16 @@ describe('OrdersService', () => {
           provide: require('../credits/credits.service').CreditsService,
           useValue: {},
         },
+        {
+          provide: require('../item-variants/variant-inventory.service')
+            .VariantInventoryService,
+          useValue: {
+            ensureForLine: jest.fn(),
+            stockForPurchase: jest.fn(),
+            retargetLines: jest.fn(),
+            seedFromParentStock: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
