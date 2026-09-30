@@ -183,6 +183,11 @@ export interface BrowseCatalogScreenProps {
   foodOnly?: boolean;
   /** Initial merged-catalog segment, including alias-route navigation. */
   initialSegment?: 'all' | 'food';
+  /** Opens the full category browser from the carousel More card. */
+  onBrowseCategories?: () => void;
+  /** Category chosen on the categories screen. */
+  requestedCategory?: string;
+  categoryRequestId?: number;
 }
 
 function BrowseCatalogScreenInner({
@@ -205,6 +210,9 @@ function BrowseCatalogScreenInner({
   applyTopSafeArea = true,
   foodOnly: legacyFoodOnly = false,
   initialSegment = 'all',
+  onBrowseCategories,
+  requestedCategory,
+  categoryRequestId,
 }: BrowseCatalogScreenProps) {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -245,6 +253,14 @@ function BrowseCatalogScreenInner({
     collection: '',
   });
   const [exportOnly, setExportOnly] = useState(false);
+  useEffect(() => {
+    if (!requestedCategory || !categoryRequestId) return;
+    setCatalogFilters((prev) => ({
+      ...prev,
+      category: requestedCategory,
+      subcategory: '',
+    }));
+  }, [requestedCategory, categoryRequestId]);
   const [snack, setSnack] = useState<string | null>(null);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [pullRefreshing, setPullRefreshing] = useState(false);
@@ -655,6 +671,7 @@ function BrowseCatalogScreenInner({
                     subcategory: '',
                   }))
                 }
+                onMore={onBrowseCategories}
               />
             ) : undefined
           }
@@ -692,6 +709,7 @@ function BrowseCatalogScreenInner({
       onHeroSlidePress,
       categoryRail.items,
       categoryRail.title,
+      onBrowseCategories,
       catalogFilters,
       onClearFilterField,
       onClearAllFilters,

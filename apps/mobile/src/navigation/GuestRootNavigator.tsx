@@ -18,6 +18,7 @@ import DeveloperOptionsScreen from '../screens/shared/DeveloperOptionsScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import InventoryItemDetailScreen from '../screens/shared/InventoryItemDetailScreen';
 import CollectionDetailScreen from '../screens/shared/CollectionDetailScreen';
+import CategoriesBrowseScreen from '../screens/shared/CategoriesBrowseScreen';
 import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import CartScreen from '../screens/shared/CartScreen';
@@ -278,6 +279,14 @@ export function GuestRootNavigator({
             />
           )}
         </GuestRootStack.Screen>
+        <GuestRootStack.Screen
+          name="CategoriesBrowse"
+          component={CategoriesBrowseScreen}
+          options={{
+            headerShown: true,
+            title: t('client.browse.categoriesTitle', 'Categories'),
+          }}
+        />
         <GuestRootStack.Screen
           name="CollectionDetail"
           component={CollectionDetailScreen}

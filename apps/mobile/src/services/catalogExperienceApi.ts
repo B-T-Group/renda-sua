@@ -35,3 +35,13 @@ export async function fetchCatalogCategoryRail(params: {
   if (!module?.items?.length) return null;
   return { title: module.title, items: module.items };
 }
+
+export async function fetchCatalogCategories(params: {
+  country_code?: string;
+  state?: string;
+}): Promise<CatalogCategoryTile[]> {
+  const response = await publicApiGet<{
+    data?: { categories?: CatalogCategoryTile[] };
+  }>('/catalog/experience/categories', params);
+  return response.data?.categories ?? [];
+}

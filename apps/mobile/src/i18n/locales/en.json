@@ -3561,7 +3561,16 @@
       "noActiveOrder": "No active delivery right now.",
       "orderCardPlaceholder": "Placeholder until orders are linked here.",
       "signedInAs": "Signed in as",
-      "categoryTile": "Browse {{name}}"
+      "categoryTile": "Browse {{name}}",
+      "moreCategories": "More",
+      "moreCategoriesHint": "All categories",
+      "moreCategoriesA11y": "Browse all categories",
+      "categoryItemCount": "{{count}} items",
+      "categoriesTitle": "Categories",
+      "categoriesSubtitle": "Find a category, then shop its items.",
+      "categoriesSearch": "Search categories",
+      "categoriesEmpty": "No categories in this market yet",
+      "categoriesEmptySearch": "No categories match that search"
     },
     "home": {
       "liveOrders": {

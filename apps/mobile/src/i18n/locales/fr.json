@@ -3466,7 +3466,16 @@
       "noActiveOrder": "Aucune livraison en cours pour le moment.",
       "orderCardPlaceholder": "Indicateur fictif jusqu’à liaison des commandes.",
       "signedInAs": "Connecté en tant que",
-      "categoryTile": "Parcourir {{name}}"
+      "categoryTile": "Parcourir {{name}}",
+      "moreCategories": "Plus",
+      "moreCategoriesHint": "Toutes les catégories",
+      "moreCategoriesA11y": "Parcourir toutes les catégories",
+      "categoryItemCount": "{{count}} articles",
+      "categoriesTitle": "Catégories",
+      "categoriesSubtitle": "Choisissez une catégorie, puis ses articles.",
+      "categoriesSearch": "Rechercher une catégorie",
+      "categoriesEmpty": "Aucune catégorie sur ce marché pour le moment",
+      "categoriesEmptySearch": "Aucune catégorie ne correspond à cette recherche"
     },
     "home": {
       "liveOrders": {

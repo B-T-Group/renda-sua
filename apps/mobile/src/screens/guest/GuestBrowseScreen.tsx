@@ -107,6 +107,12 @@ export default observer(function GuestBrowseScreen({
     );
   }, [navigation]);
 
+  const onBrowseCategories = useCallback(() => {
+    (navigation.getParent() as { navigate?: (name: string) => void } | undefined)?.navigate?.(
+      'CategoriesBrowse'
+    );
+  }, [navigation]);
+
   const checkoutSummary = useMemo(() => {
     if (!checkoutCatalogItem) return null;
     return catalogItemToCheckoutSummary(
@@ -125,6 +131,9 @@ export default observer(function GuestBrowseScreen({
       <BrowseCatalogScreen
         foodOnly={foodOnly}
         initialSegment={route.params?.segment}
+        requestedCategory={route.params?.category}
+        categoryRequestId={route.params?.categoryRequestId}
+        onBrowseCategories={foodOnly ? undefined : onBrowseCategories}
         onGuestBuyNow={variantFlow.requestBuy}
         onAddToCart={variantFlow.requestAddToCart}
         onItemPress={onItemPress}
