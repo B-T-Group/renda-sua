@@ -98,4 +98,36 @@ describe('mapReorderLineToCartItem', () => {
     expect(mapped.itemData.imageUrl).toBeUndefined();
     expect(mapped.quantity).toBe(2);
   });
+
+  it('copies pack size and shared stock onto the cart line', () => {
+    const mapped = mapReorderLineToCartItem(
+      {
+        ...line,
+        item_data: {
+          ...line.item_data,
+          pack_quantity: 10,
+          available_quantity: 25,
+        },
+      },
+      'biz-1'
+    );
+    expect(mapped.itemData.packQuantity).toBe(10);
+    expect(mapped.itemData.availableQuantity).toBe(25);
+  });
+
+  it('omits available stock when the reorder line has none', () => {
+    const mapped = mapReorderLineToCartItem(
+      {
+        ...line,
+        item_data: {
+          ...line.item_data,
+          pack_quantity: 6,
+          available_quantity: null,
+        },
+      },
+      'biz-1'
+    );
+    expect(mapped.itemData.packQuantity).toBe(6);
+    expect(mapped.itemData.availableQuantity).toBeUndefined();
+  });
 });

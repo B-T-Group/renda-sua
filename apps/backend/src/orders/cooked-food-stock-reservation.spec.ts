@@ -83,6 +83,46 @@ describe('OrdersService cooked-food stock sentinel', () => {
     );
   });
 
+  it('releases and completes a quantity pack in base units', async () => {
+    const { service, executeMutation, executeQuery } = createService([
+      stockRow('inv-retail', 'Retail & Shopping'),
+    ]);
+    const packLine = {
+      business_inventory_id: 'inv-retail',
+      quantity: 2,
+      variant_snapshot: { quantity: 10 },
+    };
+
+    await service.updateReservedQuantities([packLine], 'decrement');
+    expect(executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('try_release_business_inventory'),
+      { inventoryId: 'inv-retail', qty: 20 }
+    );
+
+    await (service as any).updateInventoryOnCompletion([packLine]);
+    const writes = executeQuery.mock.calls.filter((call) =>
+      String(call[0]).includes('UpdateInventoryOnCompletion')
+    );
+    expect(writes).toEqual([
+      [
+        expect.stringContaining('UpdateInventoryOnCompletion'),
+        { id: 'inv-retail', quantity: -20, reservedQuantity: -20 },
+      ],
+    ]);
+  });
+
+  it('loads variant_snapshot on the order used for cancel and completion', async () => {
+    const executeQuery = jest.fn().mockResolvedValue({ orders_by_pk: null });
+    const service = Object.create(OrdersService.prototype) as OrdersService;
+    (service as any).hasuraSystemService = { executeQuery };
+    await (service as any).getOrderDetails('order-1');
+    const query = String(executeQuery.mock.calls[0][0]);
+    const itemsAt = query.indexOf('order_items {');
+    const selection = query.slice(itemsAt, query.indexOf('}', itemsAt));
+    expect(selection).toContain('variant_snapshot');
+    expect(selection).toContain('quantity');
+  });
+
   it('does not decrement cooked-food quantity when an order completes', async () => {
     const { service, executeQuery } = createService([
       stockRow('inv-food', FOOD_CATEGORY_NAME),

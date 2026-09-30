@@ -69,6 +69,64 @@ describe('variant-pricing.util', () => {
       expect(stockUnitsForLine(2, 10)).toBe(20);
     });
 
+    it('floors a fractional pack and treats invalid sizes as one unit', () => {
+      expect(packQuantityOf({ quantity: '10.9' })).toBe(10);
+      expect(packQuantityOf({ quantity: '0' })).toBe(1);
+      expect(packQuantityOf({ quantity: -3 })).toBe(1);
+      expect(packQuantityOf({ quantity: 'nope' })).toBe(1);
+      expect(stockUnitsForLine(0, 10)).toBe(0);
+      expect(stockUnitsForLine(Number.NaN, 10)).toBe(0);
+    });
+
+    it('prefers the purchase snapshot, then the inventory-row variant', () => {
+      const live = {
+        id: 'inv-1',
+        item: { item_variants: [{ id: 'live', quantity: 6 }] },
+      };
+      expect(
+        packQuantityForOrderLine({
+          line: {
+            business_inventory_id: 'inv-1',
+            item_variant_id: 'live',
+            variant_snapshot: { quantity: '' },
+          },
+          inventory: live,
+        })
+      ).toBe(6);
+      expect(
+        packQuantityForOrderLine({
+          line: {
+            business_inventory_id: 'inv-1',
+            item_variant_id: 'requested',
+            quantity: 1,
+          },
+          inventory: {
+            id: 'inv-1',
+            item_variant_id: 'row-pack',
+            item_variant: { id: 'row-pack', quantity: 12 },
+            item: { item_variants: [{ id: 'requested', quantity: 4 }] },
+          },
+        })
+      ).toBe(12);
+    });
+
+    it('skips lines with no inventory id or a zero quantity', () => {
+      const totals = sumStockUnitsByInventory(
+        [
+          { business_inventory_id: 'inv-1', quantity: 0 },
+          { quantity: 2 },
+          {
+            business_inventory_id: 'inv-1',
+            quantity: 1,
+            variant_snapshot: { quantity: 4 },
+          },
+        ],
+        []
+      );
+      expect(totals.get('inv-1')).toBe(4);
+      expect(totals.size).toBe(1);
+    });
+
     it('sums one pack of 10 plus 3 singles as 13 base units', () => {
       const inventory = {
         id: 'inv-1',

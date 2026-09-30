@@ -90,7 +90,7 @@ function makeInventoryRow(overrides: {
       name: overrides.itemName ?? 'Test Item',
       currency: overrides.currency ?? 'XAF',
       weight: 0,
-      max_order_quantity: null,
+      max_order_quantity: null as number | null,
       export_available: overrides.exportAvailable ?? false,
       pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
@@ -98,7 +98,12 @@ function makeInventoryRow(overrides: {
       initial_deposit_percent: overrides.initialDepositPercent ?? null,
       shipping_enabled: overrides.shippingEnabled ?? false,
       shipping_price: overrides.shippingPrice ?? null,
-      item_variants: [],
+      item_variants: [] as Array<{
+        id: string;
+        name?: string;
+        price?: number;
+        quantity?: number;
+      }>,
     },
   };
 }
@@ -921,6 +926,88 @@ describe('CheckoutPreflightService', () => {
         'INSUFFICIENT_STOCK',
       ]);
       expect(result.blocking_errors[0]?.message).toContain('Phone charger');
+    });
+
+    it('counts a pack of 10 as ten base units against shared stock', async () => {
+      const row = makeInventoryRow({ available: 5, itemName: 'Water' });
+      row.item = {
+        ...row.item,
+        item_variants: [{ id: 'pack', name: 'Pack of 10', price: 8000, quantity: 10 }],
+      };
+      mockInventory([row]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            {
+              business_inventory_id: 'inv-1',
+              quantity: 1,
+              item_variant_id: 'pack',
+            },
+          ],
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        'INSUFFICIENT_STOCK',
+      ]);
+      expect(result.blocking_errors[0]?.message).toContain('requested: 10');
+    });
+
+    it('adds a pack and singles on the same inventory row', async () => {
+      const row = makeInventoryRow({ available: 12, itemName: 'Water' });
+      row.item = {
+        ...row.item,
+        item_variants: [{ id: 'pack', name: 'Pack of 10', price: 8000, quantity: 10 }],
+      };
+      mockInventory([row]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            {
+              business_inventory_id: 'inv-1',
+              quantity: 1,
+              item_variant_id: 'pack',
+            },
+            { business_inventory_id: 'inv-1', quantity: 3 },
+          ],
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors[0]?.message).toContain('requested: 13');
+    });
+
+    it('blocks a pack that fits stock but exceeds the merchant maximum', async () => {
+      const row = makeInventoryRow({ available: 20, itemName: 'Water' });
+      row.item = {
+        ...row.item,
+        max_order_quantity: 8,
+        item_variants: [{ id: 'pack', name: 'Pack of 10', price: 8000, quantity: 10 }],
+      };
+      mockInventory([row]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            {
+              business_inventory_id: 'inv-1',
+              quantity: 1,
+              item_variant_id: 'pack',
+            },
+          ],
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toEqual([
+        'MAX_ORDER_QUANTITY_EXCEEDED',
+      ]);
     });
 
     it('includes kitchen hours when the store cannot take a cooked-food order', async () => {
