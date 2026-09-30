@@ -4,6 +4,7 @@ import { BusinessItemsItemVariantsController } from './business-items-item-varia
 import { ItemVariantImagesController } from './item-variant-images.controller';
 import { ItemVariantsController } from './item-variants.controller';
 import { ItemVariantsService } from './item-variants.service';
+import { VariantInventoryService } from './variant-inventory.service';
 
 @Module({
   imports: [ImageThumbnailsModule],
@@ -12,7 +13,7 @@ import { ItemVariantsService } from './item-variants.service';
     ItemVariantsController,
     ItemVariantImagesController,
   ],
-  providers: [ItemVariantsService],
-  exports: [ItemVariantsService],
+  providers: [ItemVariantsService, VariantInventoryService],
+  exports: [ItemVariantsService, VariantInventoryService],
 })
 export class ItemVariantsModule {}

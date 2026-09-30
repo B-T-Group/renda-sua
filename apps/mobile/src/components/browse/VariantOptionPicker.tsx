@@ -207,11 +207,13 @@ function VariantOptionPickerInner({
               {rebate ? (
                 <Text
                   style={[typography.caption, { color: colors.success.dark, fontWeight: '700' }]}
-                  numberOfLines={1}
+                  numberOfLines={2}
                 >
-                  {t('client.placeOrder.saveAmount', 'Save {{amount}}', {
-                    amount: formatCatalogMoney(rebate.saveAmount, currency),
-                  })}
+                  {t(
+                    'client.placeOrder.saveOnPack',
+                    'Save {{pct}}% by buying a pack of {{count}} units',
+                    { pct: Math.round(rebate.savePercent), count: packQty }
+                  )}
                 </Text>
               ) : null}
             </Pressable>

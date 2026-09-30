@@ -858,7 +858,7 @@ export class DashboardService {
     for (const row of rows) {
       const product = this.toTopViewedProduct(row);
       if (!product.itemId || product.viewsCount <= 0) continue;
-      const qty = Number(row.computed_available_quantity ?? 0);
+      const qty = sellableUnits(row);
       const existing = byItem.get(product.itemId);
       if (!existing) {
         byItem.set(product.itemId, { product, availableQty: qty });
@@ -878,6 +878,7 @@ export class DashboardService {
         business_inventory(
           where: {
             is_active: { _eq: true }
+            item_variant_id: { _is_null: true }
             business_location: { business_id: { _eq: $businessId } }
           }
           order_by: { item_view_events_aggregate: { count: desc } }
@@ -907,6 +908,7 @@ export class DashboardService {
         business_inventory(
           where: {
             is_active: { _eq: true }
+            item_variant_id: { _is_null: true }
             item_id: { _in: $itemIds }
             business_location: { business_id: { _eq: $businessId } }
           }
@@ -924,6 +926,16 @@ export class DashboardService {
           }
           item_view_events_aggregate {
             aggregate { count }
+          }
+          sibling_inventory_aggregate(
+            where: {
+              item_variant_id: { _is_null: false }
+              is_active: { _eq: true }
+            }
+          ) {
+            aggregate {
+              sum { quantity reserved_quantity }
+            }
           }
         }
       }
@@ -1344,10 +1356,22 @@ interface BusinessClientCityRow {
   orders: { delivery_address?: { city?: string | null } | null }[];
 }
 
+function sellableUnits(row: InventoryViewRow): number {
+  const parent = Number(row.computed_available_quantity ?? 0);
+  const sum = row.sibling_inventory_aggregate?.aggregate?.sum;
+  const packs = Number(sum?.quantity ?? 0) - Number(sum?.reserved_quantity ?? 0);
+  return parent + Math.max(0, packs);
+}
+
 interface InventoryViewRow {
   id: string;
   item_id?: string | null;
   computed_available_quantity?: number | null;
+  sibling_inventory_aggregate?: {
+    aggregate?: {
+      sum?: { quantity?: number | null; reserved_quantity?: number | null } | null;
+    } | null;
+  } | null;
   item?: {
     id?: string | null;
     name?: string | null;

@@ -8,7 +8,7 @@ export type ItemDetailScarcityBadgeProps = {
 
 export function ItemDetailScarcityBadge({ quantity }: ItemDetailScarcityBadgeProps) {
   const { t } = useTranslation();
-  if (quantity > 5) return null;
+  if (quantity <= 0 || quantity > 5) return null;
   return (
     <Chip
       size="small"

@@ -79,6 +79,7 @@ import {
 } from '../../utils/fulfillmentMethod';
 import { isFoodCatalogItem } from '../../utils/foodAvailability';
 import {
+  availableBaseUnitsForSelection,
   effectiveVariantUnitPrice,
   orderLineBounds,
   orderedVariantImages,
@@ -376,12 +377,15 @@ export default function PlaceOrderScreen() {
 
   const quantityBounds = useMemo(() => {
     if (!item) return { min: 1, max: 1 };
-    const pack =
-      !variantId || isShopperBaseVariantId(variantId)
-        ? 1
-        : packQuantityOf(item.item.item_variants?.find((v) => v.id === variantId));
+    const isBase = !variantId || isShopperBaseVariantId(variantId);
+    const selected = item.item.item_variants?.find((v) => v.id === variantId);
+    const pack = isBase ? 1 : packQuantityOf(selected);
     return orderLineBounds({
-      available: item.computed_available_quantity,
+      available: availableBaseUnitsForSelection(
+        item.computed_available_quantity,
+        selected,
+        isBase
+      ),
       maxOrder: item.item.max_order_quantity,
       minOrder: item.item.min_order_quantity,
       packQuantity: pack,
@@ -680,6 +684,7 @@ export default function PlaceOrderScreen() {
         !addrLoading
     ),
     requiresFastDelivery: false,
+    subtotal: (item ? unitPrice(item, variantId) : 0) * quantity,
   });
 
   const discountCode = usePlaceOrderDiscountCode();
@@ -848,6 +853,14 @@ export default function PlaceOrderScreen() {
         value: t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate'),
         tone: 'secondary',
       });
+    } else if (deliveryFeeState.data?.deliveryFeeWaived) {
+      const before = Number(deliveryFeeState.data.deliveryFeeBeforeWaiver) || 0;
+      lines.push({
+        label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
+        value: t('client.placeOrder.summary.deliveryFeeWaived', 'Waived'),
+        strike: before > 0 ? formatCatalogMoney(before, currency) : undefined,
+        tone: 'success',
+      });
     } else {
       lines.push({
         label: t('client.placeOrder.summary.deliveryFee', 'Delivery fee'),
@@ -917,6 +930,7 @@ export default function PlaceOrderScreen() {
     currency,
     deliveryAddressMissing,
     deliveryAmount,
+    deliveryFeeState.data,
     deliveryFeeState.error,
     deliveryFeeState.loading,
     depositAmount,

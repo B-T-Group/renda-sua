@@ -430,6 +430,10 @@ export default observer(function CartCheckoutScreen() {
       [...cart.groupedByBusiness.entries()].map(([businessId, lines]) => ({
         businessId,
         sampleInventoryItemId: lines[0].inventoryItemId,
+        subtotal: lines.reduce(
+          (sum, line) => sum + line.itemData.price * line.quantity,
+          0
+        ),
       })),
     [cart.groupedByBusiness, cart.items]
   );
@@ -572,6 +576,28 @@ export default observer(function CartCheckoutScreen() {
     [preflightConfig]
   );
 
+  const cartDeliveryWaived = useMemo(() => {
+    if (fulfillment !== 'delivery' || feeByBiz.size === 0) return false;
+    let sawFee = false;
+    let allWaived = true;
+    feeByBiz.forEach((fee) => {
+      if (!fee) return;
+      sawFee = true;
+      if (fee.deliveryFeeWaived !== true) allWaived = false;
+    });
+    return sawFee && allWaived;
+  }, [feeByBiz, fulfillment]);
+
+  const cartDeliveryBeforeWaiver = useMemo(() => {
+    let total = 0;
+    feeByBiz.forEach((fee) => {
+      if (fee?.deliveryFeeWaived) {
+        total += Number(fee.deliveryFeeBeforeWaiver) || 0;
+      }
+    });
+    return total;
+  }, [feeByBiz]);
+
   const stickyBreakdown = useMemo((): CheckoutStickyBreakdownLine[] => {
     const lines: CheckoutStickyBreakdownLine[] = [
       {
@@ -604,6 +630,16 @@ export default observer(function CartCheckoutScreen() {
         label: t('checkout.deliveryFee', 'Delivery'),
         value: t('client.placeOrder.summary.deliveryFeePending', 'Add address'),
         tone: 'secondary',
+      });
+    } else if (cartDeliveryWaived) {
+      lines.push({
+        label: t('checkout.deliveryFee', 'Delivery'),
+        value: t('client.placeOrder.summary.deliveryFeeWaived', 'Waived'),
+        strike:
+          cartDeliveryBeforeWaiver > 0
+            ? formatCatalogMoney(cartDeliveryBeforeWaiver, currency)
+            : undefined,
+        tone: 'success',
       });
     } else {
       lines.push({
@@ -663,6 +699,8 @@ export default observer(function CartCheckoutScreen() {
 
     return lines;
   }, [
+    cartDeliveryBeforeWaiver,
+    cartDeliveryWaived,
     currency,
     deliveryAddressId,
     deliveryAmount,

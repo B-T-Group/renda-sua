@@ -4,6 +4,7 @@ import {
   type WeightUnit,
 } from '../common/weight-units';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { VariantInventoryService } from './variant-inventory.service';
 import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
 import type { CreateItemVariantDto } from './dto/create-item-variant.dto';
 import type { CreateItemVariantImageDto } from './dto/create-item-variant-image.dto';
@@ -46,7 +47,8 @@ const VARIANT_FIELDS = `
 export class ItemVariantsService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
-    private readonly imageThumbnailsService: ImageThumbnailsService
+    private readonly imageThumbnailsService: ImageThumbnailsService,
+    private readonly variantInventory: VariantInventoryService
   ) {}
 
   /** Empty → null; invalid casing/aliases normalized; unknown → 400. */
@@ -196,9 +198,13 @@ export class ItemVariantsService {
       }
     `;
     const res = await this.hasuraUserService.executeMutation<{
-      insert_item_variants_one: unknown;
+      insert_item_variants_one: { id: string } | null;
     }>(m, { object });
-    return res.insert_item_variants_one;
+    const created = res.insert_item_variants_one;
+    if (created?.id) {
+      await this.variantInventory.seedFromParentStock(itemId, created.id);
+    }
+    return created;
   }
 
   private async assertVariantOwnedByBusiness(

@@ -27,6 +27,12 @@ const FEED_INVENTORY_GQL = `
       id
       selling_price
       computed_available_quantity
+      sibling_inventory(
+        where: { item_variant_id: { _is_null: false }, is_active: { _eq: true } }
+      ) {
+        computed_available_quantity
+        item_variant { quantity }
+      }
       is_active
       item_variant_id
       item_variant {
@@ -72,8 +78,14 @@ type FeedQueryLocation = CatalogLocationPhoneGate & {
   business?: { name?: string | null } | null;
 };
 
+type FeedSiblingRow = {
+  computed_available_quantity?: number | null;
+  item_variant?: { quantity?: number | null } | null;
+};
+
 type FeedQueryRow = FeedInventoryRow & {
   business_location?: FeedQueryLocation | null;
+  sibling_inventory?: FeedSiblingRow[] | null;
 };
 
 @Injectable()
@@ -101,6 +113,7 @@ export class FacebookCatalogFeedService {
     return {
       _and: [
         { is_active: { _eq: true } },
+        { item_variant_id: { _is_null: true } },
         {
           item: {
             moderation_status: { _eq: 'approved' },
@@ -132,7 +145,7 @@ export class FacebookCatalogFeedService {
       if (page.length === 0) break;
       for (const row of page) {
         if (this.isPaymentsEligible(row, stripeCountries)) {
-          eligible.push(row);
+          eligible.push(this.withSellableStock(row));
         }
       }
       if (page.length < PAGE_SIZE) break;
@@ -153,10 +166,39 @@ export class FacebookCatalogFeedService {
     return res.business_inventory ?? [];
   }
 
+  private withSellableStock(row: FeedQueryRow): FeedInventoryRow {
+    return { ...row, computed_available_quantity: sellableFeedUnits(row) };
+  }
+
   private isPaymentsEligible(
     row: FeedQueryRow,
     stripeCountries: string[]
   ): boolean {
     return isLocationPaymentsEnabled(row.business_location, stripeCountries);
   }
+}
+
+function sellableFeedUnits(row: FeedQueryRow): number | null | undefined {
+  const sibling = purchasableSiblingUnits(row);
+  const parent = Number(row.computed_available_quantity ?? 0);
+  const base = Number.isFinite(parent) ? Math.max(0, parent) : 0;
+  if (base <= 0 && sibling <= 0 && row.computed_available_quantity == null) {
+    return row.computed_available_quantity;
+  }
+  return base + sibling;
+}
+
+function purchasableSiblingUnits(row: FeedQueryRow): number {
+  let total = 0;
+  for (const sibling of row.sibling_inventory ?? []) {
+    if (siblingCanSell(sibling)) total += Number(sibling.computed_available_quantity ?? 0);
+  }
+  return total;
+}
+
+function siblingCanSell(sibling: FeedSiblingRow): boolean {
+  const available = Number(sibling.computed_available_quantity ?? 0);
+  const pack = Number(sibling.item_variant?.quantity ?? 1);
+  const size = Number.isFinite(pack) && pack > 1 ? Math.floor(pack) : 1;
+  return Number.isFinite(available) && available >= size;
 }

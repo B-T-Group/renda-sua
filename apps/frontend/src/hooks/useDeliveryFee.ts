@@ -13,12 +13,15 @@ export interface DeliveryFeeResponse {
   method: 'distance_based' | 'flat_fee';
   currency: string;
   message: string;
+  deliveryFeeWaived?: boolean;
+  deliveryFeeBeforeWaiver?: number | null;
 }
 
 export const useDeliveryFee = (
   itemId: string | null,
   addressId?: string | null,
-  requiresFastDelivery?: boolean
+  requiresFastDelivery?: boolean,
+  subtotal?: number
 ) => {
   const [deliveryFee, setDeliveryFee] = useState<DeliveryFeeResponse | null>(
     null
@@ -46,6 +49,9 @@ export const useDeliveryFee = (
         if (requiresFastDelivery) {
           params.append('requiresFastDelivery', 'true');
         }
+        if (subtotal != null && subtotal > 0) {
+          params.append('subtotal', String(subtotal));
+        }
 
         const queryString = params.toString();
         const url = `/orders/item/${itemId}/deliveryFee${
@@ -72,7 +78,7 @@ export const useDeliveryFee = (
     };
 
     fetchDeliveryFee();
-  }, [itemId, addressId, requiresFastDelivery, apiClient]);
+  }, [itemId, addressId, requiresFastDelivery, subtotal, apiClient]);
 
   return {
     deliveryFee,

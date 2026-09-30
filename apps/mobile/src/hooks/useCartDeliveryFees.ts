@@ -5,6 +5,7 @@ import type { ItemDeliveryFeeResponse } from '../types/placeOrderPricing';
 export interface CartBusinessFeeRow {
   businessId: string;
   sampleInventoryItemId: string;
+  subtotal?: number;
 }
 
 export function useCartDeliveryFees(params: {
@@ -34,6 +35,7 @@ export function useCartDeliveryFees(params: {
           const res = await agentApi.orders.getItemDeliveryFee(r.sampleInventoryItemId, {
             addressId,
             requiresFastDelivery,
+            subtotal: r.subtotal,
           });
           next.set(r.businessId, res);
         } catch (e: unknown) {

@@ -18,6 +18,7 @@ import { InventoryItemDetailViewsRow } from '../../components/browse/InventoryIt
 import { StatusPill } from '../../components/common/StatusPill';
 import { FoodAvailabilityChip } from '../../components/food/FoodAvailabilityChip';
 import { FoodScheduleList } from '../../components/food/FoodScheduleList';
+import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
 import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
 import { TrustBadge } from '../../components/common/TrustBadge';
 import { EntityRatingsSection } from '../../components/rating/EntityRatingsSection';
@@ -45,7 +46,10 @@ import {
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import {
   effectiveVariantUnitPrice,
+  listingHasSellableStock,
   orderedVariantImages,
+  selectedAvailableUnits,
+  selectionHasPurchasableStock,
   unitPriceWithListingDeal,
 } from '../../types/business/itemVariant';
 import {
@@ -61,6 +65,25 @@ import { scheduleMetaAddToCart } from '../../services/metaConversionsApi';
 import { ProductInterestSheet } from '../../components/product-interest/ProductInterestSheet';
 import { useProductInterest } from '../../hooks/useProductInterest';
 import { useMarket } from '../../hooks/useMarket';
+
+function selectionHasStock(
+  item: CatalogInventoryItem,
+  variantId: string | null | undefined
+): boolean {
+  if (isFoodCatalogItem(item)) return true;
+  const variants = item.item.item_variants;
+  const isBase = !variantId || isShopperBaseVariantId(variantId);
+  const needsPick = (variants?.filter((v) => v.is_active !== false).length ?? 0) > 0;
+  if (needsPick && !variantId) {
+    return listingHasSellableStock(item.computed_available_quantity, variants);
+  }
+  const selected = variants?.find((variant) => variant.id === variantId);
+  return selectionHasPurchasableStock(
+    item.computed_available_quantity,
+    selected,
+    isBase
+  );
+}
 
 function InventoryItemDetailScreen() {
   const { t } = useTranslation();
@@ -194,7 +217,7 @@ function InventoryItemDetailScreen() {
   }, [inventoryItemId, item, navigation, sharePriceLine, t]);
 
   const onAddToCart = useCallback(() => {
-    if (!item || item.computed_available_quantity <= 0) return;
+    if (!item || !selectionHasStock(item, effectiveVariantId)) return;
     if (isFoodOrderBlocked(item.food_availability)) return;
     if (dbVariants.length >= 1 && !effectiveVariantId) return;
     trackView(inventoryItemId);
@@ -229,7 +252,7 @@ function InventoryItemDetailScreen() {
   ]);
 
   const onBuy = useCallback(() => {
-    if (!item || item.computed_available_quantity <= 0) return;
+    if (!item || !selectionHasStock(item, effectiveVariantId)) return;
     if (isFoodOrderBlocked(item.food_availability)) return;
     if (dbVariants.length >= 1 && !effectiveVariantId) return;
     trackView(inventoryItemId);
@@ -478,12 +501,30 @@ function InventoryItemDetailScreen() {
     imageUrl: imgs[0]?.image_url ?? checkoutBase.imageUrl,
   };
 
-  const qty = item.computed_available_quantity;
   const isFood = isFoodCatalogItem(item);
-  const outOfStock = isFood ? false : qty <= 0;
+  const isBase = !variantId || isShopperBaseVariantId(variantId);
+  const stockVariant = item.item.item_variants?.find(
+    (variant) => variant.id === variantId
+  );
+  const qty = selectedAvailableUnits(
+    item.computed_available_quantity,
+    stockVariant,
+    isBase
+  );
+  const variantSelectionReady = dbVariants.length === 0 || !!variantId;
+  const optionHasStock = variantSelectionReady
+    ? selectionHasPurchasableStock(
+        item.computed_available_quantity,
+        stockVariant,
+        isBase
+      )
+    : listingHasSellableStock(
+        item.computed_available_quantity,
+        item.item.item_variants
+      );
+  const outOfStock = isFood ? false : !optionHasStock;
   const foodBlocked = isFoodOrderBlocked(item.food_availability);
   const orderBlocked = outOfStock || foodBlocked;
-  const variantSelectionReady = dbVariants.length === 0 || !!variantId;
   const acceptsOrders = merchantCanAcceptOrders(loc.business);
   const openingSoon = isOpeningSoonMerchant(loc.business);
   const paymentsEnabled = item.payments_enabled !== false;
@@ -910,7 +951,7 @@ function InventoryItemDetailScreen() {
             category={item.item.item_sub_category?.item_category?.name}
             subcategory={item.item.item_sub_category?.name}
             brand={item.item.brand?.name}
-            availableQuantity={item.computed_available_quantity}
+            availableQuantity={qty}
           />
 
           <EntityRatingsSection

@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import type { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -50,13 +51,18 @@ describe('OrderOffersService', () => {
       scheduleDispatchRound: jest.fn().mockResolvedValue(undefined),
     } as unknown as WaitAndExecuteScheduleService;
 
+    const deliveryConfigService = {
+      getDeliveryAvailabilityRadiusKm: jest.fn().mockResolvedValue(5),
+    } as unknown as DeliveryConfigService;
+
     service = new OrderOffersService(
       hasuraSystemService,
       commissionsService,
       notificationsService,
       configService,
       eligibleAgentsQueryService,
-      waitAndExecuteScheduleService
+      waitAndExecuteScheduleService,
+      deliveryConfigService
     );
   });
 
@@ -397,7 +403,7 @@ describe('OrderOffersService', () => {
   function buildAgentLocations() {
     return [
       buildAgentLocation('agent-far', 'user-far', 4.2),
-      buildAgentLocation('agent-mid', 'user-mid', 4.05),
+      buildAgentLocation('agent-mid', 'user-mid', 4.03),
       buildAgentLocation('agent-near', 'user-near', 4.01),
       buildAgentLocation('agent-no-token', 'user-no-token', 4.005),
       buildAgentLocation('agent-unverified', 'user-unverified', 4.001, {

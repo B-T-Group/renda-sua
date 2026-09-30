@@ -269,7 +269,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
               : 'https://dev.rendasua.com'),
           SLACK_ORDER_ALERTS_IN_DEVELOPMENT:
             process.env.SLACK_ORDER_ALERTS_IN_DEVELOPMENT ?? 'false',
-          PROXIMITY_RADIUS_KM: '20',
+          PROXIMITY_RADIUS_KM: '5',
           RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID:
             'dc4461e3-4cd2-485b-8c9c-755e36205f30',
           RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID_FR:
@@ -791,7 +791,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
           BACKEND_INTERNAL_API_BASE_URL: backendInternalApiBaseUrl,
           NOTIFICATIONS_INTERNAL_API_KEY:
             process.env.NOTIFICATIONS_INTERNAL_API_KEY ?? '',
-          PROXIMITY_RADIUS_KM: '20',
+          PROXIMITY_RADIUS_KM: '5',
           RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID:
             'dc4461e3-4cd2-485b-8c9c-755e36205f30',
           RESEND_AGENT_ORDER_PROXIMITY_TEMPLATE_ID_FR:

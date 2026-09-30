@@ -614,6 +614,7 @@ export class LocationsController {
         business_inventory_aggregate(
           where: {
             is_active: { _eq: true }
+            item_variant_id: { _is_null: true }
             business_location: {
               is_active: { _eq: true }
               address: { country: { _eq: $countryCode } }
@@ -625,6 +626,7 @@ export class LocationsController {
         business_inventory(
           where: {
             is_active: { _eq: true }
+            item_variant_id: { _is_null: true }
             business_location: {
               is_active: { _eq: true }
               address: { country: { _eq: $countryCode } }

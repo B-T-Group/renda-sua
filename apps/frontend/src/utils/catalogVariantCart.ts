@@ -3,6 +3,7 @@ import type { InventoryItem } from '../hooks/useInventoryItems';
 import type { ItemVariant } from '../types/itemVariant';
 import {
   effectiveVariantUnitPrice,
+  availableBaseUnitsForSelection,
   packQuantityOf,
   primaryVariantImageUrl,
   unitPriceWithListingDeal,
@@ -129,7 +130,13 @@ export function buildCartItemFromInventory(
       minOrderQuantity: item.item.min_order_quantity || undefined,
       packQuantity: isBase ? 1 : packQuantityOf(variant),
       ...(!isFoodCatalogItem(item)
-        ? { availableQuantity: item.computed_available_quantity }
+        ? {
+            availableQuantity: availableBaseUnitsForSelection(
+              item.computed_available_quantity,
+              variant,
+              isBase
+            ),
+          }
         : {}),
       originalPrice: pricing.hasDeal ? pricing.strikeOriginal : undefined,
       discountedPrice: pricing.hasDeal ? pricing.unit : undefined,

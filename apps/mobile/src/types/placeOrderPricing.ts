@@ -12,6 +12,8 @@ export interface ItemDeliveryFeeResponse {
   method: 'distance_based' | 'flat_fee';
   currency: string;
   message?: string;
+  deliveryFeeWaived?: boolean;
+  deliveryFeeBeforeWaiver?: number | null;
 }
 
 export interface DiscountCodeValidateResponse {

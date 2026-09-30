@@ -52,11 +52,23 @@ interface ApplicationSetupApiResponse {
   error?: string;
 }
 
+export interface DeliveryPricingInput {
+  normal_delivery_base_fee: number;
+  per_km_delivery_fee: number;
+  max_delivery_fee: number;
+  delivery_availability_radius_km: number;
+  free_delivery_commission_threshold: number;
+}
+
 export interface UseApplicationSetupResult {
   setup: ApplicationSetupData | null;
   loading: boolean;
   error: string | null;
   fetchSetup: (countryCode: string) => Promise<void>;
+  saveDeliveryPricing: (
+    countryCode: string,
+    pricing: DeliveryPricingInput
+  ) => Promise<void>;
 }
 
 export const useApplicationSetup = (): UseApplicationSetupResult => {
@@ -104,10 +116,25 @@ export const useApplicationSetup = (): UseApplicationSetupResult => {
     [apiClient]
   );
 
+  const saveDeliveryPricing = useCallback(
+    async (countryCode: string, pricing: DeliveryPricingInput) => {
+      const response = await apiClient.post<{ success: boolean; error?: string }>(
+        '/admin/application-setup/delivery-pricing',
+        { countryCode, ...pricing }
+      );
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to save delivery pricing');
+      }
+      await fetchSetup(countryCode);
+    },
+    [apiClient, fetchSetup]
+  );
+
   return {
     setup,
     loading,
     error,
     fetchSetup,
+    saveDeliveryPricing,
   };
 };

@@ -166,4 +166,72 @@ describe('FacebookCatalogFeedService', () => {
     expect(rowCount).toBe(501);
     expect(hasura.executeQuery).toHaveBeenCalledTimes(3);
   });
+
+  it('counts a pack only when its units cover one sale', async () => {
+    const item = {
+      name: 'Pack',
+      description: 'desc',
+      price: 1000,
+      currency: 'XAF',
+      is_used: false,
+      brand: null,
+      item_images: [],
+      item_tags: [],
+      item_sub_category: null,
+    };
+    const location = {
+      name: 'Yaounde',
+      mobile_payment_phone: { is_verified: true },
+      address: { country: 'CM' },
+      business: { name: 'Biz' },
+    };
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        supported_payment_systems: [{ country: 'CA' }],
+      })
+      .mockResolvedValueOnce({
+        business_inventory: [
+          {
+            id: 'inv-pack',
+            selling_price: 1000,
+            computed_available_quantity: 0,
+            is_active: true,
+            sibling_inventory: [
+              {
+                computed_available_quantity: 12,
+                item_variant: { quantity: 10 },
+              },
+            ],
+            item,
+            business_location: location,
+          },
+          {
+            id: 'inv-short',
+            selling_price: 1000,
+            computed_available_quantity: 0,
+            is_active: true,
+            sibling_inventory: [
+              {
+                computed_available_quantity: 8,
+                item_variant: { quantity: 10 },
+              },
+            ],
+            item: { ...item, name: 'Short pack' },
+            business_location: location,
+          },
+        ],
+      });
+
+    const { csv } = await service.buildCsv();
+    const feedCall = hasura.executeQuery.mock.calls.find(([query]) =>
+      String(query).includes('FacebookCatalogFeed')
+    );
+    const full = csv.split('\n').find((row) => row.includes('inv-pack'));
+    const short = csv.split('\n').find((row) => row.includes('inv-short'));
+    expect(String(feedCall?.[0])).toContain('item_variant');
+    expect(full).toContain('in stock');
+    expect(full).not.toContain('out of stock');
+    expect(full).toContain('12');
+    expect(short).toContain('out of stock');
+  });
 });

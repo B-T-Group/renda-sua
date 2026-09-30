@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DeliveryConfigService } from '../../delivery-configs/delivery-configs.service';
+import { normalizeDeliveryCountryCode } from '../../orders/delivery-pricing.util';
 import { EligibleAgentsQueryService } from '../eligible-agents-query.service';
 import {
   DeliveryAvailabilityContext,
@@ -38,7 +39,7 @@ export class AgentInRegionRule implements DeliveryAvailabilityRule {
 
     const radiusKm =
       await this.deliveryConfigService.getDeliveryAvailabilityRadiusKm(
-        ctx.sellerCountry
+        normalizeDeliveryCountryCode(ctx.sellerCountry)
       );
 
     const candidates =

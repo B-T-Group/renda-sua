@@ -19,6 +19,7 @@ import { useApplicationSetup } from '../../hooks/useApplicationSetup';
 import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { ApplicationConfigurationsSection } from '../admin/ApplicationConfigurationsSection';
 import { CountryDeliveryConfigsSection } from '../admin/CountryDeliveryConfigsSection';
+import { DeliveryPricingCard } from '../admin/DeliveryPricingCard';
 import { DeliveryTimeSlotsSection } from '../admin/DeliveryTimeSlotsSection';
 import LoadingScreen from '../common/LoadingScreen';
 import SEOHead from '../seo/SEOHead';
@@ -32,7 +33,8 @@ const ApplicationSetupPage: React.FC = () => {
     loading: profileLoading,
     error: profileError,
   } = useUserProfileContext();
-  const { setup, loading, error, fetchSetup } = useApplicationSetup();
+  const { setup, loading, error, fetchSetup, saveDeliveryPricing } =
+    useApplicationSetup();
   const [countryCode, setCountryCode] = useState<string>('GA');
   const [section, setSection] = useState<'country' | 'app' | 'slots'>(
     'country'
@@ -260,12 +262,19 @@ const ApplicationSetupPage: React.FC = () => {
 
           <Box sx={{ flex: 1 }}>
             {section === 'country' && (
-              <CountryDeliveryConfigsSection
-                countryCode={countryCode}
-                countryConfigs={setup.country_delivery_configs}
-                deliveryConfigs={setup.delivery_configs}
-                cancellationConfig={cancellationConfig}
-              />
+              <>
+                <DeliveryPricingCard
+                  countryCode={countryCode}
+                  countryConfigs={setup.country_delivery_configs}
+                  onSave={(pricing) => saveDeliveryPricing(countryCode, pricing)}
+                />
+                <CountryDeliveryConfigsSection
+                  countryCode={countryCode}
+                  countryConfigs={setup.country_delivery_configs}
+                  deliveryConfigs={setup.delivery_configs}
+                  cancellationConfig={cancellationConfig}
+                />
+              </>
             )}
 
             {section === 'app' && (

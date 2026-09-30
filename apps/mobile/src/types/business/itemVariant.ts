@@ -25,6 +25,62 @@ export interface ItemVariant {
   is_active?: boolean;
   sort_order?: number;
   item_variant_images?: ItemVariantImage[];
+  /** Variant inventory available units at this listing's location. */
+  available_quantity?: number | null;
+}
+
+export function availableBaseUnitsForSelection(
+  parentAvailable: number | null | undefined,
+  variant: { available_quantity?: number | null } | null | undefined,
+  isBase: boolean
+): number | null | undefined {
+  if (isBase || variant?.available_quantity == null) return parentAvailable;
+  const qty = Number(variant.available_quantity);
+  return Number.isFinite(qty) ? qty : parentAvailable;
+}
+
+export function selectedAvailableUnits(
+  parentAvailable: number | null | undefined,
+  variant: { available_quantity?: number | null } | null | undefined,
+  isBase: boolean
+): number {
+  const qty = Number(
+    availableBaseUnitsForSelection(parentAvailable, variant, isBase) ?? 0
+  );
+  return Number.isFinite(qty) ? qty : 0;
+}
+
+export function selectionHasPurchasableStock(
+  parentAvailable: number | null | undefined,
+  variant: { available_quantity?: number | null; quantity?: number | null } | null | undefined,
+  isBase: boolean
+): boolean {
+  const available = selectedAvailableUnits(parentAvailable, variant, isBase);
+  const pack = isBase ? 1 : packQuantityOf(variant);
+  return available >= pack;
+}
+
+export function listingHasSellableStock(
+  parentAvailable: number | null | undefined,
+  variants?: Array<{
+    available_quantity?: number | null;
+    quantity?: number | null;
+    is_active?: boolean | null;
+  }> | null
+): boolean {
+  if (Number(parentAvailable) > 0) return true;
+  return (variants ?? []).some((variant) => optionHasStock(variant));
+}
+
+function optionHasStock(variant: {
+  available_quantity?: number | null;
+  quantity?: number | null;
+  is_active?: boolean | null;
+}): boolean {
+  if (variant.is_active === false) return false;
+  const qty = Number(variant.available_quantity);
+  if (!Number.isFinite(qty)) return false;
+  return qty >= packQuantityOf(variant);
 }
 
 export type ItemVariantInput = Omit<ItemVariant, 'id' | 'item_variant_images'>;
@@ -115,38 +171,67 @@ export function packRebate(params: {
   };
 }
 
-export function listingHasPackRebate(params: {
+export interface PackSavingsLabel {
+  pct: number;
+  count: number;
+}
+
+type ListingPackParams = {
   variants?: ItemVariant[] | null;
   listingSellingPrice: number;
   overrides?: InventoryVariantPriceOverride[] | null;
   hasActiveDeal?: boolean;
   originalPrice?: number;
   discountedPrice?: number;
-}): boolean {
-  const base = unitPriceWithListingDeal(
+};
+
+/** Highest pack discount on a listing, rounded to a whole percent. */
+export function bestPackSavings(params: ListingPackParams): PackSavingsLabel | null {
+  const base = listingBaseUnit(params);
+  let best: PackSavingsLabel | null = null;
+  for (const variant of params.variants ?? []) {
+    const offer = variantPackOffer(variant, params, base);
+    if (offer && (!best || offer.pct > best.pct)) best = offer;
+  }
+  return best;
+}
+
+export function listingHasPackRebate(params: ListingPackParams): boolean {
+  return bestPackSavings(params) != null;
+}
+
+function listingBaseUnit(params: ListingPackParams): number {
+  return unitPriceWithListingDeal(
     params.listingSellingPrice,
     params.listingSellingPrice,
     params.hasActiveDeal,
     params.originalPrice,
     params.discountedPrice
   ).unit;
-  return (params.variants ?? []).some((variant) => {
-    if (variant.is_active === false) return false;
-    const override = params.overrides?.find((row) => row.item_variant_id === variant.id);
-    const packBase = effectiveVariantUnitPrice(variant, params.listingSellingPrice, override);
-    const packPrice = unitPriceWithListingDeal(
-      packBase,
-      params.listingSellingPrice,
-      params.hasActiveDeal,
-      params.originalPrice,
-      params.discountedPrice
-    ).unit;
-    return packRebate({
-      packQuantity: variant.quantity,
-      packPrice,
-      baseUnitPrice: base,
-    }) != null;
+}
+
+function variantPackOffer(
+  variant: ItemVariant,
+  params: ListingPackParams,
+  base: number
+): PackSavingsLabel | null {
+  if (variant.is_active === false) return null;
+  const override = params.overrides?.find((row) => row.item_variant_id === variant.id);
+  const packBase = effectiveVariantUnitPrice(variant, params.listingSellingPrice, override);
+  const packPrice = unitPriceWithListingDeal(
+    packBase,
+    params.listingSellingPrice,
+    params.hasActiveDeal,
+    params.originalPrice,
+    params.discountedPrice
+  ).unit;
+  const rebate = packRebate({
+    packQuantity: variant.quantity,
+    packPrice,
+    baseUnitPrice: base,
   });
+  if (!rebate) return null;
+  return { pct: Math.round(rebate.savePercent), count: packQuantityOf(variant) };
 }
 
 export function orderLineBounds(params: {

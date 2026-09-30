@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { normalizeDeliveryCountryCode } from '../orders/delivery-pricing.util';
 
 interface Coordinates {
   latitude: number;
@@ -51,7 +53,8 @@ export class LocationsService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly googleDistanceService: GoogleDistanceService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly deliveryConfigService: DeliveryConfigService
   ) {}
 
   /**
@@ -400,22 +403,25 @@ export class LocationsService {
         return;
       }
 
-      // Find agents within 10km
+      const radiusKm =
+        await this.deliveryConfigService.getDeliveryAvailabilityRadiusKm(
+          normalizeDeliveryCountryCode(businessLocation.address.country)
+        );
       const agentsWithinRadius = await this.findAgentsWithinRadius(
         coordinates.latitude,
         coordinates.longitude,
-        10 // 10km radius
+        radiusKm
       );
 
       if (agentsWithinRadius.length === 0) {
         this.logger.log(
-          `No agents found within 10km of business location ${businessLocationId}`
+          `No agents found within ${radiusKm}km of business location ${businessLocationId}`
         );
         return;
       }
 
       this.logger.log(
-        `Found ${agentsWithinRadius.length} agent(s) within 10km, sending notifications`
+        `Found ${agentsWithinRadius.length} agent(s) within ${radiusKm}km, sending notifications`
       );
 
       // Get order details for notification

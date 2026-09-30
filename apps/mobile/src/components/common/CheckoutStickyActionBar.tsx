@@ -10,6 +10,8 @@ export interface CheckoutStickyBreakdownLine {
   value: string;
   /** secondary = muted, success = green, emphasize = bold primary total */
   tone?: 'default' | 'secondary' | 'success' | 'emphasize';
+  /** Pre-waiver amount shown struck through beside the value. */
+  strike?: string;
 }
 
 export interface CheckoutStickyActionBarProps {
@@ -92,15 +94,32 @@ export function CheckoutStickyActionBar({
                 >
                   {line.label}
                 </Text>
-                <Text
-                  style={[
-                    emphasize ? typography.subtitle2 : typography.caption,
-                    { color, fontWeight: emphasize ? '800' : '600' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {line.value}
-                </Text>
+                <View style={styles.strikeRow}>
+                  {line.strike ? (
+                    <Text
+                      style={[
+                        typography.caption,
+                        {
+                          color: colors.text.secondary,
+                          textDecorationLine: 'line-through',
+                          marginRight: 6,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {line.strike}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={[
+                      emphasize ? typography.subtitle2 : typography.caption,
+                      { color, fontWeight: emphasize ? '800' : '600' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {line.value}
+                  </Text>
+                </View>
               </View>
             );
           })}
@@ -150,5 +169,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  strikeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

@@ -1315,7 +1315,8 @@ const PlaceOrderPage: React.FC = () => {
   } = useDeliveryFee(
     isPickupOrder ? null : selectedItem?.id || null,
     selectedAddressId,
-    requiresFastDelivery
+    requiresFastDelivery,
+    listingUnitPricing.unit * quantity
   );
 
   // Get client addresses

@@ -72,6 +72,7 @@ import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
+import { ItemVariantsModule } from '../item-variants/item-variants.module';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
     RepresentativeCompensationModule,
     CreditsModule,
     FoodModule,
+    ItemVariantsModule,
   ],
   controllers: [
     OrdersController,

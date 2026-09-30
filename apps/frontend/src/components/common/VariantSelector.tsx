@@ -106,9 +106,6 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
             baseUnitPrice: baseUnit,
           });
           const eachLabel = formatCurrency(p.unit / packQty, currency);
-          const saveLabel = rebate
-            ? formatCurrency(rebate.saveAmount, currency)
-            : null;
 
           return (
             <ButtonBase
@@ -204,14 +201,16 @@ const VariantSelector: React.FC<VariantSelectorProps> = ({
                     })}
                   </Typography>
                 ) : null}
-                {saveLabel ? (
+                {rebate ? (
                   <Chip
                     size="small"
                     color="success"
-                    label={t('orders.variant.saveAmount', 'Save {{amount}}', {
-                      amount: saveLabel,
-                    })}
-                    sx={{ alignSelf: 'flex-start', height: 22, fontWeight: 700 }}
+                    label={t(
+                      'orders.variant.saveOnPack',
+                      'Save {{pct}}% by buying a pack of {{count}} units',
+                      { pct: Math.round(rebate.savePercent), count: packQty }
+                    )}
+                    sx={{ alignSelf: 'flex-start', height: 'auto', fontWeight: 700, '& .MuiChip-label': { whiteSpace: 'normal' } }}
                   />
                 ) : null}
               </Stack>

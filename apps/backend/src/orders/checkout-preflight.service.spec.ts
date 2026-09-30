@@ -22,6 +22,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { VariantInventoryService } from '../item-variants/variant-inventory.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
@@ -289,6 +290,29 @@ describe('CheckoutPreflightService', () => {
           },
         },
         DepositCalculationService,
+        {
+          provide: VariantInventoryService,
+          useValue: {
+            retargetLines: jest.fn(
+              async (
+                lines: Array<{
+                  business_inventory_id: string;
+                  item_variant_id?: string | null;
+                }>,
+                inventoryById: Map<string, any>
+              ) => {
+                for (const line of lines) {
+                  if (!line.item_variant_id) continue;
+                  const parent = inventoryById.get(line.business_inventory_id);
+                  if (!parent || parent.item_variant_id) continue;
+                  const id = `${parent.id}:${line.item_variant_id}`;
+                  inventoryById.set(id, { ...parent, id });
+                  line.business_inventory_id = id;
+                }
+              }
+            ),
+          },
+        },
       ],
     }).compile();
 
@@ -956,7 +980,7 @@ describe('CheckoutPreflightService', () => {
       expect(result.blocking_errors[0]?.message).toContain('requested: 10');
     });
 
-    it('adds a pack and singles on the same inventory row', async () => {
+    it('checks a pack against its own stock, not the single option', async () => {
       const row = makeInventoryRow({ available: 12, itemName: 'Water' });
       row.item = {
         ...row.item,
@@ -978,8 +1002,8 @@ describe('CheckoutPreflightService', () => {
         false
       );
 
-      expect(result.can_proceed).toBe(false);
-      expect(result.blocking_errors[0]?.message).toContain('requested: 13');
+      expect(result.can_proceed).toBe(true);
+      expect(result.blocking_errors).toEqual([]);
     });
 
     it('blocks a pack that fits stock but exceeds the merchant maximum', async () => {
@@ -1008,6 +1032,35 @@ describe('CheckoutPreflightService', () => {
       expect(result.blocking_errors.map((error) => error.code)).toEqual([
         'MAX_ORDER_QUANTITY_EXCEEDED',
       ]);
+    });
+
+    it('blocks singles plus a pack when together they exceed the maximum', async () => {
+      const row = makeInventoryRow({ available: 30, itemName: 'Water' });
+      row.item = {
+        ...row.item,
+        max_order_quantity: 12,
+        item_variants: [{ id: 'pack', name: 'Pack of 10', price: 8000, quantity: 10 }],
+      };
+      mockInventory([row]);
+
+      const result = await service.resolve(
+        {
+          items: [
+            { business_inventory_id: 'inv-1', quantity: 8 },
+            {
+              business_inventory_id: 'inv-1',
+              quantity: 1,
+              item_variant_id: 'pack',
+            },
+          ],
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(false);
+      expect(result.blocking_errors.map((error) => error.code)).toContain(
+        'MAX_ORDER_QUANTITY_EXCEEDED'
+      );
     });
 
     it('includes kitchen hours when the store cannot take a cooked-food order', async () => {
