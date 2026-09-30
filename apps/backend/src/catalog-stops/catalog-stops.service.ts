@@ -118,9 +118,15 @@ const INVENTORY_ITEM_SELECTION = `
   business_location {
     id
     name
+    address {
+      id
+      city
+    }
     business {
       id
       name
+      is_verified
+      can_accept_orders
     }
   }
 `;
