@@ -8210,7 +8210,9 @@ export class OrdersService {
           order_items {
             id
             business_inventory_id
+            item_variant_id
             quantity
+            variant_snapshot
           }
           delivery_time_windows {
             id
