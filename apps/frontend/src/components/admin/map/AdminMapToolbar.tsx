@@ -13,7 +13,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { SupportedCountry } from '../../../hooks/useSupportedCountries';
-import { AdminMapKind } from './adminMap.types';
+import { activitiesForKind, AdminMapActivityFilter, AdminMapKind } from './adminMap.types';
 
 interface AdminMapToolbarProps {
   countries: SupportedCountry[];
@@ -21,10 +21,12 @@ interface AdminMapToolbarProps {
   country: string;
   region: string;
   kind: AdminMapKind;
+  activity: AdminMapActivityFilter;
   live: boolean;
   onCountry: (value: string) => void;
   onRegion: (value: string) => void;
   onKind: (value: AdminMapKind) => void;
+  onActivity: (value: AdminMapActivityFilter) => void;
   onLive: (value: boolean) => void;
 }
 
@@ -35,6 +37,7 @@ const AdminMapToolbar: React.FC<AdminMapToolbarProps> = (props) => {
       <CountrySelect {...props} label={t('admin.map.country', 'Country')} allLabel={t('admin.map.allCountries', 'All countries')} />
       <RegionSelect {...props} label={t('admin.map.region', 'Region')} allLabel={t('admin.map.allRegions', 'All regions')} />
       <KindToggle kind={props.kind} onKind={props.onKind} />
+      <StatusSelect kind={props.kind} activity={props.activity} onActivity={props.onActivity} />
       <LiveSwitch live={props.live} onLive={props.onLive} />
     </Stack>
   );
@@ -94,6 +97,35 @@ function KindToggle({ kind, onKind }: Pick<AdminMapToolbarProps, 'kind' | 'onKin
       <ToggleButton value="agents">{t('admin.map.kindAgents', 'Agents')}</ToggleButton>
       <ToggleButton value="businesses">{t('admin.map.kindMerchants', 'Merchants')}</ToggleButton>
     </ToggleButtonGroup>
+  );
+}
+
+function StatusSelect(props: Pick<AdminMapToolbarProps, 'kind' | 'activity' | 'onActivity'>) {
+  const { t } = useTranslation();
+  const label = t('admin.map.status', 'Status');
+  return (
+    <FormControl size="small" sx={{ minWidth: 160 }}>
+      <InputLabel>{label}</InputLabel>
+      <StatusMenu {...props} label={label} />
+    </FormControl>
+  );
+}
+
+function StatusMenu({
+  kind,
+  activity,
+  onActivity,
+  label,
+}: Pick<AdminMapToolbarProps, 'kind' | 'activity' | 'onActivity'> & { label: string }) {
+  const { t } = useTranslation();
+  const choose = (value: string) => onActivity(value as AdminMapActivityFilter);
+  return (
+    <Select label={label} value={activity} onChange={(event) => choose(event.target.value)}>
+      <MenuItem value="">{t('admin.map.allStatuses', 'All statuses')}</MenuItem>
+      {activitiesForKind(kind).map((status) => (
+        <MenuItem key={status} value={status}>{t(`admin.map.activity.${status}`, status)}</MenuItem>
+      ))}
+    </Select>
   );
 }
 

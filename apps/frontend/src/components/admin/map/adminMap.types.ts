@@ -7,6 +7,7 @@ export type AdminMapActivity =
   | 'suspended'
   | 'open'
   | 'inactive';
+export type AdminMapActivityFilter = AdminMapActivity | '';
 
 export interface AdminMapPin {
   id: string;
@@ -51,6 +52,15 @@ export interface AdminMapSearchHit {
   subtitle: string | null;
   pin: AdminMapPin | null;
   notice: AdminMapSearchNotice | null;
+}
+
+const AGENT_ACTIVITIES: AdminMapActivity[] = ['active', 'unavailable', 'suspended'];
+const MERCHANT_ACTIVITIES: AdminMapActivity[] = ['open', 'inactive'];
+
+export function activitiesForKind(kind: AdminMapKind): AdminMapActivity[] {
+  if (kind === 'agents') return AGENT_ACTIVITIES;
+  if (kind === 'businesses') return MERCHANT_ACTIVITIES;
+  return [...AGENT_ACTIVITIES, ...MERCHANT_ACTIVITIES];
 }
 
 export const LIVE_POLL_MS = 15_000;

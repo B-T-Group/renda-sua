@@ -10,7 +10,12 @@ import AdminMapPinPanel from '../../admin/map/AdminMapPinPanel';
 import AdminMapSearch from '../../admin/map/AdminMapSearch';
 import AdminMapSummaryBar from '../../admin/map/AdminMapSummary';
 import AdminMapToolbar from '../../admin/map/AdminMapToolbar';
-import { AdminMapKind, AdminMapPin } from '../../admin/map/adminMap.types';
+import {
+  activitiesForKind,
+  AdminMapActivityFilter,
+  AdminMapKind,
+  AdminMapPin,
+} from '../../admin/map/adminMap.types';
 
 const AdminMapPage: React.FC = () => {
   const { isSuperuser } = usePermissions();
@@ -102,14 +107,20 @@ function MapBody({ model }: { model: ReturnType<typeof useMapModel> }) {
 
 function useMapModel() {
   const filters = useMapFilters();
-  const pins = useAdminMapPins(
+  const loaded = useAdminMapPins(
     { country: filters.country, state: filters.region, kind: filters.kind },
     filters.live
   );
+  const pins = { ...loaded, pins: pinsForActivity(loaded.pins, filters.activity) };
   const focus = useMapFocus(pins.pins);
-  const filterKey = `${filters.country}|${filters.region}|${filters.kind}`;
+  const filterKey = `${filters.country}|${filters.region}|${filters.kind}|${filters.activity}`;
   useDropFocusOnFilter(filterKey, focus.drop);
   return { toolbar: filters, pins, filterKey, ...focus };
+}
+
+function pinsForActivity(pins: AdminMapPin[], activity: AdminMapActivityFilter): AdminMapPin[] {
+  if (!activity) return pins;
+  return pins.filter((pin) => pin.activity === activity);
 }
 
 function useDropFocusOnFilter(filterKey: string, drop: () => void) {
@@ -166,20 +177,34 @@ function focusedPin(
 function useMapFilters() {
   const { countries } = useSupportedCountries();
   const place = useSeededMapMarket();
-  const [kind, setKind] = useState<AdminMapKind>('all');
+  const choice = useKindAndActivity();
   const [live, setLive] = useState(false);
   return {
     countries,
     regions: place.regions,
     country: place.country,
     region: place.region,
-    kind,
     live,
     onCountry: place.onCountry,
     onRegion: place.onRegion,
-    onKind: setKind,
     onLive: setLive,
+    ...choice,
   };
+}
+
+function useKindAndActivity() {
+  const [kind, setKind] = useState<AdminMapKind>('all');
+  const [activity, setActivity] = useState<AdminMapActivityFilter>('');
+  const onKind = (next: AdminMapKind) => {
+    setKind(next);
+    setActivity((current) => keepActivity(next, current));
+  };
+  return { kind, activity, onKind, onActivity: setActivity };
+}
+
+function keepActivity(kind: AdminMapKind, activity: AdminMapActivityFilter): AdminMapActivityFilter {
+  if (!activity || activitiesForKind(kind).includes(activity)) return activity;
+  return '';
 }
 
 export default AdminMapPage;
