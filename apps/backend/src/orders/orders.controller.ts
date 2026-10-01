@@ -2002,9 +2002,9 @@ export class OrdersController {
 
   @Get('cancellation-fee')
   @ApiOperation({
-    summary: 'Get cancellation fee for a country',
+    summary: 'Get cancellation fee (percentage of item subtotal) for an order or country',
     description:
-      'Retrieves the cancellation fee configuration for a specific country',
+      'Cancellation fee is `cancellation_fee_percent`% of the item subtotal after discounts (excludes delivery fee and tax). With `orderId` the exact fee for that order is returned (0 for pay-at-delivery / pay-at-pickup orders); with only `country` the configured percent is returned and `cancellationFee` is null.',
   })
   @ApiQuery({
     name: 'country',
@@ -2013,6 +2013,12 @@ export class OrdersController {
     description: 'Country code (ISO 3166-1 alpha-2)',
     example: 'GA',
   })
+  @ApiQuery({
+    name: 'orderId',
+    required: false,
+    type: String,
+    description: 'Order to compute the exact fee for (client or business owner only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Cancellation fee retrieved successfully',
@@ -2020,7 +2026,8 @@ export class OrdersController {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: true },
-        cancellationFee: { type: 'number', example: 500 },
+        cancellationFee: { type: 'number', nullable: true, example: 3000 },
+        cancellationFeePercent: { type: 'number', example: 30 },
         currency: { type: 'string', example: 'XAF' },
         country: { type: 'string', example: 'GA' },
         message: {
@@ -2056,45 +2063,58 @@ export class OrdersController {
       },
     },
   })
-  async getCancellationFee(@Query('country') country: string) {
+  async getCancellationFee(
+    @Query('country') country: string,
+    @Query('orderId') orderId?: string
+  ) {
     try {
-      // Validate country parameter
-      if (!country) {
+      if (!country && !orderId) {
         throw new HttpException(
           'Country code is required',
           HttpStatus.BAD_REQUEST
         );
       }
 
-      // Get cancellation fee configuration
+      if (orderId) {
+        const preview = await this.ordersService.getCancellationPreview(orderId);
+        return {
+          success: true,
+          cancellationFee: preview.cancellationFee,
+          cancellationFeePercent: preview.cancellationFeePercent ?? 0,
+          currency: preview.refundCurrency,
+          country,
+          message: 'Cancellation fee retrieved successfully',
+        };
+      }
+
       const config = await this.configurationsService.getConfigurationByKey(
-        'cancellation_fee',
+        'cancellation_fee_percent',
         country
       );
-
-      if (!config) {
+      if (!config || config.number_value == null) {
+        this.logger.error(
+          `cancellation_fee_config_missing key=cancellation_fee_percent country=${country}`
+        );
         throw new HttpException(
-          `Cancellation fee configuration not found for country ${country}`,
+          `Cancellation fee percent configuration not found for country ${country}`,
           HttpStatus.NOT_FOUND
         );
       }
 
-      // Determine currency based on country
       const currencyMap: Record<string, string> = {
-        GA: 'XAF', // Gabon - Central African CFA franc
-        CM: 'XAF', // Cameroon - Central African CFA franc
-        CA: 'CAD', // Canada - Canadian Dollar
-        US: 'USD', // United States - US Dollar
+        GA: 'XAF',
+        CM: 'XAF',
+        CA: 'CAD',
+        US: 'USD',
       };
-
-      const currency = currencyMap[country] || 'XAF';
 
       return {
         success: true,
-        cancellationFee: config.number_value,
-        currency,
+        cancellationFee: null,
+        cancellationFeePercent: Number(config.number_value),
+        currency: currencyMap[country] || 'XAF',
         country,
-        message: 'Cancellation fee retrieved successfully',
+        message: 'Cancellation fee percent retrieved successfully',
       };
     } catch (error: any) {
       if (error instanceof HttpException) {

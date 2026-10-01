@@ -6,6 +6,7 @@ from .address import format_full_address
 from .geocoding import geocode_address, persist_coordinates_to_hasura
 from .distance import calculate_haversine_distance, format_distance
 from .datetime_utils import parse_datetime
+from . import cancellation_fee
 
 __all__ = [
     "format_full_address",
@@ -14,5 +15,6 @@ __all__ = [
     "calculate_haversine_distance",
     "format_distance",
     "parse_datetime",
+    "cancellation_fee",
 ]
 

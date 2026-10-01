@@ -17,6 +17,10 @@ Object.defineProperty(globalThis, 'crypto', {
 process.env.TWILIO_ACCOUNT_SID ||= 'test_sid';
 process.env.TWILIO_ACCOUNT_TOKEN ||= 'test_token';
 process.env.TWILIO_VERIFY_SERVICE_SID ||= 'test_verify_sid';
+// Keep Redis-backed services on their in-memory fallback so the smoke test
+// neither needs a local Redis nor hangs in app.close() retrying a dead socket.
+process.env.REDIS_HOST = '';
+process.env.SESSION_ENCRYPTION_KEY ||= 'test-session-encryption-key-32bytes';
 process.env.COMMERCE_TOKEN_ENCRYPTION_KEY ||=
   'test-commerce-token-encryption-key-32b';
 

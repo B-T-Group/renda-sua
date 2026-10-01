@@ -82,6 +82,9 @@ describe('OrdersService - retryDepositPayment', () => {
         warn: jest.fn(),
         error: jest.fn(),
       },
+      resolveOrderMobileMoneyPhone: (
+        OrdersService.prototype as any
+      ).resolveOrderMobileMoneyPhone,
       finalizeDepositAfterCallback: jest.fn(),
       completePaidDepositFromSucceededTxn:
         OrdersService.prototype.completePaidDepositFromSucceededTxn,
@@ -169,7 +172,7 @@ describe('OrdersService - retryDepositPayment', () => {
         service.retryDepositPayment('order-123')
       ).rejects.toThrow(
         new HttpException(
-          'Cannot retry deposit payment for cancelled order',
+          'Deposit payment retry is only available when order is pending payment',
           HttpStatus.BAD_REQUEST
         )
       );
@@ -411,8 +414,12 @@ describe('OrdersService - retryDepositPayment', () => {
       expect(result.amount_due).toBe(8000);
       expect(result.payment_transaction.transaction_id).toBe('provider-tx-new');
 
-      expect(mobilePaymentsDatabaseService.createTransaction).toHaveBeenCalledBefore(
-        hasuraSystemService.executeMutation as any
+      expect(
+        mobilePaymentsDatabaseService.createTransaction.mock
+          .invocationCallOrder[0]
+      ).toBeLessThan(
+        (hasuraSystemService.executeMutation as jest.Mock).mock
+          .invocationCallOrder[0]
       );
 
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(

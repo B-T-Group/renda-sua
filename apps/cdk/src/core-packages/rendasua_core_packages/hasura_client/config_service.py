@@ -1,7 +1,47 @@
 """Configuration-related Hasura operations."""
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from .base import HasuraClient, HasuraClientConfig
 from .logging import log_info, log_error
+
+
+def get_cancellation_fee_percent_rows(
+    country_code: Optional[str],
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> List[Dict[str, Any]]:
+    """
+    Active ``cancellation_fee_percent`` rows for the country and the global (NULL country) row.
+
+    Unlike the legacy flat-fee reader this does NOT swallow errors: a Hasura/network
+    failure raises, so the caller fails the financial step (it is retried / alerted)
+    instead of silently waiving the fee. An empty list means "no row configured".
+    """
+    country_filter = (
+        "{ country_code: { _eq: $countryCode } }\n          " if country_code else ""
+    )
+    var_decl = ", $countryCode: String!" if country_code else ""
+    query = f"""
+    query GetCancellationFeePercent($configKey: String!{var_decl}) {{
+      application_configurations(
+        where: {{
+          config_key: {{ _eq: $configKey }}
+          status: {{ _eq: "active" }}
+          _or: [
+          {country_filter}{{ country_code: {{ _is_null: true }} }}
+          ]
+        }}
+      ) {{
+        country_code
+        number_value
+      }}
+    }}
+    """
+    variables: Dict[str, Any] = {"configKey": "cancellation_fee_percent"}
+    if country_code:
+        variables["countryCode"] = country_code
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    data = client.execute(query, variables)
+    return data.get("application_configurations", []) or []
 
 
 def get_cancellation_fee_config(
@@ -10,6 +50,10 @@ def get_cancellation_fee_config(
     hasura_admin_secret: str
 ) -> Optional[float]:
     """
+    DEPRECATED / RETIRED: legacy flat ``cancellation_fee`` reader. The cancellation fee is
+    now ``cancellation_fee_percent`` (see ``get_cancellation_fee_percent_rows``); this is
+    kept only for backward compatibility and is no longer used by the cancellation flow.
+
     Get cancellation fee configuration for a country.
     
     Args:
