@@ -1,5 +1,29 @@
 import { AccountsService, cashAdvanceMinBalance } from './accounts.service';
 
+/** Fake of the atomic ApplyBalanceDelta mutation: base balances + _inc (guard shape asserted separately). */
+function fakeApplyDelta(mutation: string, vars?: any, base?: any) {
+  if (!String(mutation).includes('ApplyBalanceDelta')) {
+    return { update_accounts_by_pk: { id: 'account-1' } };
+  }
+  const start = base ?? {
+    available_balance: 1000,
+    withheld_balance: 200,
+    cash_advance_balance: 0,
+  };
+  return {
+    update_accounts: {
+      returning: [
+        {
+          available_balance: start.available_balance + vars.inc.available_balance,
+          withheld_balance: start.withheld_balance + vars.inc.withheld_balance,
+          cash_advance_balance:
+            Number(start.cash_advance_balance ?? 0) + vars.inc.cash_advance_balance,
+        },
+      ],
+    },
+  };
+}
+
 describe('AccountsService', () => {
   const accountId = 'account-1';
   const userId = 'user-1';
@@ -162,12 +186,12 @@ describe('AccountsService', () => {
         }
         return {};
       });
-      executeMutation.mockImplementation(async (mutation: string) => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('InsertTransaction')) {
           return { insert_account_transactions_one: { id: 'tx-new' } };
         }
-        if (mutation.includes('UpdateAccountBalances')) {
-          return { update_accounts_by_pk: { id: accountId } };
+        if (mutation.includes('ApplyBalanceDelta')) {
+          return fakeApplyDelta(mutation, vars);
         }
         return {};
       });
@@ -196,11 +220,11 @@ describe('AccountsService', () => {
         }
         return { account_transactions: [] };
       });
-      executeMutation.mockImplementation(async (mutation: string) => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('InsertTransaction')) {
           return { insert_account_transactions_one: { id: 'tx-rest' } };
         }
-        return { update_accounts_by_pk: { id: accountId } };
+        return fakeApplyDelta(mutation, vars);
       });
 
       const result = await service.registerDepositIfNotExists({
@@ -248,11 +272,11 @@ describe('AccountsService', () => {
         }
         return { account_transactions: [] };
       });
-      executeMutation.mockImplementation(async (mutation: string) => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('InsertTransaction')) {
           return { insert_account_transactions_one: { id: 'tx-sum' } };
         }
-        return { update_accounts_by_pk: { id: accountId } };
+        return fakeApplyDelta(mutation, vars);
       });
 
       const result = await service.registerDepositIfNotExists({
@@ -287,11 +311,11 @@ describe('AccountsService', () => {
         }
         return { account_transactions: [] };
       });
-      executeMutation.mockImplementation(async (mutation: string) => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('InsertTransaction')) {
           return { insert_account_transactions_one: { id: 'tx-dep' } };
         }
-        return { update_accounts_by_pk: { id: accountId } };
+        return fakeApplyDelta(mutation, vars);
       });
 
       const result = await service.registerDepositIfNotExists({
@@ -325,11 +349,11 @@ describe('AccountsService', () => {
         }
         return { account_transactions: [] };
       });
-      executeMutation.mockImplementation(async (mutation: string) => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('InsertTransaction')) {
           return { insert_account_transactions_one: { id: 'tx-gap' } };
         }
-        return { update_accounts_by_pk: { id: accountId } };
+        return fakeApplyDelta(mutation, vars);
       });
 
       const result = await service.registerDepositIfNotExists({
@@ -377,12 +401,12 @@ describe('AccountsService', () => {
   describe('registerTransaction', () => {
     beforeEach(() => {
       mockAccount(activeAccount);
-      executeMutation.mockImplementation(async (mutation: string) => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('InsertTransaction')) {
           return { insert_account_transactions_one: { id: 'tx-new' } };
         }
-        if (mutation.includes('UpdateAccountBalances')) {
-          return { update_accounts_by_pk: { id: accountId } };
+        if (mutation.includes('ApplyBalanceDelta')) {
+          return fakeApplyDelta(mutation, vars);
         }
         return {};
       });
@@ -462,13 +486,16 @@ describe('AccountsService', () => {
       });
 
       const balanceCall = executeMutation.mock.calls.find(([m]) =>
-        String(m).includes('UpdateAccountBalances')
+        String(m).includes('ApplyBalanceDelta')
       );
+      // atomic increment, not an absolute overwrite; credits need no funds guard
       expect(balanceCall?.[1]).toEqual({
-        accountId,
-        availableBalance: 1250,
-        withheldBalance: 200,
-        cashAdvanceBalance: 0,
+        where: { id: { _eq: accountId } },
+        inc: {
+          available_balance: 250,
+          withheld_balance: 0,
+          cash_advance_balance: 0,
+        },
       });
     });
 
@@ -631,8 +658,142 @@ describe('AccountsService', () => {
       });
     });
 
-    it('claims cash-advance capacity atomically before inserting the ledger row', async () => {
+    const lastDelta = () =>
+      executeMutation.mock.calls
+        .filter(([m]) => String(m).includes('ApplyBalanceDelta'))
+        .map(([, v]) => v)
+        .at(-1);
+
+    it('guards debits in the same atomic statement as the increment', async () => {
+      await service.registerTransaction({
+        accountId,
+        amount: 300,
+        transactionType: 'withdrawal',
+      });
+      expect(lastDelta()).toEqual({
+        where: {
+          id: { _eq: accountId },
+          available_balance: { _gte: 300 },
+        },
+        inc: {
+          available_balance: -300,
+          withheld_balance: 0,
+          cash_advance_balance: 0,
+        },
+      });
+    });
+
+    it('guards holds on available and releases on withheld', async () => {
+      await service.registerTransaction({
+        accountId,
+        amount: 50,
+        transactionType: 'hold',
+      });
+      expect(lastDelta()?.where).toEqual({
+        id: { _eq: accountId },
+        available_balance: { _gte: 50 },
+      });
+      await service.registerTransaction({
+        accountId,
+        amount: 50,
+        transactionType: 'release',
+      });
+      expect(lastDelta()?.where).toEqual({
+        id: { _eq: accountId },
+        withheld_balance: { _gte: 50 },
+      });
+    });
+
+    it('omits the available guard when allowNegative is set', async () => {
+      await service.registerTransaction({
+        accountId,
+        amount: 5000,
+        transactionType: 'payment',
+        allowNegative: true,
+      });
+      expect(lastDelta()?.where).toEqual({ id: { _eq: accountId } });
+    });
+
+    it('fails without writing a ledger row when a concurrent debit wins (stale snapshot)', async () => {
+      // Snapshot says 1000 available, but the guarded UPDATE matches no row.
       executeMutation.mockImplementation(async (mutation: string) => {
+        if (mutation.includes('ApplyBalanceDelta')) {
+          return { update_accounts: { returning: [] } };
+        }
+        return {};
+      });
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 900,
+        transactionType: 'withdrawal',
+      });
+      expect(result).toEqual({
+        success: false,
+        error: 'Insufficient funds for this transaction',
+      });
+      expect(
+        executeMutation.mock.calls.some(([m]) =>
+          String(m).includes('InsertTransaction')
+        )
+      ).toBe(false);
+    });
+
+    it('reverts the balance delta if the ledger row cannot be inserted', async () => {
+      const deltas: any[] = [];
+      executeMutation.mockImplementation(async (mutation: string, vars: any) => {
+        if (mutation.includes('ApplyBalanceDelta')) {
+          deltas.push(vars.inc);
+          return fakeApplyDelta(mutation, vars);
+        }
+        if (mutation.includes('InsertTransaction')) {
+          throw new Error('insert failed');
+        }
+        return {};
+      });
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 100,
+        transactionType: 'deposit',
+      });
+      expect(result).toEqual({ success: false, error: 'insert failed' });
+      expect(deltas).toEqual([
+        { available_balance: 100, withheld_balance: 0, cash_advance_balance: 0 },
+        { available_balance: -100, withheld_balance: -0, cash_advance_balance: -0 },
+      ]);
+    });
+
+    it('applies concurrent increments additively (no lost update)', async () => {
+      // Model Postgres: shared row, each statement increments the current value.
+      const row = { available_balance: 1000, withheld_balance: 200, cash_advance_balance: 0 };
+      executeMutation.mockImplementation(async (mutation: string, vars: any) => {
+        if (mutation.includes('InsertTransaction')) {
+          return { insert_account_transactions_one: { id: 'tx' } };
+        }
+        if (mutation.includes('ApplyBalanceDelta')) {
+          row.available_balance += vars.inc.available_balance;
+          row.withheld_balance += vars.inc.withheld_balance;
+          row.cash_advance_balance += vars.inc.cash_advance_balance;
+          return { update_accounts: { returning: [{ ...row }] } };
+        }
+        return {};
+      });
+      // Every caller reads the same stale snapshot (available 1000).
+      const results = await Promise.all(
+        Array.from({ length: 20 }, () =>
+          service.registerTransaction({
+            accountId,
+            amount: 10,
+            transactionType: 'deposit',
+            skipCashAdvanceRepayment: true,
+          })
+        )
+      );
+      expect(results.every((r) => r.success)).toBe(true);
+      expect(row.available_balance).toBe(1200);
+    });
+
+    it('claims cash-advance capacity atomically before inserting the ledger row', async () => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('ClaimCashAdvance')) {
           return {
             update_accounts: {
@@ -681,7 +842,7 @@ describe('AccountsService', () => {
       });
       expect(
         executeMutation.mock.calls.some(([mutation]) =>
-          String(mutation).includes('UpdateAccountBalances')
+          String(mutation).includes('ApplyBalanceDelta')
         )
       ).toBe(false);
     });
@@ -747,7 +908,7 @@ describe('AccountsService', () => {
     });
 
     it('releases the cash-advance claim if the ledger insert fails', async () => {
-      executeMutation.mockImplementation(async (mutation: string) => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
         if (mutation.includes('ClaimCashAdvance')) {
           return {
             update_accounts: {

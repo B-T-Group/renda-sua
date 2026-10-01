@@ -37,8 +37,8 @@ export const ApplicationConfigurationsSection: React.FC<
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <TextField
               label={t(
-                'admin.applicationSetup.cancellationFee',
-                'Cancellation fee'
+                'admin.applicationSetup.cancellationFeePercent',
+                'Cancellation fee (% of item subtotal after discounts)'
               )}
               type="number"
               value={config.number_value ?? ''}

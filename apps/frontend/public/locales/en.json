@@ -5304,6 +5304,7 @@
     "cancellationFeeError": "Unable to load cancellation fee information.",
     "cancellationFeeMessage": "A cancellation fee will be deducted from your refund:",
     "cancellationFeeNote": "This fee will be deducted from your refund amount.",
+    "cancellationNoFeeForOrder": "No cancellation fee applies to this order.",
     "cancellationFeeUnknown": "A cancellation fee may apply. Please contact support for details.",
     "cancellationFree": "Free Cancellation",
     "cancellationFreeMessage": "You can cancel this order for free since it has not been confirmed yet.",
