@@ -54,10 +54,12 @@ describe('LoginController session cookie and CSRF gates', () => {
   it('returns channel metadata from start-otp', async () => {
     const body = await controller.startOtp(
       { email: 'a@b.com' },
+      'web',
       { ip: '9.9.9.9' } as never
     );
     expect(loginService.startLoginOtp).toHaveBeenCalledWith(
       { email: 'a@b.com' },
+      'web',
       '9.9.9.9'
     );
     expect(body).toEqual({
@@ -113,7 +115,11 @@ describe('LoginController session cookie and CSRF gates', () => {
       {
         ip: '9.9.9.9',
         secure: true,
-        headers: { 'user-agent': 'jest', 'x-forwarded-proto': 'https' },
+        headers: {
+          'user-agent': 'jest',
+          'x-forwarded-proto': 'https',
+          origin: 'http://localhost:4200',
+        },
       } as never,
       res as never
     );

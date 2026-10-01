@@ -60,7 +60,16 @@ describe('OrdersService cash-exception inventory', () => {
     };
     hasuraSystemService = {
       executeMutation: jest.fn().mockResolvedValue({}),
-      executeQuery: jest.fn().mockResolvedValue({}),
+      executeQuery: jest.fn().mockImplementation(async (query: string) =>
+        String(query).includes('StockTrackedInventories')
+          ? {
+              business_inventory: ['inv-1', 'inv-2'].map((id) => ({
+                id,
+                item: { is_cooked_food: false, item_sub_category: null },
+              })),
+            }
+          : {}
+      ),
       getAccount: jest.fn().mockResolvedValue({ id: 'acct-1' }),
     };
 

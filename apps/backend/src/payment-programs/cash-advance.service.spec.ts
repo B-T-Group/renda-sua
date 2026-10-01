@@ -90,6 +90,7 @@ describe('CashAdvanceService.draw', () => {
       amount: 1000,
       transactionType: 'cash_advance',
       memo: 'Cash advance draw - Advance',
+      maxCashAdvanceDebt: 10000,
     });
     expect(hasura.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('InsertDraw'),
