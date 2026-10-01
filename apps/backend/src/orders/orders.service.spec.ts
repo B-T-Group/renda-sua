@@ -3139,6 +3139,51 @@ describe('OrdersService', () => {
       });
       expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     });
+
+    it('keeps the merchandise total when delivery was already waived', async () => {
+      const waivedOrder = {
+        ...switchOrder,
+        delivery_fee_waived: true,
+        base_delivery_fee: 500,
+        per_km_delivery_fee: 300,
+        subtotal: 70000,
+        total_amount: 70000,
+        payment_status: 'authorized',
+        payment_source: 'credit_card',
+      };
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetOrder') || query.includes('orders_by_pk')) {
+          return { orders_by_pk: waivedOrder };
+        }
+        if (query.includes('OrderItemsPickupEligibility')) {
+          return {
+            order_items: [
+              { business_inventory: { item: { pay_at_pickup_enabled: true } } },
+            ],
+          };
+        }
+        if (query.includes('FindOrderHold') || query.includes('order_holds')) {
+          return { order_holds: [{ id: 'hold-1', delivery_fees: 0 }] };
+        }
+        return {};
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1 },
+      });
+
+      await service.switchToPickup('order-123');
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('SwitchToPickup'),
+        expect.objectContaining({ id: 'order-123', total: 70000 })
+      );
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    });
   });
 
   describe('cancelOrderAsAdmin', () => {

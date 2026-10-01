@@ -27,6 +27,7 @@ export interface RefundOrderContext {
   subtotal: number | string;
   base_delivery_fee: number | string;
   per_km_delivery_fee: number | string;
+  delivery_fee_waived?: boolean | null;
   currency: string;
   completed_at: string | null;
   client_id: string;

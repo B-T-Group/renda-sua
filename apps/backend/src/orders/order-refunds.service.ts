@@ -19,6 +19,7 @@ import { RefundDestinationRouter } from './refund-destination.router';
 import { RefundEventService } from './refund-event.service';
 import { RefundPaymentService } from './refund-payment.service';
 import { ReturnWorkflowService } from './return-workflow.service';
+import { collectedDeliveryFee } from './delivery-pricing.util';
 import type { RefundDestination, RefundOrderContext } from './refund.types';
 import { insertOrderStatusHistory } from './order-status-history.util';
 
@@ -574,7 +575,7 @@ export class OrderRefundsService {
   }
 
   private deliveryFeeTotal(order: RefundOrderContext): number {
-    return Number(order.base_delivery_fee) + Number(order.per_km_delivery_fee);
+    return collectedDeliveryFee(order);
   }
 
   private async insertRefundRequest(
@@ -734,7 +735,8 @@ export class OrderRefundsService {
           sla_due_at return_status approved_amount currency
           order {
             id order_number current_status subtotal total_amount
-            base_delivery_fee per_km_delivery_fee currency completed_at payment_source
+            base_delivery_fee per_km_delivery_fee delivery_fee_waived
+            currency completed_at payment_source
             order_items { id item_name quantity unit_price total_price }
             delivery_address {
               address_line_1 address_line_2 city state postal_code country
@@ -753,6 +755,7 @@ export class OrderRefundsService {
       query OrderRefundCtx($orderId: uuid!) {
         orders_by_pk(id: $orderId) {
           id order_number current_status subtotal base_delivery_fee per_km_delivery_fee
+          delivery_fee_waived
           currency completed_at client_id business_id business_location_id
           payment_source payment_status
           client { user_id }
