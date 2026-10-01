@@ -215,11 +215,17 @@ def get_complete_order_details(
         id
         order_number
         total_amount
+        base_delivery_fee
+        per_km_delivery_fee
+        delivery_fee_waived
+        tax_amount
         currency
         client_id
         business_id
         payment_source
         payment_status
+        payment_timing
+        current_status
         pay_after_merchant_confirm
         client {
           id
@@ -308,16 +314,19 @@ def get_complete_order_details(
             business=business,
             payment_source=order_data.get("payment_source"),
             payment_status=order_data.get("payment_status"),
+            payment_timing=order_data.get("payment_timing"),
             pay_after_merchant_confirm=order_data.get(
                 "pay_after_merchant_confirm"
             ),
-            current_status="",  # Not fetched in this query
+            current_status=order_data.get("current_status") or "",
             business_location_id="",  # Not fetched in this query
             delivery_address_id="",  # Not fetched in this query
             subtotal=0.0,
-            base_delivery_fee=0.0,
-            per_km_delivery_fee=0.0,
-            tax_amount=0.0,
+            # Fee-base inputs (cancellation fee = % of item subtotal after discounts)
+            base_delivery_fee=float(order_data.get("base_delivery_fee") or 0),
+            per_km_delivery_fee=float(order_data.get("per_km_delivery_fee") or 0),
+            delivery_fee_waived=order_data.get("delivery_fee_waived"),
+            tax_amount=float(order_data.get("tax_amount") or 0),
             requires_fast_delivery=False,
         )
         
@@ -781,6 +790,38 @@ def get_order_business_location_country(
     except Exception as e:
         log_error("Error fetching order business location country", error=e, order_id=order_id)
         return None
+
+
+def get_order_business_location_country_strict(
+    order_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Optional[str]:
+    """
+    Like ``get_order_business_location_country`` but a Hasura/network error RAISES instead
+    of becoming ``None``. ``None`` therefore only means "the order has no business
+    location address country". Used by the cancellation fee so a transient read error can
+    never change which country's fee rule is applied.
+    """
+    query = """
+    query GetOrderBusinessLocationCountryStrict($orderId: uuid!) {
+      orders_by_pk(id: $orderId) {
+        business_location {
+          address {
+            country
+          }
+        }
+      }
+    }
+    """
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    data = client.execute(query, {"orderId": order_id})
+    order_data = data.get("orders_by_pk")
+    if not order_data:
+        raise RuntimeError(f"Order {order_id} not found while resolving cancellation fee country")
+    location = order_data.get("business_location") or {}
+    address = location.get("address") or {}
+    return address.get("country")
 
 
 def create_pending_agent_notification(

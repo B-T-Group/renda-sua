@@ -73,7 +73,7 @@ describe('WhatsAppInboxPersistenceService', () => {
       rawPayload: { type: 'image' },
       bumpUnread: true,
     });
-    expect(id).toBe('m1');
+    expect(id).toEqual({ messageId: 'm1', conversationId: 'c1' });
     const conv = hasura.executeMutation.mock.calls.find(([q]) =>
       String(q).includes('InsConv')
     )?.[1].object;
@@ -166,8 +166,8 @@ describe('WhatsAppInboxPersistenceService', () => {
     await service.persistOutbound({
       waId: '1555',
       customerPhone: '1555',
-      source: 'template',
-      type: 'template',
+      source: 'agent_inbox',
+      type: 'text',
       body: 'New order',
       rawPayload: {},
     });

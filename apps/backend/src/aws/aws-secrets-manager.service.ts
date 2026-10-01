@@ -37,7 +37,7 @@ export class AwsSecretsManagerService {
    */
   async getSecret(
     secretName: string,
-    forceRefresh: boolean = false
+    forceRefresh = false
   ): Promise<SecretValue> {
     try {
       // Check cache first

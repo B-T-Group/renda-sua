@@ -63,11 +63,13 @@ describe('SignupController OTP channel and session cookie gates', () => {
         attemptId: 'attempt-123',
         channel: 'sms',
       },
+      'web',
       { ip: '9.9.9.9' }
     );
     expect(signupService.resendSignupOtp).toHaveBeenCalledWith(
       'attempt-123',
       'sms',
+      'web',
       '9.9.9.9'
     );
     expect(body).toEqual({
@@ -126,7 +128,11 @@ describe('SignupController OTP channel and session cookie gates', () => {
       {
         ip: '9.9.9.9',
         secure: true,
-        headers: { 'user-agent': 'jest', 'x-forwarded-proto': 'https' },
+        headers: {
+          'user-agent': 'jest',
+          'x-forwarded-proto': 'https',
+          origin: 'http://localhost:4200',
+        },
       } as never,
       res as never
     );

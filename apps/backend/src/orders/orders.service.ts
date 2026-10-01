@@ -5993,7 +5993,9 @@ export class OrdersService {
         is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
         business_location: { country_code: countryCode },
       },
-      'client'
+      'client',
+      // Customer no-show at pickup keeps the legacy flat fee (decision: no 30% here).
+      { legacyFlatFee: true }
     );
     const feeRetained = policy.cancellationFee ?? 0;
     return {
@@ -6515,14 +6517,19 @@ export class OrdersService {
       );
 
     const persona = isBusinessOwner ? 'business' : 'client';
+    // No silent GA default: an unknown country is logged by the fee resolver.
     const countryCode =
-      (order.business_location as any)?.address?.country ?? 'GA';
+      (order.business_location as any)?.address?.country ?? null;
 
     const orderForPolicy = {
       id: order.id,
       current_status: order.current_status,
       assigned_agent_id: order.assigned_agent_id,
       total_amount: order.total_amount,
+      base_delivery_fee: order.base_delivery_fee,
+      per_km_delivery_fee: order.per_km_delivery_fee,
+      delivery_fee_waived: (order as any).delivery_fee_waived,
+      tax_amount: order.tax_amount,
       currency: order.currency,
       payment_source: (order as any).payment_source,
       payment_status: order.payment_status,

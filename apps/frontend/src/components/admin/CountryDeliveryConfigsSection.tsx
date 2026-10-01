@@ -110,8 +110,8 @@ export const CountryDeliveryConfigsSection: React.FC<
             {cancellationConfig && (
               <TextField
                 label={t(
-                  'admin.applicationSetup.cancellationFee',
-                  'Cancellation fee'
+                  'admin.applicationSetup.cancellationFeePercent',
+                  'Cancellation fee (% of item subtotal after discounts)'
                 )}
                 type="number"
                 value={cancellationConfig.number_value ?? ''}
