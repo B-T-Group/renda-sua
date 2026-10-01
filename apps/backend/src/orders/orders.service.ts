@@ -13,6 +13,12 @@ import { CreditsService } from '../credits/credits.service';
 import { PurchaseCreditsService } from '../payment-programs/purchase-credits.service';
 import type { CreditAllocation, CreditLine } from '../payment-programs/purchase-credit.allocator';
 import { CommissionsService } from '../commissions/commissions.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+import {
+  SETTLEMENT_RETRY_MAX_ATTEMPTS,
+  SettlementStage,
+  settlementRetryDelayMinutes,
+} from './order-settlement-retry.util';
 import type { Configuration } from '../config/configuration';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -236,6 +242,9 @@ type OrderHoldWithSettlement = Order_Holds & {
   item_settlement_completed_at?: string | null;
   delivery_settlement_completed_at?: string | null;
 };
+
+/** Outcome of an item/delivery settlement stage. */
+export type SettlementOutcome = 'settled' | 'queued_for_retry';
 
 type InventoryQuantityRequest = {
   business_inventory_id?: string;
@@ -13220,6 +13229,11 @@ export class OrdersService {
       agent_id?: string | null;
       item_settlement_completed_at?: string | null;
       delivery_settlement_completed_at?: string | null;
+      settlement_failed_stage?: SettlementStage | null;
+      settlement_last_error?: string | null;
+      settlement_retry_count?: number;
+      settlement_failed_at?: string | null;
+      settlement_next_retry_at?: string | null;
     }
   ): Promise<any> {
     const updateOrderHoldMutation = `
@@ -13270,6 +13284,11 @@ export class OrdersService {
             updates.delivery_settlement_completed_at !== undefined
               ? updates.delivery_settlement_completed_at
               : undefined,
+          settlement_failed_stage: updates.settlement_failed_stage,
+          settlement_last_error: updates.settlement_last_error,
+          settlement_retry_count: updates.settlement_retry_count,
+          settlement_failed_at: updates.settlement_failed_at,
+          settlement_next_retry_at: updates.settlement_next_retry_at,
         },
       }
     );
@@ -13592,8 +13611,8 @@ export class OrdersService {
    */
   async processOrderPayment(
     orderId: string,
-    options?: { skipClientLedgerMovements?: boolean }
-  ): Promise<void> {
+    options?: { skipClientLedgerMovements?: boolean; isRetry?: boolean }
+  ): Promise<SettlementOutcome> {
     const order = await this.getOrderDetails(orderId);
     if (
       !order ||
@@ -13609,7 +13628,7 @@ export class OrdersService {
 
     const orderHold = await this.getOrCreateOrderHold(orderId);
     if (orderHold.item_settlement_completed_at) {
-      return;
+      return 'settled';
     }
 
     const paymentTiming = (order as any).payment_timing as
@@ -13626,7 +13645,11 @@ export class OrdersService {
           : fulfillment === 'shipping'
             ? ['shipped', 'in_delivery', 'complete']
             : ['assigned_to_agent', 'picked_up'];
-    if (!itemStatuses.includes(order.current_status)) {
+    // A queued retry runs after the order has moved on, so the status gate is skipped.
+    if (
+      options?.isRetry !== true &&
+      !itemStatuses.includes(order.current_status)
+    ) {
       throw new HttpException(
         `Item settlement requires assigned_to_agent or picked_up; got ${order.current_status}`,
         HttpStatus.BAD_REQUEST
@@ -13688,19 +13711,22 @@ export class OrdersService {
     try {
       await this.commissionsService.distributeItemCommissions(order);
     } catch (error: any) {
-      // Fail loud and leave item_settlement_completed_at unset so the stage can be
-      // retried (recipients already paid are skipped by payCommission).
-      this.logger.error(
-        `settlement_failed stage=item order=${order.order_number} orderId=${orderId}: ${error?.message}`,
-        error?.stack
+      // The client side is already settled (hold zeroed above). Do not stamp
+      // item_settlement_completed_at; queue a retry instead of failing the request.
+      // payCommission skips recipients already paid, so a retry is safe to repeat.
+      return this.queueSettlementRetryOrRethrow(
+        orderHold.id,
+        'item',
+        order,
+        error
       );
-      throw error;
     }
 
     await this.updateOrderHold(orderHold.id, {
       client_hold_amount: 0,
       item_settlement_completed_at: new Date().toISOString(),
     });
+    return 'settled';
   }
 
   /**
@@ -13709,8 +13735,8 @@ export class OrdersService {
    */
   async processOrderDeliveryPayment(
     orderId: string,
-    options?: { skipClientLedgerMovements?: boolean }
-  ): Promise<void> {
+    options?: { skipClientLedgerMovements?: boolean; isRetry?: boolean }
+  ): Promise<SettlementOutcome> {
     const order = await this.getOrderDetails(orderId);
     if (
       !order ||
@@ -13726,10 +13752,18 @@ export class OrdersService {
 
     const orderHold = await this.getOrCreateOrderHold(orderId);
     if (orderHold.delivery_settlement_completed_at) {
-      return;
+      return 'settled';
     }
 
     if (!orderHold.item_settlement_completed_at) {
+      if (await this.isSettlementStageQueued(orderHold.id, 'item')) {
+        // Item payout is queued for retry; the retry job runs delivery settlement
+        // once it succeeds. Do not block order completion on it.
+        this.logger.warn(
+          `settlement_deferred stage=delivery order=${order.order_number} orderId=${orderId}: item settlement is queued for retry`
+        );
+        return 'queued_for_retry';
+      }
       throw new HttpException(
         'Item settlement must complete before delivery settlement',
         HttpStatus.BAD_REQUEST
@@ -13749,7 +13783,10 @@ export class OrdersService {
         : fulfillment === 'shipping'
           ? ['shipped', 'in_delivery', 'complete']
           : ['out_for_delivery', 'complete'];
-    if (!deliveryStatuses.includes(order.current_status)) {
+    if (
+      options?.isRetry !== true &&
+      !deliveryStatuses.includes(order.current_status)
+    ) {
       throw new HttpException(
         `Delivery settlement requires out_for_delivery or complete; got ${order.current_status}`,
         HttpStatus.BAD_REQUEST
@@ -13837,12 +13874,14 @@ export class OrdersService {
       try {
         await this.commissionsService.distributeDeliveryCommissions(order);
       } catch (error: any) {
-        // Fail loud; delivery_settlement_completed_at stays unset so it can be retried.
-        this.logger.error(
-          `settlement_failed stage=delivery order=${order.order_number} orderId=${orderId}: ${error?.message}`,
-          error?.stack
+        // delivery_settlement_completed_at stays unset; queue a retry instead of
+        // failing the delivery completion.
+        return this.queueSettlementRetryOrRethrow(
+          orderHold.id,
+          'delivery',
+          order,
+          error
         );
-        throw error;
       }
     }
 
@@ -13851,6 +13890,108 @@ export class OrdersService {
       status: 'completed',
       delivery_settlement_completed_at: new Date().toISOString(),
     });
+    return 'settled';
+  }
+
+  /**
+   * Record a failed commission distribution on the order hold and schedule a retry
+   * (see OrderSettlementRetryService). The order itself keeps progressing/completing.
+   * If the failure cannot be recorded we rethrow the original error (fail loud) rather
+   * than lose track of an unpaid settlement.
+   */
+  private async queueSettlementRetryOrRethrow(
+    orderHoldId: string,
+    stage: SettlementStage,
+    order: { id: string; order_number: string },
+    error: any
+  ): Promise<SettlementOutcome> {
+    reportMoneyAnomaly(
+      this.logger,
+      'settlement_failed',
+      `stage=${stage} order=${order.order_number} orderId=${order.id}: ${error?.message}`,
+      { orderId: order.id, stage }
+    );
+    try {
+      await this.recordSettlementFailure(orderHoldId, stage, order, error);
+    } catch (recordError: any) {
+      reportMoneyAnomaly(
+        this.logger,
+        'settlement_retry_queue_failed',
+        `stage=${stage} order=${order.order_number} orderId=${order.id}: could not queue retry (${recordError?.message}); failing the request`,
+        { orderId: order.id, stage }
+      );
+      throw error;
+    }
+    return 'queued_for_retry';
+  }
+
+  /** Persist a settlement failure + next retry time on order_holds (retry queue). */
+  async recordSettlementFailure(
+    orderHoldId: string,
+    stage: SettlementStage,
+    order: { id: string; order_number: string },
+    error: any
+  ): Promise<void> {
+    const current = await this.hasuraSystemService.executeQuery(
+      `query SettlementRetryCount($id: uuid!) {
+        order_holds_by_pk(id: $id) { settlement_retry_count }
+      }`,
+      { id: orderHoldId }
+    );
+    const failedAttempts =
+      Number(current?.order_holds_by_pk?.settlement_retry_count ?? 0) + 1;
+    const exhausted = failedAttempts >= SETTLEMENT_RETRY_MAX_ATTEMPTS;
+    const nextRetryAt = exhausted
+      ? null
+      : new Date(
+          Date.now() + settlementRetryDelayMinutes(failedAttempts) * 60_000
+        ).toISOString();
+    await this.updateOrderHold(orderHoldId, {
+      settlement_failed_stage: stage,
+      settlement_last_error: String(error?.message ?? error).slice(0, 500),
+      settlement_retry_count: failedAttempts,
+      settlement_failed_at: new Date().toISOString(),
+      settlement_next_retry_at: nextRetryAt,
+    });
+    if (exhausted) {
+      reportMoneyAnomaly(
+        this.logger,
+        'settlement_retry_exhausted',
+        `stage=${stage} order=${order.order_number} orderId=${order.id} attempts=${failedAttempts}: automatic retries stopped, manual reconciliation required`,
+        { orderId: order.id, stage, attempts: failedAttempts }
+      );
+    }
+  }
+
+  /** Clear the retry-queue marker after a settlement stage succeeds. */
+  async clearSettlementFailure(orderHoldId: string): Promise<void> {
+    await this.updateOrderHold(orderHoldId, {
+      settlement_failed_stage: null,
+      settlement_last_error: null,
+      settlement_retry_count: 0,
+      settlement_failed_at: null,
+      settlement_next_retry_at: null,
+    });
+  }
+
+  private async isSettlementStageQueued(
+    orderHoldId: string,
+    stage: SettlementStage
+  ): Promise<boolean> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery(
+        `query SettlementQueued($id: uuid!) {
+          order_holds_by_pk(id: $id) { settlement_failed_stage }
+        }`,
+        { id: orderHoldId }
+      );
+      return result?.order_holds_by_pk?.settlement_failed_stage === stage;
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not read settlement retry state for hold ${orderHoldId}: ${error?.message}`
+      );
+      return false;
+    }
   }
 
   private async payMerchantShippingFee(
