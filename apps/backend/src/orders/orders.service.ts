@@ -13678,12 +13678,23 @@ export class OrdersService {
       }
     }
 
+    // Client movements are not idempotent: persist that they are done *before*
+    // distributing commissions so a retry after a distribution failure does not
+    // release/debit the client a second time.
+    if (subtotalPortion > 0) {
+      await this.updateOrderHold(orderHold.id, { client_hold_amount: 0 });
+    }
+
     try {
       await this.commissionsService.distributeItemCommissions(order);
     } catch (error: any) {
+      // Fail loud and leave item_settlement_completed_at unset so the stage can be
+      // retried (recipients already paid are skipped by payCommission).
       this.logger.error(
-        `Failed item commission distribution for order ${order.order_number}: ${error.message}`
+        `settlement_failed stage=item order=${order.order_number} orderId=${orderId}: ${error?.message}`,
+        error?.stack
       );
+      throw error;
     }
 
     await this.updateOrderHold(orderHold.id, {
@@ -13815,12 +13826,23 @@ export class OrdersService {
     if ((order as any).fulfillment_method === 'shipping') {
       await this.payMerchantShippingFee(order, deliveryAmt);
     } else {
+      // Agent hold release and client delivery movements are not idempotent:
+      // persist that they are done before distributing delivery commissions so a
+      // retry does not release/debit twice. (Shipping keeps its previous flow:
+      // it needs delivery_fees to pay the merchant.)
+      await this.updateOrderHold(orderHold.id, {
+        agent_hold_amount: 0,
+        delivery_fees: 0,
+      });
       try {
         await this.commissionsService.distributeDeliveryCommissions(order);
       } catch (error: any) {
+        // Fail loud; delivery_settlement_completed_at stays unset so it can be retried.
         this.logger.error(
-          `Failed delivery commission distribution for order ${order.order_number}: ${error.message}`
+          `settlement_failed stage=delivery order=${order.order_number} orderId=${orderId}: ${error?.message}`,
+          error?.stack
         );
+        throw error;
       }
     }
 

@@ -3755,6 +3755,136 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('settlement fails loudly and stays retryable', () => {
+    const baseOrder = {
+      id: 'order-123',
+      order_number: 'ORD-1',
+      currency: 'XAF',
+      client_id: 'client-123',
+      payment_timing: 'pay_now',
+      fulfillment_method: 'delivery',
+      business: { user_id: 'biz-user-1' },
+      client: { user_id: 'client-456' },
+      assigned_agent: { user_id: 'agent-user-1' },
+    };
+    let updateHold: jest.SpyInstance;
+    let distributeItem: jest.Mock;
+    let distributeDelivery: jest.Mock;
+
+    beforeEach(() => {
+      updateHold = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'acct-1' });
+      distributeItem = jest.fn().mockResolvedValue(undefined);
+      distributeDelivery = jest.fn().mockResolvedValue(undefined);
+      (service as any).commissionsService.distributeItemCommissions =
+        distributeItem;
+      (service as any).commissionsService.distributeDeliveryCommissions =
+        distributeDelivery;
+    });
+
+    const flagWrites = (field: string) =>
+      updateHold.mock.calls.filter(([, updates]) => field in (updates as object));
+
+    it('item settlement: failed distribution rethrows and does not stamp the flag', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 5000,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'assigned_to_agent' },
+      });
+      distributeItem.mockRejectedValue(new Error('HQ user not found'));
+
+      await expect(service.processOrderPayment('order-123')).rejects.toThrow(
+        'HQ user not found'
+      );
+
+      expect(flagWrites('item_settlement_completed_at')).toHaveLength(0);
+      // client movements already happened, so the hold is zeroed to keep retries safe
+      expect(updateHold).toHaveBeenCalledWith('hold-1', { client_hold_amount: 0 });
+    });
+
+    it('item settlement: stamps the flag only after distribution succeeds', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 5000,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'assigned_to_agent' },
+      });
+
+      await service.processOrderPayment('order-123');
+
+      const flagCalls = flagWrites('item_settlement_completed_at');
+      expect(flagCalls).toHaveLength(1);
+      expect(distributeItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('item settlement retry: does not touch the client again once the hold is zeroed', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 0,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'picked_up' },
+      });
+      accountsService.registerTransaction.mockClear();
+
+      await service.processOrderPayment('order-123');
+
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(distributeItem).toHaveBeenCalledTimes(1);
+      expect(flagWrites('item_settlement_completed_at')).toHaveLength(1);
+    });
+
+    it('delivery settlement: failed distribution rethrows and does not stamp the flag', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        delivery_fees: 1000,
+        agent_hold_amount: 4000,
+        item_settlement_completed_at: '2026-01-01T00:00:00Z',
+        delivery_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'out_for_delivery' },
+      });
+      distributeDelivery.mockRejectedValue(new Error('boom'));
+
+      await expect(
+        service.processOrderDeliveryPayment('order-123')
+      ).rejects.toThrow('boom');
+
+      expect(flagWrites('delivery_settlement_completed_at')).toHaveLength(0);
+      expect(updateHold).toHaveBeenCalledWith('hold-1', {
+        agent_hold_amount: 0,
+        delivery_fees: 0,
+      });
+    });
+
+    it('delivery settlement: stamps the flag after successful distribution', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        delivery_fees: 1000,
+        agent_hold_amount: 4000,
+        item_settlement_completed_at: '2026-01-01T00:00:00Z',
+        delivery_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'out_for_delivery' },
+      });
+
+      await service.processOrderDeliveryPayment('order-123');
+
+      expect(distributeDelivery).toHaveBeenCalledTimes(1);
+      expect(flagWrites('delivery_settlement_completed_at')).toHaveLength(1);
+    });
+  });
+
   describe('initiateCookedFoodFullPaymentAfterConfirm phone', () => {
     const payAfterOrder = {
       id: 'order-123',
