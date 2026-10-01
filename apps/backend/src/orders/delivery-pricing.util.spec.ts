@@ -58,6 +58,30 @@ describe('delivery pricing', () => {
     ).toEqual({ baseFee: 1000, perKmFee: 1500, totalFee: 2500 });
   });
 
+  it('shrinks the base when it alone is above the total cap', () => {
+    expect(
+      capDeliveryFee({
+        baseFee: 1800,
+        perKmRate: 100,
+        distanceKm: 4,
+        maxDeliveryFee: 1000,
+        maxPerKmFee: 1500,
+      })
+    ).toEqual({ baseFee: 1000, perKmFee: 0, totalFee: 1000 });
+  });
+
+  it('treats a negative distance or rate as zero', () => {
+    expect(
+      capDeliveryFee({
+        baseFee: 500,
+        perKmRate: -100,
+        distanceKm: -3,
+        maxDeliveryFee: 1000,
+        maxPerKmFee: 1500,
+      })
+    ).toEqual({ baseFee: 500, perKmFee: 0, totalFee: 500 });
+  });
+
   it('waives only inside the deduced distance at the commission threshold', () => {
     expect(
       shouldWaiveDeliveryFee({
@@ -83,12 +107,32 @@ describe('delivery pricing', () => {
         threshold: 10000,
       })
     ).toBe(false);
+    expect(
+      shouldWaiveDeliveryFee({
+        distanceKm: 1,
+        maxClientKm: null,
+        commissionAmount: 20000,
+        threshold: 10000,
+      })
+    ).toBe(false);
+    expect(
+      shouldWaiveDeliveryFee({
+        distanceKm: 1,
+        maxClientKm: 5,
+        commissionAmount: 20000,
+        threshold: 0,
+      })
+    ).toBe(false);
   });
 
   it('maps country names to the ISO codes used by delivery config', () => {
     expect(normalizeDeliveryCountryCode('Gabon')).toBe('GA');
     expect(normalizeDeliveryCountryCode('cameroon')).toBe('CM');
     expect(normalizeDeliveryCountryCode('GA')).toBe('GA');
+    expect(normalizeDeliveryCountryCode("Cote d'Ivoire")).toBe('CI');
+    expect(normalizeDeliveryCountryCode('Ivory Coast')).toBe('CI');
+    expect(normalizeDeliveryCountryCode('')).toBe('GA');
+    expect(normalizeDeliveryCountryCode('Nigeria')).toBe('NI');
   });
 
   it('charges the customer 0 and restores the pre-waiver base, skipping the first-order promo', () => {
