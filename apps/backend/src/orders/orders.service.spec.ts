@@ -2,7 +2,12 @@ jest.mock('../notifications/notifications.service', () => ({
   NotificationsService: class NotificationsService {},
 }));
 
+jest.mock('../common/utils/money-alert.util', () => ({
+  reportMoneyAnomaly: jest.fn(),
+}));
+
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -3752,6 +3757,276 @@ describe('OrdersService', () => {
           transactionType: 'payment',
         })
       );
+    });
+  });
+
+  describe('settlement failure completes the order and queues a retry', () => {
+    const baseOrder = {
+      id: 'order-123',
+      order_number: 'ORD-1',
+      currency: 'XAF',
+      client_id: 'client-123',
+      payment_timing: 'pay_now',
+      fulfillment_method: 'delivery',
+      business: { user_id: 'biz-user-1' },
+      client: { user_id: 'client-456' },
+      assigned_agent: { user_id: 'agent-user-1' },
+    };
+    let updateHold: jest.SpyInstance;
+    beforeEach(() => (reportMoneyAnomaly as jest.Mock).mockClear());
+    const retryQueueWrites = () =>
+      updateHold.mock.calls.filter(
+        ([, updates]) => 'settlement_failed_stage' in (updates as object)
+      );
+    let distributeItem: jest.Mock;
+    let distributeDelivery: jest.Mock;
+
+    beforeEach(() => {
+      updateHold = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'acct-1' });
+      hasuraSystemService.executeQuery.mockReset();
+      distributeItem = jest.fn().mockResolvedValue(undefined);
+      distributeDelivery = jest.fn().mockResolvedValue(undefined);
+      (service as any).commissionsService.distributeItemCommissions =
+        distributeItem;
+      (service as any).commissionsService.distributeDeliveryCommissions =
+        distributeDelivery;
+    });
+
+    const flagWrites = (field: string) =>
+      updateHold.mock.calls.filter(([, updates]) => field in (updates as object));
+
+    it('item settlement: failed distribution queues a retry, does not throw and does not stamp the flag', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 5000,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SettlementRetryCount')
+          ? { order_holds_by_pk: { settlement_retry_count: 0 } }
+          : { orders_by_pk: { ...baseOrder, current_status: 'assigned_to_agent' } }
+      );
+      distributeItem.mockRejectedValue(new Error('HQ user not found'));
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'queued_for_retry'
+      );
+
+      expect(flagWrites('item_settlement_completed_at')).toHaveLength(0);
+      const queued = retryQueueWrites();
+      expect(queued).toHaveLength(1);
+      expect(queued[0][1]).toEqual(
+        expect.objectContaining({
+          settlement_failed_stage: 'item',
+          settlement_last_error: 'HQ user not found',
+          settlement_retry_count: 1,
+          settlement_next_retry_at: expect.any(String),
+        })
+      );
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_failed',
+        expect.stringContaining('stage=item'),
+        expect.anything()
+      );
+      // client movements already happened, so the hold is zeroed to keep retries safe
+      expect(updateHold).toHaveBeenCalledWith('hold-1', { client_hold_amount: 0 });
+    });
+
+    it('item settlement: stamps the flag only after distribution succeeds', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 5000,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'assigned_to_agent' },
+      });
+
+      await service.processOrderPayment('order-123');
+
+      const flagCalls = flagWrites('item_settlement_completed_at');
+      expect(flagCalls).toHaveLength(1);
+      expect(distributeItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('item settlement retry: does not touch the client again once the hold is zeroed', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 0,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'picked_up' },
+      });
+      accountsService.registerTransaction.mockClear();
+
+      await service.processOrderPayment('order-123');
+
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(distributeItem).toHaveBeenCalledTimes(1);
+      expect(flagWrites('item_settlement_completed_at')).toHaveLength(1);
+    });
+
+    it('delivery settlement: failed distribution queues a retry, does not throw and does not stamp the flag', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        delivery_fees: 1000,
+        agent_hold_amount: 4000,
+        item_settlement_completed_at: '2026-01-01T00:00:00Z',
+        delivery_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SettlementRetryCount')
+          ? { order_holds_by_pk: { settlement_retry_count: 2 } }
+          : { orders_by_pk: { ...baseOrder, current_status: 'out_for_delivery' } }
+      );
+      distributeDelivery.mockRejectedValue(new Error('boom'));
+
+      await expect(
+        service.processOrderDeliveryPayment('order-123')
+      ).resolves.toBe('queued_for_retry');
+      expect(retryQueueWrites()[0][1]).toEqual(
+        expect.objectContaining({
+          settlement_failed_stage: 'delivery',
+          settlement_retry_count: 3,
+        })
+      );
+
+      expect(flagWrites('delivery_settlement_completed_at')).toHaveLength(0);
+      expect(updateHold).toHaveBeenCalledWith('hold-1', {
+        agent_hold_amount: 0,
+        delivery_fees: 0,
+      });
+    });
+
+    it('queue write failure: rethrows the original error (fail loud, never lose an unpaid settlement)', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 0,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) => {
+        if (q.includes('SettlementRetryCount')) throw new Error('hasura down');
+        return { orders_by_pk: { ...baseOrder, current_status: 'picked_up' } };
+      });
+      distributeItem.mockRejectedValue(new Error('HQ user not found'));
+
+      await expect(service.processOrderPayment('order-123')).rejects.toThrow(
+        'HQ user not found'
+      );
+      expect(flagWrites('item_settlement_completed_at')).toHaveLength(0);
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_retry_queue_failed',
+        expect.any(String),
+        expect.anything()
+      );
+    });
+
+    it('queued retry marks the stage exhausted (no next retry) after the max attempts', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 0,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SettlementRetryCount')
+          ? { order_holds_by_pk: { settlement_retry_count: 7 } }
+          : { orders_by_pk: { ...baseOrder, current_status: 'complete' } }
+      );
+      distributeItem.mockRejectedValue(new Error('still broken'));
+
+      await expect(
+        service.processOrderPayment('order-123', { isRetry: true })
+      ).resolves.toBe('queued_for_retry');
+      expect(retryQueueWrites()[0][1]).toEqual(
+        expect.objectContaining({
+          settlement_retry_count: 8,
+          settlement_next_retry_at: null,
+        })
+      );
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_retry_exhausted',
+        expect.any(String),
+        expect.anything()
+      );
+    });
+
+    it('delivery settlement is deferred (not blocked) while the item stage is queued for retry', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        delivery_fees: 1000,
+        agent_hold_amount: 4000,
+        item_settlement_completed_at: null,
+        delivery_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SettlementQueued')
+          ? { order_holds_by_pk: { settlement_failed_stage: 'item' } }
+          : { orders_by_pk: { ...baseOrder, current_status: 'out_for_delivery' } }
+      );
+
+      await expect(
+        service.processOrderDeliveryPayment('order-123')
+      ).resolves.toBe('queued_for_retry');
+      expect(distributeDelivery).not.toHaveBeenCalled();
+      expect(updateHold).not.toHaveBeenCalled();
+    });
+
+    it('delivery settlement still throws when item settlement is missing and nothing is queued', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        item_settlement_completed_at: null,
+        delivery_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SettlementQueued')
+          ? { order_holds_by_pk: { settlement_failed_stage: null } }
+          : { orders_by_pk: { ...baseOrder, current_status: 'out_for_delivery' } }
+      );
+      await expect(
+        service.processOrderDeliveryPayment('order-123')
+      ).rejects.toThrow('Item settlement must complete');
+    });
+
+    it('retry skips the status gate (order already complete)', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 0,
+        item_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'cancelled' },
+      });
+      await expect(
+        service.processOrderPayment('order-123', { isRetry: true })
+      ).resolves.toBe('settled');
+      await expect(service.processOrderPayment('order-123')).rejects.toThrow(
+        'Item settlement requires'
+      );
+    });
+
+    it('delivery settlement: stamps the flag after successful distribution', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        delivery_fees: 1000,
+        agent_hold_amount: 4000,
+        item_settlement_completed_at: '2026-01-01T00:00:00Z',
+        delivery_settlement_completed_at: null,
+      } as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'out_for_delivery' },
+      });
+
+      await service.processOrderDeliveryPayment('order-123');
+
+      expect(distributeDelivery).toHaveBeenCalledTimes(1);
+      expect(flagWrites('delivery_settlement_completed_at')).toHaveLength(1);
     });
   });
 

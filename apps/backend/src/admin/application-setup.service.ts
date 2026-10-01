@@ -50,7 +50,7 @@ export class ApplicationSetupService {
         application_configurations(
           where: {
             country_code: { _eq: $country_code_str }
-            config_key: { _eq: "cancellation_fee" }
+            config_key: { _eq: "cancellation_fee_percent" }
           }
         ) {
           id

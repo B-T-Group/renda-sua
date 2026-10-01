@@ -3,7 +3,10 @@ import { useApiClient } from './useApiClient';
 
 export interface CancellationFeeResponse {
   success: boolean;
-  cancellationFee: number;
+  /** Exact fee for the order when orderId was passed; null for a country-only lookup. */
+  cancellationFee: number | null;
+  /** % of the item subtotal after discounts (excludes delivery fee and tax). */
+  cancellationFeePercent?: number;
   currency: string;
   country: string;
   message: string;
@@ -20,7 +23,10 @@ export const useCancellationFee = () => {
   const apiClient = useApiClient();
 
   const getCancellationFee = useCallback(
-    async (country: string): Promise<CancellationFeeResponse | null> => {
+    async (
+      country: string,
+      orderId?: string
+    ): Promise<CancellationFeeResponse | null> => {
       if (!country) {
         setError('Country code is required');
         return null;
@@ -33,7 +39,7 @@ export const useCancellationFee = () => {
         const response = await apiClient.get<
           CancellationFeeResponse | CancellationFeeError
         >('/orders/cancellation-fee', {
-          params: { country },
+          params: orderId ? { country, orderId } : { country },
         });
 
         if (response.data.success) {

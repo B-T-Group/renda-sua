@@ -44,8 +44,8 @@ export class GraphQLExampleService {
    * Example: Fetch orders with pagination and type safety
    */
   async getOrders(
-    limit: number = 10,
-    offset: number = 0
+    limit = 10,
+    offset = 0
   ): Promise<GetOrdersQuery> {
     try {
       const variables: GetOrdersQueryVariables = { limit, offset };

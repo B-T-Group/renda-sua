@@ -5,6 +5,14 @@ import requests
 from dataclasses import dataclass
 from rendasua_core_packages.models import Order
 from rendasua_core_packages.utilities import format_full_address
+from rendasua_core_packages.utilities.cancellation_fee import (
+    CANCELLATION_FEE_PERCENT_KEY,
+    InvalidFeePercentError,
+    item_subtotal_after_discounts,
+    normalize_fee_country_code,
+    percent_fee,
+    select_fee_percent,
+)
 from typing import Dict, Any, Optional
 from rendasua_core_packages.hasura_client import (
     get_order_with_location,
@@ -15,8 +23,8 @@ from rendasua_core_packages.hasura_client import (
     get_account_by_user_and_currency,
     register_account_transaction,
     update_order_hold_status,
-    get_cancellation_fee_config,
-    get_order_business_location_country,
+    get_cancellation_fee_percent_rows,
+    get_order_business_location_country_strict,
     register_cancellation_fee_transactions,
 )
 from rendasua_core_packages.hasura_client.orders_service import create_pending_agent_notification
@@ -475,15 +483,85 @@ def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
 def client_cancellation_fee_applies(
     order: Any, cancelled_by: str, previous_status: Optional[str]
 ) -> bool:
-    """Charge after confirm, but not for unpaid pay-after cooked food."""
+    """Charge after confirm, but not for unpaid pay-after cooked food.
+
+    Pay-at-delivery / pay-at-pickup orders NEVER carry a cancellation fee (no hold, no
+    wallet charge, no alert). Cooked-food "pay after merchant confirm" orders are stored
+    with payment_timing pay_at_pickup but the client pays up front after confirm, so they
+    keep the paid/authorized rule below.
+    """
     if cancelled_by != "client":
         return False
     if previous_status not in ("confirmed", "preparing", "ready_for_pickup"):
         return False
-    if getattr(order, "pay_after_merchant_confirm", None) is not True:
+    pay_after_confirm = getattr(order, "pay_after_merchant_confirm", None) is True
+    if not pay_after_confirm and getattr(order, "payment_timing", None) in (
+        "pay_at_delivery",
+        "pay_at_pickup",
+    ):
+        return False
+    if not pay_after_confirm:
         return True
     payment_status = (getattr(order, "payment_status", None) or "").lower()
     return payment_status in ("paid", "authorized")
+
+
+def compute_cancellation_fee(
+    order: Any,
+    order_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+) -> float:
+    """Cancellation fee = cancellation_fee_percent % of the item subtotal after discounts.
+
+    Same definition as the NestJS ``CancellationPolicyService.resolvePercentFee`` (shared
+    vectors in tests). Config resolution is explicit and never silent:
+      * country row wins (CA = explicit 0 row => no fee),
+      * no row at all => ``cancellation_fee_config_missing`` ERROR log + 30 % default,
+      * a Hasura read error or an invalid stored value RAISES (the financial step fails and
+        is retried/alerted instead of waiving the fee).
+    """
+    raw_country = get_order_business_location_country_strict(
+        order_id, hasura_endpoint, hasura_admin_secret
+    )
+    country_code = normalize_fee_country_code(raw_country)
+    if not country_code:
+        log_error(
+            "fee_country_unknown: business location country missing/unrecognised; "
+            "using global row or default percent",
+            order_id=order_id,
+            raw_country=raw_country,
+        )
+    rows = get_cancellation_fee_percent_rows(
+        country_code, hasura_endpoint, hasura_admin_secret
+    )
+    percent, source = select_fee_percent(rows, country_code)
+    if source == "missing_default":
+        log_error(
+            "cancellation_fee_config_missing: no active config row, using default percent",
+            order_id=order_id,
+            config_key=CANCELLATION_FEE_PERCENT_KEY,
+            country_code=country_code,
+            default_percent=percent,
+        )
+    base = item_subtotal_after_discounts(
+        order.total_amount,
+        getattr(order, "base_delivery_fee", 0),
+        getattr(order, "per_km_delivery_fee", 0),
+        getattr(order, "delivery_fee_waived", False),
+        getattr(order, "tax_amount", 0),
+    )
+    fee = percent_fee(base, percent, order.currency)
+    log_info(
+        "Cancellation fee computed",
+        order_id=order_id,
+        country_code=country_code,
+        percent=percent,
+        percent_source=source,
+        item_subtotal_after_discounts=base,
+        fee=fee,
+    )
+    return fee
 
 
 def process_cancellation_financials(
@@ -598,20 +676,20 @@ def process_cancellation_financials(
             # Client cancelling after confirmation - fee applies
             log_info("Client cancelled after confirmation, checking for cancellation fee", order_id=order_id, previous_status=previous_status)
             
-            # Get country code from business location
-            country_code = get_order_business_location_country(order_id, hasura_endpoint, hasura_admin_secret)
-            if not country_code:
-                log_info("Country code not found, defaulting to GA", order_id=order_id)
-                country_code = "GA"
-            
-            # Get cancellation fee
-            cancellation_fee = get_cancellation_fee_config(country_code, hasura_endpoint, hasura_admin_secret)
-            if cancellation_fee is None:
-                log_info("Cancellation fee config not found, no fee will be charged", order_id=order_id, country_code=country_code)
-                cancellation_fee = 0.0
-            else:
-                log_info("Cancellation fee found", order_id=order_id, fee=cancellation_fee, country_code=country_code)
-                
+            try:
+                cancellation_fee = compute_cancellation_fee(
+                    order, order_id, hasura_endpoint, hasura_admin_secret
+                )
+            except Exception as fee_error:  # includes InvalidFeePercentError
+                # Never turn a config/read failure into a silently waived fee.
+                log_error(
+                    "cancellation_fee_resolution_failed",
+                    error=fee_error,
+                    order_id=order_id,
+                )
+                return {"success": False, "error": "Failed to resolve cancellation fee"}
+
+            if cancellation_fee > 0:
                 # Get business location account (or legacy business account)
                 business_user_id = order.business.user_id
                 business_location_id = getattr(order, "business_location_id", None)
@@ -622,11 +700,11 @@ def process_cancellation_financials(
                     hasura_admin_secret,
                     business_location_id=business_location_id,
                 )
-                
+
                 if not business_account:
                     log_error("Business account not found", order_id=order_id, business_user_id=business_user_id)
                     return {"success": False, "error": "Business account not found"}
-                
+
                 # Register cancellation fee transactions
                 fee_result = register_cancellation_fee_transactions(
                     order_id,
@@ -638,13 +716,15 @@ def process_cancellation_financials(
                     hasura_endpoint,
                     hasura_admin_secret
                 )
-                
+
                 if not fee_result.get("success"):
                     log_error("Failed to register cancellation fee transactions", order_id=order_id, error=fee_result.get("error"))
                     return {"success": False, "error": "Failed to process cancellation fee"}
-                
+
                 log_info("Cancellation fee transactions registered successfully", order_id=order_id)
-        
+            else:
+                log_info("Cancellation fee is 0 for this order, nothing to charge", order_id=order_id)
+
         elif cancelled_by == "business":
             # Business cancelling - no fee to client
             log_info("Business cancelled order, no cancellation fee", order_id=order_id)

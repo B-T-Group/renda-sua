@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface TransactionRequest {
@@ -51,6 +51,8 @@ export type IdempotentTransactionResult = WithdrawalRegistrationResult;
 
 @Injectable()
 export class AccountsService {
+  private readonly logger = new Logger(AccountsService.name);
+
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
   async getBusinessWithdrawalPinStateByAccountId(accountId: string): Promise<{
@@ -169,13 +171,96 @@ export class AccountsService {
       request.transactionType,
       request.amount
     );
-    const newBalances = this.calculateNewBalances(account, balanceUpdate);
+    // Fast reject on the snapshot we just read (saves a mutation). The guarded
+    // atomic update below is the authority: the snapshot may already be stale.
     if (!this.hasSufficientFunds(account, balanceUpdate, request)) {
       return { success: false, error: 'Insufficient funds for this transaction' };
     }
-    const transactionId = await this.insertTransaction(request);
-    await this.updateAccountBalances(request.accountId, newBalances);
-    return { success: true, transactionId, newBalance: newBalances };
+    const applied = await this.applyBalanceDelta(
+      request.accountId,
+      balanceUpdate,
+      this.balanceGuard(balanceUpdate, request)
+    );
+    if (!applied) {
+      return { success: false, error: 'Insufficient funds for this transaction' };
+    }
+    try {
+      const transactionId = await this.insertTransaction(request);
+      return { success: true, transactionId, newBalance: applied };
+    } catch (error: any) {
+      await this.revertBalanceDelta(request.accountId, balanceUpdate);
+      return {
+        success: false,
+        error: error?.message || 'Failed to register transaction',
+      };
+    }
+  }
+
+  /**
+   * Hasura `where` that encodes the funds check so it is evaluated by Postgres
+   * in the same statement as the increment (no check-then-act window).
+   * Mirrors hasSufficientFunds.
+   */
+  private balanceGuard(
+    balanceUpdate: { available: number; withheld: number; cashAdvance: number },
+    request: TransactionRequest
+  ): Record<string, unknown> {
+    const guard: Record<string, unknown> = {};
+    const type = request.transactionType;
+    if (type === 'cash_advance_repayment') {
+      guard.cash_advance_balance = { _lte: -balanceUpdate.cashAdvance };
+      return guard;
+    }
+    if (balanceUpdate.available < 0 && (type === 'hold' || !request.allowNegative)) {
+      guard.available_balance = { _gte: Math.abs(balanceUpdate.available) };
+    }
+    if (balanceUpdate.withheld < 0) {
+      guard.withheld_balance = { _gte: Math.abs(balanceUpdate.withheld) };
+    }
+    return guard;
+  }
+
+  /** Atomic guarded increment; returns the resulting balances or null when the guard fails. */
+  private async applyBalanceDelta(
+    accountId: string,
+    balanceUpdate: { available: number; withheld: number; cashAdvance: number },
+    guard: Record<string, unknown>
+  ): Promise<NonNullable<TransactionResult['newBalance']> | null> {
+    const result = await this.hasuraSystemService.executeMutation(
+      APPLY_BALANCE_DELTA,
+      {
+        where: { id: { _eq: accountId }, ...guard },
+        inc: {
+          available_balance: balanceUpdate.available,
+          withheld_balance: balanceUpdate.withheld,
+          cash_advance_balance: balanceUpdate.cashAdvance,
+        },
+      }
+    );
+    const row = result?.update_accounts?.returning?.[0];
+    return row ? balancesFromAccount(row) : null;
+  }
+
+  /** Compensation when the ledger row could not be written after the balance moved. */
+  private async revertBalanceDelta(
+    accountId: string,
+    balanceUpdate: { available: number; withheld: number; cashAdvance: number }
+  ): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(APPLY_BALANCE_DELTA, {
+        where: { id: { _eq: accountId } },
+        inc: {
+          available_balance: -balanceUpdate.available,
+          withheld_balance: -balanceUpdate.withheld,
+          cash_advance_balance: -balanceUpdate.cashAdvance,
+        },
+      });
+    } catch (error: any) {
+      // Balance moved without a ledger row and the revert failed: needs manual reconciliation.
+      this.logger.error(
+        `ledger_revert_failed account=${accountId} delta=${JSON.stringify(balanceUpdate)}: ${error?.message}`
+      );
+    }
   }
 
   async hasTransactionForReference(
@@ -463,29 +548,6 @@ export class AccountsService {
   }
 
   /**
-   * Calculate new account balances after transaction
-   */
-  private calculateNewBalances(
-    currentAccount: any,
-    balanceUpdate: { available: number; withheld: number; cashAdvance: number }
-  ): { available: number; withheld: number; total: number; cashAdvance: number } {
-    const newAvailable =
-      currentAccount.available_balance + balanceUpdate.available;
-    const newWithheld =
-      currentAccount.withheld_balance + balanceUpdate.withheld;
-    const newCashAdvance =
-      Number(currentAccount.cash_advance_balance ?? 0) + balanceUpdate.cashAdvance;
-    const newTotal = newAvailable + newWithheld;
-
-    return {
-      available: newAvailable,
-      withheld: newWithheld,
-      total: newTotal,
-      cashAdvance: newCashAdvance,
-    };
-  }
-
-  /**
    * Check if account has sufficient funds for debit transaction
    */
   private hasSufficientFunds(
@@ -557,47 +619,6 @@ export class AccountsService {
     });
 
     return result.insert_account_transactions_one.id;
-  }
-
-  /**
-   * Update account balances
-   */
-  private async updateAccountBalances(
-    accountId: string,
-    balances: { available: number; withheld: number; cashAdvance: number }
-  ): Promise<void> {
-    const mutation = `
-      mutation UpdateAccountBalances(
-        $accountId: uuid!, 
-        $availableBalance: numeric!, 
-        $withheldBalance: numeric!,
-        $cashAdvanceBalance: numeric!
-      ) {
-        update_accounts_by_pk(
-          pk_columns: { id: $accountId },
-          _set: {
-            available_balance: $availableBalance,
-            withheld_balance: $withheldBalance,
-            cash_advance_balance: $cashAdvanceBalance,
-            updated_at: "now()"
-          }
-        ) {
-          id
-          available_balance
-          withheld_balance
-          cash_advance_balance
-          total_balance
-          updated_at
-        }
-      }
-    `;
-
-    await this.hasuraSystemService.executeMutation(mutation, {
-      accountId,
-      availableBalance: balances.available,
-      withheldBalance: balances.withheld,
-      cashAdvanceBalance: balances.cashAdvance,
-    });
   }
 
   /**
@@ -864,6 +885,25 @@ function balancesFromAccount(row: {
     cashAdvance: Number(row.cash_advance_balance),
   };
 }
+
+const APPLY_BALANCE_DELTA = `
+  mutation ApplyBalanceDelta(
+    $where: accounts_bool_exp!
+    $inc: accounts_inc_input!
+  ) {
+    update_accounts(
+      where: $where
+      _inc: $inc
+      _set: { updated_at: "now()" }
+    ) {
+      returning {
+        available_balance
+        withheld_balance
+        cash_advance_balance
+      }
+    }
+  }
+`;
 
 const CLAIM_CASH_ADVANCE = `
   mutation ClaimCashAdvance(

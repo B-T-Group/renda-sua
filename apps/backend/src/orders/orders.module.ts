@@ -46,6 +46,7 @@ import { OrderQueueService } from './order-queue.service';
 import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderCleanupCronService } from './order-cleanup-cron.service';
+import { OrderSettlementRetryService } from './order-settlement-retry.service';
 import { OrderCleanupInternalController } from './order-cleanup-internal.controller';
 import { OrderCleanupService } from './order-cleanup.service';
 import { StorePickupReminderCronService } from './store-pickup-reminder-cron.service';
@@ -139,6 +140,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     CancellationPolicyService,
     OrderCleanupService,
     OrderCleanupCronService,
+    OrderSettlementRetryService,
     StorePickupReminderService,
     StorePickupReminderCronService,
     OrderSystemJobsService,
