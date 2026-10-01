@@ -1,0 +1,28 @@
+---
+description: Keep docs/platform-capabilities.md in sync whenever capabilities, flows, flags, personas, fees or money movement change
+alwaysApply: true
+---
+
+# Platform capabilities doc must stay accurate
+
+`docs/platform-capabilities.md` is the living reference for what each persona (client, business, agent, delegate, admin) can do on web vs mobile, how money moves (who is paid what, when), the gaps register, open questions and the flag/config tables.
+
+## When to update (same PR)
+
+Update the doc **in the same PR** whenever a change in `apps/backend`, `apps/frontend`, `apps/mobile`, `apps/hasura` or `apps/cdk`:
+
+- adds a new capability, flow, feature flag / `application_configurations` key, persona behavior, money movement, fee, hold, refund or API route; or
+- changes or removes any of the above.
+
+## What to update
+
+- The affected persona/capability section and the web-vs-mobile columns.
+- Money-flow tables and diagrams (§3), including the "configurable vs hardcoded" numbers.
+- The gaps register (§4): close, add or re-prioritise gaps the change touches.
+- Open questions (§5): add new product/ops questions; remove answered ones.
+- Flag/config tables (Appendix C) and the key file index (Appendix D).
+- The "Changes since" table and the **Last verified** date + commit sha at the top.
+
+## PR description
+
+Add a line to the PR description saying the doc was updated (and which sections), or why no update was needed (e.g. pure refactor, copy-only, tests-only).
