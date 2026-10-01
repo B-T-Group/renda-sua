@@ -280,6 +280,12 @@ export class CommissionsService {
     if (!rendasuaHQUser) {
       throw new Error('RendaSua HQ user not found');
     }
+    if (order.delivery_fee_waived) {
+      // Client pays nothing: the platform funds only the agent's pay. Partner shares
+      // and the HQ revenue share are not paid (there is no collected fee to share).
+      await this.settleWaivedDeliveryAgentPay(order, breakdown, rendasuaHQUser);
+      return;
+    }
     const partners = await this.getActivePartners();
     await this.processBaseDeliveryFeeCommissions(
       order,
@@ -293,6 +299,261 @@ export class CommissionsService {
       rendasuaHQUser,
       partners
     );
+  }
+
+  /**
+   * Waived delivery fee: Rendasua (HQ personal account) funds ONLY the agent's pay.
+   *
+   * Per component (base / per-km), in this order:
+   *   1. HQ `payment` (allowNegative) of the agent share  -> audited as `platform_funded_delivery`
+   *   2. agent `deposit` of the same amount (normal delivery commission memo)
+   * If 2 fails the HQ debit is reversed (`deposit` back to HQ) and the error is thrown,
+   * so nobody is paid from nothing. If 1 fails nobody is paid.
+   * Retry safety (until ledger-level idempotency lands, issue #399): a component whose agent
+   * credit already exists is skipped, and an un-reversed HQ funding row is not debited twice.
+   */
+  private async settleWaivedDeliveryAgentPay(
+    order: any,
+    breakdown: CommissionBreakdown,
+    rendasuaHQUser: any
+  ): Promise<void> {
+    if (!order.assigned_agent?.user_id) return;
+    const units: Array<{
+      commissionType: 'base_delivery_fee' | 'per_km_delivery_fee';
+      label: string;
+      amount: number;
+    }> = [
+      {
+        commissionType: 'base_delivery_fee',
+        label: 'base',
+        amount: this.roundMoney(breakdown.baseDeliveryFee.agent),
+      },
+      {
+        commissionType: 'per_km_delivery_fee',
+        label: 'per km',
+        amount: this.roundMoney(breakdown.perKmDeliveryFee.agent),
+      },
+    ];
+    for (const unit of units) {
+      if (unit.amount <= 0) continue;
+      await this.fundAndPayWaivedAgentUnit(order, rendasuaHQUser, unit);
+    }
+  }
+
+  private async fundAndPayWaivedAgentUnit(
+    order: any,
+    rendasuaHQUser: any,
+    unit: {
+      commissionType: 'base_delivery_fee' | 'per_km_delivery_fee';
+      label: string;
+      amount: number;
+    }
+  ): Promise<void> {
+    const currency = order.currency;
+    const agentUserId = order.assigned_agent.user_id;
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      agentUserId,
+      currency
+    );
+    const hqAccount = await this.hasuraSystemService.getAccount(
+      rendasuaHQUser.id,
+      currency
+    );
+    if (!agentAccount?.id || !hqAccount?.id) {
+      throw new Error(
+        `Waived delivery funding for order ${order.order_number}: agent or HQ account not found`
+      );
+    }
+
+    const creditMemo = this.commissionDepositMemo(
+      order.order_number,
+      'agent',
+      unit.commissionType
+    );
+    if (await this.hasAgentCredit(agentAccount.id, order.id, creditMemo)) {
+      this.logger.warn(
+        `Waived delivery agent pay already credited, skipping: order=${order.order_number} type=${unit.commissionType}`
+      );
+      return;
+    }
+
+    const fundingMemo = `Waived delivery fee funded by platform (agent ${unit.label} pay) - order ${order.order_number}`;
+    const reversalMemo = `${fundingMemo} - reversal`;
+    let fundingTransactionId: string | undefined;
+    if (!(await this.hasOpenWaivedFunding(hqAccount.id, order.id, fundingMemo, reversalMemo))) {
+      const debit = await this.accountsService.registerTransaction({
+        accountId: hqAccount.id,
+        amount: unit.amount,
+        transactionType: 'payment',
+        memo: fundingMemo,
+        referenceId: order.id,
+        allowNegative: true,
+      });
+      if (!debit?.success || !debit.transactionId) {
+        throw new Error(
+          `Waived delivery funding failed for order ${order.order_number} (${unit.commissionType}): ${debit?.error ?? 'unknown error'}`
+        );
+      }
+      fundingTransactionId = debit.transactionId;
+      await this.auditPlatformFunding(order, rendasuaHQUser.id, unit.amount, debit.transactionId);
+    }
+
+    const credit = await this.accountsService.registerTransaction({
+      accountId: agentAccount.id,
+      amount: unit.amount,
+      transactionType: 'deposit',
+      memo: creditMemo,
+      referenceId: order.id,
+    });
+    if (!credit?.success || !credit.transactionId) {
+      await this.reverseWaivedFunding(order, hqAccount.id, unit.amount, reversalMemo);
+      throw new Error(
+        `Waived delivery agent credit failed for order ${order.order_number} (${unit.commissionType}); platform funding reversed: ${credit?.error ?? 'unknown error'}`
+      );
+    }
+
+    try {
+      await this.auditCommissionPayout({
+        orderId: order.id,
+        recipientUserId: agentUserId,
+        recipientType: 'agent',
+        commissionType: unit.commissionType,
+        amount: unit.amount,
+        currency,
+        accountTransactionId: credit.transactionId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Waived delivery agent payout audit failed (non-fatal) order=${order.order_number}: ${error?.message}`
+      );
+    }
+    this.logger.log(
+      `Platform funded ${unit.amount} ${currency} waived delivery ${unit.label} pay to agent for order ${order.order_number}` +
+        (fundingTransactionId ? '' : ' (funding already recorded)')
+    );
+    void this.notificationsService.sendWalletCreditPush({
+      userId: agentUserId,
+      amount: unit.amount,
+      currency,
+      commissionType: unit.commissionType as WalletCreditCommissionType,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      preferredLanguage: order.assigned_agent?.user?.preferred_language,
+    });
+    try {
+      await this.tryAutoWithdrawAfterCommission({
+        order,
+        recipientUserId: agentUserId,
+        recipientType: 'agent',
+        accountId: agentAccount.id,
+        amount: unit.amount,
+        currency,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Auto-withdraw after commission failed (non-fatal): ${error.message}`
+      );
+    }
+  }
+
+  private async reverseWaivedFunding(
+    order: any,
+    hqAccountId: string,
+    amount: number,
+    reversalMemo: string
+  ): Promise<void> {
+    const reversal = await this.accountsService.registerTransaction({
+      accountId: hqAccountId,
+      amount,
+      transactionType: 'deposit',
+      memo: reversalMemo,
+      referenceId: order.id,
+      skipCashAdvanceRepayment: true,
+    });
+    if (!reversal?.success) {
+      this.logger.error(
+        `waived_delivery_funding_reversal_failed order=${order.order_number} orderId=${order.id} amount=${amount}: ${reversal?.error ?? 'unknown'} - HQ account is short, manual fix required`
+      );
+    }
+  }
+
+  /** HQ funding row exists for this unit and has not been reversed. */
+  private async hasOpenWaivedFunding(
+    hqAccountId: string,
+    orderId: string,
+    fundingMemo: string,
+    reversalMemo: string
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query WaivedFundingRows($accountId: uuid!, $orderId: uuid!, $memos: [String!]!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $orderId }
+            memo: { _in: $memos }
+          }
+        ) { memo }
+      }`,
+      { accountId: hqAccountId, orderId, memos: [fundingMemo, reversalMemo] }
+    );
+    const rows: Array<{ memo: string }> = result?.account_transactions ?? [];
+    const funded = rows.filter((r) => r.memo === fundingMemo).length;
+    const reversed = rows.filter((r) => r.memo === reversalMemo).length;
+    return funded > reversed;
+  }
+
+  /** Agent already received this component (a deposit, or the cash-advance repayment it became). */
+  private async hasAgentCredit(
+    accountId: string,
+    orderId: string,
+    memo: string
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query WaivedAgentCreditExists($accountId: uuid!, $orderId: uuid!, $memos: [String!]!) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $orderId }
+            memo: { _in: $memos }
+          }
+          limit: 1
+        ) { id }
+      }`,
+      {
+        accountId,
+        orderId,
+        memos: [memo, `Cash advance repayment - ${memo}`],
+      }
+    );
+    return (result?.account_transactions?.length ?? 0) > 0;
+  }
+
+  /** Audit row for the platform subsidy; never breaks settlement (money already moved). */
+  private async auditPlatformFunding(
+    order: any,
+    hqUserId: string,
+    amount: number,
+    accountTransactionId: string
+  ): Promise<void> {
+    try {
+      await this.auditCommissionPayout({
+        orderId: order.id,
+        recipientUserId: hqUserId,
+        recipientType: 'rendasua',
+        commissionType: 'platform_funded_delivery',
+        amount,
+        currency: order.currency,
+        accountTransactionId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `platform_funded_delivery audit failed order=${order.order_number} orderId=${order.id} amount=${amount}: ${error?.message}`
+      );
+    }
+  }
+
+  private roundMoney(value: number): number {
+    return Math.round((Number(value) || 0) * 100) / 100;
   }
 
   /**
