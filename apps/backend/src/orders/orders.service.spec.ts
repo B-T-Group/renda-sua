@@ -2417,6 +2417,50 @@ describe('OrdersService', () => {
       });
     });
 
+    it('processClaimOrderPayment holds on a fresh assignment even if an earlier hold row exists', async () => {
+      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
+        id: 'order-123',
+        order_number: 'ORD-1',
+        assigned_agent_id: null,
+      });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      // Agent claimed, dropped (hold released) and is re-claiming via top-up.
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' } as any);
+      jest.spyOn(service as any, 'assignOrderToAgent').mockResolvedValue({});
+      jest.spyOn(service as any, 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'onOrderAssignedToAgent').mockResolvedValue(undefined);
+
+      await service.processClaimOrderPayment({
+        id: 'tx-claim-1',
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+        amount: 8000,
+        currency: 'XAF',
+      });
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-1',
+          amount: 8000,
+          transactionType: 'hold',
+          referenceId: 'order-123',
+        })
+      );
+      accountsService.hasTransactionForReference.mockResolvedValue(false);
+    });
+
     it('processClaimOrderPayment does not hold again when this agent already has the order', async () => {
       jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
         id: 'order-123',

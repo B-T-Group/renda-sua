@@ -10054,7 +10054,7 @@ export class OrdersService {
       amount: transaction.amount,
       order: ctx.order,
       agentId: ctx.agentId,
-      revertOnFailure: slot === 'assigned',
+      freshAssignment: slot === 'assigned',
     });
     if (slot === 'assigned') await this.recordNewClaimAssignment(ctx);
     this.logger.log(this.claimPaymentDoneMessage(ctx.order.order_number, transaction));
@@ -10140,41 +10140,49 @@ export class OrdersService {
     amount: number;
     order: Orders;
     agentId: string;
-    revertOnFailure: boolean;
+    freshAssignment: boolean;
   }): Promise<void> {
     const orderHold = await this.getOrCreateOrderHold(params.order.id);
     let held = false;
     try {
-      await this.holdClaimFundsOnce(params.accountId, params.amount, params.order);
+      await this.holdClaimFunds(params);
       held = true;
       await this.updateOrderHold(orderHold.id, {
         agent_hold_amount: params.amount,
         agent_id: params.agentId,
       });
     } catch (error) {
-      if (params.revertOnFailure && !held) {
+      if (params.freshAssignment && !held) {
         await this.revertOrderAssignment(params.order.id);
       }
       throw error;
     }
   }
 
-  private async holdClaimFundsOnce(
-    accountId: string,
-    amount: number,
-    order: Orders
-  ): Promise<void> {
-    const alreadyHeld = await this.accountsService.hasTransactionForReference({
-      accountId,
-      transactionType: 'hold',
-      referenceId: order.id,
-    });
-    if (alreadyHeld) return;
+  /**
+   * A fresh assignment always holds: an earlier hold row for this order (claim,
+   * drop, re-claim) was already released. Only a callback retry for an order
+   * this agent already owns is deduplicated against the existing hold.
+   */
+  private async holdClaimFunds(params: {
+    accountId: string;
+    amount: number;
+    order: Orders;
+    freshAssignment: boolean;
+  }): Promise<void> {
+    if (!params.freshAssignment) {
+      const alreadyHeld = await this.accountsService.hasTransactionForReference({
+        accountId: params.accountId,
+        transactionType: 'hold',
+        referenceId: params.order.id,
+      });
+      if (alreadyHeld) return;
+    }
     await this.requireSuccessfulHold({
-      accountId,
-      amount,
-      memo: `Hold for order ${order.order_number}`,
-      referenceId: order.id,
+      accountId: params.accountId,
+      amount: params.amount,
+      memo: `Hold for order ${params.order.order_number}`,
+      referenceId: params.order.id,
     });
   }
 
