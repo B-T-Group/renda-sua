@@ -121,6 +121,13 @@ export function orderNumberWhere(term: string) {
   return { order_number: { _ilike: likePattern(term.replace(/\s+/g, '')) } };
 }
 
+export function activeOrdersWhere(term: string) {
+  const open = { current_status: { _nin: [...CLOSED_ORDER_STATUSES] } };
+  const compact = term.trim();
+  if (!compact) return open;
+  return { _and: [open, orderNumberWhere(compact)] };
+}
+
 export function agentSearchHit(agent: AgentMapSource): AdminMapSearchHit {
   const pin = mapAgentRow(agent, {});
   return {

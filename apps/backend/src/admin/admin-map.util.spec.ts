@@ -1,5 +1,6 @@
 import { AddressBits, AgentMapSource, LocationMapSource } from './admin-map.types';
 import {
+  activeOrdersWhere,
   agentSearchHit,
   mapAgentRow,
   mapLocationRow,
@@ -207,6 +208,19 @@ describe('orderMapHolder', () => {
     expect(orderMapHolder('complete', 'delivery')).toBe('closed');
     expect(orderMapHolder('cancelled', 'delivery')).toBe('closed');
     expect(orderMapHolder('shipped', 'shipping')).toBe('carrier');
+  });
+});
+
+describe('activeOrdersWhere', () => {
+  it('lists only open orders and narrows by order number when typed', () => {
+    const open = activeOrdersWhere('') as { current_status: { _nin: string[] } };
+    expect(open.current_status._nin).toEqual(
+      expect.arrayContaining(['complete', 'cancelled'])
+    );
+    expect(open.current_status._nin).not.toContain('preparing');
+    expect(activeOrdersWhere('ORD-9')).toEqual({
+      _and: [open, { order_number: { _ilike: '%ORD-9%' } }],
+    });
   });
 });
 
