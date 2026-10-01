@@ -143,7 +143,9 @@ import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
+import { resolvePayAfterConfirm } from '../food/pay-after-confirm.util';
 import {
+  isCookedFoodOrderSnapshot,
   isCookedFoodPickupOrder,
   isCookedFoodFulfillmentOrder,
   anyLineIsCookedFood,
@@ -588,8 +590,10 @@ export class OrdersService {
   }
 
   /** System cancel for cooked-food MoMo still unpaid after confirm timeout. */
-  async cancelUnpaidCookedFoodAfterConfirm(orderId: string): Promise<void> {
-    await this.orderCleanupService.cancelUnpaidPendingPaymentAsSystem(
+  async cancelUnpaidCookedFoodAfterConfirm(
+    orderId: string
+  ): Promise<{ cancelled: boolean; skipped?: boolean; reason?: string }> {
+    return this.orderCleanupService.cancelUnpaidPendingPaymentAsSystem(
       orderId,
       'Client did not pay within the allowed time after confirm',
       { allowConfirmedUnpaid: true, releaseInventory: true }
@@ -1650,11 +1654,13 @@ export class OrdersService {
       }
     }
 
+    // Ready-in / prep minutes are cooked-food-only (line snapshots).
     const isCookedFoodAsapReadyIn =
       this.cookedFoodPickupFlow.isCookedFoodAsapReadyInCohort(order as any) &&
       isAsapConfirm;
+    // Payment initiation depends ONLY on the order snapshot, never on the cooked
+    // ready-in cohort or on what the confirming UI sent (old apps, WhatsApp, batch).
     const payAfterConfirm =
-      isCookedFoodAsapReadyIn &&
       this.cookedFoodPickupFlow.isPayAfterMerchantConfirm(order as any);
     let cookedReadyInMinutes: number | undefined;
     if (isCookedFoodAsapReadyIn) {
@@ -1701,7 +1707,7 @@ export class OrdersService {
     }
 
     // Prep clock for pay-after-confirm starts when the client pays, not at confirm.
-    if (!payAfterConfirm) {
+    if (!(payAfterConfirm && isCookedFoodAsapReadyIn)) {
       await this.fulfillmentPromiseService.persistForOrder(request.orderId);
     }
 
@@ -1732,6 +1738,20 @@ export class OrdersService {
         message: cookedFoodResult.message,
         pay_after_merchant_confirm: cookedFoodResult.payAfterConfirm,
         ready_in_minutes: cookedReadyInMinutes,
+      };
+    }
+
+    if (payAfterConfirm) {
+      // Pay-after order outside the cooked ready-in cohort: payment was requested above;
+      // schedule the unpaid-cancel timer (or finalize if already paid).
+      const payAfterResult = await this.afterCookedFoodPayAfterConfirm(
+        request.orderId
+      );
+      return {
+        success: true,
+        order: payAfterResult.order ?? updatedOrder,
+        message: payAfterResult.message,
+        pay_after_merchant_confirm: payAfterResult.payAfterConfirm,
       };
     }
 
@@ -4534,6 +4554,9 @@ export class OrdersService {
     // pending, but do not enter preparing — confirm would then 409.
     if (afterPay.current_status === 'pending') return;
     if (afterPay.current_status !== 'confirmed') return;
+    // Auto-prepare / auto-mark-ready are kitchen behaviours: keyed on the cooked
+    // line snapshots, not on pay_after_merchant_confirm.
+    if (!isCookedFoodOrderSnapshot(afterPay as any)) return;
 
     await this.orderStatusService.updateOrderStatus(orderId, 'preparing', {
       viaSystem: true,
@@ -6126,7 +6149,8 @@ export class OrdersService {
     }
     const cooked =
       (order as any).is_cooked_food_pickup === true ||
-      (order as any).pay_after_merchant_confirm === true ||
+      ((order as any).pay_after_merchant_confirm === true &&
+        isCookedFoodOrderSnapshot(order as any)) ||
       isCookedFoodFulfillmentOrder({
         fulfillmentMethod: order.fulfillment_method,
         itemFlags: (order.order_items || []).map((oi: any) => ({
@@ -6172,7 +6196,11 @@ export class OrdersService {
   }
 
   private businessMayCancelOrder(order: Orders): boolean {
-    if ((order as any).pay_after_merchant_confirm === true) {
+    // Cooked-food only (line snapshots): the kitchen already cooked once paid.
+    if (
+      (order as any).pay_after_merchant_confirm === true &&
+      isCookedFoodOrderSnapshot(order as any)
+    ) {
       const payment = ((order as any).payment_status || '').toLowerCase();
       if (payment === 'paid' || payment === 'authorized') {
         const status = order.current_status;
@@ -6536,6 +6564,9 @@ export class OrdersService {
       payment_timing: (order as any).payment_timing,
       pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
       is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
+      order_items: (order.order_items || []).map((oi: any) => ({
+        is_cooked_food: oi.is_cooked_food,
+      })),
       business_location: { country_code: countryCode },
     };
 
@@ -8266,6 +8297,7 @@ export class OrdersService {
             business_inventory_id
             item_variant_id
             quantity
+            is_cooked_food
             variant_snapshot
           }
           delivery_time_windows {
@@ -11739,11 +11771,13 @@ export class OrdersService {
       fulfillmentMethod,
       itemFlags: itemCookedFlags,
     });
-    const payAfterMerchantConfirm =
-      cookedFoodFulfillment &&
-      railResolution.rail === 'mobile_money' &&
-      !canPayWithWallet &&
-      !isZeroOrNegativeOrder;
+    const payAfterMerchantConfirm = resolvePayAfterConfirm({
+      lines: itemCookedFlags,
+      fulfillment: fulfillmentMethod,
+      rail: railResolution.rail,
+      canPayWithWallet,
+      isZeroOrder: isZeroOrNegativeOrder,
+    });
 
     // Persist prepaid timing for delivery pay-after so agents get Complete+PIN
     // (not classic PAD), even if the client still sent pay_at_delivery.

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { isCookedFoodOrderSnapshot } from '../food/cooked-food-flag.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   itemSubtotalAfterDiscounts,
@@ -80,6 +81,8 @@ interface OrderForPolicy {
   payment_timing?: string | null;
   pay_after_merchant_confirm?: boolean | null;
   is_cooked_food_pickup?: boolean | null;
+  /** Line snapshots (order_items.is_cooked_food) used for cooked-only rules. */
+  order_items?: Array<{ is_cooked_food?: boolean | null }> | null;
   business_location?: { country_code?: string | null } | null;
 }
 
@@ -224,7 +227,8 @@ export class CancellationPolicyService {
     if (order.current_status !== 'ready_for_pickup') return false;
     return (
       order.is_cooked_food_pickup === true ||
-      order.pay_after_merchant_confirm === true
+      (order.pay_after_merchant_confirm === true &&
+        isCookedFoodOrderSnapshot(order))
     );
   }
 
@@ -274,6 +278,8 @@ export class CancellationPolicyService {
 
   private businessBlockedForCookedFoodPayAfter(order: OrderForPolicy): boolean {
     if (order.pay_after_merchant_confirm !== true) return false;
+    // Cooked-food only: the kitchen already cooked once paid (line snapshots).
+    if (!isCookedFoodOrderSnapshot(order)) return false;
     const payment = (order.payment_status || '').toLowerCase();
     if (payment !== 'paid' && payment !== 'authorized') return false;
     return (

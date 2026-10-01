@@ -11,7 +11,7 @@ export function isCookedFoodItem(item: {
   return item?.is_cooked_food === true;
 }
 
-type CookedFoodLine = {
+export type CookedFoodLine = {
   is_cooked_food?: boolean | null;
   item_sub_category?: {
     item_category?: { name?: string | null } | null;
@@ -70,4 +70,33 @@ export function isCookedFoodPickupOrder(params: {
 }): boolean {
   if (params.fulfillmentMethod !== 'pickup') return false;
   return everyLineIsCookedFood(params.itemFlags);
+}
+
+/**
+ * Post-create cooked-food check from the ORDER snapshot only (never the location).
+ *
+ * - `is_cooked_food_pickup` wins (durable pickup snapshot).
+ * - When order lines carry the `order_items.is_cooked_food` snapshot (#383), the order is
+ *   cooked only if every line is.
+ * - When lines are not loaded, fall back to the pre-location-flag invariant: every
+ *   `pay_after_merchant_confirm` order was a cooked-food order.
+ *
+ * Use this (not `pay_after_merchant_confirm`) for cooked-only behaviour: ready-in prompt,
+ * auto-prepare / auto-mark-ready, the business-cancel block and fail-pickup.
+ */
+export function isCookedFoodOrderSnapshot(order: {
+  is_cooked_food_pickup?: boolean | null;
+  pay_after_merchant_confirm?: boolean | null;
+  order_items?: Array<{ is_cooked_food?: boolean | null }> | null;
+}): boolean {
+  if (order.is_cooked_food_pickup === true) return true;
+  const lines = order.order_items;
+  if (
+    Array.isArray(lines) &&
+    lines.length > 0 &&
+    lines.every((l) => typeof l?.is_cooked_food === 'boolean')
+  ) {
+    return lines.every((l) => l.is_cooked_food === true);
+  }
+  return order.pay_after_merchant_confirm === true;
 }

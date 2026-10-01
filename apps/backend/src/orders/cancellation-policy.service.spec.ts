@@ -218,6 +218,38 @@ describe('CancellationPolicyService', () => {
       expect(policy.cancellationFee).toBe(1200);
     });
 
+    describe('fee applicability matrix (keys on pay_after_merchant_confirm, not payment_timing)', () => {
+      // Mirrored by apps/cdk/tests/test_order_status_handler_cancellation.py
+      const matrix: Array<[string, boolean, string, string, boolean]> = [
+        ['pay_now', true, 'pending', 'confirmed', false],
+        ['pay_now', true, 'paid', 'confirmed', true],
+        ['pay_at_pickup', true, 'pending', 'confirmed', false],
+        ['pay_at_pickup', true, 'paid', 'preparing', true],
+        ['pay_at_pickup', true, 'authorized', 'ready_for_pickup', true],
+        ['pay_at_pickup', false, 'paid', 'confirmed', false],
+        ['pay_at_delivery', false, 'pending', 'confirmed', false],
+        ['pay_now', false, 'paid', 'confirmed', true],
+        ['pay_now', false, 'paid', 'pending', false],
+      ];
+      it.each(matrix)(
+        'timing=%s payAfter=%s payment=%s status=%s => fee applies: %s',
+        async (timing, payAfter, paymentStatus, status, applies) => {
+          mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+          const policy = await service.getPolicy(
+            {
+              ...orderWithParts,
+              current_status: status,
+              payment_status: paymentStatus,
+              payment_timing: timing,
+              pay_after_merchant_confirm: payAfter,
+            },
+            'client'
+          );
+          expect(policy.cancellationFee > 0).toBe(applies);
+        }
+      );
+    });
+
     it('filters quick reasons for cooked food cancel at ready', async () => {
       mockFeeRows(
         [{ country_code: 'GA', number_value: 30 }],
@@ -327,6 +359,34 @@ describe('CancellationPolicyService', () => {
 
       expect(policy.canCancel).toBe(false);
       expect(policy.reasonIfBlocked).toBe('blocked.cookedFoodPayAfterPaid');
+    });
+
+    it('allows cancel for PAID pay-after orders whose lines are not cooked (refund in full)', async () => {
+      const order = {
+        ...baseOrder,
+        current_status: 'confirmed',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+        order_items: [{ is_cooked_food: false }],
+      };
+      const policy = await service.getPolicy(order, 'business');
+
+      expect(policy.canCancel).toBe(true);
+      expect(policy.refundType).toBe('full');
+      expect(policy.cancellationFee).toBe(0);
+    });
+
+    it('still blocks paid pay-after orders whose lines are all cooked', async () => {
+      const order = {
+        ...baseOrder,
+        current_status: 'confirmed',
+        payment_status: 'paid',
+        pay_after_merchant_confirm: true,
+        order_items: [{ is_cooked_food: true }],
+      };
+      const policy = await service.getPolicy(order, 'business');
+
+      expect(policy.canCancel).toBe(false);
     });
 
     it('allows cancel for unpaid cooked-food pay-after while confirmed', async () => {

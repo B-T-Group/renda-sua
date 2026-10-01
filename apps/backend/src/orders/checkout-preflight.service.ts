@@ -8,6 +8,7 @@
  * All business rules here must stay aligned with OrdersService.createOrder.
  * If you change a rule in one, change it in both.
  */
+import { resolvePayAfterConfirm } from '../food/pay-after-confirm.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { ConfigService } from '@nestjs/config';
@@ -783,8 +784,15 @@ export class CheckoutPreflightService {
           ),
         });
 
-      const groupIsCookedFoodPayAfter =
-        groupIsCookedFood && rail === 'mobile_money';
+      // Same predicate as createOrder. The preflight does not know the wallet balance
+      // or the order total here, so wallet/zero are passed as false (unchanged behaviour).
+      const groupIsCookedFoodPayAfter = resolvePayAfterConfirm({
+        lines: group.inventoryRows.map((row: { item?: any }) => row.item),
+        fulfillment,
+        rail,
+        canPayWithWallet: false,
+        isZeroOrder: false,
+      });
 
       const depositQuote = this.quoteMomoItemDeposit({
         rail,
