@@ -7,6 +7,7 @@ import {
   mergePins,
   orderMapHolder,
   orderSearchHit,
+  merchantNameWhere,
   personNameWhere,
   pinsForKind,
   resolveAgentActivity,
@@ -255,13 +256,21 @@ describe('agentSearchHit', () => {
   it('matches each part of a name and still returns an agent with no coordinates', () => {
     expect(personNameWhere(['Awa', 'Ngo'])).toEqual({
       _and: [
-        { _or: [{ user: { first_name: { _ilike: '%Awa%' } } }, { user: { last_name: { _ilike: '%Awa%' } } }] },
-        { _or: [{ user: { first_name: { _ilike: '%Ngo%' } } }, { user: { last_name: { _ilike: '%Ngo%' } } }] },
+        { _or: nameOrEmail('%Awa%') },
+        { _or: nameOrEmail('%Ngo%') },
       ],
     });
     const hit = agentSearchHit(agent({ agent_addresses: [{ address: { ...douala, latitude: null, longitude: null } }] }));
     expect(hit.title).toBe('Awa Ngo');
     expect(hit.notice).toBe('no_location');
+  });
+});
+
+describe('merchantNameWhere', () => {
+  it('matches a location name, business name, or email', () => {
+    expect(merchantNameWhere(['shop@x.com'])).toEqual({
+      _and: [{ _or: merchantOrEmail('%shop@x.com%') }],
+    });
   });
 });
 
@@ -272,6 +281,23 @@ describe('pinsForKind', () => {
     expect(pinsForKind(pins, 'businesses')[0].kind).toBe('business_location');
   });
 });
+
+function nameOrEmail(pattern: string) {
+  return [
+    { user: { first_name: { _ilike: pattern } } },
+    { user: { last_name: { _ilike: pattern } } },
+    { user: { email: { _ilike: pattern } } },
+  ];
+}
+
+function merchantOrEmail(pattern: string) {
+  return [
+    { name: { _ilike: pattern } },
+    { email: { _ilike: pattern } },
+    { business: { name: { _ilike: pattern } } },
+    { business: { user: { email: { _ilike: pattern } } } },
+  ];
+}
 
 function merchant(open: boolean, overrides: Partial<LocationMapSource> = {}): LocationMapSource {
   return {

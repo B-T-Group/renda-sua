@@ -134,7 +134,7 @@ export function agentSearchHit(agent: AgentMapSource): AdminMapSearchHit {
     id: agent.id,
     kind: 'agent',
     title: personName(agent.user),
-    subtitle: pin?.subtitle ?? null,
+    subtitle: hitSubtitle(agent.user?.email, pin?.subtitle ?? null),
     pin,
     notice: pin ? null : 'no_location',
   };
@@ -146,7 +146,7 @@ export function locationSearchHit(row: LocationMapSource): AdminMapSearchHit {
     id: row.id,
     kind: 'business_location',
     title: row.name || row.business?.name || 'Location',
-    subtitle: row.business?.name && row.name ? row.business.name : null,
+    subtitle: hitSubtitle(row.email, row.business?.name && row.name ? row.business.name : null),
     pin,
     notice: pin ? null : 'no_location',
   };
@@ -213,6 +213,7 @@ function nameToken(token: string) {
     _or: [
       { user: { first_name: { _ilike: pattern } } },
       { user: { last_name: { _ilike: pattern } } },
+      { user: { email: { _ilike: pattern } } },
     ],
   };
 }
@@ -222,9 +223,18 @@ function merchantToken(token: string) {
   return {
     _or: [
       { name: { _ilike: pattern } },
+      { email: { _ilike: pattern } },
       { business: { name: { _ilike: pattern } } },
+      { business: { user: { email: { _ilike: pattern } } } },
     ],
   };
+}
+
+function hitSubtitle(email: string | null | undefined, extra: string | null): string | null {
+  const mail = (email || '').trim();
+  if (!mail) return extra;
+  if (!extra || extra === mail) return mail;
+  return `${mail} · ${extra}`;
 }
 
 function likePattern(token: string): string {
