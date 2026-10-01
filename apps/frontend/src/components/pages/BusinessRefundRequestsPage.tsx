@@ -66,6 +66,7 @@ interface PendingRow {
     current_status?: string;
     base_delivery_fee?: number | null;
     per_km_delivery_fee?: number | null;
+    delivery_fee_waived?: boolean | null;
     completed_at?: string | null;
     order_items?: PendingOrderItem[];
     delivery_address?: PendingDeliveryAddress | null;
@@ -93,6 +94,7 @@ function formatMoney(
 }
 
 function deliveryFeesSum(order: PendingRow['order']): number {
+  if (order.delivery_fee_waived) return 0;
   return (order.base_delivery_fee ?? 0) + (order.per_km_delivery_fee ?? 0);
 }
 
@@ -493,7 +495,7 @@ const BusinessRefundRequestsPage: React.FC = () => {
               />
             </>
           )}
-          {mode === 'full' && (
+          {mode === 'full' && active && deliveryFeesSum(active.order) > 0 && (
             <FormControlLabel
               control={
                 <Checkbox

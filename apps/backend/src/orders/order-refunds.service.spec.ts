@@ -29,6 +29,7 @@ describe('OrderRefundsService', () => {
   let service: OrderRefundsService;
   let hasuraSystem: jest.Mocked<Pick<HasuraSystemService, 'executeQuery' | 'executeMutation' | 'getAccount'>>;
   let hasuraUser: jest.Mocked<Pick<HasuraUserService, 'getUser' | 'sessionPersonaContext'>>;
+  let accounts: { registerTransaction: jest.Mock };
 
   const businessUser = {
     id: 'biz-user',
@@ -104,6 +105,7 @@ describe('OrderRefundsService', () => {
     service = module.get(OrderRefundsService);
     hasuraSystem = module.get(HasuraSystemService);
     hasuraUser = module.get(HasuraUserService);
+    accounts = module.get(AccountsService);
   });
 
   it('approvePartialRefund rejects amount >= subtotal', async () => {
@@ -156,6 +158,72 @@ describe('OrderRefundsService', () => {
     await expect(
       service.rejectRefundRequest('o1', { rejectionReason: 'x' })
     ).rejects.toThrow(HttpException);
+  });
+
+  it('approveFullRefund does not pay a delivery fee the customer never paid', async () => {
+    hasuraUser.getUser.mockResolvedValue(businessUser as never);
+    hasuraSystem.getAccount.mockResolvedValue({ id: 'acct-client' } as never);
+    hasuraSystem.executeQuery.mockImplementation((query: string) => {
+      if (query.includes('orders_by_pk')) {
+        return Promise.resolve({
+          orders_by_pk: {
+            ...orderCtx,
+            subtotal: 70000,
+            base_delivery_fee: 500,
+            per_km_delivery_fee: 300,
+            delivery_fee_waived: true,
+            client: { user_id: 'cli-user' },
+          },
+        });
+      }
+      if (query.includes('order_refund_requests')) {
+        return Promise.resolve({ order_refund_requests: [{ id: 'req-1' }] });
+      }
+      return Promise.resolve({});
+    });
+
+    await service.approveFullRefund('o1', {
+      inspectionAcknowledged: true,
+      refundDeliveryFee: true,
+    });
+
+    expect(accounts.registerTransaction).toHaveBeenCalledTimes(1);
+    expect(accounts.registerTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 70000, transactionType: 'refund' })
+    );
+  });
+
+  it('approveFullRefund still refunds a delivery fee the customer paid', async () => {
+    hasuraUser.getUser.mockResolvedValue(businessUser as never);
+    hasuraSystem.getAccount.mockResolvedValue({ id: 'acct-client' } as never);
+    hasuraSystem.executeQuery.mockImplementation((query: string) => {
+      if (query.includes('orders_by_pk')) {
+        return Promise.resolve({
+          orders_by_pk: {
+            ...orderCtx,
+            subtotal: 100,
+            base_delivery_fee: 10,
+            per_km_delivery_fee: 5,
+            delivery_fee_waived: false,
+            client: { user_id: 'cli-user' },
+          },
+        });
+      }
+      if (query.includes('order_refund_requests')) {
+        return Promise.resolve({ order_refund_requests: [{ id: 'req-1' }] });
+      }
+      return Promise.resolve({});
+    });
+
+    await service.approveFullRefund('o1', {
+      inspectionAcknowledged: true,
+      refundDeliveryFee: true,
+    });
+
+    expect(accounts.registerTransaction).toHaveBeenCalledTimes(2);
+    expect(accounts.registerTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 15, transactionType: 'refund' })
+    );
   });
 
   it('approveReplaceItem requires inspection acknowledgment', async () => {

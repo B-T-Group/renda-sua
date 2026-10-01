@@ -111,6 +111,16 @@ export function waivedCustomerDeliveryFee(info: {
   };
 }
 
+/** Fee the customer actually paid. Waived orders keep base and per-km for agent pay. */
+export function collectedDeliveryFee(order: {
+  base_delivery_fee?: number | string | null;
+  per_km_delivery_fee?: number | string | null;
+  delivery_fee_waived?: boolean | null;
+}): number {
+  if (order.delivery_fee_waived) return 0;
+  return Number(order.base_delivery_fee ?? 0) + Number(order.per_km_delivery_fee ?? 0);
+}
+
 export function normalizeDeliveryCountryCode(
   country: string | null | undefined
 ): string {
