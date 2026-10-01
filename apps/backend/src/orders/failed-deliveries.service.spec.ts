@@ -1,4 +1,10 @@
 import { FailedDeliveriesService } from './failed-deliveries.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+
+jest.mock('../common/utils/money-alert.util', () => ({
+  reportMoneyAnomaly: jest.fn(),
+}));
+
 
 function createService() {
   const getUser = jest.fn();
@@ -11,8 +17,7 @@ function createService() {
     { getUser } as never,
     { executeQuery, executeMutation, getAccount } as never,
     { registerTransaction } as never,
-    { updateReservedQuantities } as never,
-    {} as never
+    { updateReservedQuantities } as never
   );
   return {
     service,
@@ -141,5 +146,256 @@ describe('FailedDeliveriesService item-fault restore', () => {
     );
 
     expect(updateReservedQuantities).not.toHaveBeenCalled();
+  });
+});
+
+describe('FailedDeliveriesService client-fault fee', () => {
+  // items after discounts 1000 (total 1500 = 1000 + delivery 400 + 100, no tax) => 30% = 300
+  const FEE = 300;
+  const FEE_ORDER = {
+    total_amount: 1500,
+    base_delivery_fee: 400,
+    per_km_delivery_fee: 100,
+    delivery_fee_waived: false,
+    tax_amount: 0,
+    delivery_address: { country: 'Cameroon' },
+  };
+  const clientAccount = (available: number) => ({
+    id: 'client-acc',
+    available_balance: available,
+  });
+
+  function setup(opts: {
+    clientAvailable: number;
+    order?: Record<string, unknown>;
+    hold?: Record<string, unknown>;
+    debitResult?: { success: boolean; error?: string };
+    feeRows?: Array<{ country_code: string | null; number_value: number | null }> | Error;
+  }) {
+    const feeQueries: any[] = [];
+    const mocks = createService();
+    const {
+      service,
+      executeQuery,
+      executeMutation,
+      getAccount,
+      registerTransaction,
+    } = mocks;
+    executeQuery.mockImplementation(async (query: string, vars?: any) => {
+      if (query.includes('FeePercentRows')) {
+        feeQueries.push(vars);
+        if (opts.feeRows instanceof Error) throw opts.feeRows;
+        return { application_configurations: opts.feeRows ?? [{ country_code: 'CM', number_value: 30 }] };
+      }
+      if (query.includes('GetFailedDelivery(')) {
+        return { failed_deliveries: [failedDeliveryRow({ ...FEE_ORDER, ...opts.order })] };
+      }
+      return {
+        order_holds: [
+          {
+            id: 'hold-1',
+            client_hold_amount: 1000,
+            agent_hold_amount: 0,
+            delivery_fees: 0,
+            currency: 'XAF',
+            ...opts.hold,
+          },
+        ],
+      };
+    });
+    executeMutation.mockResolvedValue({});
+    getAccount.mockImplementation(async (userId: string) => {
+      if (userId === 'client-user') return clientAccount(opts.clientAvailable);
+      if (userId === 'agent-user') return { id: 'agent-acc' };
+      return { id: 'biz-acc' };
+    });
+    registerTransaction.mockImplementation(async (req: any) =>
+      req.accountId === 'client-acc' && req.transactionType === 'withdrawal' && opts.debitResult
+        ? opts.debitResult
+        : { success: true }
+    );
+    return { ...mocks, feeQueries };
+  }
+
+  const anomaly = reportMoneyAnomaly as jest.Mock;
+  beforeEach(() => anomaly.mockClear());
+  const anomalyMarkers = () => anomaly.mock.calls.map((c) => c[1]);
+
+  const resolve = (service: FailedDeliveriesService) =>
+    service.resolveFailedDelivery(
+      'order-1',
+      { resolution_type: 'client_fault', outcome: 'no show' },
+      { userId: 'u1', businessId: 'biz-1' } as never
+    );
+
+  const calls = (registerTransaction: jest.Mock, accountId: string, type: string) =>
+    registerTransaction.mock.calls
+      .map(([r]) => r)
+      .filter((r) => r.accountId === accountId && r.transactionType === type);
+
+  it('charges the full fee and splits it 50/50 when the wallet covers it', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 1000 });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')).toEqual([
+      expect.objectContaining({ amount: 300, referenceId: 'order-1' }),
+    ]);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')[0].amount).toBe(150);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')[0].amount).toBe(150);
+    expect(result.client_fee_shortfall).toBeUndefined();
+    expect(anomaly).not.toHaveBeenCalled();
+  });
+
+  it('fee is 30% of the item subtotal after discounts, not the flat 200 and not the total', async () => {
+    const { service, registerTransaction, feeQueries } = setup({ clientAvailable: 5000 });
+    await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(300);
+    expect(feeQueries[0]).toEqual({ key: 'failed_delivery_fee_percent', country: 'CM' });
+  });
+
+  it('excludes tax and does not subtract a waived delivery fee', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 5000,
+      order: { total_amount: 1100, delivery_fee_waived: true, tax_amount: 100 },
+    });
+    await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(300);
+  });
+
+  it('missing percent row => 30% default with failed_delivery_fee_config_missing error log', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 5000, feeRows: [] });
+    const errorSpy = jest.spyOn((service as any).logger, 'error').mockImplementation();
+    await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(300);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('failed_delivery_fee_config_missing')
+    );
+  });
+
+  it('an explicit 0% row charges nothing and credits nobody', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 5000,
+      feeRows: [{ country_code: 'CM', number_value: 0 }],
+    });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')).toHaveLength(0);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
+    expect(result.client_fee_shortfall).toBeUndefined();
+    expect(anomaly).not.toHaveBeenCalled();
+  });
+
+  it('a config read error aborts before any ledger movement', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 5000,
+      feeRows: new Error('hasura down'),
+    });
+    await expect(resolve(service)).rejects.toThrow('hasura down');
+    expect(registerTransaction).not.toHaveBeenCalled();
+  });
+
+  it('releases the held funds before debiting the fee from the released balance', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      hold: { client_hold_amount: 300, delivery_fees: 100 },
+    });
+    await resolve(service);
+    const seq = registerTransaction.mock.calls
+      .map(([r]) => r)
+      .filter((r) => r.accountId === 'client-acc')
+      .map((r) => `${r.transactionType}:${r.amount}`);
+    expect(seq).toEqual(['release:300', 'release:100', 'withdrawal:300']);
+    expect(anomaly).not.toHaveBeenCalled();
+  });
+
+  it('credits only what was debited when the wallet cannot cover the fee', async () => {
+    const { service, registerTransaction, executeMutation } = setup({
+      clientAvailable: 50,
+    });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(50);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')[0].amount).toBe(25);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')[0].amount).toBe(25);
+    expect(result.client_fee_shortfall).toBe(250);
+    const update = executeMutation.mock.calls.at(-1)?.[1].updates;
+    expect(update.status).toBe('completed');
+    expect(update.outcome).toContain('shortfall not collected: 250 XAF');
+    expect(anomalyMarkers()).toEqual(['failed_delivery_fee_shortfall']);
+    expect(anomaly.mock.calls[0][2]).toContain('should be impossible');
+  });
+
+  it('credits nobody when the client has no funds', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 0 });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')).toHaveLength(0);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')).toHaveLength(0);
+    expect(result.client_fee_shortfall).toBe(FEE);
+    expect(anomalyMarkers()).toContain('failed_delivery_fee_shortfall');
+  });
+
+  it('credits nobody when the debit itself is rejected', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      debitResult: { success: false, error: 'Insufficient funds for this transaction' },
+    });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')).toHaveLength(0);
+    expect(result.client_fee_shortfall).toBe(FEE);
+    expect(anomalyMarkers()).toEqual([
+      'failed_delivery_fee_debit_failed',
+      'failed_delivery_fee_shortfall',
+    ]);
+  });
+
+  it('reports an anomaly when the fee exceeds the funds held for the order', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      hold: { client_hold_amount: 0, delivery_fees: 50 },
+    });
+    const result: any = await resolve(service);
+    expect(anomalyMarkers()).toEqual(['failed_delivery_fee_hold_insufficient']);
+    // wallet could still cover it, so the fee is collected in full
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(300);
+    expect(result.client_fee_shortfall).toBeUndefined();
+  });
+
+  it('reports an anomaly when releasing the hold fails', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 1000 });
+    registerTransaction.mockImplementation(async (req: any) =>
+      req.transactionType === 'release'
+        ? { success: false, error: 'nope' }
+        : { success: true }
+    );
+    await resolve(service);
+    expect(anomalyMarkers()).toEqual(['failed_delivery_hold_release_failed']);
+  });
+
+  it('gives the whole collected amount to the business when no agent is assigned', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      order: { assigned_agent: null },
+    });
+    await resolve(service);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')[0].amount).toBe(150);
+  });
+
+  it('does not lose a cent on odd partial amounts', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 0.05 });
+    await resolve(service);
+    const agent = calls(registerTransaction, 'agent-acc', 'deposit')[0].amount;
+    const biz = calls(registerTransaction, 'biz-acc', 'deposit')[0].amount;
+    expect(Number((agent + biz).toFixed(2))).toBe(0.05);
+  });
+
+  it('still releases the client delivery-fee hold before charging', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      hold: { client_hold_amount: 0, delivery_fees: 500 },
+    });
+    await resolve(service);
+    const types = registerTransaction.mock.calls.map(([r]) => r.transactionType);
+    expect(anomaly).not.toHaveBeenCalled();
+    expect(types.indexOf('release')).toBeLessThan(types.indexOf('withdrawal'));
   });
 });
