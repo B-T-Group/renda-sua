@@ -952,6 +952,591 @@ describe('OrdersService', () => {
       });
     });
 
+    // ---- per-location pay_at_confirm (#412-#414) ----
+    it('flagged location + kill switch ON: ASAP pickup is created pay-after (no hold, no MoMo request)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(finalizeSpy).not.toHaveBeenCalled();
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({
+          payAfterMerchantConfirm: true,
+          paymentStatus: 'pending',
+          currentStatus: 'pending',
+        })
+      );
+      expect(result).toMatchObject({
+        pay_after_merchant_confirm: true,
+        payment_transaction: expect.objectContaining({
+          transaction_id: null,
+          message: expect.stringMatching(/merchant confirmation/i),
+        }),
+      });
+    });
+
+    it('flagged location but kill switch OFF: location is ignored (not pay-after)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? false : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: false })
+      );
+    });
+
+    it('unflagged location with kill switch ON: not pay-after', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: false,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: false })
+      );
+    });
+
+    it('flagged location + wallet covers total: pays immediately from the wallet (not pay-after)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 50000,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: false })
+      );
+      expect(finalizeSpy).toHaveBeenCalled();
+    });
+
     it('calculates the MoMo deposit from the post-credit total', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.sessionPersonaContext.mockReturnValue({

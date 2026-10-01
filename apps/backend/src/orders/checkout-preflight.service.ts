@@ -8,7 +8,11 @@
  * All business rules here must stay aligned with OrdersService.createOrder.
  * If you change a rule in one, change it in both.
  */
-import { resolvePayAfterConfirm } from '../food/pay-after-confirm.util';
+import {
+  anyLocationPayAtConfirm,
+  PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
+  resolvePayAfterConfirm,
+} from '../food/pay-after-confirm.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
 import { ConfigService } from '@nestjs/config';
@@ -93,6 +97,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         id
         business_id
         is_active
+        pay_at_confirm
         operating_hours
         mobile_payment_phone {
           is_verified
@@ -574,6 +579,18 @@ export class CheckoutPreflightService {
         fulfillmentCountry
       );
       
+      // Per-location pay-at-confirm (kill switch on, any line's location flagged):
+      // MoMo pay-before-delivery is allowed even where the market flag is off.
+      const locationPayAfter =
+        rail === 'mobile_money' &&
+        !isDiaspora &&
+        fulfillment !== 'shipping' &&
+        anyLocationPayAtConfirm(group.inventoryRows) &&
+        (await this.isMarketFlagEnabled(
+          PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
+          null
+        ));
+
       const allowedPaymentTimings: Array<'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'> = [];
       
       // Add pay_now if:
@@ -581,7 +598,10 @@ export class CheckoutPreflightService {
       // - Rail is MoMo AND (fulfillment is NOT delivery OR flag is enabled)
       if (
         rail === 'stripe' ||
-        (rail === 'mobile_money' && (fulfillment !== 'delivery' || momoPayNowDeliveryEnabled))
+        (rail === 'mobile_money' &&
+          (fulfillment !== 'delivery' ||
+            momoPayNowDeliveryEnabled ||
+            locationPayAfter))
       ) {
         allowedPaymentTimings.push('pay_now');
       }
@@ -792,11 +812,14 @@ export class CheckoutPreflightService {
         rail,
         canPayWithWallet: false,
         isZeroOrder: false,
+        isDiaspora,
+        locationPayAtConfirm: locationPayAfter,
       });
 
       const depositQuote = this.quoteMomoItemDeposit({
         rail,
-        groupIsCookedFood,
+        // Pay-after (cooked or flagged location) never takes a reservation deposit.
+        groupIsCookedFood: groupIsCookedFood || groupIsCookedFoodPayAfter,
         timing: requestedOrAvailableTiming,
         currency,
         orderTotal: grandTotal,
@@ -874,8 +897,12 @@ export class CheckoutPreflightService {
         estimated_ready_at: asap.estimatedReadyAt,
         estimated_fulfill_by: asap.estimatedFulfillBy,
         // Cooked food cannot be scheduled; never force a future slot.
-        schedule_required: groupHasCookedFood ? false : asap.scheduleRequired,
-        schedule_allowed: !groupHasCookedFood,
+        schedule_required:
+          groupHasCookedFood || groupIsCookedFoodPayAfter
+            ? false
+            : asap.scheduleRequired,
+        // ASAP only for cooked food and for pay-after-confirm groups (v1).
+        schedule_allowed: !groupHasCookedFood && !groupIsCookedFoodPayAfter,
         pay_after_merchant_confirm_eligible: groupIsCookedFoodPayAfter,
       });
     }
