@@ -2,6 +2,7 @@ import { AddressBits, AgentMapSource, LocationMapSource } from './admin-map.type
 import {
   activeOrdersWhere,
   agentSearchHit,
+  searchTokens,
   mapAgentRow,
   mapLocationRow,
   mergePins,
@@ -209,6 +210,21 @@ describe('orderMapHolder', () => {
     expect(orderMapHolder('complete', 'delivery')).toBe('closed');
     expect(orderMapHolder('cancelled', 'delivery')).toBe('closed');
     expect(orderMapHolder('shipped', 'shipping')).toBe('carrier');
+    expect(orderMapHolder('in_delivery', 'shipping')).toBe('carrier');
+  });
+
+  it('keeps a picked-up pickup order at the store', () => {
+    expect(orderMapHolder('picked_up', 'pickup')).toBe('business');
+    expect(orderMapHolder('out_for_delivery', 'pickup')).toBe('business');
+  });
+});
+
+describe('searchTokens', () => {
+  it('keeps four tokens and escapes like-query wildcards', () => {
+    expect(searchTokens('  a   b  c d e f ')).toEqual(['a', 'b', 'c', 'd']);
+    expect(personNameWhere(['100%_a\\b'])).toEqual({
+      _and: [{ _or: nameOrEmail('%100\\%\\_a\\\\b%') }],
+    });
   });
 });
 

@@ -1,4 +1,6 @@
 import {
+  bestPackSavings,
+  lineQuantityCap,
   listingHasSellableStock,
   packRebate,
   selectedAvailableUnits,
@@ -72,6 +74,54 @@ describe('packRebate', () => {
       perUnit: 4,
       savePercent: 20,
     });
+  });
+});
+
+describe('bestPackSavings', () => {
+  const packs = [
+    { id: 'six', name: 'Six', quantity: 6, price: 50, is_active: true },
+    { id: 'ten', name: 'Ten', quantity: 10, price: 70, is_active: true },
+    { id: 'hidden', name: 'Hidden', quantity: 10, price: 40, is_active: false },
+  ];
+
+  it('labels the highest active pack discount', () => {
+    expect(bestPackSavings({ variants: packs, listingSellingPrice: 10 })).toEqual({
+      pct: 30,
+      count: 10,
+    });
+  });
+
+  it('compares pack and single prices after the listing deal', () => {
+    expect(
+      bestPackSavings({
+        variants: [{ id: 'ten', name: 'Ten', quantity: 10, price: 100, is_active: true }],
+        listingSellingPrice: 100,
+        hasActiveDeal: true,
+        originalPrice: 100,
+        discountedPrice: 80,
+        discountType: 'percentage',
+        discountValue: 20,
+      })
+    ).toEqual({ pct: 90, count: 10 });
+  });
+
+  it('hides the badge when every pack is inactive or not cheaper', () => {
+    expect(
+      bestPackSavings({
+        variants: [{ id: 'ten', name: 'Ten', quantity: 10, price: 100, is_active: false }],
+        listingSellingPrice: 10,
+      })
+    ).toBeNull();
+  });
+});
+
+describe('lineQuantityCap', () => {
+  it('uses the tighter of the merchant maximum and remaining stock', () => {
+    expect(
+      lineQuantityCap({ packQuantity: 10, maxOrderBaseUnits: 15, availableBaseUnits: 25 })
+    ).toBe(1);
+    expect(lineQuantityCap({ packQuantity: 10, availableBaseUnits: 9 })).toBe(0);
+    expect(lineQuantityCap({ packQuantity: 10 })).toBeUndefined();
   });
 });
 
