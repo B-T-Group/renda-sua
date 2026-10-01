@@ -16,6 +16,11 @@ export interface AdminMapFilter {
   state?: string;
 }
 
+export interface AdminMapSummary {
+  agents: { active: number; unavailable: number; suspended: number };
+  merchants: { open: number; inactive: number };
+}
+
 export interface AdminMapPin {
   id: string;
   kind: AdminMapPinKind;
@@ -73,4 +78,25 @@ export interface LocationMapSource {
   is_active?: boolean | null;
   business?: { name?: string | null } | null;
   address?: AddressBits | null;
+}
+
+export type AdminMapSearchNotice = 'inactive' | 'no_location' | 'carrier';
+export type OrderMapHolder = 'business' | 'agent' | 'carrier' | 'closed';
+
+export interface AdminMapSearchHit {
+  id: string;
+  kind: 'agent' | 'business_location' | 'order';
+  title: string;
+  subtitle: string | null;
+  pin: AdminMapPin | null;
+  notice: AdminMapSearchNotice | null;
+}
+
+export interface OrderMapSource {
+  id: string;
+  order_number: string;
+  current_status: string;
+  fulfillment_method?: string | null;
+  assigned_agent?: AgentMapSource | null;
+  business_location?: LocationMapSource | null;
 }

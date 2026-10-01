@@ -2,10 +2,16 @@ import {
   AddressBits,
   AdminMapActivity,
   AdminMapFilter,
+  AdminMapKind,
   AdminMapPin,
+  AdminMapSearchHit,
+  AdminMapSearchNotice,
+  AdminMapSummary,
   AgentMapSource,
   GpsBits,
   LocationMapSource,
+  OrderMapHolder,
+  OrderMapSource,
 } from './admin-map.types';
 
 export function normalizeCountryCode(value?: string): string | null {
@@ -64,6 +70,115 @@ export function mapLocationRow(
   return buildLocationPin(row, address, coords);
 }
 
+export function emptyMapSummary(): AdminMapSummary {
+  return {
+    agents: { active: 0, unavailable: 0, suspended: 0 },
+    merchants: { open: 0, inactive: 0 },
+  };
+}
+
+const CLOSED_ORDER_STATUSES = new Set([
+  'cancelled',
+  'complete',
+  'delivered',
+  'failed',
+  'refunded',
+  'refund_requested',
+  'refund_approved_full',
+  'refund_approved_partial',
+  'refund_rejected',
+  'refund_approved_replace',
+  'refund_processing',
+  'refund_failed',
+]);
+const AGENT_HELD_STATUSES = new Set(['picked_up', 'in_transit', 'out_for_delivery']);
+const CARRIER_STATUSES = new Set(['shipped', 'in_delivery']);
+
+export function orderMapHolder(
+  status: string,
+  fulfillment?: string | null
+): OrderMapHolder {
+  if (CLOSED_ORDER_STATUSES.has(status)) return 'closed';
+  if (fulfillment === 'pickup') return 'business';
+  if (AGENT_HELD_STATUSES.has(status)) return 'agent';
+  if (CARRIER_STATUSES.has(status)) return 'carrier';
+  return 'business';
+}
+
+export function searchTokens(raw: string): string[] {
+  return raw.trim().split(/\s+/).filter(Boolean).slice(0, 4);
+}
+
+export function personNameWhere(tokens: string[]) {
+  return { _and: tokens.map((token) => nameToken(token)) };
+}
+
+export function merchantNameWhere(tokens: string[]) {
+  return { _and: tokens.map((token) => merchantToken(token)) };
+}
+
+export function orderNumberWhere(term: string) {
+  return { order_number: { _ilike: likePattern(term.replace(/\s+/g, '')) } };
+}
+
+export function agentSearchHit(agent: AgentMapSource): AdminMapSearchHit {
+  const pin = mapAgentRow(agent, {});
+  return {
+    id: agent.id,
+    kind: 'agent',
+    title: personName(agent.user),
+    subtitle: pin?.subtitle ?? null,
+    pin,
+    notice: pin ? null : 'no_location',
+  };
+}
+
+export function locationSearchHit(row: LocationMapSource): AdminMapSearchHit {
+  const pin = mapLocationRow(row, {});
+  return {
+    id: row.id,
+    kind: 'business_location',
+    title: row.name || row.business?.name || 'Location',
+    subtitle: row.business?.name && row.name ? row.business.name : null,
+    pin,
+    notice: pin ? null : 'no_location',
+  };
+}
+
+export function orderSearchHit(order: OrderMapSource): AdminMapSearchHit {
+  const holder = orderMapHolder(order.current_status, order.fulfillment_method);
+  const pin = pinForHolder(holder, order);
+  return {
+    id: order.id,
+    kind: 'order',
+    title: order.order_number,
+    subtitle: order.current_status,
+    pin,
+    notice: orderNotice(holder, pin),
+  };
+}
+
+export function pinsForKind(pins: AdminMapPin[], kind: AdminMapKind): AdminMapPin[] {
+  if (kind === 'agents') return pins.filter((pin) => pin.kind === 'agent');
+  if (kind === 'businesses') return pins.filter((pin) => pin.kind === 'business_location');
+  return pins;
+}
+
+export function summarizeMarket(
+  agents: AgentMapSource[],
+  locations: LocationMapSource[],
+  filter: AdminMapFilter
+): AdminMapSummary {
+  const summary = emptyMapSummary();
+  agents.filter((row) => inMarket(pickAgentAddress(row), filter)).forEach((row) => {
+    countAgent(summary, resolveAgentActivity(row.status, row.is_available).activity);
+  });
+  locations.filter((row) => inMarket(row.address, filter)).forEach((row) => {
+    countMerchant(summary, row.is_active === true);
+  });
+  return summary;
+}
+
 export function mergePins(
   agents: AgentMapSource[],
   locations: LocationMapSource[],
@@ -83,6 +198,64 @@ export function uniqueStateNames(rows: Array<{ state_name?: string | null }>): s
     .map((row) => (row.state_name || '').trim())
     .filter((name) => name.length > 0);
   return [...new Set(names)];
+}
+
+function nameToken(token: string) {
+  const pattern = likePattern(token);
+  return {
+    _or: [
+      { user: { first_name: { _ilike: pattern } } },
+      { user: { last_name: { _ilike: pattern } } },
+    ],
+  };
+}
+
+function merchantToken(token: string) {
+  const pattern = likePattern(token);
+  return {
+    _or: [
+      { name: { _ilike: pattern } },
+      { business: { name: { _ilike: pattern } } },
+    ],
+  };
+}
+
+function likePattern(token: string): string {
+  return `%${token.replace(/[%_\\]/g, (char) => `\\${char}`)}%`;
+}
+
+function pinForHolder(holder: OrderMapHolder, order: OrderMapSource): AdminMapPin | null {
+  if (holder === 'agent' && order.assigned_agent) return mapAgentRow(order.assigned_agent, {});
+  if (holder === 'business' && order.business_location) {
+    return mapLocationRow(order.business_location, {});
+  }
+  return null;
+}
+
+function orderNotice(
+  holder: OrderMapHolder,
+  pin: AdminMapPin | null
+): AdminMapSearchNotice | null {
+  if (holder === 'closed') return 'inactive';
+  if (holder === 'carrier') return 'carrier';
+  return pin ? null : 'no_location';
+}
+
+function inMarket(
+  address: { country?: string | null; state?: string | null } | null | undefined,
+  filter: AdminMapFilter
+): boolean {
+  return addressMatchesMarket(address ?? null, filter);
+}
+
+function countAgent(summary: AdminMapSummary, activity: AdminMapActivity) {
+  if (activity === 'active' || activity === 'unavailable' || activity === 'suspended') {
+    summary.agents[activity] += 1;
+  }
+}
+
+function countMerchant(summary: AdminMapSummary, open: boolean) {
+  summary.merchants[open ? 'open' : 'inactive'] += 1;
 }
 
 function hasMarketFilter(filter: AdminMapFilter): boolean {

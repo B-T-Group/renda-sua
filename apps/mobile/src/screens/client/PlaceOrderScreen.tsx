@@ -22,7 +22,6 @@ import {
 } from 'react-native-paper';
 import { agentApi } from '../../services/agentApi';
 import { checkoutAnalytics } from '../../services/checkoutAnalytics';
-import { nextDeliveryUnavailableLatch } from '../../utils/deliveryAvailabilityLatch';
 import { useTheme } from '../../contexts/ThemeContext';
 import { isAfricanMarketCountry } from '../../constants/marketCountries';
 import { PlaceOrderDeliveryWindowBlock } from '../../components/browse/PlaceOrderDeliveryWindowBlock';
@@ -202,18 +201,21 @@ export default function PlaceOrderScreen() {
   const deliveryAddressId = usableDeliveryAddressId(addressId, addressesForDelivery);
 
   const basePreflightRequest = useMemo(() => {
-    if (!item || !fulfillmentConfirmed) return null;
+    if (!item) return null;
     const orderVariantId = toOrderItemVariantId(variantId);
     const line = {
       business_inventory_id: item.id,
       quantity,
       ...(orderVariantId ? { item_variant_id: orderVariantId } : {}),
     };
+    const address = deliveryAddressId
+      ? { delivery_address_id: deliveryAddressId }
+      : {};
     if (deliveryAddressId && fulfillmentNeedsAddress(fulfillment)) {
       return {
         items: [line],
         fulfillment_method: fulfillment,
-        delivery_address_id: deliveryAddressId,
+        ...address,
       };
     }
     if (fulfillment === 'pickup' || sellerCountry) {
@@ -221,13 +223,13 @@ export default function PlaceOrderScreen() {
         items: [line],
         fulfillment_method: fulfillment,
         ...(sellerCountry ? { provisional_country: sellerCountry } : {}),
+        ...address,
       };
     }
     return null;
   }, [
     deliveryAddressId,
     fulfillment,
-    fulfillmentConfirmed,
     item,
     quantity,
     sellerCountry,
@@ -241,7 +243,7 @@ export default function PlaceOrderScreen() {
 
   const { config: preflightConfig, loading: preflightLoading } = useResolvedCheckout({
     request: preflightRequest,
-    enabled: Boolean(item && fulfillmentConfirmed),
+    enabled: Boolean(item),
   });
 
   const checkoutBlocker = useMemo(
@@ -265,24 +267,22 @@ export default function PlaceOrderScreen() {
     fulfillmentConfirmed && !isDiasporaEarly && !resolvedIsStripeRail;
   const linkedMoMo = useCheckoutLinkedMoMoPhone(needsLinkedMoMoPhone);
 
-  // Sticky latch: preflight only returns delivery_availability for delivery
-  // fulfillment. Keep the disabled state after auto-switching to pickup so the
-  // Delivery card stays grayed out with a clear reason.
-  const [deliveryUnavailable, setDeliveryUnavailable] = useState(false);
-  useEffect(() => {
-    setDeliveryUnavailable((prev) =>
-      nextDeliveryUnavailableLatch(prev, preflightConfig?.delivery_availability)
-    );
-  }, [preflightConfig?.delivery_availability]);
+  // Delivery is offered only after the shared check returns available.
+  const deliveryOffered =
+    preflightConfig?.delivery_availability?.available === true;
+  const deliveryKnownUnavailable =
+    !preflightLoading &&
+    Boolean(preflightConfig) &&
+    preflightConfig?.delivery_availability?.available !== true;
 
   // Funnel analytics: track the first time the unavailable notice is shown.
   const unavailableTrackedRef = useRef(false);
   useEffect(() => {
-    if (deliveryUnavailable && !unavailableTrackedRef.current) {
+    if (deliveryKnownUnavailable && !unavailableTrackedRef.current) {
       unavailableTrackedRef.current = true;
       checkoutAnalytics.deliveryUnavailableShown({ checkout_mode: 'single' });
     }
-  }, [deliveryUnavailable]);
+  }, [deliveryKnownUnavailable]);
 
   const switchToPickupFromUnavailable = useCallback(() => {
     checkoutAnalytics.switchedToPickup({ checkout_mode: 'single' });
@@ -290,29 +290,50 @@ export default function PlaceOrderScreen() {
     setHasChosenFulfillment(true);
   }, []);
 
-  // When delivery is unavailable and pickup exists, auto-select pickup.
+  // When delivery is not offered and pickup exists, auto-select pickup.
   useEffect(() => {
-    if (deliveryUnavailable && pickupEnabled && fulfillment === 'delivery') {
-      switchToPickupFromUnavailable();
-    }
-  }, [deliveryUnavailable, fulfillment, pickupEnabled, switchToPickupFromUnavailable]);
+    if (preflightLoading || !preflightConfig) return;
+    if (deliveryOffered || fulfillment !== 'delivery') return;
+    if (pickupEnabled) switchToPickupFromUnavailable();
+    else if (shippingEnabled) setFulfillment('shipping');
+  }, [
+    deliveryOffered,
+    fulfillment,
+    pickupEnabled,
+    preflightConfig,
+    preflightLoading,
+    shippingEnabled,
+    switchToPickupFromUnavailable,
+  ]);
 
   const chooseFulfillment = useCallback(
     (value: Fulfillment) => {
-      if (value === 'delivery' && deliveryUnavailable) return;
+      if (value === 'delivery' && !deliveryOffered) return;
       setFulfillment(value);
       setHasChosenFulfillment(true);
     },
-    [deliveryUnavailable]
+    [deliveryOffered]
   );
 
-  // If pickup isn't offered for this item, fall back to delivery/shipping once.
+  // If pickup isn't offered, move to shipping or delivery only once delivery is known.
   useEffect(() => {
-    if (!item) return;
-    if (fulfillment === 'pickup' && !pickupEnabled) {
-      setFulfillment(shippingEnabled ? 'shipping' : 'delivery');
+    if (!item || fulfillment !== 'pickup' || pickupEnabled) return;
+    if (shippingEnabled) {
+      setFulfillment('shipping');
+      return;
     }
-  }, [item, fulfillment, pickupEnabled, shippingEnabled]);
+    if (deliveryOffered || (!preflightLoading && preflightConfig)) {
+      setFulfillment('delivery');
+    }
+  }, [
+    deliveryOffered,
+    fulfillment,
+    item,
+    pickupEnabled,
+    preflightConfig,
+    preflightLoading,
+    shippingEnabled,
+  ]);
 
   const onDwReadyChange = useCallback((ok: boolean) => {
     setDeliveryScheduleOk(ok);
@@ -952,7 +973,7 @@ export default function PlaceOrderScreen() {
         compact
         value={fulfillment}
         onChange={chooseFulfillment}
-        deliveryDisabled={deliveryUnavailable}
+        deliveryHidden={!deliveryOffered}
         deliveryDisabledReason={t(
           'client.placeOrder.deliveryUnavailable',
           'Delivery is currently unavailable.'
@@ -1054,7 +1075,7 @@ export default function PlaceOrderScreen() {
     if (checkoutBlocker) return false;
     if (preflightRequest && preflightLoading) return false;
     if (stripeDeliveryAddressIncomplete) return false;
-    if (fulfillment === 'delivery' && deliveryUnavailable) return false;
+    if (fulfillment === 'delivery' && !deliveryOffered) return false;
     if (fulfillment === 'shipping' && (!preflightConfig || !shippingEligible)) {
       return false;
     }
@@ -1067,7 +1088,7 @@ export default function PlaceOrderScreen() {
     deliveryAddressId,
     checkoutBlocker,
     deliveryScheduleOk,
-    deliveryUnavailable,
+    deliveryOffered,
     fulfillment,
     fulfillmentConfirmed,
     item,
@@ -1529,7 +1550,7 @@ export default function PlaceOrderScreen() {
           />
         ) : null}
 
-        {fulfillment === 'delivery' && deliveryUnavailable ? (
+        {fulfillment === 'delivery' && deliveryKnownUnavailable ? (
           <NoticeBanner
             style={{ marginBottom: spacing.sm }}
             tone="warning"

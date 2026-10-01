@@ -314,6 +314,20 @@
       "lastSeen": "Dernière position",
       "positionLive": "GPS en direct",
       "positionAddress": "Adresse enregistrée",
+      "summaryHint": "Totaux pour le pays et la région sélectionnés, y compris les personnes sans position sur la carte.",
+      "search": "Trouver sur la carte",
+      "searchPlaceholder": "Nom, commerce ou numéro de commande",
+      "orderHere": "La commande {{number}} est à cet endroit.",
+      "searchKind": {
+        "agent": "Agent",
+        "business_location": "Commerçant",
+        "order": "Commande"
+      },
+      "searchNotice": {
+        "inactive": "Cette commande est terminée ou annulée.",
+        "no_location": "Aucune position sur la carte pour ce résultat.",
+        "carrier": "Cette commande est chez le transporteur."
+      },
       "activity": {
         "active": "Actif",
         "unavailable": "Indisponible",

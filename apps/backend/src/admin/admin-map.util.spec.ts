@@ -1,9 +1,15 @@
 import { AddressBits, AgentMapSource, LocationMapSource } from './admin-map.types';
 import {
+  agentSearchHit,
   mapAgentRow,
   mapLocationRow,
   mergePins,
+  orderMapHolder,
+  orderSearchHit,
+  personNameWhere,
+  pinsForKind,
   resolveAgentActivity,
+  summarizeMarket,
 } from './admin-map.util';
 
 const douala: AddressBits = {
@@ -156,3 +162,109 @@ describe('mergePins', () => {
     expect(pins[0].kind).toBe('agent');
   });
 });
+
+describe('summarizeMarket', () => {
+  const cameroon = { countryCode: 'CM', countryName: 'Cameroon', state: 'Littoral' };
+
+  it('counts agents and merchants in the market by status, including those without a pin', () => {
+    const noGps = { ...douala, latitude: null, longitude: null };
+    const agents = [
+      agent(),
+      agent({ id: 'agent-2', is_available: false, agent_addresses: [{ address: noGps }] }),
+      agent({ id: 'agent-3', status: 'suspended' }),
+    ];
+    const locations = [
+      merchant(true),
+      merchant(false, { id: 'loc-2', address: noGps }),
+    ];
+    expect(summarizeMarket(agents, locations, cameroon)).toEqual({
+      agents: { active: 1, unavailable: 1, suspended: 1 },
+      merchants: { open: 1, inactive: 1 },
+    });
+    expect(mergePins(agents, locations, cameroon)).toHaveLength(3);
+  });
+
+  it('leaves out people outside the selected region', () => {
+    const summary = summarizeMarket(
+      [agent({ agent_addresses: [{ address: { ...douala, state: 'Centre' } }] })],
+      [],
+      cameroon
+    );
+    expect(summary.agents).toEqual({ active: 0, unavailable: 0, suspended: 0 });
+  });
+});
+
+describe('orderMapHolder', () => {
+  it('keeps an open order at the business until an agent picks it up', () => {
+    expect(orderMapHolder('preparing', 'delivery')).toBe('business');
+    expect(orderMapHolder('assigned_to_agent', 'delivery')).toBe('business');
+    expect(orderMapHolder('ready_for_pickup', 'pickup')).toBe('business');
+  });
+
+  it('follows the agent only after pickup, and skips closed or carrier orders', () => {
+    expect(orderMapHolder('picked_up', 'delivery')).toBe('agent');
+    expect(orderMapHolder('in_transit', 'delivery')).toBe('agent');
+    expect(orderMapHolder('complete', 'delivery')).toBe('closed');
+    expect(orderMapHolder('cancelled', 'delivery')).toBe('closed');
+    expect(orderMapHolder('shipped', 'shipping')).toBe('carrier');
+  });
+});
+
+describe('orderSearchHit', () => {
+  it('zooms to the agent who is carrying an active order', () => {
+    const hit = orderSearchHit({
+      id: 'order-1',
+      order_number: 'ORD-1',
+      current_status: 'in_transit',
+      fulfillment_method: 'delivery',
+      assigned_agent: agent(),
+      business_location: merchant(true),
+    });
+    expect(hit.notice).toBeNull();
+    expect(hit.pin).toMatchObject({ kind: 'agent', id: 'agent-1' });
+  });
+
+  it('does not place a completed order on the map', () => {
+    const hit = orderSearchHit({
+      id: 'order-2',
+      order_number: 'ORD-2',
+      current_status: 'complete',
+      fulfillment_method: 'delivery',
+      business_location: merchant(true),
+    });
+    expect(hit.pin).toBeNull();
+    expect(hit.notice).toBe('inactive');
+  });
+});
+
+describe('agentSearchHit', () => {
+  it('matches each part of a name and still returns an agent with no coordinates', () => {
+    expect(personNameWhere(['Awa', 'Ngo'])).toEqual({
+      _and: [
+        { _or: [{ user: { first_name: { _ilike: '%Awa%' } } }, { user: { last_name: { _ilike: '%Awa%' } } }] },
+        { _or: [{ user: { first_name: { _ilike: '%Ngo%' } } }, { user: { last_name: { _ilike: '%Ngo%' } } }] },
+      ],
+    });
+    const hit = agentSearchHit(agent({ agent_addresses: [{ address: { ...douala, latitude: null, longitude: null } }] }));
+    expect(hit.title).toBe('Awa Ngo');
+    expect(hit.notice).toBe('no_location');
+  });
+});
+
+describe('pinsForKind', () => {
+  it('keeps only the selected kind', () => {
+    const pins = mergePins([agent()], [merchant(true)], { countryName: 'Cameroon' });
+    expect(pinsForKind(pins, 'agents')).toHaveLength(1);
+    expect(pinsForKind(pins, 'businesses')[0].kind).toBe('business_location');
+  });
+});
+
+function merchant(open: boolean, overrides: Partial<LocationMapSource> = {}): LocationMapSource {
+  return {
+    id: 'loc-1',
+    name: 'Akwa store',
+    is_active: open,
+    address: douala,
+    ...overrides,
+  };
+}

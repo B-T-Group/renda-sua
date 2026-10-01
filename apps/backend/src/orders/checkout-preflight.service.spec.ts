@@ -677,7 +677,7 @@ describe('CheckoutPreflightService', () => {
     expect(result.delivery_availability?.available).toBe(false);
   });
 
-  it('skips delivery availability evaluation for pickup carts', async () => {
+  it('evaluates delivery availability for pickup carts so the option can be decided first', async () => {
     mockInventory([makeInventoryRow({ payAtPickup: true })]);
 
     const dto: CheckoutPreflightDto = {
@@ -689,9 +689,9 @@ describe('CheckoutPreflightService', () => {
 
     const result = await service.resolve(dto, false);
 
-    expect(deliveryAvailabilityService.evaluate).not.toHaveBeenCalled();
-    expect(result.delivery_availability).toBeNull();
-    expect(result.groups[0]?.delivery_availability).toBeNull();
+    expect(deliveryAvailabilityService.evaluate).toHaveBeenCalled();
+    expect(result.delivery_availability?.available).toBe(true);
+    expect(result.groups[0]?.delivery_availability?.available).toBe(true);
     expect(result.groups[0]?.pickup_eligible).toBe(true);
   });
 

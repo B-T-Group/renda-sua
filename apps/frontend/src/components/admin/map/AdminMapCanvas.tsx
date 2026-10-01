@@ -4,7 +4,7 @@ import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
 import React, { useEffect, useRef } from 'react';
 import { environment } from '../../../config/environment';
 import { markerContent } from './adminMapMarker';
-import { AdminMapPin, LABEL_ZOOM } from './adminMap.types';
+import { AdminMapPin, FOCUS_ZOOM, LABEL_ZOOM } from './adminMap.types';
 
 interface AdminMapCanvasProps {
   pins: AdminMapPin[];
@@ -14,6 +14,8 @@ interface AdminMapCanvasProps {
   activityLabel: (pin: AdminMapPin) => string;
   onZoom: (zoom: number) => void;
   onSelect: (pin: AdminMapPin) => void;
+  focusPin: AdminMapPin | null;
+  focusToken: number;
 }
 
 const AdminMapCanvas: React.FC<AdminMapCanvasProps> = (props) => (
@@ -27,9 +29,15 @@ const AdminMapCanvas: React.FC<AdminMapCanvasProps> = (props) => (
         style={{ width: '100%', height: '100%' }}
         onCameraChanged={(event) => props.onZoom(Math.round(event.detail.zoom))}
       >
-        <FitPins pins={props.pins} filterKey={props.filterKey} ready={props.ready} />
-        <PinLayer
+        <FitPins
           pins={props.pins}
+          filterKey={props.filterKey}
+          ready={props.ready}
+          focusToken={props.focusToken}
+        />
+        <FocusPin pin={props.focusPin} token={props.focusToken} />
+        <PinLayer
+          pins={withFocus(props.pins, props.focusPin)}
           showLabels={props.zoom >= LABEL_ZOOM}
           activityLabel={props.activityLabel}
           onSelect={props.onSelect}
@@ -43,19 +51,39 @@ function FitPins({
   pins,
   filterKey,
   ready,
+  focusToken,
 }: {
   pins: AdminMapPin[];
   filterKey: string;
   ready: boolean;
+  focusToken: number;
 }) {
   const map = useMap();
   const fitted = useRef('');
   useEffect(() => {
     if (!map || !ready || !pins.length || fitted.current === filterKey) return;
     fitted.current = filterKey;
+    if (focusToken !== 0) return;
     framePins(map, pins);
-  }, [map, pins, filterKey, ready]);
+  }, [map, pins, filterKey, ready, focusToken]);
   return null;
+}
+
+function FocusPin({ pin, token }: { pin: AdminMapPin | null; token: number }) {
+  const map = useMap();
+  const seen = useRef(0);
+  useEffect(() => {
+    if (!map || !pin || token === 0 || seen.current === token) return;
+    seen.current = token;
+    map.setCenter({ lat: pin.latitude, lng: pin.longitude });
+    map.setZoom(FOCUS_ZOOM);
+  }, [map, pin, token]);
+  return null;
+}
+
+function withFocus(pins: AdminMapPin[], focus: AdminMapPin | null): AdminMapPin[] {
+  if (!focus || pins.some((pin) => pin.id === focus.id)) return pins;
+  return [...pins, focus];
 }
 
 function framePins(map: google.maps.Map, pins: AdminMapPin[]) {

@@ -571,6 +571,20 @@
       "lastSeen": "Last position",
       "positionLive": "Live GPS",
       "positionAddress": "Registered address",
+      "summaryHint": "Totals for the selected country and region, including people without a map position.",
+      "search": "Find on the map",
+      "searchPlaceholder": "Name, business, or order number",
+      "orderHere": "Order {{number}} is at this place.",
+      "searchKind": {
+        "agent": "Agent",
+        "business_location": "Merchant",
+        "order": "Order"
+      },
+      "searchNotice": {
+        "inactive": "This order is completed or cancelled.",
+        "no_location": "No map position for this result.",
+        "carrier": "This order is with the carrier."
+      },
       "activity": {
         "active": "Active",
         "unavailable": "Unavailable",

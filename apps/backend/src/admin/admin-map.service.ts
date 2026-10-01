@@ -4,16 +4,46 @@ import {
   ADMIN_MAP_AGENTS_QUERY,
   ADMIN_MAP_LOCATIONS_QUERY,
   ADMIN_MAP_REGIONS_QUERY,
+  ADMIN_MAP_SEARCH_AGENTS_QUERY,
+  ADMIN_MAP_SEARCH_LOCATIONS_QUERY,
+  ADMIN_MAP_SEARCH_ORDERS_QUERY,
 } from './admin-map.queries';
 import {
   AdminMapFilter,
-  AdminMapKind,
   AdminMapPin,
+  AdminMapSearchHit,
+  AdminMapSummary,
   AgentMapSource,
   LocationMapSource,
+  OrderMapSource,
 } from './admin-map.types';
-import { mergePins, normalizeCountryCode, uniqueStateNames } from './admin-map.util';
+import {
+  agentSearchHit,
+  locationSearchHit,
+  mergePins,
+  merchantNameWhere,
+  normalizeCountryCode,
+  orderNumberWhere,
+  orderSearchHit,
+  personNameWhere,
+  pinsForKind,
+  searchTokens,
+  summarizeMarket,
+  uniqueStateNames,
+} from './admin-map.util';
 import { AdminMapPinsQueryDto } from './dto/admin-map-query.dto';
+
+function toSearchHits(
+  agents: AgentMapSource[],
+  locations: LocationMapSource[],
+  orders: OrderMapSource[]
+): AdminMapSearchHit[] {
+  return [
+    ...agents.map(agentSearchHit),
+    ...locations.map(locationSearchHit),
+    ...orders.map(orderSearchHit),
+  ];
+}
 
 interface RegionRow {
   state_name?: string | null;
@@ -31,10 +61,27 @@ export class AdminMapService {
     return { regions: uniqueStateNames(rows).map((stateName) => ({ stateName })) };
   }
 
-  async getPins(query: AdminMapPinsQueryDto): Promise<{ pins: AdminMapPin[] }> {
+  async search(term: string): Promise<{ results: AdminMapSearchHit[] }> {
+    const tokens = searchTokens(term);
+    if (tokens.join('').length < 2) return { results: [] };
+    const [agents, locations, orders] = await Promise.all([
+      this.findAgents(tokens),
+      this.findLocations(tokens),
+      this.findOrders(tokens.join(' ')),
+    ]);
+    return { results: toSearchHits(agents, locations, orders) };
+  }
+
+  async getPins(
+    query: AdminMapPinsQueryDto
+  ): Promise<{ pins: AdminMapPin[]; summary: AdminMapSummary }> {
     const filter = await this.buildFilter(query);
-    const [agents, locations] = await this.loadRows(query.kind ?? 'all');
-    return { pins: mergePins(agents, locations, filter) };
+    const [agents, locations] = await this.loadRows();
+    const matched = mergePins(agents, locations, filter);
+    return {
+      pins: pinsForKind(matched, query.kind ?? 'all'),
+      summary: summarizeMarket(agents, locations, filter),
+    };
   }
 
   private async buildFilter(query: AdminMapPinsQueryDto): Promise<AdminMapFilter> {
@@ -47,24 +94,45 @@ export class AdminMapService {
     };
   }
 
-  private loadRows(kind: AdminMapKind) {
-    return Promise.all([this.loadAgents(kind), this.loadLocations(kind)]);
+  private loadRows() {
+    return Promise.all([this.loadAgents(), this.loadLocations()]);
   }
 
-  private async loadAgents(kind: AdminMapKind): Promise<AgentMapSource[]> {
-    if (kind === 'businesses') return [];
+  private async loadAgents(): Promise<AgentMapSource[]> {
     const data = await this.hasuraSystemService.executeQuery<{
       agents: AgentMapSource[];
     }>(ADMIN_MAP_AGENTS_QUERY);
     return data.agents ?? [];
   }
 
-  private async loadLocations(kind: AdminMapKind): Promise<LocationMapSource[]> {
-    if (kind === 'agents') return [];
+  private async loadLocations(): Promise<LocationMapSource[]> {
     const data = await this.hasuraSystemService.executeQuery<{
       business_locations: LocationMapSource[];
     }>(ADMIN_MAP_LOCATIONS_QUERY);
     return data.business_locations ?? [];
+  }
+
+  private async findAgents(tokens: string[]): Promise<AgentMapSource[]> {
+    const data = await this.hasuraSystemService.executeQuery<{ agents: AgentMapSource[] }>(
+      ADMIN_MAP_SEARCH_AGENTS_QUERY,
+      { where: personNameWhere(tokens) }
+    );
+    return data.agents ?? [];
+  }
+
+  private async findLocations(tokens: string[]): Promise<LocationMapSource[]> {
+    const data = await this.hasuraSystemService.executeQuery<{
+      business_locations: LocationMapSource[];
+    }>(ADMIN_MAP_SEARCH_LOCATIONS_QUERY, { where: merchantNameWhere(tokens) });
+    return data.business_locations ?? [];
+  }
+
+  private async findOrders(term: string): Promise<OrderMapSource[]> {
+    const data = await this.hasuraSystemService.executeQuery<{ orders: OrderMapSource[] }>(
+      ADMIN_MAP_SEARCH_ORDERS_QUERY,
+      { where: orderNumberWhere(term) }
+    );
+    return data.orders ?? [];
   }
 
   private async loadRegions(code: string): Promise<RegionRow[]> {
