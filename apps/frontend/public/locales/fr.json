@@ -316,7 +316,9 @@
       "positionAddress": "Adresse enregistrée",
       "summaryHint": "Totaux pour le pays et la région sélectionnés, y compris les personnes sans position sur la carte.",
       "search": "Trouver sur la carte",
-      "searchPlaceholder": "Nom, commerce ou numéro de commande",
+      "searchPlaceholder": "Nom ou commerce",
+      "activeOrders": "Commandes actives",
+      "activeOrdersPlaceholder": "Numéro de commande",
       "orderHere": "La commande {{number}} est à cet endroit.",
       "searchKind": {
         "agent": "Agent",

@@ -573,7 +573,9 @@
       "positionAddress": "Registered address",
       "summaryHint": "Totals for the selected country and region, including people without a map position.",
       "search": "Find on the map",
-      "searchPlaceholder": "Name, business, or order number",
+      "searchPlaceholder": "Name or business",
+      "activeOrders": "Active orders",
+      "activeOrdersPlaceholder": "Order number",
       "orderHere": "Order {{number}} is at this place.",
       "searchKind": {
         "agent": "Agent",

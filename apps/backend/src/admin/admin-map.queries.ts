@@ -104,8 +104,8 @@ export const ADMIN_MAP_SEARCH_LOCATIONS_QUERY = `
 `;
 
 export const ADMIN_MAP_SEARCH_ORDERS_QUERY = `
-  query AdminMapSearchOrders($where: orders_bool_exp!) {
-    orders(where: $where, order_by: { created_at: desc }, limit: 8) {
+  query AdminMapSearchOrders($where: orders_bool_exp!, $limit: Int!) {
+    orders(where: $where, order_by: { created_at: desc }, limit: $limit) {
       id
       order_number
       current_status

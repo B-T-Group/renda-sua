@@ -23,7 +23,7 @@ import {
   mergePins,
   merchantNameWhere,
   normalizeCountryCode,
-  orderNumberWhere,
+  activeOrdersWhere,
   orderSearchHit,
   personNameWhere,
   pinsForKind,
@@ -33,16 +33,11 @@ import {
 } from './admin-map.util';
 import { AdminMapPinsQueryDto } from './dto/admin-map-query.dto';
 
-function toSearchHits(
+function peopleHits(
   agents: AgentMapSource[],
-  locations: LocationMapSource[],
-  orders: OrderMapSource[]
+  locations: LocationMapSource[]
 ): AdminMapSearchHit[] {
-  return [
-    ...agents.map(agentSearchHit),
-    ...locations.map(locationSearchHit),
-    ...orders.map(orderSearchHit),
-  ];
+  return [...agents.map(agentSearchHit), ...locations.map(locationSearchHit)];
 }
 
 interface RegionRow {
@@ -64,12 +59,16 @@ export class AdminMapService {
   async search(term: string): Promise<{ results: AdminMapSearchHit[] }> {
     const tokens = searchTokens(term);
     if (tokens.join('').length < 2) return { results: [] };
-    const [agents, locations, orders] = await Promise.all([
+    const [agents, locations] = await Promise.all([
       this.findAgents(tokens),
       this.findLocations(tokens),
-      this.findOrders(tokens.join(' ')),
     ]);
-    return { results: toSearchHits(agents, locations, orders) };
+    return { results: peopleHits(agents, locations) };
+  }
+
+  async activeOrders(term: string): Promise<{ results: AdminMapSearchHit[] }> {
+    const orders = await this.loadOrders(activeOrdersWhere(term), 30);
+    return { results: orders.map(orderSearchHit) };
   }
 
   async getPins(
@@ -127,10 +126,10 @@ export class AdminMapService {
     return data.business_locations ?? [];
   }
 
-  private async findOrders(term: string): Promise<OrderMapSource[]> {
+  private async loadOrders(where: object, limit: number): Promise<OrderMapSource[]> {
     const data = await this.hasuraSystemService.executeQuery<{ orders: OrderMapSource[] }>(
       ADMIN_MAP_SEARCH_ORDERS_QUERY,
-      { where: orderNumberWhere(term) }
+      { where, limit }
     );
     return data.orders ?? [];
   }

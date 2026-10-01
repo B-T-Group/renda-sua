@@ -33,11 +33,19 @@ export class AdminMapController {
   constructor(private readonly adminMapService: AdminMapService) {}
 
   @Get('search')
-  @ApiOperation({ summary: 'Find an agent, merchant, or active order on the map' })
+  @ApiOperation({ summary: 'Find an agent or merchant on the map' })
   @ApiQuery({ name: 'q', required: true, example: 'Awa' })
-  @ApiResponse({ status: 200, description: 'Matching people and active orders' })
+  @ApiResponse({ status: 200, description: 'Matching agents and merchants' })
   search(@Query('q') q = '') {
     return this.adminMapService.search(q);
+  }
+
+  @Get('active-orders')
+  @ApiOperation({ summary: 'Active orders that can be located on the map' })
+  @ApiQuery({ name: 'q', required: false, example: 'ORD-2026' })
+  @ApiResponse({ status: 200, description: 'Open orders, newest first' })
+  activeOrders(@Query('q') q = '') {
+    return this.adminMapService.activeOrders(q);
   }
 
   @Get('regions')

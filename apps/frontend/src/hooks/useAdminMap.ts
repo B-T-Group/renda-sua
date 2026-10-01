@@ -128,6 +128,17 @@ export function useAdminMapSearch() {
   return { query, setQuery, results, loading };
 }
 
+export function useActiveMapOrders() {
+  const apiClient = useApiClient();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<AdminMapSearchHit[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => watchActiveOrders(apiClient, query, setResults, setLoading), [apiClient, query]);
+
+  return { query, setQuery, results, loading };
+}
+
 export function useSeededMapMarket() {
   const { selectedMarket, hydrated } = useMarket();
   const [country, setCountry] = useState('');
@@ -189,19 +200,29 @@ function watchSearch(
     setLoading(false);
     return undefined;
   }
-  return scheduleSearch(apiClient, term, setResults, setLoading);
+  return scheduleSearch(apiClient, term, setResults, setLoading, loadSearch);
+}
+
+function watchActiveOrders(
+  apiClient: ReturnType<typeof useApiClient>,
+  query: string,
+  setResults: (value: AdminMapSearchHit[]) => void,
+  setLoading: (value: boolean) => void
+) {
+  return scheduleSearch(apiClient, query.trim(), setResults, setLoading, loadActiveOrders);
 }
 
 function scheduleSearch(
   apiClient: ReturnType<typeof useApiClient>,
   term: string,
   setResults: (value: AdminMapSearchHit[]) => void,
-  setLoading: (value: boolean) => void
+  setLoading: (value: boolean) => void,
+  load: (client: ReturnType<typeof useApiClient>, term: string) => Promise<AdminMapSearchHit[]>
 ) {
   let cancelled = false;
   setLoading(true);
   const timer = window.setTimeout(() => {
-    void loadSearch(apiClient, term).then((hits) => {
+    void load(apiClient, term).then((hits) => {
       if (!cancelled) setResults(hits);
     }).finally(() => {
       if (!cancelled) setLoading(false);
@@ -221,6 +242,21 @@ async function loadSearch(
     const { data } = await apiClient.get<{ results: AdminMapSearchHit[] }>('/admin/map/search', {
       params: { q: term },
     });
+    return data.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function loadActiveOrders(
+  apiClient: ReturnType<typeof useApiClient>,
+  term: string
+): Promise<AdminMapSearchHit[]> {
+  try {
+    const { data } = await apiClient.get<{ results: AdminMapSearchHit[] }>(
+      '/admin/map/active-orders',
+      { params: term ? { q: term } : {} }
+    );
     return data.results ?? [];
   } catch {
     return [];
