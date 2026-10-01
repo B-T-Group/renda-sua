@@ -1038,8 +1038,22 @@ export class CommissionsService {
         businessLocationId ?? undefined
       );
       if (!account) {
-        this.logger.warn(
+        throw new Error(
           `Account not found for user ${recipientUserId} with currency ${currency}`
+        );
+      }
+
+      const memo = this.commissionDepositMemo(
+        order.order_number,
+        recipientType,
+        commissionType
+      );
+
+      // A retried settlement must not pay the same recipient twice: the ledger
+      // row (account + deposit + order + deterministic memo) is the source of truth.
+      if (await this.hasCommissionDeposit(account.id, order.id, memo)) {
+        this.logger.warn(
+          `Commission already deposited, skipping: order=${order.order_number} recipient=${recipientType} type=${commissionType}`
         );
         return;
       }
@@ -1049,13 +1063,15 @@ export class CommissionsService {
         accountId: account.id,
         amount: amount,
         transactionType: 'deposit',
-        memo: this.commissionDepositMemo(
-          order.order_number,
-          recipientType,
-          commissionType
-        ),
+        memo,
         referenceId: order.id,
       });
+
+      if (!transaction?.success || !transaction.transactionId) {
+        throw new Error(
+          `Commission deposit failed for ${recipientType}/${commissionType} on order ${order.order_number}: ${transaction?.error ?? 'unknown error'}`
+        );
+      }
 
       // Record commission payout audit
       if (transaction.transactionId) {
@@ -1118,6 +1134,33 @@ export class CommissionsService {
       );
       throw error;
     }
+  }
+
+  /** True when this account already received this order's commission deposit (same memo). */
+  private async hasCommissionDeposit(
+    accountId: string,
+    orderId: string,
+    memo: string
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query CommissionDepositExists(
+        $accountId: uuid!
+        $orderId: uuid!
+        $memo: String!
+      ) {
+        account_transactions(
+          where: {
+            account_id: { _eq: $accountId }
+            transaction_type: { _eq: deposit }
+            reference_id: { _eq: $orderId }
+            memo: { _eq: $memo }
+          }
+          limit: 1
+        ) { id }
+      }`,
+      { accountId, orderId, memo }
+    );
+    return (result?.account_transactions?.length ?? 0) > 0;
   }
 
   /** Human-readable wallet memo — merchant cut is settlement, not “commission”. */
