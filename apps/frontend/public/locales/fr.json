@@ -5026,6 +5026,7 @@
     "cancellationFeeError": "Impossible de charger les informations sur les frais d'annulation.",
     "cancellationFeeMessage": "Un frais d'annulation sera déduit de votre remboursement :",
     "cancellationFeeNote": "Ce frais sera déduit du montant de votre remboursement.",
+    "cancellationNoFeeForOrder": "Aucun frais d'annulation ne s'applique à cette commande.",
     "cancellationFeeUnknown": "Un frais d'annulation peut s'appliquer. Veuillez contacter le support pour plus de détails.",
     "cancellationFree": "Annulation Gratuite",
     "cancellationFreeMessage": "Vous pouvez annuler cette commande gratuitement car elle n'a pas encore été confirmée.",

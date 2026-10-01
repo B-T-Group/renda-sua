@@ -15,6 +15,7 @@ from .orders_service import (
     get_complete_order_details,
     get_order_details_for_notification,
     get_order_business_location_country,
+    get_order_business_location_country_strict,
     get_platform_order_lifecycle_counts,
 )
 
@@ -39,6 +40,7 @@ from .transactions_service import (
 # Configuration-related functions
 from .config_service import (
     get_cancellation_fee_config,
+    get_cancellation_fee_percent_rows,
 )
 
 # Location-related functions
@@ -67,6 +69,7 @@ __all__ = [
     "get_complete_order_details",
     "get_order_details_for_notification",
     "get_order_business_location_country",
+    "get_order_business_location_country_strict",
     "get_platform_order_lifecycle_counts",
     # Order holds
     "get_or_create_order_hold",
@@ -79,6 +82,7 @@ __all__ = [
     "register_cancellation_fee_transactions",
     # Configuration
     "get_cancellation_fee_config",
+    "get_cancellation_fee_percent_rows",
     # Locations
     "get_all_agent_locations",
     # Commissions

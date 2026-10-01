@@ -96,6 +96,8 @@ function insertedPickup(executeMutation: jest.Mock) {
 }
 
 describe('OrdersService.failPickup', () => {
+  // Customer no-show at pickup is NOT part of the 30% cancellation fee: it keeps the
+  // legacy flat `cancellation_fee` (legacyFlatFee) and its existing behaviour.
   const request = { orderId: 'order-1', failure_reason_id: REASON_ID, notes: 'no show' };
 
   it('requires a failure reason before loading the order', async () => {
@@ -140,7 +142,8 @@ describe('OrdersService.failPickup', () => {
     expect(result.fee_retained).toBe(200);
     expect(harness.getPolicy).toHaveBeenCalledWith(
       expect.objectContaining({ current_status: 'ready_for_pickup' }),
-      'client'
+      'client',
+      { legacyFlatFee: true }
     );
     expect(harness.updateOrderStatus).not.toHaveBeenCalled();
     expect(harness.sendOrderCancelledMessage).toHaveBeenCalledWith(
@@ -218,7 +221,8 @@ describe('OrdersService.failPickup', () => {
         business_location: { country_code: 'CM' },
         payment_status: 'paid',
       }),
-      'client'
+      'client',
+      { legacyFlatFee: true }
     );
     expect(harness.updateOrderStatus).toHaveBeenCalledWith('order-1', 'failed', {
       viaFailPickupEndpoint: true,
@@ -259,7 +263,8 @@ describe('OrdersService.failPickup', () => {
       expect.objectContaining({
         business_location: { country_code: 'GA' },
       }),
-      'client'
+      'client',
+      { legacyFlatFee: true }
     );
   });
 

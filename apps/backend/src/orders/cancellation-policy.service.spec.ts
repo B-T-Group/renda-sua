@@ -35,6 +35,18 @@ describe('CancellationPolicyService', () => {
     { id: 5, value: 'other', display: 'Other' },
   ];
 
+  /** Route executeQuery: fee-percent rows vs. cancellation reasons. */
+  const mockFeeRows = (
+    rows: Array<{ country_code: string | null; number_value: number | null }>,
+    reasons: unknown[] = clientReasons
+  ) => {
+    hasuraService.executeQuery.mockImplementation(async (query: string) =>
+      String(query).includes('FeePercentRows')
+        ? { application_configurations: rows }
+        : { order_cancellation_reasons: reasons }
+    );
+  };
+
   beforeEach(async () => {
     configurationsService = {
       getConfigurationByKey: jest.fn().mockResolvedValue(null),
@@ -73,96 +85,193 @@ describe('CancellationPolicyService', () => {
     });
   });
 
-  describe('client policy — confirmed status, fee applies', () => {
-    it('returns partial refund when cancellation fee is configured', async () => {
-      configurationsService.getConfigurationByKey.mockResolvedValue({
-        number_value: 500,
-      } as any);
+  describe('client policy — confirmed status, 30% of item subtotal after discounts', () => {
+    // items after discount 4000 + delivery 800 + tax 200 = 5000
+    const orderWithParts = {
+      ...baseOrder,
+      current_status: 'confirmed',
+      total_amount: 5000,
+      base_delivery_fee: 500,
+      per_km_delivery_fee: 300,
+      delivery_fee_waived: false,
+      tax_amount: 200,
+    };
 
-      const order = { ...baseOrder, current_status: 'confirmed' };
-      const policy = await service.getPolicy(order, 'client');
+    it('charges 30% of items (excludes delivery fee and tax)', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+
+      const policy = await service.getPolicy(orderWithParts, 'client');
 
       expect(policy.canCancel).toBe(true);
       expect(policy.refundType).toBe('partial');
-      expect(policy.cancellationFee).toBe(500);
-      expect(policy.refundAmount).toBe(4500);
+      expect(policy.cancellationFee).toBe(1200);
+      expect(policy.cancellationFeePercent).toBe(30);
+      expect(policy.refundAmount).toBe(3800);
     });
 
-    it('does not charge a fee for unpaid pay-after cooked food', async () => {
+    it('does not subtract a waived delivery fee from the base', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const policy = await service.getPolicy(
+        { ...orderWithParts, total_amount: 4200, delivery_fee_waived: true },
+        'client'
+      );
+      expect(policy.cancellationFee).toBe(1200);
+    });
+
+    it('Cameroon (country name from the address) uses the CM row', async () => {
+      mockFeeRows([{ country_code: 'CM', number_value: 30 }]);
+      const policy = await service.getPolicy(
+        { ...orderWithParts, business_location: { country_code: 'Cameroon' } },
+        'client'
+      );
+      expect(policy.cancellationFee).toBe(1200);
+      const [, vars] = hasuraService.executeQuery.mock.calls.find(([q]) =>
+        String(q).includes('FeePercentRows')
+      )!;
+      expect(vars).toEqual({ key: 'cancellation_fee_percent', country: 'CM' });
+    });
+
+    it('Canada explicit 0 row => no fee, full refund', async () => {
+      mockFeeRows([{ country_code: 'CA', number_value: 0 }]);
+      const policy = await service.getPolicy(
+        { ...orderWithParts, currency: 'CAD', business_location: { country_code: 'CA' } },
+        'client'
+      );
+      expect(policy.cancellationFee).toBe(0);
+      expect(policy.cancellationFeePercent).toBe(0);
+      expect(policy.refundAmount).toBe(5000);
+      expect(policy.refundType).toBe('full');
+    });
+
+    it('missing row => 30% default and a cancellation_fee_config_missing error log (not a silent 0)', async () => {
+      mockFeeRows([]);
+      const errorSpy = jest.spyOn((service as any).logger, 'error').mockImplementation();
+      const policy = await service.getPolicy(orderWithParts, 'client');
+      expect(policy.cancellationFee).toBe(1200);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('cancellation_fee_config_missing')
+      );
+    });
+
+    it('a Hasura read error is not swallowed into a 0 fee', async () => {
+      hasuraService.executeQuery.mockRejectedValue(new Error('hasura down'));
+      await expect(service.getPolicy(orderWithParts, 'client')).rejects.toThrow(
+        'hasura down'
+      );
+    });
+
+    it('legacy flat cancellation_fee is ignored for cancellations', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
       configurationsService.getConfigurationByKey.mockResolvedValue({
         number_value: 500,
       } as any);
-
-      const order = {
-        ...baseOrder,
-        current_status: 'confirmed',
-        payment_status: 'pending',
-        payment_timing: 'pay_at_pickup',
-        pay_after_merchant_confirm: true,
-      };
-      const policy = await service.getPolicy(order, 'client');
-
-      expect(policy.cancellationFee).toBe(0);
-      expect(policy.refundAmount).toBe(5000);
+      const policy = await service.getPolicy(orderWithParts, 'client');
+      expect(policy.cancellationFee).toBe(1200);
       expect(configurationsService.getConfigurationByKey).not.toHaveBeenCalled();
     });
 
-    it('still charges a fee after pay-after cooked food is paid', async () => {
-      configurationsService.getConfigurationByKey.mockResolvedValue({
-        number_value: 500,
-      } as any);
+    it.each(['pay_at_delivery', 'pay_at_pickup'])(
+      'no fee at all for %s orders (no config read)',
+      async (timing) => {
+        mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+        const policy = await service.getPolicy(
+          { ...orderWithParts, payment_timing: timing, payment_status: 'pending' },
+          'client'
+        );
+        expect(policy.cancellationFee).toBe(0);
+        expect(policy.refundAmount).toBe(5000);
+        expect(
+          hasuraService.executeQuery.mock.calls.some(([q]) =>
+            String(q).includes('FeePercentRows')
+          )
+        ).toBe(false);
+      }
+    );
 
-      const order = {
-        ...baseOrder,
-        current_status: 'preparing',
-        payment_status: 'paid',
-        pay_after_merchant_confirm: true,
-      };
-      const policy = await service.getPolicy(order, 'client');
+    it('does not charge a fee for unpaid pay-after cooked food', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const policy = await service.getPolicy(
+        {
+          ...orderWithParts,
+          payment_status: 'pending',
+          payment_timing: 'pay_at_pickup',
+          pay_after_merchant_confirm: true,
+        },
+        'client'
+      );
+      expect(policy.cancellationFee).toBe(0);
+      expect(policy.refundAmount).toBe(5000);
+    });
 
-      expect(policy.cancellationFee).toBe(500);
-      expect(policy.refundAmount).toBe(4500);
+    it('still charges 30% after pay-after cooked food is paid', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const policy = await service.getPolicy(
+        {
+          ...orderWithParts,
+          current_status: 'preparing',
+          payment_status: 'paid',
+          payment_timing: 'pay_at_pickup',
+          pay_after_merchant_confirm: true,
+        },
+        'client'
+      );
+      expect(policy.cancellationFee).toBe(1200);
     });
 
     it('filters quick reasons for cooked food cancel at ready', async () => {
-      configurationsService.getConfigurationByKey.mockResolvedValue({
-        number_value: 500,
-      } as any);
-      hasuraService.executeQuery.mockResolvedValue({
-        order_cancellation_reasons: [
+      mockFeeRows(
+        [{ country_code: 'GA', number_value: 30 }],
+        [
           { id: 22, value: 'wont_make_it', display: "Won't make it" },
           { id: 2, value: 'changed_mind', display: 'Changed my mind' },
           { id: 1, value: 'other', display: 'Other' },
-        ],
-      });
-
-      const order = {
-        ...baseOrder,
-        current_status: 'ready_for_pickup',
-        payment_status: 'paid',
-        pay_after_merchant_confirm: true,
-        is_cooked_food_pickup: true,
-      };
-      const policy = await service.getPolicy(order, 'client');
-
+        ]
+      );
+      const policy = await service.getPolicy(
+        {
+          ...orderWithParts,
+          current_status: 'ready_for_pickup',
+          payment_status: 'paid',
+          pay_after_merchant_confirm: true,
+          is_cooked_food_pickup: true,
+        },
+        'client'
+      );
       expect(policy.canCancel).toBe(true);
-      expect(policy.cancellationFee).toBe(500);
+      expect(policy.cancellationFee).toBe(1200);
       expect(policy.availableCancellationReasons.map((r) => r.value)).toEqual([
         'wont_make_it',
         'other',
       ]);
     });
 
-    it('returns none when fee equals total', async () => {
-      configurationsService.getConfigurationByKey.mockResolvedValue({
-        number_value: 5000,
-      } as any);
-
-      const order = { ...baseOrder, current_status: 'confirmed' };
-      const policy = await service.getPolicy(order, 'client');
-
+    it('returns none when fee equals total (100%)', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 100 }]);
+      const policy = await service.getPolicy(
+        { ...baseOrder, current_status: 'confirmed', tax_amount: 0 },
+        'client'
+      );
       expect(policy.refundType).toBe('none');
       expect(policy.refundAmount).toBe(0);
+    });
+  });
+
+  describe('fail-pickup (customer no-show) keeps the legacy flat fee', () => {
+    it('uses cancellation_fee, not the percentage', async () => {
+      configurationsService.getConfigurationByKey.mockResolvedValue({
+        number_value: 500,
+      } as any);
+      const policy = await service.getPolicy(
+        { ...baseOrder, current_status: 'ready_for_pickup' },
+        'client',
+        { legacyFlatFee: true }
+      );
+      expect(policy.cancellationFee).toBe(500);
+      expect(policy.cancellationFeePercent).toBeUndefined();
+      expect(configurationsService.getConfigurationByKey).toHaveBeenCalledWith(
+        'cancellation_fee',
+        'GA'
+      );
     });
   });
 
@@ -240,18 +349,19 @@ describe('CancellationPolicyService', () => {
     });
   });
 
-  describe('fee config fallback', () => {
-    it('returns fee=0 when config is missing for country', async () => {
-      configurationsService.getConfigurationByKey.mockResolvedValue(null);
-
-      const order = {
-        ...baseOrder,
-        current_status: 'confirmed',
-        business_location: { country_code: 'US' },
-      };
-      const policy = await service.getPolicy(order, 'client');
-
-      expect(policy.cancellationFee).toBe(0);
+  describe('fee config for markets without their own row', () => {
+    it('uses a global (NULL country) row when present', async () => {
+      mockFeeRows([{ country_code: null, number_value: 20 }]);
+      const policy = await service.getPolicy(
+        {
+          ...baseOrder,
+          current_status: 'confirmed',
+          tax_amount: 0,
+          business_location: { country_code: 'US' },
+        },
+        'client'
+      );
+      expect(policy.cancellationFee).toBe(1000);
       expect(policy.canCancel).toBe(true);
     });
   });
