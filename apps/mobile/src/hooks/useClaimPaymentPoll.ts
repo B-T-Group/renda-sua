@@ -4,13 +4,14 @@ import {
   MOMO_POLL_INTERVAL_MS,
   claimPollTerminalPhase,
   resolveClaimPaymentPhase,
-  type MomoPaymentPollPhase,
+  type ClaimPaymentPollPhase,
 } from '../utils/momoPaymentPoll';
 
 export type ClaimPaymentPollState =
   | { phase: 'waiting' }
   | { phase: 'paid' }
   | { phase: 'failed' }
+  | { phase: 'taken' }
   | { phase: 'timeout' };
 
 export function useClaimPaymentPoll(transactionId: string | null) {
@@ -32,11 +33,11 @@ export function useClaimPaymentPoll(transactionId: string | null) {
     setRestartToken((n) => n + 1);
   }, []);
 
-  const checkOnce = useCallback(async (): Promise<MomoPaymentPollPhase> => {
+  const checkOnce = useCallback(async (): Promise<ClaimPaymentPollPhase> => {
     const id = idRef.current;
     if (!id) return 'waiting';
     const tx = await agentApi.orders.getMobilePaymentTransaction(id);
-    return resolveClaimPaymentPhase(tx.status);
+    return resolveClaimPaymentPhase(tx.status, tx.errorCode);
   }, []);
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export function useClaimPaymentPoll(transactionId: string | null) {
 }
 
 function pollClaimPayment(args: {
-  checkOnce: () => Promise<MomoPaymentPollPhase>;
+  checkOnce: () => Promise<ClaimPaymentPollPhase>;
   isStopped: () => boolean;
   onPhase: (phase: ClaimPaymentPollState) => void;
   onError: (message: string) => void;
@@ -85,7 +86,7 @@ function pollClaimPayment(args: {
 
 async function applyClaimPollTick(
   args: {
-    checkOnce: () => Promise<MomoPaymentPollPhase>;
+    checkOnce: () => Promise<ClaimPaymentPollPhase>;
     isStopped: () => boolean;
     onPhase: (phase: ClaimPaymentPollState) => void;
   },

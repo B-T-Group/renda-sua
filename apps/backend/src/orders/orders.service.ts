@@ -8370,6 +8370,7 @@ export class OrdersService {
           id
           order_number
           current_status
+          assigned_agent_id
           acceptance_state
           acceptance_deadline_at
           acceptance_activates_at
@@ -10021,71 +10022,185 @@ export class OrdersService {
   }
 
   /**
-   * Process claim order payment - credits agent account with hold amount
+   * Wallet credit already happened. Assign first, then hold once.
+   * A lost race must not withhold the payer's top-up.
    */
   async processClaimOrderPayment(transaction: any): Promise<void> {
     try {
-      // Get order details by order number (reference)
-      const order = await this.requireOrderDetailsByNumber(transaction.entity_id);
-
-      const account = await this.hasuraSystemService.getAccountById(
-        transaction.account_id
-      );
-
-      if (!account) {
-        throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
-      }
-
-      const user = await this.hasuraSystemService.getUserById(account.user_id);
-
-      if (!user || !userHasPersona(user, 'agent') || !user.agent) {
-        throw new HttpException(
-          'User or agent not found',
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      const orderHold = await this.getOrCreateOrderHold(order.id);
-
-      await this.requireSuccessfulHold({
-        accountId: account.id,
-        amount: transaction.amount,
-        memo: `Hold for order ${order.order_number}`,
-        referenceId: order.id,
-      });
-
-      await this.updateOrderHold(orderHold.id, {
-        agent_hold_amount: transaction.amount,
-        agent_id: user.agent.id,
-      });
-
-      await this.assignOrderToAgent(
-        order.id,
-        user.agent.id,
-        'assigned_to_agent'
-      );
-
-      await this.createStatusHistoryEntry(
-        order.id,
-        'assigned_to_agent',
-        `Order assigned to agent ${user.first_name} ${user.last_name} with topup payment`,
-        'agent',
-        user.id
-      );
-
-      await this.onOrderAssignedToAgent(order.id, user.agent.id);
-
-      this.logger.log(
-        `Successfully processed claim order payment for order ${order.order_number}, amount: ${transaction.amount} ${transaction.currency}`
-      );
+      await this.finishClaimOrderPayment(transaction);
     } catch (error) {
-      this.logger.error(
-        `Failed to process claim order payment: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      this.logger.error(this.claimPaymentError(error));
       throw error;
     }
+  }
+
+  private claimPaymentError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return `Failed to process claim order payment: ${message}`;
+  }
+
+  private async finishClaimOrderPayment(transaction: any): Promise<void> {
+    const ctx = await this.loadClaimPaymentContext(transaction);
+    const slot = await this.assignClaimIfOpen(ctx.order, ctx.agentId);
+    if (slot === 'lost') {
+      await this.markClaimOrderTaken(transaction.id);
+      this.logger.warn(
+        `Claim top-up for ${ctx.order.order_number} stayed in the wallet; order was not assigned`
+      );
+      return;
+    }
+    await this.placeClaimHoldOrRevert({
+      accountId: ctx.accountId,
+      amount: transaction.amount,
+      order: ctx.order,
+      agentId: ctx.agentId,
+      freshAssignment: slot === 'assigned',
+    });
+    if (slot === 'assigned') await this.recordNewClaimAssignment(ctx);
+    this.logger.log(this.claimPaymentDoneMessage(ctx.order.order_number, transaction));
+  }
+
+  private claimPaymentDoneMessage(orderNumber: string, transaction: any): string {
+    return (
+      `Successfully processed claim order payment for order ${orderNumber}, ` +
+      `amount: ${transaction.amount} ${transaction.currency}`
+    );
+  }
+
+  private async loadClaimPaymentContext(transaction: any): Promise<{
+    order: Orders;
+    accountId: string;
+    agentId: string;
+    userId: string;
+    firstName: string;
+    lastName: string;
+  }> {
+    const order = await this.requireOrderDetailsByNumber(transaction.entity_id);
+    const account = await this.hasuraSystemService.getAccountById(transaction.account_id);
+    if (!account) throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
+    const user = await this.hasuraSystemService.getUserById(account.user_id);
+    if (!user || !userHasPersona(user, 'agent') || !user.agent) {
+      throw new HttpException('User or agent not found', HttpStatus.NOT_FOUND);
+    }
+    return {
+      order,
+      accountId: account.id,
+      agentId: user.agent.id,
+      userId: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+    };
+  }
+
+  private async assignClaimIfOpen(
+    order: Orders,
+    agentId: string
+  ): Promise<'assigned' | 'already-mine' | 'lost'> {
+    if (order.assigned_agent_id && order.assigned_agent_id !== agentId) return 'lost';
+    if (order.assigned_agent_id === agentId) return 'already-mine';
+    try {
+      await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent');
+      return 'assigned';
+    } catch (error) {
+      if (!this.isClaimAssignConflict(error)) throw error;
+      return (await this.claimStillMine(order.order_number, agentId))
+        ? 'already-mine'
+        : 'lost';
+    }
+  }
+
+  private isClaimAssignConflict(error: unknown): boolean {
+    if (!(error instanceof HttpException)) return false;
+    const body = error.getResponse();
+    if (typeof body !== 'object' || body === null) return false;
+    return (body as { error?: string }).error === 'ALREADY_ASSIGNED';
+  }
+
+  private async claimStillMine(orderNumber: string, agentId: string): Promise<boolean> {
+    const fresh = await this.requireOrderDetailsByNumber(orderNumber);
+    return fresh.assigned_agent_id === agentId;
+  }
+
+  private async markClaimOrderTaken(transactionId?: string): Promise<void> {
+    if (!transactionId) return;
+    try {
+      await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
+        error_code: 'CLAIM_ORDER_TAKEN',
+        error_message: 'This order was assigned to another agent',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not mark claim ${transactionId} as taken: ${error?.message}`
+      );
+    }
+  }
+
+  private async placeClaimHoldOrRevert(params: {
+    accountId: string;
+    amount: number;
+    order: Orders;
+    agentId: string;
+    freshAssignment: boolean;
+  }): Promise<void> {
+    const orderHold = await this.getOrCreateOrderHold(params.order.id);
+    let held = false;
+    try {
+      await this.holdClaimFunds(params);
+      held = true;
+      await this.updateOrderHold(orderHold.id, {
+        agent_hold_amount: params.amount,
+        agent_id: params.agentId,
+      });
+    } catch (error) {
+      if (params.freshAssignment && !held) {
+        await this.revertOrderAssignment(params.order.id);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * A fresh assignment always holds: an earlier hold row for this order (claim,
+   * drop, re-claim) was already released. Only a callback retry for an order
+   * this agent already owns is deduplicated against the existing hold.
+   */
+  private async holdClaimFunds(params: {
+    accountId: string;
+    amount: number;
+    order: Orders;
+    freshAssignment: boolean;
+  }): Promise<void> {
+    if (!params.freshAssignment) {
+      const alreadyHeld = await this.accountsService.hasTransactionForReference({
+        accountId: params.accountId,
+        transactionType: 'hold',
+        referenceId: params.order.id,
+      });
+      if (alreadyHeld) return;
+    }
+    await this.requireSuccessfulHold({
+      accountId: params.accountId,
+      amount: params.amount,
+      memo: `Hold for order ${params.order.order_number}`,
+      referenceId: params.order.id,
+    });
+  }
+
+  private async recordNewClaimAssignment(ctx: {
+    order: Orders;
+    agentId: string;
+    userId: string;
+    firstName: string;
+    lastName: string;
+  }): Promise<void> {
+    await this.createStatusHistoryEntry(
+      ctx.order.id,
+      'assigned_to_agent',
+      `Order assigned to agent ${ctx.firstName} ${ctx.lastName} with topup payment`,
+      'agent',
+      ctx.userId
+    );
+    await this.onOrderAssignedToAgent(ctx.order.id, ctx.agentId);
   }
 
   /**

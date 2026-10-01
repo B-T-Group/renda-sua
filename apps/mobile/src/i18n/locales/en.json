@@ -839,6 +839,8 @@
       "continue": "Continue",
       "paidBodyWaitingForStore": "Waiting for the store to accept your order. We'll notify you as soon as they confirm.",
       "paidBodyClaim": "The hold is approved. This order is now assigned to you.",
+      "takenTitle": "Order no longer available",
+      "takenBody": "This order is no longer available. The payment is available in your Rendasua wallet, so you can claim a different order.",
       "usuallyWithin": "Usually within 15 min",
       "refundIfNotAccepted": "If not accepted, you get a refund",
       "trackOnMap": "Track on map"

@@ -4885,6 +4885,8 @@
       "paidTitle": "Paiement confirmé",
       "paidBodyCheckout": "Votre paiement a réussi. Le commerçant confirmera ensuite votre commande.",
       "paidBodyClaim": "La garantie est approuvée. Cette commande vous est maintenant assignée.",
+      "takenTitle": "Commande indisponible",
+      "takenBody": "Cette commande n'est plus disponible. Le paiement est disponible dans votre portefeuille Rendasua, vous pouvez réclamer une autre commande.",
       "paidBodyPickup": "Votre paiement a réussi. Vous pouvez récupérer votre commande au magasin.",
       "failedTitle": "Paiement n'a pas abouti",
       "failedBody": "Nous n'avons pas pu compléter votre paiement via MoMo. Veuillez vérifier et réessayer.",
