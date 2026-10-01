@@ -164,7 +164,8 @@ export class BusinessReferralPayoutsService {
       summary.processed++;
       try {
         const ok = await this.retryIncompletePayout(row);
-        ok ? summary.credited++ : summary.skipped++;
+        if (ok) summary.credited++;
+        else summary.skipped++;
       } catch (error: any) {
         this.logger.error(
           `Incomplete payout retry failed for ${row.business_id}: ${error.message}`
