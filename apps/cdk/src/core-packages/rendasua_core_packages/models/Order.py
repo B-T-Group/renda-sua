@@ -11,6 +11,7 @@ class Order(BaseModel):
     assigned_agent: Optional[Agent] | None = None
     assigned_agent_id: Optional[str] | None = None
     base_delivery_fee: float
+    delivery_fee_waived: Optional[bool] | None = None
     business: Optional[Business] | None = None
     business_id: str
     business_location: Optional[BusinessLocation] | None = None

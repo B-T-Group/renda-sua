@@ -50,7 +50,7 @@ export function shouldWaiveDeliveryFee(params: {
 export function capDeliveryFee(input: CapDeliveryFeeInput): CappedDeliveryFee {
   const distanceKm = Math.max(0, input.distanceKm);
   const perKmRate = Math.max(0, input.perKmRate);
-  let baseFee = Math.max(0, input.baseFee);
+  const baseFee = Math.max(0, input.baseFee);
   if (input.maxDeliveryFee > 0) {
     return capToMaxTotal(baseFee, distanceKm * perKmRate, input.maxDeliveryFee);
   }

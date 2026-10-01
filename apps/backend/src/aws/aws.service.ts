@@ -106,8 +106,8 @@ export class AwsService {
   async generateImageUploadUrl(
     bucketName: string,
     key: string,
-    contentType: string = 'image/jpeg',
-    expiresIn: number = 3600
+    contentType = 'image/jpeg',
+    expiresIn = 3600
   ): Promise<PresignedUrlResponse> {
     return this.generatePresignedUploadUrl({
       bucketName,
@@ -132,8 +132,8 @@ export class AwsService {
   async generateDocumentUploadUrl(
     bucketName: string,
     key: string,
-    contentType: string = 'application/pdf',
-    expiresIn: number = 3600
+    contentType = 'application/pdf',
+    expiresIn = 3600
   ): Promise<PresignedUrlResponse> {
     return this.generatePresignedUploadUrl({
       bucketName,

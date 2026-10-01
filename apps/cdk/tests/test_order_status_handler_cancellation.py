@@ -1,5 +1,6 @@
 import sys
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -94,17 +95,16 @@ class CancellationFinancialsTest(unittest.TestCase):
         order = _order(
             pay_after_merchant_confirm=True,
             payment_status="paid",
+            total_amount=5000.0,
         )
         with self._patch_cancellation_dependencies(
             order=order,
             hold=_hold(client_hold_amount=0.0),
             transaction_ids=[],
         ):
-            with patch.object(
-                handler, "get_order_business_location_country", return_value="GA"
-            ), patch.object(
-                handler, "get_cancellation_fee_config", return_value=500.0
-            ), patch.object(
+            with self._patch_fee_config(country="GA", rows=[
+                {"country_code": "GA", "number_value": 30}
+            ]), patch.object(
                 handler,
                 "register_cancellation_fee_transactions",
                 return_value={"success": True},
@@ -114,8 +114,150 @@ class CancellationFinancialsTest(unittest.TestCase):
                 )
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["cancellation_fee"], 500.0)
+        self.assertEqual(result["cancellation_fee"], 1500.0)
         register_fee.assert_called_once()
+
+    def test_fee_is_30_percent_of_item_subtotal_excluding_delivery_and_tax(self):
+        # items after discount 9000 + delivery 1500 + tax 200 = 10700
+        order = _order(
+            total_amount=10700.0,
+            base_delivery_fee=1000.0,
+            per_km_delivery_fee=500.0,
+            delivery_fee_waived=False,
+            tax_amount=200.0,
+        )
+        hold = _hold(client_hold_amount=9000.0, delivery_fees=1500.0)
+        with self._patch_cancellation_dependencies(
+            order=order, hold=hold, transaction_ids=["rel-items", "rel-delivery"]
+        ) as deps:
+            with self._patch_fee_config(country="Cameroon", rows=[
+                {"country_code": "CM", "number_value": 30}
+            ]), patch.object(
+                handler,
+                "register_cancellation_fee_transactions",
+                return_value={"success": True},
+            ) as register_fee:
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["cancellation_fee"], 2700.0)
+        # fee charged, then hold released minus the fee, delivery hold released in full
+        self.assertEqual(register_fee.call_args.args[4], 2700.0)
+        released = [c.args[1] for c in deps["register_account_transaction"].call_args_list]
+        self.assertEqual(released, [6300.0, 1500.0])
+
+    def test_canada_explicit_zero_row_charges_nothing(self):
+        order = _order(total_amount=100.0, currency="CAD")
+        with self._patch_cancellation_dependencies(
+            order=order, hold=_hold(client_hold_amount=100.0), transaction_ids=["rel"]
+        ):
+            with self._patch_fee_config(country="Canada", rows=[
+                {"country_code": "CA", "number_value": 0}
+            ]), patch.object(
+                handler, "register_cancellation_fee_transactions"
+            ) as register_fee:
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+        self.assertTrue(result["success"])
+        self.assertEqual(result["cancellation_fee"], 0.0)
+        register_fee.assert_not_called()
+
+    def test_missing_row_uses_30_default_and_logs_marker(self):
+        order = _order(total_amount=1000.0)
+        with self._patch_cancellation_dependencies(
+            order=order, hold=_hold(client_hold_amount=1000.0), transaction_ids=["rel"]
+        ):
+            with self._patch_fee_config(country="CM", rows=[]), patch.object(
+                handler,
+                "register_cancellation_fee_transactions",
+                return_value={"success": True},
+            ), patch.object(handler, "log_error") as log_error:
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+        self.assertEqual(result["cancellation_fee"], 300.0)
+        markers = [c.args[0] for c in log_error.call_args_list]
+        self.assertTrue(
+            any(m.startswith("cancellation_fee_config_missing") for m in markers), markers
+        )
+
+    def test_config_read_error_fails_step_and_does_not_waive_fee(self):
+        order = _order(total_amount=1000.0)
+        with self._patch_cancellation_dependencies(
+            order=order, hold=_hold(client_hold_amount=1000.0), transaction_ids=[]
+        ) as deps:
+            with patch.object(
+                handler,
+                "get_order_business_location_country_strict",
+                return_value="CM",
+            ), patch.object(
+                handler,
+                "get_cancellation_fee_percent_rows",
+                side_effect=RuntimeError("hasura down"),
+            ):
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+        self.assertFalse(result["success"])
+        deps["update_order_hold_status"].assert_not_called()
+        deps["register_account_transaction"].assert_not_called()
+
+    def test_invalid_stored_percent_fails_step(self):
+        order = _order(total_amount=1000.0)
+        with self._patch_cancellation_dependencies(
+            order=order, hold=_hold(), transaction_ids=[]
+        ):
+            with self._patch_fee_config(country="CM", rows=[
+                {"country_code": "CM", "number_value": None}
+            ]):
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+        self.assertFalse(result["success"])
+
+    def test_pay_at_delivery_and_pay_at_pickup_never_charge(self):
+        for timing in ("pay_at_delivery", "pay_at_pickup"):
+            order = _order(payment_timing=timing, total_amount=5000.0)
+            with self._patch_cancellation_dependencies(
+                order=order, hold=_hold(client_hold_amount=0.0), transaction_ids=[]
+            ):
+                with patch.object(
+                    handler, "get_cancellation_fee_percent_rows"
+                ) as rows, patch.object(
+                    handler, "register_cancellation_fee_transactions"
+                ) as register_fee:
+                    result = handler.process_cancellation_financials(
+                        "order-123", "client", "confirmed", "endpoint", "secret"
+                    )
+            self.assertTrue(result["success"], timing)
+            self.assertEqual(result["cancellation_fee"], 0.0, timing)
+            rows.assert_not_called()
+            register_fee.assert_not_called()
+
+    def test_waived_delivery_fee_is_not_subtracted_from_base(self):
+        order = _order(
+            total_amount=9000.0,
+            base_delivery_fee=1000.0,
+            per_km_delivery_fee=500.0,
+            delivery_fee_waived=True,
+        )
+        with self._patch_cancellation_dependencies(
+            order=order, hold=_hold(client_hold_amount=9000.0), transaction_ids=["rel"]
+        ):
+            with self._patch_fee_config(country="GA", rows=[
+                {"country_code": "GA", "number_value": 30}
+            ]), patch.object(
+                handler,
+                "register_cancellation_fee_transactions",
+                return_value={"success": True},
+            ):
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+        self.assertEqual(result["cancellation_fee"], 2700.0)
 
     def test_missing_agent_account_does_not_cancel_hold(self):
         order = _order(assigned_agent=SimpleNamespace(user_id="agent-user-123"))
@@ -134,6 +276,20 @@ class CancellationFinancialsTest(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual(result["error"], "Failed to release: agent hold")
         deps["update_order_hold_status"].assert_not_called()
+
+    def _patch_fee_config(self, country, rows):
+        stack = ExitStack()
+        stack.enter_context(
+            patch.object(
+                handler,
+                "get_order_business_location_country_strict",
+                return_value=country,
+            )
+        )
+        stack.enter_context(
+            patch.object(handler, "get_cancellation_fee_percent_rows", return_value=rows)
+        )
+        return stack
 
     def _patch_cancellation_dependencies(
         self,

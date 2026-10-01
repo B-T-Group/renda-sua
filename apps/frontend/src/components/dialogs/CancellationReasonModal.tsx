@@ -113,7 +113,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
       setLoadingFeeData(true);
       const countryCode = order.business_location?.address?.country || 'GA';
 
-      getCancellationFee(countryCode)
+      getCancellationFee(countryCode, order.id)
         .then((feeData) => {
           if (feeData) {
             setCancellationFee(feeData.cancellationFee);
@@ -134,6 +134,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
     canCancelForFree,
     persona,
     order.business_location?.address?.country,
+    order.id,
     getCancellationFee,
   ]);
 
@@ -388,6 +389,13 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
                     {t(
                       'orders.cancellationFeeError',
                       'Unable to load cancellation fee information.'
+                    )}
+                  </Typography>
+                ) : cancellationFee === 0 ? (
+                  <Typography variant="body2" color="success.dark">
+                    {t(
+                      'orders.cancellationNoFeeForOrder',
+                      'No cancellation fee applies to this order.'
                     )}
                   </Typography>
                 ) : cancellationFee !== null ? (
