@@ -143,3 +143,141 @@ describe('FailedDeliveriesService item-fault restore', () => {
     expect(updateReservedQuantities).not.toHaveBeenCalled();
   });
 });
+
+describe('FailedDeliveriesService client-fault fee', () => {
+  const FEE = 200;
+  const clientAccount = (available: number) => ({
+    id: 'client-acc',
+    available_balance: available,
+  });
+
+  function setup(opts: {
+    clientAvailable: number;
+    order?: Record<string, unknown>;
+    hold?: Record<string, unknown>;
+    debitResult?: { success: boolean; error?: string };
+  }) {
+    const mocks = createService();
+    const {
+      service,
+      executeQuery,
+      executeMutation,
+      getAccount,
+      registerTransaction,
+    } = mocks;
+    const deliveryConfig = { getDeliveryConfig: jest.fn().mockResolvedValue(FEE) };
+    (service as any).deliveryConfigService = deliveryConfig;
+    executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('GetFailedDelivery(')) {
+        return { failed_deliveries: [failedDeliveryRow(opts.order)] };
+      }
+      return {
+        order_holds: [
+          {
+            id: 'hold-1',
+            client_hold_amount: 0,
+            agent_hold_amount: 0,
+            delivery_fees: 0,
+            currency: 'XAF',
+            ...opts.hold,
+          },
+        ],
+      };
+    });
+    executeMutation.mockResolvedValue({});
+    getAccount.mockImplementation(async (userId: string) => {
+      if (userId === 'client-user') return clientAccount(opts.clientAvailable);
+      if (userId === 'agent-user') return { id: 'agent-acc' };
+      return { id: 'biz-acc' };
+    });
+    registerTransaction.mockImplementation(async (req: any) =>
+      req.accountId === 'client-acc' && opts.debitResult
+        ? opts.debitResult
+        : { success: true }
+    );
+    return mocks;
+  }
+
+  const resolve = (service: FailedDeliveriesService) =>
+    service.resolveFailedDelivery(
+      'order-1',
+      { resolution_type: 'client_fault', outcome: 'no show' },
+      { userId: 'u1', businessId: 'biz-1' } as never
+    );
+
+  const calls = (registerTransaction: jest.Mock, accountId: string, type: string) =>
+    registerTransaction.mock.calls
+      .map(([r]) => r)
+      .filter((r) => r.accountId === accountId && r.transactionType === type);
+
+  it('charges the full fee and splits it 50/50 when the wallet covers it', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 1000 });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')).toEqual([
+      expect.objectContaining({ amount: 200, referenceId: 'order-1' }),
+    ]);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')[0].amount).toBe(100);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')[0].amount).toBe(100);
+    expect(result.client_fee_shortfall).toBeUndefined();
+  });
+
+  it('credits only what was debited when the wallet cannot cover the fee', async () => {
+    const { service, registerTransaction, executeMutation } = setup({
+      clientAvailable: 50,
+    });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(50);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')[0].amount).toBe(25);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')[0].amount).toBe(25);
+    expect(result.client_fee_shortfall).toBe(150);
+    const update = executeMutation.mock.calls.at(-1)?.[1].updates;
+    expect(update.status).toBe('completed');
+    expect(update.outcome).toContain('shortfall not collected: 150 XAF');
+  });
+
+  it('credits nobody when the client has no funds', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 0 });
+    const result: any = await resolve(service);
+    expect(registerTransaction).not.toHaveBeenCalled();
+    expect(result.client_fee_shortfall).toBe(FEE);
+  });
+
+  it('credits nobody when the debit itself is rejected', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      debitResult: { success: false, error: 'Insufficient funds for this transaction' },
+    });
+    const result: any = await resolve(service);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')).toHaveLength(0);
+    expect(result.client_fee_shortfall).toBe(FEE);
+  });
+
+  it('gives the whole collected amount to the business when no agent is assigned', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      order: { assigned_agent: null },
+    });
+    await resolve(service);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')[0].amount).toBe(100);
+  });
+
+  it('does not lose a cent on odd partial amounts', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 0.05 });
+    await resolve(service);
+    const agent = calls(registerTransaction, 'agent-acc', 'deposit')[0].amount;
+    const biz = calls(registerTransaction, 'biz-acc', 'deposit')[0].amount;
+    expect(Number((agent + biz).toFixed(2))).toBe(0.05);
+  });
+
+  it('still releases the client delivery-fee hold before charging', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      hold: { delivery_fees: 500 },
+    });
+    await resolve(service);
+    const types = registerTransaction.mock.calls.map(([r]) => r.transactionType);
+    expect(types.indexOf('release')).toBeLessThan(types.indexOf('withdrawal'));
+  });
+});

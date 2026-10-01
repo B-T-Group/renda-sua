@@ -13,6 +13,8 @@ export interface ResolutionRequest {
   restore_inventory?: boolean; // Optional, only for item_fault (default: true)
 }
 
+const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+
 @Injectable()
 export class FailedDeliveriesService {
   private readonly logger = new Logger(FailedDeliveriesService.name);
@@ -387,6 +389,7 @@ export class FailedDeliveriesService {
     const orderHold = holdResult.order_holds[0];
 
     // Process resolution based on type
+    let clientFeeShortfall = 0;
     switch (resolution.resolution_type) {
       case 'agent_fault':
         await this.resolveAgentFault(order, orderHold);
@@ -399,7 +402,7 @@ export class FailedDeliveriesService {
         );
         break;
       case 'client_fault':
-        await this.resolveClientFault(order, orderHold);
+        clientFeeShortfall = await this.resolveClientFault(order, orderHold);
         break;
       default:
         throw new HttpException(
@@ -427,7 +430,11 @@ export class FailedDeliveriesService {
       updates: {
         status: 'completed',
         resolution_type: resolution.resolution_type,
-        outcome: resolution.outcome,
+        outcome: this.outcomeWithShortfall(
+          resolution.outcome,
+          clientFeeShortfall,
+          order.currency
+        ),
         resolved_by: resolvedBy,
         resolved_at: new Date().toISOString(),
       },
@@ -436,6 +443,9 @@ export class FailedDeliveriesService {
     return {
       success: true,
       message: 'Failed delivery resolved successfully',
+      ...(clientFeeShortfall > 0
+        ? { client_fee_shortfall: clientFeeShortfall }
+        : {}),
     };
   }
 
@@ -583,9 +593,14 @@ export class FailedDeliveriesService {
   }
 
   /**
-   * Resolve client fault: Refund both, charge client failed delivery fee (negative balance), split fee 50/50 to agent and business
+   * Resolve client fault: release holds, charge the client the failed delivery fee
+   * (limited to the available balance), split what was collected 50/50 to agent and
+   * business. Returns the uncollected shortfall (0 when the full fee was collected).
    */
-  private async resolveClientFault(order: any, orderHold: any) {
+  private async resolveClientFault(
+    order: any,
+    orderHold: any
+  ): Promise<number> {
     // Release client hold
     if (orderHold.client_hold_amount > 0) {
       const clientAccount = await this.hasuraSystemService.getAccount(
@@ -651,54 +666,106 @@ export class FailedDeliveriesService {
     }
 
     const failureFee = failedDeliveryFee;
-    const splitAmount = failureFee / 2; // 50/50 split
 
-    // Charge client (create negative balance via withdrawal)
+    // Charge the client, but never more than what the wallet can cover:
+    // registerTransaction does not throw on insufficient funds, it returns
+    // { success: false }, so the result must be checked before anyone is paid.
     const clientAccount = await this.hasuraSystemService.getAccount(
       order.client.user.id,
       order.currency
     );
+    const collected = await this.collectClientFailureFee(
+      order,
+      clientAccount,
+      failureFee
+    );
+    const shortfall = roundMoney(failureFee - collected);
+    if (shortfall > 0) {
+      this.logger.warn(
+        `failed_delivery_fee_shortfall order=${order.order_number} orderId=${order.id} ` +
+          `fee=${failureFee} collected=${collected} shortfall=${shortfall} ${order.currency}`
+      );
+    }
+    if (collected <= 0) return shortfall;
 
-    // Use withdrawal to create negative balance
-    await this.accountsService.registerTransaction({
-      accountId: clientAccount.id,
-      amount: failureFee,
-      transactionType: 'withdrawal',
-      memo: `Failed delivery fee - order ${order.order_number} (client fault)`,
-      referenceId: order.id,
-    });
+    // Split only what was actually collected, 50/50 agent / business.
+    const agentShare = roundMoney(collected / 2);
+    const businessShare = roundMoney(collected - agentShare);
 
-    // Deposit 50% to agent account
     if (order.assigned_agent) {
       const agentAccount = await this.hasuraSystemService.getAccount(
         order.assigned_agent.user.id,
         order.currency
       );
-
-      await this.accountsService.registerTransaction({
-        accountId: agentAccount.id,
-        amount: splitAmount,
-        transactionType: 'deposit',
-        memo: `Failed delivery fee split - order ${order.order_number} (client fault)`,
-        referenceId: order.id,
-      });
+      await this.creditFailureFeeShare(order, agentAccount.id, agentShare);
     }
 
-    // Deposit 50% to business account
     const businessUserId = order.business?.user_id;
     if (businessUserId) {
       const businessUserAccount = await this.hasuraSystemService.getAccount(
         businessUserId,
         order.currency
       );
-
-      await this.accountsService.registerTransaction({
-        accountId: businessUserAccount.id,
-        amount: splitAmount,
-        transactionType: 'deposit',
-        memo: `Failed delivery fee split - order ${order.order_number} (client fault)`,
-        referenceId: order.id,
-      });
+      await this.creditFailureFeeShare(
+        order,
+        businessUserAccount.id,
+        businessShare
+      );
     }
+    return shortfall;
+  }
+
+  /** Debit min(fee, available balance); returns the amount actually debited. */
+  private async collectClientFailureFee(
+    order: any,
+    clientAccount: any,
+    failureFee: number
+  ): Promise<number> {
+    const available = Number(clientAccount?.available_balance ?? 0);
+    const amount = roundMoney(Math.min(failureFee, Math.max(0, available)));
+    if (amount <= 0) return 0;
+    const result = await this.accountsService.registerTransaction({
+      accountId: clientAccount.id,
+      amount,
+      transactionType: 'withdrawal',
+      memo: `Failed delivery fee - order ${order.order_number} (client fault)`,
+      referenceId: order.id,
+    });
+    if (result?.success) return amount;
+    this.logger.error(
+      `failed_delivery_fee_debit_failed order=${order.order_number} orderId=${order.id} ` +
+        `amount=${amount} ${order.currency}: ${result?.error ?? 'unknown'}`
+    );
+    return 0;
+  }
+
+  private async creditFailureFeeShare(
+    order: any,
+    accountId: string,
+    amount: number
+  ): Promise<void> {
+    if (amount <= 0) return;
+    const result = await this.accountsService.registerTransaction({
+      accountId,
+      amount,
+      transactionType: 'deposit',
+      memo: `Failed delivery fee split - order ${order.order_number} (client fault)`,
+      referenceId: order.id,
+    });
+    if (!result?.success) {
+      this.logger.error(
+        `failed_delivery_fee_credit_failed order=${order.order_number} orderId=${order.id} ` +
+          `account=${accountId} amount=${amount} ${order.currency}: ${result?.error ?? 'unknown'}`
+      );
+    }
+  }
+
+  private outcomeWithShortfall(
+    outcome: string,
+    shortfall: number,
+    currency: string
+  ): string {
+    if (shortfall <= 0) return outcome;
+    return `${outcome} [client fee shortfall not collected: ${shortfall} ${currency}]`;
   }
 }
