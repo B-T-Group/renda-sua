@@ -103,6 +103,7 @@ import { calculateDeliveryFeeFallback } from './delivery-fee-fallback';
 import { getCommissionForBusinessAccountType } from '../commissions/business-account-type';
 import {
   capDeliveryFee,
+  collectedDeliveryFee,
   maxClientDistanceKm,
   normalizeDeliveryCountryCode,
   shouldWaiveDeliveryFee,
@@ -2121,10 +2122,8 @@ export class OrdersService {
   }
 
   private async applySwitchToPickup(order: Orders): Promise<void> {
-    const baseFee = Number((order as any).base_delivery_fee ?? 0);
-    const perKmFee = Number((order as any).per_km_delivery_fee ?? 0);
-    const waived = baseFee + perKmFee;
-    const newTotal = Math.max(0, Number(order.total_amount) - waived);
+    const collectedDelivery = this.orderDeliveryFeesTotal(order);
+    const newTotal = Math.max(0, Number(order.total_amount) - collectedDelivery);
     const hold = await this.findOrderHold(order.id);
     const heldDelivery = Number(hold?.delivery_fees || 0);
     await this.persistSwitchToPickupClaim(order.id, newTotal);
@@ -13864,16 +13863,13 @@ export class OrdersService {
     return Math.round(amount * 100) / 100;
   }
 
-  /** Sum delivery fees from an order row (never NaN). */
+  /** Sum of the delivery fee the customer was charged. */
   private orderDeliveryFeesTotal(order: {
-    base_delivery_fee?: number | null;
-    per_km_delivery_fee?: number | null;
+    base_delivery_fee?: number | string | null;
+    per_km_delivery_fee?: number | string | null;
     delivery_fee_waived?: boolean | null;
   }): number {
-    if (order.delivery_fee_waived) return 0;
-    return (
-      Number(order.base_delivery_fee ?? 0) + Number(order.per_km_delivery_fee ?? 0)
-    );
+    return collectedDeliveryFee(order);
   }
 
   /** Order subtotal for holds/settlement (never NaN). */

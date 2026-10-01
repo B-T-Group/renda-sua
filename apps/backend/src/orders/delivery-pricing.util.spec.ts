@@ -1,5 +1,6 @@
 import {
   capDeliveryFee,
+  collectedDeliveryFee,
   isBeyondFeeRange,
   maxClientDistanceKm,
   normalizeDeliveryCountryCode,
@@ -133,6 +134,23 @@ describe('delivery pricing', () => {
     expect(normalizeDeliveryCountryCode('Ivory Coast')).toBe('CI');
     expect(normalizeDeliveryCountryCode('')).toBe('GA');
     expect(normalizeDeliveryCountryCode('Nigeria')).toBe('NI');
+  });
+
+  it('ignores stored base and per-km when the customer delivery fee was waived', () => {
+    expect(
+      collectedDeliveryFee({
+        base_delivery_fee: 500,
+        per_km_delivery_fee: 300,
+        delivery_fee_waived: true,
+      })
+    ).toBe(0);
+    expect(
+      collectedDeliveryFee({
+        base_delivery_fee: 500,
+        per_km_delivery_fee: 300,
+        delivery_fee_waived: false,
+      })
+    ).toBe(800);
   });
 
   it('charges the customer 0 and restores the pre-waiver base, skipping the first-order promo', () => {
