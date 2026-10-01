@@ -1,8 +1,13 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
-import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import {
+  itemSubtotalAfterDiscounts,
+  normalizeFeeCountryCode,
+  percentFee,
+  resolveFeePercent,
+} from './fee-percent.util';
 import { OrdersService } from './orders.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { isActivePersona } from '../users/persona.util';
@@ -16,6 +21,9 @@ export interface ResolutionRequest {
 
 const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 
+/** application_configurations key: client-fault failed delivery fee, % of the item subtotal. */
+export const FAILED_DELIVERY_FEE_PERCENT_KEY = 'failed_delivery_fee_percent';
+
 @Injectable()
 export class FailedDeliveriesService {
   private readonly logger = new Logger(FailedDeliveriesService.name);
@@ -24,8 +32,7 @@ export class FailedDeliveriesService {
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly accountsService: AccountsService,
-    private readonly ordersService: OrdersService,
-    private readonly deliveryConfigService: DeliveryConfigService
+    private readonly ordersService: OrdersService
   ) {}
 
   /**
@@ -142,6 +149,10 @@ export class FailedDeliveriesService {
             order_number
             current_status
             total_amount
+            base_delivery_fee
+            per_km_delivery_fee
+            delivery_fee_waived
+            tax_amount
             currency
             business_id
             created_at
@@ -219,6 +230,10 @@ export class FailedDeliveriesService {
             order_number
             current_status
             total_amount
+            base_delivery_fee
+            per_km_delivery_fee
+            delivery_fee_waived
+            tax_amount
             currency
             business_id
             business_location_id
@@ -594,6 +609,31 @@ export class FailedDeliveriesService {
   }
 
   /**
+   * Client-fault failed delivery fee = `failed_delivery_fee_percent`% of the item subtotal
+   * after discounts (excludes delivery fee and tax) - the same base and rounding as the
+   * client cancellation fee (`fee-percent.util.ts`). Country = delivery address country.
+   * Missing row: logged `failed_delivery_fee_config_missing` (error) + 30% default, never a
+   * silent 0; a read error propagates (HTTP 500) before any ledger movement.
+   */
+  async resolveClientFaultFee(order: any): Promise<number> {
+    const country = normalizeFeeCountryCode(order.delivery_address?.country);
+    const { percent } = await resolveFeePercent(
+      this.hasuraSystemService,
+      FAILED_DELIVERY_FEE_PERCENT_KEY,
+      country,
+      this.logger,
+      'failed_delivery_fee_config_missing',
+      `order=${order.order_number}`
+    );
+    const base = itemSubtotalAfterDiscounts(order);
+    const fee = percentFee(base, percent, order.currency);
+    this.logger.log(
+      `failed_delivery_fee order=${order.order_number} country=${country ?? 'unknown'} percent=${percent} base=${base} fee=${fee} ${order.currency}`
+    );
+    return fee;
+  }
+
+  /**
    * Resolve client fault: release the order holds, charge the client the failed
    * delivery fee, split what was collected 50/50 to agent and business. Returns the
    * uncollected shortfall (0 when the full fee was collected).
@@ -608,6 +648,10 @@ export class FailedDeliveriesService {
     order: any,
     orderHold: any
   ): Promise<number> {
+    // Resolve the fee BEFORE any money moves: a config read error / invalid value throws
+    // here, so nothing has been released or debited and the resolution can be retried.
+    const failureFee = await this.resolveClientFaultFee(order);
+
     const clientHold = Number(orderHold.client_hold_amount || 0);
     const deliveryHold = Number(orderHold.delivery_fees || 0);
     const heldFunds = roundMoney(clientHold + deliveryHold);
@@ -651,24 +695,6 @@ export class FailedDeliveriesService {
         referenceId: order.id,
       });
     }
-
-    // Get failed delivery fee configuration
-    // Use delivery address country or default to GA
-    const country = order.delivery_address?.country || 'GA';
-    const failedDeliveryFee =
-      await this.deliveryConfigService.getDeliveryConfig(
-        country,
-        'failed_delivery_fees'
-      );
-
-    if (failedDeliveryFee === null || typeof failedDeliveryFee !== 'number') {
-      throw new HttpException(
-        'Failed delivery fee configuration not found',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-
-    const failureFee = failedDeliveryFee;
 
     // Invariant: the fee must be covered by what was held for this order.
     if (failureFee > heldFunds) {
