@@ -4,6 +4,7 @@ import { DeliveryConfigService } from '../delivery-configs/delivery-configs.serv
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersService } from './orders.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { isActivePersona } from '../users/persona.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 
@@ -593,28 +594,46 @@ export class FailedDeliveriesService {
   }
 
   /**
-   * Resolve client fault: release holds, charge the client the failed delivery fee
-   * (limited to the available balance), split what was collected 50/50 to agent and
-   * business. Returns the uncollected shortfall (0 when the full fee was collected).
+   * Resolve client fault: release the order holds, charge the client the failed
+   * delivery fee, split what was collected 50/50 to agent and business. Returns the
+   * uncollected shortfall (0 when the full fee was collected).
+   *
+   * The fee is always covered by funds the client already has on hold for this order
+   * (items + delivery hold), so a shortfall is an invariant violation, not a normal
+   * outcome: it is logged at error level and raised to Sentry (`reportMoneyAnomaly`).
+   * The cap at the available balance is purely defensive so the platform never mints
+   * money (registerTransaction returns { success:false } rather than throwing).
    */
   private async resolveClientFault(
     order: any,
     orderHold: any
   ): Promise<number> {
-    // Release client hold
-    if (orderHold.client_hold_amount > 0) {
-      const clientAccount = await this.hasuraSystemService.getAccount(
+    const clientHold = Number(orderHold.client_hold_amount || 0);
+    const deliveryHold = Number(orderHold.delivery_fees || 0);
+    const heldFunds = roundMoney(clientHold + deliveryHold);
+
+    // Release client hold, delivery-fee hold (these are the funds the fee is paid from)
+    if (clientHold > 0 || deliveryHold > 0) {
+      const holdAccount = await this.hasuraSystemService.getAccount(
         order.client.user.id,
         order.currency
       );
-
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: orderHold.client_hold_amount,
-        transactionType: 'release',
-        memo: `Hold released for failed delivery - order ${order.order_number}`,
-        referenceId: order.id,
-      });
+      if (clientHold > 0) {
+        await this.releaseClientHold(
+          order,
+          holdAccount.id,
+          clientHold,
+          `Hold released for failed delivery - order ${order.order_number}`
+        );
+      }
+      if (deliveryHold > 0) {
+        await this.releaseClientHold(
+          order,
+          holdAccount.id,
+          deliveryHold,
+          `Delivery fee hold released for failed delivery - order ${order.order_number}`
+        );
+      }
     }
 
     // Release agent hold
@@ -629,22 +648,6 @@ export class FailedDeliveriesService {
         amount: orderHold.agent_hold_amount,
         transactionType: 'release',
         memo: `Hold released for failed delivery - order ${order.order_number}`,
-        referenceId: order.id,
-      });
-    }
-
-    // Release delivery fees if any
-    if (orderHold.delivery_fees > 0) {
-      const clientAccount = await this.hasuraSystemService.getAccount(
-        order.client.user.id,
-        order.currency
-      );
-
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: orderHold.delivery_fees,
-        transactionType: 'release',
-        memo: `Delivery fee hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
       });
     }
@@ -667,9 +670,21 @@ export class FailedDeliveriesService {
 
     const failureFee = failedDeliveryFee;
 
-    // Charge the client, but never more than what the wallet can cover:
-    // registerTransaction does not throw on insufficient funds, it returns
-    // { success: false }, so the result must be checked before anyone is paid.
+    // Invariant: the fee must be covered by what was held for this order.
+    if (failureFee > heldFunds) {
+      reportMoneyAnomaly(
+        this.logger,
+        'failed_delivery_fee_hold_insufficient',
+        `order=${order.order_number} orderId=${order.id} fee=${failureFee} ` +
+          `held=${heldFunds} ${order.currency}: fee exceeds funds held for the order ` +
+          `(should be impossible; e.g. item settlement already consumed the hold)`,
+        { orderId: order.id, fee: failureFee, held: heldFunds }
+      );
+    }
+
+    // Charge the client (funds were just released from the hold). Defensive cap at the
+    // available balance: registerTransaction does not throw on insufficient funds, it
+    // returns { success: false }, so the result must be checked before anyone is paid.
     const clientAccount = await this.hasuraSystemService.getAccount(
       order.client.user.id,
       order.currency
@@ -681,9 +696,13 @@ export class FailedDeliveriesService {
     );
     const shortfall = roundMoney(failureFee - collected);
     if (shortfall > 0) {
-      this.logger.warn(
-        `failed_delivery_fee_shortfall order=${order.order_number} orderId=${order.id} ` +
-          `fee=${failureFee} collected=${collected} shortfall=${shortfall} ${order.currency}`
+      reportMoneyAnomaly(
+        this.logger,
+        'failed_delivery_fee_shortfall',
+        `order=${order.order_number} orderId=${order.id} fee=${failureFee} ` +
+          `collected=${collected} shortfall=${shortfall} ${order.currency}: ` +
+          `client could not cover the fee although it was held (should be impossible)`,
+        { orderId: order.id, fee: failureFee, collected, shortfall }
       );
     }
     if (collected <= 0) return shortfall;
@@ -715,6 +734,31 @@ export class FailedDeliveriesService {
     return shortfall;
   }
 
+  /** Release part of the client's order hold; a failed release is an anomaly. */
+  private async releaseClientHold(
+    order: any,
+    accountId: string,
+    amount: number,
+    memo: string
+  ): Promise<void> {
+    const result = await this.accountsService.registerTransaction({
+      accountId,
+      amount,
+      transactionType: 'release',
+      memo,
+      referenceId: order.id,
+    });
+    if (!result?.success) {
+      reportMoneyAnomaly(
+        this.logger,
+        'failed_delivery_hold_release_failed',
+        `order=${order.order_number} orderId=${order.id} amount=${amount} ` +
+          `${order.currency}: ${result?.error ?? 'unknown'}`,
+        { orderId: order.id, amount }
+      );
+    }
+  }
+
   /** Debit min(fee, available balance); returns the amount actually debited. */
   private async collectClientFailureFee(
     order: any,
@@ -732,9 +776,12 @@ export class FailedDeliveriesService {
       referenceId: order.id,
     });
     if (result?.success) return amount;
-    this.logger.error(
-      `failed_delivery_fee_debit_failed order=${order.order_number} orderId=${order.id} ` +
-        `amount=${amount} ${order.currency}: ${result?.error ?? 'unknown'}`
+    reportMoneyAnomaly(
+      this.logger,
+      'failed_delivery_fee_debit_failed',
+      `order=${order.order_number} orderId=${order.id} amount=${amount} ` +
+        `${order.currency}: ${result?.error ?? 'unknown'}`,
+      { orderId: order.id, amount }
     );
     return 0;
   }
@@ -753,9 +800,12 @@ export class FailedDeliveriesService {
       referenceId: order.id,
     });
     if (!result?.success) {
-      this.logger.error(
-        `failed_delivery_fee_credit_failed order=${order.order_number} orderId=${order.id} ` +
-          `account=${accountId} amount=${amount} ${order.currency}: ${result?.error ?? 'unknown'}`
+      reportMoneyAnomaly(
+        this.logger,
+        'failed_delivery_fee_credit_failed',
+        `order=${order.order_number} orderId=${order.id} account=${accountId} ` +
+          `amount=${amount} ${order.currency}: ${result?.error ?? 'unknown'}`,
+        { orderId: order.id, accountId, amount }
       );
     }
   }

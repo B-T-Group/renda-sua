@@ -1,4 +1,10 @@
 import { FailedDeliveriesService } from './failed-deliveries.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+
+jest.mock('../common/utils/money-alert.util', () => ({
+  reportMoneyAnomaly: jest.fn(),
+}));
+
 
 function createService() {
   const getUser = jest.fn();
@@ -175,7 +181,7 @@ describe('FailedDeliveriesService client-fault fee', () => {
         order_holds: [
           {
             id: 'hold-1',
-            client_hold_amount: 0,
+            client_hold_amount: 1000,
             agent_hold_amount: 0,
             delivery_fees: 0,
             currency: 'XAF',
@@ -191,12 +197,16 @@ describe('FailedDeliveriesService client-fault fee', () => {
       return { id: 'biz-acc' };
     });
     registerTransaction.mockImplementation(async (req: any) =>
-      req.accountId === 'client-acc' && opts.debitResult
+      req.accountId === 'client-acc' && req.transactionType === 'withdrawal' && opts.debitResult
         ? opts.debitResult
         : { success: true }
     );
     return mocks;
   }
+
+  const anomaly = reportMoneyAnomaly as jest.Mock;
+  beforeEach(() => anomaly.mockClear());
+  const anomalyMarkers = () => anomaly.mock.calls.map((c) => c[1]);
 
   const resolve = (service: FailedDeliveriesService) =>
     service.resolveFailedDelivery(
@@ -219,6 +229,21 @@ describe('FailedDeliveriesService client-fault fee', () => {
     expect(calls(registerTransaction, 'agent-acc', 'deposit')[0].amount).toBe(100);
     expect(calls(registerTransaction, 'biz-acc', 'deposit')[0].amount).toBe(100);
     expect(result.client_fee_shortfall).toBeUndefined();
+    expect(anomaly).not.toHaveBeenCalled();
+  });
+
+  it('releases the held funds before debiting the fee from the released balance', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      hold: { client_hold_amount: 300, delivery_fees: 100 },
+    });
+    await resolve(service);
+    const seq = registerTransaction.mock.calls
+      .map(([r]) => r)
+      .filter((r) => r.accountId === 'client-acc')
+      .map((r) => `${r.transactionType}:${r.amount}`);
+    expect(seq).toEqual(['release:300', 'release:100', 'withdrawal:200']);
+    expect(anomaly).not.toHaveBeenCalled();
   });
 
   it('credits only what was debited when the wallet cannot cover the fee', async () => {
@@ -233,13 +258,18 @@ describe('FailedDeliveriesService client-fault fee', () => {
     const update = executeMutation.mock.calls.at(-1)?.[1].updates;
     expect(update.status).toBe('completed');
     expect(update.outcome).toContain('shortfall not collected: 150 XAF');
+    expect(anomalyMarkers()).toEqual(['failed_delivery_fee_shortfall']);
+    expect(anomaly.mock.calls[0][2]).toContain('should be impossible');
   });
 
   it('credits nobody when the client has no funds', async () => {
     const { service, registerTransaction } = setup({ clientAvailable: 0 });
     const result: any = await resolve(service);
-    expect(registerTransaction).not.toHaveBeenCalled();
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')).toHaveLength(0);
+    expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
+    expect(calls(registerTransaction, 'biz-acc', 'deposit')).toHaveLength(0);
     expect(result.client_fee_shortfall).toBe(FEE);
+    expect(anomalyMarkers()).toContain('failed_delivery_fee_shortfall');
   });
 
   it('credits nobody when the debit itself is rejected', async () => {
@@ -251,6 +281,33 @@ describe('FailedDeliveriesService client-fault fee', () => {
     expect(calls(registerTransaction, 'agent-acc', 'deposit')).toHaveLength(0);
     expect(calls(registerTransaction, 'biz-acc', 'deposit')).toHaveLength(0);
     expect(result.client_fee_shortfall).toBe(FEE);
+    expect(anomalyMarkers()).toEqual([
+      'failed_delivery_fee_debit_failed',
+      'failed_delivery_fee_shortfall',
+    ]);
+  });
+
+  it('reports an anomaly when the fee exceeds the funds held for the order', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 1000,
+      hold: { client_hold_amount: 0, delivery_fees: 50 },
+    });
+    const result: any = await resolve(service);
+    expect(anomalyMarkers()).toEqual(['failed_delivery_fee_hold_insufficient']);
+    // wallet could still cover it, so the fee is collected in full
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(200);
+    expect(result.client_fee_shortfall).toBeUndefined();
+  });
+
+  it('reports an anomaly when releasing the hold fails', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 1000 });
+    registerTransaction.mockImplementation(async (req: any) =>
+      req.transactionType === 'release'
+        ? { success: false, error: 'nope' }
+        : { success: true }
+    );
+    await resolve(service);
+    expect(anomalyMarkers()).toEqual(['failed_delivery_hold_release_failed']);
   });
 
   it('gives the whole collected amount to the business when no agent is assigned', async () => {
@@ -274,10 +331,11 @@ describe('FailedDeliveriesService client-fault fee', () => {
   it('still releases the client delivery-fee hold before charging', async () => {
     const { service, registerTransaction } = setup({
       clientAvailable: 1000,
-      hold: { delivery_fees: 500 },
+      hold: { client_hold_amount: 0, delivery_fees: 500 },
     });
     await resolve(service);
     const types = registerTransaction.mock.calls.map(([r]) => r.transactionType);
+    expect(anomaly).not.toHaveBeenCalled();
     expect(types.indexOf('release')).toBeLessThan(types.indexOf('withdrawal'));
   });
 });
