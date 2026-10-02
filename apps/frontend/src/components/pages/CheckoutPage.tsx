@@ -1,5 +1,9 @@
 import { ArrowBack, Lock } from '@mui/icons-material';
 import {
+  payAfterCopyVariantForPreflight,
+  resolveCreatedPayAfter,
+} from '../../utils/payAfterConfirm';
+import {
   Alert,
   Box,
   Button,
@@ -758,6 +762,7 @@ const CheckoutPage: React.FC = () => {
   const cookedFoodClosedMessage = cookedFoodClosedBlocker?.message ?? null;
   const cookedFoodMoMoPayAfterConfirm =
     checkoutPreflight?.pay_after_merchant_confirm_eligible === true;
+  const payAfterVariant = payAfterCopyVariantForPreflight(checkoutPreflight);
 
   useEffect(() => {
     if (cookedFoodAsapOnly) setDeliveryWindow(null);
@@ -1173,8 +1178,11 @@ const CheckoutPage: React.FC = () => {
       const redirected = await maybeRedirectToStripeCheckout(orders);
       if (redirected) return;
 
+      // Navigate on the create response (authoritative), not the possibly stale preflight.
+      const createdPayAfter = resolveCreatedPayAfter(orders);
       const momoAwaiting =
         checkoutPreflight?.checkout_method === 'MOBILE_MONEY' &&
+        !createdPayAfter &&
         paymentTiming === 'pay_now' &&
         orders.some(
           (o) =>
@@ -1197,7 +1205,8 @@ const CheckoutPage: React.FC = () => {
             confirmationState: {
               orders,
               multipleOrders: orders.length > 1,
-              pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
+              pay_after_merchant_confirm: createdPayAfter,
+              pay_after_variant: payAfterVariant,
             },
           })
         );
@@ -1209,7 +1218,8 @@ const CheckoutPage: React.FC = () => {
         state: {
           orders: orders,
           multipleOrders: orders.length > 1,
-          pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
+          pay_after_merchant_confirm: createdPayAfter,
+              pay_after_variant: payAfterVariant,
         },
       });
     } catch (error) {
@@ -1493,10 +1503,14 @@ const CheckoutPage: React.FC = () => {
                       details={cookedFoodClosedBlocker?.details}
                       openMessage={t(
                         cookedFoodMoMoPayAfterConfirm
-                          ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                          ? payAfterVariant === 'cooked'
+                            ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                            : 'orders.deliveryTimeWindow.storeAsapPayAfterConfirm'
                           : 'orders.deliveryTimeWindow.cookedFoodAsapOnly',
                         cookedFoodMoMoPayAfterConfirm
-                          ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                          ? payAfterVariant === 'cooked'
+                            ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                            : 'The store will confirm your order first. We’ll then ask you to pay.'
                           : 'We’ll start preparing when the kitchen confirms.'
                       )}
                     />
@@ -1527,10 +1541,14 @@ const CheckoutPage: React.FC = () => {
                       details={cookedFoodClosedBlocker?.details}
                       openMessage={t(
                         cookedFoodMoMoPayAfterConfirm
-                          ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                          ? payAfterVariant === 'cooked'
+                            ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+                            : 'orders.deliveryTimeWindow.storeAsapPayAfterConfirm'
                           : 'orders.deliveryTimeWindow.cookedFoodAsapOnlyPickup',
                         cookedFoodMoMoPayAfterConfirm
-                          ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                          ? payAfterVariant === 'cooked'
+                            ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+                            : 'The store will confirm your order first. We’ll then ask you to pay.'
                           : 'Pick up as soon as the kitchen marks it ready.'
                       )}
                     />

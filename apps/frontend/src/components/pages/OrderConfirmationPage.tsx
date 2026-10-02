@@ -64,6 +64,8 @@ interface OrderConfirmationData {
   multipleOrders?: boolean;
   /** Passed from checkout when create response may omit the DB flag. */
   pay_after_merchant_confirm?: boolean;
+  /** Wording for pay-after copy: 'cooked' (kitchen) or 'store' (flagged-location goods). */
+  pay_after_variant?: 'cooked' | 'store';
 }
 
 const OrderConfirmationPage: React.FC = () => {
@@ -120,6 +122,7 @@ const OrderConfirmationPage: React.FC = () => {
   const hasPayAfterMerchantConfirm =
     orderData.pay_after_merchant_confirm === true ||
     orders.some((o) => o.pay_after_merchant_confirm === true);
+  const payAfterStore = orderData.pay_after_variant === 'store';
   const isCookedFoodPickup =
     hasPayAfterMerchantConfirm &&
     orders.some(
@@ -234,10 +237,17 @@ const OrderConfirmationPage: React.FC = () => {
           {hasPayAfterMerchantConfirm ? (
             <Chip
               icon={<Schedule />}
-              label={t(
-                'orders.cookedFood.payAfterConfirm.chip',
-                'Pay after kitchen confirms'
-              )}
+              label={
+                payAfterStore
+                  ? t(
+                      'orders.payAfterConfirm.chip',
+                      'Pay after the store confirms'
+                    )
+                  : t(
+                      'orders.cookedFood.payAfterConfirm.chip',
+                      'Pay after kitchen confirms'
+                    )
+              }
               color="info"
               variant="outlined"
             />
@@ -336,14 +346,28 @@ const OrderConfirmationPage: React.FC = () => {
                   fontSize: { xs: '1.1rem', sm: '1.25rem' },
                 }}
               >
-                {t(
-                  'orders.cookedFood.payAfterConfirm.title',
-                  'Pay after the kitchen confirms'
-                )}
+                {payAfterStore
+                  ? t(
+                      'orders.payAfterConfirm.title',
+                      'Pay after the store confirms'
+                    )
+                  : t(
+                      'orders.cookedFood.payAfterConfirm.title',
+                      'Pay after the kitchen confirms'
+                    )}
               </Typography>
             </Box>
             <Typography variant="body1" sx={{ color: 'info.dark', lineHeight: 1.6 }}>
-              {isCookedFoodPickup
+              {payAfterStore
+                ? t(
+                    isCookedFoodPickup
+                      ? 'orders.payAfterConfirm.bodyPickup'
+                      : 'orders.payAfterConfirm.bodyDelivery',
+                    isCookedFoodPickup
+                      ? 'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes, then collect your order when it is ready.'
+                      : 'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes and the store will prepare your order for delivery.'
+                  )
+                : isCookedFoodPickup
                 ? t(
                     'orders.cookedFood.payAfterConfirm.bodyPickup',
                     'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order. Tap Complete order when you collect it.'
@@ -787,18 +811,28 @@ const OrderConfirmationPage: React.FC = () => {
             <Box component="ol" sx={{ pl: 2 }}>
               <Box component="li" sx={{ mb: 2 }}>
                 <Typography variant="body1">
-                  {t(
-                    'orders.cookedFood.payAfterConfirm.step1',
-                    'Your order has been sent to the kitchen.'
-                  )}
+                  {payAfterStore
+                    ? t(
+                        'orders.payAfterConfirm.step1',
+                        'Your order has been sent to the store.'
+                      )
+                    : t(
+                        'orders.cookedFood.payAfterConfirm.step1',
+                        'Your order has been sent to the kitchen.'
+                      )}
                 </Typography>
               </Box>
               <Box component="li" sx={{ mb: 2 }}>
                 <Typography variant="body1">
-                  {t(
-                    'orders.cookedFood.payAfterConfirm.step2',
-                    'When the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Approve it so they can start preparing.'
-                  )}
+                  {payAfterStore
+                    ? t(
+                        'orders.payAfterConfirm.step2',
+                        'When the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes so they can prepare your order.'
+                      )
+                    : t(
+                        'orders.cookedFood.payAfterConfirm.step2',
+                        'When the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Approve it so they can start preparing.'
+                      )}
                 </Typography>
               </Box>
               <Box component="li">

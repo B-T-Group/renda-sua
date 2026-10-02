@@ -55,6 +55,9 @@ export interface CheckoutPreflightGroup {
   deposit_minimum_applied?: boolean;
   deposit_percent?: number | null;
   momo_pay_now_delivery_enabled?: boolean;
+  /** True when every line is cooked food (kitchen wording); false for flagged-location goods. */
+  all_cooked_food?: boolean;
+  pay_after_merchant_confirm_eligible?: boolean;
 }
 
 export interface CookedFoodStoreClosedHourSlot {
@@ -94,7 +97,7 @@ export interface CheckoutPreflightResult {
   /** False when the cart includes cooked food (ASAP-only). */
   schedule_allowed?: boolean;
   schedule_required?: boolean;
-  /** True when every group is cooked-food MoMo pay-after (no deposit). */
+  /** True when every group is MoMo pay-after (cooked food or flagged location; no deposit). */
   pay_after_merchant_confirm_eligible?: boolean;
   requires_payment_phone?: boolean;
   suggested_payment_phone?: string | null;

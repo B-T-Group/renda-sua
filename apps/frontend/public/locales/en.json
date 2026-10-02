@@ -5147,7 +5147,8 @@
       "confirmPickupBodyAuthorized": "Confirm the client collected this order. The authorized card payment will be charged and the order marked complete.",
       "confirmPickupBodyPaid": "Confirm the client collected this order. The order will be marked complete.",
       "confirmPickupSuccess": "Pickup confirmed. The order is complete.",
-      "confirmPickupError": "Failed to confirm pickup"
+      "confirmPickupError": "Failed to confirm pickup",
+      "storePayAfterConfirmHint": "After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes or the order is cancelled automatically."
     },
     "payAtPickup": {
       "title": "Pay at pickup",
@@ -5743,7 +5744,8 @@
       "timeSlot": "Time Slot",
       "slotName": "Slot",
       "confirmedAt": "Confirmed at",
-      "confirmedBy": "Confirmed by"
+      "confirmedBy": "Confirmed by",
+      "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay."
     },
     "failDelivery": {
       "title": "Mark Delivery as Failed",
@@ -6111,7 +6113,10 @@
       "refundRequested": "A refund request needs attention.",
       "readyPickupCompleteClient": "Food is ready. Tap Complete order when you collect it so the merchant gets paid.",
       "readyPickupCompleteOrderClient": "Your order is ready. Tap Complete order when you collect it so the merchant gets paid.",
-      "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid."
+      "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid.",
+      "payAfterWaitPaymentBusiness": "Waiting for the client to pay (unpaid orders are cancelled automatically after about 45 minutes). Do not prepare the order until payment succeeds.",
+      "payAfterWaitPaymentClient": "Approve the payment request on your phone within about 45 minutes so the store can prepare your order.",
+      "payAfterPaidMarkReadyBusiness": "Paid — mark ready when prepared."
     },
     "pickupSla": {
       "pausedTitle": "Pickup monitoring paused",
@@ -6152,6 +6157,15 @@
       "failed": "Could not reorder. Try again.",
       "businessClosedBanner": "This store is not accepting orders right now. You can keep these items in your cart and try again later.",
       "addressInvalidBanner": "Your previous delivery address is no longer valid. Choose an address at checkout."
+    },
+    "payAfterConfirm": {
+      "chip": "Pay after the store confirms",
+      "title": "Pay after the store confirms",
+      "bodyPickup": "After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes, then collect your order when it is ready.",
+      "bodyDelivery": "After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes and the store will prepare your order for delivery.",
+      "step1": "Your order has been sent to the store.",
+      "step2": "When the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes so they can prepare your order.",
+      "payBy": "Pay by {{time}} or the order is cancelled automatically."
     }
   },
   "items": {

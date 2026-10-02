@@ -33,6 +33,7 @@ import {
   useCancellationReasons,
 } from '../../hooks';
 import type { OrderData } from '../../hooks/useOrderById';
+import { isCookedFoodOrderSnapshot } from '../../utils/cookedFoodOrder';
 import { businessMayCancelOrder } from '../../utils/orderUtils';
 
 export interface CancellationReasonModalProps {
@@ -71,6 +72,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   const cookedReadyChipMode =
     persona === 'client' &&
     order.current_status === 'ready_for_pickup' &&
+    isCookedFoodOrderSnapshot(order as any) &&
     (order.pay_after_merchant_confirm === true ||
       order.is_cooked_food_pickup === true);
 

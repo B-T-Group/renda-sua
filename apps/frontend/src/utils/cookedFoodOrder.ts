@@ -20,6 +20,21 @@ function lineCookedFlags(order: CookedFoodOrderLike) {
   }));
 }
 
+/**
+ * Mirrors backend `isCookedFoodOrderSnapshot`: cooked-only behaviour (kitchen wording,
+ * ready-in prompt, auto-prepare) keys on line snapshots, not on pay_after_merchant_confirm
+ * (which is also set for flagged-location goods).
+ */
+export function isCookedFoodOrderSnapshot(order: CookedFoodOrderLike): boolean {
+  if (order.is_cooked_food_pickup === true) return true;
+  const lines = order.order_items ?? [];
+  const flags = lines.map((l) => l?.is_cooked_food ?? l?.item?.is_cooked_food);
+  if (flags.length > 0 && flags.every((f) => typeof f === 'boolean')) {
+    return flags.every((f) => f === true);
+  }
+  return order.pay_after_merchant_confirm === true;
+}
+
 function isAsapOrder(order: CookedFoodOrderLike): boolean {
   return (
     order.fulfillment_timing === 'asap' ||

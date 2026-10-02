@@ -904,6 +904,7 @@ export class CheckoutPreflightService {
         // ASAP only for cooked food and for pay-after-confirm groups (v1).
         schedule_allowed: !groupHasCookedFood && !groupIsCookedFoodPayAfter,
         pay_after_merchant_confirm_eligible: groupIsCookedFoodPayAfter,
+        all_cooked_food: groupIsCookedFood,
       });
     }
 

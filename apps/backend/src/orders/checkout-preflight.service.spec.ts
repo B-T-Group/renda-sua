@@ -1462,6 +1462,8 @@ describe('CheckoutPreflightService', () => {
       expect(result.can_proceed).toBe(true);
       const group = result.groups[0];
       expect(group.pay_after_merchant_confirm_eligible).toBe(true);
+      // Flagged-location goods are not cooked food → clients use "store" wording.
+      expect(group.all_cooked_food).toBe(false);
       expect(group.allowed_payment_timings).toContain('pay_now');
       expect(group.schedule_allowed).toBe(false);
       expect(group.schedule_required).toBe(false);
