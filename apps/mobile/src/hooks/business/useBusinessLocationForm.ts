@@ -85,6 +85,7 @@ export function useBusinessLocationForm(
   const [email, setEmail] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [autoWithdraw, setAutoWithdraw] = useState(!isStripeRail);
+  const [payAtConfirm, setPayAtConfirm] = useState(false);
   const [locationType, setLocationType] = useState<BusinessLocation['location_type']>('store');
   const [isPrimary, setIsPrimary] = useState(false);
   const [addressForm, setAddressForm] = useState<DeliveryAddressFormValue>({
@@ -123,6 +124,7 @@ export function useBusinessLocationForm(
         setEmail(loc.email ?? '');
         setLogoUrl(loc.logo_url ?? '');
         setAutoWithdraw(loc.auto_withdraw_commissions !== false);
+        setPayAtConfirm(loc.pay_at_confirm === true);
         setLocationType(loc.location_type);
         setIsPrimary(loc.is_primary);
         setAddressForm({
@@ -223,6 +225,7 @@ export function useBusinessLocationForm(
         };
         if (!isStripeRail) {
           updatePayload.auto_withdraw_commissions = autoWithdraw;
+          updatePayload.pay_at_confirm = payAtConfirm;
         }
         await businessApi.locations.update(locationId, updatePayload);
         await businessApi.locations.patchAddress(locationId, {
@@ -275,6 +278,7 @@ export function useBusinessLocationForm(
     locationType,
     isPrimary,
     autoWithdraw,
+    payAtConfirm,
     logoUrl,
     addressForm,
     locationId,
@@ -319,6 +323,8 @@ export function useBusinessLocationForm(
     pickLogo,
     autoWithdraw,
     setAutoWithdraw,
+    payAtConfirm,
+    setPayAtConfirm,
     locationType,
     setLocationType,
     locationTypeOptions,
