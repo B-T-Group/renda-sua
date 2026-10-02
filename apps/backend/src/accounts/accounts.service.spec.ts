@@ -473,6 +473,77 @@ describe('AccountsService', () => {
       expect(deltas).toEqual([-50, 50]);
     });
 
+    it('credits the remainder when a retry finds only the cash-advance repayment leg', async () => {
+      const key = 'commission:order-1:acct-1:agent:base_delivery_fee';
+      executeQuery.mockImplementation(async (query: string, vars?: { key?: string }) => {
+        if (String(query).includes('FindTransactionByIdempotencyKey')) {
+          if (vars?.key === `${key}:repay`) {
+            return { account_transactions: [{ id: 'tx-repay', amount: 400 }] };
+          }
+          return { account_transactions: [] };
+        }
+        if (String(query).includes('GetAccountById')) {
+          return {
+            accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 },
+          };
+        }
+        return {};
+      });
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) =>
+        String(mutation).includes('InsertTransactionIdempotent')
+          ? { insert_account_transactions_one: { id: 'tx-remainder' } }
+          : fakeApplyDelta(mutation, vars)
+      );
+
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 1000,
+        transactionType: 'deposit',
+        idempotencyKey: key,
+        memo: 'agent commission',
+      });
+
+      expect(result).toMatchObject({
+        success: true,
+        transactionId: 'tx-remainder',
+      });
+      const insert = executeMutation.mock.calls.find(([mutation]) =>
+        String(mutation).includes('InsertTransactionIdempotent')
+      );
+      expect(insert?.[1]).toMatchObject({
+        amount: 600,
+        transactionType: 'deposit',
+        idempotencyKey: key,
+      });
+    });
+
+    it('treats a keyed deposit fully consumed by cash-advance repayment as done', async () => {
+      const key = 'commission:order-1:acct-1:agent:per_km_delivery_fee';
+      executeQuery.mockImplementation(async (query: string, vars?: { key?: string }) => {
+        if (String(query).includes('FindTransactionByIdempotencyKey')) {
+          if (vars?.key === `${key}:repay`) {
+            return { account_transactions: [{ id: 'tx-repay', amount: 500 }] };
+          }
+          return { account_transactions: [] };
+        }
+        return { accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 } };
+      });
+
+      await expect(
+        service.registerTransaction({
+          accountId,
+          amount: 500,
+          transactionType: 'deposit',
+          idempotencyKey: key,
+        })
+      ).resolves.toEqual({
+        success: true,
+        alreadyExists: true,
+        transactionId: 'tx-repay',
+      });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
     it('keyless requests keep the original insert path', async () => {
       executeMutation.mockImplementation(async (mutation: string, vars?: any) =>
         mutation.includes('InsertTransaction')

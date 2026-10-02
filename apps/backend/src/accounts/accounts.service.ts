@@ -143,12 +143,17 @@ export class AccountsService {
       }
 
       if (request.idempotencyKey) {
-        const existingId = await this.findTransactionIdByKeys([
-          request.idempotencyKey,
-          this.repaymentIdempotencyKey(request.idempotencyKey),
-        ]);
-        if (existingId) {
-          return { success: true, transactionId: existingId, alreadyExists: true };
+        // Only the original key means the whole move finished. A `:repay` row is just
+        // the cash-advance slice; the remainder deposit may still be missing.
+        const existing = await this.findLedgerRowByIdempotencyKey(
+          request.idempotencyKey
+        );
+        if (existing) {
+          return {
+            success: true,
+            transactionId: existing.id,
+            alreadyExists: true,
+          };
         }
       }
 
@@ -408,6 +413,11 @@ export class AccountsService {
       withheld_balance?: number;
     }
   ): Promise<TransactionResult | null> {
+    const resumed = await this.resumeDepositAfterRecordedRepayment(
+      request,
+      account
+    );
+    if (resumed) return resumed;
     const debt = Number(account.cash_advance_balance ?? 0);
     if (debt >= 0) return null;
     const repay = Math.min(request.amount, Math.abs(debt));
@@ -608,14 +618,49 @@ export class AccountsService {
     return `${key}:repay`;
   }
 
-  private async findTransactionIdByKeys(keys: string[]): Promise<string | null> {
-    const result = await this.hasuraSystemService.executeQuery(
-      `query FindTransactionByIdempotencyKey($keys: [String!]!) {
-        account_transactions(where: { idempotency_key: { _in: $keys } }, limit: 1) { id }
-      }`,
-      { keys }
+  /**
+   * A previous attempt already wrote the cash-advance repayment leg (`key:repay`)
+   * and then stopped before the remainder deposit. Finish only what is still missing.
+   * A repayment that consumed the whole amount is complete.
+   */
+  private async resumeDepositAfterRecordedRepayment(
+    request: TransactionRequest,
+    account: {
+      cash_advance_balance?: number;
+      available_balance?: number;
+      withheld_balance?: number;
+    }
+  ): Promise<TransactionResult | null> {
+    if (!request.idempotencyKey) return null;
+    const repaid = await this.findLedgerRowByIdempotencyKey(
+      this.repaymentIdempotencyKey(request.idempotencyKey)
     );
-    return result?.account_transactions?.[0]?.id ?? null;
+    if (!repaid) return null;
+    const remainder = Number((request.amount - repaid.amount).toFixed(2));
+    if (remainder <= 0) {
+      return { success: true, alreadyExists: true, transactionId: repaid.id };
+    }
+    return this.applyLedgerEntry(
+      { ...request, amount: remainder, transactionType: 'deposit' },
+      account
+    );
+  }
+
+  private async findLedgerRowByIdempotencyKey(
+    key: string
+  ): Promise<{ id: string; amount: number } | null> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query FindTransactionByIdempotencyKey($key: String!) {
+        account_transactions(where: { idempotency_key: { _eq: $key } }, limit: 1) {
+          id
+          amount
+        }
+      }`,
+      { key }
+    );
+    const row = result?.account_transactions?.[0];
+    if (!row?.id) return null;
+    return { id: row.id, amount: Number(row.amount ?? 0) };
   }
 
   /**
