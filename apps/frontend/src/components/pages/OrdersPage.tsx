@@ -188,6 +188,17 @@ const OrdersPage: React.FC = () => {
   const { orders, loading, error, fetchOrders, refreshOrders } = useOrders();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Deep link from the pay-after confirm dialog: /orders?queue=prep
+  const queueParam = searchParams.get('queue');
+  useEffect(() => {
+    if (
+      queueParam &&
+      (BUSINESS_ORDER_QUEUE_FILTERS as string[]).includes(queueParam)
+    ) {
+      setQueueFilter(queueParam as BusinessOrderQueue);
+    }
+  }, [queueParam]);
+
   const isCashReconciliationView =
     isOrdersBusiness && searchParams.get('cashReconciliation') === 'pending';
 

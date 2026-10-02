@@ -57,6 +57,13 @@ export function BusinessOrdersListView({
   const { orders, loading, error, applyFilters, refresh } = useBusinessOrdersList(initialFilters);
   const [search, setSearch] = useState('');
   const [queueFilter, setQueueFilter] = useState<BusinessOrderQueue>('all');
+  // Deep link from the pay-after confirm dialog: BusinessOrdersList { queue: 'prep' }.
+  const queueParam = (route.params as { queue?: string } | undefined)?.queue;
+  useEffect(() => {
+    if (queueParam && BUSINESS_ORDER_QUEUE_FILTERS.includes(queueParam as BusinessOrderQueue)) {
+      setQueueFilter(queueParam as BusinessOrderQueue);
+    }
+  }, [queueParam]);
 
   useEffect(() => {
     if (cashMode) {

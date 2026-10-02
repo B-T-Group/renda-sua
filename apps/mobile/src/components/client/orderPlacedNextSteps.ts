@@ -243,7 +243,7 @@ function storePayAfterSteps(input: NextStepsInput): OrderNextStepsContent {
       step(
         'pay',
         `${STEPS}.storePay`,
-        'You then receive a Mobile Money payment request. Approve it within about 45 minutes or the order is cancelled automatically.'
+        'You then receive a Mobile Money payment request. Approve it within 45 minutes or the order is cancelled automatically.'
       ),
       step('prep', `${STEPS}.storePrep`, 'Once it is paid, the store prepares your order.'),
       pickup ? foodReadyPickup() : foodReadyDelivery(),

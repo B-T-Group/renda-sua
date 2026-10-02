@@ -126,6 +126,15 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
     trackFirstOrderClientPlaced({ fulfillment_method: fulfillmentPath });
   }, [fulfillmentPath, showFirstOrderPreview]);
 
+  const paymentChip = paymentChipLabel(t, {
+    depositConfirmed,
+    cardAuthorized,
+    paymentCompleted,
+    paymentTiming,
+    cookedFoodPayAfterConfirm,
+    payAfterCopyVariant,
+  });
+
   const missingEmail = !profileLoading && !(meUser?.email ?? '').trim();
   const missingPhone = !profileLoading && !(meUser?.phone_number ?? '').trim();
   const missingField: 'email' | 'phone' | null = missingEmail ? 'email' : missingPhone ? 'phone' : null;
@@ -183,17 +192,16 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
               marginTop: spacing.md,
             }}
           >
-            <Chip icon={chipIcon}>
-              {paymentChipLabel(t, {
-                depositConfirmed,
-                cardAuthorized,
-                paymentCompleted,
-                paymentTiming,
-                cookedFoodPayAfterConfirm,
-                payAfterCopyVariant,
-              })}
+            <Chip icon={chipIcon} accessibilityLabel={paymentChip}>
+              {paymentChip}
             </Chip>
-            <Chip icon="clipboard-text-outline">
+            <Chip
+              icon="clipboard-text-outline"
+              accessibilityLabel={t(
+                'client.placeOrder.successScreen.trackHint',
+                'Track progress in My orders'
+              )}
+            >
               {t('client.placeOrder.successScreen.trackHint', 'Track progress in My orders')}
             </Chip>
           </View>
@@ -204,6 +212,18 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
         ) : null}
 
         <SuccessNextSteps {...props} isStripeRail={isStripeRail} />
+
+        {cookedFoodPayAfterConfirm && payAfterCopyVariant === 'store' ? (
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.text.secondary, marginBottom: spacing.md }}
+          >
+            {t(
+              'orders.payAfterConfirm.storeNoConfirm',
+              'If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged.'
+            )}
+          </Text>
+        ) : null}
 
         {showContactNudge && missingField ? (
           <View style={{ marginBottom: spacing.md }}>

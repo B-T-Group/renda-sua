@@ -3,6 +3,10 @@ import { isCookedFoodOrderSnapshot } from './cookedFoodOrder';
 import { orderToPhaseInput, resolveOrderPhase } from './orderPhase';
 import {
   PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES,
+  formatPayByTime,
+  isUnpaidPayAfterOrder,
+  payByUrgency,
+  splitAroundTime,
   payAfterCopyVariantForPreflight,
   payAfterPayByDeadline,
   resolveCreatedPayAfter,
@@ -99,5 +103,55 @@ describe('orderPhase store wording for non-cooked pay-after', () => {
       'client'
     );
     expect(info.nextStepKey).toBe('orders.nextStep.cookedFoodWaitPaymentClient');
+  });
+});
+
+describe('payAfterConfirm pay-by helpers', () => {
+  const deadline = new Date(2026, 9, 1, 14, 30); // local 14:30
+
+  it('formats 24h in French and 12h in English, honouring the app language', () => {
+    const now = new Date(2026, 9, 1, 13, 0);
+    expect(formatPayByTime(deadline, 'fr', now)).toBe('14:30');
+    expect(formatPayByTime(deadline, 'fr-CA', now)).toBe('14:30');
+    expect(formatPayByTime(deadline, 'en', now)).toMatch(/^0?2:30\s?PM$/i);
+  });
+
+  it('prefixes tomorrow when the deadline is on a different day', () => {
+    const lateNow = new Date(2026, 8, 30, 23, 50); // Sep 30
+    expect(formatPayByTime(deadline, 'fr', lateNow, 'demain')).toBe('demain 14:30');
+    expect(formatPayByTime(deadline, 'en', lateNow, 'tomorrow')).toMatch(/^tomorrow /);
+  });
+
+  it('classifies urgency: normal, urgent at <=10 min, expired at/after the deadline', () => {
+    expect(payByUrgency(deadline, new Date(2026, 9, 1, 13, 0))).toBe('normal');
+    expect(payByUrgency(deadline, new Date(2026, 9, 1, 14, 20))).toBe('urgent');
+    expect(payByUrgency(deadline, new Date(2026, 9, 1, 14, 29))).toBe('urgent');
+    expect(payByUrgency(deadline, new Date(2026, 9, 1, 14, 30))).toBe('expired');
+    expect(payByUrgency(deadline, new Date(2026, 9, 1, 15, 0))).toBe('expired');
+  });
+
+  it('splits translated text around the time so it can be bolded', () => {
+    expect(splitAroundTime('Pay by 14:30. Free.', '14:30')).toEqual({
+      before: 'Pay by ',
+      time: '14:30',
+      after: '. Free.',
+    });
+    expect(splitAroundTime('No time here', '14:30')).toBeNull();
+  });
+
+  it('flags only unpaid pay-after orders for the free-cancel copy', () => {
+    expect(
+      isUnpaidPayAfterOrder({ pay_after_merchant_confirm: true, payment_status: 'pending' })
+    ).toBe(true);
+    expect(isUnpaidPayAfterOrder({ pay_after_merchant_confirm: true })).toBe(true);
+    expect(
+      isUnpaidPayAfterOrder({ pay_after_merchant_confirm: true, payment_status: 'paid' })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAfterOrder({ pay_after_merchant_confirm: true, payment_status: 'authorized' })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAfterOrder({ pay_after_merchant_confirm: false, payment_status: 'pending' })
+    ).toBe(false);
   });
 });

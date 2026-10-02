@@ -35,6 +35,7 @@ import {
 import type { OrderData } from '../../hooks/useOrderById';
 import { isCookedFoodOrderSnapshot } from '../../utils/cookedFoodOrder';
 import { businessMayCancelOrder } from '../../utils/orderUtils';
+import { isUnpaidPayAfterOrder } from '../../utils/payAfterConfirm';
 
 export interface CancellationReasonModalProps {
   open: boolean;
@@ -97,6 +98,12 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
     order.current_status
   );
 
+  // Confirmed pay-after order the client has not paid yet: nothing was charged, so no fee.
+  const isUnpaidPayAfter =
+    persona === 'client' &&
+    !canCancelForFree &&
+    isUnpaidPayAfterOrder(order);
+
   const agentHandoffBlockedStatuses = [
     'assigned_to_agent',
     'out_for_delivery',
@@ -111,7 +118,13 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
 
   // Fetch cancellation fee when modal opens and order can be cancelled
   useEffect(() => {
-    if (open && canCancel && !canCancelForFree && persona === 'client') {
+    if (
+      open &&
+      canCancel &&
+      !canCancelForFree &&
+      !isUnpaidPayAfter &&
+      persona === 'client'
+    ) {
       setLoadingFeeData(true);
       const countryCode = order.business_location?.address?.country || 'GA';
 
@@ -134,6 +147,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
     open,
     canCancel,
     canCancelForFree,
+    isUnpaidPayAfter,
     persona,
     order.business_location?.address?.country,
     order.id,
@@ -227,6 +241,8 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
       onClose();
     }
   };
+
+  const showFreeCancellation = canCancelForFree || isUnpaidPayAfter;
 
   const getPersonaTitle = () => {
     if (persona === 'client') {
@@ -338,7 +354,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
             <Alert severity="info" sx={{ mb: 2 }}>
               {t(
                 'orders.payAfterConfirm.business.cancelPaidRefund',
-                'This order is already paid. If you cancel it, the client is refunded in full.'
+                'This order is already paid. If you cancel it, the client is refunded in full to their Rendasua wallet.'
               )}
             </Alert>
           )}
@@ -349,14 +365,14 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
             sx={{
               mb: 3,
               p: 2,
-              bgcolor: canCancelForFree ? 'success.50' : 'warning.50',
+              bgcolor: showFreeCancellation ? 'success.50' : 'warning.50',
               borderRadius: 1,
               border: '1px solid',
-              borderColor: canCancelForFree ? 'success.200' : 'warning.200',
+              borderColor: showFreeCancellation ? 'success.200' : 'warning.200',
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              {canCancelForFree ? (
+              {showFreeCancellation ? (
                 <CheckCircle color="success" sx={{ fontSize: 20 }} />
               ) : (
                 <Warning color="warning" sx={{ fontSize: 20 }} />
@@ -364,15 +380,22 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
               <Typography
                 variant="subtitle2"
                 fontWeight="bold"
-                color={canCancelForFree ? 'success.main' : 'warning.main'}
+                color={showFreeCancellation ? 'success.main' : 'warning.main'}
               >
-                {canCancelForFree
+                {showFreeCancellation
                   ? t('orders.cancellationFree', 'Free Cancellation')
                   : t('orders.cancellationFee', 'Cancellation Fee')}
               </Typography>
             </Box>
 
-            {canCancelForFree ? (
+            {isUnpaidPayAfter ? (
+              <Typography variant="body2" color="success.dark">
+                {t(
+                  'orders.payAfterConfirm.cancelUnpaid',
+                  "You haven't paid yet, so cancelling is free and nothing is charged."
+                )}
+              </Typography>
+            ) : canCancelForFree ? (
               <Box>
                 <Typography variant="body2" color="success.dark">
                   {t(
@@ -661,7 +684,7 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
               size="large"
               fullWidth={isMobile}
             >
-              {t('common.cancel', 'Cancel')}
+              {t('orders.keepOrder', 'Keep order')}
             </Button>
             <Button
               onClick={handleSubmit}

@@ -203,7 +203,11 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
             onConfirm={() => void handleConfirmReady()}
           />
         ) : (
-          <WaitActions onDashboard={() => navigate('/dashboard')} onOrders={() => navigate('/orders?queue=prep')} />
+          <WaitActions
+            storePayAfter={storePayAfter}
+            onDashboard={() => navigate('/dashboard')}
+            onOrders={() => navigate('/orders?queue=prep')}
+          />
         )}
       </DialogActions>
     </Dialog>
@@ -396,7 +400,7 @@ function StoreConfirmStep({ error }: { error: string }) {
       <Alert severity="info">
         {t(
           'orders.payAfterConfirm.business.confirmBody',
-          'After you confirm, the client is asked to pay by Mobile Money. They have about {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.',
+          'After you confirm, the client is asked to pay by Mobile Money. They have {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.',
           { m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES }
         )}
       </Alert>
@@ -415,7 +419,7 @@ function StoreWaitPaymentStep({ isPickup }: { isPickup: boolean }) {
   const { t } = useTranslation();
   const steps = [
     t('orders.payAfterConfirm.business.waitStepSent', 'A Mobile Money request is on the client’s phone.'),
-    t('orders.payAfterConfirm.business.waitStepWait', 'Wait for the payment notification (about {{m}} minutes).', {
+    t('orders.payAfterConfirm.business.waitStepWait', 'Wait for the payment notification ({{m}} minutes).', {
       m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES,
     }),
     t('orders.payAfterConfirm.business.waitStepPrepare', 'Prepare the order only after you see that payment, then mark it ready.'),
@@ -462,7 +466,7 @@ function ConfirmActions({
   return (
     <Box display="flex" gap={2} justifyContent="flex-end" width="100%">
       <Button onClick={onClose} disabled={busy}>
-        {t('common.cancel', 'Cancel')}
+        {t('common.back', 'Back')}
       </Button>
       <Button
         variant="contained"
@@ -477,9 +481,11 @@ function ConfirmActions({
 }
 
 function WaitActions({
+  storePayAfter,
   onDashboard,
   onOrders,
 }: {
+  storePayAfter: boolean;
   onDashboard: () => void;
   onOrders: () => void;
 }) {
@@ -490,7 +496,9 @@ function WaitActions({
         {t('orders.cookedFood.returnDashboard', 'Return to dashboard')}
       </Button>
       <Button variant="outlined" onClick={onOrders}>
-        {t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
+        {storePayAfter
+          ? t('orders.payAfterConfirm.business.viewOrders', 'View orders')
+          : t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
       </Button>
     </Stack>
   );

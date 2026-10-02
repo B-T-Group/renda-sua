@@ -229,7 +229,7 @@ export default function BusinessLocationFormScreen({ route, navigation }: Props)
               <HelperText type="info" visible>
                 {t(
                   'business.locations.payAtConfirmHint',
-                  'Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after about 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.'
+                  'Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.'
                 )}
               </HelperText>
             </View>

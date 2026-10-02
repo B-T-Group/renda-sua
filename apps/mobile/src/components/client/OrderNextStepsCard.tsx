@@ -8,10 +8,18 @@ export function OrderNextStepsCard({ content }: { content: OrderNextStepsContent
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const palette = stepPalette(content.tone, colors);
+  const title = t(content.titleKey, content.titleDefault);
+  const summary = [
+    title,
+    ...content.steps.map((item, index) => `${index + 1}. ${t(item.key, item.defaultText, item.values)}`),
+  ].join('. ');
 
   return (
     <Card
       mode="outlined"
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel={summary}
       style={{
         marginBottom: spacing.md,
         borderRadius: borderRadius.md,
@@ -21,7 +29,7 @@ export function OrderNextStepsCard({ content }: { content: OrderNextStepsContent
     >
       <Card.Content style={{ paddingVertical: spacing.md, gap: spacing.sm }}>
         <Text variant="titleMedium" style={{ color: palette.title, fontWeight: '700' }}>
-          {t(content.titleKey, content.titleDefault)}
+          {title}
         </Text>
         {content.steps.map((item, index) => (
           <StepRow
