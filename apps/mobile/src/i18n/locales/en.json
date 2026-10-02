@@ -1041,7 +1041,7 @@
         "cancelPaidRefund": "This order is already paid. If you cancel it, the client is refunded in full to their Rendasua wallet.",
         "viewOrders": "View orders"
       },
-      "payByExpired": "The payment window has ended. The order was cancelled and you were not charged.",
+      "payByExpired": "The payment window has ended. This order will be cancelled automatically and you will not be charged.",
       "tomorrow": "tomorrow",
       "cancelUnpaid": "You haven’t paid yet, so cancelling is free and nothing is charged.",
       "storeNoConfirm": "If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged."
