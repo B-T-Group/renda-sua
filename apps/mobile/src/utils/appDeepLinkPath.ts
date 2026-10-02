@@ -1,5 +1,5 @@
-/** True for /app/foods and /app/foods/:id — guests can open these without signing in. */
+/** True for /app/foods, /app/foods/:id and /store/:id — guests can open these without signing in. */
 export function isGuestAccessibleDeepLinkPath(path: string): boolean {
-  const head = path.split('/').filter(Boolean)[0];
-  return head === 'foods';
+  const [head, id] = path.split('/').filter(Boolean);
+  return head === 'foods' || (head === 'store' && !!id);
 }

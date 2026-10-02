@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { CommonActions } from '@react-navigation/native';
+import { getEnv } from '../config/auth0';
 import {
   navigateToAdminOrderFromPush,
   navigateToWhatsAppInboxFromPush,
@@ -21,6 +22,7 @@ import {
   type DeepLinkTarget,
 } from '../utils/appDeepLink';
 import { isGuestAccessibleDeepLinkPath } from '../utils/appDeepLinkPath';
+import { storeWebUrl } from '../utils/storeWebUrl';
 import {
   canSwitchToPersona,
   isOnPersona,
@@ -55,7 +57,7 @@ function navigateAccounts(persona: PersonaSlug): boolean {
   return navigateNamedRoute(ACCOUNTS_ROUTE[persona]);
 }
 
-function guestFoodShellMounted(): boolean {
+function guestShellMounted(): boolean {
   if (!rootNavigationRef.isReady()) return false;
   const routeNames = rootNavigationRef.getRootState()?.routeNames ?? [];
   return routeNames.includes('GuestTabs');
@@ -116,6 +118,10 @@ function dispatchDeepLinkTarget(
   if (target.type === 'itemProposal') {
     return navigateToItemAiProposalFromPush(target.id);
   }
+  if (target.type === 'store' && isDelegation) {
+    void WebBrowser.openBrowserAsync(storeWebUrl(target.id, getEnv().apiUrl));
+    return true;
+  }
   return dispatchDeepLinkRest(target, persona);
 }
 
@@ -133,6 +139,9 @@ function dispatchDeepLinkRest(
     return navigateToInventoryItemFromPush(target.id);
   }
   if (target.type === 'food') return navigateFoodBrowse(persona);
+  if (target.type === 'store') {
+    return navigateNamedRoute('StoreDetail', { businessId: target.id });
+  }
   resetToPersonaDashboard(persona);
   return true;
 }
@@ -147,7 +156,7 @@ function isInviteUrl(url: string): boolean {
 }
 
 /**
- * Opens rendasua.com/app/* and rendasua://* links into the active persona shell.
+ * Opens rendasua.com/app/*, rendasua.com/store/:id and rendasua://* links into the active persona shell.
  * Queues until auth + navigation are ready (same pattern as push opens).
  */
 export function useAppDeepLinkNavigation(navReady: boolean): void {
@@ -263,9 +272,9 @@ function flushOne(
   p: DeepLinkPersona
 ): FlushResult {
   const signedIn = a.isAuthenticated && !!a.accessToken && p.showMainApp;
-  const guestFoodLink = isGuestAccessibleDeepLinkPath(pending.path);
-  if (!signedIn && !guestFoodLink) return 'wait';
-  if (!signedIn && guestFoodLink && !guestFoodShellMounted()) return 'hold';
+  const guestLink = isGuestAccessibleDeepLinkPath(pending.path);
+  if (!signedIn && !guestLink) return 'wait';
+  if (!signedIn && guestLink && !guestShellMounted()) return 'hold';
   const required = signedIn ? targetPersonaForDeepLinkPath(pending.path) : null;
   if (required && !isOnRequiredPersona(a, p, required)) {
     maybeSwitchPersona(a, p, required);

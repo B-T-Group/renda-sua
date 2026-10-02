@@ -42,6 +42,7 @@ import {
   reconcileStaleFirstOrderPin,
 } from '../../utils/firstOrderPinSync';
 import { getEnv } from '../../config/auth0';
+import { storeWebUrl } from '../../utils/storeWebUrl';
 import {
   buildReadinessSteps,
   resolveMerchantTip,
@@ -56,13 +57,6 @@ import {
   navigateBusinessSaleItems,
 } from '../../utils/navigateBusinessTabs';
 import type { ActiveOrderCardModel } from '../../utils/buildActiveOrderCardModel';
-
-function storeShareBaseUrl(apiUrl: string): string {
-  if (apiUrl.includes('localhost') || apiUrl.includes('dev.api')) {
-    return 'https://dev.rendasua.com';
-  }
-  return 'https://rendasua.com';
-}
 
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
@@ -1028,7 +1022,7 @@ export function useBusinessDashboardScreen() {
 
   const onShareStorefront = useCallback(async () => {
     if (!businessId) return;
-    const url = `${storeShareBaseUrl(getEnv().apiUrl)}/store/${businessId}`;
+    const url = storeWebUrl(businessId, getEnv().apiUrl);
     await Share.share({
       message: t('stores.shareMessage', 'Check out {{name}} on Rendasua: {{url}}', {
         name: me?.business?.name ?? t('stores.unnamed', 'Store'),

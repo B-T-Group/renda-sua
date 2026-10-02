@@ -7,6 +7,11 @@ describe('isGuestAccessibleDeepLinkPath', () => {
     expect(isGuestAccessibleDeepLinkPath('foods/abc-123')).toBe(true);
   });
 
+  it('allows a public store page', () => {
+    expect(isGuestAccessibleDeepLinkPath('store/abc-123')).toBe(true);
+    expect(isGuestAccessibleDeepLinkPath('store')).toBe(false);
+  });
+
   it('does not treat account or order links as guest-safe', () => {
     expect(isGuestAccessibleDeepLinkPath('orders/abc')).toBe(false);
     expect(isGuestAccessibleDeepLinkPath('wallet')).toBe(false);

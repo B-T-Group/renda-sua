@@ -23,7 +23,7 @@ describe('PushChannel', () => {
       'New order',
       'Order 1001',
       { event: 'order_created' },
-      { priority: 'high', sound: 'default', channelId: 'order_incoming' }
+      { priority: 'high', sound: 'default', channelId: 'order_incoming_alarm' }
     );
   });
 

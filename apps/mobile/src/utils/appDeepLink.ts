@@ -1,12 +1,15 @@
 import type { PersonaSlug } from '../types/persona';
 
-/** Parse https://…/app/… and rendasua://… into an app-relative path. */
+/** Parse https://…/app/…, https://…/store/:id and rendasua://… into an app-relative path. */
 export function extractAppPath(url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.protocol === 'rendasua:') return pathFromScheme(parsed);
     if (parsed.pathname.startsWith('/app/')) {
       return parsed.pathname.replace(/^\/app\//, '').replace(/\/$/, '');
+    }
+    if (/^\/store\/[^/]+\/?$/.test(parsed.pathname)) {
+      return parsed.pathname.replace(/^\//, '').replace(/\/$/, '');
     }
     return null;
   } catch {
@@ -41,6 +44,7 @@ export type DeepLinkTarget =
   | { type: 'rentalRequests' }
   | { type: 'rental'; id: string }
   | { type: 'food'; id?: string }
+  | { type: 'store'; id: string }
   | { type: 'dashboard' };
 
 export function resolveDeepLinkTarget(path: string): DeepLinkTarget {
@@ -77,5 +81,6 @@ function matchDeepLinkRest(
   }
   if (head === 'rentals' && id) return { type: 'rental', id };
   if (head === 'foods') return { type: 'food', id };
+  if (head === 'store' && id) return { type: 'store', id };
   return null;
 }

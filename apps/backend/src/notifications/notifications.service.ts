@@ -189,7 +189,7 @@ export interface OrderRiskAlertParams {
 const MERCHANT_INCOMING_ORDER_PUSH: ExpoPushOptions = {
   priority: 'high',
   sound: 'default',
-  channelId: 'order_incoming',
+  channelId: 'order_incoming_alarm',
 };
 
 function escapeHtmlForEmail(text: string): string {
@@ -4179,7 +4179,7 @@ export class NotificationsService {
 
   /**
    * Send a high-priority "New Delivery" offer push to an agent's user.
-   * Uses the dedicated `order_offers` Android channel and a sound so it can
+   * Uses the `order_offers_alarm` Android channel (alarm stream) so it can
    * interrupt the agent even when the app is backgrounded/locked.
    */
   async sendOrderOfferPush(params: {
@@ -4228,7 +4228,7 @@ export class NotificationsService {
       {
         priority: 'high',
         sound: 'default',
-        channelId: 'order_offers',
+        channelId: 'order_offers_alarm',
         ttlSeconds: params.ttlSeconds,
       }
     );
@@ -4397,7 +4397,7 @@ export class NotificationsService {
       },
       {
         priority: 'high',
-        channelId: 'order_offers',
+        channelId: 'order_offers_alarm',
       }
     );
   }

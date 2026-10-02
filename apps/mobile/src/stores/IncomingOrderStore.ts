@@ -4,6 +4,11 @@ import { BUSY_SNOOZE_MS } from '../constants/incomingOrder';
 import i18n from '../i18n';
 import { BUSINESS_PERSONA_HEADERS } from '../notifications/personaHeaders';
 import { businessApi } from '../services/businessApi';
+import {
+  pulseOrderAlertSound,
+  startOrderAlertSound,
+  stopOrderAlertSound,
+} from '../services/orderAlertSound';
 import type { IncomingOrderDetails } from '../types/incomingOrder';
 import { isDeliverySlotPast } from '../utils/isDeliverySlotPast';
 import type { RootStore } from './RootStore';
@@ -186,6 +191,7 @@ export class IncomingOrderStore {
   /** Vibrate + list refresh without presenting the owner acceptance overlay. */
   notifyDelegateForegroundOrder(): void {
     Vibration.vibrate([0, 600, 200, 600]);
+    pulseOrderAlertSound();
     this.ordersRefreshEpoch += 1;
   }
 
@@ -245,6 +251,7 @@ export class IncomingOrderStore {
       runInAction(() => {
         this.visible = true;
       });
+      startOrderAlertSound('incomingOrder');
       const res = await withLoadTimeout(
         businessApi.orders.getById(orderId, BUSINESS_PERSONA_HEADERS)
       );
@@ -262,9 +269,12 @@ export class IncomingOrderStore {
       if (this.uiState === 'active') {
         this.startReminderLoop();
         Vibration.vibrate([0, 400, 200, 400]);
+      } else {
+        stopOrderAlertSound('incomingOrder');
       }
     } catch {
       if (epoch !== this.loadEpoch || !this.visible) return;
+      stopOrderAlertSound('incomingOrder');
       runInAction(() => {
         this.uiState = 'error';
         this.message = this.t(
@@ -561,6 +571,7 @@ export class IncomingOrderStore {
 
   private startReminderLoop(): void {
     this.stopReminderLoop();
+    startOrderAlertSound('incomingOrder');
     this.reminderTimer = setInterval(() => {
       if (!this.visible || this.uiState !== 'active') return;
       Vibration.vibrate([0, 500, 150, 500, 150, 500]);
@@ -568,6 +579,7 @@ export class IncomingOrderStore {
   }
 
   private stopReminderLoop(): void {
+    stopOrderAlertSound('incomingOrder');
     if (this.reminderTimer) {
       clearInterval(this.reminderTimer);
       this.reminderTimer = null;

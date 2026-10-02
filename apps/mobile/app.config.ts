@@ -85,6 +85,14 @@ export default ({ config }: { config: Record<string, unknown> }) => {
       'expo-web-browser',
       ['expo-notifications', { defaultChannel: 'default' }],
       [
+        'expo-audio',
+        {
+          microphonePermission: false,
+          recordAudioAndroid: false,
+          enableBackgroundPlayback: false,
+        },
+      ],
+      [
         '@stripe/stripe-react-native',
         {
           // Google Pay / Apple Pay disabled for now (card only).

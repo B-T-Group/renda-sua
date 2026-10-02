@@ -23,6 +23,23 @@ describe('extractAppPath', () => {
       'admin/orders/abc'
     );
   });
+
+  it('parses public store share links', () => {
+    expect(
+      extractAppPath(
+        'https://rendasua.com/store/00cdc50b-2b46-4a27-9401-0ce3a9d3c5fd'
+      )
+    ).toBe('store/00cdc50b-2b46-4a27-9401-0ce3a9d3c5fd');
+    expect(extractAppPath('https://www.rendasua.com/store/abc/?x=1')).toBe(
+      'store/abc'
+    );
+  });
+
+  it('ignores store paths without a single id segment', () => {
+    expect(extractAppPath('https://rendasua.com/store/')).toBeNull();
+    expect(extractAppPath('https://rendasua.com/stores')).toBeNull();
+    expect(extractAppPath('https://rendasua.com/store/abc/items')).toBeNull();
+  });
 });
 
 describe('targetPersonaForDeepLinkPath', () => {
@@ -56,5 +73,13 @@ describe('resolveDeepLinkTarget', () => {
       type: 'itemProposal',
       id: 'abc',
     });
+  });
+
+  it('opens a store and keeps the active persona', () => {
+    expect(resolveDeepLinkTarget('store/abc')).toEqual({
+      type: 'store',
+      id: 'abc',
+    });
+    expect(targetPersonaForDeepLinkPath('store/abc')).toBeNull();
   });
 });

@@ -4,11 +4,11 @@
     "details": [
       {
         "appID": "A289B23AXW.com.rendasua.agent",
-        "paths": ["/app/*"]
+        "paths": ["/app/*", "/store/*"]
       },
       {
         "appIDs": ["A289B23AXW.com.rendasua.agent"],
-        "components": [{ "/": "/app/*" }]
+        "components": [{ "/": "/app/*" }, { "/": "/store/*" }]
       }
     ]
   }

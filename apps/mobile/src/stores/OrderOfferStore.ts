@@ -2,6 +2,10 @@ import { makeAutoObservable, runInAction } from 'mobx';
 import i18n from '../i18n';
 import { agentApi } from '../services/agentApi';
 import {
+  startOrderAlertSound,
+  stopOrderAlertSound,
+} from '../services/orderAlertSound';
+import {
   navigateToAgentOpenOrders,
   navigateToOrderFromPush,
 } from '../navigation/rootNavigationRef';
@@ -100,6 +104,7 @@ export class OrderOfferStore {
         this.uiState = 'active';
         this.message = null;
       });
+      startOrderAlertSound('orderOffer');
     } catch {
       // Silent: app-open check never surfaces an error UI.
     }
@@ -129,11 +134,13 @@ export class OrderOfferStore {
       this.details = null;
       this.message = null;
     });
+    startOrderAlertSound('orderOffer');
 
     try {
       const res = await agentApi.orders.getOffer(orderId);
       runInAction(() => this.showFromResponse(res));
     } catch (error) {
+      stopOrderAlertSound('orderOffer');
       runInAction(() => {
         this.uiState = 'error';
         this.message =
@@ -150,6 +157,7 @@ export class OrderOfferStore {
     offer: OrderOfferDetails | null;
   }): void {
     if (!res.active || !res.offer) {
+      stopOrderAlertSound('orderOffer');
       this.uiState = 'unavailable';
       this.message = this.t(
         'agent.orderOffer.unavailable',
@@ -180,6 +188,7 @@ export class OrderOfferStore {
       try {
         await persona.selectPersona('agent');
       } catch {
+        stopOrderAlertSound('orderOffer');
         runInAction(() => {
           this.uiState = 'error';
           this.message = this.t(
@@ -203,6 +212,7 @@ export class OrderOfferStore {
     } catch (error) {
       const msg = error instanceof Error ? error.message : '';
       runInAction(() => {
+        stopOrderAlertSound('orderOffer');
         if (/insufficient|balance/i.test(msg)) {
           this.uiState = 'insufficientFunds';
           this.message =
@@ -240,6 +250,7 @@ export class OrderOfferStore {
   cancelIfMatches(orderId: string): void {
     if (this.lastAcceptedOrderId === orderId) return;
     if (this.visible && this.orderId === orderId) {
+      stopOrderAlertSound('orderOffer');
       runInAction(() => {
         this.uiState = 'unavailable';
         this.message = this.t(
@@ -258,6 +269,7 @@ export class OrderOfferStore {
   }
 
   dismiss(): void {
+    stopOrderAlertSound('orderOffer');
     // Remember the closed offer so app-open/foreground checks don't re-pop it.
     if (this.orderId) {
       this.lastClosedOrderId = this.orderId;
