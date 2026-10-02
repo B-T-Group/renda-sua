@@ -404,7 +404,23 @@ export class CommissionsService {
       transactionType: 'deposit',
       memo: creditMemo,
       referenceId: order.id,
+      idempotencyKey: this.commissionIdempotencyKey(
+        order.id,
+        agentAccount.id,
+        'agent',
+        unit.commissionType
+      ),
     });
+    if (credit?.success && credit.alreadyExists) {
+      // A concurrent run credited the agent first: undo any funding this run just made.
+      if (fundingTransactionId) {
+        await this.reverseWaivedFunding(order, hqAccount.id, unit.amount, reversalMemo);
+      }
+      this.logger.warn(
+        `Waived delivery agent pay already credited (idempotency key), skipping: order=${order.order_number} type=${unit.commissionType}`
+      );
+      return;
+    }
     if (!credit?.success || !credit.transactionId) {
       await this.reverseWaivedFunding(order, hqAccount.id, unit.amount, reversalMemo);
       throw new Error(
@@ -1065,7 +1081,22 @@ export class CommissionsService {
         transactionType: 'deposit',
         memo,
         referenceId: order.id,
+        // DB-enforced once-only (account_transactions_idempotency_key_key): the read
+        // above is only a fast path, this closes the read-then-insert race.
+        idempotencyKey: this.commissionIdempotencyKey(
+          order.id,
+          account.id,
+          recipientType,
+          commissionType
+        ),
       });
+
+      if (transaction?.success && transaction.alreadyExists) {
+        this.logger.warn(
+          `Commission already deposited (idempotency key), skipping: order=${order.order_number} recipient=${recipientType} type=${commissionType}`
+        );
+        return;
+      }
 
       if (!transaction?.success || !transaction.transactionId) {
         throw new Error(
@@ -1134,6 +1165,15 @@ export class CommissionsService {
       );
       throw error;
     }
+  }
+
+  private commissionIdempotencyKey(
+    orderId: string,
+    accountId: string,
+    recipientType: string,
+    commissionType: string
+  ): string {
+    return `commission:${orderId}:${accountId}:${recipientType}:${commissionType}`;
   }
 
   /** True when this account already received this order's commission deposit (same memo). */
