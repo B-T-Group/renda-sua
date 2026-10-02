@@ -47,6 +47,7 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderCleanupCronService } from './order-cleanup-cron.service';
 import { OrderSettlementRetryService } from './order-settlement-retry.service';
+import { UnpaidPayAfterSweeperService } from './unpaid-pay-after-sweeper.service';
 import { OrderCleanupInternalController } from './order-cleanup-internal.controller';
 import { OrderCleanupService } from './order-cleanup.service';
 import { StorePickupReminderCronService } from './store-pickup-reminder-cron.service';
@@ -141,6 +142,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     OrderCleanupService,
     OrderCleanupCronService,
     OrderSettlementRetryService,
+    UnpaidPayAfterSweeperService,
     StorePickupReminderService,
     StorePickupReminderCronService,
     OrderSystemJobsService,
