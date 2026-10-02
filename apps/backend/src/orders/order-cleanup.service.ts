@@ -369,7 +369,10 @@ export class OrderCleanupService {
       notes,
       historyNotes,
       false,
-      releaseInventory
+      releaseInventory,
+      // Unpaid auto-cancel must never win against a payment that landed after our
+      // pre-read (pay-after goods stay `confirmed` once paid, so status alone is not enough).
+      true
     );
     if (ok) await this.restorePurchaseCredits(order.id);
     return ok;
@@ -465,13 +468,15 @@ export class OrderCleanupService {
     notes: string,
     historyNotes: string,
     notifyViaStatusUpdated: boolean,
-    releaseInventory = true
+    releaseInventory = true,
+    requireUnpaid = false
   ): Promise<boolean> {
     const claimed = await this.claimCancelled(
       order.id,
       expectedStatus,
       reasonId,
-      notes
+      notes,
+      requireUnpaid
     );
     if (!claimed) return false;
     try {
@@ -891,12 +896,16 @@ export class OrderCleanupService {
     };
   }
 
-  /** CAS: cancel only while still in expectedStatus (payment/agent races). */
+  /**
+   * CAS: cancel only while still in expectedStatus (payment/agent races).
+   * `requireUnpaid` additionally requires payment_status != paid (unpaid auto-cancel).
+   */
   private async claimCancelled(
     orderId: string,
     expectedStatus: string,
     reasonId: number,
-    notes: string
+    notes: string,
+    requireUnpaid = false
   ): Promise<boolean> {
     const at = new Date().toISOString();
     const result = await this.hasuraSystemService.executeMutation<{
@@ -915,6 +924,14 @@ export class OrderCleanupService {
             _and: [
               { id: { _eq: $orderId } }
               { current_status: { _eq: $expectedStatus } }
+              ${
+                requireUnpaid
+                  ? `{ _or: [
+                { payment_status: { _is_null: true } }
+                { payment_status: { _neq: "paid" } }
+              ] }`
+                  : ''
+              }
             ]
           }
           _set: {

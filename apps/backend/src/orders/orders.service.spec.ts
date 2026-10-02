@@ -2904,6 +2904,135 @@ describe('OrdersService', () => {
       ).rejects.toThrow(/Insufficient funds/i);
     });
 
+    it('S-2: finalizeClientOrderPayment releases the hold and does not emit paid when a cancel won the race', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+      jest
+        .spyOn(service as any, 'markOrderPaidAfterPaymentFinalize')
+        .mockResolvedValue(false);
+      // 300 held, nothing released yet
+      jest
+        .spyOn(service as any, 'sumHoldAmountForOrder')
+        .mockImplementation(async (_a: string, _o: string, type = 'hold') =>
+          type === 'hold' ? 300 : 0
+        );
+      const emitSpy = jest
+        .spyOn(service as any, 'emitOrderPaid')
+        .mockImplementation(() => undefined);
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'confirmed',
+          payment_status: 'pending',
+          subtotal: 300,
+          total_amount: 300,
+          base_delivery_fee: 0,
+          per_km_delivery_fee: 0,
+        },
+        'account-1'
+      );
+
+      expect(emitSpy).not.toHaveBeenCalled();
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-1',
+          amount: 300,
+          transactionType: 'release',
+          referenceId: 'order-123',
+        })
+      );
+      expect(updateOrderHoldSpy).toHaveBeenLastCalledWith('hold-1', {
+        client_hold_amount: 0,
+        delivery_fees: 0,
+        status: 'cancelled',
+      });
+    });
+
+    it('S-2: paid-mark is a conditional update on a live order (never overwrites a cancel)', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+      const ok = await (service as any).markOrderPaidAfterPaymentFinalize(
+        'order-123',
+        'confirmed'
+      );
+      expect(ok).toBe(false);
+      const [mutation] = hasuraSystemService.executeMutation.mock.calls[0];
+      expect(String(mutation)).toContain('current_status: { _nin: [cancelled, failed, refunded] }');
+    });
+
+    it('S-2: pending_payment -> pending+paid is CAS on pending_payment and reports a lost race', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+      const ok = await (service as any).markOrderPaidAfterPaymentFinalize(
+        'order-123',
+        'pending_payment'
+      );
+      expect(ok).toBe(false);
+      const [mutation] = hasuraSystemService.executeMutation.mock.calls[0];
+      expect(String(mutation)).toContain('current_status: { _eq: pending_payment }');
+    });
+
+    it('S-3: the global kill switch is read without a null country filter and honours a true row', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        application_configurations: [{ boolean_value: true }],
+      });
+      const on = await (service as any).isPayAfterLocationFlagEnabled();
+      expect(on).toBe(true);
+      const [query, vars] = hasuraSystemService.executeQuery.mock.calls[0];
+      expect(String(query)).not.toContain('$countryCode');
+      expect(vars).toEqual({ configKey: 'pay_after_confirm_location_flag_enabled' });
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        application_configurations: [],
+      });
+      expect(await (service as any).isPayAfterLocationFlagEnabled()).toBe(false);
+      hasuraSystemService.executeQuery.mockRejectedValue(new Error('boom'));
+      expect(await (service as any).isPayAfterLocationFlagEnabled()).toBe(false);
+    });
+
+    it('S-6: concurrent pay-after MoMo initiations send only one prompt', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const once = jest
+        .spyOn(service as any, 'initiateCookedFoodMomoAfterConfirmOnce')
+        .mockImplementation(async () => {
+          await gate;
+        });
+      const order = { id: 'order-123', order_number: 'ORD-1' };
+      const a = (service as any).initiateCookedFoodMomoAfterConfirm(order, 'order-123');
+      const b = (service as any).initiateCookedFoodMomoAfterConfirm(order, 'order-123');
+      release();
+      await Promise.all([a, b]);
+      expect(once).toHaveBeenCalledTimes(1);
+      // and the guard is cleared afterwards
+      await (service as any).initiateCookedFoodMomoAfterConfirm(order, 'order-123');
+      expect(once).toHaveBeenCalledTimes(2);
+    });
+
+    it('S-11: any scheduled window (slot or preferred date) is rejected for cooked food', () => {
+      const inv = [{ item: { is_cooked_food: true } }];
+      expect(() =>
+        (service as any).assertCookedFoodAsapOnly(inv, {
+          preferred_date: '2026-10-05',
+        })
+      ).toThrow();
+      expect(() =>
+        (service as any).assertCookedFoodAsapOnly(inv, { slot_id: 's1' })
+      ).toThrow();
+      expect(() =>
+        (service as any).assertCookedFoodAsapOnly(inv, null)
+      ).not.toThrow();
+    });
+
     it('processClaimOrderPayment reverts assignment when the agent hold fails', async () => {
       accountsService.registerTransaction.mockResolvedValue({
         success: false,
@@ -3384,7 +3513,9 @@ describe('OrdersService', () => {
       );
 
       expect(statusAndPaymentSpy).not.toHaveBeenCalled();
-      expect(paymentOnlySpy).toHaveBeenCalledWith('order-123', 'paid');
+      expect(paymentOnlySpy).toHaveBeenCalledWith('order-123', 'paid', {
+        liveOnly: true,
+      });
 
       statusAndPaymentSpy.mockRestore();
       paymentOnlySpy.mockRestore();
