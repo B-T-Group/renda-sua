@@ -947,6 +947,18 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   sx={{ height: 20, fontSize: '0.65rem' }}
                 />
               ) : null}
+              {inventory.pay_after_confirm_badge === true ? (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color="info"
+                  label={t(
+                    'catalog.payAfterConfirmBadge',
+                    'Pay after the store confirms'
+                  )}
+                  sx={{ height: 20, fontSize: '0.65rem' }}
+                />
+              ) : null}
               {!inventory.business_location.name?.trim() && (
                 <Typography
                   variant="caption"

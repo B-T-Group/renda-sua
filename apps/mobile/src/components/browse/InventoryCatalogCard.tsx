@@ -589,6 +589,16 @@ function InventoryCatalogCardInner({
             {businessLine}
           </Text>
         </Pressable>
+        {item.pay_after_confirm_badge === true ? (
+          <StatusPill
+            label={t('catalog.payAfterConfirmBadge', 'Pay after the store confirms')}
+            backgroundColor={colors.info.light + '30'}
+            textColor={colors.info.dark}
+            icon="clock-check-outline"
+            compact
+            style={{ marginTop: spacing.xs }}
+          />
+        ) : null}
         {item.distance_text ? (
           <View style={[styles.distanceRow, { marginTop: 2 }]}>
             <MaterialCommunityIcons
