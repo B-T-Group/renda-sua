@@ -100,6 +100,9 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const { profile } = useUserProfileContext();
+  // Only the business owner (not a platform admin viewing another business) may toggle it.
+  const isOwnBusiness =
+    !businessId || !profile?.business?.id || businessId === profile.business.id;
   const isEditing = !!location;
   const effectiveCountry = isEditing
     ? location?.address?.country
@@ -126,6 +129,9 @@ const LocationModal: React.FC<LocationModalProps> = ({
     auto_withdraw_commissions: true,
     logo_url: '',
   });
+
+  // Owner-only toggle (see PATCH business-items/locations/:id); edit mode only.
+  const [payAtConfirm, setPayAtConfirm] = useState(false);
 
   const [addressData, setAddressData] = useState<AddressFormData>({
     address_line_1: '',
@@ -162,6 +168,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         auto_withdraw_commissions: location.auto_withdraw_commissions !== false,
         logo_url: location.logo_url ?? '',
       });
+      setPayAtConfirm(location.pay_at_confirm === true);
       setOperatingHours(operatingHoursToEditorValue(location.operating_hours));
 
       void (async () => {
@@ -194,6 +201,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
         auto_withdraw_commissions: true,
         logo_url: '',
       });
+      setPayAtConfirm(false);
       setOperatingHours(operatingHoursToEditorValue(DEFAULT_OPERATING_HOURS));
 
       setAddressData({
@@ -265,7 +273,8 @@ const LocationModal: React.FC<LocationModalProps> = ({
   const handleSave = async () => {
     if (!formData.name.trim()) return;
 
-    const payload = {
+    // pay_at_confirm is owner-only and edit-only (the API ignores it on create).
+    const payload: any = {
       ...formData,
       order_alert_phone: formData.order_alert_phone?.trim()
         ? formData.order_alert_phone.trim()
@@ -275,6 +284,10 @@ const LocationModal: React.FC<LocationModalProps> = ({
     };
     if (isStripeRail) {
       payload.auto_withdraw_commissions = false;
+    }
+
+    if (isEditing && !isStripeRail && isOwnBusiness) {
+      payload.pay_at_confirm = payAtConfirm;
     }
 
     if (isEditing) {
@@ -628,6 +641,34 @@ const LocationModal: React.FC<LocationModalProps> = ({
                   )}
                 </Typography>
               </>
+            )}
+
+            {isEditing && !isStripeRail && isOwnBusiness && (
+              <Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={payAtConfirm}
+                      onChange={(e) => setPayAtConfirm(e.target.checked)}
+                      inputProps={{ 'aria-label': 'pay-at-confirm' }}
+                    />
+                  }
+                  label={t(
+                    'business.locations.payAtConfirm',
+                    'Ask customers to pay only after the store confirms the order.'
+                  )}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                >
+                  {t(
+                    'business.locations.payAtConfirmHint',
+                    'Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after about 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.'
+                  )}
+                </Typography>
+              </Box>
             )}
 
             {/* Commission is now managed by Business Account Type — not editable per-location */}
