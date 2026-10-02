@@ -122,7 +122,7 @@ const PayByLine: React.FC<{
         <Typography variant="body2" color="error.main" fontWeight={600}>
           {t(
             'orders.payAfterConfirm.payByExpired',
-            'The payment window has ended. The order was cancelled and you were not charged.'
+            'The payment window has ended. This order will be cancelled automatically and you will not be charged.'
           )}
         </Typography>
       </Stack>
