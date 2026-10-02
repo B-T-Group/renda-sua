@@ -456,6 +456,12 @@ export class CheckoutGroupDto {
       'True when every line is cooked food on the mobile-money rail — no deposit; pay after kitchen confirm.',
   })
   pay_after_merchant_confirm_eligible?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when every line in this group is cooked food. Clients use it to pick kitchen vs store wording for pay-after copy.',
+  })
+  all_cooked_food?: boolean;
 }
 
 export class PayerChargeEstimateDto {

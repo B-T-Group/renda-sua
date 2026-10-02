@@ -2,6 +2,7 @@ import React from 'react';
 import { Chip, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
+import { payAfterPayByDeadline } from '../../utils/payAfterConfirm';
 import {
   resolveOrderPhase,
   orderToPhaseInput,
@@ -26,6 +27,13 @@ interface Props {
     payment_method?: string | null;
     assigned_agent_id?: string | null;
     reconciliation_status?: string | null;
+    is_cooked_food_pickup?: boolean | null;
+    pay_after_merchant_confirm?: boolean | null;
+    order_items?: Array<{
+      is_cooked_food?: boolean | null;
+      item?: { is_cooked_food?: boolean | null } | null;
+    }> | null;
+    order_status_history?: Array<{ status?: string | null; created_at: string }> | null;
   };
   role: OrderPhaseRole;
   action?: React.ReactNode;
@@ -35,6 +43,7 @@ export const OrderPhaseBanner: React.FC<Props> = ({ order, role, action }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const info = resolveOrderPhase(orderToPhaseInput(order), role);
+  const payByDeadline = role === 'client' ? payAfterPayByDeadline(order) : null;
 
   // Complete orders already show status elsewhere; the next-step alert adds noise.
   if (order.current_status === 'complete') {
@@ -68,6 +77,18 @@ export const OrderPhaseBanner: React.FC<Props> = ({ order, role, action }) => {
       {info.nextStepKey ? (
         <Typography variant="body2" color="text.primary">
           {t(info.nextStepKey, '')}
+        </Typography>
+      ) : null}
+      {payByDeadline ? (
+        <Typography variant="caption" color="text.secondary">
+          {t('orders.payAfterConfirm.payBy', {
+            defaultValue:
+              'Pay by {{time}} or the order is cancelled automatically.',
+            time: payByDeadline.toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          })}
         </Typography>
       ) : null}
       {action}

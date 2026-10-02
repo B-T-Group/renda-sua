@@ -4867,7 +4867,8 @@
       "confirmPickupBodyAuthorized": "Confirmez que le client a retiré cette commande. Le paiement par carte autorisé sera débité et la commande marquée comme terminée.",
       "confirmPickupBodyPaid": "Confirmez que le client a retiré cette commande. La commande sera marquée comme terminée.",
       "confirmPickupSuccess": "Retrait confirmé. La commande est terminée.",
-      "confirmPickupError": "Impossible de confirmer le retrait"
+      "confirmPickupError": "Impossible de confirmer le retrait",
+      "storePayAfterConfirmHint": "Après confirmation du magasin, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Approuvez-la dans les 45 minutes environ, sinon la commande est annulée automatiquement."
     },
     "payAtPickup": {
       "title": "Payer au retrait",
@@ -5466,7 +5467,8 @@
       "timeSlot": "Créneau horaire",
       "slotName": "Créneau",
       "confirmedAt": "Confirmé à",
-      "confirmedBy": "Confirmé par"
+      "confirmedBy": "Confirmé par",
+      "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer."
     },
     "failDelivery": {
       "title": "Marquer la livraison comme échouée",
@@ -5828,7 +5830,10 @@
       "refundRequested": "Une demande de remboursement nécessite votre attention.",
       "readyPickupCompleteClient": "La commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
       "readyPickupCompleteOrderClient": "Votre commande est prête. Appuyez sur Terminer la commande à la collecte pour payer le commerçant.",
-      "readyPickupAskClientCompleteBusiness": "Demandez au client d'appuyer sur Terminer la commande dans l'app pour que vous soyez payé (et la commission)."
+      "readyPickupAskClientCompleteBusiness": "Demandez au client d'appuyer sur Terminer la commande dans l'app pour que vous soyez payé (et la commission).",
+      "payAfterWaitPaymentBusiness": "En attente du paiement du client (les commandes impayées sont annulées automatiquement après environ 45 minutes). Ne préparez pas la commande avant la réussite du paiement.",
+      "payAfterWaitPaymentClient": "Approuvez la demande de paiement sur votre téléphone dans les 45 minutes environ pour que le magasin puisse préparer votre commande.",
+      "payAfterPaidMarkReadyBusiness": "Payée — marquez la commande prête une fois préparée."
     },
     "pickupSla": {
       "pausedTitle": "Suivi de collecte en pause",
@@ -5869,6 +5874,15 @@
       "failed": "Impossible de commander à nouveau. Réessayez.",
       "businessClosedBanner": "Ce magasin n’accepte pas les commandes pour le moment. Vous pouvez garder ces articles dans votre panier et réessayer plus tard.",
       "addressInvalidBanner": "Votre adresse de livraison précédente n’est plus valide. Choisissez une adresse au paiement."
+    },
+    "payAfterConfirm": {
+      "chip": "Paiement après confirmation du magasin",
+      "title": "Paiement après confirmation du magasin",
+      "bodyPickup": "Après confirmation du magasin, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Approuvez-la dans les 45 minutes environ, puis récupérez votre commande lorsqu’elle est prête.",
+      "bodyDelivery": "Après confirmation du magasin, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Approuvez-la dans les 45 minutes environ et le magasin préparera votre commande pour la livraison.",
+      "step1": "Votre commande a été envoyée au magasin.",
+      "step2": "Lorsque le magasin confirme, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Approuvez-la dans les 45 minutes environ pour qu’ils puissent préparer votre commande.",
+      "payBy": "Payez avant {{time}} sinon la commande est annulée automatiquement."
     }
   },
   "items": {
