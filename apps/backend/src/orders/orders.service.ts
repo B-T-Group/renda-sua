@@ -143,7 +143,12 @@ import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
-import { resolvePayAfterConfirm } from '../food/pay-after-confirm.util';
+import {
+  anyLocationPayAtConfirm,
+  PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
+  resolvePayAfterConfirm,
+  resolvePayAfterConfirmReason,
+} from '../food/pay-after-confirm.util';
 import {
   isCookedFoodOrderSnapshot,
   isCookedFoodPickupOrder,
@@ -1657,6 +1662,7 @@ export class OrdersService {
     // Ready-in / prep minutes are cooked-food-only (line snapshots).
     const isCookedFoodAsapReadyIn =
       this.cookedFoodPickupFlow.isCookedFoodAsapReadyInCohort(order as any) &&
+      isCookedFoodOrderSnapshot(order as any) &&
       isAsapConfirm;
     // Payment initiation depends ONLY on the order snapshot, never on the cooked
     // ready-in cohort or on what the confirming UI sent (old apps, WhatsApp, batch).
@@ -1742,8 +1748,10 @@ export class OrdersService {
     }
 
     if (payAfterConfirm) {
-      // Pay-after order outside the cooked ready-in cohort: payment was requested above;
-      // schedule the unpaid-cancel timer (or finalize if already paid).
+      // Pay-after order outside the cooked ready-in cohort (e.g. flagged non-cooked
+      // goods): payment was requested above; schedule the unpaid-cancel timer (45 min
+      // for stock-tracked goods) or finalize if already paid. No prep minutes, no
+      // auto-prepare: the merchant marks the order ready once it is paid.
       const payAfterResult = await this.afterCookedFoodPayAfterConfirm(
         request.orderId
       );
@@ -1826,7 +1834,10 @@ export class OrdersService {
         payAfterConfirm: false,
       };
     }
-    await this.cookedFoodPickupFlow.scheduleUnpaidCancelAfterConfirm(orderId);
+    await this.cookedFoodPickupFlow.scheduleUnpaidCancelAfterConfirm(
+      orderId,
+      { stockTrackedGoods: !isCookedFoodOrderSnapshot((fresh ?? {}) as any) }
+    );
     return {
       message:
         'Order confirmed. Payment request sent to the client. Start preparing after they pay.',
@@ -4556,7 +4567,18 @@ export class OrdersService {
     if (afterPay.current_status !== 'confirmed') return;
     // Auto-prepare / auto-mark-ready are kitchen behaviours: keyed on the cooked
     // line snapshots, not on pay_after_merchant_confirm.
-    if (!isCookedFoodOrderSnapshot(afterPay as any)) return;
+    if (!isCookedFoodOrderSnapshot(afterPay as any)) {
+      // Non-cooked goods stay `confirmed` after payment; the merchant marks ready.
+      // Start the (WhatsApp) mark-ready reminder clock now that the order is paid.
+      void this.orderMarkReadyService.scheduleAfterConfirm({
+        id: orderId,
+        business_id: (afterPay as any).business_id,
+        fulfillment_method: (afterPay as any).fulfillment_method,
+        fulfillment_timing: (afterPay as any).fulfillment_timing,
+        delivery_time_windows: (afterPay as any).delivery_time_windows,
+      });
+      return;
+    }
 
     await this.orderStatusService.updateOrderStatus(orderId, 'preparing', {
       viaSystem: true,
@@ -10312,18 +10334,26 @@ export class OrdersService {
    * @param countryCode - Optional country code for country-specific config
    * @returns true if enabled, false otherwise (default false)
    */
+  /**
+   * Kill switch for business_locations.pay_at_confirm (global row, default false).
+   * Fail closed: any read error means the location flag is ignored for new orders.
+   */
+  private async isPayAfterLocationFlagEnabled(): Promise<boolean> {
+    return this.isMarketFlagEnabled(PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY, null);
+  }
+
   private async isMarketFlagEnabled(
     configKey: string,
     countryCode?: string | null
   ): Promise<boolean> {
     try {
       const query = `
-        query GetMarketFlag($configKey: String!, $countryCode: String) {
+        query GetMarketFlag($configKey: String!${countryCode ? ', $countryCode: String!' : ''}) {
           application_configurations(
             where: {
               config_key: { _eq: $configKey }
               _or: [
-                { country_code: { _eq: $countryCode } }
+                ${countryCode ? '{ country_code: { _eq: $countryCode } }' : ''}
                 { country_code: { _is_null: true } }
               ]
             }
@@ -10334,10 +10364,12 @@ export class OrdersService {
           }
         }
       `;
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        configKey,
-        countryCode: countryCode || null,
-      });
+      // Never send `_eq: null` (Hasura v2 rejects it, which would make a global-only flag
+      // such as the pay_at_confirm kill switch always read as off): omit the country filter.
+      const result = await this.hasuraSystemService.executeQuery(
+        query,
+        countryCode ? { configKey, countryCode } : { configKey }
+      );
       const configs = (result as any).application_configurations || [];
       if (configs.length === 0) {
         return false; // Default to false if config not found
@@ -11083,6 +11115,7 @@ export class OrdersService {
           business_location {
             business_id
             is_active
+            pay_at_confirm
             operating_hours
             mobile_payment_phone {
               is_verified
@@ -11409,10 +11442,22 @@ export class OrdersService {
       fulfillmentMethod,
       itemFlags: itemCookedFlags,
     });
+    // Per-location "pay at confirm": ANY line from a flagged location (kill switch on)
+    // makes the whole order a pay-after candidate. Decided once, here, from ALL lines;
+    // after create only the order snapshot is read (never the location).
+    const locationPayAtConfirm =
+      anyLocationPayAtConfirm(businessInventories) &&
+      (await this.isPayAfterLocationFlagEnabled());
 
     // Classic PAD requires pay_on_delivery_enabled. Cooked-food orders never
     // use classic PAD deposits — pay-after or pay_now / pay_at_pickup only.
-    if (paymentTiming === 'pay_at_delivery' && !cookedFoodFulfillment) {
+    // Flagged locations skip this here: the check is re-applied below only if the order
+    // does NOT end up pay-after (e.g. Stripe rail), so the flag never loosens PAD there.
+    if (
+      paymentTiming === 'pay_at_delivery' &&
+      !cookedFoodFulfillment &&
+      !locationPayAtConfirm
+    ) {
       const anyNotEligible = businessInventories.some(
         (inv) => inv?.item?.pay_on_delivery_enabled !== true
       );
@@ -11658,6 +11703,31 @@ export class OrdersService {
       paymentTiming,
     });
 
+    // ASAP only in v1: a scheduled window cannot be combined with pay-after-confirm.
+    // Same predicate as preflight `schedule_allowed=false` (wallet/zero unknown there).
+    if (
+      orderData.delivery_window?.slot_id?.trim() &&
+      resolvePayAfterConfirmReason({
+        lines: itemCookedFlags,
+        fulfillment: fulfillmentMethod,
+        rail: railResolution.rail,
+        canPayWithWallet: false,
+        isZeroOrder: false,
+        isDiaspora: railResolution.isDiaspora,
+        locationPayAtConfirm,
+      }) === 'location_flag'
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'PAY_AFTER_CONFIRM_ASAP_ONLY',
+          message:
+            'This store asks you to pay after it confirms your order, so scheduled orders are not available. Please order for as soon as possible.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
     // Block MoMo pay_now + delivery when flag is false (default).
     // Cooked-food MoMo pay-after also stores pay_now but is not classic pay-now.
@@ -11665,7 +11735,10 @@ export class OrdersService {
       paymentTiming === 'pay_now' &&
       fulfillmentMethod === 'delivery' &&
       railResolution.rail === 'mobile_money' &&
-      !cookedFoodFulfillment
+      !cookedFoodFulfillment &&
+      // Flagged location: MoMo payment before delivery is OK even where the market
+      // flag is off (locked decision). Diaspora payers are card-only (no-op).
+      !(locationPayAtConfirm && !railResolution.isDiaspora)
     ) {
       const momoPayNowDeliveryEnabled =
         await this.isMarketFlagEnabled(
@@ -11710,6 +11783,22 @@ export class OrdersService {
         `Account balance is negative. Please top up your account before placing orders. Current balance: ${availableBalance} ${currency}`,
         HttpStatus.FORBIDDEN
       );
+    }
+
+    // Locked decision: wallet-covered clients pay immediately from the wallet, so a
+    // flagged-location order never waits for confirm when the wallet covers the total.
+    // Cooked-food orders keep their existing behaviour (wallet used at confirm).
+    if (
+      locationPayAtConfirm &&
+      !cookedFoodFulfillment &&
+      paymentTiming !== 'pay_now' &&
+      !railResolution.isDiaspora &&
+      railResolution.rail === 'mobile_money' &&
+      (fulfillmentMethod === 'pickup' || fulfillmentMethod === 'delivery') &&
+      !isZeroOrNegativeOrder &&
+      availableBalance >= requiredAmountForHold
+    ) {
+      paymentTiming = 'pay_now';
     }
 
     const canPayWithWallet =
@@ -11777,6 +11866,8 @@ export class OrdersService {
       rail: railResolution.rail,
       canPayWithWallet,
       isZeroOrder: isZeroOrNegativeOrder,
+      isDiaspora: railResolution.isDiaspora,
+      locationPayAtConfirm,
     });
 
     // Persist prepaid timing for delivery pay-after so agents get Complete+PIN
@@ -11788,7 +11879,7 @@ export class OrdersService {
 
     if (
       paymentTiming === 'pay_at_delivery' &&
-      cookedFoodFulfillment &&
+      (cookedFoodFulfillment || locationPayAtConfirm) &&
       !payAfterMerchantConfirm
     ) {
       const anyNotEligible = businessInventories.some(
@@ -12735,6 +12826,8 @@ export class OrdersService {
       delivery_window: deliveryWindow,
       payment_source: 'mobile_money' as const,
       payment_rail: 'mobile_money' as const,
+      // Clients navigate on this resolved flag, not on a possibly stale preflight.
+      pay_after_merchant_confirm: true,
       payment_transaction: {
         success: true,
         transaction_id: null,

@@ -176,6 +176,11 @@ export class BusinessItemsController {
           nullable: true,
           description: 'Public URL for the location logo (S3 or external). Empty clears.',
         },
+        pay_at_confirm: {
+          type: 'boolean',
+          description:
+            'Owner-only. When true (and the server kill switch is on), clients pay AFTER the store confirms (MoMo pickup/delivery, ASAP). Default false.',
+        },
       },
     },
   })
@@ -194,9 +199,19 @@ export class BusinessItemsController {
       is_primary?: boolean;
       auto_withdraw_commissions?: boolean;
       logo_url?: string | null;
+      pay_at_confirm?: boolean;
     }
   ) {
     const ctx = await this.accessService.resolveAccess(businessId);
+    if (body?.pay_at_confirm !== undefined) {
+      this.accessService.assertOwnBusiness(ctx, 'pay_at_confirm');
+      if (typeof body.pay_at_confirm !== 'boolean') {
+        throw new HttpException(
+          { success: false, error: 'pay_at_confirm must be a boolean' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
     const location = await this.businessItemsService.updateBusinessLocation(
       ctx.targetBusinessId,
       locationId,

@@ -1407,6 +1407,146 @@ describe('CheckoutPreflightService', () => {
   // -------------------------------------------------------------------------
   // MoMo deposit quote on preflight
   // -------------------------------------------------------------------------
+  describe('per-location pay_at_confirm (flagged non-cooked goods)', () => {
+    function flaggedRow(flag: boolean) {
+      const row = makeInventoryRow({
+        id: 'inv-1',
+        sellerCountry: 'CM',
+        currency: 'XAF',
+        price: 10000,
+        payOnDelivery: false,
+        payAtPickup: true,
+        initialDepositEnabled: true,
+        initialDepositPercent: 5,
+      });
+      (row.business_location as any).pay_at_confirm = flag;
+      return row;
+    }
+
+    function mockFlags(flags: Record<string, boolean>, rows: any[]) {
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string, vars: any) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({ business_inventory: rows });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [
+                { boolean_value: flags[vars.configKey] === true },
+              ],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({
+              supported_payment_systems: [{ country: 'CA' }],
+            });
+          }
+          return Promise.resolve({});
+        }
+      );
+    }
+
+    const KILL = 'pay_after_confirm_location_flag_enabled';
+    const deliveryDto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      provisional_country: 'CM',
+      payment_timing: 'pay_now',
+    };
+
+    it('kill switch ON + flagged location: pay-after eligible, ASAP only, no deposit, pay_now advertised where MoMo pay-now delivery is off', async () => {
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [
+        flaggedRow(true),
+      ]);
+      const result = await service.resolve(deliveryDto, false);
+
+      expect(result.can_proceed).toBe(true);
+      const group = result.groups[0];
+      expect(group.pay_after_merchant_confirm_eligible).toBe(true);
+      expect(group.allowed_payment_timings).toContain('pay_now');
+      expect(group.schedule_allowed).toBe(false);
+      expect(group.schedule_required).toBe(false);
+      expect(group.requires_payment_phone).toBe(true);
+      expect(group.deposit_required).toBeUndefined();
+      expect(result.pay_after_merchant_confirm_eligible).toBe(true);
+      expect(result.schedule_allowed).toBe(false);
+    });
+
+    it('flagged ASAP pickup is pay-after with no deposit', async () => {
+      mockFlags({ [KILL]: true }, [flaggedRow(true)]);
+      const result = await service.resolve(
+        { ...deliveryDto, fulfillment_method: 'pickup', payment_timing: 'pay_at_pickup' },
+        false
+      );
+      expect(result.groups[0].pay_after_merchant_confirm_eligible).toBe(true);
+      expect(result.groups[0].deposit_required).toBeUndefined();
+    });
+
+    it('reads the global kill switch without sending a null country filter (Hasura v2 rejects `_eq: null`)', async () => {
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [
+        flaggedRow(true),
+      ]);
+      await service.resolve(deliveryDto, false);
+      const killCall = (hasuraSystemService.executeQuery as jest.Mock).mock.calls.find(
+        ([q, v]: [string, any]) =>
+          q.includes('GetMarketFlag') && v?.configKey === KILL
+      );
+      expect(killCall).toBeDefined();
+      expect(killCall[0]).not.toContain('$countryCode');
+      expect(killCall[1]).not.toHaveProperty('countryCode');
+    });
+
+    it('kill switch OFF: the location column is ignored (today\'s behaviour)', async () => {
+      mockFlags({ [KILL]: false, momo_pay_now_delivery_enabled: false }, [
+        flaggedRow(true),
+      ]);
+      const result = await service.resolve(deliveryDto, false);
+      const group = result.groups[0];
+      expect(group.pay_after_merchant_confirm_eligible).toBe(false);
+      expect(group.allowed_payment_timings).not.toContain('pay_now');
+      expect(group.schedule_allowed).toBe(true);
+    });
+
+    it('unflagged location with kill switch ON is unchanged', async () => {
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [
+        flaggedRow(false),
+      ]);
+      const result = await service.resolve(deliveryDto, false);
+      expect(result.groups[0].pay_after_merchant_confirm_eligible).toBe(false);
+      expect(result.groups[0].schedule_allowed).toBe(true);
+    });
+
+    it('Stripe-rail seller: the flag is a no-op', async () => {
+      const row = makeInventoryRow({
+        id: 'inv-1',
+        sellerCountry: 'CA',
+        currency: 'CAD',
+      });
+      (row.business_location as any).pay_at_confirm = true;
+      mockFlags({ [KILL]: true }, [row]);
+      (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
+      (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
+      const result = await service.resolve(
+        { ...deliveryDto, provisional_country: 'CA' },
+        false
+      );
+      expect(result.groups[0].pay_after_merchant_confirm_eligible).toBe(false);
+      expect(result.groups[0].schedule_allowed).toBe(true);
+    });
+
+    it('carrier shipping is never pay-after', async () => {
+      const row = flaggedRow(true);
+      (row.item as any).shipping_enabled = true;
+      (row.item as any).shipping_price = 500;
+      (row.item as any).shipping_currency = 'XAF';
+      mockFlags({ [KILL]: true }, [row]);
+      const result = await service.resolve(
+        { ...deliveryDto, fulfillment_method: 'shipping' } as any,
+        false
+      );
+      expect(result.groups[0].pay_after_merchant_confirm_eligible).toBe(false);
+    });
+  });
+
   describe('MoMo deposit quote', () => {
     beforeEach(() => {
       // Mock the market flag query for deposit tests

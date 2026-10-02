@@ -338,4 +338,35 @@ describe('CookedFoodPickupFlowService', () => {
       1
     );
   });
+
+  it('cooked food keeps the hours-long unpaid window; stock-tracked goods use 45 minutes', async () => {
+    const { service, wait } = makeService({ hours: 3 });
+    (service as any).configService.get.mockReturnValue({
+      cookedFoodUnpaidCancelHours: 3,
+      payAfterGoodsUnpaidCancelMinutes: 45,
+    });
+    expect(service.unpaidCancelSeconds()).toBe(3 * 3600);
+    expect(service.unpaidCancelSeconds({ stockTrackedGoods: true })).toBe(45 * 60);
+
+    await service.scheduleUnpaidCancelAfterConfirm('goods-1', {
+      stockTrackedGoods: true,
+    });
+    expect(wait.scheduleAcceptanceTimeout).toHaveBeenCalledWith(
+      'order.cooked_food_unpaid_cancel',
+      { order_id: 'goods-1' },
+      45 * 60
+    );
+    await service.scheduleUnpaidCancelAfterConfirm('cooked-1');
+    expect(wait.scheduleAcceptanceTimeout).toHaveBeenLastCalledWith(
+      'order.cooked_food_unpaid_cancel',
+      { order_id: 'cooked-1' },
+      3 * 3600
+    );
+  });
+
+  it('defaults the goods window to 45 minutes when unconfigured', () => {
+    const { service } = makeService();
+    (service as any).configService.get.mockReturnValue(undefined);
+    expect(service.unpaidCancelSeconds({ stockTrackedGoods: true })).toBe(45 * 60);
+  });
 });

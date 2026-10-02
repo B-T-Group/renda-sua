@@ -1180,6 +1180,7 @@ export class BusinessItemsService {
       is_primary?: boolean;
       auto_withdraw_commissions?: boolean;
       logo_url?: string | null;
+      pay_at_confirm?: boolean;
     }
   ): Promise<any> {
     const query = `
@@ -1231,6 +1232,7 @@ export class BusinessItemsService {
           mobile_payment_phone_id
           email
           auto_withdraw_commissions
+          pay_at_confirm
           logo_url
           location_type
           is_active

@@ -1,5 +1,6 @@
 import { isCookedFoodOrderSnapshot } from './cooked-food-flag.util';
 import {
+  anyLocationPayAtConfirm,
   resolvePayAfterConfirm,
   resolvePayAfterConfirmReason,
 } from './pay-after-confirm.util';
@@ -15,7 +16,7 @@ const base = {
   isZeroOrder: false,
 };
 
-describe('resolvePayAfterConfirm (cooked reason only)', () => {
+describe('resolvePayAfterConfirm (cooked reason)', () => {
   it('cooked MoMo pickup and delivery are pay-after', () => {
     expect(resolvePayAfterConfirmReason(base)).toBe('cooked_food');
     expect(
@@ -23,7 +24,7 @@ describe('resolvePayAfterConfirm (cooked reason only)', () => {
     ).toBe(true);
   });
 
-  it('non-cooked goods are never pay-after in phase 1', () => {
+  it('non-cooked goods are not pay-after without the location flag', () => {
     expect(resolvePayAfterConfirm({ ...base, lines: [goods] })).toBe(false);
   });
 
@@ -110,5 +111,80 @@ describe('isCookedFoodOrderSnapshot', () => {
         order_items: [],
       })
     ).toBe(true);
+  });
+});
+
+describe('resolvePayAfterConfirm (location_flag reason)', () => {
+  const flagged = { ...base, lines: [goods], locationPayAtConfirm: true };
+
+  it('flagged location makes non-cooked pickup and delivery pay-after', () => {
+    expect(resolvePayAfterConfirmReason(flagged)).toBe('location_flag');
+    expect(
+      resolvePayAfterConfirmReason({ ...flagged, fulfillment: 'pickup' })
+    ).toBe('location_flag');
+  });
+
+  it('mixed cooked + non-cooked lines in a flagged cart are pay-after', () => {
+    expect(
+      resolvePayAfterConfirmReason({ ...flagged, lines: [cooked, goods] })
+    ).toBe('location_flag');
+  });
+
+  it('cooked reason wins when every line is cooked', () => {
+    expect(
+      resolvePayAfterConfirmReason({ ...flagged, lines: [cooked] })
+    ).toBe('cooked_food');
+  });
+
+  it('is not pay-after when the flag/kill switch is off', () => {
+    expect(
+      resolvePayAfterConfirm({ ...flagged, locationPayAtConfirm: false })
+    ).toBe(false);
+    expect(
+      resolvePayAfterConfirm({ ...flagged, locationPayAtConfirm: undefined })
+    ).toBe(false);
+  });
+
+  it('wallet-covered clients still pay immediately', () => {
+    expect(resolvePayAfterConfirm({ ...flagged, canPayWithWallet: true })).toBe(
+      false
+    );
+  });
+
+  it('zero orders, stripe rail and diaspora payers are a no-op', () => {
+    expect(resolvePayAfterConfirm({ ...flagged, isZeroOrder: true })).toBe(false);
+    expect(resolvePayAfterConfirm({ ...flagged, rail: 'stripe' })).toBe(false);
+    expect(resolvePayAfterConfirm({ ...flagged, isDiaspora: true })).toBe(false);
+  });
+
+  it.each(['shipping', null, undefined, 'rental'])(
+    'fulfilment %s never qualifies even when flagged',
+    (fulfillment) => {
+      expect(
+        resolvePayAfterConfirm({ ...flagged, fulfillment: fulfillment as any })
+      ).toBe(false);
+    }
+  );
+});
+
+describe('anyLocationPayAtConfirm', () => {
+  it('is true when ANY line location is flagged', () => {
+    expect(
+      anyLocationPayAtConfirm([
+        { business_location: { pay_at_confirm: false } },
+        { business_location: { pay_at_confirm: true } },
+      ])
+    ).toBe(true);
+  });
+
+  it('is false for unflagged, null or missing locations', () => {
+    expect(
+      anyLocationPayAtConfirm([
+        { business_location: { pay_at_confirm: false } },
+        { business_location: null },
+        {},
+      ])
+    ).toBe(false);
+    expect(anyLocationPayAtConfirm([])).toBe(false);
   });
 });
