@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
 import {
@@ -33,6 +33,7 @@ const BusinessLocationSettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { locationId } = useParams();
+  const [searchParams] = useSearchParams();
   const { profile } = useUserProfileContext();
   const { isViewingOtherBusiness } = useBusinessCatalogScope();
   const { isStripeRail, loading: railLoading } = useIsStripeRail();
@@ -94,7 +95,10 @@ const BusinessLocationSettingsPage: React.FC = () => {
     .join(', ');
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 2, md: 4 }, maxWidth: 720 }}>
+    <Container
+      maxWidth="md"
+      sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, md: 4 }, maxWidth: 760 }}
+    >
       <SEOHead
         title={location.name}
         description={t(
@@ -110,11 +114,23 @@ const BusinessLocationSettingsPage: React.FC = () => {
       >
         {t('business.locations.title', 'Locations')}
       </Button>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Typography variant="h5" component="h1">
-          {location.name}
-          {address ? ` · ${address}` : ''}
-        </Typography>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        justifyContent="space-between"
+        alignItems={{ sm: 'center' }}
+        sx={{ mb: 2 }}
+      >
+        <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+          <Typography variant="h5" component="h1" sx={{ overflowWrap: 'anywhere' }}>
+            {location.name}
+          </Typography>
+          {address ? (
+            <Typography variant="body2" color="text.secondary">
+              {address}
+            </Typography>
+          ) : null}
+        </Stack>
         <Button variant="text" onClick={actions.onManageItems}>
           {t('business.locations.manageItems', 'Manage items')}
         </Button>
@@ -132,7 +148,10 @@ const BusinessLocationSettingsPage: React.FC = () => {
             })
           }
         />
-        <OpenClosedSection {...actions} />
+        <OpenClosedSection
+          {...actions}
+          startEditing={searchParams.get('edit') === 'hours'}
+        />
         <GettingPaidSection {...actions} updateLocation={update} />
         <HowCustomersPaySection {...actions} updateLocation={update} />
         <OrderAlertsSection {...actions} updateLocation={update} />

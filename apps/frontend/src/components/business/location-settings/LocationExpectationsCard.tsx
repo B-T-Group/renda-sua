@@ -35,11 +35,12 @@ const LocationExpectationsCard: React.FC<LocationExpectationsCardProps> = ({
           )}
         </Typography>
       </Stack>
-      <Stack spacing={1}>
+      <Stack spacing={1.5}>
         {result.lines.map((line) => (
-          <Stack key={line.id} spacing={0.5}>
+          <Stack key={line.id} spacing={0.25}>
             <Typography
               variant="body2"
+              sx={{ lineHeight: 1.6 }}
               color={line.tone === 'warning' ? 'warning.dark' : 'text.primary'}
             >
               {line.text}
@@ -48,7 +49,7 @@ const LocationExpectationsCard: React.FC<LocationExpectationsCardProps> = ({
               <Button
                 variant="text"
                 size="small"
-                sx={{ alignSelf: 'flex-start' }}
+                sx={{ alignSelf: 'flex-start', px: 0.5, py: 0, minWidth: 0 }}
                 onClick={() => onAction(line.action as string)}
               >
                 {actionLabel(line.action, t)}

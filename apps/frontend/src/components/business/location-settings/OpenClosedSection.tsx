@@ -15,15 +15,23 @@ import SettingToggleRow from './SettingToggleRow';
 import SettingsSection from './SettingsSection';
 import { LocationSectionActions } from './sectionTypes';
 
-const OpenClosedSection: React.FC<LocationSectionActions> = ({
+const OpenClosedSection: React.FC<
+  LocationSectionActions & { startEditing?: boolean }
+> = ({
   location,
   updateLocation,
+  startEditing = false,
 }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const [active, setActive] = useState(location.is_active);
   useEffect(() => setActive(location.is_active), [location.is_active]);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startEditing);
+  useEffect(() => {
+    if (!startEditing) return;
+    setEditing(true);
+    document.getElementById('opening-hours')?.scrollIntoView({ block: 'start' });
+  }, [startEditing]);
   const [hours, setHours] = useState(() =>
     operatingHoursToEditorValue(location.operating_hours)
   );
@@ -96,6 +104,7 @@ const OpenClosedSection: React.FC<LocationSectionActions> = ({
         confirmFor={(next) => (next ? null : hideConfirm(t))}
       />
       <SettingsSection
+        id="opening-hours"
         title={t('business.locations.openClosed.hoursTitle', 'Opening hours')}
         summary={<HoursSummary location={location} />}
         editing={editing}
@@ -112,6 +121,7 @@ const OpenClosedSection: React.FC<LocationSectionActions> = ({
         error={error}
       >
         <ServiceHoursEditor
+          embedded
           value={hours}
           onChange={setHours}
           offDayLabel={t('common.closed', 'Closed')}
@@ -122,18 +132,20 @@ const OpenClosedSection: React.FC<LocationSectionActions> = ({
             'Copy Monday to all open days'
           )}
         </Button>
-        <Typography variant="body2" color="text.secondary">
-          {t(
-            'business.locations.openClosed.hoursHelp',
-            "Customers can only choose pickup or delivery times when you're open. Orders for 'as soon as possible' stop a little before closing, so there's time to prepare."
-          )}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {t(
-            'business.locations.openClosed.cookedFoodNote',
-            'Cooked food uses the serving times set on each food item.'
-          )}
-        </Typography>
+        <Stack spacing={1}>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+            {t(
+              'business.locations.openClosed.hoursHelp',
+              "Customers can only choose pickup or delivery times when you're open. Orders for 'as soon as possible' stop a little before closing, so there's time to prepare."
+            )}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+            {t(
+              'business.locations.openClosed.cookedFoodNote',
+              'Cooked food uses the serving times set on each food item.'
+            )}
+          </Typography>
+        </Stack>
       </SettingsSection>
     </Stack>
   );
@@ -146,11 +158,11 @@ function HoursSummary({
 }) {
   const { t } = useTranslation();
   return (
-    <Stack spacing={0.5}>
-      <Typography variant="body2">
+    <Stack spacing={1}>
+      <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
         {formatOperatingHoursSummary(location.operating_hours, t)}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
         {t(
           'business.locations.openClosed.hoursHelp',
           "Customers can only choose pickup or delivery times when you're open. Orders for 'as soon as possible' stop a little before closing, so there's time to prepare."

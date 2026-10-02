@@ -9,6 +9,7 @@ interface LocationCardProps {
   isStripeRail?: boolean;
   railLoading?: boolean;
   onSettings: (location: BusinessLocation) => void;
+  onHours: (location: BusinessLocation) => void;
   onViewItems?: (location: BusinessLocation) => void;
 }
 
@@ -17,6 +18,7 @@ const LocationCard: React.FC<LocationCardProps> = ({
   isStripeRail = false,
   railLoading = false,
   onSettings,
+  onHours,
   onViewItems,
 }) => {
   const { t } = useTranslation();
@@ -29,25 +31,27 @@ const LocationCard: React.FC<LocationCardProps> = ({
   const warning = cardWarning(location, isStripeRail || railLoading, t);
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
-      <Stack spacing={1.25}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
+    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, height: '100%' }}>
+      <Stack spacing={1.5}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
           <Avatar src={location.logo_url || undefined} alt={location.name}>
             {location.name.slice(0, 1)}
           </Avatar>
-          <Stack sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
+          <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.5}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               {location.name}
             </Typography>
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {address}
+            {address ? (
+              <Typography variant="body2" color="text.secondary">
+                {address}
+              </Typography>
+            ) : null}
+            <Typography variant="body2" color={location.is_active ? 'success.main' : 'text.secondary'}>
+              {location.is_active
+                ? t('business.locations.card.open', 'Open for customers')
+                : t('business.locations.card.hidden', 'Hidden from customers')}
             </Typography>
           </Stack>
-          <Typography variant="body2" color={location.is_active ? 'success.main' : 'text.secondary'}>
-            {location.is_active
-              ? t('business.locations.card.open', 'Open for customers')
-              : t('business.locations.card.hidden', 'Hidden from customers')}
-          </Typography>
         </Stack>
         <Typography variant="body2" color="text.secondary">
           {formatOperatingHoursSummary(location.operating_hours, t)}
@@ -60,9 +64,12 @@ const LocationCard: React.FC<LocationCardProps> = ({
             {warning}
           </Typography>
         ) : null}
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Button variant="contained" onClick={() => onSettings(location)}>
             {t('business.locations.card.settings', 'Settings')}
+          </Button>
+          <Button variant="outlined" onClick={() => onHours(location)}>
+            {t('business.locations.hours.setNow', 'Set hours')}
           </Button>
           {onViewItems ? (
             <Button variant="text" onClick={() => onViewItems(location)}>

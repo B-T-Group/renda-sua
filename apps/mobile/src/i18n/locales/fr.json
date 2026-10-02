@@ -92,6 +92,7 @@
     "retryHint": "Toucher pour réessayer",
     "save": "Enregistrer",
     "cancel": "Annuler",
+    "gotIt": "Compris",
     "clear": "Effacer",
     "search": "Rechercher",
     "noResults": "Aucun résultat",
@@ -2702,6 +2703,7 @@
     "locations": {
       "title": "Points de vente",
       "empty": "Aucun emplacement",
+      "emptyLine": "Ajoutez un lieu où les clients peuvent commander.",
       "primary": "Principal",
       "add": "Ajouter",
       "addTitle": "Ajouter un emplacement",
@@ -2898,6 +2900,16 @@
       "usingBusinessProfileAddress": "Adresse du profil entreprise utilisée",
       "logoBusinessRequired": "Le profil entreprise est requis pour téléverser un logo",
       "manageItems": "Gérer les articles",
+      "editPage": {
+        "expectLine": "Un aperçu de ce que les clients voient.",
+        "hoursLine": "Les clients commandent pendant ces heures.",
+        "autoShort": "Verser automatiquement",
+        "payLine": "Les clients peuvent payer après votre confirmation.",
+        "alertsTitle": "Alertes de commande",
+        "alertsLine": "Un second téléphone pour les nouvelles commandes.",
+        "basicsLine": "Le nom et le logo que les clients voient.",
+        "learnMore": "En savoir plus"
+      },
       "expectations": {
         "title": "Ce que vos clients vont vivre",
         "visible": "Les clients peuvent voir ce lieu et y commander.",
@@ -3010,7 +3022,7 @@
       "more": {
         "title": "Plus d'options",
         "kind": "Type de lieu",
-        "kindHelp": "Vous aide à distinguer vos lieux.",
+        "kindHelp": "Magasin, entrepôt, bureau ou point de retrait. Cette étiquette est pour vous, afin de distinguer facilement vos lieux.",
         "mainCurrent": "Ceci est votre lieu principal. Il ne peut pas être supprimé.",
         "makeMain": "En faire mon lieu principal",
         "mainConfirm": "Votre lieu principal actuel ne le sera plus.",
