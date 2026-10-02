@@ -247,6 +247,19 @@ export function BusinessCancelOrderDialog({ visible, order, onDismiss, onSubmit 
                 </Text>
               </View>
             ) : (
+              <>
+              {order.pay_after_merchant_confirm === true &&
+              (order.payment_status === 'paid' || order.payment_status === 'authorized') ? (
+                <Text
+                  variant="bodyMedium"
+                  style={{ color: colors.info.main, marginBottom: spacing.md, lineHeight: 22 }}
+                >
+                  {t(
+                    'orders.payAfterConfirm.business.cancelPaidRefund',
+                    'This order is already paid. If you cancel it, the client is refunded in full.'
+                  )}
+                </Text>
+              ) : null}
               <Text
                 variant="bodyMedium"
                 style={{ color: colors.text.secondary, marginBottom: spacing.md, lineHeight: 22 }}
@@ -256,6 +269,7 @@ export function BusinessCancelOrderDialog({ visible, order, onDismiss, onSubmit 
                   'Please select a reason for canceling this order. The customer will be notified.'
                 )}
               </Text>
+              </>
             )}
 
             {loadingReasons ? (

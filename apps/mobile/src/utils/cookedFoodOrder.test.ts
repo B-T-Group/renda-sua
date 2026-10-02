@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   isCookedFoodAwaitingClientPayment,
+  isCookedFoodPayAfterPaid,
   isCookedFoodReadyFailEligible,
   isCookedFoodStartCookingPriority,
+  isStorePayAfterConfirmOrder,
   shouldUseCookedFoodConfirmModal,
+  shouldUseGuidedConfirmModal,
 } from './cookedFoodOrder';
+import type { Order } from '../types/agent';
 
 const asapPickup = {
   fulfillment_method: 'pickup' as const,
@@ -143,5 +147,42 @@ describe('isCookedFoodReadyFailEligible', () => {
         order_items: [{ is_cooked_food: false }],
       })
     ).toBe(false);
+  });
+});
+
+describe('flagged-location goods (non-cooked pay-after)', () => {
+  const goods = {
+    ...asapPickup,
+    pay_after_merchant_confirm: true,
+    is_cooked_food_pickup: false,
+    order_items: [{ is_cooked_food: false }],
+    current_status: 'pending',
+  } as unknown as Order;
+
+  it('uses the guided confirm modal but not the ready-in modal', () => {
+    expect(isStorePayAfterConfirmOrder(goods)).toBe(true);
+    expect(shouldUseCookedFoodConfirmModal(goods)).toBe(false);
+    expect(shouldUseGuidedConfirmModal(goods)).toBe(true);
+  });
+
+  it('does not treat cooked pay-after orders as store pay-after', () => {
+    const cooked = { ...goods, is_cooked_food_pickup: true };
+    expect(isStorePayAfterConfirmOrder(cooked)).toBe(false);
+    expect(shouldUseGuidedConfirmModal(cooked)).toBe(true);
+  });
+
+  it('is not guided when the order is not pay-after', () => {
+    expect(shouldUseGuidedConfirmModal(({ ...goods, pay_after_merchant_confirm: false } as Order))).toBe(false);
+  });
+
+  it('awaits client payment until paid, then is not cooked-paid', () => {
+    expect(isCookedFoodAwaitingClientPayment({ ...goods, current_status: 'confirmed', payment_status: 'pending' })).toBe(true);
+    expect(isCookedFoodAwaitingClientPayment({ ...goods, current_status: 'confirmed', payment_status: 'paid' })).toBe(false);
+    expect(isCookedFoodPayAfterPaid({ ...goods, current_status: 'preparing', payment_status: 'paid' })).toBe(false);
+  });
+
+  it('has no cooked-only ready-fail / start-cooking behaviour', () => {
+    expect(isCookedFoodReadyFailEligible({ ...goods, current_status: 'ready_for_pickup', payment_status: 'paid' })).toBe(false);
+    expect(isCookedFoodStartCookingPriority({ ...goods, current_status: 'confirmed', payment_status: 'paid' })).toBe(false);
   });
 });

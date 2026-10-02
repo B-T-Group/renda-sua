@@ -5882,7 +5882,20 @@
       "bodyDelivery": "Après confirmation du magasin, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Approuvez-la dans les 45 minutes environ et le magasin préparera votre commande pour la livraison.",
       "step1": "Votre commande a été envoyée au magasin.",
       "step2": "Lorsque le magasin confirme, nous enverrons une demande de paiement Mobile Money sur votre téléphone. Approuvez-la dans les 45 minutes environ pour qu’ils puissent préparer votre commande.",
-      "payBy": "Payez avant {{time}} sinon la commande est annulée automatiquement."
+      "payBy": "Payez avant {{time}} sinon la commande est annulée automatiquement.",
+      "business": {
+        "confirmTitle": "Confirmer cette commande",
+        "waitPaymentTitle": "Attendez le paiement avant de préparer",
+        "confirmBody": "Après votre confirmation, le client est invité à payer par Mobile Money. Il dispose d’environ {{m}} minutes ; les commandes impayées sont annulées automatiquement et le stock est libéré.",
+        "confirmHint": "Ne préparez pas la commande avant d’avoir vu le paiement. Une fois payée, marquez-la prête quand elle est préparée. Si vous ne pouvez pas honorer une commande payée, vous pouvez l’annuler et le client est remboursé.",
+        "confirmCta": "Confirmer la commande",
+        "waitStepSent": "Une demande Mobile Money est sur le téléphone du client.",
+        "waitStepWait": "Attendez la notification de paiement (environ {{m}} minutes).",
+        "waitStepPrepare": "Préparez la commande seulement après avoir vu ce paiement, puis marquez-la prête.",
+        "waitPickup": "Quand elle est prête, le client la récupère et termine la commande dans l’application.",
+        "waitDelivery": "Quand elle est prête, un livreur la récupère pour la livraison.",
+        "cancelPaidRefund": "Cette commande est déjà payée. Si vous l’annulez, le client est remboursé intégralement."
+      }
     }
   },
   "items": {

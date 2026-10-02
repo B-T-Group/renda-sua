@@ -1,5 +1,8 @@
 import {
   isCookedFoodAwaitingClientPayment,
+  isCookedFoodPayAfterPaid,
+  isStorePayAfterConfirmOrder,
+  shouldUseGuidedConfirmModal,
   isCookedFoodReadyFailEligible,
   isCookedFoodStartCookingPriority,
   shouldUseCookedFoodConfirmModal,
@@ -199,6 +202,61 @@ describe('isCookedFoodReadyFailEligible', () => {
         fulfillment_method: 'delivery',
         assigned_agent_id: null,
       })
+    ).toBe(true);
+  });
+});
+
+describe('flagged-location goods (non-cooked pay-after)', () => {
+  const goods = {
+    fulfillment_method: 'delivery' as const,
+    fulfillment_timing: 'asap' as const,
+    pay_after_merchant_confirm: true,
+    current_status: 'confirmed',
+    payment_status: 'pending',
+    order_items: [{ is_cooked_food: false }],
+  };
+
+  it('uses the guided store confirm, not the cooked ready-in modal', () => {
+    expect(shouldUseCookedFoodConfirmModal(goods)).toBe(false);
+    expect(isStorePayAfterConfirmOrder(goods)).toBe(true);
+    expect(shouldUseGuidedConfirmModal(goods)).toBe(true);
+    expect(
+      shouldUseGuidedConfirmModal({ ...goods, fulfillment_method: 'pickup' })
+    ).toBe(true);
+  });
+
+  it('is not guided for scheduled, non-pay-after, or cooked orders', () => {
+    expect(
+      isStorePayAfterConfirmOrder({ ...goods, delivery_time_windows: [{ id: 's' }], fulfillment_timing: 'scheduled' })
+    ).toBe(false);
+    expect(isStorePayAfterConfirmOrder({ ...goods, pay_after_merchant_confirm: false })).toBe(false);
+    expect(
+      isStorePayAfterConfirmOrder({ ...goods, order_items: [{ is_cooked_food: true }] })
+    ).toBe(false);
+  });
+
+  it('waits for payment while unpaid, and never counts as cooked "start cooking"', () => {
+    expect(isCookedFoodAwaitingClientPayment(goods)).toBe(true);
+    expect(isCookedFoodAwaitingClientPayment({ ...goods, payment_status: 'paid' })).toBe(false);
+    expect(
+      isCookedFoodStartCookingPriority({ ...goods, payment_status: 'paid' })
+    ).toBe(false);
+  });
+
+  it('paid goods stay cancellable by the store (refund); paid cooked do not', () => {
+    expect(isCookedFoodPayAfterPaid({ ...goods, payment_status: 'paid' })).toBe(false);
+    expect(
+      isCookedFoodPayAfterPaid({
+        ...goods,
+        payment_status: 'paid',
+        order_items: [{ is_cooked_food: true }],
+      })
+    ).toBe(true);
+  });
+
+  it('delivery pay-after for cooked food keeps the ready-in modal', () => {
+    expect(
+      shouldUseCookedFoodConfirmModal({ ...goods, order_items: [{ is_cooked_food: true }] })
     ).toBe(true);
   });
 });

@@ -328,6 +328,21 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
           </Box>
         )}
 
+        {/* Business cancelling a PAID pay-after order (e.g. out of stock): client is refunded */}
+        {!success &&
+          canCancel &&
+          persona === 'business' &&
+          order.pay_after_merchant_confirm === true &&
+          (order.payment_status === 'paid' ||
+            order.payment_status === 'authorized') && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t(
+                'orders.payAfterConfirm.business.cancelPaidRefund',
+                'This order is already paid. If you cancel it, the client is refunded in full.'
+              )}
+            </Alert>
+          )}
+
         {/* Cancellation Fee Information */}
         {!success && canCancel && persona === 'client' && (
           <Box

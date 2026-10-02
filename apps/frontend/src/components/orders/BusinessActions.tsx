@@ -43,7 +43,7 @@ import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrder
 import {
   isCookedFoodAwaitingClientPayment,
   isCookedFoodReadyFailEligible,
-  shouldUseCookedFoodConfirmModal,
+  shouldUseGuidedConfirmModal,
 } from '../../utils/cookedFoodOrder';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import FailPickupDialog from '../dialogs/FailPickupDialog';
@@ -200,7 +200,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   };
 
   const handleConfirmOrder = () => {
-    if (shouldUseCookedFoodConfirmModal(order)) {
+    if (shouldUseGuidedConfirmModal(order)) {
       setCookedFoodConfirmOpen(true);
       return;
     }

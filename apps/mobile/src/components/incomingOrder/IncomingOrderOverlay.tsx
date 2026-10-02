@@ -13,7 +13,7 @@ import { IncomingOrderView } from './IncomingOrderView';
 import type { BusinessOrder } from '../../types/business/orders';
 import type { ConfirmOrderPayload } from '../../types/business/orders';
 import { resolveAcceptanceDeadline } from '../../utils/resolveAcceptanceDeadline';
-import { shouldUseCookedFoodConfirmModal } from '../../utils/cookedFoodOrder';
+import { shouldUseGuidedConfirmModal } from '../../utils/cookedFoodOrder';
 import {
   FIRST_ORDER_ONBOARDING_NUDGE_ID,
   shouldShowFirstOrderOverlayGuidance,
@@ -47,7 +47,7 @@ function IncomingOrderOverlayBase() {
 
   const needsReadyInConfirm = useMemo(
     () =>
-      orderForDialog != null && shouldUseCookedFoodConfirmModal(orderForDialog),
+      orderForDialog != null && shouldUseGuidedConfirmModal(orderForDialog),
     [orderForDialog]
   );
 

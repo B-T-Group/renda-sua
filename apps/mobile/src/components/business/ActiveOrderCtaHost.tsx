@@ -16,7 +16,7 @@ import {
 } from '../../utils/businessOrderActions';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
 import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
-import { shouldUseCookedFoodConfirmModal } from '../../utils/cookedFoodOrder';
+import { shouldUseGuidedConfirmModal } from '../../utils/cookedFoodOrder';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
@@ -128,7 +128,7 @@ export function ActiveOrderCtaHost({
   const handlePrimary = useCallback(
     (actionOrder: BusinessOrder, actionId: BusinessOrderActionId) => {
       if (actionId === 'confirm') {
-        if (shouldUseCookedFoodConfirmModal(actionOrder)) {
+        if (shouldUseGuidedConfirmModal(actionOrder)) {
           setCookedConfirmOpen(true);
         } else {
           setConfirmOpen(true);

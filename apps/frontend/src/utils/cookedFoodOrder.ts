@@ -61,10 +61,31 @@ export function shouldUseCookedFoodConfirmModal(order: CookedFoodOrderLike): boo
     if (order.is_cooked_food_pickup === true) return true;
     return everyLineIsCookedFood(lineCookedFlags(order));
   }
-  if (isAsapDeliveryOrder(order) && order.pay_after_merchant_confirm === true) {
+  if (
+    isAsapDeliveryOrder(order) &&
+    order.pay_after_merchant_confirm === true &&
+    isCookedFoodOrderSnapshot(order)
+  ) {
     return true;
   }
   return false;
+}
+
+/**
+ * Merchant confirm modal for ASAP pay-after orders that are NOT cooked food
+ * (flagged-location goods): no ready-in prompt, just the pay-after explanation.
+ * Use together with `shouldUseCookedFoodConfirmModal` to decide whether to open
+ * the guided confirm dialog at all.
+ */
+export function isStorePayAfterConfirmOrder(order: CookedFoodOrderLike): boolean {
+  if (order.pay_after_merchant_confirm !== true) return false;
+  if (isCookedFoodOrderSnapshot(order)) return false;
+  return isAsapPickupOrder(order) || isAsapDeliveryOrder(order);
+}
+
+/** True when the guided (pay-after aware) confirm dialog should open. */
+export function shouldUseGuidedConfirmModal(order: CookedFoodOrderLike): boolean {
+  return shouldUseCookedFoodConfirmModal(order) || isStorePayAfterConfirmOrder(order);
 }
 
 export function isCookedFoodPickupFlow(order: CookedFoodOrderLike): boolean {
@@ -102,16 +123,22 @@ export function isCookedFoodAwaitingClientPayment(
   order: CookedFoodOrderLike
 ): boolean {
   if (order.pay_after_merchant_confirm !== true) return false;
-  if (!shouldUseCookedFoodConfirmModal(order)) return false;
+  // Applies to flagged-location goods too (pay-after, unpaid): the store must wait for payment.
+  if (!shouldUseGuidedConfirmModal(order)) return false;
   const payment = order.payment_status;
   return payment !== 'paid' && payment !== 'authorized';
 }
 
-/** Paid (or authorized) cooked-food pay-after order — cooking / ready stages. */
+/**
+ * Paid (or authorized) COOKED-food pay-after order — cooking / ready stages.
+ * Non-cooked (flagged-location goods) pay-after orders are excluded: the store may
+ * cancel those after payment and the client is refunded.
+ */
 export function isCookedFoodPayAfterPaid(
   order: CookedFoodOrderLike
 ): boolean {
   if (order.pay_after_merchant_confirm !== true) return false;
+  if (!isCookedFoodOrderSnapshot(order)) return false;
   const payment = order.payment_status;
   return payment === 'paid' || payment === 'authorized';
 }
@@ -128,7 +155,7 @@ export function isCookedFoodReadyFailEligible(
   if (order.current_status !== 'ready_for_pickup') return false;
   const cooked =
     order.is_cooked_food_pickup === true ||
-    order.pay_after_merchant_confirm === true ||
+    (order.pay_after_merchant_confirm === true && isCookedFoodOrderSnapshot(order)) ||
     shouldUseCookedFoodConfirmModal(order);
   if (!cooked) return false;
   const paid =
@@ -144,6 +171,8 @@ export function isCookedFoodStartCookingPriority(
   order: CookedFoodOrderLike
 ): boolean {
   if (!shouldUseCookedFoodConfirmModal(order)) return false;
+  // Flagged-location goods are marked ready by the store, not "cooked".
+  if (!isCookedFoodOrderSnapshot(order)) return false;
   const status = order.current_status ?? '';
   if (status === 'preparing') return true;
   if (status !== 'confirmed') return false;
