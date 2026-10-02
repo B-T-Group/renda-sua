@@ -4445,6 +4445,8 @@
         "momoLabel": "Mobile Money number",
         "phoneLabel": "Phone number",
         "phoneHelp": "How customers and Rendasua can reach this location.",
+        "unlinkFailed": "Couldn't remove this Mobile Money number. Please try again.",
+        "linkFailed": "Couldn't update the Mobile Money number. Please try again.",
         "noNumber": "No number yet",
         "addNumber": "Add a number",
         "momoNone": "No number yet. Add one so customers can buy from this location.",
@@ -4502,12 +4504,14 @@
         "email": "Contact email (optional)",
         "emailHelp": "For messages about this location.",
         "save": "Save details",
-        "saveFailed": "Couldn't save this location's name. Please try again."
+        "saveFailed": "Couldn't save this location's name. Please try again.",
+        "addressSaveFailed": "Couldn't save this address. Please try again."
       },
       "more": {
         "title": "More options",
         "kind": "Kind of place",
         "kindHelp": "Helps you tell your places apart.",
+        "kindFailed": "Couldn't save the kind of place. Please try again.",
         "mainCurrent": "This is your main location. It can't be deleted.",
         "makeMain": "Make this my main location",
         "mainConfirm": "Your current main location will no longer be main.",

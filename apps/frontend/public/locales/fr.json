@@ -4139,6 +4139,8 @@
         "momoLabel": "Numéro Mobile Money",
         "phoneLabel": "Numéro de téléphone",
         "phoneHelp": "Comment les clients et Rendasua peuvent joindre ce lieu.",
+        "unlinkFailed": "Impossible de retirer ce numéro Mobile Money. Réessayez.",
+        "linkFailed": "Impossible de mettre à jour le numéro Mobile Money. Réessayez.",
         "noNumber": "Pas encore de numéro",
         "addNumber": "Ajouter un numéro",
         "momoNone": "Pas encore de numéro. Ajoutez-en un pour que les clients puissent acheter depuis ce lieu.",
@@ -4196,12 +4198,14 @@
         "email": "E-mail de contact (facultatif)",
         "emailHelp": "Pour les messages concernant ce lieu.",
         "save": "Enregistrer",
-        "saveFailed": "Impossible d'enregistrer le nom de ce lieu. Réessayez."
+        "saveFailed": "Impossible d'enregistrer le nom de ce lieu. Réessayez.",
+        "addressSaveFailed": "Impossible d'enregistrer cette adresse. Réessayez."
       },
       "more": {
         "title": "Plus d'options",
         "kind": "Type de lieu",
         "kindHelp": "Vous aide à distinguer vos lieux.",
+        "kindFailed": "Impossible d'enregistrer le type de lieu. Réessayez.",
         "mainCurrent": "Ceci est votre lieu principal. Il ne peut pas être supprimé.",
         "makeMain": "En faire mon lieu principal",
         "mainConfirm": "Votre lieu principal actuel ne le sera plus.",

@@ -36,6 +36,8 @@ const MoreOptionsSection: React.FC<LocationSectionActions> = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [mainOpen, setMainOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const makeMain = async () => {
     const previous = locations.find(
@@ -124,11 +126,17 @@ const MoreOptionsSection: React.FC<LocationSectionActions> = ({
           "You can only delete a location with no items and no money in its account. This can't be undone."
         )}
         confirmLabel={t('common.delete', 'Delete')}
-        onClose={() => setDeleteOpen(false)}
-        onConfirm={() => {
-          void deleteLocation(location.id);
-          setDeleteOpen(false);
-        }}
+        error={deleteError}
+        busy={deleting}
+        onClose={() => closeDelete(setDeleteOpen, setDeleteError)}
+        onConfirm={() =>
+          void confirmDelete(deleteLocation, location.id, {
+            setDeleteOpen,
+            setDeleteError,
+            setDeleting,
+            t,
+          })
+        }
       />
     </Accordion>
   );
@@ -139,6 +147,7 @@ function TypeSelect({
   updateLocation,
 }: Pick<LocationSectionActions, 'location' | 'updateLocation'>) {
   const { t } = useTranslation();
+  const [error, setError] = useState<string | null>(null);
   return (
     <Stack spacing={0.5}>
       <Typography variant="body2">
@@ -147,9 +156,13 @@ function TypeSelect({
       <Select
         value={location.location_type}
         onChange={(event) =>
-          void updateLocation(location.id, {
-            location_type: event.target.value as BusinessLocation['location_type'],
-          })
+          void saveLocationType(
+            location.id,
+            String(event.target.value),
+            updateLocation,
+            setError,
+            t
+          )
         }
       >
         {TYPES.map((type) => (
@@ -164,6 +177,11 @@ function TypeSelect({
           'Helps you tell your places apart.'
         )}
       </Typography>
+      {error ? (
+        <Typography variant="body2" color="error" role="alert">
+          {error}
+        </Typography>
+      ) : null}
     </Stack>
   );
 }
@@ -198,6 +216,8 @@ function ConfirmDialog({
   title,
   body,
   confirmLabel,
+  error,
+  busy = false,
   onClose,
   onConfirm,
 }: {
@@ -205,24 +225,120 @@ function ConfirmDialog({
   title: string;
   body: string;
   confirmLabel: string;
+  error?: string | null;
+  busy?: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }) {
   const { t } = useTranslation();
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={busy ? undefined : onClose}>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <DialogContentText>{body}</DialogContentText>
+        {error ? (
+          <Typography variant="body2" color="error" role="alert" sx={{ mt: 2 }}>
+            {error}
+          </Typography>
+        ) : null}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
-        <Button variant="contained" onClick={onConfirm}>
+        <Button onClick={onClose} disabled={busy}>
+          {t('common.cancel', 'Cancel')}
+        </Button>
+        <Button variant="contained" onClick={onConfirm} disabled={busy}>
           {confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>
   );
+}
+
+function closeDelete(
+  setOpen: (open: boolean) => void,
+  setError: (message: string | null) => void
+) {
+  setOpen(false);
+  setError(null);
+}
+
+async function confirmDelete(
+  deleteLocation: (id: string) => Promise<unknown>,
+  locationId: string,
+  state: {
+    setDeleteOpen: (open: boolean) => void;
+    setDeleteError: (message: string | null) => void;
+    setDeleting: (busy: boolean) => void;
+    t: (key: string, fallback: string) => string;
+  }
+) {
+  state.setDeleting(true);
+  state.setDeleteError(null);
+  try {
+    await deleteLocation(locationId);
+    state.setDeleteOpen(false);
+  } catch (err: unknown) {
+    state.setDeleteError(deleteFailureMessage(err, state.t));
+  } finally {
+    state.setDeleting(false);
+  }
+}
+
+const DELETE_CODE_COPY: Record<string, readonly [string, string]> = {
+  LOCATION_HAS_INVENTORY: [
+    'business.locations.cannotDeleteHasInventory',
+    'Cannot delete a location that still has items. Remove items from this location first.',
+  ],
+  LOCATION_HAS_BALANCE: [
+    'business.locations.cannotDeleteHasBalance',
+    'Cannot delete a location that still has account balance. Withdraw or transfer funds first.',
+  ],
+  ADDRESS_PRIMARY_DELETE_FORBIDDEN: [
+    'business.locations.cannotDeletePrimary',
+    'Cannot delete primary location',
+  ],
+  ADDRESS_MINIMUM_REQUIRED: [
+    'business.locations.cannotDeleteOnlyLocation',
+    'Cannot delete the only location. Each business must have at least one location.',
+  ],
+};
+
+function deleteFailureMessage(
+  err: unknown,
+  t: (key: string, fallback: string) => string
+): string {
+  const copy = DELETE_CODE_COPY[readErrorCode(err) ?? ''];
+  if (copy) return t(copy[0], copy[1]);
+  if (err instanceof Error && err.message) return err.message;
+  return t('business.locations.deleteError', 'Failed to delete location');
+}
+
+function readErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object' || !('code' in err)) return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+async function saveLocationType(
+  locationId: string,
+  locationType: string,
+  updateLocation: LocationSectionActions['updateLocation'],
+  setError: (message: string | null) => void,
+  t: (key: string, fallback: string) => string
+) {
+  setError(null);
+  try {
+    await updateLocation(locationId, {
+      location_type: locationType as BusinessLocation['location_type'],
+    });
+  } catch {
+    setError(
+      t(
+        'business.locations.more.kindFailed',
+        "Couldn't save the kind of place. Please try again."
+      )
+    );
+  }
 }
 
 function deleteHelp(

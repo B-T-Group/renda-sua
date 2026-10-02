@@ -49,6 +49,7 @@ interface AddressDialogProps {
   onClose: () => void;
   onSave: () => void;
   onAddressChange: (address: AddressFormData) => void;
+  error?: string | null;
 }
 
 const AddressDialog: React.FC<AddressDialogProps> = ({
@@ -69,6 +70,7 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
   onClose,
   onSave,
   onAddressChange,
+  error,
 }) => {
   const { t } = useTranslation();
   const dialogTitle =
@@ -135,6 +137,11 @@ const AddressDialog: React.FC<AddressDialogProps> = ({
             {subtitle}
           </Typography>
         )}
+        {error ? (
+          <Alert severity="error" role="alert" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        ) : null}
         <AddressForm
           addressData={addressData}
           loading={loading}

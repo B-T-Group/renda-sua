@@ -34,6 +34,16 @@ import LocationTransferInbox from '../business/LocationTransferInbox';
 import AddressDialog, { type AddressFormData } from '../dialogs/AddressDialog';
 import SEOHead from '../seo/SEOHead';
 
+function notifyAddressSaveFailed(
+  enqueueSnackbar: (message: string, options: { variant: 'error' }) => void,
+  t: (key: string, fallback: string) => string
+) {
+  enqueueSnackbar(
+    t('addresses.saveError', 'Failed to save address. Please try again.'),
+    { variant: 'error' }
+  );
+}
+
 const INITIAL_BUSINESS_ADDRESS_FORM: AddressFormData = {
   address_line_1: '',
   address_line_2: '',
@@ -123,7 +133,11 @@ const BusinessLocationsPage: React.FC = () => {
       if (success) {
         setBusinessAddressDialogOpen(false);
         await fetchLocations();
+      } else {
+        notifyAddressSaveFailed(enqueueSnackbar, t);
       }
+    } catch {
+      notifyAddressSaveFailed(enqueueSnackbar, t);
     } finally {
       setSavingBusinessAddress(false);
     }

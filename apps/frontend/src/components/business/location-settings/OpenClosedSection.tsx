@@ -1,6 +1,6 @@
 import { Button, Stack, Typography } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ServiceHoursEditor } from '../../admin/ServiceHoursEditor';
 import {
@@ -22,6 +22,7 @@ const OpenClosedSection: React.FC<LocationSectionActions> = ({
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const [active, setActive] = useState(location.is_active);
+  useEffect(() => setActive(location.is_active), [location.is_active]);
   const [editing, setEditing] = useState(false);
   const [hours, setHours] = useState(() =>
     operatingHoursToEditorValue(location.operating_hours)

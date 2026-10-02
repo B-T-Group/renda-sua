@@ -29,6 +29,8 @@ const BasicsSection: React.FC<LocationSectionActions> = ({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
   const [address, setAddress] = useState<AddressFormData>(toForm(location));
 
   const save = async () => {
@@ -69,7 +71,17 @@ const BasicsSection: React.FC<LocationSectionActions> = ({
         summary={<BasicsSummary location={location} />}
         editing={editing}
         onEdit={() => setEditing(true)}
-        onCancel={() => setEditing(false)}
+        onCancel={() =>
+          cancelBasics(location, {
+            setEditing,
+            setName,
+            setEmail,
+            setLogoUrl,
+            setShowLogoUrl,
+            setNameError,
+            setError,
+          })
+        }
         onSave={() => void save()}
         saveLabel={t('business.locations.basics.save', 'Save details')}
         saving={saving}
@@ -142,14 +154,21 @@ const BasicsSection: React.FC<LocationSectionActions> = ({
       </SettingsSection>
       <AddressDialog
         open={addressOpen}
-        onClose={() => setAddressOpen(false)}
+        onClose={() => closeAddressDialog(setAddressOpen, setAddressError)}
         addressData={address}
         onAddressChange={setAddress}
-        onSave={() => {
-          void updateLocation(location.id, { address }).then(() => {
-            setAddressOpen(false);
-          });
-        }}
+        loading={addressSaving}
+        error={addressError}
+        onSave={() =>
+          void saveAddress(location.id, address, updateLocation, {
+            setAddressOpen,
+            setAddressSaving,
+            setAddressError,
+            notify: (message) =>
+              enqueueSnackbar(message, { variant: 'success' }),
+            t,
+          })
+        }
         title={t('business.locations.editLocationAddress', 'Edit location address')}
       />
     </>
@@ -190,6 +209,65 @@ async function uploadLogo(
         : ctx.t('business.locations.logoUploadError', 'Failed to upload logo')
     );
   }
+}
+
+async function saveAddress(
+  locationId: string,
+  address: AddressFormData,
+  updateLocation: LocationSectionActions['updateLocation'],
+  ui: {
+    setAddressOpen: (open: boolean) => void;
+    setAddressSaving: (saving: boolean) => void;
+    setAddressError: (message: string | null) => void;
+    notify: (message: string) => void;
+    t: (key: string, fallback: string) => string;
+  }
+) {
+  ui.setAddressSaving(true);
+  ui.setAddressError(null);
+  try {
+    await updateLocation(locationId, { address });
+    ui.setAddressOpen(false);
+    ui.notify(ui.t('business.locations.locationUpdated', 'Location updated successfully'));
+  } catch {
+    ui.setAddressError(
+      ui.t(
+        'business.locations.basics.addressSaveFailed',
+        "Couldn't save this address. Please try again."
+      )
+    );
+  } finally {
+    ui.setAddressSaving(false);
+  }
+}
+
+function closeAddressDialog(
+  setOpen: (open: boolean) => void,
+  setError: (message: string | null) => void
+) {
+  setOpen(false);
+  setError(null);
+}
+
+function cancelBasics(
+  location: LocationSectionActions['location'],
+  ui: {
+    setEditing: (editing: boolean) => void;
+    setName: (name: string) => void;
+    setEmail: (email: string) => void;
+    setLogoUrl: (url: string) => void;
+    setShowLogoUrl: (show: boolean) => void;
+    setNameError: (message: string | null) => void;
+    setError: (message: string | null) => void;
+  }
+) {
+  ui.setName(location.name);
+  ui.setEmail(location.email ?? '');
+  ui.setLogoUrl(location.logo_url ?? '');
+  ui.setShowLogoUrl(false);
+  ui.setNameError(null);
+  ui.setError(null);
+  ui.setEditing(false);
 }
 
 function BasicsSummary({

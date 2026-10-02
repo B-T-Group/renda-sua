@@ -5,11 +5,10 @@ import {
   Select,
   Skeleton,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { useBusinessAccountType } from '../../../hooks/useBusinessAccountType';
@@ -25,98 +24,67 @@ const GettingPaidSection: React.FC<LocationSectionActions> = ({
   location,
   isStripeRail,
   railLoading,
+  phoneRequest,
   updateLocation,
 }) => {
   const { t } = useTranslation();
+  const sectionRef = useRef<HTMLElement>(null);
+  const openToken = usePhonePrompt(phoneRequest, !railLoading, sectionRef);
   if (railLoading) return <Skeleton variant="rounded" height={120} />;
   return (
-    <Stack spacing={2} component="section">
+    <Stack spacing={2} component="section" ref={sectionRef} id="getting-paid">
       <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
         {t('business.locations.gettingPaid.title', 'Getting paid')}
       </Typography>
-      {isStripeRail ? (
-        <StripePhone location={location} updateLocation={updateLocation} />
-      ) : (
-        <MomoNumber location={location} updateLocation={updateLocation} />
+      {isStripeRail ? null : (
+        <MomoPayout
+          location={location}
+          updateLocation={updateLocation}
+          openToken={openToken}
+        />
       )}
-      {!isStripeRail ? (
-        <AutoPayout location={location} updateLocation={updateLocation} />
-      ) : null}
       <FeeLine />
     </Stack>
   );
 };
 
-function StripePhone({
-  location,
-  updateLocation,
-}: Pick<LocationSectionActions, 'location' | 'updateLocation'>) {
-  const { t } = useTranslation();
-  const [phone, setPhone] = useState(location.phone ?? '');
-  const [editing, setEditing] = useState(false);
-  useEffect(() => setPhone(location.phone ?? ''), [location.phone]);
-  const save = async () => {
-    await updateLocation(location.id, { phone: phone.trim() });
-    setEditing(false);
-  };
+function MomoPayout(props: PhoneEditorProps) {
   return (
-    <Stack spacing={1}>
-      <Typography variant="body1">
-        {t('business.locations.gettingPaid.phoneLabel', 'Phone number')}
-      </Typography>
-      {editing ? (
-        <TextField
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          fullWidth
-        />
-      ) : (
-        <Typography variant="body2">{location.phone || '—'}</Typography>
-      )}
-      <Typography variant="body2" color="text.secondary">
-        {t(
-          'business.locations.gettingPaid.phoneHelp',
-          'How customers and Rendasua can reach this location.'
-        )}
-      </Typography>
-      <Button variant={editing ? 'contained' : 'text'} onClick={() => (editing ? void save() : setEditing(true))}>
-        {editing
-          ? t('common.save', 'Save')
-          : t('common.edit', 'Edit')}
-      </Button>
-    </Stack>
+    <>
+      <MomoNumber {...props} />
+      <AutoPayout location={props.location} updateLocation={props.updateLocation} />
+    </>
   );
 }
 
 function MomoNumber({
   location,
   updateLocation,
-}: Pick<LocationSectionActions, 'location' | 'updateLocation'>) {
+  openToken,
+}: PhoneEditorProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const { phones, deletePhone, fetchPhones } = useMobilePaymentPhones();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (openToken) setOpen(true);
+  }, [openToken]);
   const linked = location.mobile_payment_phone;
   const verified = linked?.is_verified === true;
   const help = momoHelp(!!linked, verified, t);
 
-  const link = async (phoneId: string | null) => {
-    await updateLocation(location.id, { mobile_payment_phone_id: phoneId });
-  };
+  const link = (phoneId: string | null) =>
+    linkMomoNumber(location.id, phoneId, updateLocation, enqueueSnackbar, t);
 
-  const remove = async () => {
-    const phoneId = location.mobile_payment_phone_id;
-    if (!phoneId) return;
-    await updateLocation(location.id, { mobile_payment_phone_id: null });
-    try {
-      await deletePhone(phoneId);
-    } catch {
-      enqueueSnackbar(
-        t('mobilePaymentPhone.unlinked', 'Mobile payment number unlinked from this location'),
-        { variant: 'success' }
-      );
-    }
-  };
+  const remove = () =>
+    unlinkMomoNumber(
+      location.id,
+      location.mobile_payment_phone_id,
+      updateLocation,
+      deletePhone,
+      enqueueSnackbar,
+      t
+    );
 
   return (
     <Stack spacing={1}>
@@ -158,8 +126,8 @@ function MomoNumber({
         initialPhone={linked ? (linked as MobilePaymentPhone) : null}
         onClose={() => setOpen(false)}
         onCompleted={(phone) => {
-          void link(phone.id).then(() => fetchPhones());
           setOpen(false);
+          void finishLinkedPhone(phone.id, { link, fetchPhones });
         }}
       />
     </Stack>
@@ -231,6 +199,95 @@ function FeeLine() {
       </MuiLink>
     </Typography>
   );
+}
+
+interface PhoneEditorProps extends Pick<
+  LocationSectionActions,
+  'location' | 'updateLocation'
+> {
+  openToken: number;
+}
+
+async function linkMomoNumber(
+  locationId: string,
+  phoneId: string | null,
+  updateLocation: LocationSectionActions['updateLocation'],
+  notify: (message: string, options: { variant: 'error' }) => void,
+  t: (key: string, fallback: string) => string
+): Promise<boolean> {
+  try {
+    await updateLocation(locationId, { mobile_payment_phone_id: phoneId });
+    return true;
+  } catch {
+    notify(
+      t(
+        'business.locations.gettingPaid.linkFailed',
+        "Couldn't update the Mobile Money number. Please try again."
+      ),
+      { variant: 'error' }
+    );
+    return false;
+  }
+}
+
+async function finishLinkedPhone(
+  phoneId: string,
+  actions: {
+    link: (id: string | null) => Promise<boolean>;
+    fetchPhones: () => Promise<unknown>;
+  }
+) {
+  const saved = await actions.link(phoneId);
+  if (!saved) return;
+  await actions.fetchPhones();
+}
+
+async function unlinkMomoNumber(
+  locationId: string,
+  phoneId: string | null | undefined,
+  updateLocation: LocationSectionActions['updateLocation'],
+  deletePhone: (id: string) => Promise<unknown>,
+  notify: (message: string, options: { variant: 'error' | 'success' }) => void,
+  t: (key: string, fallback: string) => string
+) {
+  if (!phoneId) return;
+  try {
+    await updateLocation(locationId, { mobile_payment_phone_id: null });
+  } catch {
+    notify(
+      t(
+        'business.locations.gettingPaid.unlinkFailed',
+        "Couldn't remove this Mobile Money number. Please try again."
+      ),
+      { variant: 'error' }
+    );
+    return;
+  }
+  try {
+    await deletePhone(phoneId);
+  } catch {
+    notify(
+      t(
+        'mobilePaymentPhone.unlinked',
+        'Mobile payment number unlinked from this location'
+      ),
+      { variant: 'success' }
+    );
+  }
+}
+
+function usePhonePrompt(
+  request: number | undefined,
+  ready: boolean,
+  ref: React.RefObject<HTMLElement | null>
+) {
+  const [openToken, setOpenToken] = useState(0);
+  useEffect(() => {
+    if (!request || !ready) return;
+    ref.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    setOpenToken(request);
+  }, [request, ready, ref]);
+  return openToken;
 }
 
 function momoHelp(

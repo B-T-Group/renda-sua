@@ -16,6 +16,8 @@ export interface LocationSectionActions {
   ) => Promise<unknown>;
   deleteLocation: (id: string) => Promise<unknown>;
   onManageItems: () => void;
+  /** Increments when the expectations card asks to add or verify a payout number. */
+  phoneRequest?: number;
 }
 
 export function isOwnerForbidden(error: unknown): boolean {

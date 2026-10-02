@@ -7,7 +7,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -40,6 +40,7 @@ const BusinessLocationSettingsPage: React.FC = () => {
   const { locations, loading, updateLocation, deleteLocation } =
     useBusinessLocations(businessId);
   const location = selectBusinessLocation(locations, locationId);
+  const [phoneRequest, setPhoneRequest] = useState(0);
 
   const update = async (id: string, data: UpdateBusinessLocationData) => {
     const payload =
@@ -65,6 +66,7 @@ const BusinessLocationSettingsPage: React.FC = () => {
         updateLocation: update,
         deleteLocation: removeLocation,
         onManageItems: () => navigate(`/business/items?location=${location.id}`),
+        phoneRequest,
       }
     : null;
 
@@ -122,12 +124,13 @@ const BusinessLocationSettingsPage: React.FC = () => {
           location={location}
           isStripeRail={isStripeRail}
           hasVerifiedPhone={verified}
-          onAction={(action) => {
-            if (action === 'manageItems') actions.onManageItems();
-            if (action === 'showLocation') {
-              void update(location.id, { is_active: true });
-            }
-          }}
+          onAction={(action) =>
+            handleExpectationAction(action, {
+              onManageItems: actions.onManageItems,
+              showLocation: () => update(location.id, { is_active: true }),
+              askForPhone: () => setPhoneRequest((current) => current + 1),
+            })
+          }
         />
         <OpenClosedSection {...actions} />
         <GettingPaidSection {...actions} updateLocation={update} />
@@ -140,5 +143,18 @@ const BusinessLocationSettingsPage: React.FC = () => {
     </Container>
   );
 };
+
+function handleExpectationAction(
+  action: string,
+  handlers: {
+    onManageItems: () => void;
+    showLocation: () => Promise<unknown>;
+    askForPhone: () => void;
+  }
+) {
+  if (action === 'manageItems') handlers.onManageItems();
+  if (action === 'showLocation') void handlers.showLocation();
+  if (action === 'verifyPhone' || action === 'addPhone') handlers.askForPhone();
+}
 
 export default BusinessLocationSettingsPage;

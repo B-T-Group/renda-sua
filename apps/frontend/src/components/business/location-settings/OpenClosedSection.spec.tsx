@@ -84,6 +84,35 @@ describe('OpenClosedSection', () => {
     ).toBe(true);
   });
 
+  it('turns the switch on when the location becomes visible elsewhere', () => {
+    const hidden = { ...location(), is_active: false };
+    const actions: LocationSectionActions = {
+      location: hidden,
+      locations: [hidden],
+      isStripeRail: false,
+      railLoading: false,
+      isOwnBusiness: true,
+      updateLocation: jest.fn(),
+      deleteLocation: jest.fn(),
+      onManageItems: jest.fn(),
+    };
+    const { rerender } = render(<OpenClosedSection {...actions} />);
+    const toggle = screen.getByRole('checkbox', {
+      name: 'Show this location to customers',
+    });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    rerender(
+      <OpenClosedSection {...actions} location={{ ...hidden, is_active: true }} />
+    );
+    expect(
+      (
+        screen.getByRole('checkbox', {
+          name: 'Show this location to customers',
+        }) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+  });
+
   it('keeps the hours section open when saving fails', async () => {
     const updateLocation = jest.fn().mockRejectedValue(new Error('nope'));
     renderSection(updateLocation);
