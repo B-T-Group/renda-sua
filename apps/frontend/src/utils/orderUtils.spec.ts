@@ -86,6 +86,18 @@ describe('order cancellation utilities', () => {
       expect(businessMayCancelOrder(order)).toBe(false);
     });
 
+    it('allows the store to cancel a PAID non-cooked pay-after order (client is refunded)', () => {
+      for (const current_status of ['confirmed', 'preparing', 'ready_for_pickup']) {
+        const order = buildOrder({
+          current_status,
+          payment_status: 'paid',
+          pay_after_merchant_confirm: true,
+          order_items: [{ is_cooked_food: false }],
+        } as any);
+        expect(businessMayCancelOrder(order)).toBe(current_status !== 'ready_for_pickup');
+      }
+    });
+
     it('allows cancel for unpaid cooked-food pay-after while confirmed', () => {
       const order = buildOrder({
         current_status: 'confirmed',

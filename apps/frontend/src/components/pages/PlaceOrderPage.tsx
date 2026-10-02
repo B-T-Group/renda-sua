@@ -14,6 +14,10 @@ import {
   Verified,
 } from '@mui/icons-material';
 import {
+  payAfterCopyVariantForPreflight,
+  resolveCreatedPayAfter,
+} from '../../utils/payAfterConfirm';
+import {
   Alert,
   Box,
   Button,
@@ -1292,6 +1296,14 @@ const PlaceOrderPage: React.FC = () => {
   /** Server rail+SKU gate — same as CheckoutPage / mobile place order. */
   const cookedFoodMoMoPayAfterConfirm =
     checkoutPreflight?.pay_after_merchant_confirm_eligible === true;
+  /** Pay-after for flagged-location goods is ASAP-only too (server rejects scheduled windows). */
+  const asapOnlyCheckout =
+    cookedFoodAsapOnly || checkoutPreflight?.schedule_allowed === false;
+  const payAfterVariant = payAfterCopyVariantForPreflight(checkoutPreflight);
+
+  useEffect(() => {
+    if (asapOnlyCheckout) setDeliveryWindow(null);
+  }, [asapOnlyCheckout]);
 
   useEffect(() => {
     if (cookedFoodMoMoPayAfterConfirm) return;
@@ -1567,7 +1579,7 @@ const PlaceOrderPage: React.FC = () => {
                 ? 'pay_now'
                 : 'pay_at_pickup') as const,
               requires_fast_delivery: false,
-              ...(cookedFoodAsapOnly
+              ...(asapOnlyCheckout
                 ? {}
                 : { delivery_window: deliveryWindow }),
             }
@@ -1575,7 +1587,7 @@ const PlaceOrderPage: React.FC = () => {
               delivery_address_id: selectedAddressId,
               payment_timing: paymentTiming,
               requires_fast_delivery: requiresFastDelivery,
-              ...(cookedFoodAsapOnly
+              ...(asapOnlyCheckout
                 ? {}
                 : { delivery_window: deliveryWindow }),
             }),
@@ -1628,6 +1640,8 @@ const PlaceOrderPage: React.FC = () => {
         );
       }
 
+      // Navigate on the create response (authoritative), not the possibly stale preflight.
+      const createdPayAfter = resolveCreatedPayAfter([order]);
       const effectiveTiming = isPickupOrder
         ? itemCountrySupportsStripe
           ? 'pay_now'
@@ -1635,6 +1649,7 @@ const PlaceOrderPage: React.FC = () => {
         : paymentTiming;
       const momoAwaiting =
         !itemCountrySupportsStripe &&
+        !createdPayAfter &&
         effectiveTiming === 'pay_now' &&
         order.payment_status !== 'paid' &&
         order.payment_source !== 'wallet';
@@ -1653,7 +1668,8 @@ const PlaceOrderPage: React.FC = () => {
             orderNumbers: [order.order_number],
             confirmationState: {
               order,
-              pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
+              pay_after_merchant_confirm: createdPayAfter,
+              pay_after_variant: payAfterVariant,
             },
           })
         );
@@ -1664,7 +1680,8 @@ const PlaceOrderPage: React.FC = () => {
       navigate('/orders/confirmation', {
         state: {
           order,
-          pay_after_merchant_confirm: cookedFoodMoMoPayAfterConfirm,
+          pay_after_merchant_confirm: createdPayAfter,
+              pay_after_variant: payAfterVariant,
         },
       });
     } catch (error: unknown) {
@@ -1697,7 +1714,7 @@ const PlaceOrderPage: React.FC = () => {
   }, [
     apiClient,
     appliedDiscountCode,
-    cookedFoodAsapOnly,
+    asapOnlyCheckout,
     cookedFoodMoMoPayAfterConfirm,
     deliveryWindow,
     isPickupOrder,
@@ -2062,16 +2079,20 @@ const PlaceOrderPage: React.FC = () => {
   const renderTimingSelector = (
     props: React.ComponentProps<typeof DeliveryTimeWindowSelector>
   ) =>
-    cookedFoodAsapOnly ? (
+    asapOnlyCheckout ? (
       <CookedFoodClosedAlert
         message={cookedFoodClosedMessage}
         details={cookedFoodClosedBlocker?.details}
         openMessage={t(
           cookedFoodMoMoPayAfterConfirm
-            ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+            ? payAfterVariant === 'cooked'
+              ? 'orders.deliveryTimeWindow.cookedFoodAsapPayAfterConfirm'
+              : 'orders.deliveryTimeWindow.storeAsapPayAfterConfirm'
             : 'orders.deliveryTimeWindow.cookedFoodAsapOnly',
           cookedFoodMoMoPayAfterConfirm
-            ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+            ? payAfterVariant === 'cooked'
+              ? 'We’ll start preparing once the kitchen confirms and receives your payment.'
+              : 'The store will confirm your order first. We’ll then ask you to pay.'
             : 'We’ll start preparing when the kitchen confirms.'
         )}
       />
@@ -2101,7 +2122,7 @@ const PlaceOrderPage: React.FC = () => {
       minimumApplied: false,
       percent: null as number | null,
     };
-    if (cookedFoodMoMoPayAfterConfirm || cookedFoodAsapOnly) return empty;
+    if (cookedFoodMoMoPayAfterConfirm || asapOnlyCheckout) return empty;
     const group = checkoutPreflight?.groups?.[0];
     const deposit = Number(group?.deposit_amount) || 0;
     if (!group?.deposit_required || deposit <= 0) return empty;
@@ -2112,7 +2133,7 @@ const PlaceOrderPage: React.FC = () => {
       percent:
         group.deposit_percent != null ? Number(group.deposit_percent) : null,
     };
-  }, [checkoutPreflight?.groups, cookedFoodMoMoPayAfterConfirm, cookedFoodAsapOnly]);
+  }, [checkoutPreflight?.groups, cookedFoodMoMoPayAfterConfirm, asapOnlyCheckout]);
 
   // Funnel analytics: track the first time the unavailable notice is shown.
   const unavailableTrackedRef = useRef(false);
@@ -3095,10 +3116,15 @@ const PlaceOrderPage: React.FC = () => {
                       </Typography>
                       <Typography variant="body2">
                         {cookedFoodMoMoPayAfterConfirm
-                          ? t(
-                              'orders.pickup.cookedFoodPayAfterConfirmHint',
-                              'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
-                            )
+                          ? payAfterVariant === 'cooked'
+                            ? t(
+                                'orders.pickup.cookedFoodPayAfterConfirmHint',
+                                'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
+                              )
+                            : t(
+                                'orders.pickup.storePayAfterConfirmHint',
+                                'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within 45 minutes or the order is cancelled automatically.'
+                              )
                           : isPickupOrder
                             ? t(
                                 'orders.pickup.clientPaymentHint',
@@ -4038,10 +4064,15 @@ const PlaceOrderPage: React.FC = () => {
                         </Typography>
                         <Typography variant="body2">
                           {cookedFoodMoMoPayAfterConfirm
-                            ? t(
-                                'orders.pickup.cookedFoodPayAfterConfirmHint',
-                                'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
-                              )
+                            ? payAfterVariant === 'cooked'
+                              ? t(
+                                  'orders.pickup.cookedFoodPayAfterConfirmHint',
+                                  'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order.'
+                                )
+                              : t(
+                                  'orders.pickup.storePayAfterConfirmHint',
+                                  'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within 45 minutes or the order is cancelled automatically.'
+                                )
                             : paymentTiming === 'pay_at_delivery'
                               ? t(
                                   'orders.payAtDelivery.info',

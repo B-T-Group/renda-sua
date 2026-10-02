@@ -116,8 +116,10 @@ export interface CheckoutGroup {
   schedule_required?: boolean;
   /** False when this group contains cooked food (ASAP-only). */
   schedule_allowed?: boolean;
-  /** True when every line is cooked food on MoMo — pay after kitchen confirm. */
+  /** True when pay-after applies on MoMo (cooked food or flagged location) — no deposit. */
   pay_after_merchant_confirm_eligible?: boolean;
+  /** True when every line is cooked food (kitchen wording); false for flagged-location goods. */
+  all_cooked_food?: boolean;
   /** MoMo deposit configuration (when available). */
   deposit_required?: boolean | null;
   deposit_amount?: number | null;

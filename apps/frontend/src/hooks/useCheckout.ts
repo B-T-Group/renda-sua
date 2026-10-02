@@ -63,6 +63,8 @@ interface OrderResult {
   payment_reference?: string;
   payment_status?: string;
   payment_timing?: string;
+  /** Resolved by the create call (authoritative; the preflight may be stale). */
+  pay_after_merchant_confirm?: boolean;
 }
 
 function buildMetaPixelPurchaseFromCart(

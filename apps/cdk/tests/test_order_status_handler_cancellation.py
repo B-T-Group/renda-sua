@@ -117,6 +117,43 @@ class CancellationFinancialsTest(unittest.TestCase):
         self.assertEqual(result["cancellation_fee"], 1500.0)
         register_fee.assert_called_once()
 
+    def test_fee_applicability_keys_on_pay_after_flag_not_payment_timing(self):
+        # Mirrors cancellation-policy.service.spec.ts "fee applicability matrix".
+        # (payment_timing, pay_after, payment_status, previous_status) -> fee applies
+        matrix = [
+            # pay-after delivery is stored as pay_now; pay-after pickup as pay_at_pickup
+            ("pay_now", True, "pending", "confirmed", False),
+            ("pay_now", True, "paid", "confirmed", True),
+            ("pay_at_pickup", True, "pending", "confirmed", False),
+            ("pay_at_pickup", True, "paid", "preparing", True),
+            ("pay_at_pickup", True, "authorized", "ready_for_pickup", True),
+            # classic pay-at-* never carries a fee
+            ("pay_at_pickup", False, "paid", "confirmed", False),
+            ("pay_at_delivery", False, "pending", "confirmed", False),
+            # classic pay-now carries the fee from confirmed
+            ("pay_now", False, "paid", "confirmed", True),
+            ("pay_now", False, "paid", "pending", False),
+        ]
+        for timing, pay_after, payment_status, prev, expected in matrix:
+            order = _order(
+                payment_timing=timing,
+                pay_after_merchant_confirm=pay_after,
+                payment_status=payment_status,
+            )
+            with self.subTest(timing=timing, pay_after=pay_after, status=payment_status, prev=prev):
+                self.assertEqual(
+                    handler.client_cancellation_fee_applies(order, "client", prev),
+                    expected,
+                )
+        # Only the client is ever charged
+        self.assertFalse(
+            handler.client_cancellation_fee_applies(
+                _order(payment_timing="pay_now", payment_status="paid"),
+                "business",
+                "confirmed",
+            )
+        )
+
     def test_fee_is_30_percent_of_item_subtotal_excluding_delivery_and_tax(self):
         # items after discount 9000 + delivery 1500 + tax 200 = 10700
         order = _order(

@@ -18,7 +18,7 @@ import {
 import { BusinessCancelOrderDialog } from './BusinessCancelOrderDialog';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
 import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
-import { shouldUseCookedFoodConfirmModal } from '../../utils/cookedFoodOrder';
+import { shouldUseGuidedConfirmModal } from '../../utils/cookedFoodOrder';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
@@ -123,7 +123,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
   const handlePress = useCallback(
     (actionId: BusinessOrderActionId, destructive?: boolean) => {
       if (actionId === 'confirm') {
-        if (shouldUseCookedFoodConfirmModal(order)) {
+        if (shouldUseGuidedConfirmModal(order)) {
           setCookedConfirmOpen(true);
         } else {
           setConfirmOpen(true);

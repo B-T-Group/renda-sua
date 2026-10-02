@@ -68,6 +68,8 @@ export interface CreatedOrder {
   deposit_status?: 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded' | null;
   /** Database transaction ID for MoMo deposit collect (FK to mobile_payment_transactions). #275 merged @ 3ed60fab. */
   deposit_mobile_payment_transaction_id?: string | null;
+  /** Resolved by the create call (authoritative; the preflight may be stale). */
+  pay_after_merchant_confirm?: boolean | null;
 }
 
 export interface CreateOrderResponse {

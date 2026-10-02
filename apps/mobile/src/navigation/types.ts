@@ -95,6 +95,8 @@ export type OrderPlacedSuccessParams = {
   fulfillment?: 'delivery' | 'pickup' | 'shipping';
   /** MoMo cooked-food pickup: payment is requested after kitchen confirm. */
   cookedFoodPayAfterConfirm?: boolean;
+  /** Wording for pay-after copy: kitchen (cooked food) or generic store (flagged-location goods). */
+  payAfterCopyVariant?: 'cooked' | 'store';
 };
 
 /** Where deposit-fail “Back to checkout” should return. */
@@ -275,7 +277,9 @@ export type BusinessPickupPaymentAwaitingParams = {
 export type BusinessRootStackParamList = {
   BusinessMainTabs: NavigatorScreenParams<BusinessMainTabParamList> | undefined;
   NotificationsCenter: undefined;
-  BusinessOrdersList: { cashReconciliation?: boolean } | undefined;
+  BusinessOrdersList:
+    | { cashReconciliation?: boolean; queue?: 'confirm' | 'prep' | 'pickup' | 'issues' | 'all' }
+    | undefined;
   BusinessOrderDetail: { orderId: string; openMessages?: boolean; highlightMessageId?: string };
   OrderMessages: {
     orderId: string;

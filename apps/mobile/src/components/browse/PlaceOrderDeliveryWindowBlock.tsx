@@ -20,6 +20,8 @@ export interface PlaceOrderDeliveryWindowBlockProps {
    * Changes the ASAP helper copy.
    */
   payAfterConfirm?: boolean;
+  /** 'store' → generic store wording (flagged-location goods); default kitchen wording. */
+  payAfterCopyVariant?: 'cooked' | 'store';
   estimatedReadyAt?: string | null;
   estimatedFulfillBy?: string | null;
   opensAt?: string | null;
@@ -36,6 +38,7 @@ export function PlaceOrderDeliveryWindowBlock({
   scheduleRequired = false,
   allowSchedule = true,
   payAfterConfirm = false,
+  payAfterCopyVariant = 'cooked',
   estimatedReadyAt,
   estimatedFulfillBy,
   opensAt,
@@ -87,7 +90,12 @@ export function PlaceOrderDeliveryWindowBlock({
         'client.placeOrder.deliveryWindow.storeClosedDelivery',
         'This store is closed. Select a future delivery date below.'
       );
-  const cookedFoodAsapCopy = payAfterConfirm
+  const cookedFoodAsapCopy = payAfterConfirm && payAfterCopyVariant === 'store'
+    ? t(
+        'client.placeOrder.deliveryWindow.storeAsapPayAfterConfirm',
+        'The store will confirm your order first. We’ll then ask you to pay.'
+      )
+    : payAfterConfirm
     ? t(
         'client.placeOrder.deliveryWindow.cookedFoodAsapPayAfterConfirm',
         'We’ll start preparing once the kitchen confirms and receives your payment.'

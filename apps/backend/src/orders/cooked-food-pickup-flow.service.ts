@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Configuration } from '../config/configuration';
+import { DEFAULT_PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES } from '../food/pay-after-confirm.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { OrderStatusService } from './order-status.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
@@ -182,15 +183,31 @@ export class CookedFoodPickupFlowService {
     }
   }
 
-  async scheduleUnpaidCancelAfterConfirm(orderId: string): Promise<void> {
-    const hours =
-      this.configService.get<Configuration['order']>('order')
-        ?.cookedFoodUnpaidCancelHours ?? 3;
+  /**
+   * Cooked food keeps the long window (hours). Stock-tracked goods hold reserved stock
+   * while unpaid, so they auto-cancel much sooner (default 45 min).
+   */
+  unpaidCancelSeconds(options?: { stockTrackedGoods?: boolean }): number {
+    const orderCfg = this.configService.get<Configuration['order']>('order');
+    if (options?.stockTrackedGoods) {
+      const minutes =
+        orderCfg?.payAfterGoodsUnpaidCancelMinutes ??
+        DEFAULT_PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES;
+      return Math.max(60, minutes * 60);
+    }
+    const hours = orderCfg?.cookedFoodUnpaidCancelHours ?? 3;
+    return Math.max(60, hours * 3600);
+  }
+
+  async scheduleUnpaidCancelAfterConfirm(
+    orderId: string,
+    options?: { stockTrackedGoods?: boolean }
+  ): Promise<void> {
     try {
       await this.waitAndExecute.scheduleAcceptanceTimeout(
         'order.cooked_food_unpaid_cancel',
         { order_id: orderId },
-        Math.max(60, hours * 3600)
+        this.unpaidCancelSeconds(options)
       );
     } catch (error: any) {
       this.logger.warn(

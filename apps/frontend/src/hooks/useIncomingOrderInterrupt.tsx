@@ -23,7 +23,7 @@ import {
   resolveIncomingInterruptDeadline,
   shouldOpenIncomingInterrupt,
 } from '../utils/incomingOrderInterrupt';
-import { shouldUseCookedFoodConfirmModal } from '../utils/cookedFoodOrder';
+import { shouldUseGuidedConfirmModal } from '../utils/cookedFoodOrder';
 import type {
   ConfirmOrderData,
   OrderStatusChangeResponse,
@@ -288,7 +288,7 @@ export function IncomingOrderInterruptProvider({
 
   const confirm = useCallback(async () => {
     if (!isActionableIncomingOrder(order) || !apiClient) return;
-    if (shouldUseCookedFoodConfirmModal(order)) {
+    if (shouldUseGuidedConfirmModal(order)) {
       setCookedFoodConfirmOpen(true);
       return;
     }

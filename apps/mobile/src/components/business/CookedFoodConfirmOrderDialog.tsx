@@ -10,14 +10,19 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessOrder } from '../../types/business/orders';
 import type { ConfirmOrderPayload } from '../../types/business/orders';
 import { rootNavigationRef } from '@/navigation/rootNavigationRef';
+import { isStorePayAfterConfirmOrder } from '../../utils/cookedFoodOrder';
+import { PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES } from '../../utils/payAfterConfirm';
 
 const PRESETS = [15, 30, 45, 60] as const;
 const MIN_CUSTOM = 5;
 const MAX_CUSTOM = 180;
 
-function navigateBusinessRoute(name: 'BusinessDashboard' | 'BusinessOrdersList') {
+function navigateBusinessRoute(
+  name: 'BusinessDashboard' | 'BusinessOrdersList',
+  params?: { queue: 'prep' }
+) {
   if (!rootNavigationRef.isReady()) return;
-  rootNavigationRef.dispatch(CommonActions.navigate({ name }));
+  rootNavigationRef.dispatch(CommonActions.navigate({ name, params }));
 }
 
 type ConfirmResponse = {
@@ -76,10 +81,13 @@ export function CookedFoodConfirmOrderDialog({
     return parsed;
   }, [customMinutes, selected]);
 
+  // Flagged-location goods: no ready-in prompt; explain pay-after + auto-cancel.
+  const storePayAfter = order ? isStorePayAfterConfirmOrder(order) : false;
+
   const handleSubmit = async () => {
     if (!order) return;
-    const readyInMinutes = resolveMinutes();
-    if (readyInMinutes == null) {
+    const readyInMinutes = storePayAfter ? undefined : resolveMinutes();
+    if (!storePayAfter && readyInMinutes == null) {
       setError(
         t(
           'orders.cookedFood.invalidReadyMinutes',
@@ -92,7 +100,10 @@ export function CookedFoodConfirmOrderDialog({
     setSubmitting(true);
     setError(null);
     try {
-      const result = await onConfirm({ orderId: order.id, ready_in_minutes: readyInMinutes });
+      const result = await onConfirm({
+        orderId: order.id,
+        ...(readyInMinutes != null ? { ready_in_minutes: readyInMinutes } : {}),
+      });
       if (result.pay_after_merchant_confirm) {
         setStep(2);
       } else {
@@ -138,16 +149,26 @@ export function CookedFoodConfirmOrderDialog({
                 : t('orders.cookedFood.delivery', 'Delivery')}
             </Text>
             <Text variant="titleLarge" style={{ marginTop: spacing.xs }}>
-              {step === 1
-                ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
-                : t('orders.cookedFood.waitPaymentTitle', 'Do not start cooking yet')}
+              {storePayAfter
+                ? step === 1
+                  ? t('orders.payAfterConfirm.business.confirmTitle', 'Confirm this order')
+                  : t('orders.payAfterConfirm.business.waitPaymentTitle', 'Wait for payment before preparing')
+                : step === 1
+                  ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
+                  : t('orders.cookedFood.waitPaymentTitle', 'Do not start cooking yet')}
             </Text>
           </View>
           <ScrollView
             contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
             keyboardShouldPersistTaps="handled"
           >
-            {step === 1 ? (
+            {storePayAfter ? (
+              step === 1 ? (
+                <StoreConfirmBody error={error} />
+              ) : (
+                <StoreWaitPaymentBody isPickup={isPickup} />
+              )
+            ) : step === 1 ? (
               <ReadyTimeBody
                 order={order}
                 selected={selected}
@@ -168,17 +189,19 @@ export function CookedFoodConfirmOrderDialog({
                 <Button
                   mode="contained"
                   loading={submitting}
-                  disabled={readyMinutes == null}
+                  disabled={!storePayAfter && readyMinutes == null}
                   onPress={() => void handleSubmit()}
                 >
-                  {readyMinutes == null
+                  {storePayAfter
+                    ? t('orders.payAfterConfirm.business.confirmCta', 'Confirm order')
+                    : readyMinutes == null
                     ? t('orders.cookedFood.confirmReady', 'Confirm ready time')
                     : t('orders.cookedFood.confirmReadyMinutes', 'Confirm · {{m}} min', {
                         m: readyMinutes,
                       })}
                 </Button>
                 <Button onPress={onDismiss} disabled={submitting}>
-                  {t('common.cancel', 'Cancel')}
+                  {t('common.back', 'Back')}
                 </Button>
               </>
             ) : (
@@ -196,10 +219,16 @@ export function CookedFoodConfirmOrderDialog({
                   mode="outlined"
                   onPress={() => {
                     onDismiss();
-                    navigateBusinessRoute('BusinessOrdersList');
+                    // Pay-after orders awaiting payment sit in the Prep queue.
+                    navigateBusinessRoute(
+                      'BusinessOrdersList',
+                      storePayAfter ? { queue: 'prep' } : undefined
+                    );
                   }}
                 >
-                  {t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
+                  {storePayAfter
+                    ? t('orders.payAfterConfirm.business.viewOrders', 'View orders')
+                    : t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
                 </Button>
               </>
             )}
@@ -208,6 +237,65 @@ export function CookedFoodConfirmOrderDialog({
       </Portal>
       <ActionLoadingDialog visible={submitting} action="confirm_order" />
     </>
+  );
+}
+
+function StoreConfirmBody({ error }: { error: string | null }) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  return (
+    <View style={{ gap: spacing.md }}>
+      <Text variant="bodyLarge" style={{ color: colors.text.primary }}>
+        {t(
+          'orders.payAfterConfirm.business.confirmBody',
+          'After you confirm, the client is asked to pay by Mobile Money. They have {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.',
+          { m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES }
+        )}
+      </Text>
+      <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+        {t(
+          'orders.payAfterConfirm.business.confirmHint',
+          'Do not prepare the order until you see the payment. Once it is paid, mark it ready when prepared. If you cannot fulfil a paid order, you can cancel it and the client is refunded.'
+        )}
+      </Text>
+      {error ? (
+        <Text style={{ color: colors.error.main, textAlign: 'center' }} variant="bodySmall">
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function StoreWaitPaymentBody({ isPickup }: { isPickup: boolean }) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  const steps = [
+    t('orders.payAfterConfirm.business.waitStepSent', 'A Mobile Money request is on the client’s phone.'),
+    t('orders.payAfterConfirm.business.waitStepWait', 'Wait for the payment notification ({{m}} minutes).', {
+      m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES,
+    }),
+    t('orders.payAfterConfirm.business.waitStepPrepare', 'Prepare the order only after you see that payment, then mark it ready.'),
+  ];
+  return (
+    <View style={{ gap: spacing.md }}>
+      {steps.map((label, i) => (
+        <Text key={label} variant="bodyMedium" style={{ color: colors.text.primary }}>
+          {i + 1}. {label}
+        </Text>
+      ))}
+      <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+        {isPickup
+          ? t(
+              'orders.payAfterConfirm.business.waitPickup',
+              'When it is ready, the client picks it up and completes the order in the app.'
+            )
+          : t(
+              'orders.payAfterConfirm.business.waitDelivery',
+              'When it is ready, a courier picks it up for delivery.'
+            )}
+      </Text>
+    </View>
   );
 }
 

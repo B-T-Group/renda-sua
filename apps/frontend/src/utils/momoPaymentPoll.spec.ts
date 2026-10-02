@@ -1,6 +1,7 @@
 import {
   MOMO_POLL_TIMEOUT_MS,
   claimPollTerminalPhase,
+  claimTransactionErrorCodeFromBody,
   claimTransactionStatusFromBody,
   resolveClaimPaymentPhase,
   resolveMomoPaymentStatuses,
@@ -30,6 +31,16 @@ describe('resolveMomoPaymentStatuses', () => {
     expect(resolveClaimPaymentPhase('')).toBe('waiting');
   });
 
+  it('maps CLAIM_ORDER_TAKEN to taken regardless of status', () => {
+    expect(resolveClaimPaymentPhase('success', 'CLAIM_ORDER_TAKEN')).toBe('taken');
+    expect(resolveClaimPaymentPhase('failed', 'CLAIM_ORDER_TAKEN')).toBe('taken');
+    expect(resolveClaimPaymentPhase('success', 'OTHER')).toBe('paid');
+    expect(
+      claimTransactionErrorCodeFromBody({ data: { error_code: 'CLAIM_ORDER_TAKEN' } })
+    ).toBe('CLAIM_ORDER_TAKEN');
+    expect(claimTransactionErrorCodeFromBody(null)).toBeUndefined();
+  });
+
   it('reads the nested transaction status and ignores a missing envelope', () => {
     expect(
       claimTransactionStatusFromBody({
@@ -54,6 +65,7 @@ describe('resolveMomoPaymentStatuses', () => {
     expect(claimPollTerminalPhase('waiting', MOMO_POLL_TIMEOUT_MS - 1)).toBeNull();
     expect(claimPollTerminalPhase('waiting', MOMO_POLL_TIMEOUT_MS)).toBe('timeout');
     expect(claimPollTerminalPhase('paid', 0)).toBe('paid');
+    expect(claimPollTerminalPhase('taken', 0)).toBe('taken');
     expect(claimPollTerminalPhase('failed', MOMO_POLL_TIMEOUT_MS)).toBe('failed');
   });
 

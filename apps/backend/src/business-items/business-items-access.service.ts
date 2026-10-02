@@ -55,6 +55,19 @@ export class BusinessItemsAccessService {
     }
   }
 
+  /** Owner-only fields: an admin editing another business is rejected (no admin override in v1). */
+  assertOwnBusiness(ctx: BusinessItemsAccessContext, field: string): void {
+    if (!ctx.isOwnBusiness) {
+      throw new HttpException(
+        {
+          success: false,
+          error: `${field} can only be changed by the business owner`,
+        },
+        HttpStatus.FORBIDDEN
+      );
+    }
+  }
+
   assertPlatformAdmin(ctx: BusinessItemsAccessContext): void {
     if (!ctx.isPlatformAdmin) {
       throw new HttpException(

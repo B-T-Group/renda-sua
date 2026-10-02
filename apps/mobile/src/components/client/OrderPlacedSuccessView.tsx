@@ -40,6 +40,7 @@ function paymentChipLabel(
     paymentCompleted?: boolean;
     paymentTiming: OrderPlacedSuccessParams['paymentTiming'];
     cookedFoodPayAfterConfirm?: boolean;
+    payAfterCopyVariant?: 'cooked' | 'store';
   }
 ) {
   if (params.depositConfirmed) {
@@ -50,6 +51,12 @@ function paymentChipLabel(
   }
   // Food MoMo: order is placed unpaid; payment request comes after kitchen confirm.
   if (params.cookedFoodPayAfterConfirm) {
+    if (params.payAfterCopyVariant === 'store') {
+      return t(
+        'client.placeOrder.successScreen.chipStorePayAfterConfirm',
+        'Pay after the store confirms'
+      );
+    }
     return t(
       'client.placeOrder.successScreen.chipCookedFoodPayAfterConfirm',
       'Pay after kitchen confirms'
@@ -84,6 +91,7 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
     fulfillment,
     depositConfirmed,
     cookedFoodPayAfterConfirm,
+    payAfterCopyVariant,
     primaryAction,
     secondaryAction,
   } = props;
@@ -117,6 +125,15 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
     placedTrackedRef.current = true;
     trackFirstOrderClientPlaced({ fulfillment_method: fulfillmentPath });
   }, [fulfillmentPath, showFirstOrderPreview]);
+
+  const paymentChip = paymentChipLabel(t, {
+    depositConfirmed,
+    cardAuthorized,
+    paymentCompleted,
+    paymentTiming,
+    cookedFoodPayAfterConfirm,
+    payAfterCopyVariant,
+  });
 
   const missingEmail = !profileLoading && !(meUser?.email ?? '').trim();
   const missingPhone = !profileLoading && !(meUser?.phone_number ?? '').trim();
@@ -175,16 +192,16 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
               marginTop: spacing.md,
             }}
           >
-            <Chip icon={chipIcon}>
-              {paymentChipLabel(t, {
-                depositConfirmed,
-                cardAuthorized,
-                paymentCompleted,
-                paymentTiming,
-                cookedFoodPayAfterConfirm,
-              })}
+            <Chip icon={chipIcon} accessibilityLabel={paymentChip}>
+              {paymentChip}
             </Chip>
-            <Chip icon="clipboard-text-outline">
+            <Chip
+              icon="clipboard-text-outline"
+              accessibilityLabel={t(
+                'client.placeOrder.successScreen.trackHint',
+                'Track progress in My orders'
+              )}
+            >
               {t('client.placeOrder.successScreen.trackHint', 'Track progress in My orders')}
             </Chip>
           </View>
@@ -195,6 +212,18 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
         ) : null}
 
         <SuccessNextSteps {...props} isStripeRail={isStripeRail} />
+
+        {cookedFoodPayAfterConfirm && payAfterCopyVariant === 'store' ? (
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.text.secondary, marginBottom: spacing.md }}
+          >
+            {t(
+              'orders.payAfterConfirm.storeNoConfirm',
+              'If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged.'
+            )}
+          </Text>
+        ) : null}
 
         {showContactNudge && missingField ? (
           <View style={{ marginBottom: spacing.md }}>

@@ -22,6 +22,8 @@ import {
 } from '../../../hooks/useBackendOrders';
 import type { OrderData } from '../../../hooks/useOrderById';
 import type { FoodConfirmationStockUpdate } from '../../../types/food';
+import { isStorePayAfterConfirmOrder } from '../../../utils/cookedFoodOrder';
+import { PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES } from '../../../utils/payAfterConfirm';
 import FoodOrderStockPrompt, { type FoodOrderLine } from './FoodOrderStockPrompt';
 import { CookedFoodReadyClockIllustration } from './CookedFoodReadyClockIllustration';
 import { CookedFoodWaitPaymentIllustration } from './CookedFoodWaitPaymentIllustration';
@@ -83,6 +85,9 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
     setFoodStockUpdates({});
   }, [open, order?.id]);
 
+  // Flagged-location goods: no ready-in prompt; explain pay-after + 45-min auto-cancel.
+  const storePayAfter = order ? isStorePayAfterConfirmOrder(order as any) : false;
+
   const resolveReadyMinutes = useCallback((): number | null => {
     if (selectedMinutes !== 'custom') return selectedMinutes;
     const parsed = Number.parseInt(customMinutes, 10);
@@ -93,8 +98,8 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
 
   const handleConfirmReady = useCallback(async () => {
     setError('');
-    const readyInMinutes = resolveReadyMinutes();
-    if (readyInMinutes == null) {
+    const readyInMinutes = storePayAfter ? undefined : resolveReadyMinutes();
+    if (!storePayAfter && readyInMinutes == null) {
       setError(
         t(
           'orders.cookedFood.invalidReadyMinutes',
@@ -112,7 +117,7 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
     try {
       const payload: ConfirmOrderData = {
         orderId: order.id,
-        ready_in_minutes: readyInMinutes,
+        ...(readyInMinutes != null ? { ready_in_minutes: readyInMinutes } : {}),
       };
       const stockUpdates = Object.values(foodStockUpdates);
       if (stockUpdates.length > 0) {
@@ -132,7 +137,7 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
     } finally {
       setSubmitting(false);
     }
-  }, [foodStockUpdates, onClose, onConfirm, order, resolveReadyMinutes, t]);
+  }, [foodStockUpdates, onClose, onConfirm, order, resolveReadyMinutes, storePayAfter, t]);
 
   if (!order) return null;
 
@@ -153,14 +158,24 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
             : t('orders.cookedFood.delivery', 'Delivery')}
         </Typography>
         <Typography variant="h6">
-          {step === 1
-            ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
-            : t('orders.cookedFood.waitPaymentTitle', 'Do not start cooking yet')}
+          {storePayAfter
+            ? step === 1
+              ? t('orders.payAfterConfirm.business.confirmTitle', 'Confirm this order')
+              : t('orders.payAfterConfirm.business.waitPaymentTitle', 'Wait for payment before preparing')
+            : step === 1
+              ? t('orders.cookedFood.confirmTitle', 'When will it be ready?')
+              : t('orders.cookedFood.waitPaymentTitle', 'Do not start cooking yet')}
         </Typography>
       </DialogTitle>
 
       <DialogContent>
-        {step === 1 ? (
+        {storePayAfter ? (
+          step === 1 ? (
+            <StoreConfirmStep error={error} />
+          ) : (
+            <StoreWaitPaymentStep isPickup={isPickup} />
+          )
+        ) : step === 1 ? (
           <ReadyTimeStep
             lines={foodLines}
             selectedMinutes={selectedMinutes}
@@ -182,12 +197,17 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
         {step === 1 ? (
           <ConfirmActions
             busy={busy}
-            readyMinutes={readyMinutes}
+            readyMinutes={storePayAfter ? 0 : readyMinutes}
+            plain={storePayAfter}
             onClose={onClose}
             onConfirm={() => void handleConfirmReady()}
           />
         ) : (
-          <WaitActions onDashboard={() => navigate('/dashboard')} onOrders={() => navigate('/orders?queue=prep')} />
+          <WaitActions
+            storePayAfter={storePayAfter}
+            onDashboard={() => navigate('/dashboard')}
+            onOrders={() => navigate('/orders?queue=prep')}
+          />
         )}
       </DialogActions>
     </Dialog>
@@ -373,26 +393,80 @@ function WaitRow({ index, label }: { index: number; label: string }) {
   );
 }
 
+function StoreConfirmStep({ error }: { error: string }) {
+  const { t } = useTranslation();
+  return (
+    <Stack spacing={2}>
+      <Alert severity="info">
+        {t(
+          'orders.payAfterConfirm.business.confirmBody',
+          'After you confirm, the client is asked to pay by Mobile Money. They have {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.',
+          { m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES }
+        )}
+      </Alert>
+      <Typography variant="body2" color="text.secondary">
+        {t(
+          'orders.payAfterConfirm.business.confirmHint',
+          'Do not prepare the order until you see the payment. Once it is paid, mark it ready when prepared. If you cannot fulfil a paid order, you can cancel it and the client is refunded.'
+        )}
+      </Typography>
+      {error ? <Alert severity="error">{error}</Alert> : null}
+    </Stack>
+  );
+}
+
+function StoreWaitPaymentStep({ isPickup }: { isPickup: boolean }) {
+  const { t } = useTranslation();
+  const steps = [
+    t('orders.payAfterConfirm.business.waitStepSent', 'A Mobile Money request is on the client’s phone.'),
+    t('orders.payAfterConfirm.business.waitStepWait', 'Wait for the payment notification ({{m}} minutes).', {
+      m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES,
+    }),
+    t('orders.payAfterConfirm.business.waitStepPrepare', 'Prepare the order only after you see that payment, then mark it ready.'),
+  ];
+  return (
+    <Stack spacing={2}>
+      {steps.map((label, index) => (
+        <WaitRow key={label} index={index + 1} label={label} />
+      ))}
+      <Alert severity="warning">
+        {isPickup
+          ? t(
+              'orders.payAfterConfirm.business.waitPickup',
+              'When it is ready, the client picks it up and completes the order in the app.'
+            )
+          : t(
+              'orders.payAfterConfirm.business.waitDelivery',
+              'When it is ready, a courier picks it up for delivery.'
+            )}
+      </Alert>
+    </Stack>
+  );
+}
+
 function ConfirmActions({
   busy,
   readyMinutes,
+  plain,
   onClose,
   onConfirm,
 }: {
   busy: boolean;
   readyMinutes: number | null;
+  plain?: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }) {
   const { t } = useTranslation();
-  const label =
-    readyMinutes == null
+  const label = plain
+    ? t('orders.payAfterConfirm.business.confirmCta', 'Confirm order')
+    : readyMinutes == null
       ? t('orders.cookedFood.confirmReady', 'Confirm ready time')
       : t('orders.cookedFood.confirmReadyMinutes', 'Confirm · {{m}} min', { m: readyMinutes });
   return (
     <Box display="flex" gap={2} justifyContent="flex-end" width="100%">
       <Button onClick={onClose} disabled={busy}>
-        {t('common.cancel', 'Cancel')}
+        {t('common.back', 'Back')}
       </Button>
       <Button
         variant="contained"
@@ -407,9 +481,11 @@ function ConfirmActions({
 }
 
 function WaitActions({
+  storePayAfter,
   onDashboard,
   onOrders,
 }: {
+  storePayAfter: boolean;
   onDashboard: () => void;
   onOrders: () => void;
 }) {
@@ -420,7 +496,9 @@ function WaitActions({
         {t('orders.cookedFood.returnDashboard', 'Return to dashboard')}
       </Button>
       <Button variant="outlined" onClick={onOrders}>
-        {t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
+        {storePayAfter
+          ? t('orders.payAfterConfirm.business.viewOrders', 'View orders')
+          : t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
       </Button>
     </Stack>
   );

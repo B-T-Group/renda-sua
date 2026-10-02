@@ -48,6 +48,8 @@ export interface BusinessLocation {
   rendasua_item_commission_percentage?: number | null;
   /** When true, order payouts are auto-sent to this location's phone when set. */
   auto_withdraw_commissions?: boolean;
+  /** Owner-only. When true, clients pay after the store confirms (MoMo, ASAP). Default false. */
+  pay_at_confirm?: boolean;
   /** Public URL for location logo (S3 or external). */
   logo_url?: string | null;
 }
@@ -88,6 +90,8 @@ export interface UpdateBusinessLocationData {
   is_active?: boolean;
   is_primary?: boolean;
   auto_withdraw_commissions?: boolean;
+  /** Owner-only; ignored by the API for non-owners. */
+  pay_at_confirm?: boolean;
   logo_url?: string | null;
   address?: {
     address_line_1?: string;
@@ -98,6 +102,14 @@ export interface UpdateBusinessLocationData {
     country?: string;
     instructions?: string;
   };
+}
+
+export function selectBusinessLocation(
+  locations: BusinessLocation[],
+  locationId: string | undefined
+): BusinessLocation | undefined {
+  if (!locationId) return undefined;
+  return locations.find((location) => location.id === locationId);
 }
 
 export const useBusinessLocations = (
@@ -286,6 +298,9 @@ export const useBusinessLocations = (
           ...(locationData.auto_withdraw_commissions !== undefined && {
             auto_withdraw_commissions: locationData.auto_withdraw_commissions,
           }),
+          ...(locationData.pay_at_confirm !== undefined && {
+            pay_at_confirm: locationData.pay_at_confirm,
+          }),
           ...(locationData.logo_url !== undefined && {
             logo_url: locationData.logo_url?.trim()
               ? locationData.logo_url.trim()
@@ -416,10 +431,6 @@ export const useBusinessLocations = (
   );
 
   useEffect(() => {
-    console.log(
-      'useBusinessLocations: useEffect triggered, businessId:',
-      businessId
-    );
     if (businessId) {
       fetchLocations();
     }

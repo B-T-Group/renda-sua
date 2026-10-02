@@ -67,7 +67,10 @@ import {
   normalizeRecipientResponse,
   normalizeRecipientsList,
 } from '../utils/recipientsApi';
-import { claimTransactionStatusFromBody } from '../utils/momoPaymentPoll';
+import {
+  claimTransactionErrorCodeFromBody,
+  claimTransactionStatusFromBody,
+} from '../utils/momoPaymentPoll';
 
 export type { MeResponse, MeUser, SetMyPhoneResponse, UpdateMeResponse, UpdateMyEmailResponse };
 
@@ -396,11 +399,17 @@ const orders = {
 
   claimOrderWithTopup: (orderId: string, phone_number?: string): Promise<ClaimOrderTopupResponse> =>
     api.post<ClaimOrderTopupResponse>('/orders/claim_order_with_topup', { orderId, phone_number }),
-  getMobilePaymentTransaction: (transactionId: string): Promise<{ status?: string }> =>
-    api.get<{ success?: boolean; data?: { status?: string }; status?: string }>(
-      `/mobile-payments/transactions/${transactionId}`
-    ).then((body) => ({
+  getMobilePaymentTransaction: (
+    transactionId: string
+  ): Promise<{ status?: string; errorCode?: string }> =>
+    api.get<{
+      success?: boolean;
+      data?: { status?: string; error_code?: string };
+      status?: string;
+      error_code?: string;
+    }>(`/mobile-payments/transactions/${transactionId}`).then((body) => ({
       status: claimTransactionStatusFromBody(body) ?? undefined,
+      errorCode: claimTransactionErrorCodeFromBody(body) ?? undefined,
     })),
 
   dropOrder: (orderId: string): Promise<OrderActionResponse> =>

@@ -1,6 +1,11 @@
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import type { MobilePaymentTransaction } from './mobile-payments-database.service';
 import type { MyPVitCallbackDto } from './mobile-payment-callback.dto';
+
+jest.mock('../common/utils/money-alert.util', () => ({
+  reportMoneyAnomaly: jest.fn(),
+}));
 
 describe('MobilePaymentCallbackProcessor provider confirmation', () => {
   const pendingTokenTx: MobilePaymentTransaction = {
@@ -753,5 +758,117 @@ describe('MobilePaymentCallbackProcessor Freemopay lookup', () => {
 
     expect(databaseService.getTransactionById).toHaveBeenCalledWith(depositTx.id);
     expect(onPaymentSuccess).toHaveBeenCalled();
+  });
+});
+
+describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)', () => {
+  const databaseService = {
+    getTransactionByReference: jest.fn(),
+    logCallback: jest.fn(),
+    updateTransaction: jest.fn(),
+  };
+  const accountsService = {
+    registerDepositIfNotExists: jest.fn(),
+    hasTransactionForReference: jest.fn(),
+    registerTransaction: jest.fn(),
+  };
+  const orderHandler = {
+    supportsPaymentEntity: (e: string) => e === 'order',
+    onPaymentSuccess: jest.fn(),
+    onPaymentFailure: jest.fn(),
+    finalizeCashReconciliationAfterPayment: jest.fn(),
+  };
+  const registry = { getHandlers: jest.fn().mockReturnValue([orderHandler]) };
+  const mobilePaymentsService = {
+    assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+  };
+  const orderTx: MobilePaymentTransaction = {
+    id: '66666666-6666-4666-8666-666666666666',
+    reference: 'ORD-1-123-abc',
+    amount: 5000,
+    currency: 'XAF',
+    status: 'pending',
+    account_id: '77777777-7777-4777-8777-777777777777',
+    transaction_type: 'PAYMENT',
+    payment_entity: 'order',
+    entity_id: 'ORD-1',
+    provider: 'mypvit',
+    payment_method: 'mobile_money',
+    created_at: '2026-10-01T00:00:00.000Z',
+    updated_at: '2026-10-01T00:00:00.000Z',
+  } as MobilePaymentTransaction;
+  const callback = {
+    transactionId: 'provider-1',
+    merchantReferenceId: 'ORD-1-123-abc',
+    status: 'SUCCESS' as const,
+    amount: 5000,
+    customerID: '+237600000000',
+    fees: 0,
+    chargeOwner: 'MERCHANT',
+    transactionOperation: 'PAYMENT',
+    operator: 'MTN',
+    code: 200,
+  };
+  let processor: MobilePaymentCallbackProcessor;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    registry.getHandlers.mockReturnValue([orderHandler]);
+    processor = new MobilePaymentCallbackProcessor(
+      databaseService as never,
+      accountsService as never,
+      registry as never,
+      mobilePaymentsService as never
+    );
+    databaseService.getTransactionByReference.mockResolvedValue(orderTx);
+    databaseService.logCallback.mockResolvedValue(undefined);
+    databaseService.updateTransaction.mockResolvedValue(undefined);
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+    });
+    orderHandler.onPaymentSuccess.mockResolvedValue(undefined);
+  });
+
+  it('does not mark the tx success when the order finalize fails; alerts and leaves it pending for replay', async () => {
+    orderHandler.onPaymentSuccess.mockRejectedValue(new Error('hold failed'));
+
+    await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
+      'hold failed'
+    );
+
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(),
+      'payment_finalize_failed',
+      expect.stringContaining('entity=order'),
+      expect.objectContaining({ transactionId: orderTx.id })
+    );
+  });
+
+  it('marks success normally when the order finalize succeeds (no alert)', async () => {
+    await processor.processMypvitCallback(callback);
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(orderTx.id, {
+      status: 'success',
+      transaction_id: 'provider-1',
+    });
+    expect(reportMoneyAnomaly).not.toHaveBeenCalled();
+  });
+
+  it('replay of an already-success tx alerts but does not 5xx the provider', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...orderTx,
+      status: 'success',
+    });
+    orderHandler.onPaymentSuccess.mockRejectedValue(new Error('still failing'));
+
+    const result = await processor.processMypvitCallback(callback);
+
+    expect(result.skipped).toBe(true);
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(),
+      'payment_finalize_failed',
+      expect.stringContaining('(replay)'),
+      expect.anything()
+    );
   });
 });

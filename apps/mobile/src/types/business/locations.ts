@@ -32,6 +32,8 @@ export interface BusinessLocation {
    */
   rendasua_item_commission_percentage?: number | null;
   auto_withdraw_commissions?: boolean;
+  /** Owner-only: clients pay after the store confirms (MoMo, ASAP). Default false. */
+  pay_at_confirm?: boolean;
   logo_url?: string | null;
   operating_hours?: OperatingHours | null;
 }
@@ -81,6 +83,7 @@ export interface UpdateBusinessLocationPayload {
   is_primary?: boolean;
   is_active?: boolean;
   auto_withdraw_commissions?: boolean;
+  pay_at_confirm?: boolean;
   logo_url?: string | null;
 }
 

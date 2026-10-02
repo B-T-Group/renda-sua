@@ -83,6 +83,7 @@ insert_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - pay_at_confirm
         - logo_url
         - created_at
         - updated_at
@@ -145,6 +146,7 @@ select_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - pay_at_confirm
         - logo_url
         - created_at
         - updated_at
@@ -211,6 +213,7 @@ update_permissions:
         - operating_hours
         - rendasua_item_commission_percentage
         - auto_withdraw_commissions
+        - pay_at_confirm
         - logo_url
         - updated_at
       filter:

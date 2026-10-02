@@ -69,6 +69,17 @@ export default function ClaimAwaitingPaymentScreen() {
     }
   }, [orderId, phoneE164, restart, t]);
 
+  if (phase === 'taken') {
+    return (
+      <ClaimOrderTaken
+        onBack={() => {
+          stop();
+          navigation.goBack();
+        }}
+      />
+    );
+  }
+
   if (phase === 'failed') {
     return (
       <ClaimPaymentFailed
@@ -92,6 +103,28 @@ export default function ClaimAwaitingPaymentScreen() {
         navigation.goBack();
       }}
     />
+  );
+}
+
+function ClaimOrderTaken(props: { onBack: () => void }) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.pageBackground, padding: spacing.lg, paddingBottom: insets.bottom + spacing.xl }}>
+      <Text variant="headlineSmall" style={{ textAlign: 'center', fontWeight: '700', color: colors.warning.main }}>
+        {t('orders.momoAwaiting.takenTitle', 'Order no longer available')}
+      </Text>
+      <Text variant="bodyLarge" style={{ marginTop: spacing.sm, textAlign: 'center', color: colors.text.secondary, lineHeight: 24 }}>
+        {t(
+          'orders.momoAwaiting.takenBody',
+          'This order is no longer available. The payment is available in your Rendasua wallet, so you can claim a different order.'
+        )}
+      </Text>
+      <Button mode="contained" style={{ marginTop: spacing.xl }} onPress={props.onBack}>
+        {t('orders.momoAwaiting.back', 'Back to order')}
+      </Button>
+    </View>
   );
 }
 

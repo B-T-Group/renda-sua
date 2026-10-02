@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react';
+import { isCookedFoodOrderSnapshot } from '../../utils/cookedFoodOrder';
+import { isUnpaidPayAfterOrder } from '../../utils/payAfterConfirm';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -174,6 +176,7 @@ export function CancellationConfirmSheet({ visible, order, onDismiss, onSuccess 
               {preview.canCancel ? (
                 <CancellationDetails
                   preview={preview}
+                  unpaidPayAfter={isUnpaidPayAfterOrder(order)}
                   colors={colors}
                   spacing={spacing}
                   borderRadius={borderRadius}
@@ -207,6 +210,7 @@ export function CancellationConfirmSheet({ visible, order, onDismiss, onSuccess 
                     isOther={isOther}
                     chipMode={
                       order.current_status === 'ready_for_pickup' &&
+                      isCookedFoodOrderSnapshot(order) &&
                       (order.pay_after_merchant_confirm === true ||
                         order.is_cooked_food_pickup === true)
                     }
@@ -262,12 +266,15 @@ export function CancellationConfirmSheet({ visible, order, onDismiss, onSuccess 
 
 function CancellationDetails({
   preview,
+  unpaidPayAfter,
   colors,
   spacing,
   borderRadius,
   t,
 }: {
   preview: CancellationPreview;
+  /** Pay-after order the client has not paid yet: nothing was charged, so nothing is refunded. */
+  unpaidPayAfter: boolean;
   colors: any;
   spacing: any;
   borderRadius: any;
@@ -275,42 +282,64 @@ function CancellationDetails({
 }) {
   return (
     <View>
-      <RefundBadge refundType={preview.refundType} colors={colors} spacing={spacing} t={t} />
-
-      {preview.cancellationFee > 0 && (
-        <Text
-          variant="bodySmall"
-          style={{ color: colors.text.secondary, marginTop: spacing.xs }}
+      {unpaidPayAfter ? (
+        <View
+          style={{
+            backgroundColor: colors.success.main + '20',
+            borderRadius: 8,
+            paddingHorizontal: spacing.sm,
+            paddingVertical: spacing.xs,
+            alignSelf: 'flex-start',
+            marginBottom: spacing.xs,
+          }}
         >
-          {t('cancellation.refund.feeDeducted', 'Cancellation fee: {{amount}} {{currency}}', {
-            amount: preview.cancellationFee.toLocaleString(),
-            currency: preview.refundCurrency,
-          })}
-        </Text>
-      )}
+          <Text variant="bodyMedium" style={{ color: colors.success.dark, fontWeight: '600' }}>
+            {t(
+              'orders.payAfterConfirm.cancelUnpaid',
+              "You haven't paid yet, so cancelling is free and nothing is charged."
+            )}
+          </Text>
+        </View>
+      ) : (
+        <>
+          <RefundBadge refundType={preview.refundType} colors={colors} spacing={spacing} t={t} />
 
-      {preview.refundAmount > 0 &&
-        preview.refundType !== 'none' &&
-        preview.refundType !== 'authorization_release' && (
-        <Text
-          variant="bodySmall"
-          style={{ color: colors.text.secondary, marginTop: spacing.xs }}
-        >
-          {t('cancellation.refund.netRefund', 'Net refund: {{amount}} {{currency}}', {
-            amount: preview.refundAmount.toLocaleString(),
-            currency: preview.refundCurrency,
-          })}
-        </Text>
-      )}
+          {preview.cancellationFee > 0 && (
+            <Text
+              variant="bodySmall"
+              style={{ color: colors.text.secondary, marginTop: spacing.xs }}
+            >
+              {t('cancellation.refund.feeDeducted', 'Cancellation fee: {{amount}} {{currency}}', {
+                amount: preview.cancellationFee.toLocaleString(),
+                currency: preview.refundCurrency,
+              })}
+            </Text>
+          )}
 
-      {preview.estimatedRefundProcessingTime ? (
-        <ProcessingTimeNote
-          key_={preview.estimatedRefundProcessingTime}
-          colors={colors}
-          spacing={spacing}
-          t={t}
-        />
-      ) : null}
+          {preview.refundAmount > 0 &&
+            preview.refundType !== 'none' &&
+            preview.refundType !== 'authorization_release' && (
+            <Text
+              variant="bodySmall"
+              style={{ color: colors.text.secondary, marginTop: spacing.xs }}
+            >
+              {t('cancellation.refund.netRefund', 'Net refund: {{amount}} {{currency}}', {
+                amount: preview.refundAmount.toLocaleString(),
+                currency: preview.refundCurrency,
+              })}
+            </Text>
+          )}
+
+          {preview.estimatedRefundProcessingTime ? (
+            <ProcessingTimeNote
+              key_={preview.estimatedRefundProcessingTime}
+              colors={colors}
+              spacing={spacing}
+              t={t}
+            />
+          ) : null}
+        </>
+      )}
 
       {preview.cancellationConsequences.length > 0 && (
         <View
@@ -407,9 +436,10 @@ function ProcessingTimeNote({
       'cancellation.refund.stripe_timeline',
       'Refunds typically appear within 5–10 business days.'
     ),
+    // Refunds for Mobile Money payments are credited to the Rendasua wallet, not sent back.
     mobile_money_provider: t(
       'cancellation.refund.mobileMoney_timeline',
-      'Refund processing depends on your mobile money provider.'
+      'Refunds go to your Rendasua wallet and are credited immediately.'
     ),
     wallet_immediate: t(
       'cancellation.refund.wallet_timeline',

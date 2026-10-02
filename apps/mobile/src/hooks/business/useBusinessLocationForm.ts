@@ -58,6 +58,47 @@ function resolveDefaultMobilePaymentPhoneId(
   return phones.find((p) => p.is_verified)?.id ?? null;
 }
 
+function createPayloadFromForm(input: {
+  name: string;
+  isStripeRail: boolean;
+  phone: string;
+  mobilePaymentPhoneId: string | null;
+  addressForm: DeliveryAddressFormValue;
+}): CreateBusinessLocationPayload {
+  return {
+    name: input.name.trim(),
+    location_type: 'store',
+    ...(input.isStripeRail
+      ? { phone: input.phone.trim() || undefined, auto_withdraw_commissions: false }
+      : { mobile_payment_phone_id: input.mobilePaymentPhoneId, auto_withdraw_commissions: true }),
+    address: {
+      address_line_1: input.addressForm.address_line_1.trim(),
+      address_line_2: input.addressForm.address_line_2?.trim(),
+      city: input.addressForm.city.trim(),
+      state: input.addressForm.state,
+      postal_code: input.addressForm.postal_code?.trim(),
+      latitude: input.addressForm.latitude,
+      longitude: input.addressForm.longitude,
+    },
+  };
+}
+
+function ownerErrorMessage(
+  err: unknown,
+  t: (key: string, fallback: string) => string
+): string {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  if (status === 403) {
+    return t(
+      'business.locations.payAfter.ownerOnly',
+      'Only the business owner can change this.'
+    );
+  }
+  return err instanceof Error
+    ? err.message
+    : t('business.locations.saveError', 'Failed to save location');
+}
+
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList, 'BusinessLocationForm'>;
 
 export function useBusinessLocationForm(
@@ -66,7 +107,7 @@ export function useBusinessLocationForm(
 ) {
   const { t } = useTranslation();
   const { me } = useProfileMe();
-  const { isStripeRail } = useIsStripeRail();
+  const { isStripeRail, loading: railLoading } = useIsStripeRail();
   const { phones, fetchPhones, verificationMethod } = useMobilePaymentPhones(!isStripeRail);
   const businessId = me?.business?.id ?? '';
   const isEditing = !!locationId;
@@ -85,6 +126,7 @@ export function useBusinessLocationForm(
   const [email, setEmail] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [autoWithdraw, setAutoWithdraw] = useState(!isStripeRail);
+  const [payAtConfirm, setPayAtConfirm] = useState(false);
   const [locationType, setLocationType] = useState<BusinessLocation['location_type']>('store');
   const [isPrimary, setIsPrimary] = useState(false);
   const [addressForm, setAddressForm] = useState<DeliveryAddressFormValue>({
@@ -97,6 +139,7 @@ export function useBusinessLocationForm(
   });
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [location, setLocation] = useState<BusinessLocation | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -114,6 +157,7 @@ export function useBusinessLocationForm(
         }
         const loc = res.data.business_locations.find((l) => l.id === locationId);
         if (!loc) return;
+        setLocation(loc);
         setName(loc.name);
         setPhone(loc.phone ?? '');
         setOrderAlertPhone(loc.order_alert_phone ?? '');
@@ -123,6 +167,7 @@ export function useBusinessLocationForm(
         setEmail(loc.email ?? '');
         setLogoUrl(loc.logo_url ?? '');
         setAutoWithdraw(loc.auto_withdraw_commissions !== false);
+        setPayAtConfirm(loc.pay_at_confirm === true);
         setLocationType(loc.location_type);
         setIsPrimary(loc.is_primary);
         setAddressForm({
@@ -201,7 +246,12 @@ export function useBusinessLocationForm(
   }, [businessId, t]);
 
   const save = useCallback(async () => {
-    if (!name.trim() || !addressForm.address_line_1.trim() || !addressForm.city.trim()) {
+    if (!name.trim()) {
+      setSaveError(t('business.locations.basics.nameRequired', 'Enter a name.'));
+      return;
+    }
+    if (!addressForm.address_line_1.trim() || !addressForm.city.trim()) {
+      setSaveError(t('business.locations.basics.addressRequired', 'Add an address for this location.'));
       return;
     }
     setSaving(true);
@@ -223,6 +273,7 @@ export function useBusinessLocationForm(
         };
         if (!isStripeRail) {
           updatePayload.auto_withdraw_commissions = autoWithdraw;
+          updatePayload.pay_at_confirm = payAtConfirm;
         }
         await businessApi.locations.update(locationId, updatePayload);
         await businessApi.locations.patchAddress(locationId, {
@@ -236,28 +287,13 @@ export function useBusinessLocationForm(
           longitude: addressForm.longitude,
         });
       } else {
-        const createPayload: CreateBusinessLocationPayload = {
-          name: name.trim(),
-          ...(isStripeRail
-            ? { phone: phone.trim() || undefined }
-            : { mobile_payment_phone_id: mobilePaymentPhoneId }),
-          order_alert_phone: normalizeOrderAlertPhone(orderAlertPhone),
-          email: email.trim() || undefined,
-          location_type: locationType,
-          is_primary: isPrimary,
-          logo_url: logo,
-          address: {
-            address_line_1: addressForm.address_line_1.trim(),
-            address_line_2: addressForm.address_line_2?.trim(),
-            city: addressForm.city.trim(),
-            state: addressForm.state,
-            postal_code: addressForm.postal_code?.trim(),
-            latitude: addressForm.latitude,
-            longitude: addressForm.longitude,
-          },
-        };
-        if (!isStripeRail) createPayload.auto_withdraw_commissions = autoWithdraw;
-        await businessApi.locations.create(createPayload);
+        await businessApi.locations.create(createPayloadFromForm({
+          name,
+          isStripeRail,
+          phone,
+          mobilePaymentPhoneId,
+          addressForm,
+        }));
       }
       navigation.goBack();
     } catch (err: unknown) {
@@ -275,6 +311,7 @@ export function useBusinessLocationForm(
     locationType,
     isPrimary,
     autoWithdraw,
+    payAtConfirm,
     logoUrl,
     addressForm,
     locationId,
@@ -283,6 +320,116 @@ export function useBusinessLocationForm(
     mobilePaymentPhoneId,
     isStripeRail,
   ]);
+
+  const patchFields = useCallback(
+    async (payload: UpdateBusinessLocationPayload) => {
+      if (!locationId) return;
+      setSaving(true);
+      setSaveError(null);
+      try {
+        await businessApi.locations.update(locationId, payload);
+        const res = await businessApi.locations.list();
+        const next = res.data?.business_locations?.find((item) => item.id === locationId);
+        if (next) setLocation(next);
+      } catch (err: unknown) {
+        setSaveError(ownerErrorMessage(err, t));
+        throw err;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [locationId, t]
+  );
+
+  const saveBasics = useCallback(async () => {
+    if (!name.trim()) {
+      setSaveError(t('business.locations.basics.nameRequired', 'Enter a name.'));
+      return;
+    }
+    await patchFields({
+      name: name.trim(),
+      email: email.trim() || undefined,
+      logo_url: logoUrl.trim() ? logoUrl.trim() : null,
+      ...(isStripeRail ? { phone: phone.trim() || undefined, auto_withdraw_commissions: false } : {}),
+    });
+  }, [email, isStripeRail, logoUrl, name, patchFields, phone, t]);
+
+  const savePayments = useCallback(async () => {
+    if (isStripeRail) {
+      await patchFields({ phone: phone.trim() || undefined, auto_withdraw_commissions: false });
+      return;
+    }
+    await patchFields({
+      mobile_payment_phone_id: mobilePaymentPhoneId,
+      auto_withdraw_commissions: autoWithdraw,
+    });
+  }, [autoWithdraw, isStripeRail, mobilePaymentPhoneId, patchFields, phone]);
+
+  const savePayAtConfirm = useCallback(
+    async (next: boolean) => {
+      await patchFields({ pay_at_confirm: next });
+      setPayAtConfirm(next);
+    },
+    [patchFields]
+  );
+
+  const saveAlerts = useCallback(async () => {
+    const trimmed = orderAlertPhone.trim();
+    if (trimmed && !trimmed.startsWith('+')) {
+      setSaveError(t('business.locations.alerts.countryCode', 'Enter the number with its country code.'));
+      return;
+    }
+    await patchFields({ order_alert_phone: normalizeOrderAlertPhone(orderAlertPhone) });
+  }, [orderAlertPhone, patchFields, t]);
+
+  const saveAddress = useCallback(async () => {
+    if (!locationId) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await businessApi.locations.patchAddress(locationId, {
+        address_line_1: addressForm.address_line_1.trim(),
+        address_line_2: addressForm.address_line_2?.trim() || undefined,
+        city: addressForm.city.trim(),
+        state: addressForm.state,
+        postal_code: addressForm.postal_code?.trim() || undefined,
+        country: addressForm.country || undefined,
+        latitude: addressForm.latitude,
+        longitude: addressForm.longitude,
+      });
+    } catch (err: unknown) {
+      setSaveError(ownerErrorMessage(err, t));
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }, [addressForm, locationId, t]);
+
+  const makeMain = useCallback(async () => {
+    if (!locationId) return;
+    const previous = existingLocations.find(
+      (item) => item.is_primary && item.id !== locationId
+    );
+    await patchFields({ is_primary: true });
+    if (!previous) return;
+    try {
+      await businessApi.locations.update(previous.id, { is_primary: false });
+    } catch {
+      setSaveError(
+        t(
+          'business.locations.more.mainPartial',
+          'This location is main, but the previous one could not be updated. You may have two main locations until you try again.'
+        )
+      );
+    }
+  }, [existingLocations, locationId, patchFields, t]);
+
+  const saveActive = useCallback(
+    async (next: boolean) => {
+      await patchFields({ is_active: next });
+    },
+    [patchFields]
+  );
 
   const locationTypeOptions = useMemo(
     () =>
@@ -319,6 +466,8 @@ export function useBusinessLocationForm(
     pickLogo,
     autoWithdraw,
     setAutoWithdraw,
+    payAtConfirm,
+    setPayAtConfirm,
     locationType,
     setLocationType,
     locationTypeOptions,
@@ -330,5 +479,15 @@ export function useBusinessLocationForm(
     setAddressModalOpen,
     saveError,
     save,
+    location,
+    railLoading,
+    saveBasics,
+    savePayments,
+    savePayAtConfirm,
+    saveAlerts,
+    saveAddress,
+    saveActive,
+    makeMain,
+    patchFields,
   };
 }

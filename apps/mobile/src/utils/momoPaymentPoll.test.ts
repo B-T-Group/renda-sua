@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MOMO_POLL_TIMEOUT_MS,
   claimPollTerminalPhase,
+  claimTransactionErrorCodeFromBody,
   claimTransactionStatusFromBody,
   resolveClaimPaymentPhase,
   resolveMomoPaymentStatuses,
@@ -16,6 +17,16 @@ describe('resolveClaimPaymentPhase', () => {
     expect(resolveClaimPaymentPhase('pending')).toBe('waiting');
     expect(resolveClaimPaymentPhase('ambiguous')).toBe('waiting');
     expect(resolveClaimPaymentPhase(null)).toBe('waiting');
+  });
+
+  it('maps CLAIM_ORDER_TAKEN to taken regardless of status', () => {
+    expect(resolveClaimPaymentPhase('success', 'CLAIM_ORDER_TAKEN')).toBe('taken');
+    expect(resolveClaimPaymentPhase('failed', 'CLAIM_ORDER_TAKEN')).toBe('taken');
+    expect(resolveClaimPaymentPhase('success', 'OTHER')).toBe('paid');
+    expect(
+      claimTransactionErrorCodeFromBody({ data: { error_code: 'CLAIM_ORDER_TAKEN' } })
+    ).toBe('CLAIM_ORDER_TAKEN');
+    expect(claimTransactionErrorCodeFromBody(null)).toBeUndefined();
   });
 
   it('reads the nested transaction status ahead of a top-level status', () => {
@@ -34,6 +45,7 @@ describe('resolveClaimPaymentPhase', () => {
     expect(claimPollTerminalPhase('waiting', MOMO_POLL_TIMEOUT_MS)).toBe('timeout');
     expect(claimPollTerminalPhase('failed', 0)).toBe('failed');
     expect(claimPollTerminalPhase('paid', MOMO_POLL_TIMEOUT_MS)).toBe('paid');
+    expect(claimPollTerminalPhase('taken', 0)).toBe('taken');
   });
 });
 

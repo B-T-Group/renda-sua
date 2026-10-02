@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Request } from 'express';
 import { AccountsService } from '../accounts/accounts.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import type {
   FreemopayCallbackDto,
   MyPVitCallbackDto,
@@ -324,7 +325,9 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
     if (this.isTokenPackEntity(transaction.payment_entity)) return;
-    await this.runHandlerSuccess(transaction);
+    // Replay of an already-success tx: a handler failure is alerted inside
+    // runHandlerSuccess and the next provider replay retries again.
+    await this.runHandlerSuccess(transaction, { replay: true });
   }
 
   private isTokenPackEntity(paymentEntity?: string | null): boolean {
@@ -542,8 +545,17 @@ export class MobilePaymentCallbackProcessor {
     return true;
   }
 
+  /**
+   * Run the entity success handler. A failure is always alerted (reportMoneyAnomaly).
+   * For `order_deposit`, and for `order` on the first (pending -> success) pass, it is
+   * rethrown so the transaction is NOT marked success and stays pending: the wallet credit
+   * is idempotent on the transaction id, so the provider replay / pending reconciler
+   * re-runs the handler instead of leaving a paid-but-unpaid-order silently (UAT S-8).
+   * On replays of an already-success tx the error is only alerted (no endless 5xx).
+   */
   private async runHandlerSuccess(
-    transaction: MobilePaymentTransaction
+    transaction: MobilePaymentTransaction,
+    options: { replay?: boolean } = {}
   ): Promise<void> {
     try {
       const handlers = this.resolveHandlers();
@@ -555,12 +567,22 @@ export class MobilePaymentCallbackProcessor {
         await handler.onPaymentSuccess(transaction);
       }
     } catch (error: any) {
-      this.logger.error(
-        `Payment finalize failed for ${transaction.reference}: ${String(
-          error?.message || error
-        )}`
+      reportMoneyAnomaly(
+        this.logger,
+        'payment_finalize_failed',
+        `entity=${transaction.payment_entity} reference=${transaction.reference} txId=${transaction.id}${
+          options.replay ? ' (replay)' : ''
+        }: ${String(error?.message || error)}`,
+        {
+          transactionId: transaction.id,
+          paymentEntity: transaction.payment_entity,
+          replay: options.replay === true,
+        }
       );
-      if (transaction.payment_entity === 'order_deposit') {
+      if (
+        transaction.payment_entity === 'order_deposit' ||
+        (transaction.payment_entity === 'order' && options.replay !== true)
+      ) {
         throw error;
       }
     }

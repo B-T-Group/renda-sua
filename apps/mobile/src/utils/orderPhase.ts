@@ -4,6 +4,7 @@
  */
 
 import {
+  isCookedFoodOrderSnapshot,
   shouldUseCookedFoodConfirmModal,
   type CookedFoodOrderLike,
 } from './cookedFoodOrder';
@@ -61,6 +62,8 @@ export interface OrderPhaseInput {
   reconciliationStatus?: string | null;
   isCookedFoodPickup?: boolean | null;
   payAfterMerchantConfirm?: boolean | null;
+  /** Pay-after order that is NOT cooked food (flagged-location goods): use "store" wording. */
+  payAfterStoreWording?: boolean | null;
 }
 
 export interface OrderPhaseInfo {
@@ -213,10 +216,21 @@ function nextStepKeyFor(
   }
   if (phase === 'prepare') {
     if (isCookedFoodAwaitingPayment(input) && role === 'business') {
-      return 'orders.nextStep.cookedFoodWaitPaymentBusiness';
+      return input.payAfterStoreWording
+        ? 'orders.nextStep.payAfterWaitPaymentBusiness'
+        : 'orders.nextStep.cookedFoodWaitPaymentBusiness';
     }
     if (isCookedFoodAwaitingPayment(input) && role === 'client') {
-      return 'orders.nextStep.cookedFoodWaitPaymentClient';
+      return input.payAfterStoreWording
+        ? 'orders.nextStep.payAfterWaitPaymentClient'
+        : 'orders.nextStep.cookedFoodWaitPaymentClient';
+    }
+    if (
+      input.payAfterMerchantConfirm === true &&
+      input.payAfterStoreWording &&
+      role === 'business'
+    ) {
+      return 'orders.nextStep.payAfterPaidMarkReadyBusiness';
     }
     if (shipping) {
       return role === 'client'
@@ -566,5 +580,7 @@ export function orderToPhaseInput(order: OrderPhaseSource): OrderPhaseInput {
     reconciliationStatus: order.reconciliation_status,
     isCookedFoodPickup,
     payAfterMerchantConfirm: order.pay_after_merchant_confirm,
+    payAfterStoreWording:
+      order.pay_after_merchant_confirm === true && !isCookedFoodOrderSnapshot(order),
   };
 }

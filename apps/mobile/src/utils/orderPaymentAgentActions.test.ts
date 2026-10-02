@@ -35,4 +35,22 @@ describe('orderNeedsPayAtDeliveryAgentActions', () => {
       })
     ).toBe(false);
   });
+
+  it('hides collect actions for flagged-location (non-cooked) pay-after delivery orders', () => {
+    // Flagged goods orders are stored like cooked pay-after: pay_at_delivery timing + flag.
+    expect(
+      orderNeedsPayAtDeliveryAgentActions({
+        payment_timing: 'pay_at_delivery',
+        payment_method: 'mobile_money',
+        pay_after_merchant_confirm: true,
+      })
+    ).toBe(false);
+    expect(
+      orderNeedsPayAtDeliveryAgentActions({
+        payment_timing: 'pay_at_pickup',
+        payment_method: 'pay_on_delivery',
+        pay_after_merchant_confirm: true,
+      })
+    ).toBe(false);
+  });
 });

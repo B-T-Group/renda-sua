@@ -153,6 +153,12 @@ export interface OrderConfig {
    * Env: ORDER_COOKED_FOOD_UNPAID_CANCEL_HOURS (default 3).
    */
   cookedFoodUnpaidCancelHours: number;
+  /**
+   * Minutes after confirm before an UNPAID pay-after order of stock-tracked goods
+   * (per-location pay_at_confirm) auto-cancels and releases reserved stock.
+   * Env: ORDER_PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES (default 45).
+   */
+  payAfterGoodsUnpaidCancelMinutes: number;
   /** Minutes added per Busy tap. */
   busyExtraPrepMinutes: number;
   /** Cap on busy_extra_prep_minutes. */
@@ -914,6 +920,10 @@ export default (): Configuration => {
       ),
       cookedFoodUnpaidCancelHours: parseInt(
         process.env.ORDER_COOKED_FOOD_UNPAID_CANCEL_HOURS || '3',
+        10
+      ),
+      payAfterGoodsUnpaidCancelMinutes: parseInt(
+        process.env.ORDER_PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES || '45',
         10
       ),
       busyExtraPrepMinutes: parseInt(

@@ -1,5 +1,7 @@
 export type MomoPaymentPollPhase = 'waiting' | 'paid' | 'failed';
 
+export type ClaimPaymentPollPhase = MomoPaymentPollPhase | 'taken';
+
 interface OrderPaymentSnapshot {
   payment_status?: string | null;
   deposit_status?: string | null;
@@ -83,8 +85,10 @@ export const MOMO_POLL_TIMEOUT_MS = 3 * 60 * 1000;
 
 /** Claim-hold Mobile Money transaction status. */
 export function resolveClaimPaymentPhase(
-  status?: string | null
-): MomoPaymentPollPhase {
+  status?: string | null,
+  errorCode?: string | null
+): ClaimPaymentPollPhase {
+  if (errorCode === 'CLAIM_ORDER_TAKEN') return 'taken';
   const value = (status ?? '').toLowerCase();
   if (value === 'success' || value === 'paid' || value === 'completed') {
     return 'paid';
@@ -108,12 +112,25 @@ export function claimTransactionStatusFromBody(
   return body?.data?.status ?? body?.status;
 }
 
+/** GET /mobile-payments/transactions/:id error_code (e.g. CLAIM_ORDER_TAKEN). */
+export function claimTransactionErrorCodeFromBody(
+  body:
+    | {
+        data?: { error_code?: string | null } | null;
+        error_code?: string | null;
+      }
+    | null
+    | undefined
+): string | null | undefined {
+  return body?.data?.error_code ?? body?.error_code;
+}
+
 /** Stop polling only on a terminal claim status or after the wait window. */
 export function claimPollTerminalPhase(
-  phase: MomoPaymentPollPhase,
+  phase: ClaimPaymentPollPhase,
   elapsedMs: number
-): 'paid' | 'failed' | 'timeout' | null {
-  if (phase === 'paid' || phase === 'failed') return phase;
+): 'paid' | 'failed' | 'taken' | 'timeout' | null {
+  if (phase === 'paid' || phase === 'failed' || phase === 'taken') return phase;
   if (elapsedMs >= MOMO_POLL_TIMEOUT_MS) return 'timeout';
   return null;
 }

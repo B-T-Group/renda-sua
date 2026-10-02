@@ -197,6 +197,7 @@ describe('OrdersService', () => {
     const mockAccountsService = {
       registerTransaction: jest.fn().mockResolvedValue({ success: true }),
       registerDepositIfNotExists: jest.fn(),
+      hasTransactionForReference: jest.fn().mockResolvedValue(false),
     };
 
     const mockOrderStatusService = {
@@ -241,6 +242,7 @@ describe('OrdersService', () => {
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
           getOrderNumbersWithPendingClaimOrder: jest.fn().mockResolvedValue([]),
+          updateTransaction: jest.fn().mockResolvedValue({}),
         } },
         {
           provide: require('../mobile-payment-phones/mobile-payment-phones.service')
@@ -948,6 +950,591 @@ describe('OrdersService', () => {
           message: expect.stringMatching(/merchant confirmation/i),
         }),
       });
+    });
+
+    // ---- per-location pay_at_confirm (#412-#414) ----
+    it('flagged location + kill switch ON: ASAP pickup is created pay-after (no hold, no MoMo request)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(finalizeSpy).not.toHaveBeenCalled();
+      expect(
+        (service as any).mobilePaymentsService.initiatePayment
+      ).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({
+          payAfterMerchantConfirm: true,
+          paymentStatus: 'pending',
+          currentStatus: 'pending',
+        })
+      );
+      expect(result).toMatchObject({
+        pay_after_merchant_confirm: true,
+        payment_transaction: expect.objectContaining({
+          transaction_id: null,
+          message: expect.stringMatching(/merchant confirmation/i),
+        }),
+      });
+    });
+
+    it('flagged location but kill switch OFF: location is ignored (not pay-after)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? false : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: false })
+      );
+    });
+
+    it('unflagged location with kill switch ON: not pay-after', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: false,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: false })
+      );
+    });
+
+    it('flagged location + wallet covers total: pays immediately from the wallet (not pay-after)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      // Wallet has balance — regresses if create falls through to finalize.
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-cooked-123',
+        available_balance: 50000,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      const finalizeSpy = jest
+        .spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({
+          id: 'order-cooked-123',
+          order_number: '29809112',
+          payment_status: 'pending',
+        });
+      jest
+        .spyOn(service as any, 'sendOrderPlacedNotifications')
+        .mockResolvedValue(undefined);
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+
+      const cookedPickupInventory = {
+        id: 'inventory-cooked-123',
+        computed_available_quantity: 10,
+        selling_price: 300,
+        is_active: true,
+        business_location_id: 'location-123',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          business_id: 'business-123',
+          is_active: true,
+          operating_hours: null,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: {
+            country: 'CM',
+            address_line_1: 'Kitchen St',
+            city: 'Douala',
+            state: 'Littoral',
+            postal_code: '00237',
+          },
+          business: {
+            id: 'business-123',
+            name: 'Test Kitchen',
+            can_accept_orders: true,
+            is_verified: true,
+            user: {
+              id: 'merchant-user-123',
+              email: 'merchant@example.com',
+              first_name: 'Merchant',
+              last_name: 'User',
+              country: 'CM',
+            },
+          },
+        },
+        item: {
+          id: 'item-cooked-123',
+          name: 'Fried Rice',
+          description: 'Cooked dish',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: {
+            item_category: { name: 'Hardware' },
+          },
+        },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [cookedPickupInventory],
+        })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-cooked-123',
+            order_number: '29809112',
+            payment_source: 'mobile_payment',
+            payment_status: 'pending',
+            current_status: 'pending',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      const result = await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+23765410000',
+        items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: false })
+      );
+      expect(finalizeSpy).toHaveBeenCalled();
     });
 
     it('calculates the MoMo deposit from the post-credit total', async () => {
@@ -2317,7 +2904,136 @@ describe('OrdersService', () => {
       ).rejects.toThrow(/Insufficient funds/i);
     });
 
-    it('processClaimOrderPayment does not assign when the agent hold fails', async () => {
+    it('S-2: finalizeClientOrderPayment releases the hold and does not emit paid when a cancel won the race', async () => {
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const updateOrderHoldSpy = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+      jest
+        .spyOn(service as any, 'markOrderPaidAfterPaymentFinalize')
+        .mockResolvedValue(false);
+      // 300 held, nothing released yet
+      jest
+        .spyOn(service as any, 'sumHoldAmountForOrder')
+        .mockImplementation(async (_a: string, _o: string, type = 'hold') =>
+          type === 'hold' ? 300 : 0
+        );
+      const emitSpy = jest
+        .spyOn(service as any, 'emitOrderPaid')
+        .mockImplementation(() => undefined);
+
+      await (service as any).finalizeClientOrderPayment(
+        {
+          id: 'order-123',
+          order_number: 'ORD-1',
+          current_status: 'confirmed',
+          payment_status: 'pending',
+          subtotal: 300,
+          total_amount: 300,
+          base_delivery_fee: 0,
+          per_km_delivery_fee: 0,
+        },
+        'account-1'
+      );
+
+      expect(emitSpy).not.toHaveBeenCalled();
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-1',
+          amount: 300,
+          transactionType: 'release',
+          referenceId: 'order-123',
+        })
+      );
+      expect(updateOrderHoldSpy).toHaveBeenLastCalledWith('hold-1', {
+        client_hold_amount: 0,
+        delivery_fees: 0,
+        status: 'cancelled',
+      });
+    });
+
+    it('S-2: paid-mark is a conditional update on a live order (never overwrites a cancel)', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+      const ok = await (service as any).markOrderPaidAfterPaymentFinalize(
+        'order-123',
+        'confirmed'
+      );
+      expect(ok).toBe(false);
+      const [mutation] = hasuraSystemService.executeMutation.mock.calls[0];
+      expect(String(mutation)).toContain('current_status: { _nin: [cancelled, failed, refunded] }');
+    });
+
+    it('S-2: pending_payment -> pending+paid is CAS on pending_payment and reports a lost race', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 0 },
+      });
+      const ok = await (service as any).markOrderPaidAfterPaymentFinalize(
+        'order-123',
+        'pending_payment'
+      );
+      expect(ok).toBe(false);
+      const [mutation] = hasuraSystemService.executeMutation.mock.calls[0];
+      expect(String(mutation)).toContain('current_status: { _eq: pending_payment }');
+    });
+
+    it('S-3: the global kill switch is read without a null country filter and honours a true row', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        application_configurations: [{ boolean_value: true }],
+      });
+      const on = await (service as any).isPayAfterLocationFlagEnabled();
+      expect(on).toBe(true);
+      const [query, vars] = hasuraSystemService.executeQuery.mock.calls[0];
+      expect(String(query)).not.toContain('$countryCode');
+      expect(vars).toEqual({ configKey: 'pay_after_confirm_location_flag_enabled' });
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        application_configurations: [],
+      });
+      expect(await (service as any).isPayAfterLocationFlagEnabled()).toBe(false);
+      hasuraSystemService.executeQuery.mockRejectedValue(new Error('boom'));
+      expect(await (service as any).isPayAfterLocationFlagEnabled()).toBe(false);
+    });
+
+    it('S-6: concurrent pay-after MoMo initiations send only one prompt', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const once = jest
+        .spyOn(service as any, 'initiateCookedFoodMomoAfterConfirmOnce')
+        .mockImplementation(async () => {
+          await gate;
+        });
+      const order = { id: 'order-123', order_number: 'ORD-1' };
+      const a = (service as any).initiateCookedFoodMomoAfterConfirm(order, 'order-123');
+      const b = (service as any).initiateCookedFoodMomoAfterConfirm(order, 'order-123');
+      release();
+      await Promise.all([a, b]);
+      expect(once).toHaveBeenCalledTimes(1);
+      // and the guard is cleared afterwards
+      await (service as any).initiateCookedFoodMomoAfterConfirm(order, 'order-123');
+      expect(once).toHaveBeenCalledTimes(2);
+    });
+
+    it('S-11: any scheduled window (slot or preferred date) is rejected for cooked food', () => {
+      const inv = [{ item: { is_cooked_food: true } }];
+      expect(() =>
+        (service as any).assertCookedFoodAsapOnly(inv, {
+          preferred_date: '2026-10-05',
+        })
+      ).toThrow();
+      expect(() =>
+        (service as any).assertCookedFoodAsapOnly(inv, { slot_id: 's1' })
+      ).toThrow();
+      expect(() =>
+        (service as any).assertCookedFoodAsapOnly(inv, null)
+      ).not.toThrow();
+    });
+
+    it('processClaimOrderPayment reverts assignment when the agent hold fails', async () => {
       accountsService.registerTransaction.mockResolvedValue({
         success: false,
         error: 'Insufficient funds for this transaction',
@@ -2327,6 +3043,7 @@ describe('OrdersService', () => {
         .mockResolvedValue({
           id: 'order-123',
           order_number: 'ORD-1',
+          assigned_agent_id: null,
         });
       hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
         id: 'account-1',
@@ -2345,6 +3062,9 @@ describe('OrdersService', () => {
       const assign = jest
         .spyOn(service as any, 'assignOrderToAgent')
         .mockResolvedValue({});
+      const revert = jest
+        .spyOn(service as any, 'revertOrderAssignment')
+        .mockResolvedValue(undefined);
 
       await expect(
         service.processClaimOrderPayment({
@@ -2355,8 +3075,147 @@ describe('OrdersService', () => {
         })
       ).rejects.toThrow(/Insufficient funds/i);
 
+      expect(assign).toHaveBeenCalled();
+      expect(revert).toHaveBeenCalledWith('order-123');
       expect(updateHold).not.toHaveBeenCalled();
+    });
+
+    it('processClaimOrderPayment does not hold when another agent already has the order', async () => {
+      const requireOrder = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValueOnce({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          assigned_agent_id: null,
+        })
+        .mockResolvedValueOnce({
+          id: 'order-123',
+          order_number: 'ORD-1',
+          assigned_agent_id: 'other-agent',
+        });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      jest
+        .spyOn(service as any, 'assignOrderToAgent')
+        .mockRejectedValue(
+          new HttpException(
+            { message: 'taken', error: 'ALREADY_ASSIGNED' },
+            HttpStatus.CONFLICT
+          )
+        );
+      const updateHold = jest.spyOn(service, 'updateOrderHold');
+      const db = module.get(MobilePaymentsDatabaseService) as {
+        updateTransaction: jest.Mock;
+      };
+
+      await service.processClaimOrderPayment({
+        id: 'tx-claim-1',
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+        amount: 8000,
+        currency: 'XAF',
+      });
+
+      expect(requireOrder).toHaveBeenCalledTimes(2);
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(updateHold).not.toHaveBeenCalled();
+      expect(db.updateTransaction).toHaveBeenCalledWith('tx-claim-1', {
+        error_code: 'CLAIM_ORDER_TAKEN',
+        error_message: 'This order was assigned to another agent',
+      });
+    });
+
+    it('processClaimOrderPayment holds on a fresh assignment even if an earlier hold row exists', async () => {
+      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
+        id: 'order-123',
+        order_number: 'ORD-1',
+        assigned_agent_id: null,
+      });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      // Agent claimed, dropped (hold released) and is re-claiming via top-up.
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' } as any);
+      jest.spyOn(service as any, 'assignOrderToAgent').mockResolvedValue({});
+      jest.spyOn(service as any, 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'onOrderAssignedToAgent').mockResolvedValue(undefined);
+
+      await service.processClaimOrderPayment({
+        id: 'tx-claim-1',
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+        amount: 8000,
+        currency: 'XAF',
+      });
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-1',
+          amount: 8000,
+          transactionType: 'hold',
+          referenceId: 'order-123',
+        })
+      );
+      accountsService.hasTransactionForReference.mockResolvedValue(false);
+    });
+
+    it('processClaimOrderPayment does not hold again when this agent already has the order', async () => {
+      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
+        id: 'order-123',
+        order_number: 'ORD-1',
+        assigned_agent_id: 'agent-123',
+      });
+      hasuraSystemService.getAccountById = jest.fn().mockResolvedValue({
+        id: 'account-1',
+        user_id: 'agent-123',
+      });
+      hasuraSystemService.getUserById = jest.fn().mockResolvedValue({
+        ...mockAgentUser,
+        personas: ['agent'],
+      });
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const updateHold = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' } as any);
+      const assign = jest.spyOn(service as any, 'assignOrderToAgent');
+      const history = jest
+        .spyOn(service as any, 'createStatusHistoryEntry')
+        .mockResolvedValue(undefined);
+
+      await service.processClaimOrderPayment({
+        id: 'tx-claim-1',
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+        amount: 8000,
+        currency: 'XAF',
+      });
+
       expect(assign).not.toHaveBeenCalled();
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(history).not.toHaveBeenCalled();
+      expect(updateHold).toHaveBeenCalledWith('hold-1', {
+        agent_hold_amount: 8000,
+        agent_id: 'agent-123',
+      });
     });
 
     it('finalizeClientOrderPayment coerces stripped subtotal and fees to 0', async () => {
@@ -2654,7 +3513,9 @@ describe('OrdersService', () => {
       );
 
       expect(statusAndPaymentSpy).not.toHaveBeenCalled();
-      expect(paymentOnlySpy).toHaveBeenCalledWith('order-123', 'paid');
+      expect(paymentOnlySpy).toHaveBeenCalledWith('order-123', 'paid', {
+        liveOnly: true,
+      });
 
       statusAndPaymentSpy.mockRestore();
       paymentOnlySpy.mockRestore();
@@ -3688,6 +4549,10 @@ describe('OrdersService', () => {
     };
 
     beforeEach(() => {
+      jest.spyOn(service as any, 'claimSettlementStage').mockResolvedValue(true);
+      jest
+        .spyOn(service as any, 'releaseSettlementClaim')
+        .mockResolvedValue(undefined);
       jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' });
       jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
         id: 'hold-1',
@@ -3782,6 +4647,10 @@ describe('OrdersService', () => {
     let distributeDelivery: jest.Mock;
 
     beforeEach(() => {
+      jest.spyOn(service as any, 'claimSettlementStage').mockResolvedValue(true);
+      jest
+        .spyOn(service as any, 'releaseSettlementClaim')
+        .mockResolvedValue(undefined);
       updateHold = jest
         .spyOn(service, 'updateOrderHold')
         .mockResolvedValue({ id: 'hold-1' });
@@ -3994,18 +4863,21 @@ describe('OrdersService', () => {
       ).rejects.toThrow('Item settlement must complete');
     });
 
-    it('retry skips the status gate (order already complete)', async () => {
+    it('retry still checks the order status: a completed order settles, a non-retry in a bad status throws', async () => {
       jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
         id: 'hold-1',
         client_hold_amount: 0,
         item_settlement_completed_at: null,
       } as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...baseOrder, current_status: 'cancelled' },
+        orders_by_pk: { ...baseOrder, current_status: 'complete' },
       });
       await expect(
         service.processOrderPayment('order-123', { isRetry: true })
       ).resolves.toBe('settled');
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'cancelled' },
+      });
       await expect(service.processOrderPayment('order-123')).rejects.toThrow(
         'Item settlement requires'
       );
@@ -4028,6 +4900,326 @@ describe('OrdersService', () => {
       expect(distributeDelivery).toHaveBeenCalledTimes(1);
       expect(flagWrites('delivery_settlement_completed_at')).toHaveLength(1);
     });
+  });
+
+  describe('settlement concurrency, idempotency and retry gate (UAT S-4 / S-5)', () => {
+    const order = {
+      id: 'order-123',
+      order_number: 'ORD-1',
+      currency: 'XAF',
+      client_id: 'client-123',
+      payment_timing: 'pay_now',
+      fulfillment_method: 'delivery',
+      current_status: 'picked_up',
+      business: { user_id: 'biz-user-1' },
+      client: { user_id: 'client-456' },
+      assigned_agent: { user_id: 'agent-user-1' },
+    };
+    const itemHold = (over = {}) => ({
+      id: 'hold-1',
+      client_hold_amount: 5000,
+      delivery_fees: 1000,
+      agent_hold_amount: 4000,
+      item_settlement_completed_at: null,
+      delivery_settlement_completed_at: null,
+      ...over,
+    });
+    let updateHold: jest.SpyInstance;
+    let distributeItem: jest.Mock;
+    let distributeDelivery: jest.Mock;
+
+    beforeEach(() => {
+      (reportMoneyAnomaly as jest.Mock).mockClear();
+      updateHold = jest
+        .spyOn(service, 'updateOrderHold')
+        .mockResolvedValue({ id: 'hold-1' });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'acct-1' });
+      hasuraSystemService.executeQuery.mockReset();
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SettlementRetryCount')
+          ? { order_holds_by_pk: { settlement_retry_count: 0 } }
+          : { orders_by_pk: order }
+      );
+      hasuraSystemService.executeMutation.mockReset();
+      accountsService.registerTransaction.mockReset();
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+      distributeItem = jest.fn().mockResolvedValue(undefined);
+      distributeDelivery = jest.fn().mockResolvedValue(undefined);
+      (service as any).commissionsService.distributeItemCommissions =
+        distributeItem;
+      (service as any).commissionsService.distributeDeliveryCommissions =
+        distributeDelivery;
+    });
+
+    /** In-memory compare-and-set: only the first claim of a stage wins. */
+    function fakeClaimMutation() {
+      const claimed = new Set<string>();
+      hasuraSystemService.executeMutation.mockImplementation(
+        async (q: string) => {
+          if (q.includes('ClaimSettlementStage')) {
+            const stage = q.includes('item_settlement_claimed_at')
+              ? 'item'
+              : 'delivery';
+            if (claimed.has(stage)) {
+              return { update_order_holds: { affected_rows: 0 } };
+            }
+            claimed.add(stage);
+            return { update_order_holds: { affected_rows: 1 } };
+          }
+          if (q.includes('ReleaseSettlementClaim')) {
+            claimed.clear();
+          }
+          return {};
+        }
+      );
+    }
+
+    it('S-4: two concurrent item settlements move the client and pay the merchant exactly once', async () => {
+      fakeClaimMutation();
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue(itemHold() as any);
+
+      const results = await Promise.all([
+        service.processOrderPayment('order-123'),
+        service.processOrderPayment('order-123'),
+      ]);
+
+      expect([...results].sort()).toEqual(['in_progress', 'settled']);
+      // release + payment, once (not 4 calls)
+      expect(accountsService.registerTransaction).toHaveBeenCalledTimes(2);
+      expect(distributeItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('S-4: the loser of the claim never touches the ledger or commissions', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds: { affected_rows: 0 },
+      });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue(itemHold() as any);
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'in_progress'
+      );
+      await expect(
+        service.processOrderDeliveryPayment('order-123')
+      ).rejects.toThrow('Item settlement must complete');
+
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(distributeItem).not.toHaveBeenCalled();
+      expect(updateHold).not.toHaveBeenCalled();
+    });
+
+    it('S-4: claim is a CAS on "not completed and no live lease"', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds: { affected_rows: 1 },
+      });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue(itemHold() as any);
+
+      await service.processOrderPayment('order-123');
+
+      const [query, vars] = hasuraSystemService.executeMutation.mock.calls.find(
+        ([q]) => String(q).includes('ClaimSettlementStage')
+      ) as [string, any];
+      expect(query).toContain('item_settlement_completed_at: { _is_null: true }');
+      expect(query).toContain('item_settlement_claimed_at: { _is_null: true }');
+      expect(query).toContain('item_settlement_claimed_at: { _lt: $staleBefore }');
+      expect(new Date(vars.staleBefore).getTime()).toBeLessThan(
+        new Date(vars.now).getTime()
+      );
+    });
+
+    it('S-4: every client ledger move carries a once-only idempotency key', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds: { affected_rows: 1 },
+      });
+      const hold = itemHold();
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue(hold as any);
+
+      await service.processOrderPayment('order-123');
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transactionType: 'release',
+          idempotencyKey: 'settle:item:release:order-123',
+        })
+      );
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transactionType: 'payment',
+          idempotencyKey: 'settle:item:payment:order-123',
+        })
+      );
+
+      accountsService.registerTransaction.mockClear();
+      jest
+        .spyOn(service, 'getOrCreateOrderHold')
+        .mockResolvedValue(
+          itemHold({ item_settlement_completed_at: '2026-01-01T00:00:00Z' }) as any
+        );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...order, current_status: 'out_for_delivery' },
+      });
+      await service.processOrderDeliveryPayment('order-123');
+      const keys = accountsService.registerTransaction.mock.calls.map(
+        ([r]: [any]) => r.idempotencyKey
+      );
+      expect(keys).toEqual([
+        'settle:delivery:agent-release:order-123',
+        'settle:delivery:client-release:order-123',
+        'settle:delivery:client-payment:order-123',
+      ]);
+    });
+
+    it('S-4: replaying after a crash (ledger rows already exist) still completes without a second move', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds: { affected_rows: 1 },
+      });
+      accountsService.registerTransaction.mockResolvedValue({
+        success: true,
+        alreadyExists: true,
+      });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue(itemHold() as any);
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+      expect(distributeItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('S-4: a failed client ledger move never pays the merchant; it queues a retry and frees the claim', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds: { affected_rows: 1 },
+      });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue(itemHold() as any);
+      accountsService.registerTransaction.mockImplementation(
+        async (r: any) =>
+          r.transactionType === 'payment'
+            ? { success: false, error: 'Insufficient funds for this transaction' }
+            : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'queued_for_retry'
+      );
+
+      expect(distributeItem).not.toHaveBeenCalled();
+      expect(updateHold).not.toHaveBeenCalledWith('hold-1', {
+        client_hold_amount: 0,
+      });
+      expect(
+        updateHold.mock.calls.some(
+          ([, u]) => 'item_settlement_completed_at' in (u as object)
+        )
+      ).toBe(false);
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_failed',
+        expect.stringContaining('item payment failed'),
+        expect.anything()
+      );
+      expect(
+        hasuraSystemService.executeMutation.mock.calls.some(([q]) =>
+          String(q).includes('ReleaseSettlementClaim')
+        )
+      ).toBe(true);
+    });
+
+    it('S-4: delivery stage is leased too (loser does nothing)', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds: { affected_rows: 0 },
+      });
+      jest
+        .spyOn(service, 'getOrCreateOrderHold')
+        .mockResolvedValue(
+          itemHold({ item_settlement_completed_at: '2026-01-01T00:00:00Z' }) as any
+        );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...order, current_status: 'out_for_delivery' },
+      });
+
+      await expect(
+        service.processOrderDeliveryPayment('order-123')
+      ).resolves.toBe('in_progress');
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(distributeDelivery).not.toHaveBeenCalled();
+    });
+
+    it.each(['cancelled', 'failed', 'refunded', 'refund_approved_full', 'pending'])(
+      'S-5: item retry on a %s order pays nobody, clears the retry row and alerts',
+      async (status) => {
+        hasuraSystemService.executeMutation.mockResolvedValue({
+          update_order_holds: { affected_rows: 1 },
+        });
+        jest
+          .spyOn(service, 'getOrCreateOrderHold')
+          .mockResolvedValue(itemHold() as any);
+        hasuraSystemService.executeQuery.mockResolvedValue({
+          orders_by_pk: { ...order, current_status: status },
+        });
+
+        await expect(
+          service.processOrderPayment('order-123', { isRetry: true })
+        ).resolves.toBe('not_settleable');
+
+        expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+        expect(distributeItem).not.toHaveBeenCalled();
+        expect(updateHold).toHaveBeenCalledWith(
+          'hold-1',
+          expect.objectContaining({
+            settlement_failed_stage: null,
+            settlement_next_retry_at: null,
+          })
+        );
+        expect(
+          updateHold.mock.calls.some(
+            ([, u]) => 'item_settlement_completed_at' in (u as object)
+          )
+        ).toBe(false);
+        expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+          expect.anything(),
+          'settlement_retry_dropped_unsettleable_order',
+          expect.stringContaining(`status=${status}`),
+          expect.anything()
+        );
+      }
+    );
+
+    it('S-5: delivery retry on a cancelled order pays nobody either', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_order_holds: { affected_rows: 1 },
+      });
+      jest
+        .spyOn(service, 'getOrCreateOrderHold')
+        .mockResolvedValue(
+          itemHold({ item_settlement_completed_at: '2026-01-01T00:00:00Z' }) as any
+        );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...order, current_status: 'cancelled' },
+      });
+
+      await expect(
+        service.processOrderDeliveryPayment('order-123', { isRetry: true })
+      ).resolves.toBe('not_settleable');
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+      expect(distributeDelivery).not.toHaveBeenCalled();
+    });
+
+    it.each(['complete', 'delivered', 'out_for_delivery'])(
+      'S-5: a legitimate retry on a %s order still settles',
+      async (status) => {
+        hasuraSystemService.executeMutation.mockResolvedValue({
+          update_order_holds: { affected_rows: 1 },
+        });
+        jest
+          .spyOn(service, 'getOrCreateOrderHold')
+          .mockResolvedValue(itemHold({ client_hold_amount: 0 }) as any);
+        hasuraSystemService.executeQuery.mockResolvedValue({
+          orders_by_pk: { ...order, current_status: status },
+        });
+
+        await expect(
+          service.processOrderPayment('order-123', { isRetry: true })
+        ).resolves.toBe('settled');
+        expect(distributeItem).toHaveBeenCalledTimes(1);
+      }
+    );
   });
 
   describe('initiateCookedFoodFullPaymentAfterConfirm phone', () => {

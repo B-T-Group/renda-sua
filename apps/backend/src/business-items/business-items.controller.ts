@@ -44,6 +44,7 @@ import { SetItemFavoriteDto } from './dto/set-item-favorite.dto';
 import { SetItemTagsDto } from './dto/set-item-tags.dto';
 import { SetItemCollectionsDto } from './dto/set-item-collections.dto';
 import { CreateLocationTransferRequestDto } from './dto/create-location-transfer-request.dto';
+import { UpdateBusinessLocationDto } from './dto/update-business-location.dto';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { BusinessAccountTypeService } from './business-account-type.service';
@@ -140,6 +141,8 @@ export class BusinessItemsController {
   }
 
   @Patch('locations/:locationId')
+  // Whitelist: unknown properties (business_id, address_id, id, ...) are stripped (UAT S-9).
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   @ApiOperation({
     summary: 'Update a business location',
   })
@@ -147,56 +150,22 @@ export class BusinessItemsController {
   @ApiResponse({ status: 200, description: 'Location updated successfully' })
   @ApiResponse({ status: 403, description: 'User has no business' })
   @ApiResponse({ status: 404, description: 'Location not found' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        phone: { type: 'string' },
-        order_alert_phone: { type: 'string', nullable: true },
-        mobile_payment_phone_id: {
-          type: 'string',
-          format: 'uuid',
-          nullable: true,
-        },
-        email: { type: 'string' },
-        location_type: {
-          type: 'string',
-          enum: ['store', 'warehouse', 'office', 'pickup_point'],
-        },
-        is_active: { type: 'boolean' },
-        is_primary: { type: 'boolean' },
-        auto_withdraw_commissions: {
-          type: 'boolean',
-          description:
-            'When true, order payouts are sent automatically to this location phone when configured.',
-        },
-        logo_url: {
-          type: 'string',
-          nullable: true,
-          description: 'Public URL for the location logo (S3 or external). Empty clears.',
-        },
-      },
-    },
-  })
+  @ApiBody({ type: UpdateBusinessLocationDto })
   async patchLocation(
     @Param('locationId') locationId: string,
     @Query('businessId') businessId: string | undefined,
-    @Body()
-    body: {
-      name?: string;
-      phone?: string;
-      order_alert_phone?: string | null;
-      mobile_payment_phone_id?: string | null;
-      email?: string;
-      location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
-      is_active?: boolean;
-      is_primary?: boolean;
-      auto_withdraw_commissions?: boolean;
-      logo_url?: string | null;
-    }
+    @Body() body: UpdateBusinessLocationDto
   ) {
     const ctx = await this.accessService.resolveAccess(businessId);
+    if (body?.pay_at_confirm !== undefined) {
+      this.accessService.assertOwnBusiness(ctx, 'pay_at_confirm');
+      if (typeof body.pay_at_confirm !== 'boolean') {
+        throw new HttpException(
+          { success: false, error: 'pay_at_confirm must be a boolean' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
     const location = await this.businessItemsService.updateBusinessLocation(
       ctx.targetBusinessId,
       locationId,

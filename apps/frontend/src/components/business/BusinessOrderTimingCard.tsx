@@ -79,8 +79,8 @@ const BusinessOrderTimingCard: React.FC = () => {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {t(
-              'businessOrderTiming.help',
-              'ASAP orders start the confirm timer immediately. Future orders activate before prep begins.'
+              'business.locations.allLocations.timingHelp',
+              'These settings apply to all your locations.'
             )}
           </Typography>
         </Box>
@@ -93,8 +93,12 @@ const BusinessOrderTimingCard: React.FC = () => {
 
         <TextField
           label={t(
-            'businessOrderTiming.asapMinutes',
-            'ASAP confirm window (minutes)'
+            'business.locations.allLocations.asapLabel',
+            'How long you have to confirm an order'
+          )}
+          helperText={t(
+            'business.locations.allLocations.asapHelp',
+            "If you don't confirm in this time, the order is declined."
           )}
           type="number"
           value={asapMins}
@@ -105,8 +109,8 @@ const BusinessOrderTimingCard: React.FC = () => {
         />
         <TextField
           label={t(
-            'businessOrderTiming.futureMinutes',
-            'Future-order confirm window (minutes)'
+            'business.locations.allLocations.futureLabel',
+            'How long you have to confirm a scheduled order'
           )}
           type="number"
           value={futureMins}
@@ -118,15 +122,15 @@ const BusinessOrderTimingCard: React.FC = () => {
         <FormControl fullWidth disabled={loading || saving}>
           <InputLabel id="activation-lead-label">
             {t(
-              'businessOrderTiming.activationLead',
-              'Activate before prep starts'
+              'business.locations.allLocations.leadLabel',
+              'Start counting before prep time'
             )}
           </InputLabel>
           <Select
             labelId="activation-lead-label"
             label={t(
-              'businessOrderTiming.activationLead',
-              'Activate before prep starts'
+              'business.locations.allLocations.leadLabel',
+              'Start counting before prep time'
             )}
             value={leadMins}
             onChange={(e) => setLeadMins(Number(e.target.value))}
@@ -138,10 +142,20 @@ const BusinessOrderTimingCard: React.FC = () => {
             ))}
           </Select>
         </FormControl>
+        <Typography variant="body2" color="text.secondary">
+          {t(
+            'business.locations.allLocations.leadHelp',
+            'For scheduled orders, the confirm timer starts this long before you need to start preparing.'
+          )}
+        </Typography>
         <TextField
           label={t(
-            'businessOrderTiming.prepMinutes',
-            'Default prep time (minutes)'
+            'business.locations.allLocations.prepLabel',
+            'Usual preparation time (minutes)'
+          )}
+          helperText={t(
+            'business.locations.allLocations.prepHelp',
+            'Used to tell customers when to expect their order.'
           )}
           type="number"
           value={prepMins}

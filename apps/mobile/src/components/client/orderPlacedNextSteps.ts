@@ -26,7 +26,9 @@ const STEPS = 'client.placeOrder.successScreen.steps';
 
 export function resolveOrderNextSteps(input: NextStepsInput): OrderNextStepsContent | null {
   if (input.depositConfirmed) return depositSteps(input);
-  if (input.cookedFoodPayAfterConfirm) return foodSteps(input);
+  if (input.cookedFoodPayAfterConfirm) {
+    return input.payAfterCopyVariant === 'store' ? storePayAfterSteps(input) : foodSteps(input);
+  }
   if (input.paymentCompleted) return paidSteps(input);
   if (input.cardAuthorized) return cardSteps(input);
   if (input.isStripeRail) return stripeSteps(input);
@@ -228,6 +230,26 @@ function deliveryDone(): OrderNextStep {
     `${STEPS}.deliveryDone`,
     'Approve it on your phone, then receive your order.'
   );
+}
+
+function storePayAfterSteps(input: NextStepsInput): OrderNextStepsContent {
+  const pickup = fulfillmentPath(input) === 'pickup';
+  return {
+    titleKey: `${STEPS}.foodTitle`,
+    titleDefault: 'What happens next',
+    tone: 'info',
+    steps: [
+      step('confirm', `${STEPS}.storeConfirm`, 'The store confirms your order.'),
+      step(
+        'pay',
+        `${STEPS}.storePay`,
+        'You then receive a Mobile Money payment request. Approve it within 45 minutes or the order is cancelled automatically.'
+      ),
+      step('prep', `${STEPS}.storePrep`, 'Once it is paid, the store prepares your order.'),
+      pickup ? foodReadyPickup() : foodReadyDelivery(),
+      pickup ? foodComplete() : foodOnTheWay(),
+    ],
+  };
 }
 
 function foodConfirm(): OrderNextStep {

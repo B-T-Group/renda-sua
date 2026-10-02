@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { payAfterCopyVariantForPreflight, resolveCreatedPayAfter } from '../../utils/payAfterConfirm';
 import type { CountryCode } from 'libphonenumber-js';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { AppModal } from '../../components/common/AppModal';
@@ -1166,6 +1167,10 @@ export default function PlaceOrderScreen() {
       return;
     }
 
+    // Navigate on the create response (authoritative), not the possibly stale preflight (G15).
+    const createdPayAfter = resolveCreatedPayAfter([
+      { pay_after_merchant_confirm: 'payAfterConfirm' in outcome ? outcome.payAfterConfirm : false },
+    ]);
     if (fulfillment === 'pickup') {
       checkoutAnalytics.orderCreatedPickup({
         checkout_mode: 'single',
@@ -1180,7 +1185,7 @@ export default function PlaceOrderScreen() {
     // Non-deposit PAD/PAP MoMo must NOT enter await (would poll-timeout).
     // Cooked-food MoMo stays unpaid until the kitchen confirms and sends the request.
     const momoWaitingRequired =
-      !isCookedFoodMoMoPayAfter &&
+      !createdPayAfter &&
       !resolvedIsStripeRail &&
       outcome.type === 'pending' &&
       outcome.paymentRail === 'mobile_money' &&
@@ -1225,7 +1230,7 @@ export default function PlaceOrderScreen() {
     const cardAuthorized = outcome.type === 'success' && !!outcome.cardAuthorized;
     // Cooked-food MoMo: unpaid until kitchen confirm + payment request.
     const paymentCompleted =
-      outcome.type === 'success' && !cardAuthorized && !isCookedFoodMoMoPayAfter;
+      outcome.type === 'success' && !cardAuthorized && !createdPayAfter;
     navigation.reset({
       index: 1,
       routes: [
@@ -1238,7 +1243,8 @@ export default function PlaceOrderScreen() {
             paymentCompleted,
             cardAuthorized,
             fulfillment,
-            cookedFoodPayAfterConfirm: isCookedFoodMoMoPayAfter,
+            cookedFoodPayAfterConfirm: createdPayAfter,
+            payAfterCopyVariant: payAfterCopyVariantForPreflight(preflightConfig),
           },
         },
       ],
@@ -1268,7 +1274,6 @@ export default function PlaceOrderScreen() {
     currency,
     inventoryItemId,
     initialVariantId,
-    isCookedFoodMoMoPayAfter,
   ]);
 
   if (itemLoading) {
@@ -1633,6 +1638,7 @@ export default function PlaceOrderScreen() {
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
             payAfterConfirm={isCookedFoodMoMoPayAfter}
+            payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
@@ -1654,6 +1660,7 @@ export default function PlaceOrderScreen() {
             scheduleRequired={!!preflightConfig?.schedule_required}
             allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
             payAfterConfirm={isCookedFoodMoMoPayAfter}
+            payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}

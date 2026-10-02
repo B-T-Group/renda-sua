@@ -1,22 +1,10 @@
-import {
-  Add as AddIcon,
-  ArrowBack as ArrowBackIcon,
-  LocationOn as LocationOnIcon,
-  Store as StoreIcon,
-} from '@mui/icons-material';
+import { Add as AddIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  Divider,
   Grid,
   Paper,
   Stack,
@@ -29,7 +17,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAccountManager } from '../../hooks/useAccountManager';
 import { useBusinessCatalogScope } from '../../hooks/useBusinessCatalogScope';
 import {
   AddBusinessLocationData,
@@ -37,23 +24,25 @@ import {
   UpdateBusinessLocationData,
   useBusinessLocations,
 } from '../../hooks/useBusinessLocations';
-import BusinessOrderTimingCard from '../business/BusinessOrderTimingCard';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { useLocationTransfers } from '../../hooks/useLocationTransfers';
 import LocationCard from '../business/LocationCard';
 import LocationCardSkeleton from '../business/LocationCardSkeleton';
+import ForAllLocationsPanel from '../business/location-settings/ForAllLocationsPanel';
 import LocationModal from '../business/LocationModal';
 import LocationTransferInbox from '../business/LocationTransferInbox';
-import TransferLocationDialog from '../business/TransferLocationDialog';
-import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
-import { useIsStripeRail } from '../../hooks/useIsStripeRail';
-import {
-  MobilePaymentPhone,
-  useMobilePaymentPhones,
-} from '../../hooks/useMobilePaymentPhones';
-import { useLocationTransfers } from '../../hooks/useLocationTransfers';
-import AddressDialog, {
-  type AddressFormData,
-} from '../dialogs/AddressDialog';
+import AddressDialog, { type AddressFormData } from '../dialogs/AddressDialog';
 import SEOHead from '../seo/SEOHead';
+
+function notifyAddressSaveFailed(
+  enqueueSnackbar: (message: string, options: { variant: 'error' }) => void,
+  t: (key: string, fallback: string) => string
+) {
+  enqueueSnackbar(
+    t('addresses.saveError', 'Failed to save address. Please try again.'),
+    { variant: 'error' }
+  );
+}
 
 const INITIAL_BUSINESS_ADDRESS_FORM: AddressFormData = {
   address_line_1: '',
@@ -72,34 +61,20 @@ const BusinessLocationsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { enqueueSnackbar } = useSnackbar();
+  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const { profile, loading: profileLoading, refetch: refetchProfile, addAddress } =
     useUserProfileContext();
   const { businessQueryParams } = useBusinessCatalogScope();
-  const { isStripeRail } = useIsStripeRail();
-  const { deletePhone, fetchPhones } = useMobilePaymentPhones();
-  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
-  const [phoneModalMode, setPhoneModalMode] = useState<'add' | 'edit' | 'verify'>('verify');
-  const [phoneModalTarget, setPhoneModalTarget] = useState<MobilePaymentPhone | null>(null);
-  const [phoneModalLocation, setPhoneModalLocation] = useState<BusinessLocation | null>(null);
+  const { isStripeRail, loading: railLoading } = useIsStripeRail();
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [businessAddressDialogOpen, setBusinessAddressDialogOpen] =
-    useState(false);
-  const [businessAddressForm, setBusinessAddressForm] =
-    useState<AddressFormData>(() => ({ ...INITIAL_BUSINESS_ADDRESS_FORM }));
-  const [savingBusinessAddress, setSavingBusinessAddress] = useState(false);
-  const [editingLocation, setEditingLocation] =
-    useState<BusinessLocation | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [locationToDelete, setLocationToDelete] =
-    useState<BusinessLocation | null>(null);
-  const [locationToTransfer, setLocationToTransfer] =
-    useState<BusinessLocation | null>(null);
-  const [transferRefresh, setTransferRefresh] = useState(0);
-  const [deepLinkRequestId, setDeepLinkRequestId] = useState<string | null>(
-    null
+  const [businessAddressDialogOpen, setBusinessAddressDialogOpen] = useState(false);
+  const [businessAddressForm, setBusinessAddressForm] = useState<AddressFormData>(
+    () => ({ ...INITIAL_BUSINESS_ADDRESS_FORM })
   );
-  const { outgoing, fetchPending } = useLocationTransfers(profile?.business?.id);
+  const [savingBusinessAddress, setSavingBusinessAddress] = useState(false);
+  const [transferRefresh, setTransferRefresh] = useState(0);
+  const [deepLinkRequestId, setDeepLinkRequestId] = useState<string | null>(null);
+  const { fetchPending } = useLocationTransfers(profile?.business?.id);
 
   useEffect(() => {
     const id = searchParams.get('transferRequestId');
@@ -117,16 +92,8 @@ const BusinessLocationsPage: React.FC = () => {
     error: locationsError,
     warning: locationsWarning,
     addLocation,
-    updateLocation,
-    deleteLocation,
     fetchLocations,
   } = useBusinessLocations(profile?.business?.id, undefined, refetchProfile);
-
-  const { accounts } = useAccountManager({
-    entityType: 'business',
-    entityId: profile?.id ?? '',
-    autoFetch: !!profile?.id,
-  });
 
   const canAddLocation = !!primaryAddressCountry;
 
@@ -135,25 +102,13 @@ const BusinessLocationsPage: React.FC = () => {
     setBusinessAddressDialogOpen(true);
   }, []);
 
-  const closeBusinessAddressDialog = useCallback(() => {
-    if (!savingBusinessAddress) setBusinessAddressDialogOpen(false);
-  }, [savingBusinessAddress]);
-
   const saveBusinessAddress = useCallback(async () => {
     const businessId = profile?.business?.id;
     if (!businessId) return;
     const { address_line_1, city, country, state } = businessAddressForm;
-    if (
-      !address_line_1?.trim() ||
-      !city?.trim() ||
-      !country?.trim() ||
-      !state?.trim()
-    ) {
+    if (!address_line_1?.trim() || !city?.trim() || !country?.trim() || !state?.trim()) {
       enqueueSnackbar(
-        t(
-          'addresses.addressDialog.requiredFields',
-          'Please fill in all required fields (address, city, state, country).'
-        ),
+        t('addresses.addressDialog.requiredFields', 'Please fill in all required fields (address, city, state, country).'),
         { variant: 'warning' }
       );
       return;
@@ -170,7 +125,7 @@ const BusinessLocationsPage: React.FC = () => {
           country: country.trim(),
           postal_code: businessAddressForm.postal_code?.trim() || '',
           address_type: businessAddressForm.address_type || 'home',
-          is_primary: businessAddressForm.is_primary ?? true,
+          is_primary: true,
         },
         'business',
         businessId
@@ -179,53 +134,18 @@ const BusinessLocationsPage: React.FC = () => {
         setBusinessAddressDialogOpen(false);
         await fetchLocations();
       } else {
-        enqueueSnackbar(
-          t('addresses.saveError', 'Failed to save address. Please try again.'),
-          { variant: 'error' }
-        );
+        notifyAddressSaveFailed(enqueueSnackbar, t);
       }
     } catch {
-      enqueueSnackbar(
-        t('addresses.saveError', 'Failed to save address. Please try again.'),
-        { variant: 'error' }
-      );
+      notifyAddressSaveFailed(enqueueSnackbar, t);
     } finally {
       setSavingBusinessAddress(false);
     }
-  }, [
-    profile?.business?.id,
-    businessAddressForm,
-    addAddress,
-    enqueueSnackbar,
-    t,
-    fetchLocations,
-  ]);
-
+  }, [profile?.business?.id, businessAddressForm, addAddress, enqueueSnackbar, t, fetchLocations]);
 
   useEffect(() => {
     void fetchPending();
   }, [fetchPending]);
-
-  const pendingLocationIds = new Set(
-    outgoing.map((r) => r.business_location_id)
-  );
-
-  // Fetch locations when component mounts or business ID changes
-  useEffect(() => {
-    if (profile?.business?.id) {
-      fetchLocations();
-    }
-  }, [profile?.business?.id, fetchLocations]);
-
-  const handleAddLocation = () => {
-    setEditingLocation(null);
-    setShowLocationModal(true);
-  };
-
-  const handleEditLocation = (location: BusinessLocation) => {
-    setEditingLocation(location);
-    setShowLocationModal(true);
-  };
 
   const handleViewItems = (location: BusinessLocation) => {
     const params = new URLSearchParams();
@@ -236,220 +156,42 @@ const BusinessLocationsPage: React.FC = () => {
     navigate(`/business/items?${params.toString()}`);
   };
 
-  const openPhoneModal = (
-    location: BusinessLocation,
-    mode: 'add' | 'edit' | 'verify'
-  ) => {
-    setPhoneModalLocation(location);
-    setPhoneModalMode(mode);
-    setPhoneModalTarget(location.mobile_payment_phone ?? null);
-    setPhoneModalOpen(true);
-  };
-
-  const handlePhoneCompleted = async (phone: MobilePaymentPhone) => {
-    if (!phoneModalLocation) return;
-    await updateLocation(phoneModalLocation.id, {
-      mobile_payment_phone_id: phone.id,
-    });
-    await fetchLocations();
-    setPhoneModalOpen(false);
-    setPhoneModalLocation(null);
-  };
-
-  const handleRemoveLocationPhone = async (location: BusinessLocation) => {
-    const phoneId = location.mobile_payment_phone_id;
-    if (!phoneId) return;
-    try {
-      await updateLocation(location.id, { mobile_payment_phone_id: null });
-      await fetchLocations();
-      try {
-        await deletePhone(phoneId);
-        enqueueSnackbar(
-          t('mobilePaymentPhone.removed', 'Mobile payment number removed'),
-          { variant: 'success' }
-        );
-      } catch {
-        enqueueSnackbar(
-          t(
-            'mobilePaymentPhone.unlinked',
-            'Mobile payment number unlinked from this location'
-          ),
-          { variant: 'success' }
-        );
-      }
-    } catch (error: unknown) {
-      enqueueSnackbar(
-        error instanceof Error
-          ? error.message
-          : t('mobilePaymentPhone.removeFailed', 'Could not remove number'),
-        { variant: 'error' }
-      );
-    }
-  };
-
-  const locationCardProps = (location: BusinessLocation) => ({
-    location,
-    account: accounts.find((a) => a.business_location_id === location.id),
-    transferPending: pendingLocationIds.has(location.id),
-    isStripeRail,
-    onTransfer: setLocationToTransfer,
-    onEdit: handleEditLocation,
-    onDelete: handleDeleteLocation,
-    onToggleStatus: handleToggleLocationStatus,
-    onViewItems: handleViewItems,
-    onVerifyPhone: (loc: BusinessLocation) =>
-      openPhoneModal(loc, loc.mobile_payment_phone ? 'verify' : 'add'),
-    onEditPhone: (loc: BusinessLocation) => openPhoneModal(loc, 'edit'),
-    onRemovePhone: (loc: BusinessLocation) => void handleRemoveLocationPhone(loc),
-  });
-
-  const handleDeleteLocation = (location: BusinessLocation) => {
-    setLocationToDelete(location);
-    setShowDeleteConfirm(true);
-  };
-
-  const deleteLocationErrorMessage = (error: unknown) => {
-    const code =
-      error && typeof error === 'object' && 'code' in error
-        ? String((error as { code?: string }).code)
-        : undefined;
-    if (code === 'LOCATION_HAS_INVENTORY') {
-      return t(
-        'business.locations.cannotDeleteHasInventory',
-        'Cannot delete a location that still has items. Remove items from this location first.'
-      );
-    }
-    if (code === 'LOCATION_HAS_BALANCE') {
-      return t(
-        'business.locations.cannotDeleteHasBalance',
-        'Cannot delete a location that still has account balance. Withdraw or transfer funds first.'
-      );
-    }
-    if (code === 'ADDRESS_PRIMARY_DELETE_FORBIDDEN') {
-      return t(
-        'business.locations.cannotDeletePrimary',
-        'Cannot delete primary location'
-      );
-    }
-    if (code === 'ADDRESS_MINIMUM_REQUIRED') {
-      return t(
-        'business.locations.cannotDeleteOnlyLocation',
-        'Cannot delete the only location. Each business must have at least one location.'
-      );
-    }
-    if (error instanceof Error && error.message) return error.message;
-    return t('business.locations.deleteError', 'Failed to delete location');
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!locationToDelete) return;
-
-    try {
-      await deleteLocation(locationToDelete.id);
-      enqueueSnackbar(
-        t(
-          'business.locations.locationDeleted',
-          'Location deleted successfully'
-        ),
-        {
-          variant: 'success',
-        }
-      );
-      setShowDeleteConfirm(false);
-      setLocationToDelete(null);
-      void fetchLocations();
-    } catch (error: unknown) {
-      console.error('Error deleting location:', error);
-      enqueueSnackbar(deleteLocationErrorMessage(error), {
-        variant: 'error',
-      });
-    }
-  };
-
   const handleSaveLocation = async (
     data: AddBusinessLocationData | UpdateBusinessLocationData
   ) => {
+    let created: Awaited<ReturnType<typeof addLocation>>;
     try {
-      if (editingLocation) {
-        await updateLocation(
-          editingLocation.id,
-          data as UpdateBusinessLocationData
-        );
-        enqueueSnackbar(
-          t(
-            'business.locations.locationUpdated',
-            'Location updated successfully'
-          ),
-          {
-            variant: 'success',
-          }
-        );
-      } else {
-        await addLocation(data as AddBusinessLocationData);
-        enqueueSnackbar(
-          t('business.locations.locationAdded', 'Location added successfully'),
-          {
-            variant: 'success',
-          }
-        );
-      }
-      setShowLocationModal(false);
-      fetchLocations();
-      setEditingLocation(null);
-    } catch (error) {
-      console.error('BusinessLocationsPage: Error saving location:', error);
+      created = await addLocation(data as AddBusinessLocationData);
+    } catch {
       enqueueSnackbar(
         t('business.locations.saveError', 'Failed to save location'),
         { variant: 'error' }
       );
+      return;
     }
-  };
-
-  const handleToggleLocationStatus = async (location: BusinessLocation) => {
-    try {
-      await updateLocation(location.id, {
-        is_active: !location.is_active,
-      });
-
-      const statusMessage = location.is_active
-        ? t(
-            'business.locations.locationDeactivated',
-            'Location deactivated successfully'
-          )
-        : t(
-            'business.locations.locationActivated',
-            'Location activated successfully'
-          );
-
-      enqueueSnackbar(statusMessage, {
+    setShowLocationModal(false);
+    enqueueSnackbar(
+      t('business.locations.locationAdded', 'Location added. Set your opening hours'),
+      {
         variant: 'success',
-      });
-
-      // Refresh the locations list
-      fetchLocations();
-    } catch (error) {
-      console.error(
-        'BusinessLocationsPage: Error toggling location status:',
-        error
-      );
-      enqueueSnackbar(
-        t(
-          'business.locations.statusUpdateError',
-          'Failed to update location status'
+        action: (key) => (
+          <Button
+            color="inherit"
+            onClick={() => {
+              closeSnackbar(key);
+              navigate(`/business/locations/${created.id}`);
+            }}
+          >
+            {t('business.locations.hours.setNow', 'Set hours')}
+          </Button>
         ),
-        {
-          variant: 'error',
-        }
-      );
-    }
+      }
+    );
   };
-
-  const activeLocations = locations.filter((location) => location.is_active);
-  const inactiveLocations = locations.filter((location) => !location.is_active);
 
   if (profileLoading) {
     return (
-      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 }, display: 'flex', justifyContent: 'center' }}>
+      <Container maxWidth="lg" sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
         <CircularProgress />
       </Container>
     );
@@ -457,12 +199,9 @@ const BusinessLocationsPage: React.FC = () => {
 
   if (!profile?.business) {
     return (
-      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
         <Alert severity="error">
-          {t(
-            'business.dashboard.noBusinessProfile',
-            'Business profile not found'
-          )}
+          {t('business.dashboard.noBusinessProfile', 'Business profile not found')}
         </Alert>
       </Container>
     );
@@ -472,395 +211,100 @@ const BusinessLocationsPage: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
       <SEOHead
         title={t('seo.business-locations.title', 'Business Locations')}
-        description={t(
-          'seo.business-locations.description',
-          'Manage your business locations'
-        )}
-        keywords={t(
-          'seo.business-locations.keywords',
-          'business locations, manage locations'
-        )}
+        description={t('seo.business-locations.description', 'Manage your business locations')}
+        keywords={t('seo.business-locations.keywords', 'business locations, manage locations')}
       />
-
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Button
-          variant="outlined"
-          color="inherit"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/dashboard')}
-          sx={{
-            mb: 2,
-            borderColor: 'divider',
-            alignSelf: 'flex-start',
-          }}
-        >
-          {t(
-            'business.locations.backToDashboard',
-            'Back to dashboard'
-          )}
+      <Box sx={{ mb: 3 }}>
+        <Button variant="outlined" color="inherit" startIcon={<ArrowBackIcon />} onClick={() => navigate('/dashboard')} sx={{ mb: 2 }}>
+          {t('business.locations.backToDashboard', 'Back to dashboard')}
         </Button>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          justifyContent="space-between"
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          spacing={2}
-          mb={2}
-        >
-          <Box>
-            <Typography
-              variant="h4"
-              component="h1"
-              sx={{
-                fontWeight: 700,
-                fontSize: { xs: '1.75rem', md: '2.125rem' },
-              }}
-            >
-              {t('business.locations.title', 'Business Locations')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {t(
-                'business.locations.description',
-                'Manage all your business locations and their details'
-              )}
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAddLocation}
-            disabled={!canAddLocation}
-            size={isMobile ? 'medium' : 'large'}
-            sx={{ minWidth: { xs: '100%', sm: 'auto' } }}
-          >
-            {t('business.locations.addLocation', 'Add Location')}
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+            {t('business.locations.title', 'Locations')}
+          </Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowLocationModal(true)} disabled={!canAddLocation}>
+            {t('business.locations.addLocation', 'Add location')}
           </Button>
         </Stack>
-        <Box sx={{ mt: 2, mb: 3 }}>
-          <BusinessOrderTimingCard />
-        </Box>
-
-        {!locationsLoading && !canAddLocation && profile?.business && (
-          <Alert
-            severity="info"
-            sx={{
-              mt: 2,
-              '& .MuiAlert-message': { width: '100%' },
-            }}
-            action={
-              <Button
-                color="inherit"
-                size="small"
-                onClick={openBusinessAddressDialog}
-                sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}
-              >
-                {t(
-                  'business.locations.addBusinessAddress',
-                  'Add business address'
-                )}
-              </Button>
-            }
-          >
-            {t(
-              'business.locations.addAddressFirst',
-              'Add a business address first before adding locations.'
-            )}
+        {!locationsLoading && !canAddLocation && profile.business ? (
+          <Alert severity="info" sx={{ mt: 2 }} action={
+            <Button color="inherit" size="small" onClick={openBusinessAddressDialog}>
+              {t('business.locations.addBusinessAddress', 'Add business address')}
+            </Button>
+          }>
+            {t('business.locations.addAddressFirst', 'Add a business address first before adding locations.')}
           </Alert>
-        )}
-
-        <LocationTransferInbox
-          businessId={profile?.business?.id}
-          refreshToken={transferRefresh}
-          focusRequestId={deepLinkRequestId}
-          onFocusHandled={() => setDeepLinkRequestId(null)}
-          onChanged={() => {
-            void fetchLocations();
-            void fetchPending();
-            setTransferRefresh((n) => n + 1);
-          }}
-        />
-
-        {/* Stats Summary */}
-        {!locationsLoading && locations.length > 0 && (
-          <Paper sx={{ p: 2, bgcolor: 'primary.50' }}>
-            <Stack
-              direction="row"
-              spacing={3}
-              alignItems="center"
-              flexWrap="wrap"
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <StoreIcon sx={{ color: 'primary.main' }} />
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                  {locations.length}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {t('business.locations.totalLocations', 'Total Locations')}
-                </Typography>
-              </Box>
-              {activeLocations.length > 0 && (
-                <>
-                  <Divider orientation="vertical" flexItem />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <LocationOnIcon sx={{ color: 'success.main' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {activeLocations.length}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('business.locations.active', 'Active')}
-                    </Typography>
-                  </Box>
-                </>
-              )}
-              {inactiveLocations.length > 0 && (
-                <>
-                  <Divider orientation="vertical" flexItem />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <LocationOnIcon sx={{ color: 'grey.400' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {inactiveLocations.length}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('business.locations.inactive', 'Inactive')}
-                    </Typography>
-                  </Box>
-                </>
-              )}
-            </Stack>
-          </Paper>
-        )}
+        ) : null}
+        <Box sx={{ mt: 2 }}>
+          <LocationTransferInbox
+            businessId={profile.business.id}
+            refreshToken={transferRefresh}
+            focusRequestId={deepLinkRequestId}
+            onFocusHandled={() => setDeepLinkRequestId(null)}
+            onChanged={() => {
+              void fetchLocations();
+              void fetchPending();
+              setTransferRefresh((n) => n + 1);
+            }}
+          />
+        </Box>
       </Box>
-
-      {/* Error Display */}
-      {locationsError && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {locationsError}
-        </Alert>
-      )}
-
-      {/* Loading State */}
-      {locationsLoading && (
+      {locationsError ? <Alert severity="error" sx={{ mb: 2 }}>{locationsError}</Alert> : null}
+      {locationsLoading ? (
         <Grid container spacing={2}>
           {[1, 2, 3].map((index) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
-              <LocationCardSkeleton />
-            </Grid>
+            <Grid size={{ xs: 12 }} key={index}><LocationCardSkeleton /></Grid>
           ))}
         </Grid>
-      )}
-
-      {/* Empty State */}
-      {!locationsLoading && locations.length === 0 && (
-        <Paper
-          sx={{
-            p: { xs: 4, md: 6 },
-            textAlign: 'center',
-            bgcolor: 'grey.50',
-            border: '2px dashed',
-            borderColor: 'grey.300',
-            borderRadius: 2,
-          }}
-        >
-          <StoreIcon sx={{ fontSize: 80, color: 'grey.400', mb: 2 }} />
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
-            {t('business.locations.noLocations', 'No Locations Yet')}
+      ) : null}
+      {!locationsLoading && locations.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h5" gutterBottom>
+            {t('business.locations.noLocations', 'No locations found')}
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            {t(
-              'business.locations.noLocationsMessage',
-              'Add your first business location to start managing inventory and deliveries'
-            )}
-          </Typography>
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={<AddIcon />}
-            onClick={handleAddLocation}
-            disabled={!canAddLocation}
-          >
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowLocationModal(true)} disabled={!canAddLocation}>
             {t('business.locations.addFirstLocation', 'Add First Location')}
           </Button>
-          {!canAddLocation && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              {t(
-                'business.locations.addAddressFirst',
-                'Add a business address first before adding locations.'
-              )}
-            </Typography>
-          )}
         </Paper>
-      )}
-
-      {/* Locations Grid */}
-      {!locationsLoading && locations.length > 0 && (
-        <Box>
-          {/* Active Locations */}
-          {activeLocations.length > 0 && (
-            <Box sx={{ mb: 4 }}>
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                sx={{ mb: 2 }}
-              >
-                <Chip
-                  label={t('business.locations.active', 'Active')}
-                  color="success"
-                  size="small"
-                  sx={{ fontWeight: 600 }}
-                />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {t('business.locations.activeLocations', 'Active Locations')}
-                </Typography>
-                <Chip
-                  label={activeLocations.length}
-                  size="small"
-                  variant="outlined"
-                />
-              </Stack>
-              <Grid container spacing={2}>
-                {activeLocations.map((location) => (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
-                    <LocationCard {...locationCardProps(location)} />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          )}
-
-          {/* Inactive Locations */}
-          {inactiveLocations.length > 0 && (
-            <Box>
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                sx={{ mb: 2 }}
-              >
-                <Chip
-                  label={t('business.locations.inactive', 'Inactive')}
-                  color="default"
-                  size="small"
-                  sx={{ fontWeight: 600 }}
-                />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {t(
-                    'business.locations.inactiveLocations',
-                    'Inactive Locations'
-                  )}
-                </Typography>
-                <Chip
-                  label={inactiveLocations.length}
-                  size="small"
-                  variant="outlined"
-                />
-              </Stack>
-              <Grid container spacing={2}>
-                {inactiveLocations.map((location) => (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={location.id}>
-                    <LocationCard {...locationCardProps(location)} />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          )}
-        </Box>
-      )}
-
-      {/* Location Modal */}
+      ) : null}
+      {!locationsLoading && locations.length > 0 ? (
+        <Stack spacing={2}>
+          {locations.map((location) => (
+            <LocationCard
+              key={location.id}
+              location={location}
+              isStripeRail={isStripeRail}
+              railLoading={railLoading}
+              onSettings={(item) => navigate(`/business/locations/${item.id}`)}
+              onViewItems={handleViewItems}
+            />
+          ))}
+        </Stack>
+      ) : null}
+      <Box sx={{ mt: 3 }}>
+        <ForAllLocationsPanel />
+      </Box>
       <LocationModal
         open={showLocationModal}
         onClose={() => setShowLocationModal(false)}
         onSave={handleSaveLocation}
-        location={editingLocation}
         businessPrimaryCountry={primaryAddressCountry}
-        businessId={profile?.business?.id ?? null}
+        businessId={profile.business.id}
         loading={locationsLoading}
         error={locationsError}
         warning={locationsWarning}
       />
-
       <AddressDialog
         open={businessAddressDialogOpen}
-        onClose={closeBusinessAddressDialog}
+        onClose={() => {
+          if (!savingBusinessAddress) setBusinessAddressDialogOpen(false);
+        }}
         onSave={saveBusinessAddress}
         addressData={businessAddressForm}
         onAddressChange={setBusinessAddressForm}
         loading={savingBusinessAddress}
-        title={t(
-          'business.locations.addBusinessAddress',
-          'Add business address'
-        )}
+        title={t('business.locations.addBusinessAddress', 'Add business address')}
         fullScreen={isMobile}
-      />
-
-      
-      <TransferLocationDialog
-        open={!!locationToTransfer}
-        location={locationToTransfer}
-        businessId={profile?.business?.id}
-        onClose={() => setLocationToTransfer(null)}
-        onSuccess={() => {
-          enqueueSnackbar(
-            t(
-              'business.locations.transfer.requestSent',
-              'Transfer request sent'
-            ),
-            { variant: 'success' }
-          );
-          void fetchPending();
-          void fetchLocations();
-          setTransferRefresh((n) => n + 1);
-        }}
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>
-          {t('business.locations.deleteLocation', 'Delete Location')}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {locationToDelete?.is_primary
-              ? t(
-                  'business.locations.primaryLocationWarning',
-                  'Cannot delete the primary location. Please set another location as primary first.'
-                )
-              : t(
-                  'business.locations.deleteConfirm',
-                  'Are you sure you want to delete this location? This action cannot be undone.'
-                )}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setShowDeleteConfirm(false)}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button
-            onClick={handleConfirmDelete}
-            color="error"
-            variant="contained"
-            disabled={locationToDelete?.is_primary}
-          >
-            {t('common.delete', 'Delete')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <MobilePaymentPhoneVerifyModal
-        open={phoneModalOpen}
-        mode={phoneModalMode}
-        initialPhone={phoneModalTarget}
-        onClose={() => {
-          setPhoneModalOpen(false);
-          setPhoneModalLocation(null);
-        }}
-        onCompleted={(phone) => void handlePhoneCompleted(phone)}
       />
     </Container>
   );
