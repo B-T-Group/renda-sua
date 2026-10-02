@@ -74,3 +74,130 @@ export function editorValueToOperatingHours(
   }
   return hours;
 }
+
+const SHORT_DAY: Record<DayName, string> = {
+  monday: 'Mon',
+  tuesday: 'Tue',
+  wednesday: 'Wed',
+  thursday: 'Thu',
+  friday: 'Fri',
+  saturday: 'Sat',
+  sunday: 'Sun',
+};
+
+type TranslateFn = (key: string, defaultValue: string) => string;
+
+function dayRangeLabel(days: DayName[], t: TranslateFn): string {
+  if (days.length === 1) {
+    return t(`common.weekdays.short.${days[0]}`, SHORT_DAY[days[0]]);
+  }
+  const first = t(`common.weekdays.short.${days[0]}`, SHORT_DAY[days[0]]);
+  const last = t(
+    `common.weekdays.short.${days[days.length - 1]}`,
+    SHORT_DAY[days[days.length - 1]]
+  );
+  return `${first}–${last}`;
+}
+
+function isConsecutive(days: DayName[]): boolean {
+  if (days.length <= 1) return true;
+  const indexes = days.map((day) => DAY_ORDER.indexOf(day));
+  for (let i = 1; i < indexes.length; i += 1) {
+    if (indexes[i] !== indexes[i - 1] + 1) return false;
+  }
+  return true;
+}
+
+function resolvedHours(
+  hours: OperatingHours | null | undefined
+): OperatingHours {
+  return { ...DEFAULT_OPERATING_HOURS, ...(hours ?? {}) };
+}
+
+function openRows(hours: OperatingHours | null | undefined) {
+  const source = resolvedHours(hours);
+  return DAY_ORDER.map((day) => {
+    const dayHours = source[day];
+    const enabled = !!(dayHours && !dayHours.closed && dayHours.open && dayHours.close);
+    return {
+      day,
+      enabled,
+      open: dayHours?.open || '08:00',
+      close: dayHours?.close || '20:00',
+    };
+  }).filter((row) => row.enabled);
+}
+
+/** True when every weekday is closed after filling gaps from the platform default. */
+export function isAllDaysClosed(
+  hours: OperatingHours | null | undefined
+): boolean {
+  if (!hours) return false;
+  const source = resolvedHours(hours);
+  return DAY_ORDER.every((day) => source[day]?.closed === true);
+}
+
+/** One-line summary for cards, e.g. "Mon–Fri 08:00–20:00". */
+export function formatOperatingHoursSummary(
+  hours: OperatingHours | null | undefined,
+  t: TranslateFn
+): string {
+  const rows = openRows(hours);
+  if (rows.length === 0) return t('common.closed', 'Closed');
+  return summarizeOpenRows(rows, t);
+}
+
+function summarizeOpenRows(
+  rows: Array<{ day: DayName; open: string; close: string }>,
+  t: TranslateFn
+): string {
+  const sameWindow = rows.every(
+    (row) => row.open === rows[0].open && row.close === rows[0].close
+  );
+  const windowLabel = `${rows[0].open}–${rows[0].close}`;
+  if (rows.length === 7 && sameWindow) {
+    return t(
+      'business.locations.operatingHours.everyDay',
+      'Every day {{hours}}'
+    ).replace('{{hours}}', windowLabel);
+  }
+  if (sameWindow && isConsecutive(rows.map((row) => row.day))) {
+    return `${dayRangeLabel(rows.map((row) => row.day), t)} ${windowLabel}`;
+  }
+  if (sameWindow) {
+    return t(
+      'business.locations.operatingHours.openDays',
+      '{{count}} days · {{hours}}'
+    )
+      .replace('{{count}}', String(rows.length))
+      .replace('{{hours}}', windowLabel);
+  }
+  return t('business.locations.operatingHours.custom', 'Custom schedule');
+}
+
+/** Copy Monday's open window onto every enabled day. */
+export function copyMondayToOpenDays(value: ServiceHoursValue): ServiceHoursValue {
+  const monday = value.monday;
+  if (!monday?.enabled) return value;
+  const next: ServiceHoursValue = { ...value };
+  for (const day of Object.keys(next)) {
+    const config = next[day];
+    if (!config?.enabled) continue;
+    next[day] = { ...config, start: monday.start, end: monday.end };
+  }
+  return next;
+}
+
+export function editorHoursAreValid(value: ServiceHoursValue): boolean {
+  return Object.values(value).every((config) => {
+    if (!config?.enabled) return true;
+    return config.start < config.end;
+  });
+}
+
+export function operatingHoursEqual(
+  left: OperatingHours | null | undefined,
+  right: OperatingHours | null | undefined
+): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}

@@ -4384,6 +4384,158 @@
           "skuCollision": "Destination already has items with the same SKU",
           "unknown": "Transfer is blocked"
         }
+      },
+      "store": "Store",
+      "warehouse": "Warehouse",
+      "office": "Office",
+      "pickup_point": "Pickup point",
+      "manageItems": "Manage items",
+      "expectations": {
+        "title": "What your customers will experience",
+        "visible": "Customers can see and order from this location.",
+        "hidden": "This location is hidden. Customers can't see its items or order from it.",
+        "closedEveryDay": "You're closed every day, so customers can't order.",
+        "openHours": "Open {{hours}} (local time). Pickup and delivery times must fall inside these hours.",
+        "paidOut": "Your sales are paid out to {{phone}}{{auto}}.",
+        "autoSuffix": " automatically",
+        "manualSuffix": " when you withdraw",
+        "needPhone": "Customers can't buy from this location until you {{action}} a Mobile Money number.",
+        "verifyVerb": "verify",
+        "addVerb": "add",
+        "payAfter": "Mobile Money orders: customers order first, you confirm, then they have 45 minutes to pay (3 hours for cooked food). They can't schedule for later.",
+        "payAsSet": "Customers pay as set on each item (for example when they order, or when they receive it). Cooked food is always paid after you confirm.",
+        "alertPhone": "New orders also alert {{phone}}.",
+        "alertOwnerOnly": "New orders alert you. Add a kitchen or till phone to alert staff too.",
+        "itemsPointer": "Pickup, delivery and shipping are chosen on each item.",
+        "rolloutFootnote": "We're rolling this out gradually. Your choice is saved now and starts working as soon as it's available for your store.",
+        "showCta": "Show this location"
+      },
+      "openClosed": {
+        "showLabel": "Show this location to customers",
+        "showOn": "Customers can see this location's items and order from it.",
+        "showOff": "This location is hidden. Customers can't see its items or order from it until you turn it back on.",
+        "hideTitle": "Hide this location?",
+        "hideConfirm": "Hide it",
+        "hoursTitle": "Opening hours",
+        "hoursHelp": "Customers can only choose pickup or delivery times when you're open. Orders for 'as soon as possible' stop a little before closing, so there's time to prepare.",
+        "cookedFoodNote": "Cooked food uses the serving times set on each food item."
+      },
+      "hours": {
+        "save": "Save hours",
+        "saved": "Opening hours saved",
+        "saveFailed": "Couldn't save your opening hours. Please try again.",
+        "closeAfterOpen": "Closing time must be after opening time.",
+        "copyMonday": "Copy Monday to all open days",
+        "setNow": "Set hours"
+      },
+      "operatingHours": {
+        "everyDay": "Every day {{hours}}",
+        "openDays": "{{count}} days · {{hours}}",
+        "custom": "Custom schedule"
+      },
+      "card": {
+        "open": "Open for customers",
+        "hidden": "Hidden from customers",
+        "settings": "Settings",
+        "addPhone": "Add a Mobile Money number",
+        "verifyPhone": "Verify your mobile money number"
+      },
+      "gettingPaid": {
+        "title": "Getting paid",
+        "momoLabel": "Mobile Money number",
+        "phoneLabel": "Phone number",
+        "phoneHelp": "How customers and Rendasua can reach this location.",
+        "noNumber": "No number yet",
+        "addNumber": "Add a number",
+        "momoNone": "No number yet. Add one so customers can buy from this location.",
+        "momoUnverified": "Not verified yet. Customers can't buy from this location until you verify it.",
+        "momoVerified": "Verified. Your sales are paid out to this number.",
+        "autoLabel": "Send my money to this number automatically",
+        "autoOn": "Each time a sale's money reaches this location, we send it to your number.",
+        "autoOff": "Money stays in this location's account until you withdraw it from your Wallet.",
+        "autoNeedsNumber": "Add a Mobile Money number for automatic payouts to work.",
+        "feeLabel": "Rendasua fee",
+        "feeValue": "{{pct}}% of item sales, set by your business plan.",
+        "seePlans": "See plans"
+      },
+      "payAfter": {
+        "section": "How customers pay",
+        "label": "Ask customers to pay after you confirm",
+        "short": "When on, customers order first. After you confirm, they have 45 minutes to pay with Mobile Money (3 hours for cooked food). Unpaid orders are cancelled and the stock goes back on sale.",
+        "goodToKnow": "Good to know",
+        "ownerOnly": "Only the business owner can change this.",
+        "saved": "Payment setting saved",
+        "saveFailed": "Couldn't save how customers pay. Please try again.",
+        "turnOnTitle": "Turn on pay after you confirm?",
+        "turnOnBody": "When on, customers order first. After you confirm, they have 45 minutes to pay with Mobile Money (3 hours for cooked food). Unpaid orders are cancelled and the stock goes back on sale. Customers will see 'Pay after the store confirms' on this location's items.",
+        "turnOffTitle": "Turn off pay after you confirm?",
+        "turnOffBody": "Customers will pay when they order, as set on each item.",
+        "turnOn": "Turn on",
+        "turnOff": "Turn off",
+        "bulletMomo": "Applies to Mobile Money pickup and delivery orders.",
+        "bulletAsap": "Customers can only order for as soon as possible — they can't schedule for later.",
+        "bulletCart": "If a basket has items from this location, the whole basket is paid after you confirm.",
+        "bulletWallet": "Customers whose Rendasua wallet covers the order still pay right away.",
+        "bulletDeposit": "No reservation deposit is taken.",
+        "bulletCancel": "You can cancel an order even after it's paid (for example, out of stock). The customer is refunded in full.",
+        "bulletShipping": "Shipping and rentals aren't affected.",
+        "bulletFood": "Cooked food is already paid after you confirm, whether or not this is on."
+      },
+      "alerts": {
+        "label": "Extra phone for new-order alerts (optional)",
+        "empty": "Not set — alerts go to you only.",
+        "help": "Add your kitchen or till phone. It gets a message for each new order at this location, and can confirm or update orders from there. You still get your own alerts.",
+        "placeholder": "+237 …",
+        "countryCode": "Enter the number with its country code.",
+        "save": "Save alerts",
+        "saved": "Order alerts saved",
+        "saveFailed": "Couldn't save the alert phone. Please try again."
+      },
+      "basics": {
+        "title": "Name, logo & address",
+        "nameRequired": "Enter a name.",
+        "addressRequired": "Add an address for this location.",
+        "logo": "Logo",
+        "uploadLogo": "Upload a logo",
+        "useLink": "Use an image link instead",
+        "logoHelp": "Shown to customers next to this location.",
+        "email": "Contact email (optional)",
+        "emailHelp": "For messages about this location.",
+        "save": "Save details",
+        "saveFailed": "Couldn't save this location's name. Please try again."
+      },
+      "more": {
+        "title": "More options",
+        "kind": "Kind of place",
+        "kindHelp": "Helps you tell your places apart.",
+        "mainCurrent": "This is your main location. It can't be deleted.",
+        "makeMain": "Make this my main location",
+        "mainConfirm": "Your current main location will no longer be main.",
+        "mainSaved": "This is now your main location.",
+        "mainPartial": "This location is main, but the previous one could not be updated. You may have two main locations until you try again.",
+        "mainFailed": "Couldn't update the main location. Please try again.",
+        "transfer": "Transfer to another business",
+        "transferHelp": "Move this location and its items to another business. They must accept first.",
+        "delete": "Delete this location",
+        "deleteHelp": "You can only delete a location with no items and no money in its account. This can't be undone."
+      },
+      "allLocations": {
+        "link": "For all your locations",
+        "banner": "These settings apply to all your locations.",
+        "timingHelp": "These settings apply to all your locations.",
+        "asapLabel": "How long you have to confirm an order",
+        "asapHelp": "If you don't confirm in this time, the order is declined.",
+        "futureLabel": "How long you have to confirm a scheduled order",
+        "leadLabel": "Start counting before prep time",
+        "leadHelp": "For scheduled orders, the confirm timer starts this long before you need to start preparing.",
+        "prepLabel": "Usual preparation time (minutes)",
+        "prepHelp": "Used to tell customers when to expect their order.",
+        "pauseTitle": "Pause orders",
+        "pauseHelp": "Customers can't place new orders while paused."
+      },
+      "settings": {
+        "notFound": "We couldn't find this location.",
+        "seo": "Location settings"
       }
     },
     "orders": {
@@ -4740,7 +4892,18 @@
     "firstName": "First name",
     "lastName": "Last name",
     "pleaseWait": "Please wait",
-    "email": "Email"
+    "email": "Email",
+    "weekdays": {
+      "short": {
+        "monday": "Mon",
+        "tuesday": "Tue",
+        "wednesday": "Wed",
+        "thursday": "Thu",
+        "friday": "Fri",
+        "saturday": "Sat",
+        "sunday": "Sun"
+      }
+    }
   },
   "dashboard": {
     "client": {

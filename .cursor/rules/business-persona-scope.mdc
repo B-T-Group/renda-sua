@@ -5,7 +5,7 @@ When implementing any feature, fix, or update that touches the **business person
 business catalog, business accounts), the change MUST be reflected on **both**:
 
 - `apps/frontend/src/` (React web app)
-- `mobile-rendasua/src/` (Expo React Native mobile app)
+- `apps/mobile/src/` (Expo React Native mobile app)
 
 Do not implement a business-facing change on only one platform without explicitly
 noting why the other platform is intentionally excluded.

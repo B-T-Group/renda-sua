@@ -119,6 +119,14 @@ function isConsecutive(days: DayName[]): boolean {
   return true;
 }
 
+/** True when every weekday is closed after filling gaps from the platform default. */
+export function isAllDaysClosed(
+  hours: OperatingHours | null | undefined
+): boolean {
+  if (!hours) return false;
+  return operatingHoursToEditorRows(hours).every((row) => !row.enabled);
+}
+
 /** One-line summary for cards, e.g. "Mon–Fri 08:00–20:00". */
 export function formatOperatingHoursSummary(
   hours: OperatingHours | null | undefined,

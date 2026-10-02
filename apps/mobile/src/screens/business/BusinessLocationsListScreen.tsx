@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Snackbar, Text } from 'react-native-paper';
+import { Button, Snackbar, Text } from 'react-native-paper';
 import { SubtleExtendedFab } from '../../components/common/SubtleExtendedFab';
 import { BusinessLocationCard } from '../../components/business/BusinessLocationCard';
 import { BusinessLocationCardSkeleton } from '../../components/business/BusinessLocationCardSkeleton';
@@ -321,30 +321,25 @@ export default function BusinessLocationsListScreen() {
               {t('business.locations.empty', 'No locations yet')}
             </Text>
           }
+          ListFooterComponent={
+            <Button
+              mode="text"
+              onPress={() => navigation.navigate('BusinessInsights')}
+            >
+              {t('business.locations.allLocations.link', 'For all your locations')}
+            </Button>
+          }
           renderItem={({ item }) => (
             <BusinessLocationCard
               location={item}
-              account={accountsByLocation.get(item.id) ?? null}
               isStripeRail={isStripeRail}
-              transferPending={pendingLocationIds.has(item.id)}
-              businessAccountType={me?.business?.account_type}
+              railLoading={stripeRailLoading}
               onEdit={() =>
                 navigation.navigate('BusinessLocationForm', { locationId: item.id })
-              }
-              onEditHours={() =>
-                navigation.navigate('BusinessLocationHours', { locationId: item.id })
-              }
-              onToggleStatus={() => setToggleTarget(item)}
-              onTransfer={() => setTransferTarget(item)}
-              onDelete={
-                item.is_primary ? undefined : () => setDeleteTarget(item)
               }
               onViewItems={() =>
                 navigateBusinessCatalogTab(navigation, { locationId: item.id })
               }
-              onChoosePhone={(loc) => openChooser(loc)}
-              onVerifyPhone={(loc) => openPhoneModal(loc, 'verify')}
-              onUnlinkPhone={(loc) => void handleUnlinkLocationPhone(loc)}
             />
           )}
         />

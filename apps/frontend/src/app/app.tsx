@@ -812,6 +812,14 @@ function App() {
               }
             />
             <Route
+              path="/business/locations/:locationId"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessLocationSettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/team"
               element={
                 <ProtectedRoute>

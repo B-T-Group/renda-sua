@@ -1,54 +1,30 @@
 import {
   Alert,
-  Avatar,
-  Box,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  FormControlLabel,
-  InputLabel,
   MenuItem,
   Select,
   Stack,
-  Switch,
   TextField,
   Typography,
 } from '@mui/material';
-import { Store as StoreIcon } from '@mui/icons-material';
-import { useSnackbar } from 'notistack';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  SUPPORTED_IMAGE_ACCEPT,
-  isSupportedImageFile,
-} from '../../constants/supportedImageFormats';
 import type { Address } from '../../contexts/UserProfileContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAws } from '../../hooks/useAws';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
   AddBusinessLocationData,
   BusinessLocation,
   UpdateBusinessLocationData,
 } from '../../hooks/useBusinessLocations';
-import {
-  DEFAULT_OPERATING_HOURS,
-  editorValueToOperatingHours,
-  operatingHoursToEditorValue,
-} from '../../utils/operatingHours';
-import { presignUploadLibraryImage } from './onboarding/onboardingPresignedUpload';
-import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
-import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { getCountryStateCity } from '../../utils/countryStateCityLoader';
-import {
-  ServiceHoursEditor,
-  ServiceHoursValue,
-} from '../admin/ServiceHoursEditor';
+import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 
 async function profileAddressToFormData(addr: Address): Promise<AddressFormData> {
   const { State } = await getCountryStateCity();
@@ -71,15 +47,24 @@ interface LocationModalProps {
     data: AddBusinessLocationData | UpdateBusinessLocationData
   ) => Promise<void>;
   location?: BusinessLocation | null;
-  /** Business primary address country. When set, country is read-only and derived from business address. */
   businessPrimaryCountry?: string | null;
-  /** Required for uploading a logo to S3 from this dialog. */
   businessId?: string | null;
   loading?: boolean;
   error?: string | null;
   warning?: string | null;
 }
 
+const EMPTY_ADDRESS: AddressFormData = {
+  address_line_1: '',
+  address_line_2: '',
+  city: '',
+  state: '',
+  postal_code: '',
+  country: '',
+  instructions: '',
+};
+
+/** Create-only location dialog. Editing happens on the location settings page. */
 const LocationModal: React.FC<LocationModalProps> = ({
   open,
   onClose,
@@ -92,762 +77,237 @@ const LocationModal: React.FC<LocationModalProps> = ({
   warning = null,
 }) => {
   const { t } = useTranslation();
-  const { enqueueSnackbar } = useSnackbar();
-  const { generateImageUploadUrl } = useAws();
-  const { isStripeRail } = useIsStripeRail();
+  const { isStripeRail, loading: railLoading } = useIsStripeRail();
   const { phones, fetchPhones } = useMobilePaymentPhones(!isStripeRail && open);
-  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
-  const logoFileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const { profile } = useUserProfileContext();
-  // Only the business owner (not a platform admin viewing another business) may toggle it.
-  const isOwnBusiness =
-    !businessId || !profile?.business?.id || businessId === profile.business.id;
-  const isEditing = !!location;
-  const effectiveCountry = isEditing
-    ? location?.address?.country
-    : businessPrimaryCountry;
+  const [locationType, setLocationType] = useState<
+    BusinessLocation['location_type']
+  >('store');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [paymentPhoneId, setPaymentPhoneId] = useState<string | null>(null);
+  const [address, setAddress] = useState<AddressFormData>(EMPTY_ADDRESS);
+  const [reuseProfile, setReuseProfile] = useState(false);
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [addressError, setAddressError] = useState<string | null>(null);
 
   const businessProfileAddress = useMemo(() => {
     const list = profile?.addresses;
     if (!list?.length) return null;
-    return list.find((a) => a.is_primary) ?? list[0];
+    return list.find((item) => item.is_primary) ?? list[0];
   }, [profile?.addresses]);
 
-  const [reuseProfileAddress, setReuseProfileAddress] = useState(false);
-
-  // Form states
-  const [formData, setFormData] = useState<AddBusinessLocationData>({
-    name: '',
-    address_id: '',
-    phone: '',
-    order_alert_phone: '',
-    mobile_payment_phone_id: null as string | null,
-    email: '',
-    location_type: 'store',
-    is_primary: false,
-    auto_withdraw_commissions: true,
-    logo_url: '',
-  });
-
-  // Owner-only toggle (see PATCH business-items/locations/:id); edit mode only.
-  const [payAtConfirm, setPayAtConfirm] = useState(false);
-
-  const [addressData, setAddressData] = useState<AddressFormData>({
-    address_line_1: '',
-    address_line_2: '',
-    city: '',
-    state: '',
-    postal_code: '',
-    country: '',
-    instructions: '',
-  });
-
-  const [operatingHours, setOperatingHours] = useState<ServiceHoursValue>(
-    operatingHoursToEditorValue(DEFAULT_OPERATING_HOURS)
-  );
-
-  // Address dialog state
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
-
-  // Load location data when editing
   useEffect(() => {
-    if (location) {
-      setFormData({
-        name: location.name,
-        address_id: location.address.id,
-        phone: location.phone || '',
-        order_alert_phone: location.order_alert_phone || '',
-        mobile_payment_phone_id:
-          location.mobile_payment_phone_id ??
-          location.mobile_payment_phone?.id ??
-          null,
-        email: location.email || '',
-        location_type: location.location_type,
-        is_primary: location.is_primary,
-        auto_withdraw_commissions: location.auto_withdraw_commissions !== false,
-        logo_url: location.logo_url ?? '',
-      });
-      setPayAtConfirm(location.pay_at_confirm === true);
-      setOperatingHours(operatingHoursToEditorValue(location.operating_hours));
+    if (!open) return;
+    setName('');
+    setLocationType('store');
+    setPhone('');
+    setPaymentPhoneId(null);
+    setReuseProfile(false);
+    setNameError(null);
+    setAddressError(null);
+    setAddress({ ...EMPTY_ADDRESS, country: businessPrimaryCountry ?? '' });
+  }, [open, businessPrimaryCountry, location, businessId]);
 
-      void (async () => {
-        const { State } = await getCountryStateCity();
-        const state = State.getStateByCodeAndCountry(
-          location.address.state,
-          location.address.country
-        );
-        setAddressData({
-          address_line_1: location.address.address_line_1,
-          address_line_2: location.address.address_line_2 || '',
-          city: location.address.city,
-          state: state?.name ?? location.address.state,
-          postal_code: location.address.postal_code,
-          country: location.address.country,
-          instructions: location.address.instructions || '',
-        });
-      })();
-    } else {
-      // Reset form for new location; country comes from business primary address
-      setFormData({
-        name: '',
-        address_id: '',
-        phone: '',
-        order_alert_phone: '',
-        mobile_payment_phone_id: null,
-        email: '',
-        location_type: 'store',
-        is_primary: false,
-        auto_withdraw_commissions: true,
-        logo_url: '',
-      });
-      setPayAtConfirm(false);
-      setOperatingHours(operatingHoursToEditorValue(DEFAULT_OPERATING_HOURS));
-
-      setAddressData({
-        address_line_1: '',
-        address_line_2: '',
-        city: '',
-        state: '',
-        postal_code: '',
-        country: businessPrimaryCountry ?? '',
-        instructions: '',
-      });
-      setReuseProfileAddress(false);
-    }
-  }, [location, open, businessPrimaryCountry]);
-
-  const bucketName =
-    process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
-
-  const handleLogoFileSelected = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !businessId) {
-      if (!businessId) {
-        enqueueSnackbar(
-          t(
-            'business.locations.logoBusinessRequired',
-            'Business profile is required to upload a logo'
-          ),
-          { variant: 'warning' }
-        );
-      }
+  const save = async () => {
+    if (!name.trim()) {
+      setNameError(t('business.locations.basics.nameRequired', 'Enter a name.'));
       return;
     }
-    if (!isSupportedImageFile(file)) {
-      enqueueSnackbar(
+    const hasAddress =
+      reuseProfile ||
+      (!!address.address_line_1.trim() &&
+        !!address.city.trim() &&
+        !!address.state.trim() &&
+        !!address.country.trim());
+    if (!hasAddress) {
+      setAddressError(
         t(
-          'business.images.upload.unsupportedFormat',
-          'Unsupported image format for {{file}}. Please use JPEG, PNG, or WebP.',
-          { file: file.name }
-        ),
-        { variant: 'error' }
+          'business.locations.basics.addressRequired',
+          'Add an address for this location.'
+        )
       );
       return;
     }
-    setUploadingLogo(true);
-    try {
-      const { image_url } = await presignUploadLibraryImage(
-        file,
-        bucketName,
-        `businesses/${businessId}/location-logos`,
-        generateImageUploadUrl,
-        t('business.locations.logoUploadError', 'Failed to upload logo')
-      );
-      setFormData((prev) => ({ ...prev, logo_url: image_url }));
-    } catch (err: unknown) {
-      enqueueSnackbar(
-        err instanceof Error
-          ? err.message
-          : t('business.locations.logoUploadError', 'Failed to upload logo'),
-        { variant: 'error' }
-      );
-    } finally {
-      setUploadingLogo(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!formData.name.trim()) return;
-
-    // pay_at_confirm is owner-only and edit-only (the API ignores it on create).
-    const payload: any = {
-      ...formData,
-      order_alert_phone: formData.order_alert_phone?.trim()
-        ? formData.order_alert_phone.trim()
-        : null,
-      logo_url: formData.logo_url?.trim() ? formData.logo_url.trim() : null,
-      operating_hours: editorValueToOperatingHours(operatingHours),
+    const payload: AddBusinessLocationData = {
+      name: name.trim(),
+      location_type: locationType,
+      is_primary: false,
+      auto_withdraw_commissions: isStripeRail ? false : true,
+      phone: isStripeRail ? phone.trim() : undefined,
+      mobile_payment_phone_id: isStripeRail ? null : paymentPhoneId,
     };
-    if (isStripeRail) {
-      payload.auto_withdraw_commissions = false;
-    }
-
-    if (isEditing && !isStripeRail && isOwnBusiness) {
-      payload.pay_at_confirm = payAtConfirm;
-    }
-
-    if (isEditing) {
-      if (
-        !addressData.address_line_1.trim() ||
-        !addressData.city.trim() ||
-        !addressData.state.trim() ||
-        !addressData.country.trim()
-      ) {
-        return;
-      }
-      await onSave({
-        ...payload,
-        address: {
-          ...addressData,
-          postal_code: addressData.postal_code?.trim() || '',
-          state: addressData.state?.trim() || undefined,
-          address_line_2: addressData.address_line_2?.trim() || undefined,
-        },
-      });
+    if (reuseProfile && businessProfileAddress) {
+      await onSave({ ...payload, address_id: businessProfileAddress.id });
       return;
     }
-
-    if (reuseProfileAddress && formData.address_id) {
-      await onSave(payload);
-      return;
-    }
-
-    if (
-      !addressData.address_line_1.trim() ||
-      !addressData.city.trim() ||
-      !addressData.state.trim() ||
-      !addressData.country.trim()
-    ) {
-      return;
-    }
-
     await onSave({
       ...payload,
       address: {
-        ...addressData,
-        postal_code: addressData.postal_code?.trim() || '',
-        state: addressData.state?.trim() || undefined,
-        address_line_2: addressData.address_line_2?.trim() || undefined,
+        ...address,
+        postal_code: address.postal_code?.trim() || '',
       },
     });
   };
 
-  const handleClose = () => {
-    if (!loading) {
-      onClose();
-    }
-  };
-
-  const handleAddressSave = () => {
-    setReuseProfileAddress(false);
-    setFormData((prev) => ({ ...prev, address_id: '' }));
-    setAddressDialogOpen(false);
-  };
-
-  const applyBusinessProfileAddress = () => {
-    if (!businessProfileAddress) return;
-    setReuseProfileAddress(true);
-    setFormData((prev) => ({
-      ...prev,
-      address_id: businessProfileAddress.id,
-    }));
-    void profileAddressToFormData(businessProfileAddress).then(setAddressData);
-  };
-
-  const openCustomAddressDialog = () => {
-    setReuseProfileAddress(false);
-    setFormData((prev) => ({ ...prev, address_id: '' }));
-    setAddressData({
-      address_line_1: '',
-      address_line_2: '',
-      city: '',
-      state: '',
-      postal_code: '',
-      country: businessPrimaryCountry ?? '',
-      instructions: '',
-    });
-    setAddressDialogOpen(true);
-  };
-
-  const hasAddress =
-    !!(addressData.address_line_1 && addressData.city && addressData.country);
-  const canSaveAddress =
-    isEditing ||
-    (reuseProfileAddress && !!formData.address_id) ||
-    hasAddress;
-
-  const hasLocationLogo = !!formData.logo_url?.trim();
-  const locationNameHelperText = hasLocationLogo
-    ? t(
-        'business.locations.locationNameHintWithLogo',
-        'If a logo is set, enter only the city where this shop is located (the logo already identifies your business).'
-      )
-    : t(
-        'business.locations.locationNameHintWithoutLogo',
-        'Without a logo, enter your shop name and the city, e.g. Rendasua - Akwa.'
-      );
-
   return (
-    <>
-      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {isEditing
-            ? t('business.locations.editLocation')
-            : t('business.locations.addLocation')}
-        </DialogTitle>
-        <DialogContent>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          {warning && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              {warning}
-            </Alert>
-          )}
-
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label={t('business.locations.locationName')}
-              value={formData.name}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, name: e.target.value }))
-              }
-              fullWidth
-              required
-              helperText={locationNameHelperText}
-            />
-
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                {t('business.locations.logoLabel', 'Location logo')}
-              </Typography>
-              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                <Avatar
-                  src={formData.logo_url?.trim() || undefined}
-                  variant="rounded"
-                  sx={{
-                    width: 72,
-                    height: 72,
-                    bgcolor: 'action.hover',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  <StoreIcon sx={{ color: 'text.secondary', fontSize: 36 }} />
-                </Avatar>
-                <Stack spacing={1} sx={{ flex: 1, minWidth: 200 }}>
-                  <TextField
-                    label={t('business.locations.logoUrl', 'Logo image URL')}
-                    value={formData.logo_url}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        logo_url: e.target.value,
-                      }))
-                    }
-                    fullWidth
-                    size="small"
-                    placeholder="https://"
-                    helperText={t(
-                      'business.locations.logoUrlHint',
-                      'Paste a public image URL, or upload a file to store on S3.'
-                    )}
-                  />
-                  <Stack direction="row" spacing={1} flexWrap="wrap">
-                    <input
-                      ref={logoFileInputRef}
-                      type="file"
-                      accept={SUPPORTED_IMAGE_ACCEPT}
-                      hidden
-                      onChange={handleLogoFileSelected}
-                    />
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      disabled={loading || uploadingLogo || !businessId}
-                      onClick={() => logoFileInputRef.current?.click()}
-                      startIcon={
-                        uploadingLogo ? (
-                          <CircularProgress color="inherit" size={16} />
-                        ) : undefined
-                      }
-                    >
-                      {t('business.locations.logoUpload', 'Upload image')}
-                    </Button>
-                    {formData.logo_url ? (
-                      <Button
-                        variant="text"
-                        size="small"
-                        color="inherit"
-                        onClick={() =>
-                          setFormData((prev) => ({ ...prev, logo_url: '' }))
-                        }
-                      >
-                        {t('business.locations.logoClear', 'Remove logo')}
-                      </Button>
-                    ) : null}
-                  </Stack>
-                </Stack>
-              </Stack>
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <FormControl sx={{ flex: 1, minWidth: 200 }}>
-                <InputLabel>{t('business.locations.locationType')}</InputLabel>
-                <Select
-                  value={formData.location_type}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      location_type: e.target.value,
-                    }))
-                  }
-                  label={t('business.locations.locationType')}
-                >
-                  <MenuItem value="store">Store</MenuItem>
-                  <MenuItem value="warehouse">Warehouse</MenuItem>
-                  <MenuItem value="office">Office</MenuItem>
-                  <MenuItem value="showroom">Showroom</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.is_primary}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        is_primary: e.target.checked,
-                      }))
-                    }
-                  />
-                }
-                label={t('business.locations.isPrimary')}
-                sx={{ alignSelf: 'center' }}
-              />
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              {!isStripeRail ? (
-                <FormControl sx={{ flex: 1, minWidth: 200 }}>
-                  <InputLabel id="mobile-payment-phone-label">
-                    {t('business.locations.mobilePaymentPhone', 'Mobile money number')}
-                  </InputLabel>
-                  <Select
-                    labelId="mobile-payment-phone-label"
-                    label={t('business.locations.mobilePaymentPhone', 'Mobile money number')}
-                    value={formData.mobile_payment_phone_id ?? ''}
-                    onChange={(e) => {
-                      const id = e.target.value as string;
-                      const selected = phones.find((p) => p.id === id);
-                      setFormData((prev) => ({
-                        ...prev,
-                        mobile_payment_phone_id: id || null,
-                        phone: selected?.phone_e164 ?? prev.phone,
-                      }));
-                    }}
-                  >
-                    <MenuItem value="">
-                      <em>{t('common.none', 'None')}</em>
-                    </MenuItem>
-                    {phones.map((p) => (
-                      <MenuItem key={p.id} value={p.id}>
-                        {p.phone_e164}
-                        {p.is_verified
-                          ? ` (${t('mobilePaymentPhone.verified', 'Verified')})`
-                          : ` (${t('mobilePaymentPhone.unverified', 'Unverified')})`}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <Button
-                    size="small"
-                    sx={{ mt: 1, alignSelf: 'flex-start' }}
-                    onClick={() => setPhoneModalOpen(true)}
-                  >
-                    {t('mobilePaymentPhone.addNew', 'Add new number…')}
-                  </Button>
-                </FormControl>
-              ) : (
-                <TextField
-                  label={t('business.locations.phone')}
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                  }
-                  sx={{ flex: 1, minWidth: 200 }}
-                />
-              )}
-
-              <TextField
-                label={t('business.locations.email')}
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, email: e.target.value }))
-                }
-                sx={{ flex: 1, minWidth: 200 }}
-              />
-            </Box>
-
-            <TextField
-              label={t(
-                'business.locations.orderAlertPhone',
-                'Order alert phone'
-              )}
-              value={formData.order_alert_phone || ''}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  order_alert_phone: e.target.value,
-                }))
-              }
-              fullWidth
-              helperText={t(
-                'business.locations.orderAlertPhoneHint',
-                'Kitchen WhatsApp / till phone for new-order alerts'
-              )}
-            />
-
-            {!isStripeRail && (
-              <>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.auto_withdraw_commissions !== false}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          auto_withdraw_commissions: e.target.checked,
-                        }))
-                      }
-                    />
-                  }
-                  label={t(
-                    'business.locations.autoWithdrawCommissions',
-                    'Automatically send payouts to this phone'
-                  )}
-                />
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {t(
-                    'business.locations.autoWithdrawCommissionsHint',
-                    'Requires a valid phone number above. You can turn this off anytime.'
-                  )}
-                </Typography>
-              </>
-            )}
-
-            {isEditing && !isStripeRail && isOwnBusiness && (
-              <Box>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={payAtConfirm}
-                      onChange={(e) => setPayAtConfirm(e.target.checked)}
-                      inputProps={{ 'aria-label': 'pay-at-confirm' }}
-                    />
-                  }
-                  label={t(
-                    'business.locations.payAtConfirm',
-                    'Ask customers to pay only after the store confirms the order.'
-                  )}
-                />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                >
-                  {t(
-                    'business.locations.payAtConfirmHint',
-                    'Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.'
-                  )}
-                </Typography>
-              </Box>
-            )}
-
-            {/* Commission is now managed by Business Account Type — not editable per-location */}
-
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                {t('business.locations.address')}
-              </Typography>
-
-              {effectiveCountry && (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mb: 1 }}
-                >
-                  {t('business.locations.countryReadOnly', 'Country is set from your business address and cannot be changed.')}:{' '}
-                  <strong>{effectiveCountry}</strong>
-                </Typography>
-              )}
-
-              {hasAddress ? (
-                <Box
-                  sx={{
-                    p: 2,
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 1,
-                    mb: 2,
-                  }}
-                >
-                  {reuseProfileAddress && !isEditing && (
-                    <Typography
-                      variant="caption"
-                      color="primary"
-                      display="block"
-                      sx={{ mb: 1, fontWeight: 600 }}
-                    >
-                      {t(
-                        'business.locations.usingBusinessProfileAddress',
-                        'Using your business profile address'
-                      )}
-                    </Typography>
-                  )}
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    gutterBottom
-                  >
-                    {t('business.locations.currentAddress', 'Current address')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {addressData.address_line_1}
-                    {addressData.address_line_2 &&
-                      `, ${addressData.address_line_2}`}
-                  </Typography>
-                  <Typography variant="body1">
-                    {addressData.city}
-                    {addressData.state && `, ${addressData.state}`}{' '}
-                    {addressData.postal_code}
-                  </Typography>
-                  <Typography variant="body1">{addressData.country}</Typography>
-                </Box>
-              ) : (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  {t(
-                    'business.locations.noLocationAddressHint',
-                    'No address configured. Add a location-specific address or reuse your business profile address.'
-                  )}
-                </Alert>
-              )}
-
-              <Stack spacing={1}>
-                {!isEditing && businessProfileAddress && (
-                  <Button
-                    variant="outlined"
-                    onClick={applyBusinessProfileAddress}
-                    fullWidth
-                  >
-                    {t(
-                      'business.locations.useBusinessProfileAddress',
-                      'Use business profile address'
-                    )}
-                  </Button>
-                )}
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    if (isEditing) {
-                      setAddressDialogOpen(true);
-                      return;
-                    }
-                    if (hasAddress && !reuseProfileAddress) {
-                      setAddressDialogOpen(true);
-                      return;
-                    }
-                    openCustomAddressDialog();
-                  }}
-                  fullWidth
-                >
-                  {isEditing || (hasAddress && !reuseProfileAddress)
-                    ? t('business.locations.editAddress', 'Edit address')
-                    : t('business.locations.addAddress', 'Add address')}
-                </Button>
-                {!isEditing && reuseProfileAddress && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={openCustomAddressDialog}
-                  >
-                    {t(
-                      'business.locations.useDifferentAddress',
-                      'Use a different address instead'
-                    )}
-                  </Button>
-                )}
-              </Stack>
-            </Box>
-
-            <Box>
-              <ServiceHoursEditor
-                value={operatingHours}
-                onChange={setOperatingHours}
-                title={t('business.locations.operatingHours', 'Operating hours')}
-                description={t(
-                  'business.locations.operatingHoursHint',
-                  'Clients can only book delivery or pickup time slots that fall fully within these hours.'
-                )}
-              />
-            </Box>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose} disabled={loading}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            onClick={handleSave}
-            variant="contained"
-            disabled={loading || !canSaveAddress}
-            startIcon={loading && <CircularProgress size={20} />}
+    <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{t('business.locations.addLocation', 'Add location')}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {error ? <Alert severity="error">{error}</Alert> : null}
+          {warning ? <Alert severity="warning">{warning}</Alert> : null}
+          <Select
+            value={locationType}
+            onChange={(event) =>
+              setLocationType(
+                event.target.value as BusinessLocation['location_type']
+              )
+            }
+            inputProps={{
+              'aria-label': t('business.locations.more.kind', 'Kind of place'),
+            }}
           >
-            {loading
-              ? t('common.saving')
-              : isEditing
-              ? t('common.update')
-              : t('common.save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
+            {(['store', 'warehouse', 'office', 'pickup_point'] as const).map(
+              (type) => (
+                <MenuItem key={type} value={type}>
+                  {t(
+                    `business.locations.${type}`,
+                    type === 'pickup_point' ? 'Pickup point' : type
+                  )}
+                </MenuItem>
+              )
+            )}
+          </Select>
+          <TextField
+            label={t('business.locations.locationName', 'Location name')}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            error={!!nameError}
+            helperText={
+              nameError ||
+              t(
+                'business.locations.locationNameHintWithoutLogo',
+                'Enter your shop name and the city, e.g. Rendasua – Akwa'
+              )
+            }
+            required
+            fullWidth
+          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            {businessProfileAddress ? (
+              <Button variant="outlined" onClick={() => void reuseAddress(businessProfileAddress, setReuseProfile, setAddress)}>
+                {t('business.locations.useBusinessProfileAddress', 'Use my business address')}
+              </Button>
+            ) : null}
+            <Button variant="text" onClick={() => setAddressOpen(true)}>
+              {t('business.locations.addLocationAddress', 'Add a different address')}
+            </Button>
+          </Stack>
+          {addressError ? (
+            <Typography variant="body2" color="error">{addressError}</Typography>
+          ) : null}
+          {reuseProfile ? (
+            <Typography variant="body2" color="text.secondary">
+              {t('business.locations.usingBusinessProfileAddress', 'Using your business profile address')}
+            </Typography>
+          ) : null}
+          {railLoading ? null : isStripeRail ? (
+            <TextField
+              label={t('business.locations.phone', 'Phone')}
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              fullWidth
+            />
+          ) : (
+            <MomoPicker
+              phones={phones}
+              value={paymentPhoneId}
+              onChange={setPaymentPhoneId}
+              onAdd={() => setPhoneModalOpen(true)}
+            />
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={loading}>{t('common.cancel', 'Cancel')}</Button>
+        <Button variant="contained" onClick={() => void save()} disabled={loading}>
+          {t('business.locations.addLocation', 'Add location')}
+        </Button>
+      </DialogActions>
       <AddressDialog
-        open={addressDialogOpen}
-        title={
-          hasAddress
-            ? t('business.locations.editLocationAddress', 'Edit location address')
-            : t('business.locations.addLocationAddress', 'Add location address')
-        }
-        addressData={addressData}
-        readOnlyCountry={effectiveCountry || undefined}
-        onClose={() => setAddressDialogOpen(false)}
-        onSave={handleAddressSave}
-        onAddressChange={setAddressData}
+        open={addressOpen}
+        onClose={() => setAddressOpen(false)}
+        addressData={address}
+        onAddressChange={setAddress}
+        onSave={() => {
+          setReuseProfile(false);
+          setAddressOpen(false);
+          setAddressError(null);
+        }}
+        title={t('business.locations.addLocationAddress', 'Add location address')}
       />
-
       <MobilePaymentPhoneVerifyModal
         open={phoneModalOpen}
         mode="add"
         onClose={() => setPhoneModalOpen(false)}
-        onCompleted={async (phone) => {
-          await fetchPhones();
-          setFormData((prev) => ({
-            ...prev,
-            mobile_payment_phone_id: phone.id,
-            phone: phone.phone_e164,
-          }));
+        onCompleted={(saved) => {
+          setPaymentPhoneId(saved.id);
+          void fetchPhones();
           setPhoneModalOpen(false);
         }}
       />
-    </>
+    </Dialog>
   );
 };
+
+function reuseAddress(
+  addr: Address,
+  setReuse: (value: boolean) => void,
+  setAddress: (value: AddressFormData) => void
+) {
+  setReuse(true);
+  void profileAddressToFormData(addr).then(setAddress);
+}
+
+function MomoPicker({
+  phones,
+  value,
+  onChange,
+  onAdd,
+}: {
+  phones: Array<{ id: string; phone_e164: string; is_verified: boolean }>;
+  value: string | null;
+  onChange: (id: string | null) => void;
+  onAdd: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Stack spacing={1}>
+      <Typography variant="body2">
+        {t('business.locations.gettingPaid.momoLabel', 'Mobile Money number')}
+      </Typography>
+      <Select
+        value={value ?? ''}
+        displayEmpty
+        onChange={(event) => onChange(event.target.value || null)}
+      >
+        <MenuItem value="">
+          {t('business.locations.gettingPaid.noNumber', 'No number yet')}
+        </MenuItem>
+        {phones.map((phone) => (
+          <MenuItem key={phone.id} value={phone.id}>
+            {phone.phone_e164}
+          </MenuItem>
+        ))}
+      </Select>
+      <Button variant="text" onClick={onAdd}>
+        {t('business.locations.gettingPaid.addNumber', 'Add a number')}
+      </Button>
+    </Stack>
+  );
+}
 
 export default LocationModal;

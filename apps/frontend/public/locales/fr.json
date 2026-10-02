@@ -4078,6 +4078,158 @@
           "skuCollision": "L'entreprise de destination a déjà des articles avec le même SKU",
           "unknown": "Le transfert est bloqué"
         }
+      },
+      "store": "Magasin",
+      "warehouse": "Entrepôt",
+      "office": "Bureau",
+      "pickup_point": "Point de retrait",
+      "manageItems": "Gérer les articles",
+      "expectations": {
+        "title": "Ce que vos clients vont vivre",
+        "visible": "Les clients peuvent voir ce lieu et y commander.",
+        "hidden": "Ce lieu est masqué. Les clients ne peuvent pas voir ses articles ni y commander.",
+        "closedEveryDay": "Vous êtes fermé tous les jours, donc les clients ne peuvent pas commander.",
+        "openHours": "Ouvert {{hours}} (heure locale). Les heures de retrait et de livraison doivent être dans ces horaires.",
+        "paidOut": "Vos ventes sont versées au {{phone}}{{auto}}.",
+        "autoSuffix": " automatiquement",
+        "manualSuffix": " quand vous retirez",
+        "needPhone": "Les clients ne peuvent pas acheter depuis ce lieu tant que vous n'avez pas {{action}} un numéro Mobile Money.",
+        "verifyVerb": "vérifié",
+        "addVerb": "ajouté",
+        "payAfter": "Commandes Mobile Money : les clients commandent d'abord, vous confirmez, puis ils ont 45 minutes pour payer (3 heures pour les plats cuisinés). Ils ne peuvent pas choisir un horaire plus tard.",
+        "payAsSet": "Les clients paient comme indiqué sur chaque article (par exemple à la commande ou à la réception). Les plats cuisinés se paient toujours après votre confirmation.",
+        "alertPhone": "Les nouvelles commandes alertent aussi {{phone}}.",
+        "alertOwnerOnly": "Les nouvelles commandes vous alertent. Ajoutez le téléphone de la cuisine ou de la caisse pour alerter le personnel aussi.",
+        "itemsPointer": "Le retrait, la livraison et l’expédition se choisissent sur chaque article.",
+        "rolloutFootnote": "Nous déployons cela progressivement. Votre choix est enregistré et commencera dès qu'il sera disponible pour votre magasin.",
+        "showCta": "Afficher ce lieu"
+      },
+      "openClosed": {
+        "showLabel": "Montrer ce lieu aux clients",
+        "showOn": "Les clients peuvent voir les articles de ce lieu et y commander.",
+        "showOff": "Ce lieu est masqué. Les clients ne peuvent pas voir ses articles ni y commander tant que vous ne le réactivez pas.",
+        "hideTitle": "Masquer ce lieu ?",
+        "hideConfirm": "Le masquer",
+        "hoursTitle": "Heures d'ouverture",
+        "hoursHelp": "Les clients ne peuvent choisir un retrait ou une livraison que lorsque vous êtes ouvert. Les commandes « dès que possible » s'arrêtent un peu avant la fermeture, pour laisser le temps de préparer.",
+        "cookedFoodNote": "Les plats cuisinés utilisent les horaires de service définis sur chaque article."
+      },
+      "hours": {
+        "save": "Enregistrer les horaires",
+        "saved": "Heures d'ouverture enregistrées",
+        "saveFailed": "Impossible d'enregistrer vos heures d'ouverture. Réessayez.",
+        "closeAfterOpen": "L'heure de fermeture doit être après l'heure d'ouverture.",
+        "copyMonday": "Copier le lundi sur tous les jours ouverts",
+        "setNow": "Définir les horaires"
+      },
+      "operatingHours": {
+        "everyDay": "Tous les jours {{hours}}",
+        "openDays": "{{count}} jours · {{hours}}",
+        "custom": "Horaires personnalisés"
+      },
+      "card": {
+        "open": "Ouvert aux clients",
+        "hidden": "Masqué pour les clients",
+        "settings": "Réglages",
+        "addPhone": "Ajoutez un numéro Mobile Money",
+        "verifyPhone": "Vérifiez votre numéro Mobile Money"
+      },
+      "gettingPaid": {
+        "title": "Être payé",
+        "momoLabel": "Numéro Mobile Money",
+        "phoneLabel": "Numéro de téléphone",
+        "phoneHelp": "Comment les clients et Rendasua peuvent joindre ce lieu.",
+        "noNumber": "Pas encore de numéro",
+        "addNumber": "Ajouter un numéro",
+        "momoNone": "Pas encore de numéro. Ajoutez-en un pour que les clients puissent acheter depuis ce lieu.",
+        "momoUnverified": "Pas encore vérifié. Les clients ne peuvent pas acheter depuis ce lieu tant que vous ne le vérifiez pas.",
+        "momoVerified": "Vérifié. Vos ventes sont versées sur ce numéro.",
+        "autoLabel": "Envoyer mon argent sur ce numéro automatiquement",
+        "autoOn": "Chaque fois que l'argent d'une vente arrive sur ce lieu, nous l'envoyons sur votre numéro.",
+        "autoOff": "L'argent reste sur le compte de ce lieu jusqu'à ce que vous le retiriez depuis votre portefeuille.",
+        "autoNeedsNumber": "Ajoutez un numéro Mobile Money pour que les versements automatiques fonctionnent.",
+        "feeLabel": "Frais Rendasua",
+        "feeValue": "{{pct}} % des ventes d’articles, fixé par votre formule.",
+        "seePlans": "Voir les formules"
+      },
+      "payAfter": {
+        "section": "Comment les clients paient",
+        "label": "Demander aux clients de payer après votre confirmation",
+        "short": "Quand c'est activé, les clients commandent d'abord. Après votre confirmation, ils ont 45 minutes pour payer par Mobile Money (3 heures pour les plats cuisinés). Les commandes impayées sont annulées et le stock revient en vente.",
+        "goodToKnow": "Bon à savoir",
+        "ownerOnly": "Seul le propriétaire de l'entreprise peut changer cela.",
+        "saved": "Réglage de paiement enregistré",
+        "saveFailed": "Impossible d'enregistrer le mode de paiement. Réessayez.",
+        "turnOnTitle": "Activer le paiement après confirmation ?",
+        "turnOnBody": "Les clients commandent d'abord. Après votre confirmation, ils ont 45 minutes pour payer par Mobile Money (3 heures pour les plats cuisinés). Les commandes impayées sont annulées et le stock revient en vente. Les clients verront « Payer après confirmation du magasin » sur les articles de ce lieu.",
+        "turnOffTitle": "Désactiver le paiement après confirmation ?",
+        "turnOffBody": "Les clients paieront à la commande, comme indiqué sur chaque article.",
+        "turnOn": "Activer",
+        "turnOff": "Désactiver",
+        "bulletMomo": "S'applique aux commandes Mobile Money en retrait et en livraison.",
+        "bulletAsap": "Les clients ne peuvent commander que dès que possible — ils ne peuvent pas choisir un horaire plus tard.",
+        "bulletCart": "Si un panier contient des articles de ce lieu, tout le panier se paie après votre confirmation.",
+        "bulletWallet": "Les clients dont le portefeuille Rendasua couvre la commande paient tout de suite.",
+        "bulletDeposit": "Aucun acompte de réservation n'est pris.",
+        "bulletCancel": "Vous pouvez annuler une commande même après paiement (par exemple, rupture de stock). Le client est remboursé en totalité.",
+        "bulletShipping": "L'expédition et les locations ne sont pas concernées.",
+        "bulletFood": "Les plats cuisinés se paient déjà après votre confirmation, que ce réglage soit activé ou non."
+      },
+      "alerts": {
+        "label": "Téléphone supplémentaire pour les alertes de commande (facultatif)",
+        "empty": "Non défini — les alertes vous sont envoyées uniquement.",
+        "help": "Ajoutez le téléphone de la cuisine ou de la caisse. Il reçoit un message pour chaque nouvelle commande de ce lieu, et peut confirmer ou mettre à jour les commandes. Vous recevez toujours vos propres alertes.",
+        "placeholder": "+237 …",
+        "countryCode": "Saisissez le numéro avec l'indicatif du pays.",
+        "save": "Enregistrer les alertes",
+        "saved": "Alertes de commande enregistrées",
+        "saveFailed": "Impossible d'enregistrer le téléphone d'alerte. Réessayez."
+      },
+      "basics": {
+        "title": "Nom, logo et adresse",
+        "nameRequired": "Saisissez un nom.",
+        "addressRequired": "Ajoutez une adresse pour ce lieu.",
+        "logo": "Logo",
+        "uploadLogo": "Téléverser un logo",
+        "useLink": "Utiliser un lien d’image à la place",
+        "logoHelp": "Affiché aux clients à côté de ce lieu.",
+        "email": "E-mail de contact (facultatif)",
+        "emailHelp": "Pour les messages concernant ce lieu.",
+        "save": "Enregistrer",
+        "saveFailed": "Impossible d'enregistrer le nom de ce lieu. Réessayez."
+      },
+      "more": {
+        "title": "Plus d'options",
+        "kind": "Type de lieu",
+        "kindHelp": "Vous aide à distinguer vos lieux.",
+        "mainCurrent": "Ceci est votre lieu principal. Il ne peut pas être supprimé.",
+        "makeMain": "En faire mon lieu principal",
+        "mainConfirm": "Votre lieu principal actuel ne le sera plus.",
+        "mainSaved": "Ceci est maintenant votre lieu principal.",
+        "mainPartial": "Ce lieu est principal, mais l'ancien n'a pas pu être mis à jour. Vous pouvez avoir deux lieux principaux jusqu'à un nouvel essai.",
+        "mainFailed": "Impossible de mettre à jour le lieu principal. Réessayez.",
+        "transfer": "Transférer vers une autre entreprise",
+        "transferHelp": "Déplacez ce lieu et ses articles vers une autre entreprise. Elle doit d’abord accepter.",
+        "delete": "Supprimer ce lieu",
+        "deleteHelp": "Vous ne pouvez supprimer qu'un lieu sans articles et sans argent sur son compte. Cette action est définitive."
+      },
+      "allLocations": {
+        "link": "Pour tous vos lieux",
+        "banner": "Ces réglages s'appliquent à tous vos lieux.",
+        "timingHelp": "Ces réglages s'appliquent à tous vos lieux.",
+        "asapLabel": "Combien de temps vous avez pour confirmer une commande",
+        "asapHelp": "Si vous ne confirmez pas dans ce délai, la commande est refusée.",
+        "futureLabel": "Combien de temps vous avez pour confirmer une commande programmée",
+        "leadLabel": "Commencer le décompte avant la préparation",
+        "leadHelp": "Pour les commandes programmées, le délai de confirmation commence aussi longtemps avant que vous deviez préparer.",
+        "prepLabel": "Temps de préparation habituel (minutes)",
+        "prepHelp": "Sert à dire aux clients quand attendre leur commande.",
+        "pauseTitle": "Mettre les commandes en pause",
+        "pauseHelp": "Les clients ne peuvent pas passer de nouvelles commandes pendant la pause."
+      },
+      "settings": {
+        "notFound": "Nous n’avons pas trouvé ce lieu.",
+        "seo": "Réglages du lieu"
       }
     },
     "orders": {
@@ -4463,7 +4615,18 @@
     "firstName": "Prénom",
     "lastName": "Nom",
     "pleaseWait": "Veuillez patienter",
-    "email": "E-mail"
+    "email": "E-mail",
+    "weekdays": {
+      "short": {
+        "monday": "Lun",
+        "tuesday": "Mar",
+        "wednesday": "Mer",
+        "thursday": "Jeu",
+        "friday": "Ven",
+        "saturday": "Sam",
+        "sunday": "Dim"
+      }
+    }
   },
   "dashboard": {
     "client": {

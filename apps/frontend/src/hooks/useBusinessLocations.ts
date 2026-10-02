@@ -104,6 +104,14 @@ export interface UpdateBusinessLocationData {
   };
 }
 
+export function selectBusinessLocation(
+  locations: BusinessLocation[],
+  locationId: string | undefined
+): BusinessLocation | undefined {
+  if (!locationId) return undefined;
+  return locations.find((location) => location.id === locationId);
+}
+
 export const useBusinessLocations = (
   businessId?: string,
   userId?: string,
@@ -423,10 +431,6 @@ export const useBusinessLocations = (
   );
 
   useEffect(() => {
-    console.log(
-      'useBusinessLocations: useEffect triggered, businessId:',
-      businessId
-    );
     if (businessId) {
       fetchLocations();
     }
