@@ -2810,6 +2810,8 @@
       "autoWithdrawOn": "On",
       "autoWithdrawOff": "Off",
       "autoWithdrawNeedsPhone": "Add a phone number above for automatic payouts to work.",
+      "payAtConfirm": "Ask customers to pay only after the store confirms the order.",
+      "payAtConfirmHint": "Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after about 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.",
       "locationAccount": "Location account",
       "phoneWithdrawalNote": "Used for withdrawals from this location's account",
       "addLocationAddress": "Add location address",

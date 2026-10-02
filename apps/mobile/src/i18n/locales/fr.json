@@ -2715,6 +2715,8 @@
       "autoWithdrawOn": "Activé",
       "autoWithdrawOff": "Désactivé",
       "autoWithdrawNeedsPhone": "Ajoutez un numéro de téléphone ci-dessus pour activer les versements automatiques.",
+      "payAtConfirm": "Demander aux clients de payer seulement après la confirmation de la commande par le magasin.",
+      "payAtConfirmHint": "S'applique aux commandes Mobile Money en retrait et en livraison passées pour le plus tôt possible. Les acomptes de réservation sont ignorés lorsque cette option est activée. Les commandes impayées sont annulées automatiquement après environ 45 minutes. Vous pouvez annuler une commande payée (par exemple, rupture de stock) et le client est remboursé. Les clients dont le portefeuille couvre la commande paient toujours immédiatement. L'expédition et les locations ne sont pas concernées.",
       "locationAccount": "Compte de l’emplacement",
       "phoneWithdrawalNote": "Utilisé pour les retraits du compte de cet emplacement",
       "addLocationAddress": "Ajouter l’adresse de l’emplacement",

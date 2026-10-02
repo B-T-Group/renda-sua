@@ -4315,7 +4315,25 @@ export class OrdersService {
     );
   }
 
+  /** Orders with a pay-after MoMo request currently being created (this instance). */
+  private readonly payAfterMomoInFlight = new Set<string>();
+
   private async initiateCookedFoodMomoAfterConfirm(
+    order: Orders,
+    orderId: string
+  ): Promise<void> {
+    // Two quick taps (confirm + retry, double retry) must not send two MoMo prompts:
+    // the pending-tx check below is read-then-write, so serialise per order.
+    if (this.payAfterMomoInFlight.has(orderId)) return;
+    this.payAfterMomoInFlight.add(orderId);
+    try {
+      await this.initiateCookedFoodMomoAfterConfirmOnce(order, orderId);
+    } finally {
+      this.payAfterMomoInFlight.delete(orderId);
+    }
+  }
+
+  private async initiateCookedFoodMomoAfterConfirmOnce(
     order: Orders,
     orderId: string
   ): Promise<void> {
@@ -4530,23 +4548,71 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Payment finalize lost the CAS to a concurrent cancel: release whatever is still held
+   * for this order (net of releases the cancel path already made) and zero the order hold.
+   */
+  private async releaseNetOrderHoldAfterLostPaidCas(
+    order: Orders,
+    accountId: string
+  ): Promise<void> {
+    this.logger.warn(
+      `Order ${order.order_number} left its live state while payment was finalizing; releasing hold`
+    );
+    const held = await this.sumHoldAmountForOrder(accountId, order.id);
+    const released = await this.sumHoldAmountForOrder(
+      accountId,
+      order.id,
+      'release'
+    );
+    const net = Number((held - released).toFixed(2));
+    if (net > 0) {
+      const result = await this.accountsService.registerTransaction({
+        accountId,
+        amount: net,
+        transactionType: 'release',
+        memo: `Hold released for order ${order.order_number} (cancelled during payment)`,
+        referenceId: order.id,
+      });
+      if (!result?.success) {
+        throw new HttpException(
+          result?.error || 'Failed to release hold for cancelled order',
+          HttpStatus.CONFLICT
+        );
+      }
+    }
+    try {
+      const orderHold = await this.getOrCreateOrderHold(order.id);
+      await this.updateOrderHold(orderHold.id, {
+        client_hold_amount: 0,
+        delivery_fees: 0,
+        status: 'cancelled',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not zero order hold for ${order.id}: ${error?.message}`
+      );
+    }
+  }
+
   private async sumHoldAmountForOrder(
     accountId: string,
-    orderId: string
+    orderId: string,
+    transactionType: 'hold' | 'release' = 'hold'
   ): Promise<number> {
     const result = await this.hasuraSystemService.executeQuery(
       `
-      query SumOrderHolds($accountId: uuid!, $orderId: uuid!) {
+      query SumOrderHolds($accountId: uuid!, $orderId: uuid!, $transactionType: transaction_type_enum!) {
         account_transactions(
           where: {
             account_id: { _eq: $accountId }
             reference_id: { _eq: $orderId }
-            transaction_type: { _eq: hold }
+            transaction_type: { _eq: $transactionType }
           }
         ) { amount }
       }
     `,
-      { accountId, orderId }
+      { accountId, orderId, transactionType }
     );
     const rows = result?.account_transactions ?? [];
     return rows.reduce(
@@ -9476,11 +9542,36 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Set payment_status. With `liveOnly`, the update is a CAS that only applies while the
+   * order is not cancelled/failed/refunded (a cancel that lands after our pre-read must
+   * not be overwritten with `paid`). Returns false when the CAS lost.
+   */
   private async updateOrderPaymentStatusOnly(
     orderId: string,
-    paymentStatus: string
-  ): Promise<void> {
+    paymentStatus: string,
+    options?: { liveOnly?: boolean }
+  ): Promise<boolean> {
     const at = new Date().toISOString();
+    if (options?.liveOnly) {
+      const res = await this.hasuraSystemService.executeMutation<{
+        update_orders: { affected_rows: number } | null;
+      }>(
+        `
+        mutation UpdateOrderPaymentStatusLive($orderId: uuid!, $paymentStatus: String!, $at: timestamptz!) {
+          update_orders(
+            where: {
+              id: { _eq: $orderId }
+              current_status: { _nin: [cancelled, failed, refunded] }
+            }
+            _set: { payment_status: $paymentStatus, updated_at: $at }
+          ) { affected_rows }
+        }
+      `,
+        { orderId, paymentStatus, at }
+      );
+      return (res?.update_orders?.affected_rows ?? 0) > 0;
+    }
     const mutation = `
       mutation UpdateOrderPaymentStatus($orderId: uuid!, $paymentStatus: String!, $at: timestamptz!) {
         update_orders_by_pk(
@@ -9496,6 +9587,7 @@ export class OrdersService {
       paymentStatus,
       at,
     });
+    return true;
   }
 
   private async updateOrderStatusWithSingleRetry(
@@ -9588,10 +9680,16 @@ export class OrdersService {
       delivery_fees: deliveryAmount,
     });
 
-    await this.markOrderPaidAfterPaymentFinalize(
+    const markedPaid = await this.markOrderPaidAfterPaymentFinalize(
       order.id,
       order.current_status
     );
+    if (markedPaid === false) {
+      // A cancel/fail/refund won the race after our pre-read: never leave a cancelled
+      // order `paid` with an active hold. Give the client's money back (wallet release).
+      await this.releaseNetOrderHoldAfterLostPaidCas(order, accountId);
+      return;
+    }
     this.emitOrderPaid(order.id);
 
     const capturedAt = new Date().toISOString();
@@ -10348,12 +10446,12 @@ export class OrdersService {
   ): Promise<boolean> {
     try {
       const query = `
-        query GetMarketFlag($configKey: String!, $countryCode: String) {
+        query GetMarketFlag($configKey: String!${countryCode ? ', $countryCode: String!' : ''}) {
           application_configurations(
             where: {
               config_key: { _eq: $configKey }
               _or: [
-                { country_code: { _eq: $countryCode } }
+                ${countryCode ? '{ country_code: { _eq: $countryCode } }' : ''}
                 { country_code: { _is_null: true } }
               ]
             }
@@ -10364,10 +10462,12 @@ export class OrdersService {
           }
         }
       `;
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        configKey,
-        countryCode: countryCode || null,
-      });
+      // Never send `_eq: null` (Hasura v2 rejects it, which would make a global-only flag
+      // such as the pay_at_confirm kill switch always read as off): omit the country filter.
+      const result = await this.hasuraSystemService.executeQuery(
+        query,
+        countryCode ? { configKey, countryCode } : { configKey }
+      );
       const configs = (result as any).application_configurations || [];
       if (configs.length === 0) {
         return false; // Default to false if config not found
@@ -10408,13 +10508,20 @@ export class OrdersService {
   /**
    * After payment is captured or confirmed: set payment_status to paid.
    * Only moves pending_payment → pending; never regresses later statuses.
+   * Conditional on the order still being live: returns false (nothing written) when a
+   * cancel/fail/refund won the race, so the caller must undo the hold it placed.
    */
   private async markOrderPaidAfterPaymentFinalize(
     orderId: string,
     currentStatus: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (currentStatus === 'pending_payment') {
-      await this.updateOrderStatusAndPaymentStatus(orderId, 'pending', 'paid');
+      const moved = await this.updateOrderStatusAndPaymentStatus(
+        orderId,
+        'pending',
+        'paid'
+      );
+      if (moved === false) return false;
       await this.triggerCommerceInventoryCommit(orderId);
       try {
         await this.orderAcceptanceService.startAcceptanceSla(orderId);
@@ -10423,9 +10530,12 @@ export class OrdersService {
           `Failed to start acceptance SLA for ${orderId}: ${error?.message}`
         );
       }
-      return;
+      return true;
     }
-    await this.updateOrderPaymentStatusOnly(orderId, 'paid');
+    const updated = await this.updateOrderPaymentStatusOnly(orderId, 'paid', {
+      liveOnly: true,
+    });
+    return updated !== false;
   }
 
   private async triggerCommerceInventoryCommit(orderId: string): Promise<void> {
@@ -10475,32 +10585,44 @@ export class OrdersService {
     orderId: string,
     newStatus: string,
     paymentStatus: string
-  ): Promise<void> {
+  ): Promise<boolean> {
+    // CAS: only moves an order that is still pending_payment (a cancel that landed after
+    // the caller's pre-read must win; returns false so the caller undoes the hold).
     const mutation = `
       mutation UpdateOrderStatusAndPaymentStatus($orderId: uuid!, $newStatus: order_status!, $paymentStatus: String!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _eq: pending_payment }
+          }
           _set: { 
             current_status: $newStatus,
             payment_status: $paymentStatus,
             updated_at: "now()"
           }
         ) {
-          id
-          order_number
-          current_status
-          payment_status
-          updated_at
+          affected_rows
         }
       }
     `;
 
     try {
-      await this.hasuraSystemService.executeMutation(mutation, {
+      const casResult = await this.hasuraSystemService.executeMutation<{
+        update_orders?: { affected_rows: number } | null;
+      }>(mutation, {
         orderId,
         newStatus,
         paymentStatus,
       });
+      if (
+        casResult?.update_orders &&
+        (casResult.update_orders.affected_rows ?? 0) === 0
+      ) {
+        this.logger.warn(
+          `Order ${orderId} was no longer pending_payment when marking paid; not moving to ${newStatus}`
+        );
+        return false;
+      }
 
       this.logger.log(
         `Updated order ${orderId} status to ${newStatus} and payment status to ${paymentStatus}`
@@ -10535,6 +10657,7 @@ export class OrdersService {
           }`
         );
       }
+      return true;
     } catch (error) {
       this.logger.error(
         `Failed to update order status and payment status for order ${orderId}: ${
@@ -10696,6 +10819,14 @@ export class OrdersService {
    * ASAP (no window): merchant must be open now.
    * Future slot: slot must fall fully within operating hours on that date.
    */
+  private hasScheduledDeliveryWindow(
+    deliveryWindow?: { slot_id?: string; preferred_date?: string } | null
+  ): boolean {
+    return !!(
+      deliveryWindow?.slot_id?.trim() || deliveryWindow?.preferred_date?.trim()
+    );
+  }
+
   private assertCookedFoodAsapOnly(
     businessInventories: Array<{
       item?: {
@@ -10710,8 +10841,8 @@ export class OrdersService {
       preferred_date?: string;
     } | null
   ): void {
-    const slotId = deliveryWindow?.slot_id?.trim();
-    if (!slotId) return;
+    // Any scheduled window (slot OR preferred date) is a scheduled order.
+    if (!this.hasScheduledDeliveryWindow(deliveryWindow)) return;
     const hasCookedFood = anyLineIsCookedFood(
       businessInventories.map((inv) => inv.item)
     );
@@ -11704,7 +11835,7 @@ export class OrdersService {
     // ASAP only in v1: a scheduled window cannot be combined with pay-after-confirm.
     // Same predicate as preflight `schedule_allowed=false` (wallet/zero unknown there).
     if (
-      orderData.delivery_window?.slot_id?.trim() &&
+      this.hasScheduledDeliveryWindow(orderData.delivery_window) &&
       resolvePayAfterConfirmReason({
         lines: itemCookedFlags,
         fulfillment: fulfillmentMethod,
