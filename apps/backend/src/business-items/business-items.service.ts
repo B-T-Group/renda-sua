@@ -278,6 +278,7 @@ const GET_BUSINESS_LOCATIONS = `
       is_primary
       rendasua_item_commission_percentage
       auto_withdraw_commissions
+      pay_at_confirm
       logo_url
       created_at
       updated_at
