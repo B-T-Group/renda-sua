@@ -82,6 +82,9 @@ describe('BusinessItemsService.updateBusinessLocation allow-list (UAT S-9)', () 
         update_business_locations_by_pk: { id: LOCATION_ID },
       }),
     };
+    const catalogCache = {
+      incrementGeneration: jest.fn().mockResolvedValue(2),
+    };
     const service = new BusinessItemsService(
       hasuraUserService as any,
       hasuraSystemService as any,
@@ -95,9 +98,9 @@ describe('BusinessItemsService.updateBusinessLocation allow-list (UAT S-9)', () 
       {} as any,
       {} as any,
       {} as any,
-      {} as any
+      catalogCache as any
     );
-    return { service, hasuraUserService, hasuraSystemService };
+    return { service, hasuraUserService, hasuraSystemService, catalogCache };
   }
 
   it('never forwards business_id / address_id / id even if the caller passes them (defence in depth)', async () => {
@@ -129,6 +132,36 @@ describe('BusinessItemsService.updateBusinessLocation allow-list (UAT S-9)', () 
     });
     const [, vars] = hasuraSystemService.executeMutation.mock.calls[0];
     expect(vars.data).toEqual({ order_alert_phone: null, logo_url: null });
+  });
+
+  it('bumps the catalog cache when pay_at_confirm changes, including an explicit false', async () => {
+    const { service, catalogCache } = setup();
+    await service.updateBusinessLocation(BUSINESS_ID, LOCATION_ID, {
+      pay_at_confirm: false,
+    });
+    await Promise.resolve();
+    expect(catalogCache.incrementGeneration).toHaveBeenCalledWith('global');
+  });
+
+  it('does not bump the catalog cache for a name-only edit', async () => {
+    const { service, catalogCache } = setup();
+    await service.updateBusinessLocation(BUSINESS_ID, LOCATION_ID, {
+      name: 'Renamed',
+    });
+    await Promise.resolve();
+    expect(catalogCache.incrementGeneration).not.toHaveBeenCalled();
+  });
+
+  it('still saves the location when catalog cache invalidation fails', async () => {
+    const { service, catalogCache } = setup();
+    catalogCache.incrementGeneration.mockRejectedValue(new Error('redis down'));
+    await expect(
+      service.updateBusinessLocation(BUSINESS_ID, LOCATION_ID, {
+        pay_at_confirm: true,
+      })
+    ).resolves.toEqual({ id: LOCATION_ID });
+    await Promise.resolve();
+    expect(catalogCache.incrementGeneration).toHaveBeenCalledWith('global');
   });
 
   it('refuses a location of another business and writes nothing', async () => {

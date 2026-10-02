@@ -72,15 +72,42 @@ describe('payAfterConfirm utils', () => {
         ).toISOString()
       );
     });
-    it('is null when paid, cooked, not pay-after, or not confirmed', () => {
+    it('is null when paid, authorized, cooked, not pay-after, or not confirmed', () => {
       expect(payAfterPayByDeadline({ ...base, payment_status: 'paid' })).toBeNull();
+      expect(payAfterPayByDeadline({ ...base, payment_status: 'authorized' })).toBeNull();
       expect(
         payAfterPayByDeadline({ ...base, order_items: [{ is_cooked_food: true }] })
+      ).toBeNull();
+      expect(
+        payAfterPayByDeadline({
+          ...base,
+          is_cooked_food_pickup: true,
+          order_items: [{ is_cooked_food: false }],
+        })
       ).toBeNull();
       expect(
         payAfterPayByDeadline({ ...base, pay_after_merchant_confirm: false })
       ).toBeNull();
       expect(payAfterPayByDeadline({ ...base, current_status: 'pending' })).toBeNull();
+      expect(payAfterPayByDeadline({ ...base, order_status_history: [] })).toBeNull();
+    });
+
+    it('uses the latest valid confirmed timestamp, not an earlier or invalid one', () => {
+      const d = payAfterPayByDeadline({
+        ...base,
+        order_status_history: [
+          { status: 'confirmed', created_at: '2026-10-01T09:00:00.000Z' },
+          { status: 'confirmed', created_at: 'not-a-date' },
+          { status: 'preparing', created_at: '2026-10-01T12:00:00.000Z' },
+          { status: 'confirmed', created_at: '2026-10-01T11:00:00.000Z' },
+        ],
+      });
+      expect(d?.toISOString()).toBe(
+        new Date(
+          Date.parse('2026-10-01T11:00:00.000Z') +
+            PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES * 60_000
+        ).toISOString()
+      );
     });
   });
 });

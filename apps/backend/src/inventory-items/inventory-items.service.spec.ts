@@ -10,6 +10,7 @@ jest.mock('../merchant-lifecycle/merchant-lifecycle.service', () => ({
 
 import { InventoryItemsService } from './inventory-items.service';
 import { FOOD_CATEGORY_NAME } from '../food/food.constants';
+import { PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY } from '../food/pay-after-confirm.util';
 
 describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
   function createService(options?: {
@@ -783,6 +784,99 @@ describe('InventoryItemsService store directory partner filters', () => {
         is_partner: false,
       }),
     ]);
+  });
+});
+
+describe('InventoryItemsService pay-after storefront badge', () => {
+  const listing = (location: Record<string, unknown> = {}) => ({
+    id: 'inv-1',
+    business_location: {
+      pay_at_confirm: true,
+      address: { country: 'CM' },
+      business: { is_storefront_visible: true },
+      ...location,
+    },
+  });
+
+  function createService(options?: {
+    flag?: unknown;
+    flagThrows?: boolean;
+    stripeCountries?: string[];
+  }) {
+    const executeQuery = jest.fn(async (query: string) => {
+      if (query.includes('PayAfterLocationFlag')) {
+        if (options?.flagThrows) throw new Error('hasura down');
+        const rows =
+          options?.flag === undefined ? [] : [{ boolean_value: options.flag }];
+        return { application_configurations: rows };
+      }
+      if (query.includes('StripeCountries')) {
+        return {
+          supported_payment_systems: (options?.stripeCountries ?? ['CA']).map(
+            (country) => ({ country })
+          ),
+        };
+      }
+      return {};
+    });
+    const service = new InventoryItemsService(
+      { executeQuery } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+    return { service, executeQuery };
+  }
+
+  async function badges(
+    options?: Parameters<typeof createService>[0],
+    location?: Record<string, unknown>
+  ) {
+    const { service, executeQuery } = createService(options);
+    const [row] = await (service as any).attachPaymentsEnabledToItemsAsync([
+      listing(location),
+    ]);
+    return { badge: row.pay_after_confirm_badge as boolean, executeQuery };
+  }
+
+  it('shows the badge only when the global kill switch is exactly true', async () => {
+    const { badge, executeQuery } = await badges({ flag: true });
+    expect(badge).toBe(true);
+    const call = executeQuery.mock.calls.find(([query]) =>
+      String(query).includes('PayAfterLocationFlag')
+    ) as [string, { key: string }];
+    expect(call[0]).toContain('country_code: { _is_null: true }');
+    expect(call[1]).toEqual({ key: PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY });
+  });
+
+  it.each([false, null, 'true', 1, undefined])(
+    'hides the badge when boolean_value is %p',
+    async (flag) => {
+      const { badge } = await badges({ flag });
+      expect(badge).toBe(false);
+    }
+  );
+
+  it('hides the badge when the kill-switch read fails', async () => {
+    const { badge } = await badges({ flag: true, flagThrows: true });
+    expect(badge).toBe(false);
+  });
+
+  it('hides the badge for a Stripe-country location and an unflagged location', async () => {
+    const stripe = await badges(
+      { flag: true, stripeCountries: ['CA'] },
+      { address: { country: ' ca ' } }
+    );
+    const unflagged = await badges({ flag: true }, { pay_at_confirm: false });
+    expect(stripe.badge).toBe(false);
+    expect(unflagged.badge).toBe(false);
+  });
+
+  it('shows the badge when the location country is missing and the switch is on', async () => {
+    expect((await badges({ flag: true }, { address: null })).badge).toBe(true);
   });
 });
 

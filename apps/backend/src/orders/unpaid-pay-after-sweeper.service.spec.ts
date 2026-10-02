@@ -22,17 +22,21 @@ describe('UnpaidPayAfterSweeperService', () => {
     order_status_history: [{ created_at: minsAgo(confirmedMinsAgo) }],
   });
 
-  function setup(rows: any[], cancel?: jest.Mock) {
+  function setup(
+    rows: any[],
+    cancel?: jest.Mock,
+    orderConfig: Record<string, number> | null = {
+      cookedFoodUnpaidCancelHours: 3,
+      payAfterGoodsUnpaidCancelMinutes: 45,
+    }
+  ) {
     const executeQuery = jest.fn().mockResolvedValue({ orders: rows });
     const ordersService = {
       cancelUnpaidCookedFoodAfterConfirm:
         cancel ?? jest.fn().mockResolvedValue({ cancelled: true }),
     };
     const config = {
-      get: jest.fn().mockReturnValue({
-        cookedFoodUnpaidCancelHours: 3,
-        payAfterGoodsUnpaidCancelMinutes: 45,
-      }),
+      get: jest.fn().mockReturnValue(orderConfig ?? undefined),
     };
     const service = new UnpaidPayAfterSweeperService(
       { executeQuery } as never,
@@ -65,6 +69,53 @@ describe('UnpaidPayAfterSweeperService', () => {
     );
     expect(ids).toEqual(['goods-old', 'cooked-old']);
     expect(res).toEqual({ found: 2, cancelled: 2, skipped: 0, failed: 0 });
+  });
+
+  it('keeps the 15 minute grace: 50 min goods and 185 min cooked are not overdue', async () => {
+    const { service, ordersService } = setup([
+      goodsRow('goods-inside-grace', 50),
+      goodsRow('goods-exact', 45 + UNPAID_SWEEP_GRACE_MINUTES),
+      cookedRow('cooked-inside-grace', 3 * 60 + 5),
+    ]);
+    const res = await service.runOnce(NOW);
+    const ids = ordersService.cancelUnpaidCookedFoodAfterConfirm.mock.calls.map(
+      (c: any[]) => c[0]
+    );
+    expect(ids).toEqual(['goods-exact']);
+    expect(res.found).toBe(1);
+  });
+
+  it('uses the cooked window for a pickup snapshot and for lines without a boolean flag', async () => {
+    const { service, ordersService } = setup([
+      {
+        ...goodsRow('pickup-snapshot', 61),
+        is_cooked_food_pickup: true,
+      },
+      {
+        ...goodsRow('missing-flag', 61),
+        order_items: [{ is_cooked_food: null }],
+      },
+      {
+        ...goodsRow('pickup-old', 3 * 60 + UNPAID_SWEEP_GRACE_MINUTES + 1),
+        is_cooked_food_pickup: true,
+      },
+    ]);
+    const res = await service.runOnce(NOW);
+    const ids = ordersService.cancelUnpaidCookedFoodAfterConfirm.mock.calls.map(
+      (c: any[]) => c[0]
+    );
+    expect(ids).toEqual(['pickup-old']);
+    expect(res.cancelled).toBe(1);
+  });
+
+  it('falls back to 3h cooked and 45m goods when order config is missing', () => {
+    const { service } = setup([], undefined, null);
+    expect(service.cutoffs(NOW)).toEqual({
+      cooked: new Date(NOW.getTime() - (3 * 60 + UNPAID_SWEEP_GRACE_MINUTES) * 60_000),
+      goods: new Date(
+        NOW.getTime() - (45 + UNPAID_SWEEP_GRACE_MINUTES) * 60_000
+      ),
+    });
   });
 
   it('ignores rows without a confirmed history entry', async () => {
