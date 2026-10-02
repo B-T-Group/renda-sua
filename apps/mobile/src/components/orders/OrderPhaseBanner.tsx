@@ -158,7 +158,7 @@ function PayByLine({
   if (urgency === 'expired') {
     const expiredText = t(
       'orders.payAfterConfirm.payByExpired',
-      'The payment window has ended. The order was cancelled and you were not charged.'
+      'The payment window has ended. This order will be cancelled automatically and you will not be charged.'
     );
     return (
       <View style={[styles.payByRow, { gap: spacing.xs }]} accessible accessibilityLabel={expiredText}>
