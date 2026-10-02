@@ -15,6 +15,8 @@ import type { CreditAllocation, CreditLine } from '../payment-programs/purchase-
 import { CommissionsService } from '../commissions/commissions.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import {
+  RETRY_SETTLEABLE_STATUSES,
+  SETTLEMENT_CLAIM_LEASE_MINUTES,
   SETTLEMENT_RETRY_MAX_ATTEMPTS,
   SettlementStage,
   settlementRetryDelayMinutes,
@@ -251,7 +253,13 @@ type OrderHoldWithSettlement = Order_Holds & {
 };
 
 /** Outcome of an item/delivery settlement stage. */
-export type SettlementOutcome = 'settled' | 'queued_for_retry';
+export type SettlementOutcome =
+  | 'settled'
+  | 'queued_for_retry'
+  /** Another worker holds the stage lease right now; nothing was moved by this call. */
+  | 'in_progress'
+  /** Retry refused: the order was cancelled/refunded/failed. The retry row was cleared and alerted. */
+  | 'not_settleable';
 
 type InventoryQuantityRequest = {
   business_inventory_id?: string;
@@ -13986,6 +13994,12 @@ export class OrdersService {
   /**
    * Release item/subtotal client hold, record item payment, distribute item/business commissions.
    * Idempotent via order_holds.item_settlement_completed_at. Call while status is assigned_to_agent (pickup) or picked_up (retry).
+   *
+   * Concurrency (UAT S-4): the stage is claimed with a compare-and-set lease
+   * (`item_settlement_claimed_at`) before any ledger move, and every ledger move carries a
+   * once-only idempotency key, so a double tap / agent+client completion / retry sweep can
+   * neither double-debit the client nor double-credit the merchant.
+   * Retry gate (UAT S-5): a retry no longer bypasses the status check.
    */
   async processOrderPayment(
     orderId: string,
@@ -14004,8 +14018,8 @@ export class OrdersService {
       );
     }
 
-    const orderHold = await this.getOrCreateOrderHold(orderId);
-    if (orderHold.item_settlement_completed_at) {
+    const preHold = await this.getOrCreateOrderHold(orderId);
+    if (preHold.item_settlement_completed_at) {
       return 'settled';
     }
 
@@ -14023,93 +14037,141 @@ export class OrdersService {
           : fulfillment === 'shipping'
             ? ['shipped', 'in_delivery', 'complete']
             : ['assigned_to_agent', 'picked_up'];
-    // A queued retry runs after the order has moved on, so the status gate is skipped.
-    if (
-      options?.isRetry !== true &&
-      !itemStatuses.includes(order.current_status)
-    ) {
+    if (options?.isRetry === true) {
+      // A queued retry runs after the order has moved on, so it may see later statuses,
+      // but never a cancelled / failed / refunded order (no merchant payout then).
+      if (!this.isRetrySettleableStatus(order.current_status, itemStatuses)) {
+        return this.dropRetryForUnsettleableOrder(preHold.id, 'item', order);
+      }
+    } else if (!itemStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Item settlement requires assigned_to_agent or picked_up; got ${order.current_status}`,
         HttpStatus.BAD_REQUEST
       );
     }
 
-    const subtotalPortion = Number(orderHold.client_hold_amount);
-    const skipClient = options?.skipClientLedgerMovements === true;
-    if (skipClient) {
-      await this.applyPaidDepositForExternalSettlement(order);
+    if (!(await this.claimSettlementStage(preHold.id, 'item'))) {
+      this.logger.warn(
+        `settlement_in_progress stage=item order=${order.order_number} orderId=${orderId}: another worker holds the lease`
+      );
+      return 'in_progress';
     }
 
-    if (subtotalPortion > 0 && !skipClient) {
-      const clientAccount = await this.hasuraSystemService.getAccount(
-        order.client.user_id,
-        order.currency
-      );
-      if (!clientAccount) {
-        throw new HttpException(
-          'Client account not found',
-          HttpStatus.NOT_FOUND
+    let finished = false;
+    try {
+      // Re-read after winning the claim so we act on the freshest hold amounts.
+      const orderHold = await this.getOrCreateOrderHold(orderId);
+      if (orderHold.item_settlement_completed_at) {
+        finished = true;
+        return 'settled';
+      }
+
+      const subtotalPortion = Number(orderHold.client_hold_amount);
+      const skipClient = options?.skipClientLedgerMovements === true;
+      if (skipClient) {
+        await this.applyPaidDepositForExternalSettlement(order);
+      }
+
+      if (subtotalPortion > 0 && !skipClient) {
+        const clientAccount = await this.hasuraSystemService.getAccount(
+          order.client.user_id,
+          order.currency
+        );
+        if (!clientAccount) {
+          throw new HttpException(
+            'Client account not found',
+            HttpStatus.NOT_FOUND
+          );
+        }
+        try {
+          if (this.settlesViaClientHoldRelease(order as any)) {
+            this.assertLedgerMove(
+              await this.accountsService.registerTransaction({
+                accountId: clientAccount.id,
+                amount: subtotalPortion,
+                transactionType: 'release',
+                memo: `Hold released for order ${order.order_number} (items)`,
+                referenceId: orderId,
+                idempotencyKey: this.settlementKey('item', 'release', orderId),
+              }),
+              'item hold release',
+              order
+            );
+            this.assertLedgerMove(
+              await this.accountsService.registerTransaction({
+                accountId: clientAccount.id,
+                amount: subtotalPortion,
+                transactionType: 'payment',
+                memo: `Order item payment for order ${order.order_number}`,
+                referenceId: orderId,
+                idempotencyKey: this.settlementKey('item', 'payment', orderId),
+              }),
+              'item payment',
+              order
+            );
+          } else {
+            // Classic PAD/PAP: release deposit hold, then debit full GMV.
+            await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
+            this.assertLedgerMove(
+              await this.accountsService.registerTransaction({
+                accountId: clientAccount.id,
+                amount: subtotalPortion,
+                transactionType: 'payment',
+                memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
+                referenceId: orderId,
+                idempotencyKey: this.settlementKey('item', 'payment', orderId),
+              }),
+              'item payment',
+              order
+            );
+          }
+        } catch (error: any) {
+          // Never pay the merchant when the client side did not move.
+          return this.queueSettlementRetryOrRethrow(
+            orderHold.id,
+            'item',
+            order,
+            error
+          );
+        }
+      }
+
+      // Client movements are done-once: persist that they are done *before*
+      // distributing commissions so a retry after a distribution failure does not
+      // release/debit the client a second time (the idempotency keys back this up).
+      if (subtotalPortion > 0) {
+        await this.updateOrderHold(orderHold.id, { client_hold_amount: 0 });
+      }
+
+      try {
+        await this.commissionsService.distributeItemCommissions(order);
+      } catch (error: any) {
+        // The client side is already settled (hold zeroed above). Do not stamp
+        // item_settlement_completed_at; queue a retry instead of failing the request.
+        // payCommission is once-only per recipient (idempotency key), so a retry is safe.
+        return this.queueSettlementRetryOrRethrow(
+          orderHold.id,
+          'item',
+          order,
+          error
         );
       }
-      if (this.settlesViaClientHoldRelease(order as any)) {
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: subtotalPortion,
-          transactionType: 'release',
-          memo: `Hold released for order ${order.order_number} (items)`,
-          referenceId: orderId,
-        });
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: subtotalPortion,
-          transactionType: 'payment',
-          memo: `Order item payment for order ${order.order_number}`,
-          referenceId: orderId,
-        });
-      } else {
-        // Classic PAD/PAP: release deposit hold, then debit full GMV.
-        await this.releasePaidDepositHoldIfNeeded(order, clientAccount.id);
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: subtotalPortion,
-          transactionType: 'payment',
-          memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
-          referenceId: orderId,
-        });
-      }
-    }
 
-    // Client movements are not idempotent: persist that they are done *before*
-    // distributing commissions so a retry after a distribution failure does not
-    // release/debit the client a second time.
-    if (subtotalPortion > 0) {
-      await this.updateOrderHold(orderHold.id, { client_hold_amount: 0 });
+      await this.updateOrderHold(orderHold.id, {
+        client_hold_amount: 0,
+        item_settlement_completed_at: new Date().toISOString(),
+      });
+      finished = true;
+      return 'settled';
+    } finally {
+      if (!finished) await this.releaseSettlementClaim(preHold.id, 'item');
     }
-
-    try {
-      await this.commissionsService.distributeItemCommissions(order);
-    } catch (error: any) {
-      // The client side is already settled (hold zeroed above). Do not stamp
-      // item_settlement_completed_at; queue a retry instead of failing the request.
-      // payCommission skips recipients already paid, so a retry is safe to repeat.
-      return this.queueSettlementRetryOrRethrow(
-        orderHold.id,
-        'item',
-        order,
-        error
-      );
-    }
-
-    await this.updateOrderHold(orderHold.id, {
-      client_hold_amount: 0,
-      item_settlement_completed_at: new Date().toISOString(),
-    });
-    return 'settled';
   }
 
   /**
    * Release agent hold and delivery client hold, record delivery payment, distribute delivery commissions.
    * Idempotent via order_holds.delivery_settlement_completed_at. Call while out_for_delivery (before complete) or complete (retry).
+   * Same lease + idempotency-key + retry status-gate guarantees as processOrderPayment.
    */
   async processOrderDeliveryPayment(
     orderId: string,
@@ -14128,13 +14190,13 @@ export class OrdersService {
       );
     }
 
-    const orderHold = await this.getOrCreateOrderHold(orderId);
-    if (orderHold.delivery_settlement_completed_at) {
+    const preHold = await this.getOrCreateOrderHold(orderId);
+    if (preHold.delivery_settlement_completed_at) {
       return 'settled';
     }
 
-    if (!orderHold.item_settlement_completed_at) {
-      if (await this.isSettlementStageQueued(orderHold.id, 'item')) {
+    if (!preHold.item_settlement_completed_at) {
+      if (await this.isSettlementStageQueued(preHold.id, 'item')) {
         // Item payout is queued for retry; the retry job runs delivery settlement
         // once it succeeds. Do not block order completion on it.
         this.logger.warn(
@@ -14161,99 +14223,42 @@ export class OrdersService {
         : fulfillment === 'shipping'
           ? ['shipped', 'in_delivery', 'complete']
           : ['out_for_delivery', 'complete'];
-    if (
-      options?.isRetry !== true &&
-      !deliveryStatuses.includes(order.current_status)
-    ) {
+    if (options?.isRetry === true) {
+      if (
+        !this.isRetrySettleableStatus(order.current_status, deliveryStatuses)
+      ) {
+        return this.dropRetryForUnsettleableOrder(
+          preHold.id,
+          'delivery',
+          order
+        );
+      }
+    } else if (!deliveryStatuses.includes(order.current_status)) {
       throw new HttpException(
         `Delivery settlement requires out_for_delivery or complete; got ${order.current_status}`,
         HttpStatus.BAD_REQUEST
       );
     }
 
-    if (order.assigned_agent) {
-      const agentAccount = await this.hasuraSystemService.getAccount(
-        order.assigned_agent.user_id,
-        order.currency
+    if (!(await this.claimSettlementStage(preHold.id, 'delivery'))) {
+      this.logger.warn(
+        `settlement_in_progress stage=delivery order=${order.order_number} orderId=${orderId}: another worker holds the lease`
       );
-      const agentHoldAmt = Number(orderHold.agent_hold_amount);
-      if (agentAccount && agentHoldAmt > 0) {
-        await this.accountsService.registerTransaction({
-          accountId: agentAccount.id,
-          amount: agentHoldAmt,
-          transactionType: 'release',
-          memo: `Hold released for order ${order.order_number}`,
-          referenceId: orderId,
-        });
-      }
+      return 'in_progress';
     }
 
-    const skipClient = options?.skipClientLedgerMovements === true;
-
-    const deliveryAmt = Number(orderHold.delivery_fees);
-    if (deliveryAmt > 0) {
-      if (this.settlesViaClientHoldRelease(order as any)) {
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
-        );
-        if (!clientAccount) {
-          throw new HttpException(
-            'Client account not found',
-            HttpStatus.NOT_FOUND
-          );
-        }
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: deliveryAmt,
-          transactionType: 'release',
-          memo: `Hold released for order ${order.order_number} delivery fee`,
-          referenceId: orderId,
-        });
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: deliveryAmt,
-          transactionType: 'payment',
-          memo: `Order delivery payment for order ${order.order_number}`,
-          referenceId: orderId,
-        });
-      } else if (!skipClient) {
-        const clientAccount = await this.hasuraSystemService.getAccount(
-          order.client.user_id,
-          order.currency
-        );
-        if (!clientAccount) {
-          throw new HttpException(
-            'Client account not found',
-            HttpStatus.NOT_FOUND
-          );
-        }
-        await this.accountsService.registerTransaction({
-          accountId: clientAccount.id,
-          amount: deliveryAmt,
-          transactionType: 'payment',
-          memo: `Order delivery payment for order ${order.order_number} (pay at delivery)`,
-          referenceId: orderId,
-        });
+    let finished = false;
+    try {
+      const orderHold = await this.getOrCreateOrderHold(orderId);
+      if (orderHold.delivery_settlement_completed_at) {
+        finished = true;
+        return 'settled';
       }
-    }
 
-    if ((order as any).fulfillment_method === 'shipping') {
-      await this.payMerchantShippingFee(order, deliveryAmt);
-    } else {
-      // Agent hold release and client delivery movements are not idempotent:
-      // persist that they are done before distributing delivery commissions so a
-      // retry does not release/debit twice. (Shipping keeps its previous flow:
-      // it needs delivery_fees to pay the merchant.)
-      await this.updateOrderHold(orderHold.id, {
-        agent_hold_amount: 0,
-        delivery_fees: 0,
-      });
       try {
-        await this.commissionsService.distributeDeliveryCommissions(order);
+        await this.moveDeliveryLedger(order, orderHold, options);
       } catch (error: any) {
-        // delivery_settlement_completed_at stays unset; queue a retry instead of
-        // failing the delivery completion.
+        if (error instanceof HttpException) throw error;
         return this.queueSettlementRetryOrRethrow(
           orderHold.id,
           'delivery',
@@ -14261,14 +14266,218 @@ export class OrdersService {
           error
         );
       }
+
+      if ((order as any).fulfillment_method === 'shipping') {
+        await this.payMerchantShippingFee(order, Number(orderHold.delivery_fees));
+      } else {
+        // Agent hold release and client delivery movements are done-once: persist that
+        // they are done before distributing delivery commissions so a retry does not
+        // release/debit twice. (Shipping keeps its previous flow: it needs
+        // delivery_fees to pay the merchant.)
+        await this.updateOrderHold(orderHold.id, {
+          agent_hold_amount: 0,
+          delivery_fees: 0,
+        });
+        try {
+          await this.commissionsService.distributeDeliveryCommissions(order);
+        } catch (error: any) {
+          // delivery_settlement_completed_at stays unset; queue a retry instead of
+          // failing the delivery completion.
+          return this.queueSettlementRetryOrRethrow(
+            orderHold.id,
+            'delivery',
+            order,
+            error
+          );
+        }
+      }
+
+      await this.updateOrderHold(orderHold.id, {
+        delivery_fees: 0,
+        status: 'completed',
+        delivery_settlement_completed_at: new Date().toISOString(),
+      });
+      finished = true;
+      return 'settled';
+    } finally {
+      if (!finished) await this.releaseSettlementClaim(preHold.id, 'delivery');
+    }
+  }
+
+  /** Agent hold release + client delivery-fee release/payment, each once-only and result-checked. */
+  private async moveDeliveryLedger(
+    order: Orders,
+    orderHold: OrderHoldWithSettlement,
+    options?: { skipClientLedgerMovements?: boolean }
+  ): Promise<void> {
+    const orderId = order.id;
+    if (order.assigned_agent) {
+      const agentAccount = await this.hasuraSystemService.getAccount(
+        order.assigned_agent.user_id,
+        order.currency
+      );
+      const agentHoldAmt = Number(orderHold.agent_hold_amount);
+      if (agentAccount && agentHoldAmt > 0) {
+        this.assertLedgerMove(
+          await this.accountsService.registerTransaction({
+            accountId: agentAccount.id,
+            amount: agentHoldAmt,
+            transactionType: 'release',
+            memo: `Hold released for order ${order.order_number}`,
+            referenceId: orderId,
+            idempotencyKey: this.settlementKey('delivery', 'agent-release', orderId),
+          }),
+          'agent hold release',
+          order
+        );
+      }
     }
 
-    await this.updateOrderHold(orderHold.id, {
-      delivery_fees: 0,
-      status: 'completed',
-      delivery_settlement_completed_at: new Date().toISOString(),
-    });
-    return 'settled';
+    const skipClient = options?.skipClientLedgerMovements === true;
+    const deliveryAmt = Number(orderHold.delivery_fees);
+    if (deliveryAmt <= 0) return;
+
+    const viaHoldRelease = this.settlesViaClientHoldRelease(order as any);
+    if (!viaHoldRelease && skipClient) return;
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      order.client!.user_id,
+      order.currency
+    );
+    if (!clientAccount) {
+      throw new HttpException('Client account not found', HttpStatus.NOT_FOUND);
+    }
+    if (viaHoldRelease) {
+      this.assertLedgerMove(
+        await this.accountsService.registerTransaction({
+          accountId: clientAccount.id,
+          amount: deliveryAmt,
+          transactionType: 'release',
+          memo: `Hold released for order ${order.order_number} delivery fee`,
+          referenceId: orderId,
+          idempotencyKey: this.settlementKey('delivery', 'client-release', orderId),
+        }),
+        'delivery hold release',
+        order
+      );
+    }
+    this.assertLedgerMove(
+      await this.accountsService.registerTransaction({
+        accountId: clientAccount.id,
+        amount: deliveryAmt,
+        transactionType: 'payment',
+        memo: viaHoldRelease
+          ? `Order delivery payment for order ${order.order_number}`
+          : `Order delivery payment for order ${order.order_number} (pay at delivery)`,
+        referenceId: orderId,
+        idempotencyKey: this.settlementKey('delivery', 'client-payment', orderId),
+      }),
+      'delivery payment',
+      order
+    );
+  }
+
+  private settlementKey(
+    stage: SettlementStage,
+    step: string,
+    orderId: string
+  ): string {
+    return `settle:${stage}:${step}:${orderId}`;
+  }
+
+  /** A ledger move that did not succeed must stop settlement (never pay the merchant on top of it). */
+  private assertLedgerMove(
+    result: { success?: boolean; error?: string } | undefined,
+    label: string,
+    order: { order_number: string }
+  ): void {
+    if (!result?.success) {
+      throw new Error(
+        `Settlement ${label} failed for order ${order.order_number}: ${result?.error ?? 'unknown error'}`
+      );
+    }
+  }
+
+  /** Retries may see post-completion statuses, but never cancelled/failed/refunded orders. */
+  private isRetrySettleableStatus(
+    status: string,
+    gateStatuses: string[]
+  ): boolean {
+    return (
+      gateStatuses.includes(status) || RETRY_SETTLEABLE_STATUSES.includes(status)
+    );
+  }
+
+  /**
+   * Compare-and-set lease on the settlement stage. Only one caller wins; a lease older
+   * than SETTLEMENT_CLAIM_LEASE_MINUTES is treated as abandoned and can be re-claimed
+   * (the ledger idempotency keys keep a re-claim safe).
+   */
+  private async claimSettlementStage(
+    orderHoldId: string,
+    stage: SettlementStage
+  ): Promise<boolean> {
+    const column = `${stage}_settlement_claimed_at`;
+    const completed = `${stage}_settlement_completed_at`;
+    const now = new Date();
+    const staleBefore = new Date(
+      now.getTime() - SETTLEMENT_CLAIM_LEASE_MINUTES * 60_000
+    ).toISOString();
+    const result = await this.hasuraSystemService.executeMutation(
+      `mutation ClaimSettlementStage($id: uuid!, $now: timestamptz!, $staleBefore: timestamptz!) {
+        update_order_holds(
+          where: {
+            id: { _eq: $id }
+            ${completed}: { _is_null: true }
+            _or: [
+              { ${column}: { _is_null: true } }
+              { ${column}: { _lt: $staleBefore } }
+            ]
+          }
+          _set: { ${column}: $now }
+        ) { affected_rows }
+      }`,
+      { id: orderHoldId, now: now.toISOString(), staleBefore }
+    );
+    return (result?.update_order_holds?.affected_rows ?? 0) === 1;
+  }
+
+  private async releaseSettlementClaim(
+    orderHoldId: string,
+    stage: SettlementStage
+  ): Promise<void> {
+    const column = `${stage}_settlement_claimed_at`;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation ReleaseSettlementClaim($id: uuid!) {
+          update_order_holds_by_pk(pk_columns: { id: $id }, _set: { ${column}: null }) { id }
+        }`,
+        { id: orderHoldId }
+      );
+    } catch (error: any) {
+      // The lease expires on its own; just make it visible.
+      this.logger.warn(
+        `Could not release settlement claim stage=${stage} hold=${orderHoldId}: ${error?.message}`
+      );
+    }
+  }
+
+  /**
+   * A queued retry found the order cancelled/failed/refunded: do not pay anyone,
+   * clear the retry row so it does not loop, and alert for manual review.
+   */
+  private async dropRetryForUnsettleableOrder(
+    orderHoldId: string,
+    stage: SettlementStage,
+    order: { id: string; order_number: string; current_status: string }
+  ): Promise<SettlementOutcome> {
+    reportMoneyAnomaly(
+      this.logger,
+      'settlement_retry_dropped_unsettleable_order',
+      `stage=${stage} order=${order.order_number} orderId=${order.id} status=${order.current_status}: retry refused, no payout made; reconcile manually`,
+      { orderId: order.id, stage, status: order.current_status }
+    );
+    await this.clearSettlementFailure(orderHoldId);
+    return 'not_settleable';
   }
 
   /**
@@ -14391,13 +14600,15 @@ export class OrdersService {
     if (!account) {
       throw new HttpException('Business account not found', HttpStatus.NOT_FOUND);
     }
-    await this.accountsService.registerTransaction({
+    const result = await this.accountsService.registerTransaction({
       accountId: account.id,
       amount,
       transactionType: 'deposit',
       memo: `Carrier shipping fee for order ${order.order_number}`,
       referenceId: order.id,
+      idempotencyKey: this.settlementKey('delivery', 'shipping-fee', order.id),
     });
+    this.assertLedgerMove(result, 'carrier shipping fee', order);
   }
 
   private roundCurrency(amount: number): number {

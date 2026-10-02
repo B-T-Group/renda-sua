@@ -398,6 +398,104 @@ describe('AccountsService', () => {
     });
   });
 
+  describe('registerTransaction idempotencyKey (UAT S-4)', () => {
+    const key = 'settle:item:payment:order-1';
+    beforeEach(() => {
+      mockAccount(activeAccount);
+    });
+
+    it('returns alreadyExists without moving any balance when the key is already in the ledger', async () => {
+      executeQuery.mockImplementation(async (query: string) =>
+        query.includes('FindTransactionByIdempotencyKey')
+          ? { account_transactions: [{ id: 'tx-old' }] }
+          : { accounts_by_pk: activeAccount }
+      );
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 50,
+        transactionType: 'payment',
+        idempotencyKey: key,
+      });
+      expect(result).toEqual({
+        success: true,
+        transactionId: 'tx-old',
+        alreadyExists: true,
+      });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('inserts with ON CONFLICT DO NOTHING on the unique key and stores it', async () => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) =>
+        mutation.includes('InsertTransactionIdempotent')
+          ? { insert_account_transactions_one: { id: 'tx-new' } }
+          : fakeApplyDelta(mutation, vars)
+      );
+      executeQuery.mockImplementation(async (query: string) =>
+        query.includes('FindTransactionByIdempotencyKey')
+          ? { account_transactions: [] }
+          : { accounts_by_pk: activeAccount }
+      );
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 50,
+        transactionType: 'payment',
+        idempotencyKey: key,
+      });
+      expect(result).toMatchObject({ success: true, transactionId: 'tx-new' });
+      const insert = executeMutation.mock.calls.find(([m]) =>
+        String(m).includes('InsertTransactionIdempotent')
+      ) as [string, any];
+      expect(insert[0]).toContain('account_transactions_idempotency_key_key');
+      expect(insert[1].idempotencyKey).toBe(key);
+    });
+
+    it('loses the race (constraint conflict): reverts the balance move and reports alreadyExists', async () => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) =>
+        mutation.includes('InsertTransactionIdempotent')
+          ? { insert_account_transactions_one: null }
+          : fakeApplyDelta(mutation, vars)
+      );
+      executeQuery.mockImplementation(async (query: string) =>
+        query.includes('FindTransactionByIdempotencyKey')
+          ? { account_transactions: [] }
+          : { accounts_by_pk: activeAccount }
+      );
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 50,
+        transactionType: 'payment',
+        idempotencyKey: key,
+      });
+      expect(result).toEqual({ success: true, alreadyExists: true });
+      const deltas = executeMutation.mock.calls
+        .filter(([m]) => String(m).includes('ApplyBalanceDelta'))
+        .map(([, v]) => v.inc.available_balance);
+      expect(deltas).toEqual([-50, 50]);
+    });
+
+    it('keyless requests keep the original insert path', async () => {
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) =>
+        mutation.includes('InsertTransaction')
+          ? { insert_account_transactions_one: { id: 'tx-plain' } }
+          : fakeApplyDelta(mutation, vars)
+      );
+      await service.registerTransaction({
+        accountId,
+        amount: 10,
+        transactionType: 'deposit',
+      });
+      expect(
+        executeMutation.mock.calls.some(([m]) =>
+          String(m).includes('InsertTransactionIdempotent')
+        )
+      ).toBe(false);
+      expect(executeQuery).not.toHaveBeenCalledWith(
+        expect.stringContaining('FindTransactionByIdempotencyKey'),
+        expect.anything()
+      );
+    });
+  });
+
   describe('registerTransaction', () => {
     beforeEach(() => {
       mockAccount(activeAccount);

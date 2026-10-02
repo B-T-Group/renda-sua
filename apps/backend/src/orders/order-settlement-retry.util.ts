@@ -11,3 +11,29 @@ export function settlementRetryDelayMinutes(failedAttempts: number): number {
   const exp = Math.max(0, failedAttempts - 1);
   return Math.min(5 * 2 ** exp, 360);
 }
+
+/**
+ * How long a per-stage settlement claim (order_holds.*_settlement_claimed_at) is honoured
+ * before it is treated as abandoned. Ledger moves are idempotency-keyed, so a re-claim after
+ * expiry cannot double-pay.
+ */
+export const SETTLEMENT_CLAIM_LEASE_MINUTES = 15;
+
+/**
+ * Statuses a queued settlement retry may run in besides the stage's normal gate statuses:
+ * the order has moved on (delivered/complete) but was NOT cancelled, failed or refunded.
+ * Anything else (cancelled, failed, refunded, refund_approved_*, pending, confirmed, ...)
+ * is refused and the retry row is cleared with an alert (UAT S-5).
+ */
+export const RETRY_SETTLEABLE_STATUSES: string[] = [
+  'assigned_to_agent',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'shipped',
+  'in_delivery',
+  'complete',
+  'refund_requested',
+  'refund_rejected',
+];

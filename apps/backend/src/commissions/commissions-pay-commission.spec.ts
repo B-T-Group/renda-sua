@@ -115,4 +115,44 @@ describe('CommissionsService.payCommission failure handling', () => {
     const memos = hasura.executeQuery.mock.calls.map(([, v]) => v.memo);
     expect(new Set(memos).size).toBe(2);
   });
+
+  describe('S-4: commission payout is once-only at the ledger', () => {
+    it('sends a deterministic idempotency key per order/account/recipient/type', async () => {
+      const { service, accountsService } = createService();
+      await pay(service);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idempotencyKey: 'commission:order-1:acct-1:business:order_subtotal',
+        })
+      );
+    });
+
+    it('two concurrent runs that both pass the read-check still credit once (second sees alreadyExists)', async () => {
+      const { service, accountsService, hasura } = createService();
+      const keys = new Set<string>();
+      accountsService.registerTransaction.mockImplementation(async (r: any) => {
+        if (keys.has(r.idempotencyKey)) {
+          return { success: true, alreadyExists: true };
+        }
+        keys.add(r.idempotencyKey);
+        return { success: true, transactionId: 'tx-1' };
+      });
+      await Promise.all([pay(service), pay(service)]);
+      expect(accountsService.registerTransaction).toHaveBeenCalledTimes(2);
+      const audits = hasura.executeMutation.mock.calls.filter(([q]) =>
+        String(q).includes('InsertCommissionPayout')
+      );
+      expect(audits).toHaveLength(1);
+    });
+
+    it('does not audit or notify when the ledger reports alreadyExists', async () => {
+      const { service, accountsService, hasura } = createService();
+      accountsService.registerTransaction.mockResolvedValue({
+        success: true,
+        alreadyExists: true,
+      });
+      await expect(pay(service)).resolves.toBeUndefined();
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+  });
 });
