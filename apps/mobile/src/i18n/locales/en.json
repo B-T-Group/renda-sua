@@ -6802,7 +6802,8 @@
   },
   "catalog": {
     "paymentsComingSoon": "Coming soon",
-    "paymentsComingSoonDetail": "Payments for this merchant are coming soon."
+    "paymentsComingSoonDetail": "Payments for this merchant are coming soon.",
+    "payAfterConfirmBadge": "Pay after the store confirms"
   },
   "foods": {
     "title": "Food",

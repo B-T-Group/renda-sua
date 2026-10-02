@@ -22,6 +22,7 @@ import {
 import { RbacService } from '../rbac/rbac.service';
 import {
   fetchStripeEnabledCountries,
+  isPayAfterConfirmBadgeVisible,
   isLocationPaymentsEnabled,
 } from './inventory-catalog-eligibility.util';
 import { buildLexicalItemSearchOr } from './inventory-lexical-search.util';
@@ -34,6 +35,8 @@ import {
   type FoodAvailabilityPayload,
 } from '../food/food-item-availability.mapper';
 import { FOOD_CATEGORY_NAME } from '../food/food.constants';
+import { PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY } from '../food/pay-after-confirm.util';
+
 export type InventorySortMode =
   | 'relevance'
   | 'fastest'
@@ -92,6 +95,12 @@ export interface InventoryItem {
   deal_end_at?: string;
   /** False when MoMo location phone is missing or unverified (Stripe-country locations exempt). */
   payments_enabled?: boolean;
+  /**
+   * True when the listing's location has `pay_at_confirm` on, the platform kill switch is
+   * enabled and the location is on the mobile-money rail (suppressed for Stripe countries).
+   * Drives the optional storefront "Pay after the store confirms" badge.
+   */
+  pay_after_confirm_badge?: boolean;
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;
@@ -193,6 +202,7 @@ export interface InventoryItem {
     is_primary: boolean;
     is_active?: boolean;
     logo_url?: string | null;
+    pay_at_confirm?: boolean | null;
     mobile_payment_phone?: {
       is_verified?: boolean;
     } | null;
@@ -466,6 +476,7 @@ const CATALOG_INVENTORY_LIST_GQL = `
         location_type
         is_primary
         logo_url
+        pay_at_confirm
         mobile_payment_phone {
           is_verified
         }
@@ -683,13 +694,32 @@ export class InventoryItemsService {
     };
   }
 
+  /** Kill switch (global row, default false). Fails closed: errors hide the badge. */
+  private async isPayAfterLocationFlagEnabled(): Promise<boolean> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery(
+        `query PayAfterLocationFlag($key: String!) {
+          application_configurations(
+            where: { config_key: { _eq: $key }, country_code: { _is_null: true } }
+            limit: 1
+          ) { boolean_value }
+        }`,
+        { key: PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY }
+      );
+      return res?.application_configurations?.[0]?.boolean_value === true;
+    } catch {
+      return false;
+    }
+  }
+
   private async getStripeEnabledCountries(): Promise<string[]> {
     return fetchStripeEnabledCountries(this.hasuraSystemService);
   }
 
   private attachPaymentsEnabledToItems(
     items: InventoryItem[],
-    stripeCountries: string[]
+    stripeCountries: string[],
+    payAfterFlagEnabled = false
   ): InventoryItem[] {
     return items.map((item) => {
       const storefrontVisible =
@@ -699,6 +729,11 @@ export class InventoryItemsService {
         payments_enabled: isLocationPaymentsEnabled(
           item.business_location,
           stripeCountries
+        ),
+        pay_after_confirm_badge: isPayAfterConfirmBadgeVisible(
+          item.business_location,
+          stripeCountries,
+          payAfterFlagEnabled
         ),
         business_location: item.business_location
           ? {
@@ -716,10 +751,14 @@ export class InventoryItemsService {
   private async attachPaymentsEnabledToItemsAsync(
     items: InventoryItem[]
   ): Promise<InventoryItem[]> {
-    const stripeCountries = await this.getStripeEnabledCountries();
+    const [stripeCountries, payAfterFlagEnabled] = await Promise.all([
+      this.getStripeEnabledCountries(),
+      this.isPayAfterLocationFlagEnabled(),
+    ]);
     const withPayments = this.attachPaymentsEnabledToItems(
       items,
-      stripeCountries
+      stripeCountries,
+      payAfterFlagEnabled
     );
     if (!this.variantInventory) return withPayments;
     return this.variantInventory.attachAvailableQuantities(withPayments);
@@ -2620,6 +2659,7 @@ export class InventoryItemsService {
             is_active
             logo_url
             mobile_payment_phone_id
+            pay_at_confirm
             mobile_payment_phone {
               is_verified
             }
@@ -2932,6 +2972,7 @@ export class InventoryItemsService {
               location_type
               is_primary
               logo_url
+              pay_at_confirm
               mobile_payment_phone { is_verified }
               business { id name is_verified can_accept_orders is_storefront_visible }
               address {

@@ -39,6 +39,8 @@ export interface InventoryItem {
   deal_end_at?: string;
   /** False when MoMo location phone is missing or unverified. */
   payments_enabled?: boolean;
+  /** Flagged MoMo location, kill switch on: show the pay-after-store-confirms badge. */
+  pay_after_confirm_badge?: boolean;
   distance_text?: string;
   duration_text?: string;
   distance_value?: number;

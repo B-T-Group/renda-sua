@@ -7994,7 +7994,8 @@
   },
   "catalog": {
     "paymentsComingSoon": "Bientôt disponible",
-    "paymentsComingSoonDetail": "Les paiements pour ce marchand arrivent bientôt."
+    "paymentsComingSoonDetail": "Les paiements pour ce marchand arrivent bientôt.",
+    "payAfterConfirmBadge": "Payez après confirmation du magasin"
   },
   "delegation": {
     "invite": {

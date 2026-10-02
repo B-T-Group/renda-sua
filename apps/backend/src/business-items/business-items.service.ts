@@ -1255,6 +1255,10 @@ export class BusinessItemsService {
       // Primary/active flips can change the resolved payment rail for visibility.
       this.triggerLifecycleRecompute(businessId);
     }
+    if (data.pay_at_confirm !== undefined) {
+      // Storefront "pay after the store confirms" badge is part of cached catalog payloads.
+      void this.invalidateCatalogCache();
+    }
     return result?.update_business_locations_by_pk ?? null;
   }
 
