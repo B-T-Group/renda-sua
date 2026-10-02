@@ -32,6 +32,10 @@ import {
 } from '../food/food-inventory-quantity.util';
 import { FOOD_DEFAULT_INVENTORY_QUANTITY } from '../food/food.constants';
 import { CatalogCacheService } from '../catalog-cache/catalog-cache.service';
+import {
+  UPDATABLE_BUSINESS_LOCATION_FIELDS,
+  UpdateBusinessLocationDto,
+} from './dto/update-business-location.dto';
 
 const GET_ITEMS = `
   query GetItems($businessId: uuid!) {
@@ -1170,19 +1174,7 @@ export class BusinessItemsService {
   async updateBusinessLocation(
     businessId: string,
     locationId: string,
-    data: {
-      name?: string;
-      phone?: string;
-      order_alert_phone?: string | null;
-      mobile_payment_phone_id?: string | null;
-      email?: string;
-      location_type?: 'store' | 'warehouse' | 'office' | 'pickup_point';
-      is_active?: boolean;
-      is_primary?: boolean;
-      auto_withdraw_commissions?: boolean;
-      logo_url?: string | null;
-      pay_at_confirm?: boolean;
-    }
+    data: UpdateBusinessLocationDto
   ): Promise<any> {
     const query = `
       query GetLocationBusiness($locationId: uuid!) {
@@ -1202,14 +1194,18 @@ export class BusinessItemsService {
         HttpStatus.NOT_FOUND
       );
     }
-    const setInput: Record<string, unknown> = { ...data };
+    // Allow-list copy (UAT S-9): this mutation runs with the admin secret, so never spread the
+    // request body into business_locations_set_input (business_id, address_id, id, ...).
+    const setInput: Record<string, unknown> = {};
+    for (const field of UPDATABLE_BUSINESS_LOCATION_FIELDS) {
+      if (data?.[field] !== undefined) setInput[field] = data[field];
+    }
     if (typeof setInput.order_alert_phone === 'string') {
       setInput.order_alert_phone = setInput.order_alert_phone.trim() || null;
     }
     if (setInput.logo_url === '') {
       setInput.logo_url = null;
     }
-    delete setInput.rendasua_item_commission_percentage;
     if (
       data.mobile_payment_phone_id !== undefined ||
       data.phone !== undefined
