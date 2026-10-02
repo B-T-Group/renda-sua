@@ -39,6 +39,8 @@ export type CheckoutOutcome =
       paymentRail: 'stripe' | 'mobile_money' | null;
       /** Manual capture: card authorized at checkout, charge happens later. */
       cardAuthorized?: boolean;
+      /** Resolved by the create response (authoritative for pay-after navigation). */
+      payAfterConfirm?: boolean;
     }
   | { 
       type: 'pending'; 
@@ -47,6 +49,8 @@ export type CheckoutOutcome =
       paymentRail: 'stripe' | 'mobile_money' | null;
       /** True when deposit collect started (navigate to MoMo await). */
       isDepositOrder?: boolean;
+      /** Resolved by the create response (authoritative for pay-after navigation). */
+      payAfterConfirm?: boolean;
     }
   | { type: 'cancelled' }
   | { type: 'busy' }
@@ -209,6 +213,7 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
         orderNumbers: [order.order_number ?? order.id], 
         paymentRail: 'mobile_money',
         isDepositOrder,
+        payAfterConfirm: order.pay_after_merchant_confirm === true,
       };
     },
     []
@@ -333,6 +338,7 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
         const orderNumbers: string[] = [];
         const isStripe = resolvedConfig?.checkout_method === 'STRIPE';
         let lastOutcome: CheckoutOutcome | null = null;
+        let payAfterConfirm = false;
 
         try {
           for (const payload of payloads) {
@@ -360,6 +366,7 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
             if (outcome.type === 'success' || outcome.type === 'pending') {
               orderIds.push(...outcome.orderIds);
               orderNumbers.push(...outcome.orderNumbers);
+              if (outcome.payAfterConfirm) payAfterConfirm = true;
               lastOutcome = outcome;
             }
           }
@@ -374,8 +381,15 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
                   orderNumbers,
                   paymentRail: lastOutcome.paymentRail,
                   cardAuthorized: lastOutcome.cardAuthorized,
+                  payAfterConfirm,
                 }
-              : { type: 'pending', orderIds, orderNumbers, paymentRail: lastOutcome.paymentRail };
+              : {
+                  type: 'pending',
+                  orderIds,
+                  orderNumbers,
+                  paymentRail: lastOutcome.paymentRail,
+                  payAfterConfirm,
+                };
 
           if (finalOutcome.type === 'success') {
             checkoutAnalytics.checkoutOrderCreated({
