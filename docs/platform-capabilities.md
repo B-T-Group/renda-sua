@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-02 (America/Toronto) for the location-settings redesign (web + mobile UI only). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-02 (America/Toronto) for the location-settings redesign @ **`e7d952d7`**. Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
