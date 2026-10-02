@@ -233,6 +233,10 @@ describe('OrdersService carrier shipping', () => {
       distributeDeliveryCommissions: distribute,
     };
     jest.spyOn(service as any, 'updateOrderHold').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'claimSettlementStage').mockResolvedValue(true);
+    jest
+      .spyOn(service as any, 'releaseSettlementClaim')
+      .mockResolvedValue(undefined);
 
     await service.processOrderDeliveryPayment('order-123');
 
@@ -242,6 +246,7 @@ describe('OrdersService carrier shipping', () => {
         accountId: 'biz-acct',
         amount: 1500,
         transactionType: 'deposit',
+        idempotencyKey: 'settle:delivery:shipping-fee:order-123',
       })
     );
   });

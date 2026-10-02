@@ -29,11 +29,19 @@ export interface TransactionRequest {
    * available to hold.
    */
   skipCashAdvanceRepayment?: boolean;
+  /**
+   * Once-only key (account_transactions.idempotency_key, UNIQUE). When set, a second
+   * call with the same key is a no-op that returns `{ success: true, alreadyExists: true }`
+   * and never moves balances twice, even under concurrency (the DB constraint decides).
+   */
+  idempotencyKey?: string;
 }
 
 export interface TransactionResult {
   success: boolean;
   transactionId?: string;
+  /** True when `idempotencyKey` already had a ledger row, so nothing was moved now. */
+  alreadyExists?: boolean;
   newBalance?: {
     available: number;
     withheld: number;
@@ -134,6 +142,16 @@ export class AccountsService {
         };
       }
 
+      if (request.idempotencyKey) {
+        const existingId = await this.findTransactionIdByKeys([
+          request.idempotencyKey,
+          this.repaymentIdempotencyKey(request.idempotencyKey),
+        ]);
+        if (existingId) {
+          return { success: true, transactionId: existingId, alreadyExists: true };
+        }
+      }
+
       // Get current account details
       const account = await this.getAccountById(request.accountId);
       if (!account) {
@@ -186,6 +204,11 @@ export class AccountsService {
     }
     try {
       const transactionId = await this.insertTransaction(request);
+      if (transactionId === null) {
+        // Lost the once-only race: another call already wrote this idempotency key.
+        await this.revertBalanceDelta(request.accountId, balanceUpdate);
+        return { success: true, alreadyExists: true };
+      }
       return { success: true, transactionId, newBalance: applied };
     } catch (error: any) {
       await this.revertBalanceDelta(request.accountId, balanceUpdate);
@@ -392,6 +415,9 @@ export class AccountsService {
     const repayment = await this.applyLedgerEntry(
       {
         ...request,
+        idempotencyKey: request.idempotencyKey
+          ? this.repaymentIdempotencyKey(request.idempotencyKey)
+          : undefined,
         amount: repay,
         transactionType: 'cash_advance_repayment',
         memo: `Cash advance repayment${request.memo ? ` - ${request.memo}` : ''}`,
@@ -578,12 +604,63 @@ export class AccountsService {
     return true;
   }
 
+  private repaymentIdempotencyKey(key: string): string {
+    return `${key}:repay`;
+  }
+
+  private async findTransactionIdByKeys(keys: string[]): Promise<string | null> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query FindTransactionByIdempotencyKey($keys: [String!]!) {
+        account_transactions(where: { idempotency_key: { _in: $keys } }, limit: 1) { id }
+      }`,
+      { keys }
+    );
+    return result?.account_transactions?.[0]?.id ?? null;
+  }
+
   /**
-   * Insert transaction record into database
+   * Insert transaction record into database. Returns null only for an idempotent
+   * request whose key already exists (ON CONFLICT DO NOTHING).
    */
   private async insertTransaction(
     request: TransactionRequest
-  ): Promise<string> {
+  ): Promise<string | null> {
+    if (request.idempotencyKey) {
+      const result = await this.hasuraSystemService.executeMutation(
+        `mutation InsertTransactionIdempotent(
+          $accountId: uuid!,
+          $amount: numeric!,
+          $transactionType: transaction_type_enum!,
+          $memo: String,
+          $referenceId: uuid,
+          $idempotencyKey: String!
+        ) {
+          insert_account_transactions_one(
+            object: {
+              account_id: $accountId,
+              amount: $amount,
+              transaction_type: $transactionType,
+              memo: $memo,
+              reference_id: $referenceId,
+              idempotency_key: $idempotencyKey
+            }
+            on_conflict: {
+              constraint: account_transactions_idempotency_key_key
+              update_columns: []
+            }
+          ) { id }
+        }`,
+        {
+          accountId: request.accountId,
+          amount: request.amount,
+          transactionType: request.transactionType,
+          memo: request.memo || null,
+          referenceId: request.referenceId || null,
+          idempotencyKey: request.idempotencyKey,
+        }
+      );
+      return result?.insert_account_transactions_one?.id ?? null;
+    }
     const mutation = `
       mutation InsertTransaction(
         $accountId: uuid!, 
@@ -827,6 +904,9 @@ export class AccountsService {
   ): Promise<TransactionResult> {
     try {
       const transactionId = await this.insertTransaction(request);
+      if (transactionId === null) {
+        throw new Error('Cash advance does not support idempotency keys');
+      }
       return { success: true, transactionId, newBalance: claimed };
     } catch (error: any) {
       await this.releaseCashAdvanceClaim(request.accountId, request.amount);
