@@ -44,13 +44,7 @@ import type {
 } from '../../navigation/types';
 import { useStore } from '../../stores/RootStore';
 import { getEnv } from '../../config/auth0';
-
-function storeShareBaseUrl(apiUrl: string): string {
-  if (apiUrl.includes('localhost') || apiUrl.includes('dev.api')) {
-    return 'https://dev.rendasua.com';
-  }
-  return 'https://rendasua.com';
-}
+import { storeWebUrl } from '../../utils/storeWebUrl';
 
 type Props =
   | NativeStackScreenProps<GuestRootStackParamList, 'StoreDetail'>
@@ -208,7 +202,7 @@ function StoreDetailScreen({ route, navigation }: Props) {
   const onShare = useCallback(async () => {
     const shareId =
       storeQuery.store?.business_location_id ?? locationOrBusinessId;
-    const url = `${storeShareBaseUrl(getEnv().apiUrl)}/store/${shareId}`;
+    const url = storeWebUrl(shareId, getEnv().apiUrl);
     const storeName = storeQuery.store?.name?.trim() || t('stores.unnamed', 'Store');
     await Share.share({
       message: t('stores.shareMessage', 'Check out {{name}} on Rendasua: {{url}}', {

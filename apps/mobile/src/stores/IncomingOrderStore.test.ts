@@ -9,6 +9,12 @@ const { getById, selectPersona, confirm, markBusy, getPendingAcceptance } =
     getPendingAcceptance: vi.fn(),
   }));
 
+vi.mock('../services/orderAlertSound', () => ({
+  startOrderAlertSound: vi.fn(),
+  stopOrderAlertSound: vi.fn(),
+  pulseOrderAlertSound: vi.fn(),
+}));
+
 vi.mock('../i18n', () => ({
   default: { t: (_key: string, fallback: string) => fallback },
 }));
