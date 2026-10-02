@@ -10348,12 +10348,12 @@ export class OrdersService {
   ): Promise<boolean> {
     try {
       const query = `
-        query GetMarketFlag($configKey: String!, $countryCode: String) {
+        query GetMarketFlag($configKey: String!${countryCode ? ', $countryCode: String!' : ''}) {
           application_configurations(
             where: {
               config_key: { _eq: $configKey }
               _or: [
-                { country_code: { _eq: $countryCode } }
+                ${countryCode ? '{ country_code: { _eq: $countryCode } }' : ''}
                 { country_code: { _is_null: true } }
               ]
             }
@@ -10364,10 +10364,12 @@ export class OrdersService {
           }
         }
       `;
-      const result = await this.hasuraSystemService.executeQuery(query, {
-        configKey,
-        countryCode: countryCode || null,
-      });
+      // Never send `_eq: null` (Hasura v2 rejects it, which would make a global-only flag
+      // such as the pay_at_confirm kill switch always read as off): omit the country filter.
+      const result = await this.hasuraSystemService.executeQuery(
+        query,
+        countryCode ? { configKey, countryCode } : { configKey }
+      );
       const configs = (result as any).application_configurations || [];
       if (configs.length === 0) {
         return false; // Default to false if config not found

@@ -1,8 +1,10 @@
 # Pay-at-confirm rollout runbook and Cameroon pilot
 
-Epic: #410 · Phase 3 (#420). Related PRs: #424 (cooked/goods rules by line snapshot), #425 (flag, kill switch, checkout rules, 45-min sweeper), #426 (settings toggle).
+Epic: #410 · Phase 3 (#420). Related PRs: #424 (cooked/goods rules by line snapshot), #425 (flag, kill switch, checkout rules, 45-min unpaid timer + sweeper fallback), #426 (settings toggle).
 
-**What it is.** Per-location flag `business_locations.pay_at_confirm` (default `false`). When a MoMo, non-diaspora, pickup/delivery, ASAP order contains a line from a flagged location (and the global kill switch is on), the client places the order **without paying**, the store confirms, then the client is asked to pay. Unpaid orders are auto-cancelled (45 min for stock-tracked goods, 3 h for cooked food). A store may cancel a paid pay-after order and the client is refunded.
+**What it is.** Per-location flag `business_locations.pay_at_confirm` (default `false`). When a MoMo, non-diaspora, pickup/delivery, ASAP order contains a line from a flagged location (and the global kill switch is on), the client places the order **without paying**, the store confirms, then the client is asked to pay. Unpaid orders are auto-cancelled: the timer fires 45 min after the store confirms for stock-tracked goods (3 h for cooked food); if the timer is lost, the 10-minute sweeper cancels them after the window **plus a 15-minute grace** (~60 min for goods, ~3 h 15 min for cooked food). Customer-facing copy says "about 45 minutes". The store also has its own confirm deadline (see below). A store may cancel a paid pay-after order and the client is refunded.
+
+**Store confirm deadline (separate from the pay window).** A pay-after order stays `pending` until the store confirms; the normal merchant acceptance SLA applies (default ASAP window 45 min, then a 15-min grace, after which the order is auto-declined, stock released). The 45-min pay window only starts at confirm.
 
 **Not covered by the flag:** shipping, rentals, Stripe rail, scheduled (non-ASAP) orders, clients whose wallet covers the order (they pay immediately), diaspora/gift checkout.
 
@@ -16,7 +18,7 @@ Epic: #410 · Phase 3 (#420). Related PRs: #424 (cooked/goods rules by line snap
 ## 2. Pre-flight checklist
 
 - [ ] Staging UAT with MoMo sandbox: place → store confirms → client pays → order progresses (pickup and delivery).
-- [ ] Unpaid timeout: confirm, do not pay, verify auto-cancel at ~45 min (goods) and that cooked food keeps 3 h.
+- [ ] Unpaid timeout: confirm, do not pay, verify auto-cancel at ~45 min (goods; up to ~60 min if the timer is lost and the sweeper cancels) and that cooked food keeps 3 h (up to ~3 h 15 min via the sweeper).
 - [ ] Store cancels a **paid** pay-after order → client refunded.
 - [ ] Wallet-covered client pays immediately (no pay-after path).
 - [ ] Mixed cart: one flagged location line makes the whole cart pay-after.
@@ -53,8 +55,9 @@ FROM orders
 WHERE pay_after_merchant_confirm = true AND created_at > now() - interval '7 days'
 GROUP BY 1, 2 ORDER BY 3 DESC;
 
--- Sweeper health: confirmed-unpaid pay-after orders older than the unpaid window + grace.
--- Expect 0 rows for goods older than ~55 min and cooked food older than ~3 h 10 min.
+-- Sweeper health: confirmed-unpaid pay-after orders older than the unpaid window + the 15-min sweeper grace.
+-- Expect 0 rows for goods older than ~60 min and cooked food older than ~3 h 15 min
+-- (a few minutes of slack for the 10-minute cron: use 70 min / 3 h 30 min below).
 SELECT o.id, o.created_at, h.created_at AS confirmed_at, o.payment_status
 FROM orders o
 JOIN LATERAL (
@@ -65,7 +68,13 @@ JOIN LATERAL (
 WHERE o.pay_after_merchant_confirm = true
   AND o.current_status = 'confirmed'
   AND o.payment_status NOT IN ('paid', 'authorized')
-  AND h.created_at < now() - interval '55 minutes'
+  AND h.created_at < now() - (
+    CASE WHEN EXISTS (
+      SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.is_cooked_food IS NOT TRUE
+    ) OR NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id)
+    THEN interval '70 minutes'      -- goods (45 min + 15 min grace + cron slack)
+    ELSE interval '3 hours 30 minutes' -- every line cooked (3 h + 15 min grace + slack)
+    END)
 ORDER BY h.created_at;
 ```
 
