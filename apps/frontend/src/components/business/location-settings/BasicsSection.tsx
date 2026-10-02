@@ -2,16 +2,24 @@ import { Button, TextField, Typography } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  SUPPORTED_IMAGE_ACCEPT,
+  isSupportedImageFile,
+} from '../../../constants/supportedImageFormats';
+import { useAws } from '../../../hooks/useAws';
+import { presignUploadLibraryImage } from '../onboarding/onboardingPresignedUpload';
 import AddressDialog, { AddressFormData } from '../../dialogs/AddressDialog';
 import SettingsSection from './SettingsSection';
 import { LocationSectionActions } from './sectionTypes';
 
 const BasicsSection: React.FC<LocationSectionActions> = ({
   location,
+  businessId,
   updateLocation,
 }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
+  const { generateImageUploadUrl } = useAws();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(location.name);
   const [email, setEmail] = useState(location.email ?? '');
@@ -83,9 +91,16 @@ const BasicsSection: React.FC<LocationSectionActions> = ({
           <input
             hidden
             type="file"
-            accept="image/*"
-            onChange={() =>
-              setShowLogoUrl(true)
+            accept={SUPPORTED_IMAGE_ACCEPT}
+            onChange={(event) =>
+              void uploadLogo(event, {
+                businessId,
+                generateImageUploadUrl,
+                setLogoUrl,
+                notify: (message) =>
+                  enqueueSnackbar(message, { variant: 'error' }),
+                t,
+              })
             }
           />
         </Button>
@@ -140,6 +155,42 @@ const BasicsSection: React.FC<LocationSectionActions> = ({
     </>
   );
 };
+
+async function uploadLogo(
+  event: React.ChangeEvent<HTMLInputElement>,
+  ctx: {
+    businessId?: string;
+    generateImageUploadUrl: ReturnType<typeof useAws>['generateImageUploadUrl'];
+    setLogoUrl: (url: string) => void;
+    notify: (message: string) => void;
+    t: (key: string, fallback: string) => string;
+  }
+) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file || !ctx.businessId) return;
+  if (!isSupportedImageFile(file)) {
+    ctx.notify(ctx.t('business.locations.logoUploadError', 'Failed to upload logo'));
+    return;
+  }
+  const bucket = process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
+  try {
+    const { image_url } = await presignUploadLibraryImage(
+      file,
+      bucket,
+      `businesses/${ctx.businessId}/location-logos`,
+      ctx.generateImageUploadUrl,
+      ctx.t('business.locations.logoUploadError', 'Failed to upload logo')
+    );
+    ctx.setLogoUrl(image_url);
+  } catch (err: unknown) {
+    ctx.notify(
+      err instanceof Error
+        ? err.message
+        : ctx.t('business.locations.logoUploadError', 'Failed to upload logo')
+    );
+  }
+}
 
 function BasicsSummary({
   location,
