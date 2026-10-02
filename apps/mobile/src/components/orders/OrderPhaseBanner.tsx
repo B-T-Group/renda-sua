@@ -4,6 +4,7 @@ import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { StatusPill } from '../common/StatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
+import { payAfterPayByDeadline } from '../../utils/payAfterConfirm';
 import {
   resolveOrderPhase,
   orderToPhaseInput,
@@ -58,6 +59,12 @@ interface Props {
     payment_method?: string | null;
     assigned_agent_id?: string | null;
     reconciliation_status?: string | null;
+    is_cooked_food_pickup?: boolean | null;
+    pay_after_merchant_confirm?: boolean | null;
+    fulfillment_timing?: string | null;
+    delivery_time_windows?: unknown[] | null;
+    order_items?: unknown[] | null;
+    order_status_history?: Array<{ status?: string | null; created_at: string }> | null;
   };
   role: OrderPhaseRole;
   action?: React.ReactNode;
@@ -68,6 +75,7 @@ export function OrderPhaseBanner({ order, role, action }: Props) {
   const { colors, spacing, borderRadius, typography } = useTheme();
   const info = resolveOrderPhase(orderToPhaseInput(order), role);
   const pc = phaseColors(info.phase, colors);
+  const payByDeadline = role === 'client' ? payAfterPayByDeadline(order as any) : null;
 
   // Complete orders already show status on the hero; the next-step alert adds noise.
   if (order.current_status === 'complete') {
@@ -108,6 +116,13 @@ export function OrderPhaseBanner({ order, role, action }: Props) {
       {info.nextStepKey ? (
         <Text style={[typography.body2, { color: colors.text.primary }]}>
           {t(info.nextStepKey, '')}
+        </Text>
+      ) : null}
+      {payByDeadline ? (
+        <Text style={[typography.caption, { color: colors.text.secondary }]}>
+          {t('orders.payAfterConfirm.payBy', 'Pay by {{time}} or the order is cancelled automatically.', {
+            time: payByDeadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          })}
         </Text>
       ) : null}
       {action}

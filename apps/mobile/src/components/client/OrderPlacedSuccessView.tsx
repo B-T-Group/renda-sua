@@ -40,6 +40,7 @@ function paymentChipLabel(
     paymentCompleted?: boolean;
     paymentTiming: OrderPlacedSuccessParams['paymentTiming'];
     cookedFoodPayAfterConfirm?: boolean;
+    payAfterCopyVariant?: 'cooked' | 'store';
   }
 ) {
   if (params.depositConfirmed) {
@@ -50,6 +51,12 @@ function paymentChipLabel(
   }
   // Food MoMo: order is placed unpaid; payment request comes after kitchen confirm.
   if (params.cookedFoodPayAfterConfirm) {
+    if (params.payAfterCopyVariant === 'store') {
+      return t(
+        'client.placeOrder.successScreen.chipStorePayAfterConfirm',
+        'Pay after the store confirms'
+      );
+    }
     return t(
       'client.placeOrder.successScreen.chipCookedFoodPayAfterConfirm',
       'Pay after kitchen confirms'
@@ -84,6 +91,7 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
     fulfillment,
     depositConfirmed,
     cookedFoodPayAfterConfirm,
+    payAfterCopyVariant,
     primaryAction,
     secondaryAction,
   } = props;
@@ -182,6 +190,7 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
                 paymentCompleted,
                 paymentTiming,
                 cookedFoodPayAfterConfirm,
+                payAfterCopyVariant,
               })}
             </Chip>
             <Chip icon="clipboard-text-outline">

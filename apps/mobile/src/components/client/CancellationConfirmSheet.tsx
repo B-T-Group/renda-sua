@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { isCookedFoodOrderSnapshot } from '../../utils/cookedFoodOrder';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -207,6 +208,7 @@ export function CancellationConfirmSheet({ visible, order, onDismiss, onSuccess 
                     isOther={isOther}
                     chipMode={
                       order.current_status === 'ready_for_pickup' &&
+                      isCookedFoodOrderSnapshot(order) &&
                       (order.pay_after_merchant_confirm === true ||
                         order.is_cooked_food_pickup === true)
                     }

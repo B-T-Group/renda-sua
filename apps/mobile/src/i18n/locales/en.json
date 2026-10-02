@@ -998,7 +998,10 @@
       "shippingBusiness": "Waiting for the customer to confirm they received the shipment.",
       "readyPickupCompleteClient": "Food is ready. Tap Complete order when you collect it so the merchant gets paid.",
       "readyPickupCompleteOrderClient": "Your order is ready. Tap Complete order when you collect it so the merchant gets paid.",
-      "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid."
+      "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid.",
+      "payAfterWaitPaymentBusiness": "Waiting for the client to pay (unpaid orders are cancelled automatically after about 45 minutes). Do not prepare the order until payment succeeds.",
+      "payAfterWaitPaymentClient": "Approve the payment request on your phone within about 45 minutes so the store can prepare your order.",
+      "payAfterPaidMarkReadyBusiness": "Paid — mark ready when prepared."
     },
     "busy": {
       "banner": "The merchant is experiencing higher demand than usual. Estimated preparation time: {{minutes}} minutes.",
@@ -1021,6 +1024,9 @@
       "failed": "Could not reorder. Try again.",
       "businessClosedBanner": "This store is not accepting orders right now. You can keep these items in your cart and try again later.",
       "addressInvalidBanner": "Your previous delivery address is no longer valid. Choose an address at checkout."
+    },
+    "payAfterConfirm": {
+      "payBy": "Pay by {{time}} or the order is cancelled automatically."
     }
   },
   "orderActions": {
@@ -3932,7 +3938,8 @@
         "pickupDate": "Pickup date",
         "scrollDaysHint": "Swipe sideways for more dates.",
         "pickSlot": "Select a time slot",
-        "unavailable": "Unavailable"
+        "unavailable": "Unavailable",
+        "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay."
       },
       "payment": {
         "title": "Payment information",
@@ -4054,7 +4061,10 @@
           "finishCard": "Finish the card payment from your order details.",
           "cardChargePickup": "Your card is charged when you collect it.",
           "cardChargeDelivery": "Your card is charged when the courier picks it up from the store.",
-          "cardChargeShip": "Your card is charged when the order ships."
+          "cardChargeShip": "Your card is charged when the order ships.",
+          "storeConfirm": "The store confirms your order.",
+          "storePay": "You then receive a Mobile Money payment request. Approve it within about 45 minutes or the order is cancelled automatically.",
+          "storePrep": "Once it is paid, the store prepares your order."
         },
         "viewOrders": "My orders",
         "goToOrder": "Go to the order",
@@ -4071,7 +4081,8 @@
         "emailInvalid": "Please enter a valid email address.",
         "emailTaken": "This email is already in use.",
         "emailSuccess": "Email saved.",
-        "emailError": "Could not save your email."
+        "emailError": "Could not save your email.",
+        "chipStorePayAfterConfirm": "Pay after the store confirms"
       },
       "deliveryUnavailable": "Delivery is currently unavailable.",
       "deliveryUnavailablePickup": "Delivery is currently unavailable. You can still pick up this order at the store.",
