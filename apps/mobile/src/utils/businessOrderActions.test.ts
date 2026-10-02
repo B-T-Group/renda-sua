@@ -152,3 +152,30 @@ describe('getBusinessOrderActions cooked-food pay-after', () => {
     expect(actions.find((a) => a.id === 'requestPickupPayment')).toBeUndefined();
   });
 });
+
+describe('getBusinessOrderActions flagged-location goods (pay-after)', () => {
+  const goods = {
+    fulfillment_method: 'pickup' as const,
+    fulfillment_timing: 'asap' as const,
+    pay_after_merchant_confirm: true,
+    is_cooked_food_pickup: false,
+    order_items: [{ is_cooked_food: false }],
+  } as unknown as Partial<BusinessOrder>;
+
+  it('offers set-as-ready and cancel once a confirmed goods order is paid', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({ ...goods, current_status: 'confirmed', payment_status: 'paid' })
+    );
+    expect(actions.map((a) => a.id)).toEqual(
+      expect.arrayContaining(['completePreparation', 'cancel'])
+    );
+  });
+
+  it('only offers cancel while a confirmed goods order awaits payment', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({ ...goods, current_status: 'confirmed', payment_status: 'pending' })
+    );
+    expect(actions.map((a) => a.id)).toContain('cancel');
+    expect(actions.find((a) => a.id === 'completePreparation')).toBeUndefined();
+  });
+});

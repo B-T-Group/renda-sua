@@ -6165,7 +6165,20 @@
       "bodyDelivery": "After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes and the store will prepare your order for delivery.",
       "step1": "Your order has been sent to the store.",
       "step2": "When the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes so they can prepare your order.",
-      "payBy": "Pay by {{time}} or the order is cancelled automatically."
+      "payBy": "Pay by {{time}} or the order is cancelled automatically.",
+      "business": {
+        "confirmTitle": "Confirm this order",
+        "waitPaymentTitle": "Wait for payment before preparing",
+        "confirmBody": "After you confirm, the client is asked to pay by Mobile Money. They have about {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.",
+        "confirmHint": "Do not prepare the order until you see the payment. Once it is paid, mark it ready when prepared. If you cannot fulfil a paid order, you can cancel it and the client is refunded.",
+        "confirmCta": "Confirm order",
+        "waitStepSent": "A Mobile Money request is on the client’s phone.",
+        "waitStepWait": "Wait for the payment notification (about {{m}} minutes).",
+        "waitStepPrepare": "Prepare the order only after you see that payment, then mark it ready.",
+        "waitPickup": "When it is ready, the client picks it up and completes the order in the app.",
+        "waitDelivery": "When it is ready, a courier picks it up for delivery.",
+        "cancelPaidRefund": "This order is already paid. If you cancel it, the client is refunded in full."
+      }
     }
   },
   "items": {
