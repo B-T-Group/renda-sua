@@ -17,11 +17,9 @@ function BusinessLocationCardSkeletonRow() {
         styles.card,
         shadows.sm,
         {
-          borderLeftColor: colors.divider,
-          borderColor: colors.divider,
           borderRadius: borderRadius.card,
           backgroundColor: colors.surface,
-          marginBottom: spacing.sm,
+          marginBottom: spacing.lg,
         },
       ]}
     >
@@ -71,7 +69,7 @@ export const BusinessLocationCardSkeleton = memo(function BusinessLocationCardSk
 }) {
   const { spacing } = useTheme();
   return (
-    <View style={{ padding: spacing.sm, paddingBottom: 88 }}>
+    <View style={{ padding: spacing.lg, paddingBottom: 96 }}>
       {Array.from({ length: count }, (_, i) => (
         <BusinessLocationCardSkeletonRow key={`location-skeleton-${i}`} />
       ))}
@@ -80,11 +78,7 @@ export const BusinessLocationCardSkeleton = memo(function BusinessLocationCardSk
 });
 
 const styles = StyleSheet.create({
-  card: {
-    borderLeftWidth: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
+  card: { overflow: 'hidden' },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   logo: { width: 56, height: 56, flexShrink: 0 },
   headerMeta: { flex: 1, minWidth: 0, paddingTop: 4 },

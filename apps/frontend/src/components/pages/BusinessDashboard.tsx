@@ -299,8 +299,12 @@ const BusinessDashboard: React.FC = () => {
       );
       return;
     }
-    if (id === 'logo' || id === 'hours') {
+    if (id === 'logo') {
       navigate('/business/locations');
+      return;
+    }
+    if (id === 'hours') {
+      navigate('/business/locations?edit=hours');
       return;
     }
     if (id === 'share_store' && profile?.business?.id) {

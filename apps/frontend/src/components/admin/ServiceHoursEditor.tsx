@@ -1,8 +1,8 @@
 import {
   Box,
   Checkbox,
-  FormControlLabel,
   Grid,
+  Stack,
   TextField,
   Typography,
 } from '@mui/material';
@@ -25,6 +25,8 @@ interface ServiceHoursEditorProps {
   disabled?: boolean;
   /** Label when a day is off. Location hours leave times visible. */
   offDayLabel?: string;
+  /** Drop the admin header and tighten rows for a settings card. */
+  embedded?: boolean;
 }
 
 const DAYS: Array<{ key: string; labelKey: string; fallback: string }> = [
@@ -39,6 +41,79 @@ const DAYS: Array<{ key: string; labelKey: string; fallback: string }> = [
 
 const DAY_LABEL_WIDTH = 120;
 
+function EmbeddedHoursRow({
+  label,
+  config,
+  disabled,
+  offDayLabel,
+  startLabel,
+  endLabel,
+  onChange,
+}: {
+  label: string;
+  config: ServiceHourConfig;
+  disabled: boolean;
+  offDayLabel?: string;
+  startLabel: string;
+  endLabel: string;
+  onChange: (field: keyof ServiceHourConfig, value: string | boolean) => void;
+}) {
+  const closed = !config.enabled && !!offDayLabel;
+  return (
+    <Stack
+      direction="row"
+      spacing={1.5}
+      alignItems="center"
+      flexWrap="wrap"
+      useFlexGap
+      sx={{
+        py: 0.75,
+        px: 0.5,
+        borderRadius: 1,
+        bgcolor: config.enabled ? 'transparent' : 'action.hover',
+      }}
+    >
+      <Checkbox
+        checked={config.enabled}
+        disabled={disabled}
+        sx={{ p: 0.5 }}
+        onChange={(event) => onChange('enabled', event.target.checked)}
+      />
+      <Typography variant="body1" sx={{ width: 108, flexShrink: 0 }}>
+        {label}
+      </Typography>
+      {closed ? (
+        <Typography variant="body2" color="text.secondary">
+          {offDayLabel}
+        </Typography>
+      ) : (
+        <>
+          <TextField
+            type="time"
+            size="small"
+            label={startLabel}
+            value={config.start}
+            disabled={disabled || !config.enabled}
+            onChange={(event) => onChange('start', event.target.value)}
+            inputProps={{ step: 900 }}
+            sx={{ width: { xs: '100%', sm: 148 } }}
+          />
+          <TextField
+            type="time"
+            size="small"
+            label={endLabel}
+            value={config.end}
+            disabled={disabled || !config.enabled}
+            onChange={(event) => onChange('end', event.target.value)}
+            inputProps={{ step: 900 }}
+            sx={{ width: { xs: '100%', sm: 148 } }}
+          />
+        </>
+      )}
+    </Stack>
+  );
+}
+
 export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
   value,
   onChange,
@@ -46,6 +121,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
   description,
   disabled = false,
   offDayLabel,
+  embedded = false,
 }) => {
   const { t } = useTranslation();
 
@@ -79,6 +155,20 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
       enabled: false,
     };
     const isEnabled = config.enabled;
+    if (embedded) {
+      return (
+        <EmbeddedHoursRow
+          key={dayKey}
+          label={label}
+          config={config}
+          disabled={disabled}
+          offDayLabel={offDayLabel}
+          startLabel={t('admin.applicationSetup.startTime', 'Start time')}
+          endLabel={t('admin.applicationSetup.endTime', 'End time')}
+          onChange={(field, fieldValue) => handleDayChange(dayKey, field, fieldValue)}
+        />
+      );
+    }
 
     return (
       <Grid
@@ -88,8 +178,8 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
         alignItems="center"
         sx={{
           mb: 1,
-          px: { xs: 1, sm: 1.5 },
-          py: 1,
+          px: embedded ? 0 : { xs: 1, sm: 1.5 },
+          py: embedded ? 0.5 : 1,
           borderRadius: 2,
           bgcolor: isEnabled ? 'background.paper' : 'action.hover',
           opacity: isEnabled ? 1 : 0.7,
@@ -113,7 +203,11 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
           >
             <Typography
               variant="body1"
-              sx={{ width: DAY_LABEL_WIDTH, flexShrink: 0 }}
+              sx={{
+                width: embedded ? 'auto' : DAY_LABEL_WIDTH,
+                flexShrink: embedded ? 1 : 0,
+                minWidth: 0,
+              }}
             >
               {label}
             </Typography>
@@ -163,22 +257,26 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
 
   return (
     <Box>
-      <Typography variant="subtitle1" sx={{ mb: 1 }}>
-        {title ??
-          t(
-            'admin.applicationSetup.fastDeliveryHours',
-            'Fast delivery service hours by day'
-          )}
-      </Typography>
+      {embedded ? null : (
+        <>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+            {title ??
+              t(
+                'admin.applicationSetup.fastDeliveryHours',
+                'Fast delivery service hours by day'
+              )}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {description ??
+              t(
+                'admin.applicationSetup.fastDeliveryHoursHelp',
+                'Uncheck a day to disable fast delivery. Times are in local time.'
+              )}
+          </Typography>
+        </>
+      )}
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {description ??
-          t(
-            'admin.applicationSetup.fastDeliveryHoursHelp',
-            'Uncheck a day to disable fast delivery. Times are in local time.'
-          )}
-      </Typography>
-
+      {embedded ? null : (
       <Box
         sx={{
           display: { xs: 'none', sm: 'block' },
@@ -216,6 +314,7 @@ export const ServiceHoursEditor: React.FC<ServiceHoursEditorProps> = ({
           </Grid>
         </Grid>
       </Box>
+      )}
 
       {DAYS.map((day) =>
         renderDayRow(

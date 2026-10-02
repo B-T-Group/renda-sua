@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Snackbar, Text } from 'react-native-paper';
 import { SubtleExtendedFab } from '../../components/common/SubtleExtendedFab';
 import { BusinessLocationCard } from '../../components/business/BusinessLocationCard';
+import { LocationOptionArt } from '../../components/business/location-edit/LocationOptionArt';
 import { BusinessLocationCardSkeleton } from '../../components/business/BusinessLocationCardSkeleton';
 import { LocationTransferInbox } from '../../components/business/LocationTransferInbox';
 import { TransferLocationModal } from '../../components/business/TransferLocationModal';
@@ -297,7 +298,7 @@ export default function BusinessLocationsListScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.pageBackground }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.default }]}>
       {!contentReady && !detailRequestId ? (
         <BusinessLocationCardSkeleton count={3} />
       ) : (
@@ -316,11 +317,7 @@ export default function BusinessLocationsListScreen() {
               onViewRequest={(id) => setDetailRequestId(id)}
             />
           }
-          ListEmptyComponent={
-            <Text style={[styles.empty, { color: colors.text.secondary }]}>
-              {t('business.locations.empty', 'No locations yet')}
-            </Text>
-          }
+          ListEmptyComponent={<EmptyLocations />}
           ListFooterComponent={
             <Button
               mode="text"
@@ -336,6 +333,9 @@ export default function BusinessLocationsListScreen() {
               railLoading={stripeRailLoading}
               onEdit={() =>
                 navigation.navigate('BusinessLocationForm', { locationId: item.id })
+              }
+              onHours={() =>
+                navigation.navigate('BusinessLocationHours', { locationId: item.id })
               }
               onViewItems={() =>
                 navigateBusinessCatalogTab(navigation, { locationId: item.id })
@@ -459,9 +459,27 @@ export default function BusinessLocationsListScreen() {
   );
 }
 
+function EmptyLocations() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.empty, { backgroundColor: colors.primary.hover }]}>
+      <LocationOptionArt kind="store" size={88} />
+      <Text variant="titleMedium" style={styles.emptyTitle}>
+        {t('business.locations.empty', 'No locations yet')}
+      </Text>
+      <Text variant="bodyMedium" style={[styles.emptyLine, { color: colors.text.secondary }]}>
+        {t('business.locations.emptyLine', 'Add a place customers can order from.')}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: spacing.sm, paddingBottom: 88 },
-  empty: { textAlign: 'center', marginTop: 24 },
+  list: { padding: spacing.lg, paddingBottom: 96 },
+  empty: { borderRadius: 24, padding: spacing.lg, alignItems: 'center', gap: spacing.sm },
+  emptyTitle: { textAlign: 'center' },
+  emptyLine: { textAlign: 'center', lineHeight: 22 },
   fab: { position: 'absolute', right: 16, bottom: 24 },
 });

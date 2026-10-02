@@ -4204,7 +4204,7 @@
       "more": {
         "title": "Plus d'options",
         "kind": "Type de lieu",
-        "kindHelp": "Vous aide à distinguer vos lieux.",
+        "kindHelp": "Magasin, entrepôt, bureau ou point de retrait. Cette étiquette est pour vous, afin de distinguer facilement vos lieux.",
         "kindFailed": "Impossible d'enregistrer le type de lieu. Réessayez.",
         "mainCurrent": "Ceci est votre lieu principal. Il ne peut pas être supprimé.",
         "makeMain": "En faire mon lieu principal",

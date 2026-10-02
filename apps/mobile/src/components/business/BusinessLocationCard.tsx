@@ -5,6 +5,7 @@ import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import { StatusPill } from '../common/StatusPill';
 import { NoticeBanner } from '../common/NoticeBanner';
+import { LocationOptionArt } from './location-edit/LocationOptionArt';
 import type { BusinessLocation } from '../../types/business/locations';
 import { formatBusinessLocationAddress } from '../../utils/businessLocationDisplay';
 import { formatOperatingHoursSummary } from '../../utils/operatingHours';
@@ -15,6 +16,7 @@ type Props = {
   isStripeRail?: boolean;
   railLoading?: boolean;
   onEdit: () => void;
+  onHours: () => void;
   onViewItems?: () => void;
 };
 
@@ -23,46 +25,61 @@ export function BusinessLocationCard({
   isStripeRail = false,
   railLoading = false,
   onEdit,
+  onHours,
   onViewItems,
 }: Props) {
   const { t } = useTranslation();
-  const { colors, borderRadius } = useTheme();
+  const { colors, borderRadius, shadows } = useTheme();
   const address = formatBusinessLocationAddress(location.address);
   const warning = phoneWarning(location, isStripeRail || railLoading, t);
+  const open = location.is_active;
 
   return (
     <Pressable
       onPress={onEdit}
-      style={[styles.card, { backgroundColor: colors.surface, borderRadius: borderRadius.card }]}
+      style={[
+        styles.card,
+        shadows.sm,
+        { backgroundColor: colors.surface, borderRadius: borderRadius.card },
+      ]}
     >
-      <View style={styles.row}>
-        {location.logo_url ? (
-          <Image source={{ uri: location.logo_url }} style={styles.logo} />
-        ) : null}
-        <View style={styles.body}>
-          <Text variant="titleMedium">{location.name}</Text>
-          <Text style={{ color: colors.text.secondary }}>{address}</Text>
+      <View style={styles.head}>
+        <PlaceMark logoUrl={location.logo_url} />
+        <View style={styles.copy}>
+          <Text variant="titleMedium" style={{ color: colors.text.primary }}>
+            {location.name}
+          </Text>
+          {address ? (
+            <Text variant="bodyMedium" style={{ color: colors.text.secondary, lineHeight: 22 }}>
+              {address}
+            </Text>
+          ) : null}
         </View>
-        <StatusPill
-          label={
-            location.is_active
-              ? t('business.locations.card.open', 'Open for customers')
-              : t('business.locations.card.hidden', 'Hidden from customers')
-          }
-          backgroundColor={location.is_active ? colors.success.light : colors.surface}
-          textColor={location.is_active ? colors.success.dark : colors.text.secondary}
-        />
       </View>
-      <Text style={{ color: colors.text.secondary }}>
+      <StatusPill
+        label={
+          open
+            ? t('business.locations.card.open', 'Open for customers')
+            : t('business.locations.card.hidden', 'Hidden from customers')
+        }
+        backgroundColor={open ? colors.successTint : colors.primaryTint}
+        textColor={open ? colors.success.dark : colors.text.secondary}
+      />
+      <Text variant="bodyMedium" style={{ color: colors.text.secondary, lineHeight: 22 }}>
         {formatOperatingHoursSummary(location.operating_hours, t)}
-        {!isStripeRail && !railLoading && location.pay_at_confirm
-          ? ` · ${t('business.locations.payAfter.label', 'Ask customers to pay after you confirm')}`
-          : ''}
       </Text>
+      {!isStripeRail && !railLoading && location.pay_at_confirm ? (
+        <Text variant="bodyMedium" style={{ color: colors.text.secondary, lineHeight: 22 }}>
+          {t('business.locations.editPage.payLine', 'Customers can pay after you confirm.')}
+        </Text>
+      ) : null}
       {warning ? <NoticeBanner tone="warning" message={warning} /> : null}
       <View style={styles.actions}>
         <Button mode="contained" onPress={onEdit}>
           {t('business.locations.card.settings', 'Settings')}
+        </Button>
+        <Button mode="outlined" onPress={onHours}>
+          {t('business.locations.hours.setNow', 'Set hours')}
         </Button>
         {onViewItems ? (
           <Button mode="text" onPress={onViewItems}>
@@ -71,6 +88,19 @@ export function BusinessLocationCard({
         ) : null}
       </View>
     </Pressable>
+  );
+}
+
+function PlaceMark({ logoUrl }: { logoUrl?: string | null }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.mark, { backgroundColor: colors.primary.hover }]}>
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={styles.logo} />
+      ) : (
+        <LocationOptionArt kind="store" size={56} />
+      )}
+    </View>
   );
 }
 
@@ -90,9 +120,10 @@ function phoneWarning(
 }
 
 const styles = StyleSheet.create({
-  card: { padding: spacing.md, marginBottom: spacing.sm, gap: spacing.sm },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  body: { flex: 1 },
-  logo: { width: 44, height: 44, borderRadius: 8 },
-  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  card: { padding: spacing.lg, marginBottom: spacing.lg, gap: spacing.md },
+  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  copy: { flex: 1, gap: 4 },
+  mark: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  logo: { width: 64, height: 64, borderRadius: 20 },
+  actions: { gap: spacing.sm },
 });

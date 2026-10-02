@@ -3,6 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface SettingsSectionProps {
+  id?: string;
   title: string;
   summary: React.ReactNode;
   editing?: boolean;
@@ -17,6 +18,7 @@ interface SettingsSectionProps {
 }
 
 const SettingsSection: React.FC<SettingsSectionProps> = ({
+  id,
   title,
   summary,
   editing = false,
@@ -31,7 +33,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
 }) => {
   const { t } = useTranslation();
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
+    <Paper id={id} variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
       <Stack spacing={1.5}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>

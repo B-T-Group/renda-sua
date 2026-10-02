@@ -45,8 +45,8 @@ export default function BusinessLocationFormScreen({ route, navigation }: Props)
   if (form.isEditing) {
     return (
       <KeyboardAwareScrollView
-        avoidingViewStyle={{ flex: 1, backgroundColor: colors.pageBackground }}
-        contentContainerStyle={styles.form}
+        avoidingViewStyle={{ flex: 1, backgroundColor: colors.background.default }}
+        contentContainerStyle={styles.editForm}
       >
         <BusinessLocationEditView form={form} navigation={navigation} />
         <SignupAddressModal
@@ -195,6 +195,7 @@ export default function BusinessLocationFormScreen({ route, navigation }: Props)
 const styles = StyleSheet.create({
   loader: { marginTop: 48 },
   form: { padding: spacing.md, paddingBottom: 40, gap: spacing.xs },
+  editForm: { paddingBottom: spacing.xl2 },
   field: { marginTop: spacing.sm },
   sectionLabel: { marginTop: spacing.md },
   logoRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },

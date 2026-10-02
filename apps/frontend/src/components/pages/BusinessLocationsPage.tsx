@@ -95,6 +95,14 @@ const BusinessLocationsPage: React.FC = () => {
     fetchLocations,
   } = useBusinessLocations(profile?.business?.id, undefined, refetchProfile);
 
+  useEffect(() => {
+    if (searchParams.get('edit') !== 'hours' || locationsLoading || !locations.length) {
+      return;
+    }
+    const target = locations.find((item) => item.is_primary) ?? locations[0];
+    navigate(`/business/locations/${target.id}?edit=hours`, { replace: true });
+  }, [searchParams, locationsLoading, locations, navigate]);
+
   const canAddLocation = !!primaryAddressCountry;
 
   const openBusinessAddressDialog = useCallback(() => {
@@ -208,7 +216,7 @@ const BusinessLocationsPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
+    <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, md: 4 } }}>
       <SEOHead
         title={t('seo.business-locations.title', 'Business Locations')}
         description={t('seo.business-locations.description', 'Manage your business locations')}
@@ -276,6 +284,7 @@ const BusinessLocationsPage: React.FC = () => {
               isStripeRail={isStripeRail}
               railLoading={railLoading}
               onSettings={(item) => navigate(`/business/locations/${item.id}`)}
+              onHours={(item) => navigate(`/business/locations/${item.id}?edit=hours`)}
               onViewItems={handleViewItems}
             />
           ))}

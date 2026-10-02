@@ -4510,7 +4510,7 @@
       "more": {
         "title": "More options",
         "kind": "Kind of place",
-        "kindHelp": "Helps you tell your places apart.",
+        "kindHelp": "Store, warehouse, office, or pickup point. This label is for you, so your locations are easy to tell apart.",
         "kindFailed": "Couldn't save the kind of place. Please try again.",
         "mainCurrent": "This is your main location. It can't be deleted.",
         "makeMain": "Make this my main location",

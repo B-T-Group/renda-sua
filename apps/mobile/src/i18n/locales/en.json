@@ -2797,6 +2797,7 @@
     "locations": {
       "title": "Locations",
       "empty": "No locations yet",
+      "emptyLine": "Add a place customers can order from.",
       "primary": "Primary",
       "add": "Add",
       "addTitle": "Add location",
@@ -2993,6 +2994,16 @@
       "usingBusinessProfileAddress": "Using your business profile address",
       "logoBusinessRequired": "Business profile is required to upload a logo",
       "manageItems": "Manage items",
+      "editPage": {
+        "expectLine": "A quick look at what customers see.",
+        "hoursLine": "Customers order during these hours.",
+        "autoShort": "Pay out automatically",
+        "payLine": "Customers can pay after you confirm.",
+        "alertsTitle": "Order alerts",
+        "alertsLine": "A second phone for new orders.",
+        "basicsLine": "The name and logo customers see.",
+        "learnMore": "Learn more"
+      },
       "expectations": {
         "title": "What your customers will experience",
         "visible": "Customers can see and order from this location.",
@@ -3105,7 +3116,7 @@
       "more": {
         "title": "More options",
         "kind": "Kind of place",
-        "kindHelp": "Helps you tell your places apart.",
+        "kindHelp": "Store, warehouse, office, or pickup point. This label is for you, so your locations are easy to tell apart.",
         "mainCurrent": "This is your main location. It can't be deleted.",
         "makeMain": "Make this my main location",
         "mainConfirm": "Your current main location will no longer be main.",
