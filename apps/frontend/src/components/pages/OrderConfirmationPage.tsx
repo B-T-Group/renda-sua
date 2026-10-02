@@ -364,8 +364,8 @@ const OrderConfirmationPage: React.FC = () => {
                       ? 'orders.payAfterConfirm.bodyPickup'
                       : 'orders.payAfterConfirm.bodyDelivery',
                     isCookedFoodPickup
-                      ? 'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes, then collect your order when it is ready.'
-                      : 'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes and the store will prepare your order for delivery.'
+                      ? 'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within 45 minutes, then collect your order when it is ready.'
+                      : 'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within 45 minutes and the store will prepare your order for delivery.'
                   )
                 : isCookedFoodPickup
                 ? t(
@@ -377,6 +377,17 @@ const OrderConfirmationPage: React.FC = () => {
                     'After the kitchen confirms, we’ll send a Mobile Money payment request to your phone. Once you approve it, they start preparing your order for delivery.'
                   )}
             </Typography>
+            {payAfterStore ? (
+              <Typography
+                variant="body2"
+                sx={{ color: 'info.dark', lineHeight: 1.6, mt: 1 }}
+              >
+                {t(
+                  'orders.payAfterConfirm.storeNoConfirm',
+                  'If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged.'
+                )}
+              </Typography>
+            ) : null}
           </CardContent>
         </Card>
       ) : showMobilePaymentConfirmation ? (
@@ -827,7 +838,7 @@ const OrderConfirmationPage: React.FC = () => {
                   {payAfterStore
                     ? t(
                         'orders.payAfterConfirm.step2',
-                        'When the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes so they can prepare your order.'
+                        'When the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within 45 minutes so the store can prepare your order.'
                       )
                     : t(
                         'orders.cookedFood.payAfterConfirm.step2',

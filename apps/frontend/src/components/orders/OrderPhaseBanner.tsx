@@ -1,8 +1,14 @@
-import React from 'react';
+import { AccessTime } from '@mui/icons-material';
 import { Chip, Stack, Typography } from '@mui/material';
+import React, { useEffect, useState } from 'react';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
-import { payAfterPayByDeadline } from '../../utils/payAfterConfirm';
+import {
+  formatPayByTime,
+  payAfterPayByDeadline,
+  payByUrgency,
+  splitAroundTime,
+} from '../../utils/payAfterConfirm';
 import {
   resolveOrderPhase,
   orderToPhaseInput,
@@ -40,10 +46,20 @@ interface Props {
 }
 
 export const OrderPhaseBanner: React.FC<Props> = ({ order, role, action }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const info = resolveOrderPhase(orderToPhaseInput(order), role);
   const payByDeadline = role === 'client' ? payAfterPayByDeadline(order) : null;
+  const [now, setNow] = useState(() => new Date());
+  const hasPayBy = payByDeadline != null;
+
+  // Re-evaluate the warning / expired state while the pay-by line is visible.
+  useEffect(() => {
+    if (!hasPayBy) return undefined;
+    setNow(new Date());
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, [hasPayBy]);
 
   // Complete orders already show status elsewhere; the next-step alert adds noise.
   if (order.current_status === 'complete') {
@@ -80,18 +96,77 @@ export const OrderPhaseBanner: React.FC<Props> = ({ order, role, action }) => {
         </Typography>
       ) : null}
       {payByDeadline ? (
-        <Typography variant="caption" color="text.secondary">
-          {t('orders.payAfterConfirm.payBy', {
-            defaultValue:
-              'Pay by {{time}} or the order is cancelled automatically.',
-            time: payByDeadline.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-          })}
-        </Typography>
+        <PayByLine
+          deadline={payByDeadline}
+          now={now}
+          language={i18n.language}
+        />
       ) : null}
       {action}
+    </Stack>
+  );
+};
+
+const PayByLine: React.FC<{
+  deadline: Date;
+  now: Date;
+  language: string;
+}> = ({ deadline, now, language }) => {
+  const { t } = useTranslation();
+  const urgency = payByUrgency(deadline, now);
+
+  if (urgency === 'expired') {
+    return (
+      <Stack direction="row" spacing={1} alignItems="flex-start">
+        <AccessTime fontSize="small" color="error" sx={{ mt: '2px' }} />
+        <Typography variant="body2" color="error.main" fontWeight={600}>
+          {t(
+            'orders.payAfterConfirm.payByExpired',
+            'The payment window has ended. The order was cancelled and you were not charged.'
+          )}
+        </Typography>
+      </Stack>
+    );
+  }
+
+  const time = formatPayByTime(
+    deadline,
+    language,
+    now,
+    t('orders.payAfterConfirm.tomorrow', 'tomorrow')
+  );
+  const text = t(
+    'orders.payAfterConfirm.payBy',
+    "Pay by {{time}}. You haven't been charged yet. If you miss it, the order is cancelled and nothing is charged.",
+    { time, interpolation: { escapeValue: false } }
+  );
+  const parts = splitAroundTime(text, time);
+  const color = urgency === 'urgent' ? 'warning.dark' : 'text.primary';
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      alignItems="flex-start"
+      data-testid="pay-by-line"
+    >
+      <AccessTime
+        fontSize="small"
+        sx={{ color, mt: '2px' }}
+        aria-hidden
+      />
+      <Typography variant="body2" sx={{ color }}>
+        {parts ? (
+          <>
+            {parts.before}
+            <Typography component="span" variant="body2" fontWeight={800} color="inherit">
+              {parts.time}
+            </Typography>
+            {parts.after}
+          </>
+        ) : (
+          text
+        )}
+      </Typography>
     </Stack>
   );
 };

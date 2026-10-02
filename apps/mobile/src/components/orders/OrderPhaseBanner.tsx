@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { StatusPill } from '../common/StatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
-import { payAfterPayByDeadline } from '../../utils/payAfterConfirm';
+import {
+  formatPayByTime,
+  payAfterPayByDeadline,
+  payByUrgency,
+  splitAroundTime,
+} from '../../utils/payAfterConfirm';
 import {
   resolveOrderPhase,
   orderToPhaseInput,
@@ -71,11 +77,21 @@ interface Props {
 }
 
 export function OrderPhaseBanner({ order, role, action }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const info = resolveOrderPhase(orderToPhaseInput(order), role);
   const pc = phaseColors(info.phase, colors);
   const payByDeadline = role === 'client' ? payAfterPayByDeadline(order as any) : null;
+  const [now, setNow] = useState(() => new Date());
+  const hasPayBy = payByDeadline != null;
+
+  // Re-evaluate the warning / expired state while the pay-by line is visible.
+  useEffect(() => {
+    if (!hasPayBy) return undefined;
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, [hasPayBy]);
 
   // Complete orders already show status on the hero; the next-step alert adds noise.
   if (order.current_status === 'complete') {
@@ -119,18 +135,75 @@ export function OrderPhaseBanner({ order, role, action }: Props) {
         </Text>
       ) : null}
       {payByDeadline ? (
-        <Text style={[typography.caption, { color: colors.text.secondary }]}>
-          {t('orders.payAfterConfirm.payBy', 'Pay by {{time}} or the order is cancelled automatically.', {
-            time: payByDeadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          })}
-        </Text>
+        <PayByLine deadline={payByDeadline} now={now} language={i18n.language} />
       ) : null}
       {action}
     </View>
   );
 }
 
+function PayByLine({
+  deadline,
+  now,
+  language,
+}: {
+  deadline: Date;
+  now: Date;
+  language: string;
+}) {
+  const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
+  const urgency = payByUrgency(deadline, now);
+
+  if (urgency === 'expired') {
+    const expiredText = t(
+      'orders.payAfterConfirm.payByExpired',
+      'The payment window has ended. The order was cancelled and you were not charged.'
+    );
+    return (
+      <View style={[styles.payByRow, { gap: spacing.xs }]} accessible accessibilityLabel={expiredText}>
+        <MaterialCommunityIcons name="clock-alert-outline" size={18} color={colors.error.main} />
+        <Text style={[typography.body2, styles.payByText, { color: colors.error.main, fontWeight: '600' }]}>
+          {expiredText}
+        </Text>
+      </View>
+    );
+  }
+
+  const time = formatPayByTime(
+    deadline,
+    language,
+    now,
+    t('orders.payAfterConfirm.tomorrow', 'tomorrow')
+  );
+  const text = t(
+    'orders.payAfterConfirm.payBy',
+    "Pay by {{time}}. You haven't been charged yet. If you miss it, the order is cancelled and nothing is charged.",
+    { time, interpolation: { escapeValue: false } }
+  );
+  const parts = splitAroundTime(text, time);
+  const color = urgency === 'urgent' ? colors.warning.dark ?? colors.warning.main : colors.text.primary;
+  return (
+    <View style={[styles.payByRow, { gap: spacing.xs }]} accessible accessibilityLabel={text}>
+      <MaterialCommunityIcons name="clock-outline" size={18} color={color} />
+      <Text style={[typography.body2, styles.payByText, { color }]}>
+        {parts ? (
+          <>
+            {parts.before}
+            <Text style={{ fontWeight: '800', color }}>{parts.time}</Text>
+            {parts.after}
+          </>
+        ) : (
+          text
+        )}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  payByRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  payByText: { flex: 1, minWidth: 0 },
   box: { borderWidth: 1 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
 });

@@ -3123,7 +3123,7 @@ const PlaceOrderPage: React.FC = () => {
                               )
                             : t(
                                 'orders.pickup.storePayAfterConfirmHint',
-                                'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes or the order is cancelled automatically.'
+                                'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within 45 minutes or the order is cancelled automatically.'
                               )
                           : isPickupOrder
                             ? t(
@@ -4071,7 +4071,7 @@ const PlaceOrderPage: React.FC = () => {
                                 )
                               : t(
                                   'orders.pickup.storePayAfterConfirmHint',
-                                  'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within about 45 minutes or the order is cancelled automatically.'
+                                  'After the store confirms, we’ll send a Mobile Money payment request to your phone. Approve it within 45 minutes or the order is cancelled automatically.'
                                 )
                             : paymentTiming === 'pay_at_delivery'
                               ? t(

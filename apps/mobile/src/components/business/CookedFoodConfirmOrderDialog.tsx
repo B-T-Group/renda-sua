@@ -17,9 +17,12 @@ const PRESETS = [15, 30, 45, 60] as const;
 const MIN_CUSTOM = 5;
 const MAX_CUSTOM = 180;
 
-function navigateBusinessRoute(name: 'BusinessDashboard' | 'BusinessOrdersList') {
+function navigateBusinessRoute(
+  name: 'BusinessDashboard' | 'BusinessOrdersList',
+  params?: { queue: 'prep' }
+) {
   if (!rootNavigationRef.isReady()) return;
-  rootNavigationRef.dispatch(CommonActions.navigate({ name }));
+  rootNavigationRef.dispatch(CommonActions.navigate({ name, params }));
 }
 
 type ConfirmResponse = {
@@ -198,7 +201,7 @@ export function CookedFoodConfirmOrderDialog({
                       })}
                 </Button>
                 <Button onPress={onDismiss} disabled={submitting}>
-                  {t('common.cancel', 'Cancel')}
+                  {t('common.back', 'Back')}
                 </Button>
               </>
             ) : (
@@ -216,10 +219,16 @@ export function CookedFoodConfirmOrderDialog({
                   mode="outlined"
                   onPress={() => {
                     onDismiss();
-                    navigateBusinessRoute('BusinessOrdersList');
+                    // Pay-after orders awaiting payment sit in the Prep queue.
+                    navigateBusinessRoute(
+                      'BusinessOrdersList',
+                      storePayAfter ? { queue: 'prep' } : undefined
+                    );
                   }}
                 >
-                  {t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
+                  {storePayAfter
+                    ? t('orders.payAfterConfirm.business.viewOrders', 'View orders')
+                    : t('orders.cookedFood.viewOrdersToCook', 'View orders to cook')}
                 </Button>
               </>
             )}
@@ -239,7 +248,7 @@ function StoreConfirmBody({ error }: { error: string | null }) {
       <Text variant="bodyLarge" style={{ color: colors.text.primary }}>
         {t(
           'orders.payAfterConfirm.business.confirmBody',
-          'After you confirm, the client is asked to pay by Mobile Money. They have about {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.',
+          'After you confirm, the client is asked to pay by Mobile Money. They have {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.',
           { m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES }
         )}
       </Text>
@@ -263,7 +272,7 @@ function StoreWaitPaymentBody({ isPickup }: { isPickup: boolean }) {
   const { colors, spacing } = useTheme();
   const steps = [
     t('orders.payAfterConfirm.business.waitStepSent', 'A Mobile Money request is on the client’s phone.'),
-    t('orders.payAfterConfirm.business.waitStepWait', 'Wait for the payment notification (about {{m}} minutes).', {
+    t('orders.payAfterConfirm.business.waitStepWait', 'Wait for the payment notification ({{m}} minutes).', {
       m: PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES,
     }),
     t('orders.payAfterConfirm.business.waitStepPrepare', 'Prepare the order only after you see that payment, then mark it ready.'),

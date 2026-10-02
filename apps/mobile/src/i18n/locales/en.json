@@ -999,8 +999,8 @@
       "readyPickupCompleteClient": "Food is ready. Tap Complete order when you collect it so the merchant gets paid.",
       "readyPickupCompleteOrderClient": "Your order is ready. Tap Complete order when you collect it so the merchant gets paid.",
       "readyPickupAskClientCompleteBusiness": "Ask the client to tap Complete order in the app so you and commission are paid.",
-      "payAfterWaitPaymentBusiness": "Waiting for the client to pay (unpaid orders are cancelled automatically after about 45 minutes). Do not prepare the order until payment succeeds.",
-      "payAfterWaitPaymentClient": "Approve the payment request on your phone within about 45 minutes so the store can prepare your order.",
+      "payAfterWaitPaymentBusiness": "Waiting for the client to pay (unpaid orders are cancelled automatically after 45 minutes). Do not prepare the order until payment succeeds.",
+      "payAfterWaitPaymentClient": "Approve the payment request on your phone within 45 minutes so the store can prepare your order.",
       "payAfterPaidMarkReadyBusiness": "Paid — mark ready when prepared."
     },
     "busy": {
@@ -1026,20 +1026,25 @@
       "addressInvalidBanner": "Your previous delivery address is no longer valid. Choose an address at checkout."
     },
     "payAfterConfirm": {
-      "payBy": "Pay by {{time}} or the order is cancelled automatically.",
+      "payBy": "Pay by {{time}}. You haven’t been charged yet. If you miss it, the order is cancelled and nothing is charged.",
       "business": {
         "confirmTitle": "Confirm this order",
         "waitPaymentTitle": "Wait for payment before preparing",
-        "confirmBody": "After you confirm, the client is asked to pay by Mobile Money. They have about {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.",
-        "confirmHint": "Do not prepare the order until you see the payment. Once it is paid, mark it ready when prepared. If you cannot fulfil a paid order, you can cancel it and the client is refunded.",
+        "confirmBody": "After you confirm, the client is asked to pay by Mobile Money. They have {{m}} minutes; unpaid orders are cancelled automatically and the stock is released.",
+        "confirmHint": "Don’t prepare the order until it shows as Paid. If you can’t fulfil a paid order, you can cancel it and the client is refunded in full.",
         "confirmCta": "Confirm order",
         "waitStepSent": "A Mobile Money request is on the client’s phone.",
-        "waitStepWait": "Wait for the payment notification (about {{m}} minutes).",
+        "waitStepWait": "Wait for the payment notification ({{m}} minutes).",
         "waitStepPrepare": "Prepare the order only after you see that payment, then mark it ready.",
         "waitPickup": "When it is ready, the client picks it up and completes the order in the app.",
         "waitDelivery": "When it is ready, a courier picks it up for delivery.",
-        "cancelPaidRefund": "This order is already paid. If you cancel it, the client is refunded in full."
-      }
+        "cancelPaidRefund": "This order is already paid. If you cancel it, the client is refunded in full to their Rendasua wallet.",
+        "viewOrders": "View orders"
+      },
+      "payByExpired": "The payment window has ended. The order was cancelled and you were not charged.",
+      "tomorrow": "tomorrow",
+      "cancelUnpaid": "You haven’t paid yet, so cancelling is free and nothing is charged.",
+      "storeNoConfirm": "If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged."
     }
   },
   "orderActions": {
@@ -1080,7 +1085,7 @@
       "netRefund": "Net refund: {{amount}} {{currency}}",
       "stripe_timeline": "Refunds typically appear within 5–10 business days.",
       "authorizationRelease_timeline": "The hold on your card is released immediately.",
-      "mobileMoney_timeline": "Refund processing depends on your mobile money provider.",
+      "mobileMoney_timeline": "Refunds go to your Rendasua wallet and are credited immediately.",
       "wallet_timeline": "Your wallet will be credited immediately."
     },
     "consequences": {
@@ -2830,7 +2835,7 @@
       "autoWithdrawOff": "Off",
       "autoWithdrawNeedsPhone": "Add a phone number above for automatic payouts to work.",
       "payAtConfirm": "Ask customers to pay only after the store confirms the order.",
-      "payAtConfirmHint": "Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after about 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.",
+      "payAtConfirmHint": "Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.",
       "locationAccount": "Location account",
       "phoneWithdrawalNote": "Used for withdrawals from this location's account",
       "addLocationAddress": "Add location address",
@@ -3952,7 +3957,7 @@
         "scrollDaysHint": "Swipe sideways for more dates.",
         "pickSlot": "Select a time slot",
         "unavailable": "Unavailable",
-        "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay."
+        "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation."
       },
       "payment": {
         "title": "Payment information",
@@ -4076,7 +4081,7 @@
           "cardChargeDelivery": "Your card is charged when the courier picks it up from the store.",
           "cardChargeShip": "Your card is charged when the order ships.",
           "storeConfirm": "The store confirms your order.",
-          "storePay": "You then receive a Mobile Money payment request. Approve it within about 45 minutes or the order is cancelled automatically.",
+          "storePay": "You then receive a Mobile Money payment request. Approve it within 45 minutes or the order is cancelled automatically.",
           "storePrep": "Once it is paid, the store prepares your order."
         },
         "viewOrders": "My orders",

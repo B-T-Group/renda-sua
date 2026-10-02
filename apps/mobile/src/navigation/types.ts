@@ -277,7 +277,9 @@ export type BusinessPickupPaymentAwaitingParams = {
 export type BusinessRootStackParamList = {
   BusinessMainTabs: NavigatorScreenParams<BusinessMainTabParamList> | undefined;
   NotificationsCenter: undefined;
-  BusinessOrdersList: { cashReconciliation?: boolean } | undefined;
+  BusinessOrdersList:
+    | { cashReconciliation?: boolean; queue?: 'confirm' | 'prep' | 'pickup' | 'issues' | 'all' }
+    | undefined;
   BusinessOrderDetail: { orderId: string; openMessages?: boolean; highlightMessageId?: string };
   OrderMessages: {
     orderId: string;
