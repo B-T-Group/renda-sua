@@ -31,8 +31,10 @@ export interface TransactionRequest {
   skipCashAdvanceRepayment?: boolean;
   /**
    * Once-only key (account_transactions.idempotency_key, UNIQUE). When set, a second
-   * call with the same key is a no-op that returns `{ success: true, alreadyExists: true }`
-   * and never moves balances twice, even under concurrency (the DB constraint decides).
+   * call with the same *primary* key is a no-op that returns
+   * `{ success: true, alreadyExists: true }` and never moves balances twice.
+   * A sibling `${key}:repay` row only means cash-advance repayment already ran;
+   * the remainder deposit still uses the primary key.
    */
   idempotencyKey?: string;
 }
@@ -40,7 +42,7 @@ export interface TransactionRequest {
 export interface TransactionResult {
   success: boolean;
   transactionId?: string;
-  /** True when `idempotencyKey` already had a ledger row, so nothing was moved now. */
+  /** True when the primary `idempotencyKey` (or a full-amount `:repay`) already settled. */
   alreadyExists?: boolean;
   newBalance?: {
     available: number;
@@ -142,14 +144,15 @@ export class AccountsService {
         };
       }
 
-      if (request.idempotencyKey) {
-        const existingId = await this.findTransactionIdByKeys([
-          request.idempotencyKey,
-          this.repaymentIdempotencyKey(request.idempotencyKey),
-        ]);
-        if (existingId) {
-          return { success: true, transactionId: existingId, alreadyExists: true };
-        }
+      const keyed = request.idempotencyKey
+        ? await this.lookupIdempotentRows(request.idempotencyKey)
+        : undefined;
+      if (keyed?.primary) {
+        return {
+          success: true,
+          transactionId: keyed.primary.id,
+          alreadyExists: true,
+        };
       }
 
       // Get current account details
@@ -163,7 +166,11 @@ export class AccountsService {
 
       if (request.transactionType === 'deposit') {
         if (!request.skipCashAdvanceRepayment) {
-          const repaid = await this.repayAdvanceOnDeposit(request, account);
+          const repaid = await this.repayAdvanceOnDeposit(
+            request,
+            account,
+            keyed?.repay
+          );
           if (repaid) return repaid;
         }
       }
@@ -406,8 +413,12 @@ export class AccountsService {
       cash_advance_balance?: number;
       available_balance?: number;
       withheld_balance?: number;
-    }
+    },
+    existingRepay?: { id: string; amount: number }
   ): Promise<TransactionResult | null> {
+    if (existingRepay) {
+      return this.resumeKeyedDepositAfterRepay(request, account, existingRepay);
+    }
     const debt = Number(account.cash_advance_balance ?? 0);
     if (debt >= 0) return null;
     const repay = Math.min(request.amount, Math.abs(debt));
@@ -608,14 +619,54 @@ export class AccountsService {
     return `${key}:repay`;
   }
 
-  private async findTransactionIdByKeys(keys: string[]): Promise<string | null> {
+  private async lookupIdempotentRows(key: string): Promise<{
+    primary?: { id: string };
+    repay?: { id: string; amount: number };
+  }> {
+    const repayKey = this.repaymentIdempotencyKey(key);
     const result = await this.hasuraSystemService.executeQuery(
       `query FindTransactionByIdempotencyKey($keys: [String!]!) {
-        account_transactions(where: { idempotency_key: { _in: $keys } }, limit: 1) { id }
+        account_transactions(where: { idempotency_key: { _in: $keys } }, limit: 2) {
+          id
+          amount
+          idempotency_key
+        }
       }`,
-      { keys }
+      { keys: [key, repayKey] }
     );
-    return result?.account_transactions?.[0]?.id ?? null;
+    const rows = result?.account_transactions ?? [];
+    const primary = rows.find((row: any) => row.idempotency_key === key);
+    const repay = rows.find((row: any) => row.idempotency_key === repayKey);
+    return {
+      primary: primary ? { id: primary.id } : undefined,
+      repay: repay
+        ? { id: repay.id, amount: Number(repay.amount) }
+        : undefined,
+    };
+  }
+
+  /** Prior call repaid cash advance (`${key}:repay`) but the remainder deposit never landed. */
+  private async resumeKeyedDepositAfterRepay(
+    request: TransactionRequest,
+    account: {
+      cash_advance_balance?: number;
+      available_balance?: number;
+      withheld_balance?: number;
+    },
+    existingRepay: { id: string; amount: number }
+  ): Promise<TransactionResult> {
+    const remainder = Number((request.amount - existingRepay.amount).toFixed(2));
+    if (remainder <= 0) {
+      return {
+        success: true,
+        transactionId: existingRepay.id,
+        alreadyExists: true,
+      };
+    }
+    return this.applyLedgerEntry(
+      { ...request, amount: remainder, transactionType: 'deposit' },
+      account
+    );
   }
 
   /**
