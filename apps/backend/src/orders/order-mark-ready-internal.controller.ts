@@ -8,10 +8,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import { constantTimeEqual } from '../common/utils/constant-time-equal.util';
 import type { Configuration } from '../config/configuration';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
 import { OrderMarkReadyService } from './order-mark-ready.service';
 import { OrdersService } from './orders.service';
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -28,7 +32,8 @@ export class OrderMarkReadyInternalController {
       this.configService.get<Configuration['notificationsInternal']>(
         'notificationsInternal'
       )?.apiKey ?? '';
-    if (!expected || internalKey !== expected) {
+    // Constant-time compare (UAT S-14): `!==` leaks the matching prefix length.
+    if (!expected || !constantTimeEqual(internalKey, expected)) {
       throw new UnauthorizedException();
     }
   }
@@ -111,6 +116,9 @@ export class OrderMarkReadyInternalController {
     this.assertInternalKey(internalKey);
     const orderId = body?.orderId?.trim();
     if (!orderId) return { success: false, error: 'orderId is required' };
+    if (!UUID_RE.test(orderId)) {
+      return { success: false, error: 'orderId must be a UUID' };
+    }
     const check = await this.cookedFoodFlow.shouldCancelUnpaid(orderId);
     if (!check.success) return check;
     if (!check.shouldCancel) {
