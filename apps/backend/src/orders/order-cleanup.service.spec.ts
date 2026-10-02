@@ -847,6 +847,55 @@ describe('OrderCleanupService', () => {
       });
     });
 
+    it('S-1: the unpaid auto-cancel claim is conditional on payment_status != paid', async () => {
+      hasura.executeQuery
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            id: 'o1',
+            order_number: 'A1',
+            current_status: 'confirmed',
+            payment_status: 'pending',
+            payment_source: 'mobile_payment',
+            order_items: [],
+          },
+        })
+        .mockResolvedValueOnce({
+          orders_by_pk: {
+            payment_status: 'pending',
+            payment_source: 'mobile_payment',
+          },
+        });
+      // Payment lands between our pre-read and the claim: CAS matches 0 rows.
+      hasura.executeMutation.mockImplementation((mutation: string) => {
+        if (String(mutation).includes('CleanupClaimCancel')) {
+          return Promise.resolve({ update_orders: { affected_rows: 0 } });
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await service.cancelUnpaidPendingPaymentAsSystem(
+        'o1',
+        'Client did not pay',
+        { allowConfirmedUnpaid: true, releaseInventory: true }
+      );
+
+      expect(result).toEqual({
+        cancelled: false,
+        skipped: true,
+        reason: 'claim_lost',
+      });
+      const claim = hasura.executeMutation.mock.calls.find((c) =>
+        String(c[0]).includes('CleanupClaimCancel')
+      );
+      expect(String(claim?.[0])).toContain('payment_status: { _neq: "paid" }');
+      // no side effects after a lost claim: stock untouched, no payment patch
+      expect(
+        hasura.executeMutation.mock.calls.some((c) =>
+          String(c[0]).includes('CleanupPatchPayment')
+        )
+      ).toBe(false);
+    });
+
     it('cancels unpaid pending when allowPendingUnpaid is set', async () => {
       hasura.executeQuery
         .mockResolvedValueOnce({

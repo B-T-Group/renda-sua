@@ -1483,6 +1483,20 @@ describe('CheckoutPreflightService', () => {
       expect(result.groups[0].deposit_required).toBeUndefined();
     });
 
+    it('reads the global kill switch without sending a null country filter (Hasura v2 rejects `_eq: null`)', async () => {
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [
+        flaggedRow(true),
+      ]);
+      await service.resolve(deliveryDto, false);
+      const killCall = (hasuraSystemService.executeQuery as jest.Mock).mock.calls.find(
+        ([q, v]: [string, any]) =>
+          q.includes('GetMarketFlag') && v?.configKey === KILL
+      );
+      expect(killCall).toBeDefined();
+      expect(killCall[0]).not.toContain('$countryCode');
+      expect(killCall[1]).not.toHaveProperty('countryCode');
+    });
+
     it('kill switch OFF: the location column is ignored (today\'s behaviour)', async () => {
       mockFlags({ [KILL]: false, momo_pay_now_delivery_enabled: false }, [
         flaggedRow(true),

@@ -1,6 +1,8 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { OrderMarkReadyInternalController } from './order-mark-ready-internal.controller';
 
+const ORDER_ID = '3f2b8c1e-9d4a-4e6b-8a7c-1d2e3f4a5b6c';
+
 describe('OrderMarkReadyInternalController', () => {
   const markReadyService = { onMarkReadyPrompt: jest.fn() };
   const cookedFoodFlow = {
@@ -132,7 +134,7 @@ describe('OrderMarkReadyInternalController', () => {
       reason: 'already_paid',
     });
     await expect(
-      controller.cookedFoodUnpaidCancel({ orderId: 'o1' }, 'internal-secret')
+      controller.cookedFoodUnpaidCancel({ orderId: ORDER_ID }, 'internal-secret')
     ).resolves.toEqual({
       success: true,
       skipped: true,
@@ -143,11 +145,11 @@ describe('OrderMarkReadyInternalController', () => {
 
   it('cancels a confirmed unpaid cooked-food order', async () => {
     await expect(
-      controller.cookedFoodUnpaidCancel({ orderId: ' o1 ' }, 'internal-secret')
+      controller.cookedFoodUnpaidCancel({ orderId: ` ${ORDER_ID} ` }, 'internal-secret')
     ).resolves.toEqual({ success: true });
-    expect(cookedFoodFlow.shouldCancelUnpaid).toHaveBeenCalledWith('o1');
+    expect(cookedFoodFlow.shouldCancelUnpaid).toHaveBeenCalledWith(ORDER_ID);
     expect(ordersService.cancelUnpaidCookedFoodAfterConfirm).toHaveBeenCalledWith(
-      'o1'
+      ORDER_ID
     );
   });
 
@@ -155,6 +157,34 @@ describe('OrderMarkReadyInternalController', () => {
     await expect(
       controller.cookedFoodUnpaidCancel({}, 'internal-secret')
     ).resolves.toEqual({ success: false, error: 'orderId is required' });
+    expect(cookedFoodFlow.shouldCancelUnpaid).not.toHaveBeenCalled();
+  });
+
+  it.each(['o1', '1; drop table orders', '../../etc/passwd', 'not-a-uuid-at-all'])(
+    'rejects a non-UUID unpaid-cancel order id %p without touching the order',
+    async (orderId) => {
+      await expect(
+        controller.cookedFoodUnpaidCancel({ orderId }, 'internal-secret')
+      ).resolves.toEqual({ success: false, error: 'orderId must be a UUID' });
+      expect(cookedFoodFlow.shouldCancelUnpaid).not.toHaveBeenCalled();
+      expect(
+        ordersService.cancelUnpaidCookedFoodAfterConfirm
+      ).not.toHaveBeenCalled();
+    }
+  );
+
+  it('checks the key before validating the order id on unpaid cancel', async () => {
+    await expect(
+      controller.cookedFoodUnpaidCancel({ orderId: 'o1' }, 'wrong')
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('accepts only the exact internal key (same-length and prefix variants rejected)', async () => {
+    for (const key of ['internal-secreT', 'internal-secre', 'internal-secret ']) {
+      await expect(
+        controller.cookedFoodUnpaidCancel({ orderId: ORDER_ID }, key)
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    }
     expect(cookedFoodFlow.shouldCancelUnpaid).not.toHaveBeenCalled();
   });
 });

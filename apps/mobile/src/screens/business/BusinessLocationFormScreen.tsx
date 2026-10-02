@@ -217,6 +217,26 @@ export default function BusinessLocationFormScreen({ route, navigation }: Props)
           </View>
         )}
 
+        {!isStripeRail && form.isEditing && (
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabels}>
+              <Text>
+                {t(
+                  'business.locations.payAtConfirm',
+                  'Ask customers to pay only after the store confirms the order.'
+                )}
+              </Text>
+              <HelperText type="info" visible>
+                {t(
+                  'business.locations.payAtConfirmHint',
+                  'Applies to Mobile Money pickup and delivery orders placed for as soon as possible. Reservation deposits are ignored while this is on. Unpaid orders are cancelled automatically after about 45 minutes. You can cancel a paid order (for example, out of stock) and the customer is refunded. Customers whose wallet covers the order still pay immediately. Shipping and rentals are not affected.'
+                )}
+              </HelperText>
+            </View>
+            <Switch value={form.payAtConfirm} onValueChange={form.setPayAtConfirm} />
+          </View>
+        )}
+
         <Button mode="outlined" onPress={() => form.setAddressModalOpen(true)} style={styles.field}>
           {form.addressForm.address_line_1
             ? `${form.addressForm.address_line_1}, ${form.addressForm.city}`
