@@ -5899,7 +5899,7 @@
         "cancelPaidRefund": "Cette commande est déjà payée. Si vous l’annulez, le client est remboursé intégralement sur son portefeuille Rendasua.",
         "viewOrders": "Voir les commandes"
       },
-      "payByExpired": "Le délai de paiement est dépassé. La commande a été annulée et vous n’avez rien payé.",
+      "payByExpired": "Le délai de paiement est dépassé. La commande sera annulée automatiquement et vous ne serez pas débité.",
       "tomorrow": "demain",
       "cancelUnpaid": "Vous n’avez encore rien payé, l’annulation est donc gratuite et rien ne sera débité.",
       "storeNoConfirm": "Si le magasin ne confirme pas dans les 60 minutes, la commande est annulée automatiquement et vous n’êtes pas débité."
