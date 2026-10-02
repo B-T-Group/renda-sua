@@ -35,7 +35,7 @@ UPDATE business_locations SET pay_at_confirm = true WHERE id IN ('<location-id-1
 -- then switch the global kill switch on for the pilot window
 UPDATE application_configurations
 SET boolean_value = true
-WHERE config_key = 'pay_after_confirm_location_flag_enabled';
+WHERE config_key = 'pay_after_confirm_location_flag_enabled' AND country_code IS NULL;
 ```
 
 (The kill-switch row is global and created by the migration with `boolean_value = false`; it can also be edited from the admin configurations list.)
