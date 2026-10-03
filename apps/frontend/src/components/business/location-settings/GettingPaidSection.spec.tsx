@@ -86,4 +86,27 @@ describe('GettingPaidSection', () => {
       )
     );
   });
+
+  it('hides the Mobile Money payout controls on the Stripe rail', () => {
+    const actions: LocationSectionActions = {
+      location: location(),
+      locations: [location()],
+      isStripeRail: true,
+      railLoading: false,
+      isOwnBusiness: true,
+      updateLocation: jest.fn(),
+      deleteLocation: jest.fn(),
+      onManageItems: jest.fn(),
+    };
+    render(
+      <MemoryRouter>
+        <GettingPaidSection {...actions} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Getting paid')).toBeInTheDocument();
+    expect(screen.queryByText('Mobile Money number')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Send my money to this number automatically')
+    ).not.toBeInTheDocument();
+  });
 });

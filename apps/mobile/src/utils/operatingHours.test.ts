@@ -4,6 +4,7 @@ import {
   applyHoursToEnabledDays,
   editorRowsToOperatingHours,
   formatOperatingHoursSummary,
+  isAllDaysClosed,
   isValidOpenCloseWindow,
   operatingHoursToEditorRows,
 } from './operatingHours';
@@ -59,6 +60,20 @@ describe('editorRowsToOperatingHours', () => {
     const rows = operatingHoursToEditorRows(DEFAULT_OPERATING_HOURS);
     expect(editorRowsToOperatingHours(rows)).toEqual(DEFAULT_OPERATING_HOURS);
   });
+
+  it('trims seconds and spaces before saving HH:MM', () => {
+    const rows = operatingHoursToEditorRows({
+      monday: { open: ' 09:00:00 ', close: '17:30:00' },
+    });
+    expect(rows.find((row) => row.day === 'monday')).toMatchObject({
+      open: '09:00',
+      close: '17:30',
+    });
+    expect(editorRowsToOperatingHours(rows).monday).toEqual({
+      open: '09:00',
+      close: '17:30',
+    });
+  });
 });
 
 describe('formatOperatingHoursSummary', () => {
@@ -92,6 +107,41 @@ describe('formatOperatingHoursSummary', () => {
       sunday: { closed: true },
     };
     expect(formatOperatingHoursSummary(hours, t)).toBe('Closed');
+    expect(isAllDaysClosed(hours)).toBe(true);
+    expect(isAllDaysClosed(null)).toBe(false);
+    expect(isAllDaysClosed({})).toBe(false);
+  });
+
+  it('names one open day and counts a broken week', () => {
+    const closed = { closed: true as const };
+    expect(
+      formatOperatingHoursSummary(
+        {
+          monday: { open: '08:00', close: '20:00' },
+          tuesday: closed,
+          wednesday: closed,
+          thursday: closed,
+          friday: closed,
+          saturday: closed,
+          sunday: closed,
+        },
+        t
+      )
+    ).toBe('Mon 08:00–20:00');
+    expect(
+      formatOperatingHoursSummary(
+        {
+          monday: { open: '08:00', close: '20:00' },
+          tuesday: closed,
+          wednesday: { open: '08:00', close: '20:00' },
+          thursday: closed,
+          friday: closed,
+          saturday: closed,
+          sunday: closed,
+        },
+        t
+      )
+    ).toBe('2 days · 08:00–20:00');
   });
 });
 
@@ -109,6 +159,11 @@ describe('applyHoursToEnabledDays', () => {
       close: '17:00',
     });
     expect(next.find((r) => r.day === 'wednesday')?.enabled).toBe(false);
+  });
+
+  it('leaves rows unchanged when the source day is closed', () => {
+    const rows = operatingHoursToEditorRows(DEFAULT_OPERATING_HOURS);
+    expect(applyHoursToEnabledDays(rows, 'saturday')).toBe(rows);
   });
 });
 
