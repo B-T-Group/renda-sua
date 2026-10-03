@@ -14100,12 +14100,11 @@ export class OrdersService {
         try {
           if (this.settlesViaClientHoldRelease(order as any)) {
             this.assertLedgerMove(
-              await this.accountsService.registerTransaction({
+              await this.releaseClientSettlementHold({
                 accountId: clientAccount.id,
+                orderId,
                 amount: subtotalPortion,
-                transactionType: 'release',
                 memo: `Hold released for order ${order.order_number} (items)`,
-                referenceId: orderId,
                 idempotencyKey: this.settlementKey('item', 'release', orderId),
               }),
               'item hold release',
@@ -14362,13 +14361,16 @@ export class OrdersService {
     }
     if (viaHoldRelease) {
       this.assertLedgerMove(
-        await this.accountsService.registerTransaction({
+        await this.releaseClientSettlementHold({
           accountId: clientAccount.id,
+          orderId,
           amount: deliveryAmt,
-          transactionType: 'release',
           memo: `Hold released for order ${order.order_number} delivery fee`,
-          referenceId: orderId,
-          idempotencyKey: this.settlementKey('delivery', 'client-release', orderId),
+          idempotencyKey: this.settlementKey(
+            'delivery',
+            'client-release',
+            orderId
+          ),
         }),
         'delivery hold release',
         order
@@ -14409,6 +14411,87 @@ export class OrdersService {
         `Settlement ${label} failed for order ${order.order_number}: ${result?.error ?? 'unknown error'}`
       );
     }
+  }
+
+  /**
+   * Release the requested amount, or only the order's remaining withheld if the
+   * bookkeeping hold was never placed (pay-after credit sitting in available).
+   */
+  private async releaseClientSettlementHold(params: {
+    accountId: string;
+    orderId: string;
+    amount: number;
+    memo: string;
+    idempotencyKey: string;
+  }): Promise<{ success?: boolean; error?: string }> {
+    const attempted = await this.registerHoldRelease(params, params.amount);
+    if (attempted?.success || !this.isInsufficientFundsError(attempted?.error)) {
+      return attempted;
+    }
+    try {
+      return await this.releaseRemainingOrderHold(params);
+    } catch {
+      return attempted;
+    }
+  }
+
+  private isInsufficientFundsError(error?: string): boolean {
+    return (error ?? '').toLowerCase().includes('insufficient funds');
+  }
+
+  private async releaseRemainingOrderHold(params: {
+    accountId: string;
+    orderId: string;
+    amount: number;
+    memo: string;
+    idempotencyKey: string;
+  }): Promise<{ success?: boolean; error?: string }> {
+    const netHeld = await this.netHoldAmountForOrder(
+      params.accountId,
+      params.orderId
+    );
+    if (netHeld <= 0) {
+      this.logger.warn(
+        `settlement_skip_unheld_release orderId=${params.orderId} requested=${params.amount}: debiting available`
+      );
+      return { success: true };
+    }
+    return this.registerHoldRelease(
+      params,
+      Number(Math.min(params.amount, netHeld).toFixed(2))
+    );
+  }
+
+  private async registerHoldRelease(
+    params: {
+      accountId: string;
+      orderId: string;
+      memo: string;
+      idempotencyKey: string;
+    },
+    amount: number
+  ): Promise<{ success?: boolean; error?: string }> {
+    return this.accountsService.registerTransaction({
+      accountId: params.accountId,
+      amount,
+      transactionType: 'release',
+      memo: params.memo,
+      referenceId: params.orderId,
+      idempotencyKey: params.idempotencyKey,
+    });
+  }
+
+  private async netHoldAmountForOrder(
+    accountId: string,
+    orderId: string
+  ): Promise<number> {
+    const held = await this.sumHoldAmountForOrder(accountId, orderId);
+    const released = await this.sumHoldAmountForOrder(
+      accountId,
+      orderId,
+      'release'
+    );
+    return Number((held - released).toFixed(2));
   }
 
   /** Retries may see post-completion statuses, but never cancelled/failed/refunded orders. */

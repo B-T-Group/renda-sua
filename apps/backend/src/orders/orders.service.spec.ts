@@ -4681,6 +4681,7 @@ describe('OrdersService', () => {
     };
 
     beforeEach(() => {
+      (reportMoneyAnomaly as jest.Mock).mockClear();
       jest.spyOn(service as any, 'claimSettlementStage').mockResolvedValue(true);
       jest
         .spyOn(service as any, 'releaseSettlementClaim')
@@ -4748,6 +4749,84 @@ describe('OrdersService', () => {
         (service as any).releasePaidDepositHoldIfNeeded
       ).toHaveBeenCalled();
       expect(accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+    });
+
+    it('NODE-NESTJS-3G: skips release when withheld is missing and still debits available', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SumOrderHolds')
+          ? { account_transactions: [] }
+          : {
+              orders_by_pk: {
+                ...paidPickupOrder,
+                pay_after_merchant_confirm: true,
+              },
+            }
+      );
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+      expect(
+        (service as any).commissionsService.distributeItemCommissions
+      ).toHaveBeenCalledTimes(1);
+      expect(reportMoneyAnomaly).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_failed',
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it('releases only the remaining ledger hold when withheld is short of the bookkeeping amount', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? { account_transactions: [] }
+              : { account_transactions: [{ amount: 2000 }] };
+          }
+          return {
+            orders_by_pk: {
+              ...paidPickupOrder,
+              pay_after_merchant_confirm: true,
+            },
+          };
+        }
+      );
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release' && r.amount === 5000
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 2000,
+          transactionType: 'release',
+        })
+      );
       expect(accountsService.registerTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 5000,
