@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-03 for the web Getting-paid unlink fix. Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-03 for the pay-after MoMo finalize hold fix (NODE-NESTJS-3F). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
@@ -10,6 +10,7 @@
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
+| NODE-NESTJS-3F | Sentry 7770650518 | **Pay-after MoMo success at `confirmed` holds instead of settling.** Callback load-by-number now selects `pay_after_merchant_confirm` / `is_cooked_food_pickup`. `finalizePayAtDeliveryPaymentAndComplete` re-reads the order and reroutes pay-after to the hold/prepare path. Classic PAD/PAP settlement is unchanged. | §3.4.5 |
 | store links | – | **Store share links open the mobile app:** `https://rendasua.com/store/:id` is now claimed by the app (iOS `apple-app-site-association` `/store/*`, Android intent filter `/store/`) and routes to `StoreDetail` in any shell, including guests (`appDeepLink.ts`, `useAppDeepLinkNavigation.ts`). Without the app, the link still opens the web store. Android needs a new native build; iOS works once the web deploys plus an OTA update. | Client/guest browse (store page), Appendix D |
 | #421 | – | Backend lint/test baseline restored (no behaviour change) | – |
 | #409 | #404 | **Cancellation fee = `cancellation_fee_percent` % (CM 30, GA 30, CA 0) of item subtotal after discounts** (`max(0, total − collected delivery fee − tax)`), TS + lambda (`fee-percent.util.ts`, `cancellation_fee.py`). Flat `cancellation_fee` retired for cancellations but still read by **fail-pickup** (unchanged). `pay_at_delivery`/`pay_at_pickup` orders: no fee. Cooked-food `pay_after_merchant_confirm` orders (stored as `pay_at_pickup`/`pay_now`) keep the paid/authorized rule, so **carry the fee once paid**. | §3.4.7, §3.2, M12, M13 |
@@ -414,7 +415,7 @@ Risk: until the business reconciles, nobody is paid (G-12).
 |---|---|
 | Create (MoMo, wallet insufficient) | `pay_after_merchant_confirm`: order `pending`, **no hold**, no deposit, no stock check, ASAP only |
 | Merchant confirms | full-amount MoMo request (`initiateCookedFoodFullPaymentAfterConfirm`); if wallet covers: C `hold` instead |
-| Paid | C `deposit` (callback) + hold; order → `preparing` (auto prep clock) → `ready_for_pickup` automatically |
+| Paid | C `deposit` (callback) + hold. Callback routing keys on `orders.pay_after_merchant_confirm` (not `payment_timing` alone) so a confirmed pay-after order is **not** settled/completed. Cooked: order → `preparing` (auto prep clock) → `ready_for_pickup`. Non-cooked goods stay `confirmed` until the store marks ready. |
 | Pickup completes | `confirm-pickup` (merchant PIN) or `complete-pickup`: item settlement (B/HQ/P); no delivery fee |
 | Unpaid after confirm | `cancelUnpaidCookedFoodAfterConfirm` — no fee (fee not charged for unpaid pay-after) |
 | Business `fail-pickup` (customer no-show, paid) | fee retained = client cancellation fee; refund = total − fee (`failed_pickups`); `order.cancelled` (cancelledBy `client`) → lambda: C `fee`, B `deposit` fee; rest released; Stripe authorization released |

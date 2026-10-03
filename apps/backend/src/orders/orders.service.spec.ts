@@ -3441,6 +3441,16 @@ describe('OrdersService', () => {
     });
 
     it('finalizePayAtDeliveryPaymentAndComplete settles the post-credit total', async () => {
+      const padOrder = {
+        id: 'order-123',
+        order_number: 'ORD-1',
+        payment_status: 'pending',
+        subtotal: 10000,
+        total_amount: 9000,
+        base_delivery_fee: 1000,
+        per_km_delivery_fee: 0,
+      };
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(padOrder);
       const updateOrderHoldSpy = jest
         .spyOn(service, 'updateOrderHold')
         .mockResolvedValue({ id: 'hold-1' });
@@ -3552,6 +3562,91 @@ describe('OrdersService', () => {
       requireSpy.mockRestore();
       getByNumberSpy.mockRestore();
       finalizeSpy.mockRestore();
+    });
+
+    it('loads pay_after_merchant_confirm when resolving an order by number', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders: [{ id: 'order-123', order_number: 'ORD-1' }],
+      });
+
+      await service.getOrderForProcessingByNumber('ORD-1');
+
+      expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('pay_after_merchant_confirm'),
+        { orderNumber: 'ORD-1' }
+      );
+    });
+
+    it('holds a confirmed pay-after order instead of settling PAD/PAP', async () => {
+      const rawOrder = {
+        id: 'order-123',
+        order_number: 'ORD-1',
+        current_status: 'confirmed',
+        payment_timing: 'pay_at_pickup',
+        payment_status: 'pending',
+        pay_after_merchant_confirm: true,
+        client: { user_id: 'client-456' },
+        currency: 'XAF',
+      };
+      const requireSpy = jest
+        .spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue(rawOrder);
+      const holdSpy = jest
+        .spyOn(service as any, 'finalizeCookedFoodPayAfterConfirm')
+        .mockResolvedValue(undefined);
+      const settleSpy = jest
+        .spyOn(service as any, 'settleAndCompletePadPayment')
+        .mockResolvedValue(undefined);
+
+      await service.finalizeOrderAfterIncomingPayment({
+        entity_id: 'ORD-1',
+        account_id: 'account-1',
+      });
+
+      expect(holdSpy).toHaveBeenCalledWith(rawOrder);
+      expect(settleSpy).not.toHaveBeenCalled();
+
+      requireSpy.mockRestore();
+      holdSpy.mockRestore();
+      settleSpy.mockRestore();
+    });
+
+    it('PAD finalize reroutes to hold when the order is pay-after-confirm', async () => {
+      const confirmedPayAfter = {
+        id: 'order-123',
+        order_number: 'ORD-1',
+        current_status: 'confirmed',
+        payment_timing: 'pay_at_pickup',
+        payment_status: 'pending',
+        pay_after_merchant_confirm: true,
+      };
+      jest
+        .spyOn(service as any, 'getOrderDetails')
+        .mockResolvedValue(confirmedPayAfter);
+      const holdSpy = jest
+        .spyOn(service as any, 'finalizeCookedFoodPayAfterConfirm')
+        .mockResolvedValue(undefined);
+      const settleSpy = jest
+        .spyOn(service as any, 'settleAndCompletePadPayment')
+        .mockResolvedValue(undefined);
+      const itemSettle = jest
+        .spyOn(service, 'processOrderPayment')
+        .mockResolvedValue('settled' as any);
+
+      await (service as any).finalizePayAtDeliveryPaymentAndComplete({
+        id: 'order-123',
+        order_number: 'ORD-1',
+        payment_timing: 'pay_at_pickup',
+        payment_status: 'pending',
+      });
+
+      expect(holdSpy).toHaveBeenCalledWith(confirmedPayAfter);
+      expect(settleSpy).not.toHaveBeenCalled();
+      expect(itemSettle).not.toHaveBeenCalled();
+
+      holdSpy.mockRestore();
+      settleSpy.mockRestore();
+      itemSettle.mockRestore();
     });
 
     it('finalizeOrderAfterAuthorization does not resurrect a cancelled order', async () => {

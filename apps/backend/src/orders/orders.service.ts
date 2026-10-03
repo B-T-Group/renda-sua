@@ -8515,6 +8515,8 @@ export class OrdersService {
           payment_source
           payment_timing
           reconciliation_status
+          is_cooked_food_pickup
+          pay_after_merchant_confirm
           deposit_amount
           deposit_mobile_payment_transaction_id
           deposit_status
@@ -9409,6 +9411,17 @@ export class OrdersService {
   private async finalizePayAtDeliveryPaymentAndComplete(
     order: Orders
   ): Promise<void> {
+    const fresh = (await this.getOrderDetails(order.id)) ?? order;
+    // Pay-after-confirm stores payment_timing as pay_at_pickup / pay_at_delivery.
+    // Those callbacks must hold, not settle — settlement waits for pickup/delivery.
+    if ((fresh as any).pay_after_merchant_confirm === true) {
+      await this.finalizeCookedFoodPayAfterConfirm(fresh);
+      return;
+    }
+    await this.settleAndCompletePadPayment(fresh);
+  }
+
+  private async settleAndCompletePadPayment(order: Orders): Promise<void> {
     const { itemAmount, deliveryAmount } = this.clientLedgerPortions(order);
 
     const orderHold = await this.getOrCreateOrderHold(order.id);
