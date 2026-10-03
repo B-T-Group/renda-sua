@@ -7,11 +7,14 @@ import { businessApi } from '../../services/businessApi';
 import { uploadBusinessLocationLogo } from '../../services/businessLocationLogoUpload';
 import type {
   BusinessLocation,
-  CreateBusinessLocationPayload,
   UpdateBusinessLocationPayload,
 } from '../../types/business/locations';
 import type { MobilePaymentPhone } from '../../types/mobilePaymentPhone';
 import type { DeliveryAddressFormValue } from '../../components/forms/DeliveryAddressForm';
+import {
+  basicsLocationPatch,
+  createLocationPayload,
+} from '../../utils/locationWritePayload';
 import {
   IMAGE_LIBRARY_PICKER_OPTIONS,
   isSupportedImageAsset,
@@ -56,31 +59,6 @@ function resolveDefaultMobilePaymentPhoneId(
     );
   }
   return phones.find((p) => p.is_verified)?.id ?? null;
-}
-
-function createPayloadFromForm(input: {
-  name: string;
-  isStripeRail: boolean;
-  phone: string;
-  mobilePaymentPhoneId: string | null;
-  addressForm: DeliveryAddressFormValue;
-}): CreateBusinessLocationPayload {
-  return {
-    name: input.name.trim(),
-    location_type: 'store',
-    ...(input.isStripeRail
-      ? { phone: input.phone.trim() || undefined, auto_withdraw_commissions: false }
-      : { mobile_payment_phone_id: input.mobilePaymentPhoneId, auto_withdraw_commissions: true }),
-    address: {
-      address_line_1: input.addressForm.address_line_1.trim(),
-      address_line_2: input.addressForm.address_line_2?.trim(),
-      city: input.addressForm.city.trim(),
-      state: input.addressForm.state,
-      postal_code: input.addressForm.postal_code?.trim(),
-      latitude: input.addressForm.latitude,
-      longitude: input.addressForm.longitude,
-    },
-  };
 }
 
 function ownerErrorMessage(
@@ -287,7 +265,7 @@ export function useBusinessLocationForm(
           longitude: addressForm.longitude,
         });
       } else {
-        await businessApi.locations.create(createPayloadFromForm({
+        await businessApi.locations.create(createLocationPayload({
           name,
           isStripeRail,
           phone,
@@ -346,17 +324,18 @@ export function useBusinessLocationForm(
       setSaveError(t('business.locations.basics.nameRequired', 'Enter a name.'));
       return;
     }
-    await patchFields({
-      name: name.trim(),
-      email: email.trim() || undefined,
-      logo_url: logoUrl.trim() ? logoUrl.trim() : null,
-      ...(isStripeRail ? { phone: phone.trim() || undefined, auto_withdraw_commissions: false } : {}),
-    });
+    await patchFields(basicsLocationPatch({
+      name,
+      email,
+      logoUrl,
+      isStripeRail,
+      phone,
+    }));
   }, [email, isStripeRail, logoUrl, name, patchFields, phone, t]);
 
   const savePayments = useCallback(async () => {
     if (isStripeRail) {
-      await patchFields({ phone: phone.trim() || undefined, auto_withdraw_commissions: false });
+      await patchFields({ phone: phone.trim() || undefined });
       return;
     }
     await patchFields({

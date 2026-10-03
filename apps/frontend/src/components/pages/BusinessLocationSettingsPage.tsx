@@ -44,11 +44,9 @@ const BusinessLocationSettingsPage: React.FC = () => {
   const [phoneRequest, setPhoneRequest] = useState(0);
 
   const update = async (id: string, data: UpdateBusinessLocationData) => {
-    const payload =
-      isStripeRail && data.pay_at_confirm === undefined
-        ? { ...data, auto_withdraw_commissions: false as const }
-        : data;
-    return updateLocation(id, payload);
+    // auto_withdraw_commissions also gates Stripe Connect payouts. Section
+    // saves (hours, name, visibility) must not turn that off.
+    return updateLocation(id, data);
   };
 
   const removeLocation = async (id: string) => {
