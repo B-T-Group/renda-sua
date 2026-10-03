@@ -6467,8 +6467,13 @@
       "countries": {
         "CM": "Cameroun",
         "GA": "Gabon",
+        "TG": "Togo",
+        "BJ": "Bénin",
+        "CI": "Côte d'Ivoire",
+        "CG": "Congo",
         "CA": "Canada",
-        "US": "États-Unis"
+        "US": "États-Unis",
+        "PH": "Philippines"
       },
       "fulfillment": {
         "pickup": "Retrait",

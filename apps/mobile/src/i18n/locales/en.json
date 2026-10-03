@@ -6546,8 +6546,13 @@
       "countries": {
         "CM": "Cameroon",
         "GA": "Gabon",
+        "TG": "Togo",
+        "BJ": "Benin",
+        "CI": "Côte d'Ivoire",
+        "CG": "Congo",
         "CA": "Canada",
-        "US": "United States"
+        "US": "United States",
+        "PH": "Philippines"
       },
       "fulfillment": {
         "pickup": "Pickup",

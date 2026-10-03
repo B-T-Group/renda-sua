@@ -54,6 +54,7 @@ const COUNTRY_LABELS: Record<string, [string, string]> = {
   CG: ['admin.credits.countries.CG', 'Congo'],
   CA: ['admin.credits.countries.CA', 'Canada'],
   US: ['admin.credits.countries.US', 'United States'],
+  PH: ['admin.credits.countries.PH', 'Philippines'],
 };
 
 export default function AdminCreditsScreen({ navigation }: Props) {

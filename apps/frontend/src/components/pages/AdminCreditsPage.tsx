@@ -62,8 +62,13 @@ const EVENT_LABELS: Record<CreditEventType, [string, string]> = {
 const COUNTRY_LABELS: Record<string, [string, string]> = {
   CM: ['admin.credits.countries.CM', 'Cameroon'],
   GA: ['admin.credits.countries.GA', 'Gabon'],
+  TG: ['admin.credits.countries.TG', 'Togo'],
+  BJ: ['admin.credits.countries.BJ', 'Benin'],
+  CI: ['admin.credits.countries.CI', "Côte d'Ivoire"],
+  CG: ['admin.credits.countries.CG', 'Congo'],
   CA: ['admin.credits.countries.CA', 'Canada'],
   US: ['admin.credits.countries.US', 'United States'],
+  PH: ['admin.credits.countries.PH', 'Philippines'],
 };
 
 function countryLabel(
@@ -248,11 +253,7 @@ export const AdminCreditsPage: React.FC = () => {
               </MenuItem>
               {ACTIVE_PHONE_COUNTRY_OPTIONS.map((opt) => (
                 <MenuItem key={opt.isoCode} value={opt.isoCode}>
-                  {opt.flag}{' '}
-                  {t(
-                    COUNTRY_LABELS[opt.isoCode][0],
-                    COUNTRY_LABELS[opt.isoCode][1]
-                  )}
+                  {opt.flag} {countryLabel(opt.isoCode, t)}
                 </MenuItem>
               ))}
             </Select>
