@@ -17,6 +17,7 @@ import {
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
 import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
 import { shouldUseGuidedConfirmModal } from '../../utils/cookedFoodOrder';
+import { businessReadyConfirmMessage } from '../../utils/businessReadyConfirmCopy';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
@@ -162,19 +163,14 @@ export function ActiveOrderCtaHost({
         return;
       }
       if (actionId === 'completePreparation') {
-        const isPickup = actionOrder.fulfillment_method === 'pickup';
         setPendingConfirm({
           actionId,
           title: t('business.orders.readyConfirmTitle', 'Mark ready for pickup?'),
-          message: isPickup
-            ? t(
-                'business.orders.readyConfirmBodyStore',
-                'The customer will be notified their order is ready to collect at your store. When they arrive, ask for their pickup PIN to confirm the handoff and capture payment.'
-              )
-            : t(
-                'business.orders.readyConfirmBody',
-                'The order will be ready for agent pickup.'
-              ),
+          message: businessReadyConfirmMessage(
+            actionOrder,
+            t,
+            'The order will be ready for agent pickup.'
+          ),
           confirmLabel: t('orderActions.readyForPickup', 'Ready'),
         });
         return;

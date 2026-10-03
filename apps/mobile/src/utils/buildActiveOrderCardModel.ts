@@ -38,6 +38,8 @@ export interface ActiveOrderCardModel {
   subtitleDefault: string;
   ctaKey: string;
   ctaDefault: string;
+  /** False when the business has no action on this card (open the order instead). */
+  showCta: boolean;
   urgency: ActiveOrderCardUrgency;
   createdAt: string;
   destination: ActiveOrderCardDestination;
@@ -68,6 +70,15 @@ function awaitingCustomerPayment(
   primaryActionId: OrderPrimaryActionId
 ): boolean {
   return phase === 'prepare' && primaryActionId === 'none';
+}
+
+/** Pay-at-confirm pickup: the customer completes the order. The store does not confirm pickup. */
+function clientCompletesPickup(order: BusinessOrder): boolean {
+  return (
+    order.pay_after_merchant_confirm === true &&
+    (order.current_status || '') === 'ready_for_pickup' &&
+    isPickup(order)
+  );
 }
 
 function phaseTitle(
@@ -131,7 +142,8 @@ function phaseSubtitle(
   status: string,
   phase: OrderPhase,
   pickup: boolean,
-  awaitingPayment: boolean
+  awaitingPayment: boolean,
+  customerCompletes: boolean
 ): { key: string; defaultValue: string } {
   if (awaitingPayment) {
     return {
@@ -149,6 +161,12 @@ function phaseSubtitle(
     return {
       key: 'business.dashboard.activeOrders.subtitles.preparing',
       defaultValue: 'Continue preparing this order.',
+    };
+  }
+  if (status === 'ready_for_pickup' && pickup && customerCompletes) {
+    return {
+      key: 'business.dashboard.activeOrders.subtitles.readyPickupPayAfter',
+      defaultValue: 'The customer completes this order in the app when they collect it.',
     };
   }
   if (status === 'ready_for_pickup' && pickup) {
@@ -197,7 +215,8 @@ function ctaFor(
   primaryActionId: OrderPrimaryActionId,
   pickup: boolean,
   pendingCash: boolean,
-  acceptanceState?: string | null
+  acceptanceState?: string | null,
+  customerCompletes = false
 ): { key: string; defaultValue: string; destination: ActiveOrderCardDestination } {
   if (pendingCash) {
     return {
@@ -239,6 +258,13 @@ function ctaFor(
       key: 'business.dashboard.activeOrders.cta.markReady',
       defaultValue: 'Ready',
       destination: { kind: 'perform_action' },
+    };
+  }
+  if (status === 'ready_for_pickup' && pickup && customerCompletes) {
+    return {
+      key: 'business.dashboard.activeOrders.cta.openOrder',
+      defaultValue: 'Open Order',
+      destination: { kind: 'order_detail' },
     };
   }
   if (status === 'ready_for_pickup' && pickup) {
@@ -332,15 +358,23 @@ export function buildActiveOrderCardModel(
     phaseInfo.phase,
     phaseInfo.primaryActionId
   );
+  const customerCompletes = clientCompletesPickup(order);
   const title = phaseTitle(status, phaseInfo.phase, awaitingPayment);
-  const subtitle = phaseSubtitle(status, phaseInfo.phase, pickup, awaitingPayment);
+  const subtitle = phaseSubtitle(
+    status,
+    phaseInfo.phase,
+    pickup,
+    awaitingPayment,
+    customerCompletes
+  );
   const cta = ctaFor(
     status,
     phaseInfo.phase,
     phaseInfo.primaryActionId,
     pickup,
     pendingCash,
-    order.acceptance_state
+    order.acceptance_state,
+    customerCompletes
   );
   const itemCount = businessOrderUnitsCount(order);
   const pricing = resolveOrderPricing(order as Order);
@@ -361,6 +395,7 @@ export function buildActiveOrderCardModel(
     subtitleDefault: subtitle.defaultValue,
     ctaKey: cta.key,
     ctaDefault: cta.defaultValue,
+    showCta: !customerCompletes,
     urgency: urgencyFor(status, phaseInfo.phase, awaitingPayment),
     createdAt: order.created_at,
     destination: cta.destination,

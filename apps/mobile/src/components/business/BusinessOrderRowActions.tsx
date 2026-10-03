@@ -19,6 +19,7 @@ import { BusinessCancelOrderDialog } from './BusinessCancelOrderDialog';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
 import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
 import { shouldUseGuidedConfirmModal } from '../../utils/cookedFoodOrder';
+import { businessReadyConfirmMessage } from '../../utils/businessReadyConfirmCopy';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
@@ -167,19 +168,14 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         return;
       }
       if (actionId === 'completePreparation') {
-        const isPickup = order.fulfillment_method === 'pickup';
         setPendingConfirm({
           actionId,
           title: t('business.orders.readyConfirmTitle', 'Mark ready for pickup?'),
-          message: isPickup
-            ? t(
-                'business.orders.readyConfirmBodyStore',
-                'The customer will be notified their order is ready to collect at your store. When they arrive, ask for their pickup PIN to confirm the handoff and capture payment.'
-              )
-            : t(
-                'business.orders.readyConfirmBody',
-                'Rendasua will start looking for a delivery agent to pick up this order from your location.'
-              ),
+          message: businessReadyConfirmMessage(
+            order,
+            t,
+            'Rendasua will start looking for a delivery agent to pick up this order from your location.'
+          ),
           confirmLabel: t('orderActions.readyForPickup', 'Ready'),
         });
         return;
@@ -203,7 +199,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
       }
       void runAction(actionId);
     },
-    [navigation, order.fulfillment_method, order.payment_status, runAction, t]
+    [navigation, order, runAction, t]
   );
 
   const handlePickupPinSubmit = useCallback(

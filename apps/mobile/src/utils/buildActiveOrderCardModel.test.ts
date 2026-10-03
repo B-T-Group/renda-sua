@@ -151,6 +151,41 @@ describe('buildActiveOrderCardModel', () => {
     expect(model.destination).toEqual({ kind: 'perform_action' });
   });
 
+  it('hides Confirm Pickup when the customer completes a pay-at-confirm pickup', () => {
+    const model = buildActiveOrderCardModel(
+      order({
+        id: 'o1',
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'pickup',
+        pay_after_merchant_confirm: true,
+        payment_status: 'paid',
+      }),
+      t
+    );
+    expect(model.titleDefault).toBe('Ready for Pickup');
+    expect(model.subtitleDefault).toBe(
+      'The customer completes this order in the app when they collect it.'
+    );
+    expect(model.showCta).toBe(false);
+    expect(model.ctaDefault).toBe('Open Order');
+    expect(model.destination).toEqual({ kind: 'order_detail' });
+  });
+
+  it('keeps Confirm Pickup for a prepaid store pickup', () => {
+    const model = buildActiveOrderCardModel(
+      order({
+        id: 'o1',
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'pickup',
+        pay_after_merchant_confirm: false,
+        payment_status: 'paid',
+      }),
+      t
+    );
+    expect(model.showCta).toBe(true);
+    expect(model.ctaDefault).toBe('Confirm Pickup');
+  });
+
   it('maps ready delivery to View Status', () => {
     const model = buildActiveOrderCardModel(
       order({
