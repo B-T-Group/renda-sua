@@ -29,6 +29,12 @@ import type { BusinessRootStackParamList } from '@/navigation/types';
 import { resolveFirstOrderJourney } from '../../utils/firstOrderJourney';
 import { trackFirstOrderReadyMarked } from '../../utils/firstOrderAnalytics';
 
+function readyActionIcon(id: string, labelKey: string): string | undefined {
+  if (id !== 'completePreparation') return undefined;
+  if (labelKey !== 'orderActions.readyForPickup') return undefined;
+  return 'check-circle';
+}
+
 /** iOS freezes if a second Modal presents while another is still dismissing. */
 function waitForModalDismiss(ms = 350): Promise<void> {
   return new Promise((resolve) => {
@@ -174,7 +180,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
                 'business.orders.readyConfirmBody',
                 'Rendasua will start looking for a delivery agent to pick up this order from your location.'
               ),
-          confirmLabel: t('orderActions.readyForPickup', 'Set as ready'),
+          confirmLabel: t('orderActions.readyForPickup', 'Ready'),
         });
         return;
       }
@@ -273,6 +279,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         actions={actions.map((a) => ({
           id: a.id,
           label: t(a.labelKey, a.defaultLabel),
+          icon: readyActionIcon(a.id, a.labelKey),
           mode: a.destructive ? 'outlined' : a.primary ? 'contained' : 'contained-tonal',
           destructive: a.destructive,
           primary: a.primary,

@@ -175,7 +175,7 @@ export function ActiveOrderCtaHost({
                 'business.orders.readyConfirmBody',
                 'The order will be ready for agent pickup.'
               ),
-          confirmLabel: t('orderActions.readyForPickup', 'Set as ready'),
+          confirmLabel: t('orderActions.readyForPickup', 'Ready'),
         });
         return;
       }

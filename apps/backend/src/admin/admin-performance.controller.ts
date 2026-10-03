@@ -17,6 +17,10 @@ import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminPerformanceService } from './admin-performance.service';
+import {
+  AdminPlatformMetricsService,
+  type PlatformMetrics,
+} from './admin-platform-metrics.service';
 import { ReferralPayoutPreviewService } from '../business-referral-payouts/referral-payout-preview.service';
 import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
 import {
@@ -39,9 +43,31 @@ const QUERY_PIPE = new ValidationPipe({
 export class AdminPerformanceController {
   constructor(
     private readonly adminPerformanceService: AdminPerformanceService,
+    private readonly adminPlatformMetricsService: AdminPlatformMetricsService,
     private readonly referralPayoutPreviewService: ReferralPayoutPreviewService,
     private readonly representativeCompensationService: RepresentativeCompensationService
   ) {}
+
+  @Get('platform')
+  @ApiOperation({
+    summary:
+      'Platform order, sales, payout, and top-store metrics for a market and date window',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Order counts, per-currency sales and payouts, and the top stores by orders received',
+  })
+  async platform(
+    @Query() query: AdminPerformanceSummaryQueryDto
+  ): Promise<PlatformMetrics> {
+    this.assertDateRange(query);
+    return this.adminPlatformMetricsService.getPlatformMetrics({
+      from: query.from,
+      to: query.to,
+      countryCode: query.countryCode,
+    });
+  }
 
   @Get('summary')
   @ApiOperation({

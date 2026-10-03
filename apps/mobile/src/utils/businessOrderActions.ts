@@ -178,7 +178,7 @@ function standardOrderActions(
       actions.push({
         id: 'completePreparation',
         labelKey: 'orderActions.readyForPickup',
-        defaultLabel: 'Set as ready',
+        defaultLabel: 'Ready',
         primary: true,
       });
       pushCancelIfAllowed(actions, order);

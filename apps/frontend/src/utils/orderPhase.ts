@@ -463,7 +463,7 @@ export const ORDER_PRIMARY_ACTION_LABEL: Record<
   pay: ['orders.actions.completePayment', 'Complete payment'],
   cancel: ['orders.actions.cancel', 'Cancel order'],
   confirm: ['orders.actions.confirm', 'Confirm order'],
-  mark_ready: ['orders.actions.markReady', 'Mark ready'],
+  mark_ready: ['orders.actions.markReady', 'Ready'],
   claim: ['orders.actions.claim', 'Claim order'],
   pick_up: ['orders.actions.pickUp', 'Pick up'],
   out_for_delivery: ['orders.actions.outForDelivery', 'Out for delivery'],

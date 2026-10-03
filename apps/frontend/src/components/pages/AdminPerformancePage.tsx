@@ -1,4 +1,7 @@
-import { CheckCircle, ExpandLess, ExpandMore, Insights, ShoppingCart } from '@mui/icons-material';
+import { CheckCircle, Insights, ShoppingCart } from '@mui/icons-material';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import {
   Alert,
   Box,
@@ -6,47 +9,48 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Collapse,
   Container,
   FormControl,
   FormControlLabel,
   Grid,
-  IconButton,
   InputLabel,
   MenuItem,
   Select,
   Stack,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { endOfDay, startOfDay, startOfMonth, type Locale } from 'date-fns';
+import { enUS, fr as frLocale } from 'date-fns/locale';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AdminCompensationEventsDialog } from '../admin/AdminCompensationEventsDialog';
+import { AdminPayoutPreviewDialog } from '../admin/AdminPayoutPreviewDialog';
+import { PerformanceMetricCard } from '../admin/performance/PerformanceMetricCard';
+import { PlatformOrdersOverview } from '../admin/performance/PlatformOrdersOverview';
+import { PlatformPayoutsCard } from '../admin/performance/PlatformPayoutsCard';
+import { PlatformSalesCard } from '../admin/performance/PlatformSalesCard';
+import { TopAgentsDeliveriesTable } from '../admin/performance/TopAgentsDeliveriesTable';
+import { TopAgentsReferralsTable } from '../admin/performance/TopAgentsReferralsTable';
+import { TopStoresTable } from '../admin/performance/TopStoresTable';
+import SEOHead from '../seo/SEOHead';
+import LoadingScreen from '../common/LoadingScreen';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   GOLDEN_ITEMS_PER_REFERRAL,
   PERFORMANCE_PERIODS,
+  type PerformanceCustomRange,
   type PerformanceMarket,
   type PerformancePeriod,
   type PerformanceSummary,
+  type PlatformMetrics,
   type TopAgentEntry,
   useAdminPerformance,
 } from '../../hooks/useAdminPerformance';
 import { usePermission } from '../../hooks/usePermissions';
-import LoadingScreen from '../common/LoadingScreen';
-import { AdminPayoutPreviewDialog } from '../admin/AdminPayoutPreviewDialog';
-import { AdminCompensationEventsDialog } from '../admin/AdminCompensationEventsDialog';
-import { formatPayoutMoney } from '../admin/AdminPayoutPreviewTable';
-import SEOHead from '../seo/SEOHead';
 
 const PERIOD_LABELS: Record<PerformancePeriod, [string, string]> = {
   this_week: ['admin.performance.periods.thisWeek', 'This week'],
@@ -55,503 +59,43 @@ const PERIOD_LABELS: Record<PerformancePeriod, [string, string]> = {
   last_month: ['admin.performance.periods.lastMonth', 'Last month'],
   this_year: ['admin.performance.periods.thisYear', 'This year'],
   last_year: ['admin.performance.periods.lastYear', 'Last year'],
-};
-
-interface MetricCardProps {
-  label: string;
-  value: number | null;
-}
-
-const MetricCard: React.FC<MetricCardProps> = ({ label, value }) => (
-  <Card variant="outlined" sx={{ height: '100%' }}>
-    <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-      <Typography variant="body2" color="text.secondary" gutterBottom>
-        {label}
-      </Typography>
-      <Typography variant="h4" fontWeight={700}>
-        {value ?? '—'}
-      </Typography>
-    </CardContent>
-  </Card>
-);
-
-function agentDisplayName(agent: TopAgentEntry): string {
-  return `${agent.firstName} ${agent.lastName}`.trim() || agent.agentId;
-}
-
-function AgentEarnedCell({ agent }: { agent: TopAgentEntry }) {
-  const { t } = useTranslation();
-  const currency = agent.earnedCurrency ?? agent.projectedPayoutCurrency;
-  if (agent.earnedAmount == null || !currency) {
-    return (
-      <Typography variant="body2" color="text.disabled">
-        {'—'}
-      </Typography>
-    );
-  }
-  const upcoming =
-    agent.projectedPayoutAmount != null &&
-    agent.projectedPayoutAmount > 0 &&
-    agent.projectedPayoutCurrency
-      ? formatPayoutMoney(
-          agent.projectedPayoutAmount,
-          agent.projectedPayoutCurrency
-        )
-      : null;
-  return (
-    <>
-      <Typography variant="body2" fontWeight={700}>
-        {formatPayoutMoney(agent.earnedAmount, currency)}
-      </Typography>
-      {upcoming ? (
-        <Typography variant="caption" color="text.secondary">
-          {t('admin.performance.topAgents.upcomingPayout', 'Upcoming {{amount}}', {
-            amount: upcoming,
-          })}
-        </Typography>
-      ) : null}
-    </>
-  );
-}
-
-interface DeliveriesTableProps {
-  agents: TopAgentEntry[];
-  emptyLabel: string;
-}
-
-const DeliveriesTable: React.FC<DeliveriesTableProps> = ({
-  agents,
-  emptyLabel,
-}) => {
-  const { t } = useTranslation();
-  return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
-          {t(
-            'admin.performance.topAgents.deliveriesTitle',
-            'Top agents by deliveries'
-          )}
-        </Typography>
-        {agents.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            {emptyLabel}
-          </Typography>
-        ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>#</TableCell>
-                  <TableCell>
-                    {t('admin.performance.topAgents.agent', 'Agent')}
-                  </TableCell>
-                  <TableCell>
-                    {t('admin.performance.topAgents.code', 'Code')}
-                  </TableCell>
-                  <TableCell align="right">
-                    {t(
-                      'admin.performance.topAgents.deliveriesCount',
-                      'Deliveries'
-                    )}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {agents.map((agent, index) => (
-                  <TableRow key={agent.agentId} hover>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>{agentDisplayName(agent)}</TableCell>
-                    <TableCell>{agent.agentCode ?? '—'}</TableCell>
-                    <TableCell align="right">{agent.count}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
-interface ReferralsTableProps {
-  agents: TopAgentEntry[];
-  emptyLabel: string;
-  goldenOnly: boolean;
-}
-
-interface ReferralAgentRowProps {
-  agent: TopAgentEntry;
-  rank: number;
-}
-
-const ReferralAgentRow: React.FC<ReferralAgentRowProps> = ({ agent, rank }) => {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const businesses = agent.referredBusinesses ?? [];
-  const hasBusinesses = businesses.length > 0;
-
-  return (
-    <>
-      <TableRow hover>
-        <TableCell padding="checkbox">
-          <IconButton
-            size="small"
-            disabled={!hasBusinesses}
-            onClick={() => setOpen((prev) => !prev)}
-            aria-label={t(
-              'admin.performance.topAgents.toggleBusinesses',
-              'Show referred businesses'
-            )}
-          >
-            {open ? <ExpandLess /> : <ExpandMore />}
-          </IconButton>
-        </TableCell>
-        <TableCell>{rank}</TableCell>
-        <TableCell>{agentDisplayName(agent)}</TableCell>
-        <TableCell>{agent.agentCode ?? '—'}</TableCell>
-        <TableCell align="right">
-          <Typography component="span" fontWeight={700}>
-            {agent.score ?? 0}
-          </Typography>
-        </TableCell>
-        <TableCell align="right">{agent.count}</TableCell>
-        <TableCell align="right">
-          {agent.inventoryItemsCount ?? 0}
-        </TableCell>
-        <TableCell align="right">
-          <Chip
-            size="small"
-            color={agent.meetsGoldenRatio ? 'success' : 'default'}
-            variant={agent.meetsGoldenRatio ? 'filled' : 'outlined'}
-            label={agent.itemsPerReferral ?? 0}
-          />
-        </TableCell>
-        <TableCell align="right">
-          {agent.stockedReferralCount ?? 0}
-          <Typography
-            component="span"
-            variant="caption"
-            color="text.secondary"
-          >
-            {` / ${agent.count}`}
-          </Typography>
-        </TableCell>
-        <TableCell align="right">
-          <AgentEarnedCell agent={agent} />
-        </TableCell>
-      </TableRow>
-      <TableRow>
-        <TableCell
-          colSpan={11}
-          sx={{ py: 0, borderBottom: open ? undefined : 'none' }}
-        >
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ py: 1.5, pl: 4, pr: 1 }}>
-              <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                {t(
-                  'admin.performance.topAgents.referredBusinesses',
-                  'Referred businesses'
-                )}
-              </Typography>
-              {businesses.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  {t(
-                    'admin.performance.topAgents.noBusinesses',
-                    'No referred businesses'
-                  )}
-                </Typography>
-              ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>
-                        {t(
-                          'admin.performance.topAgents.businessName',
-                          'Business'
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        {t('admin.performance.topAgents.itemsCount', 'Items')}
-                      </TableCell>
-                      <TableCell align="right">
-                        {t('admin.performance.topAgents.score', 'Score')}
-                      </TableCell>
-                      <TableCell align="center">
-                        {t(
-                          'admin.performance.topAgents.itemsQualified',
-                          '10+ items'
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        {t('admin.performance.topAgents.earned', 'Earned')}
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {businesses.map((biz) => (
-                      <TableRow key={biz.businessId}>
-                        <TableCell>{biz.businessName || biz.businessId}</TableCell>
-                        <TableCell align="right">{biz.itemCount}</TableCell>
-                        <TableCell align="right">{biz.score}</TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            size="small"
-                            color={
-                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
-                                ? 'success'
-                                : 'default'
-                            }
-                            variant={
-                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
-                                ? 'filled'
-                                : 'outlined'
-                            }
-                            label={
-                              biz.itemCount >= GOLDEN_ITEMS_PER_REFERRAL
-                                ? t(
-                                    'admin.performance.topAgents.qualifiedYes',
-                                    'Qualified'
-                                  )
-                                : t(
-                                    'admin.performance.topAgents.qualifiedNo',
-                                    'Not yet'
-                                  )
-                            }
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {biz.earnedAmount && agent.earnedCurrency
-                            ? formatPayoutMoney(
-                                biz.earnedAmount,
-                                agent.earnedCurrency
-                              )
-                            : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
-    </>
-  );
-};
-
-const ReferralsTable: React.FC<ReferralsTableProps> = ({
-  agents,
-  emptyLabel,
-  goldenOnly,
-}) => {
-  const { t } = useTranslation();
-  return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          justifyContent="space-between"
-          alignItems={{ sm: 'center' }}
-          spacing={1}
-          sx={{ mb: 1 }}
-        >
-          <Typography variant="h6" fontWeight={600}>
-            {t(
-              'admin.performance.topAgents.referralsTitle',
-              'Top agents by business referrals'
-            )}
-          </Typography>
-          {goldenOnly ? (
-            <Chip
-              size="small"
-              color="success"
-              icon={<CheckCircle />}
-              label={t(
-                'admin.performance.topAgents.goldenFilterActive',
-                '≥{{n}} items / referral',
-                { n: GOLDEN_ITEMS_PER_REFERRAL }
-              )}
-            />
-          ) : null}
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          {t(
-            'admin.performance.topAgents.referralsHelp',
-            'Score = sum of (items + 1) per referred business. Ranked by score. Items / referral target: ≥{{n}}.',
-            { n: GOLDEN_ITEMS_PER_REFERRAL }
-          )}
-        </Typography>
-        {agents.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            {emptyLabel}
-          </Typography>
-        ) : (
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" />
-                  <TableCell>#</TableCell>
-                  <TableCell>
-                    {t('admin.performance.topAgents.agent', 'Agent')}
-                  </TableCell>
-                  <TableCell>
-                    {t('admin.performance.topAgents.code', 'Code')}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip
-                      title={t(
-                        'admin.performance.topAgents.scoreTooltip',
-                        'Sum of (items + 1) across referred businesses'
-                      )}
-                    >
-                      <span>
-                        {t('admin.performance.topAgents.score', 'Score')}
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell align="right">
-                    {t(
-                      'admin.performance.topAgents.referralsCount',
-                      'Referrals'
-                    )}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip
-                      title={t(
-                        'admin.performance.topAgents.itemsTooltip',
-                        'Active sale items on businesses this agent referred'
-                      )}
-                    >
-                      <span>
-                        {t('admin.performance.topAgents.itemsCount', 'Items')}
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip
-                      title={t(
-                        'admin.performance.topAgents.itemsPerReferralTooltip',
-                        'Average items per referred business (goal ≥{{n}})',
-                        { n: GOLDEN_ITEMS_PER_REFERRAL }
-                      )}
-                    >
-                      <span>
-                        {t(
-                          'admin.performance.topAgents.itemsPerReferral',
-                          'Items / referral'
-                        )}
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip
-                      title={t(
-                        'admin.performance.topAgents.stockedTooltip',
-                        'Referred businesses with ≥{{n}} sale items',
-                        { n: GOLDEN_ITEMS_PER_REFERRAL }
-                      )}
-                    >
-                      <span>
-                        {t(
-                          'admin.performance.topAgents.stockedReferrals',
-                          'Stocked'
-                        )}
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip
-                      title={t(
-                        'admin.performance.topAgents.earnedTooltip',
-                        'Credited representative compensation in this period (10-item bonus and 1% of sales). Upcoming is the sum of pending compensation events waiting for Saturday credit.'
-                      )}
-                    >
-                      <span>
-                        {t('admin.performance.topAgents.earned', 'Earned')}
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {agents.map((agent, index) => (
-                  <ReferralAgentRow
-                    key={agent.agentId}
-                    agent={agent}
-                    rank={index + 1}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </CardContent>
-    </Card>
-  );
+  custom: ['admin.performance.periods.custom', 'Custom'],
 };
 
 const AdminPerformancePage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { profile, loading: profileLoading } = useUserProfileContext();
   const canAccess = usePermission(PlatformPermissions.DASHBOARD_PLATFORM_STATS);
   const {
     fetchMarkets,
     fetchSummary,
+    fetchPlatformMetrics,
     fetchTopAgents,
     fetchPayoutPreview,
     fetchCompensationEvents,
     error,
   } = useAdminPerformance();
+  const api = useMemo(
+    () => ({
+      fetchMarkets,
+      fetchSummary,
+      fetchPlatformMetrics,
+      fetchTopAgents,
+      fetchPayoutPreview,
+      fetchCompensationEvents,
+    }),
+    [
+      fetchMarkets,
+      fetchSummary,
+      fetchPlatformMetrics,
+      fetchTopAgents,
+      fetchPayoutPreview,
+      fetchCompensationEvents,
+    ]
+  );
+  const filters = usePerformanceFilters(canAccess, api);
 
-  const [markets, setMarkets] = useState<PerformanceMarket[]>([]);
-  const [countryCode, setCountryCode] = useState('');
-  const [period, setPeriod] = useState<PerformancePeriod>('this_week');
-  const [goldenOnly, setGoldenOnly] = useState(false);
-  const [summary, setSummary] = useState<PerformanceSummary | null>(null);
-  const [topDeliveries, setTopDeliveries] = useState<TopAgentEntry[]>([]);
-  const [topReferrals, setTopReferrals] = useState<TopAgentEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const loadSeqRef = useRef(0);
-
-  useEffect(() => {
-    if (!canAccess) return;
-    void fetchMarkets().then(setMarkets);
-  }, [canAccess, fetchMarkets]);
-
-  const load = useCallback(async () => {
-    const seq = ++loadSeqRef.current;
-    setLoading(true);
-    const referralOpts = {
-      limit: 20,
-      minItemsPerReferral: goldenOnly
-        ? GOLDEN_ITEMS_PER_REFERRAL
-        : undefined,
-    };
-    const [summaryData, deliveries, referrals] = await Promise.all([
-      fetchSummary(period, countryCode),
-      fetchTopAgents(period, countryCode, 'deliveries'),
-      fetchTopAgents(period, countryCode, 'business_referrals', referralOpts),
-    ]);
-    if (seq !== loadSeqRef.current) return;
-    setSummary(summaryData);
-    setTopDeliveries(deliveries);
-    setTopReferrals(referrals);
-    setLoading(false);
-  }, [fetchSummary, fetchTopAgents, period, countryCode, goldenOnly]);
-
-  useEffect(() => {
-    if (!canAccess) return;
-    void load();
-  }, [canAccess, load]);
-
-  if (profileLoading) {
-    return <LoadingScreen open />;
-  }
-
+  if (profileLoading) return <LoadingScreen open />;
   if (!profile?.business || !canAccess) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -565,236 +109,535 @@ const AdminPerformancePage: React.FC = () => {
     );
   }
 
-  const metricCards: Array<[string, string, number | null]> = [
-    [
-      'admin.performance.metrics.businessesEnrolled',
-      'Businesses enrolled',
-      summary?.businessesEnrolled ?? null,
-    ],
-    [
-      'admin.performance.metrics.clientsAdded',
-      'Clients added',
-      summary?.clientsAdded ?? null,
-    ],
-    [
-      'admin.performance.metrics.agentsAdded',
-      'Agents added',
-      summary?.agentsAdded ?? null,
-    ],
-    [
-      'admin.performance.metrics.saleItemsAdded',
-      'Sale items added',
-      summary?.saleItemsAdded ?? null,
-    ],
-    [
-      'admin.performance.metrics.rentalItemsAdded',
-      'Rental items added',
-      summary?.rentalItemsAdded ?? null,
-    ],
-  ];
-
-  const emptyLabel = t(
-    'admin.performance.topAgents.empty',
-    'No data for this period'
-  );
-  const goldenEmpty = t(
-    'admin.performance.topAgents.goldenEmpty',
-    'No agents meet the ≥{{n}} items / referral target for this period',
-    { n: GOLDEN_ITEMS_PER_REFERRAL }
-  );
-
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
       <SEOHead
         title={t('admin.performance.pageTitle', 'Platform performance')}
         description={t(
           'admin.performance.pageDescription',
-          'Enrollment and catalog growth by market and period.'
+          'Orders, sales, payouts, and agent performance by market and period.'
         )}
         keywords={t(
           'admin.performance.pageKeywords',
           'admin, performance, metrics, markets, agents'
         )}
       />
+      <PageHeader />
+      <FilterBar
+        filters={filters}
+        api={api}
+        dateLocale={i18n.language === 'fr' ? frLocale : enUS}
+      />
+      {filters.rangeInvalid && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t(
+            'admin.performance.platform.invalidRange',
+            'The start date must be on or before the end date.'
+          )}
+        </Alert>
+      )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+      <PlatformSection filters={filters} />
+      <GrowthSection summary={filters.summary} />
+      <AgentsSection filters={filters} />
+    </Container>
+  );
+};
 
+interface PerformanceApi {
+  fetchMarkets: () => Promise<PerformanceMarket[]>;
+  fetchSummary: (
+    period: PerformancePeriod,
+    countryCode: string,
+    custom?: PerformanceCustomRange
+  ) => Promise<PerformanceSummary | null>;
+  fetchPlatformMetrics: (
+    period: PerformancePeriod,
+    countryCode: string,
+    custom?: PerformanceCustomRange
+  ) => Promise<PlatformMetrics | null>;
+  fetchTopAgents: (
+    period: PerformancePeriod,
+    countryCode: string,
+    metric: 'deliveries' | 'business_referrals',
+    options?: {
+      minItemsPerReferral?: number;
+      limit?: number;
+      custom?: PerformanceCustomRange;
+    }
+  ) => Promise<TopAgentEntry[]>;
+  fetchPayoutPreview: ReturnType<typeof useAdminPerformance>['fetchPayoutPreview'];
+  fetchCompensationEvents: ReturnType<
+    typeof useAdminPerformance
+  >['fetchCompensationEvents'];
+}
+
+interface PerformanceFilters {
+  markets: PerformanceMarket[];
+  countryCode: string;
+  setCountryCode: (value: string) => void;
+  period: PerformancePeriod;
+  setPeriod: (value: PerformancePeriod) => void;
+  customFrom: Date;
+  customTo: Date;
+  setCustomFrom: (value: Date) => void;
+  setCustomTo: (value: Date) => void;
+  rangeInvalid: boolean;
+  goldenOnly: boolean;
+  setGoldenOnly: (value: boolean) => void;
+  summary: PerformanceSummary | null;
+  platform: PlatformMetrics | null;
+  topDeliveries: TopAgentEntry[];
+  topReferrals: TopAgentEntry[];
+  loading: boolean;
+}
+
+function usePerformanceFilters(
+  canAccess: boolean,
+  api: PerformanceApi
+): PerformanceFilters {
+  const [markets, setMarkets] = useState<PerformanceMarket[]>([]);
+  const [countryCode, setCountryCode] = useState('');
+  const [period, setPeriod] = useState<PerformancePeriod>('this_week');
+  const [customFrom, setCustomFrom] = useState(() => startOfMonth(new Date()));
+  const [customTo, setCustomTo] = useState(() => new Date());
+  const [goldenOnly, setGoldenOnly] = useState(false);
+  const [summary, setSummary] = useState<PerformanceSummary | null>(null);
+  const [platform, setPlatform] = useState<PlatformMetrics | null>(null);
+  const [topDeliveries, setTopDeliveries] = useState<TopAgentEntry[]>([]);
+  const [topReferrals, setTopReferrals] = useState<TopAgentEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const loadSeqRef = useRef(0);
+  const rangeInvalid = period === 'custom' && customFrom > customTo;
+  const customRange = useMemo(
+    () => customWindow(period, customFrom, customTo),
+    [period, customFrom, customTo]
+  );
+
+  useEffect(() => {
+    if (!canAccess) return;
+    void api.fetchMarkets().then(setMarkets);
+  }, [canAccess, api]);
+
+  const load = useCallback(async () => {
+    if (rangeInvalid) return;
+    const seq = ++loadSeqRef.current;
+    setLoading(true);
+    const loaded = await loadPerformance(api, {
+      period,
+      countryCode,
+      customRange,
+      goldenOnly,
+    });
+    if (seq !== loadSeqRef.current) return;
+    setSummary(loaded.summary);
+    setPlatform(loaded.platform);
+    setTopDeliveries(loaded.deliveries);
+    setTopReferrals(loaded.referrals);
+    setLoading(false);
+  }, [api, period, countryCode, customRange, goldenOnly, rangeInvalid]);
+
+  useEffect(() => {
+    if (!canAccess) return;
+    void load();
+  }, [canAccess, load]);
+
+  return {
+    markets,
+    countryCode,
+    setCountryCode,
+    period,
+    setPeriod,
+    customFrom,
+    customTo,
+    setCustomFrom,
+    setCustomTo,
+    rangeInvalid,
+    goldenOnly,
+    setGoldenOnly,
+    summary,
+    platform,
+    topDeliveries,
+    topReferrals,
+    loading,
+  };
+}
+
+function customWindow(
+  period: PerformancePeriod,
+  from: Date,
+  to: Date
+): PerformanceCustomRange | undefined {
+  if (period !== 'custom') return undefined;
+  return { from: startOfDay(from).toISOString(), to: endOfDay(to).toISOString() };
+}
+
+async function loadPerformance(
+  api: PerformanceApi,
+  input: {
+    period: PerformancePeriod;
+    countryCode: string;
+    customRange?: PerformanceCustomRange;
+    goldenOnly: boolean;
+  }
+) {
+  const referralOpts = {
+    limit: 20,
+    custom: input.customRange,
+    minItemsPerReferral: input.goldenOnly ? GOLDEN_ITEMS_PER_REFERRAL : undefined,
+  };
+  const [summary, platform, deliveries, referrals] = await Promise.all([
+    api.fetchSummary(input.period, input.countryCode, input.customRange),
+    api.fetchPlatformMetrics(input.period, input.countryCode, input.customRange),
+    api.fetchTopAgents(input.period, input.countryCode, 'deliveries', {
+      custom: input.customRange,
+    }),
+    api.fetchTopAgents(
+      input.period,
+      input.countryCode,
+      'business_referrals',
+      referralOpts
+    ),
+  ]);
+  return { summary, platform, deliveries, referrals };
+}
+
+function PageHeader() {
+  const { t } = useTranslation();
+  return (
+    <>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
         <Insights color="action" fontSize="small" />
         <Typography variant="h5" component="h1" fontWeight={700}>
           {t('admin.performance.pageTitle', 'Platform performance')}
         </Typography>
       </Stack>
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{ mb: 2, maxWidth: 720 }}
-      >
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
         {t(
           'admin.performance.pageDescription',
-          'Enrollment and catalog growth by market and period.'
+          'Orders, sales, payouts, and agent performance by market and period.'
         )}
       </Typography>
+    </>
+  );
+}
 
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={2}
-        alignItems={{ xs: 'stretch', md: 'center' }}
-        sx={{ mb: 2 }}
-        useFlexGap
-        flexWrap="wrap"
-      >
-        <FormControl size="small" sx={{ minWidth: 220 }}>
-          <InputLabel id="performance-market-label">
-            {t('admin.performance.marketFilter', 'Market')}
-          </InputLabel>
-          <Select
-            labelId="performance-market-label"
-            value={countryCode}
-            label={t('admin.performance.marketFilter', 'Market')}
-            onChange={(e) => setCountryCode(e.target.value)}
-          >
-            <MenuItem value="">
-              {t('admin.performance.allMarkets', 'All markets')}
-            </MenuItem>
-            {markets.map((market) => (
-              <MenuItem key={market.countryCode} value={market.countryCode}>
-                {market.countryName} ({market.countryCode})
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={period}
-          onChange={(_, value: PerformancePeriod | null) => {
-            if (value) setPeriod(value);
-          }}
-          sx={{ flexWrap: 'wrap' }}
-        >
-          {PERFORMANCE_PERIODS.map((p) => (
-            <ToggleButton key={p} value={p}>
-              {t(PERIOD_LABELS[p][0], PERIOD_LABELS[p][1])}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-        {loading && <CircularProgress size={20} />}
-        <AdminPayoutPreviewDialog
-          countryCode={countryCode}
-          fetchPreview={fetchPayoutPreview}
-        />
-        <AdminCompensationEventsDialog
-          countryCode={countryCode}
-          fetchEvents={fetchCompensationEvents}
-        />
-      </Stack>
-
-      <Card
-        variant="outlined"
-        sx={{
-          mb: 3,
-          bgcolor: (theme) =>
-            theme.palette.mode === 'dark'
-              ? 'rgba(46, 125, 50, 0.12)'
-              : 'rgba(46, 125, 50, 0.06)',
-          borderColor: 'success.light',
-        }}
-      >
-        <CardContent
-          sx={{
-            py: 1.5,
-            '&:last-child': { pb: 1.5 },
-            display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: { sm: 'center' },
-            justifyContent: 'space-between',
-            gap: 1.5,
-          }}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle2" fontWeight={700}>
-              {t(
-                'admin.performance.golden.title',
-                'Referral quality target'
-              )}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t(
-                'admin.performance.golden.description',
-                'Goal: each referred business should reach at least {{n}} approved sale items on average (items / referral).',
-                { n: GOLDEN_ITEMS_PER_REFERRAL }
-              )}
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap">
-              <Chip
-                size="small"
-                icon={<CheckCircle fontSize="small" />}
-                label={t(
-                  'admin.performance.golden.rule1',
-                  '{{n}}+ approved products',
-                  { n: GOLDEN_ITEMS_PER_REFERRAL }
-                )}
-                color="success"
-                variant="outlined"
-              />
-              <Chip
-                size="small"
-                icon={<ShoppingCart fontSize="small" />}
-                label={t(
-                  'admin.performance.golden.rule2',
-                  'Sale ≥ configured market minimum'
-                )}
-                color="info"
-                variant="outlined"
-              />
-            </Stack>
-          </Box>
-          <FormControlLabel
-            sx={{ m: 0, flexShrink: 0 }}
-            control={
-              <Switch
-                checked={goldenOnly}
-                onChange={(_, checked) => setGoldenOnly(checked)}
-                color="success"
-              />
-            }
-            label={t(
-              'admin.performance.golden.filterLabel',
-              'Only agents ≥{{n}} items / referral',
-              { n: GOLDEN_ITEMS_PER_REFERRAL }
-            )}
-          />
-        </CardContent>
-      </Card>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+function FilterBar({
+  filters,
+  api,
+  dateLocale,
+}: {
+  filters: PerformanceFilters;
+  api: PerformanceApi;
+  dateLocale: Locale;
+}) {
+  return (
+    <Stack
+      direction={{ xs: 'column', md: 'row' }}
+      spacing={2}
+      alignItems={{ xs: 'stretch', md: 'center' }}
+      sx={{ mb: 3 }}
+      useFlexGap
+      flexWrap="wrap"
+    >
+      <MarketSelect filters={filters} />
+      <PeriodToggle filters={filters} />
+      {filters.period === 'custom' && (
+        <CustomRangePickers filters={filters} dateLocale={dateLocale} />
       )}
+      {filters.loading && <CircularProgress size={20} />}
+      <AdminPayoutPreviewDialog
+        countryCode={filters.countryCode}
+        fetchPreview={api.fetchPayoutPreview}
+      />
+      <AdminCompensationEventsDialog
+        countryCode={filters.countryCode}
+        fetchEvents={api.fetchCompensationEvents}
+      />
+    </Stack>
+  );
+}
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {metricCards.map(([key, fallback, value]) => (
+function MarketSelect({ filters }: { filters: PerformanceFilters }) {
+  const { t } = useTranslation();
+  return (
+    <FormControl size="small" sx={{ minWidth: 220 }}>
+      <InputLabel id="performance-market-label">
+        {t('admin.performance.marketFilter', 'Market')}
+      </InputLabel>
+      <Select
+        labelId="performance-market-label"
+        value={filters.countryCode}
+        label={t('admin.performance.marketFilter', 'Market')}
+        onChange={(e) => filters.setCountryCode(e.target.value)}
+      >
+        <MenuItem value="">{t('admin.performance.allMarkets', 'All markets')}</MenuItem>
+        {filters.markets.map((market) => (
+          <MenuItem key={market.countryCode} value={market.countryCode}>
+            {market.countryName} ({market.countryCode})
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
+}
+
+function PeriodToggle({ filters }: { filters: PerformanceFilters }) {
+  const { t } = useTranslation();
+  return (
+    <ToggleButtonGroup
+      size="small"
+      exclusive
+      value={filters.period}
+      onChange={(_, value: PerformancePeriod | null) => {
+        if (value) filters.setPeriod(value);
+      }}
+      sx={{ flexWrap: 'wrap' }}
+    >
+      {PERFORMANCE_PERIODS.map((p) => (
+        <ToggleButton key={p} value={p}>
+          {t(PERIOD_LABELS[p][0], PERIOD_LABELS[p][1])}
+        </ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  );
+}
+
+function CustomRangePickers({
+  filters,
+  dateLocale,
+}: {
+  filters: PerformanceFilters;
+  dateLocale: Locale;
+}) {
+  const { t } = useTranslation();
+  return (
+    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={dateLocale}>
+      <DatePicker
+        label={t('admin.performance.platform.fromDate', 'From')}
+        value={filters.customFrom}
+        onChange={(value) => value && filters.setCustomFrom(value)}
+        slotProps={{ textField: { size: 'small' } }}
+      />
+      <DatePicker
+        label={t('admin.performance.platform.toDate', 'To')}
+        value={filters.customTo}
+        onChange={(value) => value && filters.setCustomTo(value)}
+        slotProps={{ textField: { size: 'small' } }}
+      />
+    </LocalizationProvider>
+  );
+}
+
+function PlatformSection({ filters }: { filters: PerformanceFilters }) {
+  const { t } = useTranslation();
+  const empty = t('admin.performance.topAgents.empty', 'No data for this period');
+  return (
+    <Box sx={{ mb: 4 }}>
+      <SectionHeading
+        title={t('admin.performance.platform.sectionTitle', 'Platform')}
+        description={t(
+          'admin.performance.platform.sectionDescription',
+          'Orders placed, money collected, and payouts in the selected period.'
+        )}
+      />
+      <PlatformOrdersOverview orders={filters.platform?.orders ?? null} />
+      <Grid container spacing={2} sx={{ mt: 0.5 }}>
+        <Grid size={{ xs: 12, lg: 5 }}>
+          <PlatformSalesCard sales={filters.platform?.sales ?? []} emptyLabel={empty} />
+        </Grid>
+        <Grid size={{ xs: 12, lg: 7 }}>
+          <PlatformPayoutsCard
+            payouts={filters.platform?.payouts ?? []}
+            emptyLabel={empty}
+          />
+        </Grid>
+      </Grid>
+      <Box sx={{ mt: 2 }}>
+        <TopStoresTable stores={filters.platform?.topStores ?? []} emptyLabel={empty} />
+      </Box>
+    </Box>
+  );
+}
+
+function GrowthSection({ summary }: { summary: PerformanceSummary | null }) {
+  const { t } = useTranslation();
+  const cards: Array<[string, string, number | null]> = [
+    ['admin.performance.metrics.businessesEnrolled', 'Businesses enrolled', summary?.businessesEnrolled ?? null],
+    ['admin.performance.metrics.clientsAdded', 'Clients added', summary?.clientsAdded ?? null],
+    ['admin.performance.metrics.agentsAdded', 'Agents added', summary?.agentsAdded ?? null],
+    ['admin.performance.metrics.saleItemsAdded', 'Sale items added', summary?.saleItemsAdded ?? null],
+    ['admin.performance.metrics.rentalItemsAdded', 'Rental items added', summary?.rentalItemsAdded ?? null],
+  ];
+  return (
+    <Box sx={{ mb: 4 }}>
+      <SectionHeading
+        title={t('admin.performance.platform.growthTitle', 'Growth')}
+        description={t(
+          'admin.performance.platform.growthDescription',
+          'New businesses, customers, agents, and catalog items.'
+        )}
+      />
+      <Grid container spacing={2}>
+        {cards.map(([key, fallback, value]) => (
           <Grid key={key} size={{ xs: 12, sm: 6, md: 2.4 }}>
-            <MetricCard label={t(key, fallback)} value={value} />
+            <PerformanceMetricCard label={t(key, fallback)} value={value} />
           </Grid>
         ))}
       </Grid>
+    </Box>
+  );
+}
 
+function AgentsSection({ filters }: { filters: PerformanceFilters }) {
+  const { t } = useTranslation();
+  const empty = t('admin.performance.topAgents.empty', 'No data for this period');
+  const goldenEmpty = t(
+    'admin.performance.topAgents.goldenEmpty',
+    'No agents meet the ≥{{n}} items / referral target for this period',
+    { n: GOLDEN_ITEMS_PER_REFERRAL }
+  );
+  return (
+    <Box sx={{ mb: 3 }}>
+      <SectionHeading
+        title={t('admin.performance.platform.agentsTitle', 'Agents')}
+        description={t(
+          'admin.performance.platform.agentsDescription',
+          'Who delivered orders and who brought businesses onto the platform.'
+        )}
+      />
+      <GoldenTargetCard
+        goldenOnly={filters.goldenOnly}
+        onChange={filters.setGoldenOnly}
+      />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, lg: 5 }}>
-          <DeliveriesTable agents={topDeliveries} emptyLabel={emptyLabel} />
+          <TopAgentsDeliveriesTable agents={filters.topDeliveries} emptyLabel={empty} />
         </Grid>
         <Grid size={{ xs: 12, lg: 7 }}>
-          <ReferralsTable
-            agents={topReferrals}
-            emptyLabel={goldenOnly ? goldenEmpty : emptyLabel}
-            goldenOnly={goldenOnly}
+          <TopAgentsReferralsTable
+            agents={filters.topReferrals}
+            emptyLabel={filters.goldenOnly ? goldenEmpty : empty}
+            goldenOnly={filters.goldenOnly}
           />
         </Grid>
       </Grid>
-      <Box sx={{ height: 24 }} />
-    </Container>
+    </Box>
   );
-};
+}
+
+function GoldenTargetCard({
+  goldenOnly,
+  onChange,
+}: {
+  goldenOnly: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        mb: 2,
+        bgcolor: (theme) =>
+          theme.palette.mode === 'dark'
+            ? 'rgba(46, 125, 50, 0.12)'
+            : 'rgba(46, 125, 50, 0.06)',
+        borderColor: 'success.light',
+      }}
+    >
+      <CardContent
+        sx={{
+          py: 1.5,
+          '&:last-child': { pb: 1.5 },
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { sm: 'center' },
+          justifyContent: 'space-between',
+          gap: 1.5,
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            {t('admin.performance.golden.title', 'Referral quality target')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t(
+              'admin.performance.golden.description',
+              'Goal: each referred business should reach at least {{n}} approved sale items on average (items / referral).',
+              { n: GOLDEN_ITEMS_PER_REFERRAL }
+            )}
+          </Typography>
+          <GoldenRuleChips />
+        </Box>
+        <FormControlLabel
+          sx={{ m: 0, flexShrink: 0 }}
+          control={
+            <Switch
+              checked={goldenOnly}
+              onChange={(_, checked) => onChange(checked)}
+              color="success"
+            />
+          }
+          label={t(
+            'admin.performance.golden.filterLabel',
+            'Only agents ≥{{n}} items / referral',
+            { n: GOLDEN_ITEMS_PER_REFERRAL }
+          )}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function GoldenRuleChips() {
+  const { t } = useTranslation();
+  return (
+    <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap">
+      <Chip
+        size="small"
+        icon={<CheckCircle fontSize="small" />}
+        label={t('admin.performance.golden.rule1', '{{n}}+ approved products', {
+          n: GOLDEN_ITEMS_PER_REFERRAL,
+        })}
+        color="success"
+        variant="outlined"
+      />
+      <Chip
+        size="small"
+        icon={<ShoppingCart fontSize="small" />}
+        label={t(
+          'admin.performance.golden.rule2',
+          'Sale ≥ configured market minimum'
+        )}
+        color="info"
+        variant="outlined"
+      />
+    </Stack>
+  );
+}
+
+function SectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <Typography variant="h6" fontWeight={700}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {description}
+      </Typography>
+    </Box>
+  );
+}
 
 export default AdminPerformancePage;

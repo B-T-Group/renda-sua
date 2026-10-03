@@ -125,4 +125,19 @@ describe('OpenClosedSection', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save hours' })).toBeInTheDocument();
   });
+
+  it('keeps the editor open when closing time is not after opening time', () => {
+    const updateLocation = jest.fn();
+    renderSection(updateLocation);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getAllByDisplayValue('20:00')[0], {
+      target: { value: '07:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save hours' }));
+    expect(
+      screen.getByText('Closing time must be after opening time.')
+    ).toBeInTheDocument();
+    expect(updateLocation).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save hours' })).toBeInTheDocument();
+  });
 });

@@ -17,6 +17,7 @@ import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module'
 import { AdminSiteEventsController } from './admin-site-events.controller';
 import { AdminPerformanceController } from './admin-performance.controller';
 import { AdminPerformanceService } from './admin-performance.service';
+import { AdminPlatformMetricsService } from './admin-platform-metrics.service';
 import { BusinessReferralReviewController } from './business-referral-review.controller';
 import { BusinessReferralReviewService } from './business-referral-review.service';
 import { AdminMessageService } from './admin-message.service';
@@ -95,6 +96,7 @@ import { AdminMapService } from './admin-map.service';
   ],
   providers: [
     AdminPerformanceService,
+    AdminPlatformMetricsService,
     BusinessReferralReviewService,
     AdminMessageService,
     AdminService,

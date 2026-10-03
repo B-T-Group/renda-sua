@@ -108,13 +108,13 @@ describe('buildActiveOrderCardModel', () => {
     expect(model.destination).toEqual({ kind: 'order_detail' });
   });
 
-  it('maps preparing to Mark Ready / perform action', () => {
+  it('maps preparing to Ready / perform action', () => {
     const model = buildActiveOrderCardModel(
       order({ id: 'o1', current_status: 'preparing' }),
       t
     );
     expect(model.titleDefault).toBe('Preparing Order');
-    expect(model.ctaDefault).toBe('Mark Ready');
+    expect(model.ctaDefault).toBe('Ready');
     expect(model.destination).toEqual({ kind: 'perform_action' });
   });
 

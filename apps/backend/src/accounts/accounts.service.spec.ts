@@ -502,6 +502,80 @@ describe('AccountsService', () => {
       expect(executeMutation).not.toHaveBeenCalled();
     });
 
+    it('returns the primary row when both the deposit and its :repay already exist', async () => {
+      const depositKey = 'commission:order-1:acct-1:business:order_subtotal';
+      executeQuery.mockImplementation(async (query: string) =>
+        query.includes('FindTransactionByIdempotencyKey')
+          ? {
+              account_transactions: [
+                {
+                  id: 'tx-repay',
+                  amount: 500,
+                  idempotency_key: `${depositKey}:repay`,
+                },
+                {
+                  id: 'tx-primary',
+                  amount: 1500,
+                  idempotency_key: depositKey,
+                },
+              ],
+            }
+          : { accounts_by_pk: activeAccount }
+      );
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 2000,
+        transactionType: 'deposit',
+        idempotencyKey: depositKey,
+      });
+      expect(result).toEqual({
+        success: true,
+        transactionId: 'tx-primary',
+        alreadyExists: true,
+      });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('treats a string :repay amount as money when resuming the remainder', async () => {
+      const depositKey = 'commission:order-1:acct-1:business:order_subtotal';
+      executeQuery.mockImplementation(async (query: string) =>
+        query.includes('FindTransactionByIdempotencyKey')
+          ? {
+              account_transactions: [
+                {
+                  id: 'tx-repay',
+                  amount: '500.25',
+                  idempotency_key: `${depositKey}:repay`,
+                },
+              ],
+            }
+          : { accounts_by_pk: { ...activeAccount, cash_advance_balance: 0 } }
+      );
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) =>
+        mutation.includes('InsertTransactionIdempotent')
+          ? { insert_account_transactions_one: { id: 'tx-remainder' } }
+          : fakeApplyDelta(mutation, vars)
+      );
+      const result = await service.registerTransaction({
+        accountId,
+        amount: 2000,
+        transactionType: 'deposit',
+        idempotencyKey: depositKey,
+      });
+      expect(result).toMatchObject({
+        success: true,
+        transactionId: 'tx-remainder',
+      });
+      const insert = executeMutation.mock.calls.find(([m]) =>
+        String(m).includes('InsertTransactionIdempotent')
+      ) as [string, any];
+      expect(insert[1]).toMatchObject({
+        amount: 1499.75,
+        transactionType: 'deposit',
+        idempotencyKey: depositKey,
+      });
+    });
+
     it('keyed deposit with cash-advance debt writes :repay then the remainder under the primary key', async () => {
       const depositKey = 'commission:order-1:acct-1:business:order_subtotal';
       executeQuery.mockImplementation(async (query: string) =>

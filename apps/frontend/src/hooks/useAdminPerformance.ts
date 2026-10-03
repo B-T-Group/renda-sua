@@ -1,7 +1,9 @@
 import {
+  endOfDay,
   endOfMonth,
   endOfWeek,
   endOfYear,
+  startOfDay,
   startOfMonth,
   startOfWeek,
   startOfYear,
@@ -18,7 +20,8 @@ export type PerformancePeriod =
   | 'this_month'
   | 'last_month'
   | 'this_year'
-  | 'last_year';
+  | 'last_year'
+  | 'custom';
 
 export const PERFORMANCE_PERIODS: PerformancePeriod[] = [
   'this_week',
@@ -27,7 +30,13 @@ export const PERFORMANCE_PERIODS: PerformancePeriod[] = [
   'last_month',
   'this_year',
   'last_year',
+  'custom',
 ];
+
+export interface PerformanceCustomRange {
+  from: string;
+  to: string;
+}
 
 export type TopAgentMetric = 'deliveries' | 'business_referrals';
 
@@ -40,6 +49,63 @@ export interface PerformanceSummary {
   agentsAdded: number;
   saleItemsAdded: number;
   rentalItemsAdded: number;
+}
+
+export interface PlatformOrderMetrics {
+  total: number;
+  completed: number;
+  cancelled: number;
+  failed: number;
+  refunds: number;
+  inProgress: number;
+  pendingPayment: number;
+  completionRate: number;
+  cancellationRate: number;
+  uniqueClients: number;
+  byFulfillment: { delivery: number; pickup: number; shipping: number };
+}
+
+export interface PlatformSalesRow {
+  currency: string;
+  gmv: number;
+  collected: number;
+  completedCount: number;
+  averageOrderValue: number;
+}
+
+export interface PlatformPayoutRow {
+  currency: string;
+  platformRevenue: number;
+  agentDeliveryPay: number;
+  partnerCommissions: number;
+  merchantPayouts: number;
+  platformFundedDelivery: number;
+  referralCompensation: number;
+}
+
+export interface TopStoreReferrer {
+  kind: 'agent' | 'business';
+  name: string;
+  code: string | null;
+}
+
+export interface TopStoreRow {
+  businessLocationId: string;
+  locationName: string;
+  businessId: string;
+  businessName: string;
+  orderCount: number;
+  completedCount: number;
+  gmv: number;
+  currency: string;
+  referrer: TopStoreReferrer | null;
+}
+
+export interface PlatformMetrics {
+  orders: PlatformOrderMetrics;
+  sales: PlatformSalesRow[];
+  payouts: PlatformPayoutRow[];
+  topStores: TopStoreRow[];
 }
 
 export interface ReferredBusinessSummary {
@@ -140,10 +206,11 @@ export interface WeeklyPayoutPreview {
   totalsByCurrency: Array<{ currency: string; count: number; gross: number }>;
 }
 
-export function resolvePeriodRange(period: PerformancePeriod): {
-  from: string;
-  to: string;
-} {
+export function resolvePeriodRange(
+  period: PerformancePeriod,
+  custom?: PerformanceCustomRange
+): { from: string; to: string } {
+  if (period === 'custom') return custom ?? todayRange();
   const now = new Date();
   const weekOptions = { weekStartsOn: 1 as const };
   switch (period) {
@@ -171,15 +238,21 @@ export function resolvePeriodRange(period: PerformancePeriod): {
   }
 }
 
+function todayRange(): { from: string; to: string } {
+  const now = new Date();
+  return toRange(startOfDay(now), endOfDay(now));
+}
+
 function toRange(from: Date, to: Date): { from: string; to: string } {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
 function buildWindowParams(
   period: PerformancePeriod,
-  countryCode: string
+  countryCode: string,
+  custom?: PerformanceCustomRange
 ): URLSearchParams {
-  const { from, to } = resolvePeriodRange(period);
+  const { from, to } = resolvePeriodRange(period, custom);
   const params = new URLSearchParams({ from, to });
   if (countryCode) params.set('countryCode', countryCode);
   return params;
@@ -214,14 +287,36 @@ export function useAdminPerformance() {
   const fetchSummary = useCallback(
     async (
       period: PerformancePeriod,
-      countryCode: string
+      countryCode: string,
+      custom?: PerformanceCustomRange
     ): Promise<PerformanceSummary | null> => {
       if (!apiClient) return null;
       setError(null);
       try {
-        const params = buildWindowParams(period, countryCode);
+        const params = buildWindowParams(period, countryCode, custom);
         const { data } = await apiClient.get<PerformanceSummary>(
           `/admin/performance/summary?${params.toString()}`
+        );
+        return data;
+      } catch (e: unknown) {
+        setError(errorMessage(e));
+        return null;
+      }
+    },
+    [apiClient]
+  );
+
+  const fetchPlatformMetrics = useCallback(
+    async (
+      period: PerformancePeriod,
+      countryCode: string,
+      custom?: PerformanceCustomRange
+    ): Promise<PlatformMetrics | null> => {
+      if (!apiClient) return null;
+      try {
+        const params = buildWindowParams(period, countryCode, custom);
+        const { data } = await apiClient.get<PlatformMetrics>(
+          `/admin/performance/platform?${params.toString()}`
         );
         return data;
       } catch (e: unknown) {
@@ -237,11 +332,15 @@ export function useAdminPerformance() {
       period: PerformancePeriod,
       countryCode: string,
       metric: TopAgentMetric,
-      options?: { minItemsPerReferral?: number; limit?: number }
+      options?: {
+        minItemsPerReferral?: number;
+        limit?: number;
+        custom?: PerformanceCustomRange;
+      }
     ): Promise<TopAgentEntry[]> => {
       if (!apiClient) return [];
       try {
-        const params = buildWindowParams(period, countryCode);
+        const params = buildWindowParams(period, countryCode, options?.custom);
         params.set('metric', metric);
         if (options?.minItemsPerReferral != null) {
           params.set(
@@ -303,6 +402,7 @@ export function useAdminPerformance() {
   return {
     fetchMarkets,
     fetchSummary,
+    fetchPlatformMetrics,
     fetchTopAgents,
     fetchPayoutPreview,
     fetchCompensationEvents,

@@ -64,7 +64,7 @@ function MomoNumber({
 }: PhoneEditorProps) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { phones, deletePhone, fetchPhones } = useMobilePaymentPhones();
+  const { phones, fetchPhones } = useMobilePaymentPhones();
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (openToken) setOpen(true);
@@ -81,7 +81,6 @@ function MomoNumber({
       location.id,
       location.mobile_payment_phone_id,
       updateLocation,
-      deletePhone,
       enqueueSnackbar,
       t
     );
@@ -246,13 +245,16 @@ async function unlinkMomoNumber(
   locationId: string,
   phoneId: string | null | undefined,
   updateLocation: LocationSectionActions['updateLocation'],
-  deletePhone: (id: string) => Promise<unknown>,
   notify: (message: string, options: { variant: 'error' | 'success' }) => void,
   t: (key: string, fallback: string) => string
 ) {
   if (!phoneId) return;
   try {
     await updateLocation(locationId, { mobile_payment_phone_id: null });
+    notify(
+      t('mobilePaymentPhone.unlinked', 'Mobile payment number unlinked from this location'),
+      { variant: 'success' }
+    );
   } catch {
     notify(
       t(
@@ -260,18 +262,6 @@ async function unlinkMomoNumber(
         "Couldn't remove this Mobile Money number. Please try again."
       ),
       { variant: 'error' }
-    );
-    return;
-  }
-  try {
-    await deletePhone(phoneId);
-  } catch {
-    notify(
-      t(
-        'mobilePaymentPhone.unlinked',
-        'Mobile payment number unlinked from this location'
-      ),
-      { variant: 'success' }
     );
   }
 }

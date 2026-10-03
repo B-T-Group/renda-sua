@@ -244,7 +244,7 @@ async function clickSetAsReadyForOrderNumber(
     .first();
   await card
     .getByRole('button', {
-      name: /Set as ready|Marquer comme prêt|ready for pickup|prêt pour ramassage|Action Requise.*Marquer comme prêt/i,
+      name: /^(Ready|Prêt)$|Set as ready|Marquer comme prêt|ready for pickup|prêt pour ramassage|Action (Required|requise).*Ready|Action Requise.*Prêt/i,
     })
     .click({ timeout: 20000 });
 }
