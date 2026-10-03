@@ -64,5 +64,43 @@ describe('MoreOptionsSection', () => {
         'Cannot delete a location that still has items. Remove items from this location first.'
       )
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'LOCATION_HAS_BALANCE',
+      'Cannot delete a location that still has account balance. Withdraw or transfer funds first.',
+    ],
+    ['ADDRESS_PRIMARY_DELETE_FORBIDDEN', 'Cannot delete primary location'],
+    [
+      'ADDRESS_MINIMUM_REQUIRED',
+      'Cannot delete the only location. Each business must have at least one location.',
+    ],
+  ])('shows the known message for %s', async (code, message) => {
+    const error = new Error('raw api') as Error & { code?: string };
+    error.code = code;
+    renderSection(jest.fn().mockRejectedValue(error));
+    fireEvent.click(screen.getByText('More options'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this location' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('shows the server message when the delete error has no known code', async () => {
+    renderSection(jest.fn().mockRejectedValue(new Error('Account is frozen')));
+    fireEvent.click(screen.getByText('More options'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this location' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText('Account is frozen')).toBeInTheDocument();
+  });
+
+  it('uses the generic delete message when the failure is not an Error', async () => {
+    renderSection(jest.fn().mockRejectedValue({ code: 500 }));
+    fireEvent.click(screen.getByText('More options'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this location' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText('Failed to delete location')).toBeInTheDocument();
   });
 });

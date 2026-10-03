@@ -170,6 +170,55 @@ describe('buildLocationExpectations', () => {
     expect(texts(unset).some((line) => line.includes('alert you'))).toBe(true);
   });
 
+  it('uses the location phone and a manual payout when the linked number has no record', () => {
+    const result = buildLocationExpectations(
+      location({
+        mobile_payment_phone_id: 'p1',
+        phone: '+237655551234',
+        auto_withdraw_commissions: false,
+      }),
+      momo,
+      t
+    );
+    const payout = result.lines.find((line) => line.id === 'payout');
+    expect(payout).toMatchObject({ tone: 'ok' });
+    expect(payout?.text).toContain('1234');
+    expect(payout?.text).toContain('when you withdraw');
+  });
+
+  it('treats a blank alert phone as owner-only and names the payout action', () => {
+    const blank = buildLocationExpectations(
+      location({ order_alert_phone: '   ' }),
+      momo,
+      t
+    );
+    expect(texts(blank).some((line) => line.includes('alert you'))).toBe(true);
+
+    const verify = buildLocationExpectations(
+      location({
+        mobile_payment_phone_id: 'p1',
+        mobile_payment_phone: {
+          id: 'p1',
+          phone_e164: '+237612345678',
+          is_verified: true,
+        },
+      }),
+      { isStripeRail: false, hasVerifiedPhone: false },
+      t
+    );
+    expect(verify.lines.find((line) => line.id === 'payout')).toMatchObject({
+      action: 'verifyPhone',
+    });
+    const add = buildLocationExpectations(
+      location(),
+      { isStripeRail: false, hasVerifiedPhone: false },
+      t
+    );
+    expect(add.lines.find((line) => line.id === 'payout')).toMatchObject({
+      action: 'addPhone',
+    });
+  });
+
   it('always includes the item-level pointer', () => {
     const result = buildLocationExpectations(location(), momo, t);
     expect(result.lines[result.lines.length - 1].text).toBe(

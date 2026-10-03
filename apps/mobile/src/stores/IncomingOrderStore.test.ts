@@ -31,6 +31,11 @@ vi.mock('../services/businessApi', () => ({
   },
 }));
 
+import {
+  pulseOrderAlertSound,
+  startOrderAlertSound,
+  stopOrderAlertSound,
+} from '../services/orderAlertSound';
 import { IncomingOrderStore } from './IncomingOrderStore';
 import type { RootStore } from './RootStore';
 import { BUSINESS_PERSONA_HEADERS } from '../notifications/personaHeaders';
@@ -306,6 +311,85 @@ const PAST_WINDOW = {
   time_slot_start: '08:00',
   time_slot_end: '12:00',
 };
+
+function lastCall(fn: { mock: { invocationCallOrder: number[] } }): number {
+  const orders = fn.mock.invocationCallOrder;
+  return orders[orders.length - 1] ?? 0;
+}
+
+describe('IncomingOrderStore order chime', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getById.mockResolvedValue({
+      order: {
+        id: 'ord-1',
+        current_status: 'pending',
+        acceptance_state: 'awaiting_acceptance',
+        delivery_time_windows: [],
+      },
+    });
+  });
+
+  it('leaves the chime looping for an order the merchant can confirm', async () => {
+    const store = new IncomingOrderStore(makeRoot({ activePersona: 'business' }));
+    await store.handleIncomingPush('ord-1');
+
+    expect(store.uiState).toBe('active');
+    expect(startOrderAlertSound).toHaveBeenCalledWith('incomingOrder');
+    expect(lastCall(vi.mocked(startOrderAlertSound))).toBeGreaterThan(
+      lastCall(vi.mocked(stopOrderAlertSound))
+    );
+  });
+
+  it('stops the chime when the order cannot be loaded', async () => {
+    getById.mockRejectedValue(new Error('network'));
+    const store = new IncomingOrderStore(makeRoot({ activePersona: 'business' }));
+    await store.handleIncomingPush('ord-1');
+
+    expect(store.uiState).toBe('error');
+    expect(lastCall(vi.mocked(stopOrderAlertSound))).toBeGreaterThan(
+      lastCall(vi.mocked(startOrderAlertSound))
+    );
+  });
+
+  it('stops the chime when the order is no longer waiting for the merchant', async () => {
+    getById.mockResolvedValue({
+      order: {
+        id: 'ord-1',
+        current_status: 'confirmed',
+        acceptance_state: 'accepted',
+        delivery_time_windows: [],
+      },
+    });
+    const store = new IncomingOrderStore(makeRoot({ activePersona: 'business' }));
+    await store.handleIncomingPush('ord-1');
+
+    expect(store.uiState).toBe('resolved');
+    expect(stopOrderAlertSound).toHaveBeenCalledWith('incomingOrder');
+    expect(lastCall(vi.mocked(stopOrderAlertSound))).toBeGreaterThan(
+      lastCall(vi.mocked(startOrderAlertSound))
+    );
+  });
+
+  it('pulses for a delegate instead of looping the owner overlay', async () => {
+    const store = new IncomingOrderStore(makeRoot({ isDelegationContext: true }));
+    await store.handleIncomingPush('ord-1');
+
+    expect(store.visible).toBe(false);
+    expect(pulseOrderAlertSound).toHaveBeenCalled();
+    expect(startOrderAlertSound).not.toHaveBeenCalled();
+  });
+
+  it('stops the chime when the merchant dismisses the order', async () => {
+    const store = new IncomingOrderStore(makeRoot({ activePersona: 'business' }));
+    await store.handleIncomingPush('ord-1');
+    vi.mocked(stopOrderAlertSound).mockClear();
+    store.dismiss();
+
+    expect(store.visible).toBe(false);
+    expect(stopOrderAlertSound).toHaveBeenCalledWith('incomingOrder');
+  });
+});
 
 describe('IncomingOrderStore slot-past guards', () => {
   beforeEach(() => {

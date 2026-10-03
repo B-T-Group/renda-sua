@@ -12,6 +12,11 @@ import { RbacService } from '../rbac/rbac.service';
 import { SmsService } from '../sms/sms.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { DeepLinkService } from './deep-link.service';
+import {
+  MERCHANT_INCOMING_ORDER_PUSH,
+  ORDER_OFFER_CANCELLED_PUSH,
+  orderOfferPushOptions,
+} from './order-alert-push.options';
 import { NotificationOrchestrator } from './orchestration/notification-orchestrator.service';
 import { WhatsAppTemplateService } from './orchestration/whatsapp-template.service';
 import { userHasRegisteredPushChannels } from './push-delivery-channel.util';
@@ -184,13 +189,6 @@ export interface OrderRiskAlertParams {
   /** Contact and timing facts so the alert is actionable on its own. */
   action?: OrderRiskActionContext;
 }
-
-/** Android channel + Expo flags for merchant incoming-order interrupts. */
-const MERCHANT_INCOMING_ORDER_PUSH: ExpoPushOptions = {
-  priority: 'high',
-  sound: 'default',
-  channelId: 'order_incoming_alarm',
-};
 
 function escapeHtmlForEmail(text: string): string {
   return text
@@ -4225,12 +4223,7 @@ export class NotificationsService {
         persona: 'agent',
         url: links.path,
       },
-      {
-        priority: 'high',
-        sound: 'default',
-        channelId: 'order_offers_alarm',
-        ttlSeconds: params.ttlSeconds,
-      }
+      orderOfferPushOptions(params.ttlSeconds)
     );
   }
 
@@ -4395,10 +4388,7 @@ export class NotificationsService {
         orderId: params.orderId,
         persona: 'agent',
       },
-      {
-        priority: 'high',
-        channelId: 'order_offers_alarm',
-      }
+      ORDER_OFFER_CANCELLED_PUSH
     );
   }
 
