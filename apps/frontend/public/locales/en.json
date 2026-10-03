@@ -1239,6 +1239,7 @@
         "completionRate": "Completion rate",
         "uniqueClients": "Customers",
         "cancellationRate": "Cancellation {{rate}}%",
+        "failed": "Failed {{count}}",
         "refunds": "Refunds {{count}}",
         "inProgress": "In progress {{count}}",
         "pendingPayment": "Awaiting payment {{count}}",

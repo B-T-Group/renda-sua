@@ -983,6 +983,7 @@
         "completionRate": "Taux de complétion",
         "uniqueClients": "Clients",
         "cancellationRate": "Annulation {{rate}} %",
+        "failed": "Échouées {{count}}",
         "refunds": "Remboursements {{count}}",
         "inProgress": "En cours {{count}}",
         "pendingPayment": "En attente de paiement {{count}}",

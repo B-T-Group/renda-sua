@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-03 for the pay-after MoMo finalize hold fix (NODE-NESTJS-3F). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-03 for platform performance metrics on `/admin/performance` and the pay-after MoMo finalize hold fix (NODE-NESTJS-3F). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
@@ -10,6 +10,7 @@
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
+| platform performance | – | **`/admin/performance` shows platform results for the selected period and market (web only):** order counts (total, completed, cancelled, failed, refunds, in progress, awaiting payment, completion and cancellation rates, unique customers, delivery/pickup/shipping split), per-currency GMV vs collected sales, payout breakdown (platform revenue, agent delivery pay, partner commissions, merchant payouts, referral compensation, funded delivery), and the top 5 stores with their referrer. Custom date range added. Mobile `AdminPerformance` is unchanged (enrollment + agents only). `GET /admin/performance/platform`. | §2.5 Analytics, Appendix D |
 | NODE-NESTJS-3F | Sentry 7770650518 | **Pay-after MoMo success at `confirmed` holds instead of settling.** Callback load-by-number now selects `pay_after_merchant_confirm` / `is_cooked_food_pickup`. `finalizePayAtDeliveryPaymentAndComplete` re-reads the order and reroutes pay-after to the hold/prepare path. Classic PAD/PAP settlement is unchanged. | §3.4.5 |
 | store links | – | **Store share links open the mobile app:** `https://rendasua.com/store/:id` is now claimed by the app (iOS `apple-app-site-association` `/store/*`, Android intent filter `/store/`) and routes to `StoreDetail` in any shell, including guests (`appDeepLink.ts`, `useAppDeepLinkNavigation.ts`). Without the app, the link still opens the web store. Android needs a new native build; iOS works once the web deploys plus an OTA update. | Client/guest browse (store page), Appendix D |
 | #421 | – | Backend lint/test baseline restored (no behaviour change) | – |
@@ -247,7 +248,7 @@ Permission keys (27): `moderate.items`, `moderate.rentals`, `ops.user_documents`
 | Money | Force refund, pending mobile payments (provider status, resolve), account recharge (credit user wallet), commission accounts & transactions, payment programs (schedules, assignments, cash-advance programs/facilities, purchase credits, partners, campaigns), credits | `/admin/refunds`, `/admin/pending-mobile-payments`, `/admin/account-recharge`, `/admin/commission-accounts`, `/admin/payment-programs/:section?`, `/admin/credits` | `AccountRecharge`, `AdminCredits` | `admin-refunds`, `admin-mobile-payments`, `account-recharge`, `payment-programs-admin`, `credit-campaign-admin`, `admin-credits` |
 | Config | Application configurations, application setup & delivery pricing, country onboarding, Stripe tax codes sync, taxonomy/brands | `/admin/configurations`, `/admin/application-setup`, `/admin/country-onboarding`, `/content-management/*` | – | `configurations`, `admin`, `stripe-tax-admin` |
 | Comms | Broadcasts, WhatsApp inbox/templates, user messages | `/admin/broadcasts`, `/admin/follow-ups` | `AdminBroadcasts`, `AdminWhatsAppInbox/Conversation` | `admin-broadcast`, `admin-whatsapp-*` |
-| Analytics | Site events funnel, performance, map | `/admin/site-events`, `/admin/performance`, `/admin/map` | `AdminPerformance` | `admin-site-events`, `admin-performance`, `admin-map` |
+| Analytics | Site events funnel; performance (web: enrollment, orders, sales, payouts, top stores; mobile: enrollment and agents only); map | `/admin/site-events`, `/admin/performance`, `/admin/map` | `AdminPerformance` | `admin-site-events`, `admin-performance`, `admin-platform-metrics`, `admin-map` |
 | Referral review | Business-referral review queue | `/business/dashboard/admin` (**[I]**) | `BusinessReferralReview` | `admin/business-referral-review.controller.ts` (guarded by `dashboard.platform_stats`) |
 
 ### 2.6 Other actors
@@ -767,3 +768,4 @@ Notes: cancellation only via `POST /orders/cancel` (client: `pending_payment…r
 | Delegations | `delegations/*`, migration `20260814171600_location_delegations` |
 | Flags | `app-config/client-flags.constants.ts`, `app-config.service.ts`, web `hooks/useClientFlags.ts`, mobile `services/clientFlagsApi.ts` |
 | Routes | web `apps/frontend/src/app/app.tsx`; mobile `apps/mobile/src/navigation/*RootNavigator.tsx` |
+| Platform performance | `admin/admin-platform-metrics.service.ts`, `admin/admin-platform-metrics.queries.ts`, `GET /admin/performance/platform`; web `components/pages/AdminPerformancePage.tsx` |
