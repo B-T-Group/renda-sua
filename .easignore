@@ -73,3 +73,20 @@ apps/frontend/src/assets/pwa/favicon-32x32.png
 /apps/cdk
 /apps/hasura
 /tools
+
+# --- copied from apps/mobile/.gitignore ---
+# Native folders are generated on the builder; uploading them makes EAS treat
+# the app as bare and reject the appVersion runtime policy.
+/apps/mobile/ios
+/apps/mobile/android
+/apps/mobile/.expo
+/apps/mobile/web-build
+/apps/mobile/.kotlin
+/apps/mobile/google-service-account.json
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+.env*.local
