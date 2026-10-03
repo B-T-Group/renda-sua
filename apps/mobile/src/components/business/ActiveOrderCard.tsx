@@ -18,6 +18,11 @@ export interface ActiveOrderCardProps {
   onPressCta: () => void;
 }
 
+function readyCtaIcon(ctaKey: string): string | undefined {
+  if (ctaKey !== 'business.dashboard.activeOrders.cta.markReady') return undefined;
+  return 'check-circle';
+}
+
 function urgencyBorder(
   urgency: ActiveOrderCardUrgency,
   colors: ReturnType<typeof useTheme>['colors']
@@ -146,6 +151,7 @@ export function ActiveOrderCard({
       <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
         <Button
           mode="contained"
+          icon={readyCtaIcon(model.ctaKey)}
           onPress={onPressCta}
           style={{ borderRadius: borderRadius.md }}
           contentStyle={{ minHeight: 44 }}

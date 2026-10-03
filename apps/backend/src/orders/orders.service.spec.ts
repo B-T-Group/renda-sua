@@ -3522,6 +3522,43 @@ describe('OrdersService', () => {
       updateOrderHoldSpy.mockRestore();
     });
 
+    it('holds pay-after pickup payment instead of settling a confirmed order', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        expect(query).toContain('pay_after_merchant_confirm');
+        return {
+          orders: [
+            {
+              id: 'order-123',
+              order_number: '33893166',
+              current_status: 'confirmed',
+              payment_timing: 'pay_at_pickup',
+              payment_status: 'pending',
+              pay_after_merchant_confirm: true,
+              fulfillment_method: 'pickup',
+            },
+          ],
+        };
+      });
+      const payAfterSpy = jest
+        .spyOn(service as any, 'finalizeCookedFoodPayAfterConfirm')
+        .mockResolvedValue(undefined);
+      const settleSpy = jest
+        .spyOn(service, 'processOrderPayment')
+        .mockResolvedValue('settled');
+
+      await service.finalizeOrderAfterIncomingPayment({
+        entity_id: '33893166',
+        account_id: 'account-1',
+        reference: '33893166-1791034187402-3q3ck1',
+      });
+
+      expect(payAfterSpy).toHaveBeenCalled();
+      expect(settleSpy).not.toHaveBeenCalled();
+
+      payAfterSpy.mockRestore();
+      settleSpy.mockRestore();
+    });
+
     it('finalizeOrderAfterIncomingPayment loads order without agent API transform', async () => {
       const rawOrder = {
         id: 'order-123',

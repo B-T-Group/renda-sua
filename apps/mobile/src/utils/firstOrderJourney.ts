@@ -103,7 +103,7 @@ const PACK_STEP: StepTemplate = {
   titleKey: 'business.firstOrder.steps.pack.title',
   titleDefault: 'Pack the order',
   youDoKey: 'business.firstOrder.steps.pack.youDo',
-  youDoDefault: 'Prepare everything in the order, then tap Set as ready.',
+  youDoDefault: 'Prepare everything in the order, then tap Ready.',
   rendasuaKey: 'business.firstOrder.steps.pack.rendasua',
   rendasuaDefault: 'The customer knows you are preparing their order.',
   illustrationId: 'preparing',

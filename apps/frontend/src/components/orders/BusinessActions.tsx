@@ -434,7 +434,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             label:
               order.current_status === 'preparing'
                 ? t('orderActions.completePreparation', 'Complete Preparation')
-                : t('orderActions.readyForPickup', 'Set as ready'),
+                : t('orderActions.readyForPickup', 'Ready'),
             action: handleCompletePreparation,
             color: 'success' as const,
             icon: <CheckCircle />,

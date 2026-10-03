@@ -8529,6 +8529,7 @@ export class OrdersService {
           client_id
           delivery_address_id
           fulfillment_method
+          pay_after_merchant_confirm
           requires_fast_delivery
           client {
             user_id
@@ -14045,7 +14046,7 @@ export class OrdersService {
       }
     } else if (!itemStatuses.includes(order.current_status)) {
       throw new HttpException(
-        `Item settlement requires assigned_to_agent or picked_up; got ${order.current_status}`,
+        `Item settlement requires ${itemStatuses.join(' or ')}; got ${order.current_status}`,
         HttpStatus.BAD_REQUEST
       );
     }

@@ -481,7 +481,7 @@
       "completePayment": "Complete payment",
       "cancel": "Cancel order",
       "confirm": "Confirm order",
-      "markReady": "Mark ready",
+      "markReady": "Ready",
       "claim": "Claim order",
       "pickUp": "Pick up",
       "outForDelivery": "Out for delivery",
@@ -1060,7 +1060,7 @@
     "confirmOrder": "Confirm order",
     "completeDelivery": "Complete delivery",
     "confirmClientPickup": "Confirm pickup",
-    "readyForPickup": "Set as ready",
+    "readyForPickup": "Ready",
     "askIfReady": "Ask if my order is ready",
     "askIfReadySuccess": "We asked the store if your order is ready",
     "askIfReadyError": "Could not send the reminder",
@@ -2282,7 +2282,7 @@
         "cta": {
           "accept": "Accept Order",
           "openOrder": "Open Order",
-          "markReady": "Mark Ready",
+          "markReady": "Ready",
           "viewStatus": "View Status",
           "trackDelivery": "Track Delivery",
           "confirmPickup": "Confirm Pickup",
@@ -2700,7 +2700,7 @@
         },
         "pack": {
           "title": "Pack the order",
-          "youDo": "Prepare everything in the order, then tap Set as ready.",
+          "youDo": "Prepare everything in the order, then tap Ready.",
           "rendasua": "The customer knows you are preparing their order."
         },
         "findCourier": {

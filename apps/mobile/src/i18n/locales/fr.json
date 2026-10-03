@@ -418,7 +418,7 @@
       "completePayment": "Finaliser le paiement",
       "cancel": "Annuler la commande",
       "confirm": "Confirmer la commande",
-      "markReady": "Marquer prêt",
+      "markReady": "Prêt",
       "claim": "Prendre la commande",
       "pickUp": "Récupérer",
       "outForDelivery": "En cours de livraison",
@@ -1045,7 +1045,7 @@
     "confirmOrder": "Confirmer la commande",
     "completeDelivery": "Terminer la livraison",
     "confirmClientPickup": "Confirmer le retrait",
-    "readyForPickup": "Marquer comme prête",
+    "readyForPickup": "Prêt",
     "askIfReady": "Demander si ma commande est prête",
     "askIfReadySuccess": "Nous avons demandé au magasin si votre commande est prête",
     "askIfReadyError": "Impossible d’envoyer le rappel",
@@ -2214,7 +2214,7 @@
         "cta": {
           "accept": "Accepter la commande",
           "openOrder": "Ouvrir la commande",
-          "markReady": "Marquer prêt",
+          "markReady": "Prêt",
           "viewStatus": "Voir le statut",
           "trackDelivery": "Suivre la livraison",
           "confirmPickup": "Confirmer le retrait",
@@ -2606,7 +2606,7 @@
         },
         "pack": {
           "title": "Préparer la commande",
-          "youDo": "Préparez tous les articles, puis appuyez sur Marquer prête.",
+          "youDo": "Préparez tous les articles, puis appuyez sur Prêt.",
           "rendasua": "Le client sait que vous préparez sa commande."
         },
         "findCourier": {

@@ -209,7 +209,7 @@ function ctaFor(
   if (phase === 'prepare') {
     return {
       key: 'business.dashboard.activeOrders.cta.markReady',
-      defaultValue: 'Mark Ready',
+      defaultValue: 'Ready',
       destination: { kind: 'perform_action' },
     };
   }

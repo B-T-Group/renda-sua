@@ -235,7 +235,7 @@ const BatchOrdersPage: React.FC = () => {
       value: 'complete_preparation',
       label: t(
         'orders.batch.actions.completePreparation',
-        'Set as ready (confirmed → ready for pickup)'
+        'Ready (confirmed → ready for pickup)'
       ),
     });
   }

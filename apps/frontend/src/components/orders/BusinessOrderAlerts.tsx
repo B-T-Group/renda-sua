@@ -95,7 +95,7 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
           severity: 'warning' as const,
           message: t(
             'business.orders.preparingNotice',
-            '👨‍🍳 Preparation in progress. Complete carefully, then use Set as ready to notify available agents.'
+            '👨‍🍳 Preparation in progress. Complete carefully, then tap Ready to notify available agents.'
           ),
         });
         break;
