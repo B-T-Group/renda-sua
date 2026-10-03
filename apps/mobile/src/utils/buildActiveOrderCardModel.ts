@@ -63,10 +63,24 @@ function isPickup(order: BusinessOrder): boolean {
   );
 }
 
+function awaitingCustomerPayment(
+  phase: OrderPhase,
+  primaryActionId: OrderPrimaryActionId
+): boolean {
+  return phase === 'prepare' && primaryActionId === 'none';
+}
+
 function phaseTitle(
   status: string,
-  phase: OrderPhase
+  phase: OrderPhase,
+  awaitingPayment: boolean
 ): { key: string; defaultValue: string } {
+  if (awaitingPayment) {
+    return {
+      key: 'business.dashboard.activeOrders.titles.pendingPayment',
+      defaultValue: 'Pending payment',
+    };
+  }
   if (status === 'pending') {
     return {
       key: 'business.dashboard.activeOrders.titles.newOrder',
@@ -116,8 +130,15 @@ function phaseTitle(
 function phaseSubtitle(
   status: string,
   phase: OrderPhase,
-  pickup: boolean
+  pickup: boolean,
+  awaitingPayment: boolean
 ): { key: string; defaultValue: string } {
+  if (awaitingPayment) {
+    return {
+      key: 'business.dashboard.activeOrders.subtitles.pendingPayment',
+      defaultValue: 'Waiting for the customer to pay.',
+    };
+  }
   if (status === 'pending') {
     return {
       key: 'business.dashboard.activeOrders.subtitles.newOrder',
@@ -206,6 +227,13 @@ function ctaFor(
       destination: { kind: 'incoming_overlay' },
     };
   }
+  if (phase === 'prepare' && primaryActionId === 'none') {
+    return {
+      key: 'business.dashboard.activeOrders.cta.pendingPayment',
+      defaultValue: 'Pending payment',
+      destination: { kind: 'order_detail' },
+    };
+  }
   if (phase === 'prepare') {
     return {
       key: 'business.dashboard.activeOrders.cta.markReady',
@@ -253,7 +281,12 @@ function ctaFor(
   };
 }
 
-function urgencyFor(status: string, phase: OrderPhase): ActiveOrderCardUrgency {
+function urgencyFor(
+  status: string,
+  phase: OrderPhase,
+  awaitingPayment: boolean
+): ActiveOrderCardUrgency {
+  if (awaitingPayment) return 'warning';
   if (status === 'pending' || status === 'refund_requested') return 'warning';
   if (phase === 'prepare') return 'primary';
   if (phase === 'in_delivery' || status === 'ready_for_pickup') return 'info';
@@ -295,8 +328,12 @@ export function buildActiveOrderCardModel(
   const pickup = isPickup(order);
   const pendingCash =
     order.reconciliation_status === 'pending_manual_reconciliation';
-  const title = phaseTitle(status, phaseInfo.phase);
-  const subtitle = phaseSubtitle(status, phaseInfo.phase, pickup);
+  const awaitingPayment = awaitingCustomerPayment(
+    phaseInfo.phase,
+    phaseInfo.primaryActionId
+  );
+  const title = phaseTitle(status, phaseInfo.phase, awaitingPayment);
+  const subtitle = phaseSubtitle(status, phaseInfo.phase, pickup, awaitingPayment);
   const cta = ctaFor(
     status,
     phaseInfo.phase,
@@ -324,7 +361,7 @@ export function buildActiveOrderCardModel(
     subtitleDefault: subtitle.defaultValue,
     ctaKey: cta.key,
     ctaDefault: cta.defaultValue,
-    urgency: urgencyFor(status, phaseInfo.phase),
+    urgency: urgencyFor(status, phaseInfo.phase, awaitingPayment),
     createdAt: order.created_at,
     destination: cta.destination,
   };

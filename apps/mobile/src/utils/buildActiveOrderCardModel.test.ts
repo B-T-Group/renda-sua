@@ -108,6 +108,39 @@ describe('buildActiveOrderCardModel', () => {
     expect(model.destination).toEqual({ kind: 'order_detail' });
   });
 
+  it('shows pending payment instead of Ready while pay-after is unpaid', () => {
+    const model = buildActiveOrderCardModel(
+      order({
+        id: 'o1',
+        current_status: 'confirmed',
+        pay_after_merchant_confirm: true,
+        payment_status: 'pending',
+        fulfillment_method: 'delivery',
+      }),
+      t
+    );
+    expect(model.titleDefault).toBe('Pending payment');
+    expect(model.subtitleDefault).toBe('Waiting for the customer to pay.');
+    expect(model.ctaDefault).toBe('Pending payment');
+    expect(model.destination).toEqual({ kind: 'order_detail' });
+    expect(model.urgency).toBe('warning');
+  });
+
+  it('keeps Ready once a pay-after order is paid', () => {
+    const model = buildActiveOrderCardModel(
+      order({
+        id: 'o1',
+        current_status: 'confirmed',
+        pay_after_merchant_confirm: true,
+        payment_status: 'paid',
+        fulfillment_method: 'delivery',
+      }),
+      t
+    );
+    expect(model.ctaDefault).toBe('Ready');
+    expect(model.destination).toEqual({ kind: 'perform_action' });
+  });
+
   it('maps preparing to Ready / perform action', () => {
     const model = buildActiveOrderCardModel(
       order({ id: 'o1', current_status: 'preparing' }),

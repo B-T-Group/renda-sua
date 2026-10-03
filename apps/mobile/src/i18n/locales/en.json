@@ -2262,6 +2262,7 @@
         "receivedDays": "Received {{count}} days ago",
         "titles": {
           "newOrder": "New Order",
+          "pendingPayment": "Pending payment",
           "preparing": "Preparing Order",
           "ready": "Ready for Pickup",
           "agentAssigned": "Delivery Agent Assigned",
@@ -2271,6 +2272,7 @@
         },
         "subtitles": {
           "newOrder": "A customer is waiting for your response.",
+          "pendingPayment": "Waiting for the customer to pay.",
           "preparing": "Continue preparing this order.",
           "readyPickup": "Customer can pick up when ready.",
           "readyDelivery": "Waiting for a delivery agent.",
@@ -2282,6 +2284,7 @@
         "cta": {
           "accept": "Accept Order",
           "openOrder": "Open Order",
+          "pendingPayment": "Pending payment",
           "markReady": "Ready",
           "viewStatus": "View Status",
           "trackDelivery": "Track Delivery",

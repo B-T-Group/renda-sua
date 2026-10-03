@@ -2194,6 +2194,7 @@
         "receivedDays": "Reçue il y a {{count}} jours",
         "titles": {
           "newOrder": "Nouvelle commande",
+          "pendingPayment": "Paiement en attente",
           "preparing": "Préparation en cours",
           "ready": "Prête pour le retrait",
           "agentAssigned": "Livreur assigné",
@@ -2203,6 +2204,7 @@
         },
         "subtitles": {
           "newOrder": "Un client attend votre réponse.",
+          "pendingPayment": "En attente du paiement du client.",
           "preparing": "Continuez à préparer cette commande.",
           "readyPickup": "Le client peut venir récupérer la commande.",
           "readyDelivery": "En attente d'un livreur.",
@@ -2214,6 +2216,7 @@
         "cta": {
           "accept": "Accepter la commande",
           "openOrder": "Ouvrir la commande",
+          "pendingPayment": "Paiement en attente",
           "markReady": "Prêt",
           "viewStatus": "Voir le statut",
           "trackDelivery": "Suivre la livraison",
