@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-03 for platform performance metrics on `/admin/performance`, the pay-after MoMo finalize hold fix (NODE-NESTJS-3F), the mobile business dashboard pending-payment card, NODE-NESTJS-3G settlement hold-release fallback, and the pay-at-confirm ready-for-pickup copy (no PIN). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-04 for NODE-NESTJS-3H settlement retry re-arm (exhausted item/delivery holds stay on a 24h cooldown and historical NULL `settlement_next_retry_at` rows are claimed again). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
@@ -39,6 +39,7 @@
 | #438 | #438 | **Keyed deposit remainder:** a retry of an idempotency-keyed deposit no longer treats the cash-advance `:repay` row as proof the whole deposit finished. Only the original key short-circuits; if just `:repay` exists, the unpaid remainder is credited (a repayment that consumed the full amount stays done). | §3.1 |
 | location settings payout | – | **Stripe auto-payout stays on when a location section is saved.** Web location settings and mobile name/phone saves no longer set `auto_withdraw_commissions` to false as a side effect. That flag also triggers the Stripe Connect payout after a commission credit. Mobile create of a Stripe location omits the flag so the database default (true) applies. | §3 payouts |
 | NODE-NESTJS-3G | NODE-NESTJS-3G | **Settlement hold release:** if a client item/delivery `release` hits insufficient withheld, settlement measures this order's net ledger hold (`hold` − `release`) and either releases that remainder or skips the release and debits `available` (MoMo/Stripe credit that was never held). Real withheld shortfalls that still have a ledger hold still fail and queue a retry. | §3.3 |
+| NODE-NESTJS-3H | NODE-NESTJS-3H | **Settlement retry no longer dies after 8 attempts.** The 8th failure still alerts once, then sets a 24h `settlement_next_retry_at` instead of NULL. The cron also re-arms already-exhausted rows (failed stage set, retry count ≥ 8, next retry NULL) so the NODE-NESTJS-3G hold-release fallback can settle leftovers. Later cooldown failures log only; they do not re-fire `settlement_retry_exhausted`. | §3.3, M4, G-3 |
 
 Not yet reflected anywhere in the body: per-section text, the Appendix C flag list (new config key `cancellation_fee_percent`, `failed_delivery_fee_percent`), and the Appendix D file index (`fee-percent.util.ts`, `order-settlement-retry.*`, `common/utils/money-alert.util.ts`).
 

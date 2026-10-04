@@ -5,6 +5,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { OrdersService } from './orders.service';
 import {
   SETTLEMENT_RETRY_LEASE_MINUTES,
+  SETTLEMENT_RETRY_MAX_ATTEMPTS,
   SettlementStage,
 } from './order-settlement-retry.util';
 
@@ -69,30 +70,60 @@ export class OrderSettlementRetryService {
       stillFailing: 0,
       skipped: 0,
     };
-    const due = await this.fetchDue(now);
-    for (const row of due) {
-      if (!(await this.claim(row, now))) {
-        result.skipped += 1;
-        continue;
-      }
-      result.claimed += 1;
-      try {
-        const settled = await this.retryHold(row);
-        if (settled) result.settled += 1;
-        else result.stillFailing += 1;
-      } catch (error: any) {
-        // Unexpected (non-distribution) failure: keep the marker, the lease expires
-        // and the hold is picked up again. Alert so it does not stay invisible.
-        result.stillFailing += 1;
-        reportMoneyAnomaly(
-          this.logger,
-          'settlement_retry_error',
-          `orderId=${row.order_id} stage=${row.settlement_failed_stage}: ${error?.message}`,
-          { orderId: row.order_id, stage: row.settlement_failed_stage }
-        );
-      }
+    await this.rearmExhaustedOrphans(now);
+    for (const row of await this.fetchDue(now)) {
+      await this.processDueHold(row, now, result);
     }
     return result;
+  }
+
+  /**
+   * Rows exhausted before daily cooldown existed have next_retry_at NULL and
+   * would otherwise never be claimed. Give them one more pass now.
+   */
+  private async rearmExhaustedOrphans(now: Date): Promise<void> {
+    const data = await this.hasura.executeMutation(
+      `mutation RearmExhaustedSettlementRetries($now: timestamptz!, $minAttempts: Int!) {
+        update_order_holds(
+          where: {
+            settlement_failed_stage: { _is_null: false }
+            settlement_next_retry_at: { _is_null: true }
+            settlement_retry_count: { _gte: $minAttempts }
+          }
+          _set: { settlement_next_retry_at: $now }
+        ) { affected_rows }
+      }`,
+      { now: now.toISOString(), minAttempts: SETTLEMENT_RETRY_MAX_ATTEMPTS }
+    );
+    const count = data?.update_order_holds?.affected_rows ?? 0;
+    if (count > 0) {
+      this.logger.warn(`settlement_retry_rearmed count=${count}`);
+    }
+  }
+
+  private async processDueHold(
+    row: SettlementRetryRow,
+    now: Date,
+    result: SettlementRetryResult
+  ): Promise<void> {
+    if (!(await this.claim(row, now))) {
+      result.skipped += 1;
+      return;
+    }
+    result.claimed += 1;
+    try {
+      const settled = await this.retryHold(row);
+      if (settled) result.settled += 1;
+      else result.stillFailing += 1;
+    } catch (error: any) {
+      result.stillFailing += 1;
+      reportMoneyAnomaly(
+        this.logger,
+        'settlement_retry_error',
+        `orderId=${row.order_id} stage=${row.settlement_failed_stage}: ${error?.message}`,
+        { orderId: row.order_id, stage: row.settlement_failed_stage }
+      );
+    }
   }
 
   private async fetchDue(now: Date): Promise<SettlementRetryRow[]> {
