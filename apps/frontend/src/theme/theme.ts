@@ -5,15 +5,18 @@ import { spacing, borderRadius, shadows, transitions } from './themeUtils';
 const { primary, secondary, cta, success, warning, error, info, surface, text } =
   brandTokens;
 
+const displayFont =
+  '"Poppins", "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
 const brandShadow = (color: string, opacity: number, blur: number, y: number) =>
   `0 ${y}px ${blur}px ${alpha(color, opacity)}`;
 
 export const theme = createTheme({
   palette: {
     mode: 'light',
-    primary, // Trust Coast Blue - app chrome, links and secondary actions
-    secondary, // Deep teal - delivery and agent chrome
-    cta, // Purchase accent - Buy / Pay / Checkout only
+    primary, // Logo blue - app chrome, links and secondary actions
+    secondary, // Navy - delivery and agent chrome
+    cta, // Logo green - Buy / Pay / Checkout only
     success,
     warning,
     error,
@@ -30,8 +33,9 @@ export const theme = createTheme({
   },
   typography: {
     fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     h1: {
+      fontFamily: displayFont,
       fontWeight: 700,
       fontSize: '3rem',
       color: text.primary,
@@ -39,6 +43,7 @@ export const theme = createTheme({
       lineHeight: 1.1,
     },
     h2: {
+      fontFamily: displayFont,
       fontWeight: 600,
       fontSize: '2.25rem',
       color: text.primary,
@@ -46,6 +51,7 @@ export const theme = createTheme({
       lineHeight: 1.2,
     },
     h3: {
+      fontFamily: displayFont,
       fontWeight: 600,
       fontSize: '1.875rem',
       color: text.primary,
@@ -53,6 +59,7 @@ export const theme = createTheme({
       lineHeight: 1.25,
     },
     h4: {
+      fontFamily: displayFont,
       fontWeight: 600,
       fontSize: '1.5rem',
       color: text.primary,
@@ -104,6 +111,61 @@ export const theme = createTheme({
       fontWeight: 500,
       color: text.muted,
       lineHeight: 1.57,
+    },
+    display: {
+      fontFamily: displayFont,
+      fontWeight: 700,
+      fontSize: '2rem',
+      lineHeight: 1.15,
+      letterSpacing: '-0.03em',
+      color: text.primary,
+    },
+    bodyLarge: {
+      fontSize: '1.0625rem',
+      fontWeight: 400,
+      lineHeight: 1.47,
+      color: text.primary,
+    },
+    bodySmall: {
+      fontSize: '0.875rem',
+      fontWeight: 400,
+      lineHeight: 1.43,
+      color: text.muted,
+    },
+    caption: {
+      fontSize: '0.75rem',
+      fontWeight: 500,
+      lineHeight: 1.33,
+      color: text.muted,
+    },
+    label: {
+      fontSize: '0.75rem',
+      fontWeight: 500,
+      lineHeight: 1.33,
+      letterSpacing: '0.01em',
+      color: text.secondary,
+    },
+    price: {
+      fontWeight: 700,
+      fontSize: '1rem',
+      lineHeight: 1.25,
+      letterSpacing: '-0.02em',
+      fontVariantNumeric: 'tabular-nums',
+      color: text.primary,
+    },
+    priceLarge: {
+      fontWeight: 700,
+      fontSize: '1.75rem',
+      lineHeight: 1.2,
+      letterSpacing: '-0.03em',
+      fontVariantNumeric: 'tabular-nums',
+      color: text.primary,
+    },
+    nav: {
+      fontSize: '0.6875rem',
+      fontWeight: 500,
+      lineHeight: 1.27,
+      letterSpacing: '0.01em',
     },
   },
   shape: {
@@ -175,6 +237,10 @@ export const theme = createTheme({
           '&:hover': {
             transform: 'none',
           },
+          '&:focus-visible': {
+            outline: `2px solid ${primary.main}`,
+            outlineOffset: '2px',
+          },
         },
         contained: {
           boxShadow: brandShadow(primary.main, 0.25, 14, 4),
@@ -216,14 +282,10 @@ export const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-          borderRadius: 14,
-          border: '1px solid rgba(0, 0, 0, 0.04)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
-            transform: 'translateY(-2px)',
-          },
+          boxShadow: shadows.sm,
+          borderRadius: borderRadius.card,
+          border: `1px solid ${surface.border}`,
+          backgroundImage: 'none',
         },
       },
     },

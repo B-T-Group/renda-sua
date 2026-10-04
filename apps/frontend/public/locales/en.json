@@ -399,6 +399,23 @@
         "not_ready_now": "Not ready to accept now",
         "targets_unclear": "Targets are unclear",
         "other": "Other"
+      },
+      "focus": {
+        "overall": "{{percent}}% overall",
+        "seeAll": "See all objectives",
+        "allMet": "You've met every objective on this plan.",
+        "otherPlan": "You have another plan",
+        "otherPlans": "You have {{count}} other plans",
+        "gap": {
+          "itemSales": "Next: {{amount}} {{currency}} more in item sales",
+          "rentals": "Next: {{amount}} {{currency}} more in rentals",
+          "clientSignups": "Next: {{count}} more client signups",
+          "clientSignupsOne": "Next: 1 more client signup",
+          "merchantRecruitments": "Next: {{count}} more merchant recruitments",
+          "merchantRecruitmentsOne": "Next: 1 more merchant recruitment",
+          "agentRecruitments": "Next: {{count}} more agent recruitments",
+          "agentRecruitmentsOne": "Next: 1 more agent recruitment"
+        }
       }
     },
     "walletHub": {
@@ -742,6 +759,12 @@
       "advanceImpactNamed": "{{name}} can draw up to {{money}}. Deposits repay that debt first.",
       "creditImpact": "{{who}} receives {{money}} of store credit {{where}}. It cannot be withdrawn and does not cover the reservation deposit.",
       "assignments": "Assignments",
+      "progress": "Progress",
+      "searchAgent": "Search agent name",
+      "emptyProgress": "No accepted plans with objectives.",
+      "allObjectivesMet": "All objectives met",
+      "progressWindow": "Progress window",
+      "progressLoadFailed": "Could not load objective progress.",
       "assignKind": "Apply",
       "template": "Template",
       "supporting": "More",
@@ -2210,6 +2233,22 @@
       "title": "Agent Orders",
       "internalRequired": "This order requires an internal agent. Contact support to become an internal agent.",
       "verificationRequired": "This order requires a verified agent. Please complete your verification to claim high-value orders."
+    },
+    "now": {
+      "active": "Active delivery",
+      "openDelivery": "Open this delivery",
+      "deliveries": "Deliveries today",
+      "earnings": "Earnings today"
+    },
+    "readiness": {
+      "locationTitle": "Turn on location",
+      "locationBody": "Location is required before you can go online and claim deliveries.",
+      "idTitle": "Add your ID",
+      "idBody": "Upload a government ID so you can claim deliveries.",
+      "momoTitle": "Finish Mobile Money",
+      "momoBody": "Add a payout number to start claiming deliveries.",
+      "pendingTitle": "ID under review",
+      "pendingBody": "You can claim deliveries once your ID is approved."
     }
   },
   "auth": {
@@ -4716,7 +4755,57 @@
         "ctaTrack": "Track order",
         "ctaView": "View order",
         "openDetail": "Open the order for details."
-      }
+      },
+      "lane": {
+        "shop": "Shop",
+        "food": "Food",
+        "rentals": "Rentals"
+      },
+      "forYou": "For you",
+      "buyAgain": "Buy again"
+    },
+    "search": {
+      "placeholder": "Search products, stores, food",
+      "emptyTitle": "No matches",
+      "emptyBody": "Try a product, a store, or a category.",
+      "recent": "Recent searches"
+    },
+    "following": {
+      "title": "Following",
+      "error": "Something went wrong while loading stores you follow.",
+      "emptyTitle": "No stores yet",
+      "emptyBody": "Follow a store to find it again here.",
+      "browse": "Browse stores",
+      "followers": "{{count}} followers",
+      "menuSubtitle": "Stores you follow"
+    },
+    "journey": {
+      "placed": "Placed",
+      "confirmed": "Confirmed",
+      "preparing": "Preparing",
+      "on_the_way": "On the way",
+      "delivered": "Delivered",
+      "agentPickingUp": "{{name}} is picking up your order.",
+      "onTheWay": "Your order is on the way.",
+      "pay": "Payment is the next step.",
+      "messagePlaced": "Your order is with the store.",
+      "messagePreparing": "Your order is being prepared.",
+      "messageDelivered": "Your order was delivered."
+    },
+    "card": {
+      "onlyLeft": "Only {{count}} left",
+      "checkAvailability": "Check availability",
+      "kitchenClosed": "Kitchen closed",
+      "orderNow": "Order now",
+      "deal": "Deal"
+    },
+    "payAfter": {
+      "title": "Pay after the store confirms",
+      "body": "Nothing is charged until the store says it can fulfil this order.",
+      "step1": "The store confirms it is available",
+      "step2": "You get a payment request",
+      "step3": "Pay within the time window",
+      "step4": "The store prepares your order"
     }
   },
   "collections": {
@@ -5217,7 +5306,14 @@
     "support": "Support",
     "forBusiness": "For Business",
     "becomeAgent": "Become an Agent",
-    "downloadApp": "Download App"
+    "downloadApp": "Download App",
+    "clientTabs": {
+      "home": "Home",
+      "search": "Search"
+    },
+    "tabs": {
+      "account": "Account"
+    }
   },
   "orderActions": {
     "cancelOrder": "Cancel Order",
@@ -5230,6 +5326,7 @@
     "dropOrder": "Drop Order",
     "confirmReceipt": "Confirm receipt",
     "askIfReady": "Ask if my order is ready",
+    "pickupFollowUp": "Pickup follow-up",
     "askIfReadySuccess": "We asked the store if your order is ready",
     "askIfReadyError": "Could not send the reminder",
     "askIfReadyAlready": "You already asked about this order",
@@ -5852,7 +5949,9 @@
       "orderItemsHeading": "Items in this order",
       "deliveryFeesLabel": "Delivery fees",
       "totalLabel": "Order total",
-      "lineTotal": "Line total"
+      "lineTotal": "Line total",
+      "request": "Request a refund",
+      "requested": "Your refund request was sent."
     },
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
     "orderCompletionSuccessTitle": "🎉 Order Successfully Completed!",
@@ -6405,9 +6504,25 @@
       "payByExpired": "The payment window has ended. This order will be cancelled automatically and you will not be charged.",
       "tomorrow": "tomorrow",
       "cancelUnpaid": "You haven’t paid yet, so cancelling is free and nothing is charged.",
+      "cancelFeeAfterPay": "If you cancel after you pay, {{percent}}% of the items is kept.",
       "storeNoConfirm": "If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged."
     },
-    "keepOrder": "Keep order"
+    "keepOrder": "Keep order",
+    "cancellationFeePercentOfItems": "{{percent}}% of the items.",
+    "cancellationNetRefund": "You get back {{amount}} {{currency}}.",
+    "pickupNoshow": {
+      "title": "Client pickup",
+      "remindBody": "Order #{{orderNumber}} is ready. Send a reminder to come and collect it.",
+      "remind": "Remind client",
+      "reminded": "Reminder sent",
+      "remindError": "Could not send the reminder",
+      "loadError": "Could not load pickup options",
+      "feeLine": "Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.",
+      "wait": "You can cancel for a no-show after the order has been ready for {{hours}} hours.",
+      "cancel": "Cancel — client did not pick up",
+      "cancelled": "Pickup cancelled. The client is refunded except for the fee.",
+      "cancelError": "Could not cancel this pickup"
+    }
   },
   "items": {
     "brand": "Brand",
@@ -6430,6 +6545,13 @@
     "notFound": "Item not found",
     "perishable": "Perishable",
     "productInformation": "Product Information",
+    "availability": {
+      "checkCta": "Check availability with store",
+      "checkCtaA11y": "Check availability of {{name}} with the store",
+      "pending": "Waiting for the store…",
+      "requestSent": "We’ve asked the store to confirm availability. You’ll be notified when they reply.",
+      "requestFailed": "Could not send the availability check. Try again shortly."
+    },
     "reviews": "Reviews",
     "sku": "SKU",
     "specialHandling": "Special handling",
@@ -7653,7 +7775,11 @@
     "pickupNotice": "No delivery fee. Collect your order at each store once it is ready.",
     "pickupNoFee": "Waived (store pickup)",
     "diaspora": {
+      "eyebrow": "For someone special",
+      "illustrationLabel": "A gift for someone special",
       "title": "Sending an order home",
+      "localTitle": "Send this order as a gift",
+      "localLine": "A personal delivery, handed over in their name.",
       "payingFrom": "Paying from {{country}}",
       "deliveringTo": "Delivering to {{country}}",
       "sendingToSomeoneElse": "Someone else is receiving this order",

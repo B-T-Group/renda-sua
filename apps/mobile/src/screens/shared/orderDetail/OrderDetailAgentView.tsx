@@ -40,6 +40,8 @@ import {
   DeliveryRequirementsCard,
   DeliveryStopsSection,
 } from '../../../components/delivery';
+import { ActiveDeliveryView } from '../../../components/agent/ActiveDeliveryView';
+import type { DeliveryEarnings, DeliveryOrderViewModel } from '../../../orders/model';
 import { useStore } from '../../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../../utils/defaultClaimTopupPhone';
 import { claimAwaitingParams } from '../../../utils/claimAwaitingNav';
@@ -110,6 +112,54 @@ function formatDate(dateString: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function DeliveryDetails({
+  sheet,
+  bottomInset,
+  vm,
+  earnings,
+  maskDeliveryContact,
+  cardStyle,
+}: {
+  sheet: boolean;
+  bottomInset: number;
+  vm: DeliveryOrderViewModel;
+  earnings: DeliveryEarnings | null;
+  maskDeliveryContact: boolean;
+  cardStyle: object;
+}) {
+  const { t } = useTranslation();
+  const { colors, typography } = useTheme();
+  const body = (
+    <>
+      <DeliveryObjectiveHero
+        objective={vm.currentObjective}
+        nextStepMessage={vm.nextStepMessage}
+        urgency={vm.urgency}
+      />
+      <DeliveryStopsSection stops={vm.stops} maskDeliveryContact={maskDeliveryContact} />
+      {vm.deliveryWindowLabel ? (
+        <View style={cardStyle}>
+          <Text style={[styles.sectionTitle, { color: colors.text.secondary }, typography.caption]}>
+            {t('orders.deliveryTimeWindow.title', 'Delivery Time Window')}
+          </Text>
+          <Text style={[styles.sectionValue, { color: colors.text.primary }, typography.body2]}>
+            {vm.deliveryWindowLabel}
+          </Text>
+        </View>
+      ) : null}
+      <DeliveryPackageCard packageInfo={vm.packageInfo} />
+      <DeliveryRequirementsCard requirements={vm.deliveryRequirements} />
+      {earnings ? <DeliveryEarningsCard earnings={earnings} /> : null}
+    </>
+  );
+  if (!sheet) return body;
+  return (
+    <ActiveDeliveryView visible bottomInset={bottomInset}>
+      {body}
+    </ActiveDeliveryView>
+  );
 }
 
 export default function OrderDetailAgentView({ route, navigation }: Props) {
@@ -744,6 +794,12 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
             })
           ? t('agent.openOrders.uploadIdToClaim', 'Upload ID to claim')
           : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim');
+  const showActiveDeliverySheet = [
+    'assigned_to_agent',
+    'picked_up',
+    'in_transit',
+    'out_for_delivery',
+  ].includes(status);
   const earningsForCard = deliveryVm
     ? {
         ...deliveryVm.earnings,
@@ -766,30 +822,14 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {deliveryVm ? (
-          <>
-            <DeliveryObjectiveHero
-              objective={deliveryVm.currentObjective}
-              nextStepMessage={deliveryVm.nextStepMessage}
-              urgency={deliveryVm.urgency}
-            />
-            <DeliveryStopsSection
-              stops={deliveryVm.stops}
-              maskDeliveryContact={!showClientPii}
-            />
-            {deliveryVm.deliveryWindowLabel ? (
-              <View style={cardStyle}>
-                <Text style={[styles.sectionTitle, { color: colors.text.secondary }, typography.caption]}>
-                  {t('orders.deliveryTimeWindow.title', 'Delivery Time Window')}
-                </Text>
-                <Text style={[styles.sectionValue, { color: colors.text.primary }, typography.body2]}>
-                  {deliveryVm.deliveryWindowLabel}
-                </Text>
-              </View>
-            ) : null}
-            <DeliveryPackageCard packageInfo={deliveryVm.packageInfo} />
-            <DeliveryRequirementsCard requirements={deliveryVm.deliveryRequirements} />
-            {earningsForCard ? <DeliveryEarningsCard earnings={earningsForCard} /> : null}
-          </>
+          <DeliveryDetails
+            sheet={showActiveDeliverySheet}
+            bottomInset={showStickyPrimary ? stickyBottomPad + 140 : 0}
+            vm={deliveryVm}
+            earnings={earningsForCard}
+            maskDeliveryContact={!showClientPii}
+            cardStyle={cardStyle}
+          />
         ) : null}
 
         {/* Delivery workflow indicator – only shown for active agent orders */}

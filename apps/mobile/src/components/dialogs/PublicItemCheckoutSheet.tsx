@@ -41,6 +41,7 @@ export interface PublicCheckoutItemSummary {
 export interface PublicItemCheckoutSheetProps {
   visible: boolean;
   inventoryItemId: string;
+  quantity?: number;
   item: PublicCheckoutItemSummary;
   onDismiss: () => void;
   /**
@@ -83,6 +84,7 @@ function resolveInitialPhoneCountry(itemCountryCode?: string | null): CountryCod
 function PublicItemCheckoutSheetComponent({
   visible,
   inventoryItemId,
+  quantity = 1,
   item,
   onDismiss,
   resolvedVerificationMethod,
@@ -283,11 +285,11 @@ function PublicItemCheckoutSheetComponent({
         );
         return;
       }
-      await auth.setPostAuthResumeForInventoryItem(inventoryItemId);
+      await auth.setPostAuthResumeForInventoryItem(inventoryItemId, quantity);
       setOtpTarget(target);
       setStep('otp');
     },
-    [auth, contactMethod, emailNormalized, inventoryItemId, phoneE164, t]
+    [auth, contactMethod, emailNormalized, inventoryItemId, phoneE164, quantity, t]
   );
 
   const emailTakenMessage = useCallback(
@@ -412,7 +414,7 @@ function PublicItemCheckoutSheetComponent({
         setError(auth.error || t('auth.errors.generic', 'Something went wrong.'));
         return;
       }
-      await auth.setPostAuthResumeForInventoryItem(inventoryItemId);
+      await auth.setPostAuthResumeForInventoryItem(inventoryItemId, quantity);
       setOtpTarget({ channel: 'phone', value: phoneE164 });
       setStep('otp');
       return;
@@ -436,7 +438,7 @@ function PublicItemCheckoutSheetComponent({
       setError(auth.error || t('auth.errors.generic', 'Something went wrong.'));
       return;
     }
-    await auth.setPostAuthResumeForInventoryItem(inventoryItemId);
+    await auth.setPostAuthResumeForInventoryItem(inventoryItemId, quantity);
     setOtpTarget({ channel: 'email', value: emailNormalized });
     setStep('otp');
   }, [
@@ -444,6 +446,7 @@ function PublicItemCheckoutSheetComponent({
     contactMethod,
     emailNormalized,
     inventoryItemId,
+    quantity,
     isEmailValid,
     isPhoneValid,
     phoneE164,

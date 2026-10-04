@@ -5,6 +5,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import AppStoreBadges from '../common/AppStoreBadges';
 import { marketingGradients } from '../../theme/themeUtils';
+import { brandTokens } from '../../theme/brandTokens';
 import { HOME_ACCENTS } from './homeTheme';
 
 const downloadBenefits = [
@@ -100,7 +101,7 @@ const DownloadAppSection: React.FC = () => {
                 <svg viewBox="0 0 260 500" style={{ width: 220, height: 'auto', filter: 'drop-shadow(0 32px 80px rgba(0,0,0,0.5))' }} aria-hidden="true">
                   <rect x="8" y="0" width="244" height="500" rx="34" fill="#0f172a" />
                   <rect x="16" y="8" width="228" height="484" rx="28" fill="#1e293b" />
-                  <rect x="16" y="8" width="228" height="484" rx="28" fill="#f8fafc" />
+                  <rect x="16" y="8" width="228" height="484" rx="28" fill={brandTokens.surface.background} />
                   <rect x="16" y="8" width="228" height="44" rx="28" fill={HOME_ACCENTS.primary} />
                   <rect x="16" y="36" width="228" height="16" fill={HOME_ACCENTS.primary} />
                   <rect x="88" y="8" width="84" height="24" rx="12" fill="#0f172a" />

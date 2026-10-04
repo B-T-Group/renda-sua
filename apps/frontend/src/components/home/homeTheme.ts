@@ -1,7 +1,7 @@
 import { brandTokens } from '../../theme/brandTokens';
 
 /**
- * Marketing accents for the homepage, resolved from the Trust Coast Blue
+ * Marketing accents for the homepage, resolved from the logo brand
  * tokens. Illustrations and section chrome pick from here so the landing page
  * cannot drift from the product palette.
  */

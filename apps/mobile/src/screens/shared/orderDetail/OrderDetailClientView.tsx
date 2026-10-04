@@ -21,6 +21,9 @@ import { SectionCard } from '../../../components/common/SectionCard';
 import { InfoRow } from '../../../components/common/InfoRow';
 import { RateOrderModal, type RateOrderMode } from '../../../components/dialogs/RateOrderModal';
 import { OrderPhaseBanner } from '../../../components/orders/OrderPhaseBanner';
+import { OrderJourneyTimeline } from '../../../components/client/OrderJourneyTimeline';
+import { ClientTrackingHero } from '../../../components/client/ClientTrackingHero';
+import { ClientRefundRequestButton } from '../../../components/client/ClientRefundRequestButton';
 import { FirstOrderJourneyCard } from '../../../components/client/FirstOrderJourneyCard';
 import { ShippingTrackingCard } from '../../../components/orders/ShippingTrackingCard';
 import { ContactCard } from '../../../components/orders/shared/ContactCard';
@@ -36,6 +39,7 @@ import { agentApi } from '../../../services/agentApi';
 import type { Address, Order, OrderItem } from '../../../types/agent';
 import { clientCanCancelOrder, clientShowAgentLocation, clientShowDeliveryPin, clientShowNoAgentOptions } from '../../../utils/clientOrderActions';
 import { getClientOrderJourney } from '../../../utils/clientOrderJourney';
+import { isOrderRefundRequestAllowed } from '../../../utils/orderRefundWindow';
 import { trackCancellationEvent } from '../../../utils/cancellationAnalytics';
 import {
   orderItemImageUrl,
@@ -660,6 +664,22 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           <OrderPhaseBanner order={order} role="client" />
         )}
 
+        {firstOrderJourney ? null : (
+          <OrderJourneyTimeline
+            input={orderToPhaseInput(order)}
+            agentName={order.assigned_agent?.user?.first_name}
+          />
+        )}
+        <ClientTrackingHero
+          phase={phaseInfo.phase}
+          status={order.current_status}
+          fulfillment={order.fulfillment_method}
+          agentName={order.assigned_agent?.user?.first_name}
+          storeName={order.business_location?.name}
+          storeAddress={order.business_location?.address?.address_line_1}
+          onOpenMap={phaseInfo.phase === 'in_delivery' ? () => setMapOpen(true) : undefined}
+        />
+
         {showNoAgentOptions ? (
           <View style={{ marginBottom: SECTION_GAP }}>
             <View
@@ -715,6 +735,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             trackingNumber={order.shipping_tracking_number}
             shippedAt={order.shipped_at}
           />
+        ) : null}
+
+        {isOrderRefundRequestAllowed(order.completed_at) ? (
+          <ClientRefundRequestButton orderId={order.id} />
         ) : null}
 
         {/* ── Rating CTAs (eligibility-driven) ─────────────────────────── */}
@@ -951,6 +975,8 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           ) : showStickyPrimary ? (
             <Button
               mode="contained"
+              buttonColor={stickyPrimaryId === 'pay' ? colors.cta.main : undefined}
+              textColor={stickyPrimaryId === 'pay' ? colors.cta.contrast : undefined}
               loading={
                 stickyPrimaryId === 'reorder'
                   ? reorderFlow.loading

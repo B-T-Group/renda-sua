@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
+import { brandTokens } from '../../theme/brandTokens';
 
 interface Props {
   size?: number;
@@ -19,18 +20,18 @@ export function AssistantEmptyIllustration({ size = 160 }: Props) {
     >
       <defs>
         <radialGradient id="aeiOrbGrad" cx="38%" cy="33%">
-          <stop offset="0%" stopColor="#26c6da" />
-          <stop offset="100%" stopColor="#00575e" />
+          <stop offset="0%" stopColor={brandTokens.primary.light} />
+          <stop offset="100%" stopColor={brandTokens.primary.dark} />
         </radialGradient>
         <radialGradient id="aeiGlowGrad" cx="50%" cy="50%">
-          <stop offset="0%" stopColor="#00e5ff" stopOpacity={0.28} />
-          <stop offset="100%" stopColor="#00e5ff" stopOpacity={0} />
+          <stop offset="0%" stopColor={brandTokens.primary.light} stopOpacity={0.28} />
+          <stop offset="100%" stopColor={brandTokens.primary.light} stopOpacity={0} />
         </radialGradient>
       </defs>
 
       {/* Outer rings */}
-      <circle cx="80" cy="80" r="72" fill="none" stroke="#00e5ff" strokeWidth="0.8" strokeOpacity={0.18} />
-      <circle cx="80" cy="80" r="57" fill="none" stroke="#00e5ff" strokeWidth="0.8" strokeOpacity={0.13} />
+      <circle cx="80" cy="80" r="72" fill="none" stroke={brandTokens.primary.light} strokeWidth="0.8" strokeOpacity={0.18} />
+      <circle cx="80" cy="80" r="57" fill="none" stroke={brandTokens.primary.light} strokeWidth="0.8" strokeOpacity={0.13} />
 
       {/* Ambient glow */}
       <circle cx="80" cy="80" r="52" fill="url(#aeiGlowGrad)" />
@@ -49,15 +50,15 @@ export function AssistantEmptyIllustration({ size = 160 }: Props) {
       {/* Sparkle top-right */}
       <path
         d="M122 28 L125 39 L136 42 L125 45 L122 56 L119 45 L108 42 L119 39 Z"
-        fill="#00e5ff"
+        fill={brandTokens.primary.light}
         fillOpacity={0.75}
       />
 
       {/* Small accent dots */}
-      <circle cx="28" cy="58" r="2.2" fill="#00e5ff" fillOpacity={0.38} />
-      <circle cx="132" cy="103" r="2.2" fill="#00e5ff" fillOpacity={0.38} />
-      <circle cx="43" cy="124" r="1.6" fill="#00e5ff" fillOpacity={0.28} />
-      <circle cx="118" cy="118" r="1.6" fill="#00e5ff" fillOpacity={0.22} />
+      <circle cx="28" cy="58" r="2.2" fill={brandTokens.primary.light} fillOpacity={0.38} />
+      <circle cx="132" cy="103" r="2.2" fill={brandTokens.primary.light} fillOpacity={0.38} />
+      <circle cx="43" cy="124" r="1.6" fill={brandTokens.primary.light} fillOpacity={0.28} />
+      <circle cx="118" cy="118" r="1.6" fill={brandTokens.primary.light} fillOpacity={0.22} />
     </Box>
   );
 }

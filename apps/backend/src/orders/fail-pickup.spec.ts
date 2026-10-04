@@ -37,7 +37,10 @@ function createHarness() {
   });
   const sendOrderCancelledMessage = jest.fn().mockResolvedValue(undefined);
   const restore = jest.fn().mockResolvedValue(undefined);
-  const getPolicy = jest.fn().mockResolvedValue({ cancellationFee: 500 });
+  const quoteNoshowFee = jest.fn().mockResolvedValue({
+    cancellationFee: 500,
+    refundAmount: 4500,
+  });
   const cancelOrderPaymentIntent = jest.fn().mockResolvedValue({ success: true });
   const getOrderDetails = jest.fn();
   const service = Object.create(OrdersService.prototype) as OrdersService;
@@ -47,7 +50,7 @@ function createHarness() {
     orderStatusService: { updateOrderStatus },
     orderQueueService: { sendOrderCancelledMessage },
     purchaseCreditsService: { restore },
-    cancellationPolicyService: { getPolicy },
+    cancellationPolicyService: { quoteNoshowFee },
     stripeCaptureService: { cancelOrderPaymentIntent },
   });
   jest
@@ -63,7 +66,7 @@ function createHarness() {
     updateOrderStatus,
     sendOrderCancelledMessage,
     restore,
-    getPolicy,
+    quoteNoshowFee,
     cancelOrderPaymentIntent,
     getOrderDetails,
   };
@@ -84,6 +87,16 @@ function mockLookups(
     if (query.includes('ValidatePickupFailureReason')) {
       return { pickup_failure_reasons_by_pk: reason };
     }
+    if (query.includes('PickupReadyAt')) {
+      return {
+        order_status_history: [
+          { created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
+        ],
+      };
+    }
+    if (query.includes('PickupNoshowHours')) {
+      return { application_configurations: [{ country_code: null, number_value: 2 }] };
+    }
     return {};
   });
 }
@@ -96,8 +109,9 @@ function insertedPickup(executeMutation: jest.Mock) {
 }
 
 describe('OrdersService.failPickup', () => {
-  // Customer no-show at pickup is NOT part of the 30% cancellation fee: it keeps the
-  // legacy flat `cancellation_fee` (legacyFlatFee) and its existing behaviour.
+  // Customer no-show uses the percent cancellation fee (same as a client cancel)
+  // and is only allowed after the ready window. The harness treats the order as
+  // ready 3 hours ago so the default 2-hour window is open.
   const request = { orderId: 'order-1', failure_reason_id: REASON_ID, notes: 'no show' };
 
   it('requires a failure reason before loading the order', async () => {
@@ -134,22 +148,23 @@ describe('OrdersService.failPickup', () => {
       readyOrder({ current_status: 'failed', total_amount: 2000 })
     );
     mockLookups(harness.executeQuery, null);
-    harness.getPolicy.mockResolvedValue({ cancellationFee: 200 });
+    harness.quoteNoshowFee.mockResolvedValue({
+      cancellationFee: 200,
+      refundAmount: 1800,
+    });
 
     const result = await harness.service.failPickup(request);
 
     expect(result.refund_amount).toBe(1800);
     expect(result.fee_retained).toBe(200);
-    expect(harness.getPolicy).toHaveBeenCalledWith(
-      expect.objectContaining({ current_status: 'ready_for_pickup' }),
-      'client',
-      { legacyFlatFee: true }
+    expect(harness.quoteNoshowFee).toHaveBeenCalledWith(
+      expect.objectContaining({ current_status: 'ready_for_pickup' })
     );
     expect(harness.updateOrderStatus).not.toHaveBeenCalled();
     expect(harness.sendOrderCancelledMessage).toHaveBeenCalledWith(
       'order-1',
-      'client',
-      'no show',
+      'business',
+      'client_no_show',
       'ready_for_pickup'
     );
   });
@@ -194,7 +209,9 @@ describe('OrdersService.failPickup', () => {
 
   it('keeps the cancellation fee and refunds the rest for a paid cooked-food pickup', async () => {
     const harness = createHarness();
-    harness.getOrderDetails.mockResolvedValue(readyOrder());
+    harness.getOrderDetails.mockResolvedValue(
+      readyOrder({ delivery_fee_waived: true, base_delivery_fee: 500 })
+    );
     mockLookups(harness.executeQuery, null);
 
     const result = await harness.service.failPickup(request);
@@ -216,21 +233,21 @@ describe('OrdersService.failPickup', () => {
       currency: 'XAF',
       fulfillment_method: 'pickup',
     });
-    expect(harness.getPolicy).toHaveBeenCalledWith(
+    expect(harness.quoteNoshowFee).toHaveBeenCalledWith(
       expect.objectContaining({
         business_location: { country_code: 'CM' },
         payment_status: 'paid',
-      }),
-      'client',
-      { legacyFlatFee: true }
+        delivery_fee_waived: true,
+        base_delivery_fee: 500,
+      })
     );
     expect(harness.updateOrderStatus).toHaveBeenCalledWith('order-1', 'failed', {
       viaFailPickupEndpoint: true,
     });
     expect(harness.sendOrderCancelledMessage).toHaveBeenCalledWith(
       'order-1',
-      'client',
-      'no show',
+      'business',
+      'client_no_show',
       'ready_for_pickup'
     );
     expect(harness.restore).toHaveBeenCalledWith('order-1');
@@ -249,7 +266,10 @@ describe('OrdersService.failPickup', () => {
       })
     );
     mockLookups(harness.executeQuery, null);
-    harness.getPolicy.mockResolvedValue({ cancellationFee: null });
+    harness.quoteNoshowFee.mockResolvedValue({
+      cancellationFee: 0,
+      refundAmount: 5000,
+    });
 
     const result = await harness.service.failPickup({
       orderId: 'order-1',
@@ -259,12 +279,10 @@ describe('OrdersService.failPickup', () => {
     expect(result.refund_amount).toBe(5000);
     expect(result.fee_retained).toBe(0);
     expect(insertedPickup(harness.executeMutation).notes).toBeNull();
-    expect(harness.getPolicy).toHaveBeenCalledWith(
+    expect(harness.quoteNoshowFee).toHaveBeenCalledWith(
       expect.objectContaining({
         business_location: { country_code: 'GA' },
-      }),
-      'client',
-      { legacyFlatFee: true }
+      })
     );
   });
 
@@ -278,7 +296,10 @@ describe('OrdersService.failPickup', () => {
       })
     );
     mockLookups(harness.executeQuery, null);
-    harness.getPolicy.mockResolvedValue({ cancellationFee: 500 });
+    harness.quoteNoshowFee.mockResolvedValue({
+      cancellationFee: 500,
+      refundAmount: 0,
+    });
 
     const result = await harness.service.failPickup(request);
 
@@ -305,6 +326,26 @@ describe('OrdersService.failPickup', () => {
       )
     ).toBe(true);
     expect(harness.sendOrderCancelledMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects a no-show before the order has been ready for the configured hours', async () => {
+    const harness = createHarness();
+    harness.getOrderDetails.mockResolvedValue(readyOrder());
+    harness.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('FailedPickupByOrder')) return { failed_pickups: [] };
+      if (query.includes('PickupReadyAt')) {
+        return { order_status_history: [{ created_at: new Date().toISOString() }] };
+      }
+      if (query.includes('PickupNoshowHours')) {
+        return { application_configurations: [{ number_value: 2 }] };
+      }
+      return {};
+    });
+
+    await expect(harness.service.failPickup(request)).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+    expect(harness.updateOrderStatus).not.toHaveBeenCalled();
   });
 
   it('still succeeds when the refund enqueue fails', async () => {

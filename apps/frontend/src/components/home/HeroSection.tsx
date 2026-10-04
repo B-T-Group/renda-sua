@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { marketingGradients } from '../../theme/themeUtils';
 import AppStoreBadges from '../common/AppStoreBadges';
+import { brandTokens } from '../../theme/brandTokens';
 import { HOME_ACCENTS } from './homeTheme';
 
 const PhoneMockupIllustration: React.FC = () => {
@@ -25,7 +26,7 @@ const PhoneMockupIllustration: React.FC = () => {
         <rect x="10" y="0" width="300" height="580" rx="38" fill="#0f172a" />
         <rect x="18" y="8" width="284" height="564" rx="32" fill="#1e293b" />
         {/* Screen */}
-        <rect x="18" y="8" width="284" height="564" rx="32" fill="#f8fafc" />
+        <rect x="18" y="8" width="284" height="564" rx="32" fill={brandTokens.surface.background} />
         {/* Status bar */}
         <rect x="18" y="8" width="284" height="44" rx="32" fill={HOME_ACCENTS.primary} />
         <rect x="18" y="36" width="284" height="16" fill={HOME_ACCENTS.primary} />

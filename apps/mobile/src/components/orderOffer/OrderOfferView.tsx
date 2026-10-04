@@ -7,7 +7,7 @@ import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { OrderOfferUiState } from '../../stores/OrderOfferStore';
 import type { OrderOfferDetails } from '../../types/orderOffer';
-import { StatusPill } from '../common/StatusPill';
+import { OfferCountdownRing } from './OfferCountdownRing';
 
 interface OrderOfferViewProps {
   uiState: OrderOfferUiState;
@@ -18,6 +18,11 @@ interface OrderOfferViewProps {
   onDecline: () => void;
   onClose: () => void;
   onGoToAvailable: () => void;
+}
+
+function offerRingTotal(ttlSeconds: number | undefined, secondsLeft: number): number {
+  if (ttlSeconds && ttlSeconds > 0) return ttlSeconds;
+  return Math.max(secondsLeft, 1);
 }
 
 function formatRegion(city: string | null, state: string | null): string {
@@ -150,11 +155,10 @@ export function OrderOfferView({
             {t('agent.orderOffer.title', 'New Delivery')}
           </Text>
         </View>
-        <StatusPill
-          label={`${secondsLeft}s`}
-          icon="timer-outline"
-          backgroundColor={countdownColor}
-          textColor={colors.primary.contrast}
+        <OfferCountdownRing
+          secondsLeft={secondsLeft}
+          total={offerRingTotal(details?.ttlSeconds, secondsLeft)}
+          color={countdownColor}
         />
       </View>
 

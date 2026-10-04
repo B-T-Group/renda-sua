@@ -1044,7 +1044,25 @@
       "payByExpired": "The payment window has ended. This order will be cancelled automatically and you will not be charged.",
       "tomorrow": "tomorrow",
       "cancelUnpaid": "You haven’t paid yet, so cancelling is free and nothing is charged.",
+      "cancelFeeAfterPay": "If you cancel after you pay, {{percent}}% of the items is kept.",
       "storeNoConfirm": "If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged."
+    },
+    "refunds": {
+      "request": "Request a refund",
+      "requested": "Your refund request was sent."
+    },
+    "cancellationFeePercentOfItems": "{{percent}}% of the items.",
+    "cancellationNetRefund": "You get back {{amount}} {{currency}}.",
+    "pickupNoshow": {
+      "title": "Client pickup",
+      "remindBody": "Order #{{orderNumber}} is ready. Send a reminder to come and collect it.",
+      "remind": "Remind client",
+      "remindError": "Could not send the reminder",
+      "loadError": "Could not load pickup options",
+      "feeLine": "Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.",
+      "wait": "You can cancel for a no-show after the order has been ready for {{hours}} hours.",
+      "cancel": "Cancel — client did not pick up",
+      "cancelError": "Could not cancel this pickup"
     }
   },
   "orderActions": {
@@ -1067,6 +1085,7 @@
     "printLabel": "Print label",
     "markAsFailed": "Mark as failed",
     "failPickup": "Mark pickup failed",
+    "pickupFollowUp": "Pickup follow-up",
     "switchToPickupFailed": "Could not switch to store pickup."
   },
   "cancellation": {
@@ -1177,7 +1196,14 @@
     }
   },
   "nav": {
-    "manageRecipients": "Saved recipients"
+    "manageRecipients": "Saved recipients",
+    "clientTabs": {
+      "home": "Home",
+      "search": "Search"
+    },
+    "tabs": {
+      "account": "Account"
+    }
   },
   "public": {
     "items": {
@@ -2262,6 +2288,7 @@
         "receivedDays": "Received {{count}} days ago",
         "titles": {
           "newOrder": "New Order",
+          "pendingPayment": "Pending payment",
           "preparing": "Preparing Order",
           "ready": "Ready for Pickup",
           "agentAssigned": "Delivery Agent Assigned",
@@ -2271,7 +2298,9 @@
         },
         "subtitles": {
           "newOrder": "A customer is waiting for your response.",
+          "pendingPayment": "Waiting for the customer to pay.",
           "preparing": "Continue preparing this order.",
+          "readyPickupPayAfter": "The customer completes this order in the app when they collect it.",
           "readyPickup": "Customer can pick up when ready.",
           "readyDelivery": "Waiting for a delivery agent.",
           "agentAssigned": "The driver is on the way to pick up.",
@@ -2282,6 +2311,7 @@
         "cta": {
           "accept": "Accept Order",
           "openOrder": "Open Order",
+          "pendingPayment": "Pending payment",
           "markReady": "Ready",
           "viewStatus": "View Status",
           "trackDelivery": "Track Delivery",
@@ -2646,6 +2676,7 @@
       "readyConfirmTitle": "Mark ready for pickup?",
       "readyConfirmBody": "Rendasua will start looking for a delivery agent to pick up this order from your location.",
       "readyConfirmBodyStore": "The customer will be notified their order is ready to collect at your store. When they arrive, ask for their pickup PIN to confirm the handoff and capture payment.",
+      "readyConfirmBodyStorePayAfter": "The customer will be notified their order is ready to collect at your store. When they arrive, ask them to tap Complete order in the app. There is no pickup PIN.",
       "confirmConsequenceDelivery": "The customer will be notified. Prepare the order, then mark it ready — Rendasua finds a courier only after that.",
       "confirmConsequencePickup": "The customer will be notified. Prepare the order, then mark it ready when they can collect it.",
       "confirmConsequenceShipping": "The customer will be notified. Prepare the order, then mark it shipped with tracking.",
@@ -3796,7 +3827,15 @@
         "ctaTrack": "Track order",
         "ctaView": "View order",
         "cardA11y": "Order {{number}}, {{title}}"
-      }
+      },
+      "lane": {
+        "shop": "Shop",
+        "food": "Food",
+        "rentals": "Rentals"
+      },
+      "forYou": "For you",
+      "buyAgain": "Buy again",
+      "buyAgainMore": "and {{count}} more"
     },
     "rentals": {
       "title": "Rentals",
@@ -4082,17 +4121,17 @@
       "quantity": "Quantity",
       "quantityHint": "Max {{max}} available",
       "fulfillment": "Fulfillment",
-      "fulfillmentQuestion": "How do you want it?",
+      "fulfillmentQuestion": "How would you like to receive this?",
       "fulfillmentRequired": "Choose one option to continue.",
       "fulfillmentHint": "You can change this anytime.",
-      "delivery": "Delivery",
+      "delivery": "Get it delivered",
       "deliveryChoiceHint": "To your address",
       "deliveryPriceAddressRequired": "Choose an address to see the delivery price.",
-      "pickup": "Pickup",
+      "pickup": "Pick it up",
       "pickupChoiceHint": "At the store",
       "pickupHint": "Pay when you pick up at the store.",
       "pickupHintStripe": "Pay securely by card when you place your order, then pick up at the store.",
-      "shipping": "Shipping",
+      "shipping": "Ship to me",
       "shippingChoiceHint": "By carrier",
       "shippingNotice": "The seller ships this with a carrier. Pay now to place the order.",
       "shippingUnavailableMixed": "Shipping is only available when every item in your cart can be shipped.",
@@ -4294,6 +4333,49 @@
       "deliveryUnavailable": "Delivery is currently unavailable.",
       "deliveryUnavailablePickup": "Delivery is currently unavailable. You can still pick up this order at the store.",
       "switchToPickup": "Switch to pickup"
+    },
+    "search": {
+      "placeholder": "Search products, stores, food",
+      "emptyTitle": "No matches",
+      "emptyBody": "Try a product, a store, or a category.",
+      "recent": "Recent searches"
+    },
+    "following": {
+      "title": "Following",
+      "error": "Something went wrong while loading stores you follow.",
+      "emptyTitle": "No stores yet",
+      "emptyBody": "Follow a store to find it again here.",
+      "browse": "Browse stores",
+      "followers": "{{count}} followers",
+      "menuSubtitle": "Stores you follow"
+    },
+    "journey": {
+      "placed": "Placed",
+      "confirmed": "Confirmed",
+      "preparing": "Preparing",
+      "on_the_way": "On the way",
+      "delivered": "Delivered",
+      "agentPickingUp": "{{name}} is picking up your order.",
+      "onTheWay": "Your order is on the way.",
+      "pay": "Payment is the next step.",
+      "messagePlaced": "Your order is with the store.",
+      "messagePreparing": "Your order is being prepared.",
+      "messageDelivered": "Your order was delivered."
+    },
+    "card": {
+      "onlyLeft": "Only {{count}} left",
+      "checkAvailability": "Check availability",
+      "kitchenClosed": "Kitchen closed",
+      "orderNow": "Order now",
+      "deal": "Deal"
+    },
+    "payAfter": {
+      "title": "Pay after the store confirms",
+      "body": "Nothing is charged until the store says it can fulfil this order.",
+      "step1": "The store confirms it is available",
+      "step2": "You get a payment request",
+      "step3": "Pay within the time window",
+      "step4": "The store prepares your order"
     }
   },
   "auth": {
@@ -4942,6 +5024,22 @@
       "editAddress": "Edit address",
       "noAddresses": "No saved addresses.",
       "noAddressesOptional": "No saved address — nearby orders use your live location when available."
+    },
+    "now": {
+      "active": "Active delivery",
+      "openDelivery": "Open this delivery",
+      "deliveries": "Deliveries today",
+      "earnings": "Earnings today"
+    },
+    "readiness": {
+      "locationTitle": "Turn on location",
+      "locationBody": "Location is required before you can go online and claim deliveries.",
+      "idTitle": "Add your ID",
+      "idBody": "Upload a government ID so you can claim deliveries.",
+      "momoTitle": "Finish Mobile Money",
+      "momoBody": "Add a payout number to start claiming deliveries.",
+      "pendingTitle": "ID under review",
+      "pendingBody": "You can claim deliveries once your ID is approved."
     }
   },
   "completeProfile": {
@@ -5262,6 +5360,23 @@
         "not_ready_now": "Not ready to accept now",
         "targets_unclear": "Targets are unclear",
         "other": "Other"
+      },
+      "focus": {
+        "overall": "{{percent}}% overall",
+        "seeAll": "See all objectives",
+        "allMet": "You've met every objective on this plan.",
+        "otherPlan": "You have another plan",
+        "otherPlans": "You have {{count}} other plans",
+        "gap": {
+          "itemSales": "Next: {{amount}} {{currency}} more in item sales",
+          "rentals": "Next: {{amount}} {{currency}} more in rentals",
+          "clientSignups": "Next: {{count}} more client signups",
+          "clientSignupsOne": "Next: 1 more client signup",
+          "merchantRecruitments": "Next: {{count}} more merchant recruitments",
+          "merchantRecruitmentsOne": "Next: 1 more merchant recruitment",
+          "agentRecruitments": "Next: {{count}} more agent recruitments",
+          "agentRecruitmentsOne": "Next: 1 more agent recruitment"
+        }
       }
     },
     "walletHub": {
@@ -7112,6 +7227,8 @@
     "someoneElseReceiving": "Someone else is receiving this order",
     "someoneElseHelp": "Turn this on to choose who will receive the order. We will send them delivery updates.",
     "checkoutHeader": "Diaspora checkout",
+    "eyebrow": "For someone special",
+    "illustrationLabel": "A gift for someone special",
     "selectRecipientTitle": "Who is receiving this order?",
     "selectRecipientPrompt": "Tap a recipient to continue",
     "selectRecipientToPay": "Select a recipient before paying",

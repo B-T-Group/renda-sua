@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
+import { resolveProductCardHint } from '../../utils/resolveProductCardHint';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
@@ -650,6 +651,12 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
       {/* Content Section - Bottom */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <CardContent sx={{ flexGrow: 1, p: 1.5, pb: 1 }}>
+          <ProductCardHintLine
+            quantity={inventory.computed_available_quantity}
+            isFood={Boolean(inventory.food_availability)}
+            foodOpen={inventory.food_availability?.is_available_now}
+            hasDeal={Boolean(inventory.hasActiveDeal)}
+          />
           {packSavings && !exportAvailable ? (
             <Typography variant="caption" color="success.dark" fontWeight={700} sx={{ display: 'block', mb: 0.5 }}>
               {t('orders.variant.saveOnPack', 'Save {{pct}}% by buying a pack of {{count}} units', packSavings)}
@@ -1416,5 +1423,38 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
     </Card>
   );
 };
+
+function ProductCardHintLine({
+  quantity,
+  isFood,
+  foodOpen,
+  hasDeal,
+}: {
+  quantity: number;
+  isFood: boolean;
+  foodOpen?: boolean;
+  hasDeal: boolean;
+}) {
+  const { t } = useTranslation();
+  const hint = resolveProductCardHint({ quantity, isFood, foodOpen, hasDeal });
+  if (!hint) return null;
+  const label =
+    hint.id === 'low_stock'
+      ? t('client.card.onlyLeft', 'Only {{count}} left', { count: hint.count })
+      : hint.id === 'check_availability'
+        ? t('client.card.checkAvailability', 'Check availability')
+        : hint.id === 'food_closed'
+          ? t('client.card.kitchenClosed', 'Kitchen closed')
+          : hint.id === 'food_open'
+            ? t('client.card.orderNow', 'Order now')
+            : hint.id === 'deal'
+              ? t('client.card.deal', 'Deal')
+              : hint.label;
+  return (
+    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+      {label}
+    </Typography>
+  );
+}
 
 export default DashboardItemCard;

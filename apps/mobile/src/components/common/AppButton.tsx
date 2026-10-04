@@ -8,12 +8,14 @@ import {
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { usePressScale } from '@/theme/motionHooks';
 import { Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { ThemeColors } from '@/theme';
 
-export type AppButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type AppButtonVariant = 'primary' | 'cta' | 'secondary' | 'outline' | 'ghost' | 'danger';
 
 export interface AppButtonProps {
   label: string;
@@ -29,8 +31,8 @@ export interface AppButtonProps {
   style?: StyleProp<ViewStyle>;
   labelStyle?: StyleProp<TextStyle>;
   accessibilityLabel?: string;
-  /** Minimum height: 48dp (spec), defaults to 52 for standard use */
-  size?: 'medium' | 'large';
+  /** 44 / 48 / 52dp. Defaults to large. */
+  size?: 'small' | 'medium' | 'large';
 }
 
 function variantStyles(colors: ThemeColors) {
@@ -40,6 +42,12 @@ function variantStyles(colors: ThemeColors) {
       containerPressed: { backgroundColor: colors.primary.dark },
       label: { color: colors.primary.contrast },
       spinner: colors.primary.contrast,
+    },
+    cta: {
+      container: { backgroundColor: colors.cta.main },
+      containerPressed: { backgroundColor: colors.cta.dark },
+      label: { color: colors.cta.contrast },
+      spinner: colors.cta.contrast,
     },
     secondary: {
       container: { backgroundColor: colors.secondary.main },
@@ -93,11 +101,15 @@ export function AppButton({
   const variants = useMemo(() => variantStyles(colors), [colors]);
   const vStyle = variants[variant];
   const isInert = loading || disabled;
-  const height = size === 'large' ? 52 : 48;
+  const height = size === 'small' ? 44 : size === 'medium' ? 48 : 52;
+  const press = usePressScale();
 
   return (
+    <Animated.View style={[fullWidth && styles.fullWidth, press.animatedStyle]}>
     <Pressable
       onPress={isInert ? undefined : onPress}
+      onPressIn={isInert ? undefined : press.onPressIn}
+      onPressOut={press.onPressOut}
       disabled={isInert}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
@@ -143,11 +155,16 @@ export function AppButton({
         </View>
       )}
     </Pressable>
+    </Animated.View>
   );
 }
 
 export function PrimaryButton(props: Omit<AppButtonProps, 'variant'>) {
   return <AppButton {...props} variant="primary" />;
+}
+
+export function CtaButton(props: Omit<AppButtonProps, 'variant'>) {
+  return <AppButton {...props} variant="cta" />;
 }
 
 export function SecondaryButton(props: Omit<AppButtonProps, 'variant'>) {

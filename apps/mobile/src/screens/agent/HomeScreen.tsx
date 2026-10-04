@@ -45,6 +45,8 @@ import { ActionsNeededSection } from '../../components/common/ActionsNeededSecti
 import { NotificationBellButton } from '../../components/common/NotificationBellButton';
 import { TintedHeaderBlock } from '../../components/common/TintedHeaderBlock';
 import { AgentActivationChecklist } from '../../components/agent/AgentActivationChecklist';
+import { AgentNowSection } from '../../components/agent/AgentNowSection';
+import { AgentObjectiveFocusCard } from '../../components/agent/AgentObjectiveFocusCard';
 import { FeatureCard } from '../../components/common/FeatureCard';
 import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
@@ -67,6 +69,7 @@ import {
   agentNeedsIdUpload,
   agentNeedsMomoSetup,
 } from '../../utils/agentClaimSetupGate';
+import { resolveClaimReadiness } from '../../utils/claimReadiness';
 
 const MAX_HOME_ORDERS = 3;
 
@@ -159,6 +162,12 @@ export default function HomeScreen() {
   });
   const idRejected =
     !walletIsStripeRail && !isVerified && idDocumentStatus === 'rejected';
+  const claimReadiness = resolveClaimReadiness({
+    isStripeRail: walletIsStripeRail,
+    isVerified,
+    idDocumentStatus,
+    locationReady: true,
+  });
   const showVerificationBanner =
     !verificationLoading &&
     !ordersCanClaim &&
@@ -454,6 +463,7 @@ export default function HomeScreen() {
               onPress={() => (navigation as any).navigate('NotificationsCenter')}
             />
           </View>
+          <AgentNowSection readiness={claimReadiness} />
           <ActionsNeededSection
             items={actionsNeededItems}
             onMarkAllRead={() => void dismissAll()}
@@ -472,6 +482,7 @@ export default function HomeScreen() {
             projectedCurrency={referralPayout?.currency ?? displayCurrency}
             onOpenWallet={() => goTo('AgentAccounts')}
           />
+          <AgentObjectiveFocusCard />
           {creditSummary.totalRemaining > 0 ? (
             <StoreCreditsSnapshot
               grants={usableCredits}

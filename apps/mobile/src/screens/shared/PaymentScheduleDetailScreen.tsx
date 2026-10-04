@@ -6,10 +6,12 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Button, ProgressBar, Text, TextInput } from 'react-native-paper';
+import { Button, Text, TextInput } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { api } from '@/services/apiClient';
+import { ObjectiveProgressList } from '../../components/agent/ObjectiveProgressList';
+import type { ObjectiveProgress } from '../../components/agent/objectiveProgress';
 import { useTheme } from '../../contexts/ThemeContext';
 import { spacing } from '@/theme';
 import type { RootStackParamList } from '@/navigation/AgentRootNavigator';
@@ -32,21 +34,7 @@ interface Detail {
   amount: number;
   currency: string;
   schedule: { name: string; frequency: string };
-  targets: {
-    agentRecruitments: number | null;
-    clientSignups: number | null;
-    merchantRecruitments: number | null;
-    itemSalesAmount: number | null;
-    rentalAmount: number | null;
-  };
-  progress: {
-    agentRecruitments: { actual: number };
-    clientSignups: { actual: number };
-    merchantRecruitments: { actual: number };
-    itemSales: { actual: number };
-    rentals: { actual: number };
-    completionPercent: number | null;
-  };
+  progress: ObjectiveProgress;
 }
 
 export default function PaymentScheduleDetailScreen({ route }: Props) {
@@ -112,7 +100,6 @@ export default function PaymentScheduleDetailScreen({ route }: Props) {
   }
 
   const awaiting = ['pending', 'deferred'].includes(detail.decision);
-  const percent = detail.progress.completionPercent;
 
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}>
@@ -150,15 +137,11 @@ export default function PaymentScheduleDetailScreen({ route }: Props) {
         <Text variant="titleMedium">
           {t('accounts.schedules.objectives', 'Objectives')}
         </Text>
-        {percent != null && detail.decision === 'accepted' ? (
-          <View style={{ gap: spacing.xs }}>
-            <Text>
-              {t('accounts.schedules.salesCompletion', 'Sales completion')}: {percent}%
-            </Text>
-            <ProgressBar progress={percent / 100} color={colors.primary.main} />
-          </View>
-        ) : null}
-        <ObjectiveLines detail={detail} />
+        <ObjectiveProgressList
+          progress={detail.progress}
+          currency={detail.currency}
+          showPercent={detail.decision === 'accepted'}
+        />
         {detail.decision !== 'accepted' ? (
           <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
             {t(
@@ -240,50 +223,6 @@ function reasonLabel(code: string) {
     default:
       return 'Other';
   }
-}
-
-function ObjectiveLines({ detail }: { detail: Detail }) {
-  const { t } = useTranslation();
-  const lines: string[] = [];
-  if (detail.targets.agentRecruitments != null) {
-    lines.push(
-      `${t('accounts.schedules.agentRecruitments', 'Agent recruitments')}: ${detail.progress.agentRecruitments.actual} / ${detail.targets.agentRecruitments}`
-    );
-  }
-  if (detail.targets.clientSignups != null) {
-    lines.push(
-      `${t('accounts.schedules.clientSignups', 'Client signups')}: ${detail.progress.clientSignups.actual} / ${detail.targets.clientSignups}`
-    );
-  }
-  if (detail.targets.merchantRecruitments != null) {
-    lines.push(
-      `${t('accounts.schedules.merchantRecruitments', 'Merchant recruitments')}: ${detail.progress.merchantRecruitments.actual} / ${detail.targets.merchantRecruitments}`
-    );
-  }
-  if (detail.targets.itemSalesAmount != null) {
-    lines.push(
-      `${t('accounts.schedules.itemSales', 'Item sales')}: ${detail.progress.itemSales.actual} / ${detail.targets.itemSalesAmount} ${detail.currency}`
-    );
-  }
-  if (detail.targets.rentalAmount != null) {
-    lines.push(
-      `${t('accounts.schedules.rentals', 'Rentals')}: ${detail.progress.rentals.actual} / ${detail.targets.rentalAmount} ${detail.currency}`
-    );
-  }
-  if (!lines.length) {
-    return (
-      <Text>
-        {t('accounts.schedules.noObjectives', 'This plan has no attached objectives.')}
-      </Text>
-    );
-  }
-  return (
-    <View style={{ gap: spacing.xs }}>
-      {lines.map((line) => (
-        <Text key={line}>{line}</Text>
-      ))}
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({

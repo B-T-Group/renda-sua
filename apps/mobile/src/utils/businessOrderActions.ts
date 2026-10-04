@@ -22,6 +22,7 @@ export type BusinessOrderActionId =
   | 'requestPickupPayment'
   | 'confirmClientPickup'
   | 'failPickup'
+  | 'pickupFollowUp'
   | 'printLabel'
   | 'markShipped'
   | 'updateTracking';
@@ -208,6 +209,22 @@ function standardOrderActions(
       }
       break;
     case 'ready_for_pickup':
+      if (order.fulfillment_method === 'pickup') {
+        actions.push({
+          id: 'pickupFollowUp',
+          labelKey: 'orderActions.pickupFollowUp',
+          defaultLabel: 'Pickup follow-up',
+          primary: true,
+        });
+        if (pickupPaymentNeedsCollection(order)) {
+          actions.push({
+            id: 'requestPickupPayment',
+            labelKey: 'orderActions.requestPickupPayment',
+            defaultLabel: 'Request pickup payment',
+          });
+        }
+        break;
+      }
       if (isCookedFoodReadyFailEligible(order)) {
         actions.push({
           id: 'failPickup',

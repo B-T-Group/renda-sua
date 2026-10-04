@@ -37,6 +37,7 @@ import { useCartDeliveryFees } from '../../hooks/useCartDeliveryFees';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useResolvedCheckout } from '../../hooks/useResolvedCheckout';
 import { useCheckoutLinkedMoMoPhone } from '../../hooks/useCheckoutLinkedMoMoPhone';
+import { PayAfterConfirmExplainer } from '../../components/client/PayAfterConfirmExplainer';
 import { PlaceOrderDeliveryWindowBlock } from '../../components/browse/PlaceOrderDeliveryWindowBlock';
 import { PlaceOrderPaymentBlock } from '../../components/browse/PlaceOrderPaymentBlock';
 import { appliedPurchaseCredit } from '../../utils/purchaseCredits';
@@ -46,6 +47,7 @@ import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDial
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
 import { PlaceOrderDeliveryAddressBlock } from '../../components/place-order/PlaceOrderDeliveryAddressBlock';
 import {
+  offeredFulfillmentCount,
   PlaceOrderFulfillmentChoice,
   type OrderFulfillment,
 } from '../../components/place-order/PlaceOrderFulfillmentChoice';
@@ -62,6 +64,7 @@ import { ReservationDepositExplainer } from '../../components/checkout/Reservati
 import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
 import { resolveDepositAmount, isMoMoDepositCheckoutPath, preflightDepositCopy } from '../../types/deposit';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
+import { checkoutStickyDisabledReason } from '../../utils/checkoutStickyDisabledReason';
 import { isAddressComplete } from '../../utils/addressCompleteness';
 import {
   cartShippingAvailability,
@@ -728,8 +731,14 @@ export default observer(function CartCheckoutScreen() {
     t,
   ]);
 
+  const fulfillmentOptions = offeredFulfillmentCount({
+    pickupAvailable: pickupEligible,
+    deliveryHidden: !deliveryOffered,
+    shippingAvailable: shippingEligible,
+    shippingDisabled: shippingPartial,
+  });
   const stickyFulfillment =
-    pickupEligible || shippingEligible || shippingPartial ? (
+    fulfillmentOptions === 0 ? null : (
       <PlaceOrderFulfillmentChoice
         compact
         value={fulfillment}
@@ -758,7 +767,7 @@ export default observer(function CartCheckoutScreen() {
             : undefined
         }
       />
-    ) : null;
+    );
 
   const payAtDeliveryAllowed = useMemo(() => cart.items.every((l) => l.itemData.payOnDeliveryEnabled), [cart.items]);
 
@@ -890,6 +899,31 @@ export default observer(function CartCheckoutScreen() {
     needsLinkedMoMoPhone,
     linkedMoMo.selectedPhoneId,
   ]);
+
+  const cartAddressMissing =
+    fulfillmentNeedsAddress(fulfillment) && !deliveryAddressId && !hideShopperAddressBook;
+  const stickyDisabledReason = checkoutStickyDisabledReason({
+    recipientIncomplete: isRecipientDraftIncomplete(someoneElseReceiving, recipient),
+    recipientAddressMissing: captureRecipientAddress && !deliveryAddressId,
+    momoMissing: needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId,
+    blockerCode: checkoutBlocker?.code,
+    blockerMessage: checkoutBlocker?.message,
+    addressMissing: cartAddressMissing && !captureRecipientAddress,
+    windowMissing: fulfillmentNeedsWindow(fulfillment) && !deliveryScheduleOk,
+    loading: preflightLoading || (fulfillment === 'delivery' && feeLoading),
+    recipientIncompleteText: t('diaspora.selectRecipientToPay', 'Select a recipient before paying'),
+    recipientAddressText: t(
+      'diaspora.selectRecipientAddressToPay',
+      'Add the recipient’s delivery address before paying'
+    ),
+    momoText: t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.'),
+    addressText: t(
+      'client.placeOrder.noAddresses',
+      'Add an address in your profile to place a delivery order.'
+    ),
+    windowText: t('client.placeOrder.deliveryWindow.pickSlot', 'Select a time slot'),
+    loadingText: t('checkout.resolving', 'Preparing your checkout…'),
+  });
 
   const onSubmit = useCallback(async () => {
     if (submitting || !canSubmit) return;
@@ -1381,6 +1415,12 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
+        {fulfillmentConfirmed && isCookedFoodMoMoPayAfter ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <PayAfterConfirmExplainer />
+          </View>
+        ) : null}
+
         {fulfillmentConfirmed &&
         fulfillment === 'delivery' &&
         payAtDeliveryAllowed &&
@@ -1459,10 +1499,13 @@ export default observer(function CartCheckoutScreen() {
         {/* Payment method (country-locked) - driven by preflight, not client country */}
         {fulfillmentConfirmed && preflightConfig ? (
           <>
-            <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-              <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-                {t('checkout.paymentMethod', 'Payment method')}
-              </Text>
+            <View
+              style={[
+                styles.block,
+                styles.paymentMethodBlock,
+                { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md },
+              ]}
+            >
               <PaymentMethodLockedRow
                 method={resolvedIsStripeRail ? 'stripe' : 'mobile_money'}
                 countryIsos={cart.items.map((line) => line.sellerCountry)}
@@ -1527,15 +1570,7 @@ export default observer(function CartCheckoutScreen() {
             onPress={() => { if (!submitting) void onSubmit(); }}
             loading={submitting}
             disabled={!canSubmit || submitting}
-            disabledReason={
-              isRecipientDraftIncomplete(someoneElseReceiving, recipient)
-                ? t('diaspora.selectRecipientToPay', 'Select a recipient before paying')
-                : captureRecipientAddress && !deliveryAddressId
-                  ? t('diaspora.selectRecipientAddressToPay', 'Add the recipient’s delivery address before paying')
-                  : needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId
-                    ? t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.')
-                    : undefined
-            }
+            disabledReason={stickyDisabledReason}
           />
         )}
       </View>
@@ -1608,6 +1643,7 @@ export default observer(function CartCheckoutScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   block: { padding: 16, borderWidth: 1, marginBottom: 12 },
+  paymentMethodBlock: { paddingVertical: 10 },
   modalOverlay: { flex: 1, justifyContent: 'center', padding: 24 },
   modalBox: { maxHeight: '88%', padding: 20, borderWidth: 1 },
 });

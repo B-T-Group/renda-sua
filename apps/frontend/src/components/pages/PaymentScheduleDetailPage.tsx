@@ -6,7 +6,6 @@ import {
   CardContent,
   CircularProgress,
   Container,
-  LinearProgress,
   MenuItem,
   Stack,
   TextField,
@@ -19,6 +18,7 @@ import {
   usePaymentScheduleDetail,
   type ScheduleAssignmentDetail,
 } from '../../hooks/usePaymentScheduleDetail';
+import { ObjectiveProgressList } from '../accounts/ObjectiveProgressList';
 import { PaymentPlanOfferIllustration } from '../common/PaymentPlanOfferIllustration';
 
 const REJECT_REASONS = [
@@ -173,37 +173,19 @@ export function PaymentScheduleDetailPage() {
 
 function ObjectivesCard({ detail }: { detail: ScheduleAssignmentDetail }) {
   const { t } = useTranslation();
-  const rows = objectiveRows(detail, t);
-  if (!rows.length) {
-    return (
-      <Alert severity="info">
-        {t('accounts.schedules.noObjectives', 'This plan has no attached objectives.')}
-      </Alert>
-    );
-  }
-  const percent = detail.progress.completionPercent;
+  const accepted = detail.decision === 'accepted';
   return (
     <Card>
       <CardContent>
         <Typography variant="h6" gutterBottom>
           {t('accounts.schedules.objectives', 'Objectives')}
         </Typography>
-        {percent != null && detail.decision === 'accepted' && (
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" sx={{ mb: 0.5 }}>
-              {t('accounts.schedules.salesCompletion', 'Sales completion')}: {percent}%
-            </Typography>
-            <LinearProgress variant="determinate" value={percent} />
-          </Box>
-        )}
-        <Stack spacing={1}>
-          {rows.map((row) => (
-            <Typography key={row.label} variant="body2">
-              {row.label}: {row.value}
-            </Typography>
-          ))}
-        </Stack>
-        {detail.decision !== 'accepted' && (
+        <ObjectiveProgressList
+          progress={detail.progress}
+          currency={detail.currency}
+          showPercent={accepted}
+        />
+        {!accepted && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
             {t(
               'accounts.schedules.progressAfterAccept',
@@ -214,45 +196,6 @@ function ObjectivesCard({ detail }: { detail: ScheduleAssignmentDetail }) {
       </CardContent>
     </Card>
   );
-}
-
-function objectiveRows(
-  detail: ScheduleAssignmentDetail,
-  t: (key: string, fallback: string) => string
-) {
-  const { targets, progress, currency } = detail;
-  const rows: Array<{ label: string; value: string }> = [];
-  if (targets.agentRecruitments != null) {
-    rows.push({
-      label: t('accounts.schedules.agentRecruitments', 'Agent recruitments'),
-      value: `${progress.agentRecruitments.actual} / ${targets.agentRecruitments}`,
-    });
-  }
-  if (targets.clientSignups != null) {
-    rows.push({
-      label: t('accounts.schedules.clientSignups', 'Client signups'),
-      value: `${progress.clientSignups.actual} / ${targets.clientSignups}`,
-    });
-  }
-  if (targets.merchantRecruitments != null) {
-    rows.push({
-      label: t('accounts.schedules.merchantRecruitments', 'Merchant recruitments'),
-      value: `${progress.merchantRecruitments.actual} / ${targets.merchantRecruitments}`,
-    });
-  }
-  if (targets.itemSalesAmount != null) {
-    rows.push({
-      label: t('accounts.schedules.itemSales', 'Item sales'),
-      value: `${progress.itemSales.actual} / ${targets.itemSalesAmount} ${currency}`,
-    });
-  }
-  if (targets.rentalAmount != null) {
-    rows.push({
-      label: t('accounts.schedules.rentals', 'Rentals'),
-      value: `${progress.rentals.actual} / ${targets.rentalAmount} ${currency}`,
-    });
-  }
-  return rows;
 }
 
 function reasonLabel(code: string) {

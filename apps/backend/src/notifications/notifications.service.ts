@@ -1446,20 +1446,70 @@ export class NotificationsService {
     );
   }
 
-  /** Daily reminder for clients to collect a store-pickup order. */
+  /** Remind the client to collect a store-pickup order (push, and WhatsApp when asked). */
   async sendStorePickupReminderPush(params: {
     clientUserId?: string | null;
     orderId: string;
     orderNumber: string;
     preferredLanguage?: string | null;
+    includeWhatsapp?: boolean;
+    feePercent?: number | null;
   }): Promise<void> {
-    const payload = buildStorePickupReminderNotify(params);
+    const payload = buildStorePickupReminderNotify({
+      ...params,
+      bustDedupe: params.includeWhatsapp === true,
+    });
     if (!payload) return;
     try {
       await this.orchestrator.notify(payload);
     } catch (error: any) {
       this.logger.warn(
         `sendStorePickupReminderPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+    if (params.includeWhatsapp) await this.sendPickupCollectWhatsApp(params);
+  }
+
+  private async sendPickupCollectWhatsApp(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+    feePercent?: number | null;
+  }): Promise<void> {
+    const userId = params.clientUserId?.trim();
+    if (!userId) return;
+    const fr = (params.preferredLanguage || '').toLowerCase().startsWith('fr');
+    const percent = params.feePercent;
+    const fee =
+      percent != null && percent > 0
+        ? fr
+          ? ` Annuler conserve ${percent} % des articles.`
+          : ` Cancelling keeps ${percent}% of the items.`
+        : '';
+    const statusLabel = fr
+      ? `est prête. Venez la récupérer.${fee}`
+      : `is ready. Please come collect it.${fee}`;
+    try {
+      await this.orchestrator.notify({
+        type: 'order.store_pickup.reminder',
+        category: 'actionable',
+        recipientUserId: userId,
+        preferenceCategory: 'order_updates',
+        entityType: 'order',
+        entityId: params.orderId,
+        dedupeKey: `order.store_pickup.whatsapp:${params.orderId}:${Date.now()}`,
+        channels: {
+          whatsapp: {
+            templateKey: 'order_status_client',
+            ctaUrl: this.deepLinkService.order(params.orderId).universal,
+            variables: { orderNumber: params.orderNumber, statusLabel },
+          },
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendPickupCollectWhatsApp failed: ${error?.message ?? String(error)}`
       );
     }
   }
@@ -3998,13 +4048,24 @@ export class NotificationsService {
       data.paymentStatus !== 'paid' &&
       data.paymentStatus !== 'authorized';
     if (awaitingPayment) {
+      const fee = this.payAfterCancelFeeSentence(data.cancellationFeePercent, fr);
       return fr
-        ? `Commande ${orderNumber} confirmée. Prête dans environ ${minutes} minutes après paiement.`
-        : `Order ${orderNumber} confirmed. Ready in about ${minutes} minutes after payment.`;
+        ? `Commande ${orderNumber} confirmée. Prête dans environ ${minutes} minutes après paiement.${fee}`
+        : `Order ${orderNumber} confirmed. Ready in about ${minutes} minutes after payment.${fee}`;
     }
     return fr
       ? `Commande ${orderNumber} confirmée. Prête dans environ ${minutes} minutes.`
       : `Order ${orderNumber} confirmed. Ready in about ${minutes} minutes.`;
+  }
+
+  private payAfterCancelFeeSentence(
+    percent: number | null | undefined,
+    fr: boolean
+  ): string {
+    if (percent == null || percent <= 0) return '';
+    return fr
+      ? ` Si vous annulez après paiement, ${percent} % des articles sont conservés.`
+      : ` If you cancel after you pay, ${percent}% of the items is kept.`;
   }
 
   /**

@@ -142,6 +142,23 @@
         "not_ready_now": "Pas prêt à accepter maintenant",
         "targets_unclear": "Objectifs peu clairs",
         "other": "Autre"
+      },
+      "focus": {
+        "overall": "{{percent}} % au total",
+        "seeAll": "Voir tous les objectifs",
+        "allMet": "Vous avez atteint tous les objectifs de ce plan.",
+        "otherPlan": "Vous avez un autre plan",
+        "otherPlans": "Vous avez {{count}} autres plans",
+        "gap": {
+          "itemSales": "Ensuite : {{amount}} {{currency}} de ventes d'articles en plus",
+          "rentals": "Ensuite : {{amount}} {{currency}} de locations en plus",
+          "clientSignups": "Ensuite : {{count}} inscriptions clients de plus",
+          "clientSignupsOne": "Ensuite : 1 inscription client de plus",
+          "merchantRecruitments": "Ensuite : {{count}} recrutements de commerçants de plus",
+          "merchantRecruitmentsOne": "Ensuite : 1 recrutement de commerçant de plus",
+          "agentRecruitments": "Ensuite : {{count}} recrutements d'agents de plus",
+          "agentRecruitmentsOne": "Ensuite : 1 recrutement d'agent de plus"
+        }
       }
     },
     "walletHub": {
@@ -485,6 +502,12 @@
       "advanceImpactNamed": "{{name}} peut tirer jusqu'à {{money}}. Les dépôts remboursent d'abord cette dette.",
       "creditImpact": "{{who}} reçoit {{money}} de crédit magasin {{where}}. Ce crédit ne peut pas être retiré et ne couvre pas l'acompte de réservation.",
       "assignments": "Attributions",
+      "progress": "Progression",
+      "searchAgent": "Nom de l'agent",
+      "emptyProgress": "Aucun plan accepté avec des objectifs.",
+      "allObjectivesMet": "Tous les objectifs sont atteints",
+      "progressWindow": "Période suivie",
+      "progressLoadFailed": "Impossible de charger la progression.",
       "assignKind": "Appliquer",
       "template": "Modèle",
       "supporting": "Autres",
@@ -1938,6 +1961,22 @@
       "title": "Commandes d'Agent",
       "internalRequired": "Cette commande nécessite un agent interne. Contactez le support pour devenir un agent interne.",
       "verificationRequired": "Cette commande nécessite un agent vérifié. Veuillez compléter votre vérification pour réclamer des commandes de grande valeur."
+    },
+    "now": {
+      "active": "Livraison en cours",
+      "openDelivery": "Ouvrir cette livraison",
+      "deliveries": "Livraisons aujourd’hui",
+      "earnings": "Gains aujourd’hui"
+    },
+    "readiness": {
+      "locationTitle": "Activez la localisation",
+      "locationBody": "La localisation est nécessaire avant de passer en ligne et de prendre des livraisons.",
+      "idTitle": "Ajoutez votre pièce d’identité",
+      "idBody": "Téléversez une pièce d’identité pour prendre des livraisons.",
+      "momoTitle": "Terminez Mobile Money",
+      "momoBody": "Ajoutez un numéro de versement pour commencer à prendre des livraisons.",
+      "pendingTitle": "Pièce d’identité en cours de vérification",
+      "pendingBody": "Vous pourrez prendre des livraisons une fois votre pièce approuvée."
     }
   },
   "auth": {
@@ -4438,7 +4477,57 @@
         "ctaTrack": "Suivre la commande",
         "ctaView": "Voir la commande",
         "openDetail": "Ouvrez la commande pour plus de détails."
-      }
+      },
+      "lane": {
+        "shop": "Boutique",
+        "food": "Repas",
+        "rentals": "Locations"
+      },
+      "forYou": "Pour vous",
+      "buyAgain": "Racheter"
+    },
+    "search": {
+      "placeholder": "Rechercher un produit, un magasin, un repas",
+      "emptyTitle": "Aucun résultat",
+      "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
+      "recent": "Recherches récentes"
+    },
+    "following": {
+      "title": "Abonnements",
+      "error": "Impossible de charger les magasins que vous suivez.",
+      "emptyTitle": "Aucun magasin",
+      "emptyBody": "Suivez un magasin pour le retrouver ici.",
+      "browse": "Voir les magasins",
+      "followers": "{{count}} abonnés",
+      "menuSubtitle": "Magasins que vous suivez"
+    },
+    "journey": {
+      "placed": "Passée",
+      "confirmed": "Confirmée",
+      "preparing": "En préparation",
+      "on_the_way": "En route",
+      "delivered": "Livrée",
+      "agentPickingUp": "{{name}} récupère votre commande.",
+      "onTheWay": "Votre commande est en route.",
+      "pay": "Le paiement est la prochaine étape.",
+      "messagePlaced": "Votre commande est chez le magasin.",
+      "messagePreparing": "Votre commande est en préparation.",
+      "messageDelivered": "Votre commande a été livrée."
+    },
+    "card": {
+      "onlyLeft": "Plus que {{count}}",
+      "checkAvailability": "Vérifier la disponibilité",
+      "kitchenClosed": "Cuisine fermée",
+      "orderNow": "Commander",
+      "deal": "Promo"
+    },
+    "payAfter": {
+      "title": "Payez après confirmation du magasin",
+      "body": "Rien n’est débité tant que le magasin n’a pas confirmé qu’il peut honorer la commande.",
+      "step1": "Le magasin confirme que c’est disponible",
+      "step2": "Vous recevez une demande de paiement",
+      "step3": "Payez dans le délai indiqué",
+      "step4": "Le magasin prépare votre commande"
     }
   },
   "collections": {
@@ -4939,7 +5028,14 @@
   "nav": {
     "forBusiness": "Pour les entreprises",
     "becomeAgent": "Devenir agent",
-    "downloadApp": "Télécharger l'appli"
+    "downloadApp": "Télécharger l'appli",
+    "clientTabs": {
+      "home": "Accueil",
+      "search": "Recherche"
+    },
+    "tabs": {
+      "account": "Compte"
+    }
   },
   "orderActions": {
     "cancelOrder": "Annuler la Commande",
@@ -4952,6 +5048,7 @@
     "dropOrder": "Abandonner la Commande",
     "confirmReceipt": "Confirmer la réception",
     "askIfReady": "Demander si ma commande est prête",
+    "pickupFollowUp": "Suivi du retrait",
     "askIfReadySuccess": "Nous avons demandé au magasin si votre commande est prête",
     "askIfReadyError": "Impossible d’envoyer le rappel",
     "askIfReadyAlready": "Vous avez déjà demandé des nouvelles de cette commande",
@@ -5572,7 +5669,9 @@
       "orderItemsHeading": "Articles de cette commande",
       "deliveryFeesLabel": "Frais de livraison",
       "totalLabel": "Total de la commande",
-      "lineTotal": "Total ligne"
+      "lineTotal": "Total ligne",
+      "request": "Demander un remboursement",
+      "requested": "Votre demande de remboursement a été envoyée."
     },
     "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
     "orderCompletionSuccessTitle": "🎉 Commande Terminée avec Succès !",
@@ -6124,9 +6223,25 @@
       "payByExpired": "Le délai de paiement est dépassé. La commande sera annulée automatiquement et vous ne serez pas débité.",
       "tomorrow": "demain",
       "cancelUnpaid": "Vous n’avez encore rien payé, l’annulation est donc gratuite et rien ne sera débité.",
+      "cancelFeeAfterPay": "Si vous annulez après avoir payé, {{percent}} % des articles sont conservés.",
       "storeNoConfirm": "Si le magasin ne confirme pas dans les 60 minutes, la commande est annulée automatiquement et vous n’êtes pas débité."
     },
-    "keepOrder": "Garder la commande"
+    "keepOrder": "Garder la commande",
+    "cancellationFeePercentOfItems": "{{percent}} % des articles.",
+    "cancellationNetRefund": "Vous récupérez {{amount}} {{currency}}.",
+    "pickupNoshow": {
+      "title": "Retrait client",
+      "remindBody": "La commande n°{{orderNumber}} est prête. Envoyez un rappel pour venir la chercher.",
+      "remind": "Rappeler le client",
+      "reminded": "Rappel envoyé",
+      "remindError": "Impossible d’envoyer le rappel",
+      "loadError": "Impossible de charger les options de retrait",
+      "feeLine": "Frais {{fee}} {{currency}} ({{percent}} % des articles). Vous recevez {{share}} {{currency}}. Le client récupère {{refund}} {{currency}}.",
+      "wait": "Vous pouvez annuler pour absence après {{hours}} heures au statut prêt.",
+      "cancel": "Annuler — le client n’est pas venu",
+      "cancelled": "Retrait annulé. Le client est remboursé, moins les frais.",
+      "cancelError": "Impossible d’annuler ce retrait"
+    }
   },
   "items": {
     "brand": "Marque",
@@ -6149,6 +6264,13 @@
     "notFound": "Article introuvable",
     "perishable": "Périssable",
     "productInformation": "Informations produit",
+    "availability": {
+      "checkCta": "Vérifier la disponibilité auprès du magasin",
+      "checkCtaA11y": "Vérifier la disponibilité de {{name}} auprès du magasin",
+      "pending": "En attente du magasin…",
+      "requestSent": "Nous avons demandé au magasin de confirmer. Vous serez notifié de leur réponse.",
+      "requestFailed": "Impossible d’envoyer la demande. Réessayez bientôt."
+    },
     "reviews": "Avis",
     "sku": "Référence",
     "specialHandling": "Manutention spéciale",
@@ -7369,7 +7491,11 @@
     "pickupNotice": "Pas de frais de livraison. Récupérez votre commande dans chaque magasin dès qu'elle est prête.",
     "pickupNoFee": "Offert (retrait en magasin)",
     "diaspora": {
+      "eyebrow": "Pour quelqu'un de spécial",
+      "illustrationLabel": "Un cadeau pour quelqu'un de spécial",
       "title": "Envoyer une commande au pays",
+      "localTitle": "Offrir cette commande",
+      "localLine": "Une livraison personnelle, remise en son nom.",
       "payingFrom": "Paiement depuis {{country}}",
       "deliveringTo": "Livraison vers {{country}}",
       "sendingToSomeoneElse": "Une autre personne reçoit cette commande",

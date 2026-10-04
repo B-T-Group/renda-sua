@@ -2,12 +2,20 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode
 import {
   ActivityIndicator,
   Animated,
-  Platform,
   RefreshControl,
   StyleSheet,
   useWindowDimensions,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import Reanimated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { CatalogCategoryRail } from '../../components/browse/CatalogCategoryRail';
@@ -188,6 +196,8 @@ export interface BrowseCatalogScreenProps {
   /** Category chosen on the categories screen. */
   requestedCategory?: string;
   categoryRequestId?: number;
+  /** Extra discovery content above the product grid (rails, buy again). */
+  discoveryExtra?: React.ReactNode;
 }
 
 function BrowseCatalogScreenInner({
@@ -213,6 +223,7 @@ function BrowseCatalogScreenInner({
   onBrowseCategories,
   requestedCategory,
   categoryRequestId,
+  discoveryExtra,
 }: BrowseCatalogScreenProps) {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -231,12 +242,27 @@ function BrowseCatalogScreenInner({
   const tabBarHeight = useBottomTabBarHeight();
   const bottomPad = tabBarHeight + spacing.lg;
   const isWideHero = width >= 640;
-  const listRef = useRef<Animated.FlatList<CatalogInventoryItem>>(null);
+  const listRef = useRef<FlashListRef<CatalogFeedRow>>(null);
+  const headerScroll = useSharedValue(0);
   const { onHeroSlidePress } = useHeroCarouselActions(() => {
     listRef.current?.scrollToOffset({ offset: 280, animated: true });
   });
 
   const scrollY = useRef(new Animated.Value(0)).current;
+  const onFeedScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = event.nativeEvent.contentOffset.y;
+      scrollY.setValue(y);
+      headerScroll.value = y;
+      reportTabBarScroll(event);
+    },
+    [headerScroll, reportTabBarScroll, scrollY]
+  );
+  const stickyHeaderStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(headerScroll.value, [0, 48], [1, 0], Extrapolation.CLAMP),
+    maxHeight: interpolate(headerScroll.value, [0, 72], [140, 0], Extrapolation.CLAMP),
+    overflow: 'hidden',
+  }));
 
   // Guests default to "Nearest" so results are proximity-ordered.
   // Authenticated users keep "For you" (relevance) as the default.
@@ -690,6 +716,7 @@ function BrowseCatalogScreenInner({
           onToggleExportOnly={onToggleExportOnly}
           onClearExportOnly={onClearExportOnly}
         />
+        {discoveryExtra}
       </>
     ),
     [
@@ -723,6 +750,7 @@ function BrowseCatalogScreenInner({
       exportOnly,
       onToggleExportOnly,
       onClearExportOnly,
+      discoveryExtra,
     ]
   );
 
@@ -848,9 +876,10 @@ function BrowseCatalogScreenInner({
       style={[styles.safe, { backgroundColor: colors.pageBackground }]}
       edges={applyTopSafeArea ? ['top'] : []}
     >
-      <View
+      <Reanimated.View
         style={[
           styles.searchSticky,
+          stickyHeaderStyle,
           {
             paddingHorizontal: spacing.md,
             paddingTop: spacing.xs,
@@ -882,8 +911,8 @@ function BrowseCatalogScreenInner({
           </View>
           {headerMarketTrailing}
         </View>
-      </View>
-      <Animated.FlatList<CatalogFeedRow>
+      </Reanimated.View>
+      <FlashList
         ref={listRef}
         data={feedRows}
         keyExtractor={keyExtractorRow}
@@ -899,10 +928,7 @@ function BrowseCatalogScreenInner({
             tintColor={colors.primary.main}
           />
         }
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-          useNativeDriver: false,
-          listener: reportTabBarScroll,
-        })}
+        onScroll={onFeedScroll}
         scrollEventThrottle={16}
         onEndReached={() => {
           if (canLoadMore) loadMore();
@@ -914,16 +940,8 @@ function BrowseCatalogScreenInner({
             {loadingMore ? <ActivityIndicator color={colors.primary.main} /> : null}
           </View>
         }
-        contentContainerStyle={[
-          { paddingBottom: spacing.md },
-          items.length === 0 ? { flexGrow: 1 } : null,
-        ]}
+        contentContainerStyle={{ paddingBottom: spacing.md }}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={5}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
       />
       <CatalogBrowseFilterSheet
         visible={filterSheetVisible}

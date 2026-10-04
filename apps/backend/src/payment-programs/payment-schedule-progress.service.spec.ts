@@ -1,5 +1,9 @@
 import {
+  buildObjectiveProgress,
+  nextObjectiveKey,
+  overallObjectivePercent,
   PaymentScheduleProgressService,
+  pickFeaturedProgress,
   progressWindow,
   salesCompletionPercent,
   sumUniqueAmounts,
@@ -97,9 +101,11 @@ describe('PaymentScheduleProgressService.compute', () => {
       targets: { ...targets, targetItemSalesAmount: null },
     });
     expect(executeQuery).not.toHaveBeenCalled();
-    expect(result.itemSales).toEqual({ actual: 0, target: null });
-    expect(result.rentals).toEqual({ actual: 0, target: 500 });
+    expect(result.itemSales).toEqual({ actual: 0, target: null, percent: null });
+    expect(result.rentals).toEqual({ actual: 0, target: 500, percent: 0 });
     expect(result.completionPercent).toBeNull();
+    expect(result.overallPercent).toBe(0);
+    expect(result.nextObjective).toBe('rentals');
   });
 
   it('does not query when acceptance is after the schedule has ended', async () => {
@@ -116,6 +122,8 @@ describe('PaymentScheduleProgressService.compute', () => {
     expect(executeQuery).not.toHaveBeenCalled();
     expect(result.itemSales.actual).toBe(0);
     expect(result.completionPercent).toBe(0);
+    expect(result.overallPercent).toBe(0);
+    expect(result.nextObjective).toBe('itemSales');
   });
 
   it('dedupes client and merchant orders and ignores rentals in the sales percent', async () => {
@@ -160,11 +168,69 @@ describe('PaymentScheduleProgressService.compute', () => {
     expect(String(executeQuery.mock.calls[0][0])).toContain(
       'status: { _in: [confirmed, active, awaiting_return, completed] }'
     );
-    expect(result.agentRecruitments).toEqual({ actual: 2, target: 4 });
-    expect(result.clientSignups).toEqual({ actual: 3, target: 2 });
-    expect(result.merchantRecruitments).toEqual({ actual: 0, target: 1 });
-    expect(result.itemSales).toEqual({ actual: 1400, target: 2000 });
-    expect(result.rentals).toEqual({ actual: 250, target: 500 });
+    expect(result.agentRecruitments).toEqual({ actual: 2, target: 4, percent: 50 });
+    expect(result.clientSignups).toEqual({ actual: 3, target: 2, percent: 100 });
+    expect(result.merchantRecruitments).toEqual({ actual: 0, target: 1, percent: 0 });
+    expect(result.itemSales).toEqual({ actual: 1400, target: 2000, percent: 70 });
+    expect(result.rentals).toEqual({ actual: 250, target: 500, percent: 50 });
     expect(result.completionPercent).toBe(70);
+    expect(result.overallPercent).toBe(54);
+    expect(result.nextObjective).toBe('merchantRecruitments');
+  });
+});
+
+describe('objective summary', () => {
+  const zeros = {
+    agentRecruitments: 0,
+    clientSignups: 0,
+    merchantRecruitments: 0,
+    itemSales: 0,
+    rentals: 0,
+  };
+
+  it('averages only objectives that have a target', () => {
+    const progress = buildObjectiveProgress(
+      { ...zeros, itemSales: 50, clientSignups: 1 },
+      { targetItemSalesAmount: 100, targetClientSignups: 4 }
+    );
+    expect(progress.overallPercent).toBe(38);
+    expect(overallObjectivePercent(progress)).toBe(38);
+  });
+
+  it('picks the lowest unfinished percent and breaks ties in a fixed order', () => {
+    const progress = buildObjectiveProgress(zeros, {
+      targetItemSalesAmount: 100,
+      targetRentalAmount: 100,
+      targetClientSignups: 2,
+    });
+    expect(nextObjectiveKey(progress)).toBe('itemSales');
+    expect(progress.nextObjective).toBe('itemSales');
+  });
+
+  it('returns null when every set objective is complete', () => {
+    const progress = buildObjectiveProgress(
+      { ...zeros, clientSignups: 2, itemSales: 100 },
+      { targetClientSignups: 2, targetItemSalesAmount: 80 }
+    );
+    expect(progress.nextObjective).toBeNull();
+    expect(progress.overallPercent).toBe(100);
+  });
+
+  it('features the plan furthest behind', () => {
+    const behind = buildObjectiveProgress(
+      { ...zeros, clientSignups: 1 },
+      { targetClientSignups: 5 }
+    );
+    const done = buildObjectiveProgress(
+      { ...zeros, clientSignups: 5 },
+      { targetClientSignups: 5 }
+    );
+    const picked = pickFeaturedProgress([
+      { id: 'done', progress: done },
+      { id: 'behind', progress: behind },
+    ]);
+    expect(picked.featured?.id).toBe('behind');
+    expect(picked.otherCount).toBe(1);
+    expect(pickFeaturedProgress([]).featured).toBeNull();
   });
 });

@@ -7,7 +7,9 @@ import { PlatformPermissions } from '../rbac/platform-permissions';
 import { CashAdvanceService } from './cash-advance.service';
 import { PartnerBusinessesService } from './partner-businesses.service';
 import { PaymentScheduleCatalogService } from './payment-schedule-catalog.service';
+import { PaymentScheduleConsentService } from './payment-schedule-consent.service';
 import {
+  AssignmentProgressQueryDto,
   AssignScheduleDto,
   CreateCashAdvanceProgramDto,
   CreateScheduleDto,
@@ -38,7 +40,8 @@ export class PaymentProgramsAdminController {
     private readonly cashAdvances: CashAdvanceService,
     private readonly credits: PurchaseCreditsService,
     private readonly partners: PartnerBusinessesService,
-    private readonly users: HasuraUserService
+    private readonly users: HasuraUserService,
+    private readonly consent: PaymentScheduleConsentService
   ) {}
 
   @Get('schedules')
@@ -83,6 +86,15 @@ export class PaymentProgramsAdminController {
       endsAt: dto.endsAt,
       createdBy: await this.actorId(),
     });
+  }
+
+  @Get('assignments/progress')
+  @ApiOperation({ summary: 'Accepted schedule assignments with live objective progress' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'offset', required: false })
+  listAssignmentProgress(@Query() query: AssignmentProgressQueryDto) {
+    return this.consent.listProgress(query);
   }
 
   @Patch('assignments/:id')

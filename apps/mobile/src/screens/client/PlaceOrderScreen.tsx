@@ -36,9 +36,11 @@ import { appliedPurchaseCredit } from '../../utils/purchaseCredits';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
 import { PlaceOrderDeliveryAddressBlock } from '../../components/place-order/PlaceOrderDeliveryAddressBlock';
 import {
+  offeredFulfillmentCount,
   PlaceOrderFulfillmentChoice,
   type OrderFulfillment,
 } from '../../components/place-order/PlaceOrderFulfillmentChoice';
+import { GuidedCheckoutCard } from '../../components/checkout/GuidedCheckoutCard';
 import { PlaceOrderSpecialInstructions } from '../../components/place-order/PlaceOrderSpecialInstructions';
 import { AddressCapture } from '../../components/forms/AddressCapture';
 import type { DeliveryAddressFormValue } from '../../components/forms/DeliveryAddressForm';
@@ -71,6 +73,7 @@ import {
 } from '../../utils/catalogInventoryDisplay';
 import { alignCatalogAddressToCscFields } from '../../utils/addressRegionMatch';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
+import { checkoutStickyDisabledReason } from '../../utils/checkoutStickyDisabledReason';
 import { isAddressComplete } from '../../utils/addressCompleteness';
 import {
   cartShippingAvailability,
@@ -138,7 +141,7 @@ export default function PlaceOrderScreen() {
   const keyboardVerticalOffset = useKeyboardVerticalOffset();
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const route = useRoute<RouteProp<{ PlaceOrder: PlaceOrderParams }, 'PlaceOrder'>>();
-  const { inventoryItemId, variantId: initialVariantId } = route.params;
+  const { inventoryItemId, variantId: initialVariantId, quantity: routeQuantity } = route.params;
 
   const { item, loading: itemLoading, error: itemError } = useInventoryItemDetail(inventoryItemId, {
     withAuth: true,
@@ -154,7 +157,7 @@ export default function PlaceOrderScreen() {
   const shippingEnabled = Boolean(item?.item.shipping_enabled);
   const payAtDeliveryEnabled = Boolean(item?.item.pay_on_delivery_enabled);
 
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(() => Math.max(1, Math.floor(routeQuantity ?? 1)));
   const [addressId, setAddressId] = useState('');
   const [variantId, setVariantId] = useState<string | null>(null);
   const [fulfillment, setFulfillment] = useState<Fulfillment>('pickup');
@@ -417,11 +420,16 @@ export default function PlaceOrderScreen() {
   }, [item, variantId]);
 
   useEffect(() => {
+    setQuantity(Math.max(1, Math.floor(routeQuantity ?? 1)));
+  }, [inventoryItemId, routeQuantity]);
+
+  useEffect(() => {
+    if (!item) return;
     setQuantity((q) => {
       if (quantityBounds.max < 1) return 0;
       return Math.min(Math.max(q, quantityBounds.min), quantityBounds.max);
     });
-  }, [quantityBounds.max, quantityBounds.min]);
+  }, [item, quantityBounds.max, quantityBounds.min]);
 
   const minQ = quantityBounds.min || 1;
   const maxQ = quantityBounds.max;
@@ -968,38 +976,54 @@ export default function PlaceOrderScreen() {
     t,
   ]);
 
-  const stickyFulfillment =
-    pickupEnabled || shippingEnabled ? (
-      <PlaceOrderFulfillmentChoice
-        compact
-        value={fulfillment}
-        onChange={chooseFulfillment}
-        deliveryHidden={!deliveryOffered}
-        deliveryDisabledReason={t(
-          'client.placeOrder.deliveryUnavailable',
-          'Delivery is currently unavailable.'
-        )}
-        pickupAvailable={pickupEnabled}
-        shippingAvailable={shippingEnabled}
-        pickupLocations={pickupLocations}
-        deliveryPriceLabel={
-          !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
-            ? formatCatalogMoney(deliveryAmount, currency)
+  const fulfillmentChoice = (
+    <PlaceOrderFulfillmentChoice
+      compact
+      value={fulfillment}
+      onChange={chooseFulfillment}
+      deliveryHidden={!deliveryOffered}
+      deliveryDisabledReason={t(
+        'client.placeOrder.deliveryUnavailable',
+        'Delivery is currently unavailable.'
+      )}
+      pickupAvailable={pickupEnabled}
+      shippingAvailable={shippingEnabled}
+      pickupLocations={pickupLocations}
+      deliveryPriceLabel={
+        !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
+          ? formatCatalogMoney(deliveryAmount, currency)
+          : undefined
+      }
+      deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
+      deliveryPriceHint={
+        deliveryAddressMissing
+          ? t(
+              'client.placeOrder.deliveryPriceAddressRequired',
+              'Choose an address to see the delivery price.'
+            )
+          : deliveryFeeState.error
+            ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
             : undefined
-        }
-        deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
-        deliveryPriceHint={
-          deliveryAddressMissing
-            ? t(
-                'client.placeOrder.deliveryPriceAddressRequired',
-                'Choose an address to see the delivery price.'
-              )
-            : deliveryFeeState.error
-              ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
-              : undefined
-        }
-      />
-    ) : null;
+      }
+    />
+  );
+  const fulfillmentOptions = offeredFulfillmentCount({
+    pickupAvailable: pickupEnabled,
+    deliveryHidden: !deliveryOffered,
+    shippingAvailable: shippingEnabled,
+  });
+  const stickyFulfillment =
+    fulfillmentOptions === 0
+      ? null
+      : fulfillmentOptions === 1
+        ? fulfillmentChoice
+        : (
+          <GuidedCheckoutCard
+            title={t('client.placeOrder.fulfillmentQuestion', 'How would you like to receive this?')}
+          >
+            {fulfillmentChoice}
+          </GuidedCheckoutCard>
+        );
 
   const imgs = item ? catalogOrderedImages(item) : [];
   const selectedVariant =
@@ -1109,6 +1133,29 @@ export default function PlaceOrderScreen() {
     needsLinkedMoMoPhone,
     linkedMoMo.selectedPhoneId,
   ]);
+
+  const stickyDisabledReason = checkoutStickyDisabledReason({
+    recipientIncomplete: isRecipientDraftIncomplete(someoneElseReceiving, recipient),
+    recipientAddressMissing: captureRecipientAddress && !deliveryAddressId,
+    momoMissing: needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId,
+    blockerCode: checkoutBlocker?.code,
+    blockerMessage: checkoutBlocker?.message,
+    addressMissing: deliveryAddressMissing && !captureRecipientAddress,
+    windowMissing: fulfillmentNeedsWindow(fulfillment) && !deliveryScheduleOk,
+    loading: Boolean(preflightRequest && preflightLoading),
+    recipientIncompleteText: t('diaspora.selectRecipientToPay', 'Select a recipient before paying'),
+    recipientAddressText: t(
+      'diaspora.selectRecipientAddressToPay',
+      'Add the recipient’s delivery address before paying'
+    ),
+    momoText: t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.'),
+    addressText: t(
+      'client.placeOrder.noAddresses',
+      'Add an address in your profile to place a delivery order.'
+    ),
+    windowText: t('client.placeOrder.deliveryWindow.pickSlot', 'Select a time slot'),
+    loadingText: t('checkout.resolving', 'Preparing your checkout…'),
+  });
 
   const onSubmit = useCallback(async () => {
     if (!item || submitting || !canSubmit) return;
@@ -1630,6 +1677,7 @@ export default function PlaceOrderScreen() {
         ) : null}
 
         {fulfillmentConfirmed && fulfillment === 'delivery' && selectedAddress ? (
+          <GuidedCheckoutCard title={t('client.placeOrder.addressAndTime', 'Address and time')}>
           <PlaceOrderDeliveryWindowBlock
             countryCode={selectedAddress.country?.trim() ?? ''}
             stateCode={selectedAddress.state?.trim() ?? ''}
@@ -1645,6 +1693,7 @@ export default function PlaceOrderScreen() {
             onReadyChange={onDwReadyChange}
             onCommit={onDwCommit}
           />
+          </GuidedCheckoutCard>
         ) : null}
 
         {fulfillmentConfirmed && fulfillment === 'pickup' ? (
@@ -1683,10 +1732,7 @@ export default function PlaceOrderScreen() {
         !isDiaspora &&
         momoPayNowDeliveryEnabled &&
         !isCookedFoodMoMoPayAfter ? (
-          <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-            <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-              {t('client.placeOrder.paymentTiming', 'Payment')}
-            </Text>
+          <GuidedCheckoutCard title={t('client.placeOrder.paymentTiming', 'Payment')}>
             <SegmentedButtons
               value={payTiming === 'pay_at_delivery' ? 'pad' : 'now'}
               onValueChange={(v) => setPayTiming(v === 'pad' ? 'pay_at_delivery' : 'pay_now')}
@@ -1695,16 +1741,19 @@ export default function PlaceOrderScreen() {
                 { value: 'pad', label: t('client.placeOrder.payAtDelivery', 'Pay at delivery') },
               ]}
             />
-          </View>
+          </GuidedCheckoutCard>
         ) : null}
 
         {/* Payment method (country-locked) - driven by preflight, not client country */}
         {fulfillmentConfirmed && preflightConfig ? (
           <>
-            <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-              <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-                {t('checkout.paymentMethod', 'Payment method')}
-              </Text>
+            <View
+              style={[
+                styles.block,
+                styles.paymentMethodBlock,
+                { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md },
+              ]}
+            >
               <PaymentMethodLockedRow
                 method={resolvedIsStripeRail ? 'stripe' : 'mobile_money'}
                 countryIsos={[sellerCountry]}
@@ -1768,15 +1817,7 @@ export default function PlaceOrderScreen() {
             onPress={() => { if (!submitting) void onSubmit(); }}
             loading={submitting}
             disabled={!canSubmit}
-            disabledReason={
-              isRecipientDraftIncomplete(someoneElseReceiving, recipient)
-                ? t('diaspora.selectRecipientToPay', 'Select a recipient before paying')
-                : captureRecipientAddress && !deliveryAddressId
-                  ? t('diaspora.selectRecipientAddressToPay', 'Add the recipient’s delivery address before paying')
-                  : needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId
-                    ? t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.')
-                    : undefined
-            }
+            disabledReason={stickyDisabledReason}
           />
         )}
       </View>
@@ -1864,6 +1905,7 @@ export default function PlaceOrderScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   block: { padding: 16, borderWidth: 1, marginBottom: 12 },
+  paymentMethodBlock: { paddingVertical: 10 },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',

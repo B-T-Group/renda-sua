@@ -3,9 +3,8 @@ import { brandTokens } from '../theme/brandTokens';
 export type PersonaSlug = 'client' | 'agent' | 'business';
 
 /**
- * Aligns with app header bar colors per active persona (Trust Coast Blue):
- * client reads primary blue, agent reads delivery teal, business reads the
- * warm accent family.
+ * Aligns with app header bar colors per active persona:
+ * client reads logo blue, agent reads navy, business reads the purchase green.
  */
 export const PERSONA_HEADER_COLORS: Record<
   PersonaSlug,
@@ -19,5 +18,5 @@ export const PERSONA_HEADER_COLORS: Record<
     main: brandTokens.secondary.main,
     navUnderline: brandTokens.tint.secondaryStrong,
   },
-  business: { main: brandTokens.cta.main, navUnderline: brandTokens.cta.soft },
+  business: { main: brandTokens.cta.dark, navUnderline: brandTokens.cta.soft },
 };

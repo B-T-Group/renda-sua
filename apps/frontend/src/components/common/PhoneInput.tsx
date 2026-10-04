@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import PhoneInputBase from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { environment } from '../../config/environment';
+import { brandTokens } from '../../theme/brandTokens';
 import { useSupportedCountries } from '../../hooks/useSupportedCountries';
 
 /** Dev-only phone numbers for dropdown when useDevPhoneDropdown and isDevelopment */
@@ -197,16 +198,18 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          border: error ? '1px solid #d32f2f' : '1px solid rgba(0, 0, 0, 0.23)',
+          border: error
+            ? `1px solid ${brandTokens.error.main}`
+            : '1px solid rgba(0, 0, 0, 0.23)',
           borderRadius: squareEdges ? 0 : '4px',
           padding: '8px 12px',
           backgroundColor: disabled ? 'rgba(0, 0, 0, 0.12)' : 'transparent',
           transition: 'border-color 0.2s ease-in-out',
           '&:hover': {
-            borderColor: error ? '#d32f2f' : 'rgba(0, 0, 0, 0.87)',
+            borderColor: error ? brandTokens.error.main : 'rgba(0, 0, 0, 0.87)',
           },
           '&:focus-within': {
-            borderColor: error ? '#d32f2f' : '#1976d2',
+            borderColor: error ? brandTokens.error.main : brandTokens.primary.main,
             borderWidth: '2px',
           },
         }}
@@ -251,12 +254,12 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
             backgroundColor: 'white',
             padding: '0 4px',
             fontSize: '12px',
-            color: error ? '#d32f2f' : 'rgba(0, 0, 0, 0.6)',
+            color: error ? brandTokens.error.main : 'rgba(0, 0, 0, 0.6)',
             zIndex: 1,
           }}
         >
           {label}
-          {required && <span style={{ color: '#d32f2f' }}> *</span>}
+          {required && <span style={{ color: brandTokens.error.main }}> *</span>}
         </Box>
       )}
 

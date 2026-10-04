@@ -7,6 +7,9 @@ export interface CancellationFeeResponse {
   cancellationFee: number | null;
   /** % of the item subtotal after discounts (excludes delivery fee and tax). */
   cancellationFeePercent?: number;
+  merchantShare?: number;
+  platformShare?: number;
+  refundAmount?: number;
   currency: string;
   country: string;
   message: string;

@@ -1,9 +1,46 @@
+import type { CSSProperties } from 'react';
 import type {
   borderRadius,
   shadows,
   spacing,
   transitions,
 } from '../theme/themeUtils';
+
+type TypeRole = CSSProperties;
+
+declare module '@mui/material/styles' {
+  interface TypographyVariants {
+    display: TypeRole;
+    bodyLarge: TypeRole;
+    bodySmall: TypeRole;
+    label: TypeRole;
+    price: TypeRole;
+    priceLarge: TypeRole;
+    nav: TypeRole;
+  }
+
+  interface TypographyVariantsOptions {
+    display?: TypeRole;
+    bodyLarge?: TypeRole;
+    bodySmall?: TypeRole;
+    label?: TypeRole;
+    price?: TypeRole;
+    priceLarge?: TypeRole;
+    nav?: TypeRole;
+  }
+}
+
+declare module '@mui/material/Typography' {
+  interface TypographyPropsVariantOverrides {
+    display: true;
+    bodyLarge: true;
+    bodySmall: true;
+    label: true;
+    price: true;
+    priceLarge: true;
+    nav: true;
+  }
+}
 
 /**
  * Brand extensions to the MUI theme: the purchase-intent `cta` palette colour

@@ -32,6 +32,7 @@ const STORAGE_KEYS = {
   isAuthenticated: `${STORAGE_PREFIX}isAuthenticated`,
   profilePhotoUri: `${STORAGE_PREFIX}profilePhotoUri`,
   postAuthResumeInventoryItemId: `${STORAGE_PREFIX}postAuthResumeInventoryItemId`,
+  postAuthResumeOrderQuantity: `${STORAGE_PREFIX}postAuthResumeOrderQuantity`,
   postAuthResumeInventoryDetailId: `${STORAGE_PREFIX}postAuthResumeInventoryDetailId`,
   postAuthResumeCartCheckout: `${STORAGE_PREFIX}postAuthResumeCartCheckout`,
   postAuthResumeLikeItemId: `${STORAGE_PREFIX}postAuthResumeLikeItemId`,
@@ -56,6 +57,11 @@ export interface AuthTokens {
   expiresAt: number;
 }
 
+function storedOrderQuantity(raw: string | null): number {
+  const n = Number.parseInt(raw ?? '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 export class AuthStore {
   private rootStore: RootStore;
 
@@ -68,6 +74,8 @@ export class AuthStore {
   error: string | null = null;
   /** After guest checkout / login, open this catalog item on the client stack once. */
   postAuthResumeInventoryItemId: string | null = null;
+  /** Quantity chosen before guest checkout, restored on Place Order. */
+  postAuthResumeOrderQuantity: number | null = null;
   /** After login from interest CTA, open InventoryItemDetail (not PlaceOrder). */
   postAuthResumeInventoryDetailId: string | null = null;
   /** After guest signs in from cart checkout, open CartCheckout once. */
@@ -180,19 +188,33 @@ export class AuthStore {
     this.biometricPromptPending = pending;
   }
 
-  async setPostAuthResumeForInventoryItem(inventoryItemId: string): Promise<void> {
-    const id = inventoryItemId.trim();
-    if (!id) return;
+  private rememberInventoryResume(id: string, quantity: number): void {
     runInAction(() => {
       this.postAuthResumeInventoryItemId = id;
+      this.postAuthResumeOrderQuantity = quantity;
       this.postAuthResumeInventoryDetailId = null;
       this.postAuthResumeCartCheckout = false;
     });
+  }
+
+  private async persistInventoryResume(id: string, quantity: number): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.postAuthResumeInventoryItemId, id);
+    await AsyncStorage.setItem(STORAGE_KEYS.postAuthResumeOrderQuantity, String(quantity));
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.postAuthResumeInventoryDetailId,
       STORAGE_KEYS.postAuthResumeCartCheckout,
     ]);
+  }
+
+  async setPostAuthResumeForInventoryItem(
+    inventoryItemId: string,
+    quantity = 1
+  ): Promise<void> {
+    const id = inventoryItemId.trim();
+    if (!id) return;
+    const qty = Math.max(1, Math.floor(quantity) || 1);
+    this.rememberInventoryResume(id, qty);
+    await this.persistInventoryResume(id, qty);
   }
 
   async setPostAuthResumeForInventoryDetail(
@@ -203,11 +225,13 @@ export class AuthStore {
     runInAction(() => {
       this.postAuthResumeInventoryDetailId = id;
       this.postAuthResumeInventoryItemId = null;
+      this.postAuthResumeOrderQuantity = null;
       this.postAuthResumeCartCheckout = false;
     });
     await AsyncStorage.setItem(STORAGE_KEYS.postAuthResumeInventoryDetailId, id);
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.postAuthResumeInventoryItemId,
+      STORAGE_KEYS.postAuthResumeOrderQuantity,
       STORAGE_KEYS.postAuthResumeCartCheckout,
     ]);
   }
@@ -216,11 +240,13 @@ export class AuthStore {
     runInAction(() => {
       this.postAuthResumeCartCheckout = true;
       this.postAuthResumeInventoryItemId = null;
+      this.postAuthResumeOrderQuantity = null;
       this.postAuthResumeInventoryDetailId = null;
     });
     await AsyncStorage.setItem(STORAGE_KEYS.postAuthResumeCartCheckout, '1');
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.postAuthResumeInventoryItemId,
+      STORAGE_KEYS.postAuthResumeOrderQuantity,
       STORAGE_KEYS.postAuthResumeInventoryDetailId,
     ]);
   }
@@ -234,13 +260,18 @@ export class AuthStore {
     return v;
   }
 
-  consumePostAuthResumeForInventoryItem(): string | null {
+  consumePostAuthResumeForInventoryItem(): { id: string; quantity: number } | null {
     const id = this.postAuthResumeInventoryItemId?.trim() || null;
+    const quantity = this.postAuthResumeOrderQuantity ?? 1;
     runInAction(() => {
       this.postAuthResumeInventoryItemId = null;
+      this.postAuthResumeOrderQuantity = null;
     });
-    void AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeInventoryItemId);
-    return id;
+    void AsyncStorage.multiRemove([
+      STORAGE_KEYS.postAuthResumeInventoryItemId,
+      STORAGE_KEYS.postAuthResumeOrderQuantity,
+    ]);
+    return id ? { id, quantity } : null;
   }
 
   consumePostAuthResumeForInventoryDetail(): string | null {
@@ -290,8 +321,9 @@ export class AuthStore {
 
   private async loadPostAuthResumeFromStorage(): Promise<void> {
     try {
-      const [rawItem, rawDetail, rawCart, rawLike, rawFollow] = await Promise.all([
+      const [rawItem, rawQty, rawDetail, rawCart, rawLike, rawFollow] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeInventoryItemId),
+        AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeOrderQuantity),
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeInventoryDetailId),
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeCartCheckout),
         AsyncStorage.getItem(STORAGE_KEYS.postAuthResumeLikeItemId),
@@ -306,13 +338,16 @@ export class AuthStore {
         if (cart) {
           this.postAuthResumeCartCheckout = true;
           this.postAuthResumeInventoryItemId = null;
+          this.postAuthResumeOrderQuantity = null;
           this.postAuthResumeInventoryDetailId = null;
         } else if (detailId) {
           this.postAuthResumeInventoryDetailId = detailId;
           this.postAuthResumeInventoryItemId = null;
+          this.postAuthResumeOrderQuantity = null;
           this.postAuthResumeCartCheckout = false;
         } else if (id) {
           this.postAuthResumeInventoryItemId = id;
+          this.postAuthResumeOrderQuantity = storedOrderQuantity(rawQty);
           this.postAuthResumeInventoryDetailId = null;
           this.postAuthResumeCartCheckout = false;
         }
@@ -421,6 +456,7 @@ export class AuthStore {
       this.isLoading = false;
       this.error = null;
       this.postAuthResumeInventoryItemId = null;
+      this.postAuthResumeOrderQuantity = null;
       this.postAuthResumeInventoryDetailId = null;
       this.postAuthResumeCartCheckout = false;
       this.postAuthResumeLikeItemId = null;
@@ -777,6 +813,7 @@ export class AuthStore {
       AsyncStorage.removeItem(STORAGE_KEYS.isAuthenticated),
       AsyncStorage.removeItem(STORAGE_KEYS.profilePhotoUri),
       AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeInventoryItemId),
+      AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeOrderQuantity),
       AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeInventoryDetailId),
       AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeCartCheckout),
       AsyncStorage.removeItem(STORAGE_KEYS.postAuthResumeLikeItemId),
@@ -927,6 +964,7 @@ export class AuthStore {
     this.localProfilePhotoUri = null;
     this.error = null;
     this.postAuthResumeInventoryItemId = null;
+    this.postAuthResumeOrderQuantity = null;
     this.postAuthResumeInventoryDetailId = null;
     this.postAuthResumeCartCheckout = false;
     this.postAuthResumeLikeItemId = null;

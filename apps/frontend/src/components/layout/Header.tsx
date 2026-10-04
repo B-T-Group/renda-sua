@@ -12,6 +12,7 @@ import {
     RestaurantMenu,
     ShoppingBag,
     ShoppingCart,
+    Storefront,
     SmartToy,
     SwapHoriz,
 } from '@mui/icons-material';
@@ -61,6 +62,7 @@ import PersonaSwitchOverlay from '../common/PersonaSwitchOverlay';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 import UserRatingSummary from '../common/UserRatingSummary';
 import { MarketSelector } from '../market/MarketSelector';
+import { HeaderSearchPopover } from './HeaderSearchPopover';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
 import { brandTokens } from '../../theme/brandTokens';
@@ -442,7 +444,7 @@ const Header: React.FC = () => {
         fontWeight: 400,
         fontSize: '0.875rem',
         fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          'inherit',
         px: { md: 1.5, lg: 2 },
         py: 1,
         minWidth: 'auto',
@@ -534,7 +536,7 @@ const Header: React.FC = () => {
                       width: 36,
                       height: 36,
                       fontSize: '0.75rem',
-                      backgroundColor: '#007aff',
+                      backgroundColor: brandTokens.primary.main,
                       color: 'white',
                     }}
                   >
@@ -768,7 +770,7 @@ const Header: React.FC = () => {
                       fontWeight: 400,
                       fontSize: '0.875rem',
                       fontFamily:
-                        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        'inherit',
                       px: 2,
                       py: 1,
                       minWidth: 'auto',
@@ -838,6 +840,8 @@ const Header: React.FC = () => {
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
               {!isMobile && <LanguageSwitcher inverted />}
 
+              {(userType === 'client' || !isAuthenticated) && <HeaderSearchPopover />}
+
               {/* Favorites + Cart - clients */}
               {isAuthenticated && userType === 'client' && (
                 <IconButton
@@ -853,6 +857,20 @@ const Header: React.FC = () => {
                   }}
                 >
                   <FavoriteBorder />
+                </IconButton>
+              )}
+              {isAuthenticated && userType === 'client' && (
+                <IconButton
+                  onClick={() => navigate('/following')}
+                  size="small"
+                  aria-label={t('client.following.title', 'Following')}
+                  sx={{
+                    color: '#ffffff',
+                    padding: '6px',
+                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.08)' },
+                  }}
+                >
+                  <Storefront />
                 </IconButton>
               )}
               {isAuthenticated && userType === 'client' && (
@@ -893,10 +911,10 @@ const Header: React.FC = () => {
                         width: 28,
                         height: 28,
                         fontSize: '0.75rem',
-                        backgroundColor: '#007aff',
+                        backgroundColor: brandTokens.primary.main,
                         color: 'white',
                         fontFamily:
-                          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                          'inherit',
                       }}
                     >
                       {getUserInitials()}
@@ -938,7 +956,7 @@ const Header: React.FC = () => {
                             width: 32,
                             height: 32,
                             fontSize: '0.75rem',
-                            backgroundColor: '#007aff',
+                            backgroundColor: brandTokens.primary.main,
                             color: 'white',
                           }}
                         >

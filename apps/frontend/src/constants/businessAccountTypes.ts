@@ -4,6 +4,8 @@
  * Commission values mirror the backend helper — keep in sync with business-account-type.ts.
  */
 
+import { brandTokens } from '../theme/brandTokens';
+
 export type BusinessAccountTypeId = 'STANDARD' | 'PREMIUM' | 'ELITE';
 
 export interface BusinessAccountTypePlan {
@@ -38,8 +40,8 @@ export const BUSINESS_ACCOUNT_TYPE_PLANS: BusinessAccountTypePlan[] = [
     defaultLabel: 'Standard',
     taglineKey: 'business.accountType.plans.standard.tagline',
     defaultTagline: 'Best for getting started',
-    color: '#475569',
-    softColor: '#f1f5f9',
+    color: brandTokens.text.secondary,
+    softColor: brandTokens.surface.subtle,
     benefitKeys: [
       'business.accountType.plans.standard.benefit1',
       'business.accountType.plans.standard.benefit2',
@@ -63,8 +65,8 @@ export const BUSINESS_ACCOUNT_TYPE_PLANS: BusinessAccountTypePlan[] = [
     defaultLabel: 'Premium',
     taglineKey: 'business.accountType.plans.premium.tagline',
     defaultTagline: 'Grow your reach',
-    color: '#1d4ed8',
-    softColor: '#eff6ff',
+    color: brandTokens.primary.main,
+    softColor: brandTokens.tint.primary,
     includesFromId: 'STANDARD',
     benefitKeys: [
       'business.accountType.plans.premium.benefit1',
@@ -87,8 +89,8 @@ export const BUSINESS_ACCOUNT_TYPE_PLANS: BusinessAccountTypePlan[] = [
     defaultLabel: 'Elite',
     taglineKey: 'business.accountType.plans.elite.tagline',
     defaultTagline: 'Maximum visibility',
-    color: '#b45309',
-    softColor: '#fffbeb',
+    color: brandTokens.warning.main,
+    softColor: brandTokens.warning.soft,
     includesFromId: 'PREMIUM',
     benefitKeys: [
       'business.accountType.plans.elite.benefit1',

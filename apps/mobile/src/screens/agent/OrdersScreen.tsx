@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Text } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -414,7 +414,7 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
       </View>
 
       {/* List */}
-      <FlatList
+      <FlashList
         data={listActive}
         keyExtractor={keyExtractor}
         renderItem={renderItem}

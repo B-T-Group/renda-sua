@@ -146,7 +146,7 @@ describe('getBusinessOrderActions cooked-food pay-after', () => {
       })
     );
     expect(actions.map((a) => a.id)).toEqual(
-      expect.arrayContaining(['failPickup'])
+      expect.arrayContaining(['pickupFollowUp'])
     );
     expect(actions.find((a) => a.id === 'cancel')).toBeUndefined();
     expect(actions.find((a) => a.id === 'requestPickupPayment')).toBeUndefined();

@@ -1,9 +1,8 @@
 import { useCallback, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { AppModal } from '../common/AppModal';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Button, Chip, Divider, IconButton, RadioButton, Text } from 'react-native-paper';
+import { Button, Chip, Divider, RadioButton, Text } from 'react-native-paper';
+import { BottomSheet } from '../common/BottomSheet';
 import { CATALOG_SORT_OPTIONS } from '../../constants/catalogSortOptions';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { CatalogFilterState } from '../../types/catalogFilter';
@@ -88,10 +87,7 @@ export function CatalogBrowseFilterSheet({
   foodOnly = false,
 }: CatalogBrowseFilterSheetProps) {
   const { t } = useTranslation();
-  const { colors, borderRadius, spacing } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { height: winH } = useWindowDimensions();
-  const maxH = Math.min(winH * 0.88, 720);
+  const { colors, spacing } = useTheme();
 
   const setField = useCallback(
     (field: keyof CatalogFilterState, v: string) => {
@@ -121,36 +117,24 @@ export function CatalogBrowseFilterSheet({
   );
 
   return (
-    <AppModal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onDismiss}
-    >
-      <View style={styles.modalRoot}>
-        <Pressable style={styles.backdropFill} onPress={onDismiss} accessibilityRole="button" />
-        <View
-          style={[
-            styles.sheet,
-            {
-              maxHeight: maxH,
-              paddingBottom: insets.bottom + spacing.md,
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: borderRadius.lg,
-              borderTopRightRadius: borderRadius.lg,
-            },
-          ]}
-        >
-        <View style={[styles.sheetHeader, { paddingHorizontal: spacing.md, paddingTop: spacing.sm }]}>
-          <Text variant="titleMedium" style={{ color: colors.text.primary, flex: 1 }}>
-            {t('public.items.filterSheetTitle', 'Filters & sort')}
-          </Text>
-          <IconButton icon="close" onPress={onDismiss} accessibilityLabel={t('common.cancel', 'Close')} />
+      onClose={onDismiss}
+      title={t('public.items.filterSheetTitle', 'Filters & sort')}
+      snapPoints={['88%']}
+      footer={
+        <View style={styles.footerBtns}>
+          {hasFilters ? (
+            <Button mode="text" onPress={clearAll} compact>
+              {t('public.items.filters.clear', 'Clear filters')}
+            </Button>
+          ) : null}
+          <Button mode="contained" onPress={onDismiss} style={{ flex: 1, minWidth: 120 }}>
+            {t('common.done', 'Done')}
+          </Button>
         </View>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: spacing.lg }}
-        >
+      }
+    >
           <Text variant="labelLarge" style={{ color: colors.text.secondary, marginBottom: spacing.xs }}>
             {t('public.items.sortLabel', 'Sort')}
           </Text>
@@ -231,20 +215,7 @@ export function CatalogBrowseFilterSheet({
               </RadioButton.Group>
             </View>
           ) : null}
-          <View style={styles.footerBtns}>
-            {hasFilters ? (
-              <Button mode="text" onPress={clearAll} compact>
-                {t('public.items.filters.clear', 'Clear filters')}
-              </Button>
-            ) : null}
-            <Button mode="contained" onPress={onDismiss} style={{ flex: 1, minWidth: 120 }}>
-              {t('common.done', 'Done')}
-            </Button>
-          </View>
-        </ScrollView>
-        </View>
-      </View>
-    </AppModal>
+    </BottomSheet>
   );
 }
 

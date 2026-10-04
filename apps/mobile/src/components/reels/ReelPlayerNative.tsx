@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Animated, { ZoomIn } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 
 const MAX_PLAY_THROUGH_COUNT = 2;
@@ -10,18 +11,30 @@ export interface ReelPlayerNativeProps {
   uri: string;
   active: boolean;
   posterUri?: string | null;
+  preloadUri?: string | null;
   /** Fired after the reel has played through this many times (default 2). */
   onMaxLoopsReached?: () => void;
+  onDoubleTap?: () => void;
+}
+
+function PreloadPlayer({ uri }: { uri: string }) {
+  useVideoPlayer(uri, (player) => {
+    player.pause();
+  });
+  return null;
 }
 
 /** Only import this file when `isExpoVideoAvailable()` is true. */
 export function ReelPlayerNative({
   uri,
   active,
+  preloadUri,
   onMaxLoopsReached,
+  onDoubleTap,
 }: ReelPlayerNativeProps) {
   const { t } = useTranslation();
   const [userPaused, setUserPaused] = useState(false);
+  const [showHeart, setShowHeart] = useState(false);
   const playThroughCountRef = useRef(0);
   const onMaxLoopsRef = useRef(onMaxLoopsReached);
   onMaxLoopsRef.current = onMaxLoopsReached;
@@ -30,6 +43,7 @@ export function ReelPlayerNative({
     p.loop = true;
     p.muted = false;
   });
+  const lastTapRef = useRef(0);
 
   useEffect(() => {
     if (!active) {
@@ -63,7 +77,19 @@ export function ReelPlayerNative({
       style={styles.wrap}
       onPress={() => {
         if (!active) return;
-        setUserPaused((prev) => !prev);
+        const now = Date.now();
+        if (now - lastTapRef.current < 280) {
+          lastTapRef.current = 0;
+          setShowHeart(true);
+          setTimeout(() => setShowHeart(false), 700);
+          onDoubleTap?.();
+          return;
+        }
+        lastTapRef.current = now;
+        setTimeout(() => {
+          if (lastTapRef.current !== now) return;
+          setUserPaused((prev) => !prev);
+        }, 280);
       }}
       accessibilityRole="button"
       accessibilityLabel={
@@ -72,6 +98,12 @@ export function ReelPlayerNative({
           : t('reels.pause', 'Pause')
       }
     >
+      {preloadUri && preloadUri !== uri ? <PreloadPlayer uri={preloadUri} /> : null}
+      {showHeart ? (
+        <Animated.View entering={ZoomIn.duration(200)} style={styles.heart} pointerEvents="none">
+          <MaterialCommunityIcons name="heart" size={88} color="#fff" />
+        </Animated.View>
+      ) : null}
       <VideoView
         player={player}
         style={styles.video}
@@ -92,6 +124,7 @@ export function ReelPlayerNative({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#000' },
+  heart: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
   video: { flex: 1, width: '100%', height: '100%' },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,

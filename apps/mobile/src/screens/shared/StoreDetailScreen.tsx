@@ -26,11 +26,12 @@ import { useInventoryStore } from '../../hooks/useInventoryStore';
 import { useGuestCatalogCountry } from '../../hooks/useGuestCatalogCountry';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
+import { BusinessFollowButton } from '../../components/browse/BusinessFollowButton';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
 import { InventoryCatalogCard } from '../../components/browse/InventoryCatalogCard';
 import { StatusPill } from '../../components/common/StatusPill';
 import { StoreDefaultAvatar } from '../../components/illustrations/StoreDefaultAvatar';
-import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
+import { placeOrderParamsFromCatalog, useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useStockAvailabilityChecks } from '../../hooks/useStockAvailabilityChecks';
 import { businessApi } from '../../services/businessApi';
 import { shadows } from '../../theme';
@@ -168,16 +169,16 @@ function StoreDetailScreen({ route, navigation }: Props) {
     requestAddToCart,
     confirmLabel,
   } = useCatalogVariantFlow({
-    onPlaceOrder: (item, cartVariantId) => {
+    onPlaceOrder: (item, cartVariantId, quantity) => {
       trackView(item.id);
       const nav = navigation as {
         navigate: (name: string, params: object) => void;
       };
       if (persona.activePersona === 'client') {
-        nav.navigate('PlaceOrder', {
-          inventoryItemId: item.id,
-          ...(cartVariantId ? { variantId: cartVariantId } : {}),
-        });
+        nav.navigate(
+          'PlaceOrder',
+          placeOrderParamsFromCatalog(item, cartVariantId, quantity)
+        );
         return;
       }
       openItem(item.id);
@@ -418,6 +419,9 @@ function StoreDetailScreen({ route, navigation }: Props) {
           </View>
 
           <View style={styles.headerActions}>
+            {!previewMode && store?.business_id ? (
+              <BusinessFollowButton businessId={store.business_id} />
+            ) : null}
             {store?.is_storefront_visible || previewMode ? (
               <Button
                 mode="contained-tonal"

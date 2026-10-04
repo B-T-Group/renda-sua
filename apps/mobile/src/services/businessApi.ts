@@ -440,6 +440,25 @@ export const businessApi = {
       }),
   },
 
+  pickupNoshow: {
+    preview: (orderId: string) =>
+      api.get<{
+        canCancel: boolean;
+        hours: number;
+        cancellationFee: number;
+        cancellationFeePercent: number;
+        merchantShare: number;
+        refundAmount: number;
+        currency: string;
+      }>(`/orders/${orderId}/pickup-noshow`),
+    remind: (orderId: string) => api.post(`/orders/${orderId}/pickup-reminder`),
+    cancel: (orderId: string, failure_reason_id: string, notes?: string) =>
+      api.post(`/orders/${orderId}/cancel-uncollected-pickup`, {
+        failure_reason_id,
+        notes,
+      }),
+  },
+
   locations: {
     list: (): Promise<{
       success: boolean;

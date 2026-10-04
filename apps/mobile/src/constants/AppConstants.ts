@@ -6,39 +6,6 @@ export const APP_CONFIG = {
   ENVIRONMENT: __DEV__ ? 'development' : 'production',
 };
 
-// Configuration des couleurs
-export const COLORS = {
-  PRIMARY: 'rgb(197, 157, 95)',
-  PRIMARY_LIGHT: 'rgba(197, 157, 95, 0.1)',
-  PRIMARY_DARK: 'rgb(167, 127, 65)',
-  
-  // Couleurs de statut
-  SUCCESS: '#4CAF50',
-  WARNING: '#FF9800',
-  ERROR: '#F44336',
-  INFO: '#2196F3',
-  
-  // Couleurs de fond
-  BACKGROUND: '#f8f9fa',
-  SURFACE: '#ffffff',
-  CARD: '#ffffff',
-  
-  // Couleurs de texte
-  TEXT_PRIMARY: '#333333',
-  TEXT_SECONDARY: '#666666',
-  TEXT_DISABLED: '#999999',
-  
-  // Couleurs de bordure
-  BORDER: '#e0e0e0',
-  BORDER_LIGHT: '#f0f0f0',
-  
-  // Couleurs de notification
-  NOTIFICATION_SUCCESS: '#4CAF50',
-  NOTIFICATION_WARNING: '#FF9800',
-  NOTIFICATION_ERROR: '#F44336',
-  NOTIFICATION_INFO: '#2196F3',
-};
-
 // Configuration des espacements
 export const SPACING = {
   XS: 4,

@@ -1,26 +1,12 @@
-import React, {
+import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react';
-import { Appearance, type ColorSchemeName } from 'react-native';
-import {
-  createTheme,
-  darkColors,
-  lightColors,
-  type Theme,
-  type ThemeMode,
-} from '../theme';
-import {
-  THEME_MODE_STORAGE_KEY,
-  createPaperTheme,
-  createNavigationTheme,
-} from '../theme';
-import StorageService from '../services/storage/StorageService';
+import { createTheme, lightColors, type Theme, type ThemeMode } from '../theme';
+import { createPaperTheme, createNavigationTheme } from '../theme';
 
 export type ThemeContextValue = Theme & {
   mode: ThemeMode;
@@ -32,77 +18,20 @@ export type ThemeContextValue = Theme & {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function resolveIsDark(mode: ThemeMode, system: ColorSchemeName): boolean {
-  if (mode === 'dark') return true;
-  if (mode === 'light') return false;
-  return system === 'dark';
-}
-
-function isThemeMode(value: unknown): value is ThemeMode {
-  return value === 'light' || value === 'dark' || value === 'system';
-}
-
+/** Light only until the dark palette is checked on a device. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>('system');
-  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
-    () => Appearance.getColorScheme() ?? 'light'
-  );
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    void StorageService.getString(THEME_MODE_STORAGE_KEY).then((saved) => {
-      if (!mounted) return;
-      if (isThemeMode(saved)) setModeState(saved);
-      setHydrated(true);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) => {
-      setSystemScheme(colorScheme);
-    });
-    return () => sub.remove();
-  }, []);
-
-  const setMode = useCallback((next: ThemeMode) => {
-    setModeState(next);
-    void StorageService.setString(THEME_MODE_STORAGE_KEY, next);
-  }, []);
-
-  const isDark = resolveIsDark(mode, systemScheme);
-  const palette = isDark ? darkColors : lightColors;
-
+  const setMode = useCallback((_next: ThemeMode) => undefined, []);
   const value = useMemo<ThemeContextValue>(() => {
-    const base = createTheme(palette);
+    const base = createTheme(lightColors);
     return {
       ...base,
-      mode,
-      isDark,
-      setMode,
-      paperTheme: createPaperTheme(palette, isDark),
-      navigationTheme: createNavigationTheme(palette, isDark),
-    };
-  }, [palette, mode, isDark, setMode]);
-
-  // Avoid a flash of the wrong scheme once storage loads.
-  if (!hydrated) {
-    const boot = createTheme(lightColors);
-    const bootValue: ThemeContextValue = {
-      ...boot,
-      mode: 'system',
+      mode: 'light',
       isDark: false,
       setMode,
       paperTheme: createPaperTheme(lightColors, false),
       navigationTheme: createNavigationTheme(lightColors, false),
     };
-    return (
-      <ThemeContext.Provider value={bootValue}>{children}</ThemeContext.Provider>
-    );
-  }
+  }, [setMode]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

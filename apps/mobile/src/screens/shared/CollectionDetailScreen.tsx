@@ -9,7 +9,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useInventoryCatalog } from '../../hooks/useInventoryCatalog';
 import { useFeaturedCollections } from '../../hooks/useFeaturedCollections';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
-import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
+import { placeOrderParamsFromCatalog, useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useStockAvailabilityChecks } from '../../hooks/useStockAvailabilityChecks';
 import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
@@ -92,16 +92,16 @@ function CollectionDetailScreen({ route, navigation }: Props) {
     requestAddToCart,
     confirmLabel,
   } = useCatalogVariantFlow({
-    onPlaceOrder: (item, cartVariantId) => {
+    onPlaceOrder: (item, cartVariantId, quantity) => {
       trackView(item.id);
       const nav = navigation as {
         navigate: (name: string, params: object) => void;
       };
       if (persona.activePersona === 'client') {
-        nav.navigate('PlaceOrder', {
-          inventoryItemId: item.id,
-          ...(cartVariantId ? { variantId: cartVariantId } : {}),
-        });
+        nav.navigate(
+          'PlaceOrder',
+          placeOrderParamsFromCatalog(item, cartVariantId, quantity)
+        );
         return;
       }
       openItem(item.id);

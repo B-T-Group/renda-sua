@@ -13,7 +13,6 @@ import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBot
 import Logo from '../../components/Logo';
 import { PersonaQuickSwitch } from '../../components/persona/PersonaQuickSwitch';
 import { MenuLanguageSwitcher } from '../../components/menu/MenuLanguageSwitcher';
-import { MenuThemeSwitcher } from '../../components/menu/MenuThemeSwitcher';
 import { TabAwareSnackbar } from '../../components/feedback/TabAwareSnackbar';
 import { UserMenuRow } from '../../components/common/UserMenuRow';
 import { UserMenuSection } from '../../components/common/UserMenuSection';
@@ -114,6 +113,10 @@ function ClientMenuTabScreenBase() {
 
         <PersonaQuickSwitch />
 
+        <UserMenuSection>
+          <MenuLanguageSwitcher />
+        </UserMenuSection>
+
         <UserMenuSection title={t('menuTab.sections.account', 'Account')}>
           <UserMenuRow
             icon="account-outline"
@@ -132,6 +135,12 @@ function ClientMenuTabScreenBase() {
             label={t('items.likes.title', 'Your favorites')}
             subtitle={t('items.likes.menuSubtitle', 'Items you saved')}
             onPress={() => goTo('UserLikes')}
+          />
+          <UserMenuRow
+            icon="store-outline"
+            label={t('client.following.title', 'Following')}
+            subtitle={t('client.following.menuSubtitle', 'Stores you follow')}
+            onPress={() => goTo('FollowingStores')}
           />
           <UserMenuRow
             icon="hand-wave-outline"
@@ -189,8 +198,6 @@ function ClientMenuTabScreenBase() {
             )}
             onPress={() => goTo('NotificationPreferences')}
           />
-          <MenuLanguageSwitcher />
-          <MenuThemeSwitcher />
         </UserMenuSection>
 
         <UserMenuSection title={t('menuTab.sections.support', 'Support')}>

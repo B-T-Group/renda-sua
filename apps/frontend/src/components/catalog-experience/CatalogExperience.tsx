@@ -1,4 +1,5 @@
 import { Box, Skeleton } from '@mui/material';
+import { motion } from 'framer-motion';
 import React, { useEffect } from 'react';
 import {
   SITE_EVENT_CATALOG_MODULE_CLICK,
@@ -47,8 +48,13 @@ export function CatalogExperience({
   return (
     <Box sx={{ mb: 1 }}>
       {visible.map((module, position) => (
-        <CatalogModuleRenderer
+        <motion.div
           key={module.id}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.32, delay: position * 0.04 }}
+        >
+        <CatalogModuleRenderer
           module={module}
           actions={actions}
           onCategorySelect={onCategorySelect}
@@ -66,6 +72,7 @@ export function CatalogExperience({
             });
           }}
         />
+        </motion.div>
       ))}
     </Box>
   );

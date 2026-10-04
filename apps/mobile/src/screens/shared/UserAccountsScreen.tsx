@@ -22,6 +22,7 @@ import { useWalletAccountActions } from '../../hooks/useWalletAccountActions';
 import { AgentAccountTransactionsDialog } from '../../components/dialogs/AgentAccountTransactionsDialog';
 import { AgentWithdrawDialog } from '../../components/dialogs/AgentWithdrawDialog';
 import { ClientTopUpDialog } from '../../components/dialogs/ClientTopUpDialog';
+import { PriceText } from '../../components/common/PriceText';
 import { WalletAccountCard } from '../../components/wallet/WalletAccountCard';
 import {
   LocationsWalletSectionHeader,
@@ -259,6 +260,18 @@ function UserAccountsScreenBase() {
           </View>
         ) : (
           <>
+            {personalAccounts[0] ? (
+              <View style={{ marginBottom: spacing.md }}>
+                <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                  {t('accounts.availableBalance', 'Available balance')}
+                </Text>
+                <PriceText
+                  amount={personalAccounts[0].available_balance}
+                  currency={personalAccounts[0].currency}
+                  size="lg"
+                />
+              </View>
+            ) : null}
             {personalAccounts.length > 0 ? (
               <View style={{ gap: spacing.sm }}>
                 <PersonalWalletSectionHeader />

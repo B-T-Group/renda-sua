@@ -43,6 +43,10 @@ export function FailPickupSheet({
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noshowWindow, setNoshowWindow] = useState<{
+    canCancel: boolean;
+    hours: number;
+  } | null>(null);
 
   const loadReasons = useCallback(async () => {
     setLoading(true);
@@ -61,23 +65,41 @@ export function FailPickupSheet({
     }
   }, [i18n.language, t]);
 
+  const loadWindow = useCallback(async () => {
+    try {
+      const preview = await businessApi.pickupNoshow.preview(order.id);
+      setNoshowWindow({ canCancel: preview.canCancel, hours: preview.hours });
+    } catch (e: any) {
+      setNoshowWindow(null);
+      setError(
+        e?.message ??
+          t('orders.pickupNoshow.loadError', 'Could not load pickup options')
+      );
+    }
+  }, [order.id, t]);
+
   useEffect(() => {
     if (!visible) {
       setSelectedId(null);
       setNotes('');
       setError(null);
+      setNoshowWindow(null);
       return;
     }
     void loadReasons();
-  }, [visible, loadReasons]);
+    void loadWindow();
+  }, [visible, loadReasons, loadWindow]);
 
   const selected = reasons.find((r) => r.id === selectedId);
   const needsNotes = selected?.reason_key === 'other';
   const canSubmit =
-    !!selectedId && (!needsNotes || notes.trim().length > 0) && !submitting;
+    !!noshowWindow?.canCancel &&
+    !!selectedId &&
+    (!needsNotes || notes.trim().length > 0) &&
+    !submitting;
 
   const handleConfirm = async () => {
-    if (!canSubmit || !selectedId) return;
+    if (!canSubmit || !selectedId || !noshowWindow?.canCancel) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -133,7 +155,20 @@ export function FailPickupSheet({
             )}
           </Text>
 
-          {loading ? (
+          {!noshowWindow && !error ? (
+            <ActivityIndicator style={{ marginVertical: spacing.lg }} />
+          ) : noshowWindow && !noshowWindow.canCancel ? (
+            <Text
+              variant="bodyMedium"
+              style={{ color: colors.text.secondary, marginTop: spacing.md }}
+            >
+              {t(
+                'orders.pickupNoshow.wait',
+                'You can cancel for a no-show after the order has been ready for {{hours}} hours.',
+                { hours: noshowWindow.hours }
+              )}
+            </Text>
+          ) : loading ? (
             <ActivityIndicator style={{ marginVertical: spacing.lg }} />
           ) : (
             <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
@@ -180,14 +215,16 @@ export function FailPickupSheet({
           ) : null}
 
           <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
-            <Button
-              mode="contained"
-              buttonColor={colors.error.main}
-              onPress={() => void handleConfirm()}
-              disabled={!canSubmit}
-            >
-              {t('orders.failPickup.confirm', 'Mark as failed')}
-            </Button>
+            {noshowWindow?.canCancel ? (
+              <Button
+                mode="contained"
+                buttonColor={colors.error.main}
+                onPress={() => void handleConfirm()}
+                disabled={!canSubmit}
+              >
+                {t('orders.failPickup.confirm', 'Mark as failed')}
+              </Button>
+            ) : null}
             <Button mode="outlined" onPress={onDismiss} disabled={submitting}>
               {t('common.close', 'Close')}
             </Button>

@@ -4681,6 +4681,7 @@ describe('OrdersService', () => {
     };
 
     beforeEach(() => {
+      (reportMoneyAnomaly as jest.Mock).mockClear();
       jest.spyOn(service as any, 'claimSettlementStage').mockResolvedValue(true);
       jest
         .spyOn(service as any, 'releaseSettlementClaim')
@@ -4695,6 +4696,7 @@ describe('OrdersService', () => {
         id: 'client-account-1',
         available_balance: 0,
       });
+      accountsService.getAccountBalance = jest.fn().mockResolvedValue({ availableBalance: 0 });
       (
         service as any
       ).commissionsService.distributeItemCommissions = jest
@@ -4754,6 +4756,362 @@ describe('OrdersService', () => {
           transactionType: 'payment',
         })
       );
+    });
+
+    it('NODE-NESTJS-3G: skips release when withheld is missing and still debits available', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SumOrderHolds')
+          ? { account_transactions: [] }
+          : {
+              orders_by_pk: {
+                ...paidPickupOrder,
+                pay_after_merchant_confirm: true,
+              },
+            }
+      );
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+      expect(
+        (service as any).commissionsService.distributeItemCommissions
+      ).toHaveBeenCalledTimes(1);
+      expect(reportMoneyAnomaly).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_failed',
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it('releases only the remaining ledger hold when available covers the payment', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? { account_transactions: [] }
+              : { account_transactions: [{ amount: 2000 }] };
+          }
+          return {
+            orders_by_pk: {
+              ...paidPickupOrder,
+              pay_after_merchant_confirm: true,
+            },
+          };
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 3000,
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release' && r.amount === 5000
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 2000,
+          transactionType: 'release',
+        })
+      );
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+    });
+
+    it('keeps a short hold locked when available cannot cover the payment', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? { account_transactions: [] }
+              : { account_transactions: [{ amount: 2000 }] };
+          }
+          if (q.includes('SettlementRetryCount')) {
+            return { order_holds_by_pk: { settlement_retry_count: 0 } };
+          }
+          return {
+            orders_by_pk: {
+              ...paidPickupOrder,
+              pay_after_merchant_confirm: true,
+            },
+          };
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 0,
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'queued_for_retry'
+      );
+
+      expect(accountsService.registerTransaction).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 2000,
+          transactionType: 'release',
+        })
+      );
+      expect(accountsService.registerTransaction).not.toHaveBeenCalledWith(
+        expect.objectContaining({ transactionType: 'payment' })
+      );
+      expect(
+        (service as any).commissionsService.distributeItemCommissions
+      ).not.toHaveBeenCalled();
+    });
+
+    function payAfterOrder() {
+      return {
+        orders_by_pk: {
+          ...paidPickupOrder,
+          pay_after_merchant_confirm: true,
+        },
+      };
+    }
+
+    function holdRows(amounts: number[]) {
+      return { account_transactions: amounts.map((amount) => ({ amount })) };
+    }
+
+    it('releases the net hold after earlier releases, not the gross hold', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? holdRows([3200])
+              : holdRows([5000]);
+          }
+          return payAfterOrder();
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 3200,
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release' && r.amount === 5000
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 1800,
+          transactionType: 'release',
+          idempotencyKey: 'settle:item:release:order-123',
+          accountId: 'client-account-1',
+        })
+      );
+    });
+
+    it('does not release more than the bookkeeping amount when the ledger hold is larger', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (!q.includes('SumOrderHolds')) return payAfterOrder();
+          return vars?.transactionType === 'release' ? holdRows([]) : holdRows([9000]);
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 0,
+      });
+      let releaseAttempts = 0;
+      accountsService.registerTransaction.mockImplementation(async (r: any) => {
+        if (r.transactionType !== 'release') return { success: true };
+        releaseAttempts += 1;
+        return releaseAttempts === 1
+          ? { success: false, error: 'insufficient funds' }
+          : { success: true };
+      });
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      const releases = accountsService.registerTransaction.mock.calls
+        .map(([row]) => row)
+        .filter((row) => row.transactionType === 'release');
+      expect(releases.map((row) => row.amount)).toEqual([5000, 5000]);
+    });
+
+    it('skips a second release when holds and releases already net to zero', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SumOrderHolds') ? holdRows([5000]) : payAfterOrder()
+      );
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      const releases = accountsService.registerTransaction.mock.calls.filter(
+        ([row]) => row.transactionType === 'release'
+      );
+      expect(releases).toHaveLength(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+    });
+
+    it('queues a retry when a real remaining hold still cannot be released', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SettlementRetryCount')) {
+            return { order_holds_by_pk: { settlement_retry_count: 0 } };
+          }
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? holdRows([])
+              : holdRows([2000]);
+          }
+          return payAfterOrder();
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 3000,
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'queued_for_retry'
+      );
+
+      const types = accountsService.registerTransaction.mock.calls.map(
+        ([row]) => row.transactionType
+      );
+      expect(types).toEqual(['release', 'release']);
+      expect(
+        (service as any).commissionsService.distributeItemCommissions
+      ).not.toHaveBeenCalled();
+    });
+
+    it('does not treat a ledger lookup failure as an unheld release', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) => {
+        if (q.includes('SumOrderHolds')) throw new Error('hasura timeout');
+        if (q.includes('SettlementRetryCount')) {
+          return { order_holds_by_pk: { settlement_retry_count: 0 } };
+        }
+        return payAfterOrder();
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'queued_for_retry'
+      );
+      expect(accountsService.registerTransaction).not.toHaveBeenCalledWith(
+        expect.objectContaining({ transactionType: 'payment' })
+      );
+    });
+
+    it('does not measure the hold when the release failed for another reason', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) => {
+        if (q.includes('SettlementRetryCount')) {
+          return { order_holds_by_pk: { settlement_retry_count: 0 } };
+        }
+        return payAfterOrder();
+      });
+      accountsService.registerTransaction.mockResolvedValue({
+        success: false,
+        error: 'Account is frozen',
+      });
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'queued_for_retry'
+      );
+
+      const queries = hasuraSystemService.executeQuery.mock.calls.map(([q]) =>
+        String(q)
+      );
+      expect(queries.some((q) => q.includes('SumOrderHolds'))).toBe(false);
+      expect(accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('NODE-NESTJS-3G: delivery settlement skips a missing client hold and still debits the fee', async () => {
+      const deliveryOrder = {
+        ...paidPickupOrder,
+        current_status: 'out_for_delivery',
+        fulfillment_method: 'delivery',
+        payment_timing: 'pay_at_delivery',
+        pay_after_merchant_confirm: true,
+      };
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+        client_hold_amount: 0,
+        delivery_fees: 1500,
+        agent_hold_amount: 0,
+        item_settlement_completed_at: '2026-01-01T00:00:00Z',
+        delivery_settlement_completed_at: null,
+      } as any);
+      (service as any).commissionsService.distributeDeliveryCommissions = jest
+        .fn()
+        .mockResolvedValue(undefined);
+      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+        q.includes('SumOrderHolds')
+          ? holdRows([])
+          : { orders_by_pk: deliveryOrder }
+      );
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(
+        service.processOrderDeliveryPayment('order-123')
+      ).resolves.toBe('settled');
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 1500,
+          transactionType: 'payment',
+          idempotencyKey: 'settle:delivery:client-payment:order-123',
+        })
+      );
+      expect(
+        (service as any).commissionsService.distributeDeliveryCommissions
+      ).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -4928,7 +5286,43 @@ describe('OrdersService', () => {
       );
     });
 
-    it('queued retry marks the stage exhausted (no next retry) after the max attempts', async () => {
+    it('queued retry keeps a 24h cooldown after the max attempts so a later fix can settle', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-10-04T00:00:00Z'));
+      try {
+        jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+          id: 'hold-1',
+          client_hold_amount: 0,
+          item_settlement_completed_at: null,
+        } as any);
+        hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+          q.includes('SettlementRetryCount')
+            ? { order_holds_by_pk: { settlement_retry_count: 7 } }
+            : { orders_by_pk: { ...baseOrder, current_status: 'complete' } }
+        );
+        distributeItem.mockRejectedValue(new Error('still broken'));
+
+        await expect(
+          service.processOrderPayment('order-123', { isRetry: true })
+        ).resolves.toBe('queued_for_retry');
+        expect(retryQueueWrites()[0][1]).toEqual(
+          expect.objectContaining({
+            settlement_retry_count: 8,
+            settlement_next_retry_at: '2026-10-05T00:00:00.000Z',
+          })
+        );
+        expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+          expect.anything(),
+          'settlement_retry_exhausted',
+          expect.stringContaining('24h cooldown'),
+          expect.anything()
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('does not re-alert exhaustion on a later cooldown retry', async () => {
       jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
         id: 'hold-1',
         client_hold_amount: 0,
@@ -4936,7 +5330,7 @@ describe('OrdersService', () => {
       } as any);
       hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
         q.includes('SettlementRetryCount')
-          ? { order_holds_by_pk: { settlement_retry_count: 7 } }
+          ? { order_holds_by_pk: { settlement_retry_count: 8 } }
           : { orders_by_pk: { ...baseOrder, current_status: 'complete' } }
       );
       distributeItem.mockRejectedValue(new Error('still broken'));
@@ -4946,13 +5340,19 @@ describe('OrdersService', () => {
       ).resolves.toBe('queued_for_retry');
       expect(retryQueueWrites()[0][1]).toEqual(
         expect.objectContaining({
-          settlement_retry_count: 8,
-          settlement_next_retry_at: null,
+          settlement_retry_count: 9,
+          settlement_next_retry_at: expect.any(String),
         })
       );
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect(reportMoneyAnomaly).not.toHaveBeenCalledWith(
         expect.anything(),
         'settlement_retry_exhausted',
+        expect.any(String),
+        expect.anything()
+      );
+      expect(reportMoneyAnomaly).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_failed',
         expect.any(String),
         expect.anything()
       );

@@ -60,6 +60,8 @@ export interface NotificationData {
   isCookedFoodPickup?: boolean | null;
   /** MoMo cooked-food: client pays after merchant confirm */
   payAfterMerchantConfirm?: boolean | null;
+  /** Shown on the unpaid pay-after confirm push: percent of items kept if they cancel after paying. */
+  cancellationFeePercent?: number | null;
 }
 
 export interface RentalPeriodEndedEmailPayload {

@@ -7,9 +7,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider } from 'react-native-paper';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { observer } from 'mobx-react-lite';
 import { StripeAppProvider } from './src/components/payments/StripeAppProvider';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { useBrandFonts } from './src/theme/useBrandFonts';
+import { useReducedMotion } from './src/theme/motionHooks';
 import { ClientFlagsProvider } from './src/contexts/ClientFlagsContext';
 import { RootStore, RootStoreProvider } from './src/stores/RootStore';
 import { client } from './src/services/apolloClient';
@@ -158,15 +161,20 @@ const AppContent = observer(AppContentBase);
 
 function ThemedProviders({ children }: { children: React.ReactNode }) {
   const { paperTheme, isDark } = useTheme();
+  useReducedMotion();
   return (
     <PaperProvider theme={paperTheme}>
-      {children}
-      <SystemBars style={isDark ? 'light' : 'dark'} />
+      <BottomSheetModalProvider>
+        {children}
+        <SystemBars style={isDark ? 'light' : 'dark'} />
+      </BottomSheetModalProvider>
     </PaperProvider>
   );
 }
 
 export default function App() {
+  const fontsReady = useBrandFonts();
+  if (!fontsReady) return null;
   return (
     <GestureHandlerRootView style={styles.root}>
       <RootStoreProvider store={rootStore}>

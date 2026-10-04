@@ -8,14 +8,16 @@ interface Props {
   uri: string;
   active: boolean;
   posterUri?: string | null;
+  preloadUri?: string | null;
   onMaxLoopsReached?: () => void;
+  onDoubleTap?: () => void;
 }
 
 /**
  * Plays a reel when the native binary includes expo-video.
  * Older installs (pre-reels native build) get a thumbnail + upgrade message instead of crashing.
  */
-export function ReelPlayer({ uri, active, posterUri, onMaxLoopsReached }: Props) {
+export function ReelPlayer({ uri, active, posterUri, preloadUri, onMaxLoopsReached, onDoubleTap }: Props) {
   if (!isExpoVideoAvailable()) {
     return <ReelPlayerUnavailable posterUri={posterUri} />;
   }
@@ -28,7 +30,9 @@ export function ReelPlayer({ uri, active, posterUri, onMaxLoopsReached }: Props)
       uri={uri}
       active={active}
       posterUri={posterUri}
+      preloadUri={preloadUri}
       onMaxLoopsReached={onMaxLoopsReached}
+      onDoubleTap={onDoubleTap}
     />
   );
 }

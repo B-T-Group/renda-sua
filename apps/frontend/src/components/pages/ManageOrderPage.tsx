@@ -42,6 +42,7 @@ import BusinessOrderActions from '../orders/business/BusinessOrderActions';
 import ClientOrderActions from '../orders/client/ClientOrderActions';
 import DeliveryOrderActions from '../orders/delivery/DeliveryOrderActions';
 import { OrderPhaseBanner } from '../orders/OrderPhaseBanner';
+import { OrderJourneyTimeline } from '../orders/OrderJourneyTimeline';
 import PersonaOrderDetails, {
   type OrderPersona,
 } from '../orders/PersonaOrderDetails';
@@ -562,6 +563,7 @@ const ManageOrderPageContent: React.FC = () => {
               action={phaseBannerAction}
             />
           )}
+          {persona === 'client' ? <OrderJourneyTimeline order={order} /> : null}
 
           <PersonaOrderDetails
             persona={persona}

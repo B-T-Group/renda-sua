@@ -19,11 +19,13 @@ import { BusinessCancelOrderDialog } from './BusinessCancelOrderDialog';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
 import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
 import { shouldUseGuidedConfirmModal } from '../../utils/cookedFoodOrder';
+import { businessReadyConfirmMessage } from '../../utils/businessReadyConfirmCopy';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
 import { BusinessPickupPaymentDialog } from './BusinessPickupPaymentDialog';
 import { FailPickupSheet } from './FailPickupSheet';
+import { PickupNoshowSheet } from './PickupNoshowSheet';
 import { ReconcileCashDialog } from './ReconcileCashDialog';
 import type { BusinessRootStackParamList } from '@/navigation/types';
 import { resolveFirstOrderJourney } from '../../utils/firstOrderJourney';
@@ -83,6 +85,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [failPickupOpen, setFailPickupOpen] = useState(false);
+  const [noshowOpen, setNoshowOpen] = useState(false);
   const [pickupPinOpen, setPickupPinOpen] = useState(false);
   const [pickupPinError, setPickupPinError] = useState<string | null>(null);
   const {
@@ -152,6 +155,10 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         setFailPickupOpen(true);
         return;
       }
+      if (actionId === 'pickupFollowUp') {
+        setNoshowOpen(true);
+        return;
+      }
       if (actionId === 'manageRefunds') {
         navigation.navigate('BusinessRefundsList');
         return;
@@ -167,19 +174,14 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         return;
       }
       if (actionId === 'completePreparation') {
-        const isPickup = order.fulfillment_method === 'pickup';
         setPendingConfirm({
           actionId,
           title: t('business.orders.readyConfirmTitle', 'Mark ready for pickup?'),
-          message: isPickup
-            ? t(
-                'business.orders.readyConfirmBodyStore',
-                'The customer will be notified their order is ready to collect at your store. When they arrive, ask for their pickup PIN to confirm the handoff and capture payment.'
-              )
-            : t(
-                'business.orders.readyConfirmBody',
-                'Rendasua will start looking for a delivery agent to pick up this order from your location.'
-              ),
+          message: businessReadyConfirmMessage(
+            order,
+            t,
+            'Rendasua will start looking for a delivery agent to pick up this order from your location.'
+          ),
           confirmLabel: t('orderActions.readyForPickup', 'Ready'),
         });
         return;
@@ -203,7 +205,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
       }
       void runAction(actionId);
     },
-    [navigation, order.fulfillment_method, order.payment_status, runAction, t]
+    [navigation, order, runAction, t]
   );
 
   const handlePickupPinSubmit = useCallback(
@@ -374,6 +376,15 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         onDismiss={() => setFailPickupOpen(false)}
         onSuccess={() => {
           setFailPickupOpen(false);
+          onSuccess?.();
+        }}
+      />
+      <PickupNoshowSheet
+        visible={noshowOpen}
+        order={order}
+        onDismiss={() => setNoshowOpen(false)}
+        onSuccess={() => {
+          setNoshowOpen(false);
           onSuccess?.();
         }}
       />

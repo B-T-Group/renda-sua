@@ -2,7 +2,7 @@
   "expo": {
     "name": "Rendasua",
     "slug": "agent-mobile",
-    "version": "1.0.14",
+    "version": "1.1.0",
     "owner": "rendasua-org",
     "scheme": "rendasua",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/rendasua.png",
       "resizeMode": "contain",
-      "backgroundColor": "#fbfbfd"
+      "backgroundColor": "#FAF9F7"
     },
     "updates": {
       "enabled": true,
@@ -44,7 +44,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/rendasua.png",
-        "backgroundColor": "#fbfbfd"
+        "backgroundColor": "#FAF9F7"
       },
       "package": "com.rendasua.agent",
       "intentFilters": [

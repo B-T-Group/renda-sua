@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigurationsService } from '../admin/configurations.service';
 import { isCookedFoodOrderSnapshot } from '../food/cooked-food-flag.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
@@ -7,6 +6,7 @@ import {
   normalizeFeeCountryCode,
   percentFee,
   resolveFeePercent,
+  splitCancellationFee,
 } from './fee-percent.util';
 
 /** `application_configurations.config_key` for the percentage cancellation fee. */
@@ -28,6 +28,10 @@ export interface CancellationPolicy {
   refundAmount: number;
   refundCurrency: string;
   cancellationFee: number;
+  /** Floor half of `cancellationFee`. The platform keeps the remainder. */
+  merchantShare: number;
+  /** Remainder of `cancellationFee` after `merchantShare`. */
+  platformShare: number;
   /** % of the item subtotal after discounts that `cancellationFee` was computed with. */
   cancellationFeePercent?: number;
   estimatedRefundProcessingTime: string;
@@ -86,14 +90,6 @@ interface OrderForPolicy {
   business_location?: { country_code?: string | null } | null;
 }
 
-export interface PolicyOptions {
-  /**
-   * Keep the legacy flat `cancellation_fee` calculation. ONLY for fail-pickup (customer
-   * no-show at pickup), whose behaviour is intentionally unchanged (decision 3).
-   */
-  legacyFlatFee?: boolean;
-}
-
 const COOKED_READY_CLIENT_REASON_VALUES = new Set([
   'wont_make_it',
   'something_came_up',
@@ -105,15 +101,11 @@ const COOKED_READY_CLIENT_REASON_VALUES = new Set([
 export class CancellationPolicyService {
   private readonly logger = new Logger(CancellationPolicyService.name);
 
-  constructor(
-    private readonly hasuraService: HasuraSystemService,
-    private readonly configurationsService: ConfigurationsService
-  ) {}
+  constructor(private readonly hasuraService: HasuraSystemService) {}
 
   async getPolicy(
     order: OrderForPolicy,
-    persona: CancelledBy,
-    options: PolicyOptions = {}
+    persona: CancelledBy
   ): Promise<CancellationPolicy> {
     const status = order.current_status;
 
@@ -126,7 +118,7 @@ export class CancellationPolicyService {
     }
 
     if (persona === 'client') {
-      return this.getClientPolicy(order, options);
+      return this.getClientPolicy(order);
     }
 
     if (persona === 'business') {
@@ -159,8 +151,7 @@ export class CancellationPolicyService {
   }
 
   private async getClientPolicy(
-    order: OrderForPolicy,
-    options: PolicyOptions
+    order: OrderForPolicy
   ): Promise<CancellationPolicy> {
     if (order.assigned_agent_id) {
       return this.blockedPolicy(order, 'blocked.agentAssigned', 'client');
@@ -170,21 +161,12 @@ export class CancellationPolicyService {
       return this.blockedPolicy(order, 'blocked.terminalStatus', 'client');
     }
 
-    const feeApplies = options.legacyFlatFee
-      ? this.clientCancellationFeeApplies(order)
-      : this.clientCancellationFeeApplies(order) &&
-        !this.isPayAtDeliveryOrPickup(order);
-    let cancellationFee = 0;
-    let cancellationFeePercent: number | undefined;
-    if (feeApplies && options.legacyFlatFee) {
-      cancellationFee = await this.resolveLegacyFlatFee(
-        order.business_location?.country_code ?? 'GA'
-      );
-    } else if (feeApplies) {
-      const result = await this.resolvePercentFee(order);
-      cancellationFee = result.fee;
-      cancellationFeePercent = result.percent;
-    }
+    const feeApplies =
+      this.clientCancellationFeeApplies(order) &&
+      !this.isPayAtDeliveryOrPickup(order);
+    const quoted = await this.quoteClientFee(order, feeApplies);
+    const cancellationFee = quoted.cancellationFee;
+    const cancellationFeePercent = quoted.cancellationFeePercent;
 
     const totalMinorUnits = Math.round(order.total_amount * 100);
     const feeMinorUnits = Math.round(cancellationFee * 100);
@@ -212,6 +194,8 @@ export class CancellationPolicyService {
       refundAmount,
       refundCurrency: order.currency,
       cancellationFee,
+      merchantShare: quoted.merchantShare,
+      platformShare: quoted.platformShare,
       ...(cancellationFeePercent !== undefined ? { cancellationFeePercent } : {}),
       estimatedRefundProcessingTime: this.resolveProcessingTime(
         order.payment_source ?? null,
@@ -266,6 +250,8 @@ export class CancellationPolicyService {
       refundAmount: order.total_amount,
       refundCurrency: order.currency,
       cancellationFee: 0,
+      merchantShare: 0,
+      platformShare: 0,
       estimatedRefundProcessingTime: this.resolveProcessingTime(
         order.payment_source ?? null,
         order.payment_status
@@ -302,6 +288,8 @@ export class CancellationPolicyService {
       refundAmount: 0,
       refundCurrency: order.currency,
       cancellationFee: 0,
+      merchantShare: 0,
+      platformShare: 0,
       estimatedRefundProcessingTime: '',
       paymentSource: order.payment_source ?? 'unknown',
       cancellationConsequences: [],
@@ -365,6 +353,22 @@ export class CancellationPolicyService {
    * row); no row at all logs `cancellation_fee_config_missing` at error level and uses
    * the 30% default; a Hasura read error propagates (never silently waives the fee).
    */
+  /**
+   * Fee a paid pickup no-show keeps. Classic pay-at-pickup is included once paid;
+   * unpaid orders stay at 0 (pay-after still discloses the percent).
+   */
+  async quoteNoshowFee(order: OrderForPolicy) {
+    const quoted = await this.quoteClientFee(order, this.paymentCaptured(order));
+    return {
+      cancellationFee: quoted.cancellationFee,
+      cancellationFeePercent: quoted.cancellationFeePercent ?? 0,
+      merchantShare: quoted.merchantShare,
+      platformShare: quoted.platformShare,
+      refundAmount: this.refundAfterFee(order.total_amount, quoted.cancellationFee),
+      currency: order.currency,
+    };
+  }
+
   async resolvePercentFee(
     order: OrderForPolicy
   ): Promise<{ fee: number; percent: number; base: number }> {
@@ -381,24 +385,40 @@ export class CancellationPolicyService {
     return { fee: percentFee(base, percent, order.currency), percent, base };
   }
 
-  /**
-   * LEGACY flat `cancellation_fee` (application_configurations number_value). Retired for
-   * cancellations; still read ONLY by fail-pickup (customer no-show), whose behaviour is
-   * unchanged. Missing row / read error still yield 0 here, exactly as before.
-   */
-  private async resolveLegacyFlatFee(countryCode: string): Promise<number> {
-    try {
-      const config = await this.configurationsService.getConfigurationByKey(
-        'cancellation_fee',
-        countryCode
-      );
-      return config?.number_value ?? 0;
-    } catch (error: any) {
-      this.logger.warn(
-        `Could not fetch cancellation fee for country ${countryCode}: ${error.message}`
-      );
-      return 0;
+  /** Percent fee plus the 50/50 split. Unpaid pay-after still discloses the percent. */
+  private async quoteClientFee(
+    order: OrderForPolicy,
+    feeApplies: boolean
+  ): Promise<{
+    cancellationFee: number;
+    cancellationFeePercent?: number;
+    merchantShare: number;
+    platformShare: number;
+  }> {
+    const shouldQuote =
+      feeApplies || order.pay_after_merchant_confirm === true;
+    if (!shouldQuote) {
+      return { cancellationFee: 0, merchantShare: 0, platformShare: 0 };
     }
+    const result = await this.resolvePercentFee(order);
+    const cancellationFee = feeApplies ? result.fee : 0;
+    const shares = splitCancellationFee(cancellationFee, order.currency);
+    return {
+      cancellationFee,
+      cancellationFeePercent: result.percent,
+      merchantShare: shares.merchantShare,
+      platformShare: shares.platformShare,
+    };
+  }
+
+  private paymentCaptured(order: OrderForPolicy): boolean {
+    const payment = (order.payment_status || '').toLowerCase();
+    return payment === 'paid' || payment === 'authorized';
+  }
+
+  private refundAfterFee(total: number, fee: number): number {
+    const refundMinor = Math.round(total * 100) - Math.round(fee * 100);
+    return Math.max(0, refundMinor) / 100;
   }
 
   private isDeferredUncollected(order: OrderForPolicy): boolean {

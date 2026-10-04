@@ -26,13 +26,15 @@ export default observer(function GuestBrowseScreen({
   const route = useRoute<RouteProp<GuestTabParamList, 'GuestBrowse'>>();
   const [checkoutCatalogItem, setCheckoutCatalogItem] = useState<CatalogInventoryItem | null>(null);
   const [checkoutVariantId, setCheckoutVariantId] = useState<string | null>(null);
+  const [checkoutQuantity, setCheckoutQuantity] = useState(1);
   const [snack, setSnack] = useState<string | null>(null);
 
   const itemCountryCode = checkoutCatalogItem?.business_location?.address?.country?.trim().toUpperCase() ?? undefined;
 
   const onPlaceOrder = useCallback(
-    (catalogItem: CatalogInventoryItem, cartVariantId?: string) => {
+    (catalogItem: CatalogInventoryItem, cartVariantId?: string, quantity?: number) => {
       setCheckoutVariantId(cartVariantId ?? null);
+      setCheckoutQuantity(Math.max(1, Math.floor(quantity ?? 1)));
       setCheckoutCatalogItem(catalogItem);
     },
     []
@@ -56,13 +58,13 @@ export default observer(function GuestBrowseScreen({
       items: [
         {
           business_inventory_id: checkoutCatalogItem.id,
-          quantity: 1,
+          quantity: checkoutQuantity,
           ...(orderVariantId ? { item_variant_id: orderVariantId } : {}),
         },
       ],
       provisional_country: itemCountryCode,
     };
-  }, [checkoutCatalogItem, checkoutVariantId, itemCountryCode]);
+  }, [checkoutCatalogItem, checkoutQuantity, checkoutVariantId, itemCountryCode]);
 
   const { config: preflightConfig, loading: preflightLoading } = useResolvedCheckout({
     request: preflightRequest,
@@ -124,6 +126,7 @@ export default observer(function GuestBrowseScreen({
   const dismissCheckout = useCallback(() => {
     setCheckoutCatalogItem(null);
     setCheckoutVariantId(null);
+    setCheckoutQuantity(1);
   }, []);
 
   return (
@@ -162,6 +165,7 @@ export default observer(function GuestBrowseScreen({
         <PublicItemCheckoutSheet
           visible
           inventoryItemId={checkoutCatalogItem.id}
+          quantity={checkoutQuantity}
           item={checkoutSummary}
           onDismiss={dismissCheckout}
           resolvedVerificationMethod={preflightConfig?.verification_method ?? null}

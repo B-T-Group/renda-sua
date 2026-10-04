@@ -17,11 +17,13 @@ import {
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
 import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
 import { shouldUseGuidedConfirmModal } from '../../utils/cookedFoodOrder';
+import { businessReadyConfirmMessage } from '../../utils/businessReadyConfirmCopy';
 import { BusinessMarkShippedSheet } from './BusinessMarkShippedSheet';
 import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
 import { BusinessPickupPaymentDialog } from './BusinessPickupPaymentDialog';
 import { FailPickupSheet } from './FailPickupSheet';
+import { PickupNoshowSheet } from './PickupNoshowSheet';
 import { ReconcileCashDialog } from './ReconcileCashDialog';
 import type { BusinessRootStackParamList } from '@/navigation/types';
 
@@ -80,6 +82,7 @@ export function ActiveOrderCtaHost({
   const [cookedConfirmOpen, setCookedConfirmOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [failPickupOpen, setFailPickupOpen] = useState(false);
+  const [noshowOpen, setNoshowOpen] = useState(false);
   const [pickupPinOpen, setPickupPinOpen] = useState(false);
   const [pickupPinError, setPickupPinError] = useState<string | null>(null);
   const {
@@ -147,6 +150,10 @@ export function ActiveOrderCtaHost({
         setFailPickupOpen(true);
         return;
       }
+      if (actionId === 'pickupFollowUp') {
+        setNoshowOpen(true);
+        return;
+      }
       if (actionId === 'manageRefunds') {
         navigation.navigate('BusinessRefundsList');
         return;
@@ -162,19 +169,14 @@ export function ActiveOrderCtaHost({
         return;
       }
       if (actionId === 'completePreparation') {
-        const isPickup = actionOrder.fulfillment_method === 'pickup';
         setPendingConfirm({
           actionId,
           title: t('business.orders.readyConfirmTitle', 'Mark ready for pickup?'),
-          message: isPickup
-            ? t(
-                'business.orders.readyConfirmBodyStore',
-                'The customer will be notified their order is ready to collect at your store. When they arrive, ask for their pickup PIN to confirm the handoff and capture payment.'
-              )
-            : t(
-                'business.orders.readyConfirmBody',
-                'The order will be ready for agent pickup.'
-              ),
+          message: businessReadyConfirmMessage(
+            actionOrder,
+            t,
+            'The order will be ready for agent pickup.'
+          ),
           confirmLabel: t('orderActions.readyForPickup', 'Ready'),
         });
         return;
@@ -357,6 +359,17 @@ export function ActiveOrderCtaHost({
           onDismiss={() => setFailPickupOpen(false)}
           onSuccess={() => {
             setFailPickupOpen(false);
+            onSuccess?.();
+          }}
+        />
+      ) : null}
+      {order ? (
+        <PickupNoshowSheet
+          visible={noshowOpen}
+          order={order}
+          onDismiss={() => setNoshowOpen(false)}
+          onSuccess={() => {
+            setNoshowOpen(false);
             onSuccess?.();
           }}
         />

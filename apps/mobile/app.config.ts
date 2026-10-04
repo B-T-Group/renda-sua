@@ -73,6 +73,7 @@ export default ({ config }: { config: Record<string, unknown> }) => {
           isAndroidBackgroundLocationEnabled: true,
         },
       ],
+      'expo-image',
       'expo-local-authentication',
       [
         'expo-secure-store',

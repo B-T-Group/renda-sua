@@ -463,7 +463,7 @@ function statusColors(
   nowMs: number
 ): { bg: string; fg: string } {
   if (reel.processing_status === 'failed') {
-    return { bg: '#fdecea', fg: '#b00020' };
+    return { bg: colors.errorTint, fg: colors.error.main };
   }
   if (
     isMerchantReelStuck({
@@ -472,7 +472,7 @@ function statusColors(
       nowMs,
     })
   ) {
-    return { bg: '#fff4e5', fg: '#b26a00' };
+    return { bg: colors.warningTint, fg: colors.warning.main };
   }
   if (isLiveCapable(reel) && reel.is_active !== false) {
     return { bg: `${colors.primary.main}22`, fg: colors.primary.main };
@@ -596,7 +596,7 @@ function ReelRowCard(props: {
         <Text
           style={[
             typography.caption,
-            { color: '#b00020', marginTop: spacing.xs },
+            { color: colors.error.main, marginTop: spacing.xs },
           ]}
         >
           {reel.processing_error}
@@ -606,7 +606,7 @@ function ReelRowCard(props: {
         <Text
           style={[
             typography.caption,
-            { color: '#b26a00', marginTop: spacing.xs },
+            { color: colors.warning.main, marginTop: spacing.xs },
           ]}
         >
           {t(
@@ -646,7 +646,7 @@ function ReelRowCard(props: {
             disabled={mutating}
             onPress={onDelete}
             style={{ flex: 1 }}
-            textColor={retryable ? '#b00020' : undefined}
+            textColor={retryable ? colors.error.main : undefined}
           >
             {stuck
               ? t('business.reels.mine.cancel', 'Cancel')

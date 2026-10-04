@@ -47,6 +47,7 @@ import {
 } from '../../utils/cookedFoodOrder';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import FailPickupDialog from '../dialogs/FailPickupDialog';
+import PickupNoshowDialog from '../dialogs/PickupNoshowDialog';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 
 /** ISO 3166-1 alpha-2 from order addresses; falls back when missing or not a 2-letter code. */
@@ -294,6 +295,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
   const [pickupPaymentDialogOpen, setPickupPaymentDialogOpen] = useState(false);
   const [failPickupDialogOpen, setFailPickupDialogOpen] = useState(false);
+  const [noshowDialogOpen, setNoshowDialogOpen] = useState(false);
 
   const handleGenerateOverwriteCode = async () => {
     setLoading(true);
@@ -471,6 +473,33 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           });
           break;
         }
+        if (order.fulfillment_method === 'pickup') {
+          actions.push({
+            label: t('orderActions.pickupFollowUp', 'Pickup follow-up'),
+            action: () => setNoshowDialogOpen(true),
+            color: 'primary' as const,
+            icon: <LocalShipping />,
+          });
+          const paid =
+            order.payment_status === 'paid' ||
+            order.payment_status === 'authorized';
+          if (
+            !paid &&
+            order.payment_timing === 'pay_at_pickup' &&
+            order.pay_after_merchant_confirm !== true
+          ) {
+            actions.push({
+              label: t(
+                'orderActions.requestPickupPayment',
+                'Request pickup payment'
+              ),
+              action: () => setPickupPaymentDialogOpen(true),
+              color: 'primary' as const,
+              icon: <PaymentsOutlined />,
+            });
+          }
+          break;
+        }
         if (isCookedFoodReadyFailEligible(order as any)) {
           actions.push({
             label: t('orderActions.failPickup', 'Mark pickup failed'),
@@ -479,23 +508,6 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             icon: <Cancel />,
           });
           break;
-        }
-        if (
-          order.fulfillment_method === 'pickup' &&
-          order.payment_timing === 'pay_at_pickup' &&
-          order.pay_after_merchant_confirm !== true &&
-          order.payment_status !== 'paid' &&
-          order.payment_status !== 'authorized'
-        ) {
-          actions.push({
-            label: t(
-              'orderActions.requestPickupPayment',
-              'Request pickup payment'
-            ),
-            action: () => setPickupPaymentDialogOpen(true),
-            color: 'primary' as const,
-            icon: <PaymentsOutlined />,
-          });
         }
         break;
 
@@ -783,6 +795,13 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <PickupNoshowDialog
+        open={noshowDialogOpen}
+        order={order}
+        onClose={() => setNoshowDialogOpen(false)}
+        onSuccess={() => onActionComplete?.()}
+      />
 
       <FailPickupDialog
         open={failPickupDialogOpen}

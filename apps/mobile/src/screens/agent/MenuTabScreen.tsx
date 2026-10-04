@@ -12,7 +12,6 @@ import { useManualAppUpdateCheck } from '../../hooks/useManualAppUpdateCheck';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { MenuLanguageSwitcher } from '../../components/menu/MenuLanguageSwitcher';
-import { MenuThemeSwitcher } from '../../components/menu/MenuThemeSwitcher';
 import { PersonaQuickSwitch } from '../../components/persona/PersonaQuickSwitch';
 import { TabAwareSnackbar } from '../../components/feedback/TabAwareSnackbar';
 import { UserMenuRow } from '../../components/common/UserMenuRow';
@@ -116,6 +115,10 @@ function MenuTabScreen() {
 
         <PersonaQuickSwitch />
 
+        <UserMenuSection>
+          <MenuLanguageSwitcher />
+        </UserMenuSection>
+
         <UserMenuSection title={t('menuTab.sections.account', 'Account')}>
           <UserMenuRow
             icon="account-outline"
@@ -211,8 +214,6 @@ function MenuTabScreen() {
             )}
             onPress={() => goTo('NotificationPreferences')}
           />
-          <MenuLanguageSwitcher />
-          <MenuThemeSwitcher />
         </UserMenuSection>
 
         <UserMenuSection title={t('menuTab.sections.support', 'Support')}>

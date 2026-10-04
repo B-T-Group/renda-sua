@@ -319,6 +319,7 @@ export const ItemsPage = lazy(
 );
 export const FoodsPage = lazy(() => import('../components/pages/FoodsPage'));
 export const LikesPage = lazy(() => import('../components/pages/LikesPage'));
+export const FollowingPage = lazy(() => import('../components/pages/FollowingPage'));
 export const StorePage = lazy(() => import('../components/pages/StorePage'));
 export const StoresIndexPage = lazy(
   () => import('../components/pages/StoresIndexPage')

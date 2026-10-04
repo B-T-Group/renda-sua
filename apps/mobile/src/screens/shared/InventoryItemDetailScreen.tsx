@@ -340,8 +340,8 @@ function InventoryItemDetailScreen() {
       return;
     }
     nav.navigate('ClientMainTabs', {
-      screen: foodTab ? 'ClientFoods' : 'ClientBrowse',
-      params: foodTab ? undefined : { segment: 'all' },
+      screen: 'ClientBrowse',
+      params: { segment: foodTab ? 'food' : 'all' },
     });
   }, [isGuest, item?.food_availability, navigation]);
 
@@ -1070,6 +1070,8 @@ function InventoryItemDetailScreen() {
             </Button>
             <Button
               mode="contained"
+              buttonColor={colors.cta.main}
+              textColor={colors.cta.contrast}
               onPress={onBuy}
               style={{ width: '100%', borderRadius: borderRadius.button }}
               contentStyle={styles.ctaBtnContent}

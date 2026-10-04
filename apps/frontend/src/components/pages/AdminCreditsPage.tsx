@@ -34,6 +34,7 @@ import {
   type CreditEventType,
 } from '../../hooks/useAdminCredits';
 import { usePermission } from '../../hooks/usePermissions';
+import { creditCountryLabel } from '../../utils/creditCountryLabel';
 import {
   RecordFeedbackDialog,
   type RecordFeedbackPayload,
@@ -58,28 +59,6 @@ const EVENT_LABELS: Record<CreditEventType, [string, string]> = {
   ],
   my_first_purchase: ['admin.credits.events.firstPurchase', 'First purchase'],
 };
-
-const COUNTRY_LABELS: Record<string, [string, string]> = {
-  CM: ['admin.credits.countries.CM', 'Cameroon'],
-  GA: ['admin.credits.countries.GA', 'Gabon'],
-  TG: ['admin.credits.countries.TG', 'Togo'],
-  BJ: ['admin.credits.countries.BJ', 'Benin'],
-  CI: ['admin.credits.countries.CI', "Côte d'Ivoire"],
-  CG: ['admin.credits.countries.CG', 'Congo'],
-  CA: ['admin.credits.countries.CA', 'Canada'],
-  US: ['admin.credits.countries.US', 'United States'],
-  PH: ['admin.credits.countries.PH', 'Philippines'],
-};
-
-function countryLabel(
-  code: string | null | undefined,
-  t: (key: string, fallback: string) => string
-): string {
-  if (!code) return '—';
-  const normalized = code.toUpperCase();
-  const entry = COUNTRY_LABELS[normalized];
-  return entry ? t(entry[0], entry[1]) : normalized;
-}
 
 export const AdminCreditsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -253,7 +232,7 @@ export const AdminCreditsPage: React.FC = () => {
               </MenuItem>
               {ACTIVE_PHONE_COUNTRY_OPTIONS.map((opt) => (
                 <MenuItem key={opt.isoCode} value={opt.isoCode}>
-                  {opt.flag} {countryLabel(opt.isoCode, t)}
+                  {opt.flag} {creditCountryLabel(opt.isoCode, t)}
                 </MenuItem>
               ))}
             </Select>
@@ -389,7 +368,7 @@ const EscalationsTable: React.FC<{
                 </Link>
               </TableCell>
               <TableCell>{name || '—'}</TableCell>
-              <TableCell>{countryLabel(client?.country, t)}</TableCell>
+              <TableCell>{creditCountryLabel(client?.country, t)}</TableCell>
               <TableCell>{row.risk_type}</TableCell>
               <TableCell>{row.severity}</TableCell>
               <TableCell align="right">
@@ -499,7 +478,7 @@ const FeedbackTable: React.FC<{
               </TableCell>
               <TableCell>{name || '—'}</TableCell>
               <TableCell>
-                {countryLabel(row.client?.user?.country, t)}
+                {creditCountryLabel(row.client?.user?.country, t)}
               </TableCell>
               <TableCell>{row.client?.user?.phone_number || '—'}</TableCell>
               <TableCell>{row.business?.name || '—'}</TableCell>
@@ -565,7 +544,7 @@ const ProgressTable: React.FC<{ rows: CreditsSummaryRow[] }> = ({ rows }) => {
           return (
             <TableRow key={row.user_id}>
               <TableCell>{name}</TableCell>
-              <TableCell>{countryLabel(row.country, t)}</TableCell>
+              <TableCell>{creditCountryLabel(row.country, t)}</TableCell>
               <TableCell>
                 <Stack direction="row" spacing={0.5}>
                   {row.is_agent ? (

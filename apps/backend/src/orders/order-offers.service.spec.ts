@@ -460,6 +460,7 @@ describe('OrderOffersService', () => {
       estimated_earnings: '42.6',
       currency: 'XAF',
       expires_at: expiresAt,
+      created_at: new Date(new Date(expiresAt).getTime() - 180_000).toISOString(),
       order: {
         id: 'order-1',
         order_number: 'ORD-1',

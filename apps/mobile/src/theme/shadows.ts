@@ -3,10 +3,10 @@ import type { ViewStyle } from 'react-native';
 /**
  * Cross-platform elevation tokens.
  *
- * Three semantic levels:
- *   small  – subtle card lift (list rows, chips)
- *   medium – elevated panels (modals, bottom sheets)
- *   large  – prominent surfaces (FABs, sticky CTAs)
+ * Two semantic levels. Prefer whitespace and hairlines over shadow.
+ *   small  – resting cards
+ *   medium – raised sheets and sticky bars
+ *   large  – alias of medium (kept so existing call sites stay flat)
  *
  * Use these on a plain `View` (shadow* for iOS, elevation for Android)
  * instead of Paper `Surface` when the card also has a visible border,
@@ -19,54 +19,50 @@ export const shadows = {
 
   /** Small – cards, list rows, subtle surfaces */
   sm: {
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   } as ViewStyle,
 
-  /** Medium – bottom sheets, filter panels, popovers */
+  /** Raised – sheets, sticky bars */
   md: {
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
-  } as ViewStyle,
-
-  /** Large – FABs, sticky action bars, prominent overlays */
-  lg: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    elevation: 8,
-  } as ViewStyle,
-
-  // ── Semantic aliases (match the three levels above) ─────────────────────
-  /** Alias for sm – use on cards and row items */
-  small: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 2,
   } as ViewStyle,
-  /** Alias for md – use on elevated panels */
-  medium: {
-    shadowColor: '#000',
+
+  /** Alias of md. Heavy drop shadows are not part of the system. */
+  lg: {
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   } as ViewStyle,
-  /** Alias for lg – use on FABs and sticky action bars */
+
+  small: {
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  } as ViewStyle,
+  medium: {
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+  } as ViewStyle,
   large: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   } as ViewStyle,
 } as const;

@@ -17,9 +17,10 @@ import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import {
   RETRY_SETTLEABLE_STATUSES,
   SETTLEMENT_CLAIM_LEASE_MINUTES,
-  SETTLEMENT_RETRY_MAX_ATTEMPTS,
   SettlementStage,
-  settlementRetryDelayMinutes,
+  isSettlementRetryExhausted,
+  justExhaustedSettlementRetry,
+  nextSettlementRetryAtIso,
 } from './order-settlement-retry.util';
 import type { Configuration } from '../config/configuration';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
@@ -129,6 +130,12 @@ import {
   withDeliveryContactForFulfiller,
 } from './delivery-contact.util';
 import { CancellationPolicyService, type CancellationPolicy } from './cancellation-policy.service';
+import {
+  assertNoshowWindowOpen,
+  CLIENT_NO_SHOW_REASON,
+  loadPickupNoshowClock,
+  reminderCoolingDown,
+} from './pickup-noshow.logic';
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
@@ -5891,6 +5898,71 @@ export class OrdersService {
     };
   }
 
+  async getPickupNoshowPreview(orderId: string) {
+    await this.requireBusinessOrderAccess(
+      orderId,
+      'Only business users can view pickup no-show options',
+      'Unauthorized to view pickup no-show options for this order'
+    );
+    const order = await this.requireOrder(orderId);
+    const clock = await loadPickupNoshowClock(this.hasuraSystemService, order as any, this.logger);
+    const quote = await this.quoteNoshowFee(order);
+    return {
+      success: true,
+      ...clock,
+      ...quote,
+      canCancel:
+        clock.canCancel &&
+        (this.paidPickupReady(order) || this.deliveryCookedReady(order)),
+      pickupReminderLastSentAt: (order as any).pickup_reminder_last_sent_at ?? null,
+    };
+  }
+
+  async sendPickupReminder(orderId: string) {
+    await this.requireBusinessOrderAccess(
+      orderId,
+      'Only business users can remind a pickup client',
+      'Unauthorized to remind the client for this order'
+    );
+    const order = await this.requireOrder(orderId);
+    this.assertPickupReady(order);
+    if (reminderCoolingDown((order as any).pickup_reminder_last_sent_at)) {
+      throw new HttpException(
+        'A pickup reminder was sent recently. Try again in a few minutes.',
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+    const quote = await this.quoteNoshowFee(order);
+    await this.notificationsService.sendStorePickupReminderPush({
+      clientUserId:
+        (order.client as any)?.user_id ?? (order.client as any)?.user?.id,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      preferredLanguage: (order.client as any)?.user?.preferred_language,
+      includeWhatsapp: true,
+      feePercent: quote.cancellationFeePercent,
+    });
+    await this.markPickupReminderSent(order.id);
+    return { success: true, message: 'Pickup reminder sent' };
+  }
+
+  async cancelUncollectedPickup(request: {
+    orderId: string;
+    failure_reason_id: string;
+    notes?: string;
+  }) {
+    await this.requireBusinessOrderAccess(
+      request.orderId,
+      'Only business users can cancel an uncollected pickup',
+      'Unauthorized to cancel this pickup'
+    );
+    const order = await this.requireOrder(request.orderId);
+    if (this.isCookedFailPickupOrder(order)) return this.failPickup(request);
+    this.assertPaidPickupNoshow(order);
+    await this.requireNoshowWindow(order);
+    return this.commitUncollectedPickupCancel(order, request);
+  }
+
   async failPickup(request: {
     orderId: string;
     failure_reason_id: string;
@@ -5936,6 +6008,7 @@ export class OrdersService {
     }
 
     this.assertCookedFoodFailPickupEligible(order);
+    await this.requireNoshowWindow(order);
     await this.assertActivePickupFailureReason(request.failure_reason_id);
 
     const { feeRetained, refundAmount } =
@@ -6026,8 +6099,8 @@ export class OrdersService {
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         request.orderId,
-        'client',
-        request.notes,
+        'business',
+        CLIENT_NO_SHOW_REASON,
         'ready_for_pickup'
       );
     } catch (error: any) {
@@ -6064,62 +6137,64 @@ export class OrdersService {
     return result.failed_pickups?.[0] ?? null;
   }
 
-  private async assertActivePickupFailureReason(reasonId: string): Promise<void> {
+  private async assertActivePickupFailureReason(reasonId: string): Promise<string> {
     const reasonResult = await this.hasuraSystemService.executeQuery(
       `
       query ValidatePickupFailureReason($reasonId: uuid!) {
         pickup_failure_reasons_by_pk(id: $reasonId) {
           id
           is_active
+          reason_en
         }
       }
       `,
       { reasonId }
     );
-    if (!reasonResult.pickup_failure_reasons_by_pk) {
+    const reason = reasonResult.pickup_failure_reasons_by_pk;
+    if (!reason) {
       throw new HttpException(
         'Invalid failure reason ID',
         HttpStatus.BAD_REQUEST
       );
     }
-    if (!reasonResult.pickup_failure_reasons_by_pk.is_active) {
+    if (!reason.is_active) {
       throw new HttpException(
         'The selected failure reason is not active',
         HttpStatus.BAD_REQUEST
       );
     }
+    return reason.reason_en || 'Client no-show';
   }
 
   private async resolveFailPickupAmounts(order: Orders): Promise<{
     feeRetained: number;
     refundAmount: number;
   }> {
+    const quote = await this.quoteNoshowFee(order);
+    return { feeRetained: quote.cancellationFee, refundAmount: quote.refundAmount };
+  }
+
+  private toPolicyOrder(order: Orders) {
     const countryCode =
       (order.business_location as any)?.address?.country ??
       (order as any).business_location?.country_code ??
-      'GA';
-    const policy = await this.cancellationPolicyService.getPolicy(
-      {
-        id: order.id,
-        current_status: order.current_status,
-        assigned_agent_id: order.assigned_agent_id,
-        total_amount: order.total_amount,
-        currency: order.currency,
-        payment_source: (order as any).payment_source,
-        payment_status: order.payment_status,
-        payment_timing: (order as any).payment_timing,
-        pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
-        is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
-        business_location: { country_code: countryCode },
-      },
-      'client',
-      // Customer no-show at pickup keeps the legacy flat fee (decision: no 30% here).
-      { legacyFlatFee: true }
-    );
-    const feeRetained = policy.cancellationFee ?? 0;
+      null;
     return {
-      feeRetained,
-      refundAmount: Math.max(0, order.total_amount - feeRetained),
+      id: order.id,
+      current_status: order.current_status,
+      assigned_agent_id: order.assigned_agent_id,
+      total_amount: order.total_amount,
+      currency: order.currency,
+      payment_source: (order as any).payment_source,
+      payment_status: order.payment_status,
+      payment_timing: (order as any).payment_timing,
+      pay_after_merchant_confirm: (order as any).pay_after_merchant_confirm,
+      is_cooked_food_pickup: (order as any).is_cooked_food_pickup,
+      base_delivery_fee: order.base_delivery_fee,
+      per_km_delivery_fee: order.per_km_delivery_fee,
+      delivery_fee_waived: (order as any).delivery_fee_waived,
+      tax_amount: order.tax_amount,
+      business_location: { country_code: countryCode },
     };
   }
 
@@ -6218,8 +6293,8 @@ export class OrdersService {
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
-        'client',
-        notes,
+        'business',
+        CLIENT_NO_SHOW_REASON,
         previousStatus
       );
     } catch (error: any) {
@@ -6268,6 +6343,139 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  private async requireOrder(orderId: string): Promise<Orders> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    return order;
+  }
+
+  private async requireNoshowWindow(order: Orders) {
+    const clock = await loadPickupNoshowClock(
+      this.hasuraSystemService,
+      order as any,
+      this.logger
+    );
+    assertNoshowWindowOpen(clock);
+    return clock;
+  }
+
+  private paidPickupReady(order: Orders): boolean {
+    if (order.fulfillment_method !== 'pickup') return false;
+    if (order.current_status !== 'ready_for_pickup') return false;
+    const payment = (order.payment_status || '').toLowerCase();
+    return payment === 'paid' || payment === 'authorized';
+  }
+
+  private deliveryCookedReady(order: Orders): boolean {
+    if (order.fulfillment_method !== 'delivery' || order.assigned_agent_id) return false;
+    if (!this.isCookedFailPickupOrder(order)) return false;
+    const payment = (order.payment_status || '').toLowerCase();
+    return payment === 'paid' || payment === 'authorized';
+  }
+
+  private assertPickupReady(order: Orders): void {
+    if (order.fulfillment_method === 'pickup' && order.current_status === 'ready_for_pickup') {
+      return;
+    }
+    throw new HttpException(
+      'Pickup reminders are only for orders that are ready for pickup',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private assertPaidPickupNoshow(order: Orders): void {
+    if (this.paidPickupReady(order)) return;
+    throw new HttpException(
+      'Only a paid pickup that is ready can be cancelled as a no-show',
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private isCookedFailPickupOrder(order: Orders): boolean {
+    if (order.current_status !== 'ready_for_pickup') return false;
+    return (
+      (order as any).is_cooked_food_pickup === true ||
+      ((order as any).pay_after_merchant_confirm === true &&
+        isCookedFoodOrderSnapshot(order as any)) ||
+      isCookedFoodFulfillmentOrder({
+        fulfillmentMethod: order.fulfillment_method,
+        itemFlags: (order.order_items || []).map((oi: any) => ({
+          is_cooked_food: oi.is_cooked_food ?? oi.item?.is_cooked_food,
+        })),
+      })
+    );
+  }
+
+  private async quoteNoshowFee(order: Orders) {
+    return this.cancellationPolicyService.quoteNoshowFee(this.toPolicyOrder(order));
+  }
+
+  private async markPickupReminderSent(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation MarkPickupReminderSent($id: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: { pickup_reminder_last_sent_at: $at }
+        ) { id }
+      }
+      `,
+      { id: orderId, at: new Date().toISOString() }
+    );
+  }
+
+  private async commitUncollectedPickupCancel(
+    order: Orders,
+    request: { orderId: string; failure_reason_id: string; notes?: string }
+  ) {
+    const reason = await this.assertActivePickupFailureReason(
+      request.failure_reason_id
+    );
+    const quote = await this.quoteNoshowFee(order);
+    await this.releaseStripeAuthorizationIfNeeded(order);
+    const previousStatus = order.current_status;
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
+      request.orderId,
+      'cancelled',
+      { viaCancelEndpoint: true }
+    );
+    await this.finishNoshowCancel(order, request, previousStatus, reason);
+    return {
+      success: true,
+      order: updatedOrder,
+      refund_amount: quote.refundAmount,
+      fee_retained: quote.cancellationFee,
+      merchant_share: quote.merchantShare,
+      message: 'Pickup cancelled because the client did not collect it',
+    };
+  }
+
+  private async finishNoshowCancel(
+    order: Orders,
+    request: { orderId: string; notes?: string },
+    previousStatus: string,
+    reason: string
+  ): Promise<void> {
+    const userId = await this.resolveOptionalUserId();
+    const detail = [reason, request.notes].filter(Boolean).join('. ');
+    await this.createStatusHistoryEntry(
+      request.orderId,
+      'cancelled',
+      'Client did not pick up',
+      'business',
+      userId ?? undefined,
+      detail
+    );
+    await this.runOrderCancellationSideEffects(
+      order,
+      request.orderId,
+      previousStatus,
+      'business',
+      request.notes,
+      CLIENT_NO_SHOW_REASON
+    );
   }
 
   private businessMayCancelDeferredUncollectedOrder(order: Orders): boolean {
@@ -8297,6 +8505,7 @@ export class OrdersService {
           busy_extra_prep_minutes
           estimated_prep_minutes
           client_ready_nudge_sent_at
+          pickup_reminder_last_sent_at
           created_at
           subtotal
           base_delivery_fee
@@ -9950,7 +10159,8 @@ export class OrdersService {
     orderId: string,
     previousStatus: string,
     cancelledBy: 'client' | 'business' | 'system',
-    notes?: string
+    notes?: string,
+    sqsReason?: string
   ): Promise<void> {
     try {
       await this.purchaseCreditsService?.restore(orderId);
@@ -10011,7 +10221,7 @@ export class OrdersService {
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
         cancelledBy,
-        notes,
+        sqsReason ?? notes,
         previousStatus
       );
     } catch (error: any) {
@@ -14100,12 +14310,11 @@ export class OrdersService {
         try {
           if (this.settlesViaClientHoldRelease(order as any)) {
             this.assertLedgerMove(
-              await this.accountsService.registerTransaction({
+              await this.releaseClientSettlementHold({
                 accountId: clientAccount.id,
+                orderId,
                 amount: subtotalPortion,
-                transactionType: 'release',
                 memo: `Hold released for order ${order.order_number} (items)`,
-                referenceId: orderId,
                 idempotencyKey: this.settlementKey('item', 'release', orderId),
               }),
               'item hold release',
@@ -14362,13 +14571,16 @@ export class OrdersService {
     }
     if (viaHoldRelease) {
       this.assertLedgerMove(
-        await this.accountsService.registerTransaction({
+        await this.releaseClientSettlementHold({
           accountId: clientAccount.id,
+          orderId,
           amount: deliveryAmt,
-          transactionType: 'release',
           memo: `Hold released for order ${order.order_number} delivery fee`,
-          referenceId: orderId,
-          idempotencyKey: this.settlementKey('delivery', 'client-release', orderId),
+          idempotencyKey: this.settlementKey(
+            'delivery',
+            'client-release',
+            orderId
+          ),
         }),
         'delivery hold release',
         order
@@ -14409,6 +14621,122 @@ export class OrdersService {
         `Settlement ${label} failed for order ${order.order_number}: ${result?.error ?? 'unknown error'}`
       );
     }
+  }
+
+  /**
+   * Release the requested amount, or only the order's remaining withheld if the
+   * bookkeeping hold was never placed (pay-after credit sitting in available).
+   */
+  private async releaseClientSettlementHold(params: {
+    accountId: string;
+    orderId: string;
+    amount: number;
+    memo: string;
+    idempotencyKey: string;
+  }): Promise<{ success?: boolean; error?: string }> {
+    const attempted = await this.registerHoldRelease(params, params.amount);
+    if (attempted?.success || !this.isInsufficientFundsError(attempted?.error)) {
+      return attempted;
+    }
+    try {
+      return await this.releaseRemainingOrderHold(params);
+    } catch {
+      return attempted;
+    }
+  }
+
+  private isInsufficientFundsError(error?: string): boolean {
+    return (error ?? '').toLowerCase().includes('insufficient funds');
+  }
+
+  private async releaseRemainingOrderHold(params: {
+    accountId: string;
+    orderId: string;
+    amount: number;
+    memo: string;
+    idempotencyKey: string;
+  }): Promise<{ success?: boolean; error?: string }> {
+    const netHeld = await this.netHoldAmountForOrder(
+      params.accountId,
+      params.orderId
+    );
+    if (netHeld <= 0) return this.skipUnheldRelease(params);
+    const releaseAmount = Number(Math.min(params.amount, netHeld).toFixed(2));
+    if (await this.partialReleaseCanBeCollected(params, releaseAmount)) {
+      return this.registerHoldRelease(params, releaseAmount);
+    }
+    return this.keepShortHoldLocked(params, netHeld);
+  }
+
+  /** No ledger hold: the following payment debits whatever is in available. */
+  private skipUnheldRelease(params: {
+    orderId: string;
+    amount: number;
+  }): { success: true } {
+    this.logger.warn(
+      `settlement_skip_unheld_release orderId=${params.orderId} requested=${params.amount}: debiting available`
+    );
+    return { success: true };
+  }
+
+  /**
+   * A short ledger hold must stay withheld when available cannot cover the
+   * payment after the release. Otherwise the customer can withdraw it and
+   * the queued retry never collects.
+   */
+  private keepShortHoldLocked(
+    params: { orderId: string; amount: number },
+    netHeld: number
+  ): { success: false; error: string } {
+    this.logger.warn(
+      `settlement_keep_short_hold orderId=${params.orderId} netHeld=${netHeld} requested=${params.amount}`
+    );
+    return {
+      success: false,
+      error: 'Insufficient funds for this transaction',
+    };
+  }
+
+  private async partialReleaseCanBeCollected(
+    params: { accountId: string; amount: number },
+    releaseAmount: number
+  ): Promise<boolean> {
+    const balance = await this.accountsService.getAccountBalance(params.accountId);
+    const available = Number(balance?.availableBalance ?? 0);
+    const covered = Number((available + releaseAmount).toFixed(2));
+    return covered >= Number(params.amount.toFixed(2));
+  }
+
+  private async registerHoldRelease(
+    params: {
+      accountId: string;
+      orderId: string;
+      memo: string;
+      idempotencyKey: string;
+    },
+    amount: number
+  ): Promise<{ success?: boolean; error?: string }> {
+    return this.accountsService.registerTransaction({
+      accountId: params.accountId,
+      amount,
+      transactionType: 'release',
+      memo: params.memo,
+      referenceId: params.orderId,
+      idempotencyKey: params.idempotencyKey,
+    });
+  }
+
+  private async netHoldAmountForOrder(
+    accountId: string,
+    orderId: string
+  ): Promise<number> {
+    const held = await this.sumHoldAmountForOrder(accountId, orderId);
+    const released = await this.sumHoldAmountForOrder(
+      accountId,
+      orderId,
+      'release'
+    );
+    return Number((held - released).toFixed(2));
   }
 
   /** Retries may see post-completion statuses, but never cancelled/failed/refunded orders. */
@@ -14506,24 +14834,56 @@ export class OrdersService {
     order: { id: string; order_number: string },
     error: any
   ): Promise<SettlementOutcome> {
+    try {
+      const recorded = await this.recordSettlementFailure(
+        orderHoldId,
+        stage,
+        order,
+        error
+      );
+      this.reportQueuedSettlementFailure(stage, order, error, recorded);
+    } catch (recordError: any) {
+      this.reportSettlementQueueWriteFailure(stage, order, error, recordError);
+      throw error;
+    }
+    return 'queued_for_retry';
+  }
+
+  private reportQueuedSettlementFailure(
+    stage: SettlementStage,
+    order: { id: string; order_number: string },
+    error: any,
+    recorded: { alreadyExhausted: boolean }
+  ): void {
+    const detail = `stage=${stage} order=${order.order_number} orderId=${order.id}: ${error?.message}`;
+    if (recorded.alreadyExhausted) {
+      this.logger.warn(`settlement_failed_after_exhaustion ${detail}`);
+      return;
+    }
+    reportMoneyAnomaly(this.logger, 'settlement_failed', detail, {
+      orderId: order.id,
+      stage,
+    });
+  }
+
+  private reportSettlementQueueWriteFailure(
+    stage: SettlementStage,
+    order: { id: string; order_number: string },
+    error: any,
+    recordError: any
+  ): void {
     reportMoneyAnomaly(
       this.logger,
       'settlement_failed',
       `stage=${stage} order=${order.order_number} orderId=${order.id}: ${error?.message}`,
       { orderId: order.id, stage }
     );
-    try {
-      await this.recordSettlementFailure(orderHoldId, stage, order, error);
-    } catch (recordError: any) {
-      reportMoneyAnomaly(
-        this.logger,
-        'settlement_retry_queue_failed',
-        `stage=${stage} order=${order.order_number} orderId=${order.id}: could not queue retry (${recordError?.message}); failing the request`,
-        { orderId: order.id, stage }
-      );
-      throw error;
-    }
-    return 'queued_for_retry';
+    reportMoneyAnomaly(
+      this.logger,
+      'settlement_retry_queue_failed',
+      `stage=${stage} order=${order.order_number} orderId=${order.id}: could not queue retry (${recordError?.message}); failing the request`,
+      { orderId: order.id, stage }
+    );
   }
 
   /** Persist a settlement failure + next retry time on order_holds (retry queue). */
@@ -14532,36 +14892,48 @@ export class OrdersService {
     stage: SettlementStage,
     order: { id: string; order_number: string },
     error: any
-  ): Promise<void> {
+  ): Promise<{ alreadyExhausted: boolean }> {
+    const previousCount = await this.readSettlementRetryCount(orderHoldId);
+    const failedAttempts = previousCount + 1;
+    await this.updateOrderHold(orderHoldId, {
+      settlement_failed_stage: stage,
+      settlement_last_error: String(error?.message ?? error).slice(0, 500),
+      settlement_retry_count: failedAttempts,
+      settlement_failed_at: new Date().toISOString(),
+      settlement_next_retry_at: nextSettlementRetryAtIso(failedAttempts),
+    });
+    this.alertIfSettlementJustExhausted(
+      previousCount,
+      failedAttempts,
+      stage,
+      order
+    );
+    return { alreadyExhausted: isSettlementRetryExhausted(previousCount) };
+  }
+
+  private async readSettlementRetryCount(orderHoldId: string): Promise<number> {
     const current = await this.hasuraSystemService.executeQuery(
       `query SettlementRetryCount($id: uuid!) {
         order_holds_by_pk(id: $id) { settlement_retry_count }
       }`,
       { id: orderHoldId }
     );
-    const failedAttempts =
-      Number(current?.order_holds_by_pk?.settlement_retry_count ?? 0) + 1;
-    const exhausted = failedAttempts >= SETTLEMENT_RETRY_MAX_ATTEMPTS;
-    const nextRetryAt = exhausted
-      ? null
-      : new Date(
-          Date.now() + settlementRetryDelayMinutes(failedAttempts) * 60_000
-        ).toISOString();
-    await this.updateOrderHold(orderHoldId, {
-      settlement_failed_stage: stage,
-      settlement_last_error: String(error?.message ?? error).slice(0, 500),
-      settlement_retry_count: failedAttempts,
-      settlement_failed_at: new Date().toISOString(),
-      settlement_next_retry_at: nextRetryAt,
-    });
-    if (exhausted) {
-      reportMoneyAnomaly(
-        this.logger,
-        'settlement_retry_exhausted',
-        `stage=${stage} order=${order.order_number} orderId=${order.id} attempts=${failedAttempts}: automatic retries stopped, manual reconciliation required`,
-        { orderId: order.id, stage, attempts: failedAttempts }
-      );
-    }
+    return Number(current?.order_holds_by_pk?.settlement_retry_count ?? 0);
+  }
+
+  private alertIfSettlementJustExhausted(
+    previousCount: number,
+    failedAttempts: number,
+    stage: SettlementStage,
+    order: { id: string; order_number: string }
+  ): void {
+    if (!justExhaustedSettlementRetry(previousCount, failedAttempts)) return;
+    reportMoneyAnomaly(
+      this.logger,
+      'settlement_retry_exhausted',
+      `stage=${stage} order=${order.order_number} orderId=${order.id} attempts=${failedAttempts}: short retry wave ended, next attempt after 24h cooldown`,
+      { orderId: order.id, stage, attempts: failedAttempts }
+    );
   }
 
   /** Clear the retry-queue marker after a settlement stage succeeds. */

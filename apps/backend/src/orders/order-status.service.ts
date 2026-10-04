@@ -13,6 +13,11 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import type { NotificationData } from '../notifications/notification-types';
 import { OrderQueueService } from './order-queue.service';
 import { resolveOrderNotificationAddress } from './order-notification-address.util';
+import { CANCELLATION_FEE_PERCENT_KEY } from './cancellation-policy.service';
+import {
+  normalizeFeeCountryCode,
+  resolveFeePercent,
+} from './fee-percent.util';
 import { isActivePersona } from '../users/persona.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 
@@ -674,6 +679,7 @@ export class OrderStatusService {
         isCookedFoodPickup: (order as any).is_cooked_food_pickup ?? null,
         payAfterMerchantConfirm:
           (order as any).pay_after_merchant_confirm ?? null,
+        cancellationFeePercent: await this.unpaidPayAfterFeePercent(order),
       };
     } catch (error: any) {
       this.logger.error(
@@ -682,6 +688,27 @@ export class OrderStatusService {
       );
       // Return null instead of throwing to prevent breaking the order status update
       return null;
+    }
+  }
+
+  private async unpaidPayAfterFeePercent(order: any): Promise<number | undefined> {
+    if (order?.pay_after_merchant_confirm !== true) return undefined;
+    const payment = String(order.payment_status || '').toLowerCase();
+    if (payment === 'paid' || payment === 'authorized') return undefined;
+    try {
+      const country = normalizeFeeCountryCode(order.business_location?.address?.country);
+      const resolved = await resolveFeePercent(
+        this.hasuraSystemService,
+        CANCELLATION_FEE_PERCENT_KEY,
+        country,
+        this.logger,
+        'cancellation_fee_config_missing',
+        `order=${order.id}`
+      );
+      return resolved.percent;
+    } catch (error: any) {
+      this.logger.warn(`pay-after fee percent for notify failed: ${error?.message}`);
+      return undefined;
     }
   }
 

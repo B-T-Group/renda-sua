@@ -1,9 +1,11 @@
 import { memo, useCallback, useMemo } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { usePressScale } from '@/theme/motionHooks';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useImageFallback } from '../../hooks/useImageFallback';
+import { AppImage } from '../common/AppImage';
 import { StatusPill } from '../common/StatusPill';
 import { StarRatingDisplay } from '../rating/StarRatingDisplay';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
@@ -15,6 +17,7 @@ import {
 } from '../../utils/buildCartLineFromCatalog';
 import { bestPackSavings } from '../../types/business/itemVariant';
 import { ItemLikeButton } from './ItemLikeButton';
+import { resolveProductCardHint } from '../../utils/resolveProductCardHint';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -56,7 +59,6 @@ function InventoryCatalogGridTileInner({
     return catalogImageDisplayUrl(sorted[0]) ?? null;
   }, [item]);
 
-  const mainImage = useImageFallback(parentImageUrl);
 
   const hasDeal =
     item.hasActiveDeal &&
@@ -93,23 +95,26 @@ function InventoryCatalogGridTileInner({
   const handlePress = useCallback(() => {
     onPress(item.id);
   }, [item.id, onPress]);
+  const press = usePressScale();
 
   return (
+    <Animated.View style={press.animatedStyle}>
     <Pressable
       onPress={handlePress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       accessibilityRole="button"
       accessibilityLabel={t(
         'public.items.card.openDetails',
         'Open {{name}} details',
         { name: item.item.name }
       )}
-      style={({ pressed }) => [
+      style={[
         styles.tile,
         shadows.sm,
         {
           borderRadius: borderRadius.md,
           backgroundColor: colors.surface,
-          opacity: pressed ? 0.92 : 1,
         },
       ]}
     >
@@ -128,22 +133,12 @@ function InventoryCatalogGridTileInner({
             }
           />
         </View>
-        {mainImage.hasImage && mainImage.sourceUri ? (
-          <Image
-            source={{ uri: mainImage.sourceUri }}
-            style={styles.image}
-            resizeMode="cover"
-            onError={mainImage.onImageError}
-          />
-        ) : (
-          <View style={[styles.image, styles.imagePlaceholder]}>
-            <Text
-              style={[typography.caption, { color: colors.text.disabled }]}
-            >
-              {t('public.items.noImage', 'Photo')}
-            </Text>
-          </View>
-        )}
+        <AppImage
+          uri={parentImageUrl}
+          recyclingKey={item.id}
+          style={styles.image}
+          accessibilityLabel={item.item.name}
+        />
       </View>
 
       <View style={[styles.content, { padding: spacing.xs }]}>
@@ -177,6 +172,8 @@ function InventoryCatalogGridTileInner({
               : formatMoney(unitPrice, currency)}
           </Text>
         )}
+
+        <ProductHint item={item} hasDeal={Boolean(hasDeal)} />
 
         {packSavings && !exportAvailable ? (
           <Text
@@ -214,6 +211,36 @@ function InventoryCatalogGridTileInner({
         ) : null}
       </View>
     </Pressable>
+    </Animated.View>
+  );
+}
+
+function ProductHint({ item, hasDeal }: { item: CatalogInventoryItem; hasDeal: boolean }) {
+  const { t } = useTranslation();
+  const { colors, typography } = useTheme();
+  const hint = resolveProductCardHint({
+    quantity: item.computed_available_quantity,
+    isFood: Boolean(item.food_availability),
+    foodOpen: item.food_availability?.is_available_now,
+    hasDeal,
+  });
+  if (!hint) return null;
+  const label =
+    hint.id === 'low_stock'
+      ? t('client.card.onlyLeft', 'Only {{count}} left', { count: hint.count })
+      : hint.id === 'check_availability'
+        ? t('client.card.checkAvailability', 'Check availability')
+        : hint.id === 'food_closed'
+          ? t('client.card.kitchenClosed', 'Kitchen closed')
+          : hint.id === 'food_open'
+            ? t('client.card.orderNow', 'Order now')
+            : hint.id === 'deal'
+              ? t('client.card.deal', 'Deal')
+              : hint.label;
+  return (
+    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1}>
+      {label}
+    </Text>
   );
 }
 

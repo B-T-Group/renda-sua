@@ -13,6 +13,7 @@ from rendasua_core_packages.utilities.cancellation_fee import (  # noqa: E402
     normalize_fee_country_code,
     percent_fee,
     select_fee_percent,
+    split_cancellation_fee,
 )
 
 
@@ -33,6 +34,12 @@ class PercentFeeParityVectors(unittest.TestCase):
         for base, pct, cur, expected in self.VECTORS:
             with self.subTest(base=base, pct=pct, cur=cur):
                 self.assertEqual(percent_fee(base, pct, cur), expected)
+
+    def test_split_gives_odd_minor_unit_to_platform(self):
+        self.assertEqual(split_cancellation_fee(3000, "XAF"), (1500, 1500))
+        self.assertEqual(split_cancellation_fee(1, "XAF"), (0, 1))
+        self.assertEqual(split_cancellation_fee(3.01, "CAD"), (1.5, 1.51))
+        self.assertEqual(split_cancellation_fee(0, "XAF"), (0, 0))
 
 
 class ItemSubtotal(unittest.TestCase):

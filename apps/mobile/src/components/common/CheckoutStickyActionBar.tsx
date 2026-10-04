@@ -2,7 +2,7 @@ import React, { type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PrimaryButton } from './AppButton';
+import { CtaButton } from './AppButton';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export interface CheckoutStickyBreakdownLine {
@@ -138,7 +138,7 @@ export function CheckoutStickyActionBar({
         </View>
       ) : null}
 
-      <PrimaryButton
+      <CtaButton
         label={label}
         onPress={onPress}
         loading={loading}

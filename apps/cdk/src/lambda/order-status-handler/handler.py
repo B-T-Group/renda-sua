@@ -5,6 +5,8 @@ import requests
 from dataclasses import dataclass
 from rendasua_core_packages.models import Order
 from rendasua_core_packages.utilities import format_full_address
+from rendasua_core_packages.hasura_client.base import HasuraClient, HasuraClientConfig
+from rendasua_core_packages.hasura_client.commission_service import get_rendasua_hq_user
 from rendasua_core_packages.utilities.cancellation_fee import (
     CANCELLATION_FEE_PERCENT_KEY,
     InvalidFeePercentError,
@@ -480,8 +482,14 @@ def handle_order_status_updated(event: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+CLIENT_NO_SHOW_REASON = "client_no_show"
+
+
 def client_cancellation_fee_applies(
-    order: Any, cancelled_by: str, previous_status: Optional[str]
+    order: Any,
+    cancelled_by: str,
+    previous_status: Optional[str],
+    cancellation_reason: Optional[str] = None,
 ) -> bool:
     """Charge after confirm, but not for unpaid pay-after cooked food.
 
@@ -489,21 +497,52 @@ def client_cancellation_fee_applies(
     wallet charge, no alert). Cooked-food "pay after merchant confirm" orders are stored
     with payment_timing pay_at_pickup but the client pays up front after confirm, so they
     keep the paid/authorized rule below.
+
+    A merchant pickup no-show (`cancelled_by=business`, reason `client_no_show`) charges
+    the same percent fee once the order was ready and paid.
     """
-    if cancelled_by != "client":
+    no_show = _is_client_no_show(cancelled_by, previous_status, cancellation_reason)
+    if cancelled_by != "client" and not no_show:
         return False
-    if previous_status not in ("confirmed", "preparing", "ready_for_pickup"):
+    if not no_show and previous_status not in ("confirmed", "preparing", "ready_for_pickup"):
         return False
     pay_after_confirm = getattr(order, "pay_after_merchant_confirm", None) is True
     if not pay_after_confirm and getattr(order, "payment_timing", None) in (
         "pay_at_delivery",
         "pay_at_pickup",
     ):
-        return False
-    if not pay_after_confirm:
+        if not no_show:
+            return False
+    if not pay_after_confirm and not no_show:
         return True
     payment_status = (getattr(order, "payment_status", None) or "").lower()
     return payment_status in ("paid", "authorized")
+
+
+def _is_client_no_show(
+    cancelled_by: str,
+    previous_status: Optional[str],
+    cancellation_reason: Optional[str],
+) -> bool:
+    return (
+        cancelled_by == "business"
+        and previous_status == "ready_for_pickup"
+        and (cancellation_reason or "").strip() == CLIENT_NO_SHOW_REASON
+    )
+
+
+def resolve_platform_account_id(
+    currency: str, hasura_endpoint: str, hasura_admin_secret: str
+) -> Optional[str]:
+    """RendaSua HQ wallet in the order currency (same account item commissions use)."""
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    hq_user = get_rendasua_hq_user(client)
+    if not hq_user:
+        return None
+    account = get_account_by_user_and_currency(
+        hq_user.id, currency, hasura_endpoint, hasura_admin_secret
+    )
+    return account.id if account else None
 
 
 def compute_cancellation_fee(
@@ -569,7 +608,8 @@ def process_cancellation_financials(
     cancelled_by: str,
     previous_status: Optional[str],
     hasura_endpoint: str,
-    hasura_admin_secret: str
+    hasura_admin_secret: str,
+    cancellation_reason: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Process financial transactions for order cancellation.
@@ -672,7 +712,10 @@ def process_cancellation_financials(
         
         # Process cancellation fee
         cancellation_fee = 0.0
-        if client_cancellation_fee_applies(order, cancelled_by, previous_status):
+        fee_applies = client_cancellation_fee_applies(
+            order, cancelled_by, previous_status, cancellation_reason
+        )
+        if fee_applies:
             # Client cancelling after confirmation - fee applies
             log_info("Client cancelled after confirmation, checking for cancellation fee", order_id=order_id, previous_status=previous_status)
             
@@ -705,7 +748,9 @@ def process_cancellation_financials(
                     log_error("Business account not found", order_id=order_id, business_user_id=business_user_id)
                     return {"success": False, "error": "Business account not found"}
 
-                # Register cancellation fee transactions
+                platform_account_id = resolve_platform_account_id(
+                    order.currency, hasura_endpoint, hasura_admin_secret
+                )
                 fee_result = register_cancellation_fee_transactions(
                     order_id,
                     order.order_number,
@@ -714,7 +759,8 @@ def process_cancellation_financials(
                     cancellation_fee,
                     order.currency,
                     hasura_endpoint,
-                    hasura_admin_secret
+                    hasura_admin_secret,
+                    platform_account_id=platform_account_id,
                 )
 
                 if not fee_result.get("success"):
@@ -726,7 +772,6 @@ def process_cancellation_financials(
                 log_info("Cancellation fee is 0 for this order, nothing to charge", order_id=order_id)
 
         elif cancelled_by == "business":
-            # Business cancelling - no fee to client
             log_info("Business cancelled order, no cancellation fee", order_id=order_id)
         
         # Release client hold (minus cancellation fee if applicable)
@@ -839,7 +884,8 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         message.cancelledBy,
         message.previousStatus,
         hasura_endpoint,
-        hasura_admin_secret
+        hasura_admin_secret,
+        message.cancellationReason,
     )
     
     if not financial_result.get("success"):
@@ -851,7 +897,8 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         message.orderId,
         message.cancelledBy,
         financial_result.get("cancellation_fee", 0),
-        environment
+        environment,
+        message.cancellationReason,
     )
 
     # Cancellation emails are sent by the backend when status is updated to cancelled
@@ -868,7 +915,8 @@ def trigger_stripe_refund_safe(
     order_id: str,
     cancelled_by: str,
     cancellation_fee: float,
-    environment: str
+    environment: str,
+    cancellation_reason: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Trigger Stripe refund for order cancellation via internal NestJS API.
@@ -911,7 +959,8 @@ def trigger_stripe_refund_safe(
         
         # Client cancellations always refund; system auto-decline also refunds
         # captured charges (Nest may have already refunded — endpoint is idempotent).
-        if cancelled_by not in ('client', 'system'):
+        no_show = (cancellation_reason or "").strip() == CLIENT_NO_SHOW_REASON
+        if cancelled_by not in ('client', 'system') and not no_show:
             log_info(
                 "Order cancelled by business, skipping Stripe refund",
                 order_id=order_id,

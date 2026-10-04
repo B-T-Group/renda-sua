@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
+export type ObjectiveKey =
+  | 'itemSales'
+  | 'rentals'
+  | 'clientSignups'
+  | 'merchantRecruitments'
+  | 'agentRecruitments';
+
+export interface ObjectiveMetric {
+  actual: number;
+  target: number | null;
+  percent: number | null;
+}
+
 export interface ScheduleAssignmentDetail {
   id: string;
   status: string;
@@ -21,13 +34,16 @@ export interface ScheduleAssignmentDetail {
     rentalAmount: number | null;
   };
   progress: {
-    agentRecruitments: { actual: number; target: number | null };
-    clientSignups: { actual: number; target: number | null };
-    merchantRecruitments: { actual: number; target: number | null };
-    itemSales: { actual: number; target: number | null };
-    rentals: { actual: number; target: number | null };
+    agentRecruitments: ObjectiveMetric;
+    clientSignups: ObjectiveMetric;
+    merchantRecruitments: ObjectiveMetric;
+    itemSales: ObjectiveMetric;
+    rentals: ObjectiveMetric;
     completionPercent: number | null;
+    overallPercent: number | null;
+    nextObjective: ObjectiveKey | null;
   };
+  progressWindow: { from: string; to: string } | null;
   runs: Array<{
     id: string;
     periodStart: string;

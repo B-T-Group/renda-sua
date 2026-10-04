@@ -1,6 +1,9 @@
 import { OrderSettlementRetryService } from './order-settlement-retry.service';
 import {
+  SETTLEMENT_RETRY_EXHAUSTED_COOLDOWN_MINUTES,
   SETTLEMENT_RETRY_MAX_ATTEMPTS,
+  nextSettlementRetryAtIso,
+  nextSettlementRetryDelayMinutes,
   settlementRetryDelayMinutes,
 } from './order-settlement-retry.util';
 
@@ -15,6 +18,16 @@ describe('settlementRetryDelayMinutes', () => {
     ]);
     expect(settlementRetryDelayMinutes(10)).toBe(360);
     expect(SETTLEMENT_RETRY_MAX_ATTEMPTS).toBe(8);
+  });
+
+  it('uses a 24h cooldown after the short wave so leftovers stay retryable', () => {
+    expect(nextSettlementRetryDelayMinutes(7)).toBe(320);
+    expect(nextSettlementRetryDelayMinutes(8)).toBe(
+      SETTLEMENT_RETRY_EXHAUSTED_COOLDOWN_MINUTES
+    );
+    expect(
+      nextSettlementRetryAtIso(8, new Date('2026-10-04T00:00:00Z'))
+    ).toBe('2026-10-05T00:00:00.000Z');
   });
 });
 
@@ -31,6 +44,7 @@ describe('OrderSettlementRetryService', () => {
   function setup(opts: {
     due: any[];
     claimRows?: number;
+    rearmRows?: number;
     orderStatus?: string;
     item?: 'settled' | 'queued_for_retry';
     delivery?: 'settled' | 'queued_for_retry';
@@ -40,8 +54,12 @@ describe('OrderSettlementRetryService', () => {
         ? { order_holds: opts.due }
         : { orders_by_pk: { current_status: opts.orderStatus ?? 'complete' } }
     );
-    const executeMutation = jest.fn(async () => ({
-      update_order_holds: { affected_rows: opts.claimRows ?? 1 },
+    const executeMutation = jest.fn(async (q: string) => ({
+      update_order_holds: {
+        affected_rows: q.includes('RearmExhausted')
+          ? (opts.rearmRows ?? 0)
+          : (opts.claimRows ?? 1),
+      },
     }));
     const ordersService = {
       processOrderPayment: jest.fn().mockResolvedValue(opts.item ?? 'settled'),
@@ -71,9 +89,27 @@ describe('OrderSettlementRetryService', () => {
   it('leases the row (moves next_retry_at forward) before retrying', async () => {
     const { service, executeMutation } = setup({ due: [row('item')] });
     await service.runOnce(NOW);
-    const vars = (executeMutation.mock.calls[0] as any[])[1];
-    expect(vars.expected).toBe('2026-10-01T11:55:00Z');
-    expect(vars.lease).toBe('2026-10-01T12:15:00.000Z');
+    const claim = executeMutation.mock.calls.find(([q]) =>
+      String(q).includes('ClaimSettlementRetry')
+    ) as [string, Record<string, string>];
+    expect(claim[1].expected).toBe('2026-10-01T11:55:00Z');
+    expect(claim[1].lease).toBe('2026-10-01T12:15:00.000Z');
+  });
+
+  it('rearms exhausted orphans (null next_retry_at) before fetching due rows', async () => {
+    const { service, executeMutation, executeQuery } = setup({ due: [] });
+    await service.runOnce(NOW);
+    const rearm = executeMutation.mock.calls.find(([q]) =>
+      String(q).includes('RearmExhaustedSettlementRetries')
+    ) as [string, Record<string, string | number>];
+    expect(rearm[1]).toEqual({
+      now: NOW.toISOString(),
+      minAttempts: SETTLEMENT_RETRY_MAX_ATTEMPTS,
+    });
+    expect(executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('SettlementRetryDue'),
+      expect.anything()
+    );
   });
 
   it('skips a row another instance already claimed', async () => {
