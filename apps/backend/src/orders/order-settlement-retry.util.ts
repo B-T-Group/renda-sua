@@ -1,15 +1,47 @@
 export type SettlementStage = 'item' | 'delivery';
 
-/** After this many failed attempts automatic retries stop and an alert is raised. */
+/** After this many failed attempts the short wave ends and a daily cooldown starts. */
 export const SETTLEMENT_RETRY_MAX_ATTEMPTS = 8;
 
 /** How long a claimed retry is leased so two instances never run the same hold. */
 export const SETTLEMENT_RETRY_LEASE_MINUTES = 15;
 
+/** After the short wave, keep trying once a day so a later code fix can settle leftovers. */
+export const SETTLEMENT_RETRY_EXHAUSTED_COOLDOWN_MINUTES = 24 * 60;
+
 /** Exponential backoff in minutes: 5, 10, 20, 40, 80, 160, 320 (capped at 6 h). */
 export function settlementRetryDelayMinutes(failedAttempts: number): number {
   const exp = Math.max(0, failedAttempts - 1);
   return Math.min(5 * 2 ** exp, 360);
+}
+
+export function isSettlementRetryExhausted(failedAttempts: number): boolean {
+  return failedAttempts >= SETTLEMENT_RETRY_MAX_ATTEMPTS;
+}
+
+export function justExhaustedSettlementRetry(
+  previousCount: number,
+  failedAttempts: number
+): boolean {
+  return (
+    previousCount < SETTLEMENT_RETRY_MAX_ATTEMPTS &&
+    isSettlementRetryExhausted(failedAttempts)
+  );
+}
+
+export function nextSettlementRetryDelayMinutes(failedAttempts: number): number {
+  return isSettlementRetryExhausted(failedAttempts)
+    ? SETTLEMENT_RETRY_EXHAUSTED_COOLDOWN_MINUTES
+    : settlementRetryDelayMinutes(failedAttempts);
+}
+
+export function nextSettlementRetryAtIso(
+  failedAttempts: number,
+  now: Date = new Date()
+): string {
+  return new Date(
+    now.getTime() + nextSettlementRetryDelayMinutes(failedAttempts) * 60_000
+  ).toISOString();
 }
 
 /**

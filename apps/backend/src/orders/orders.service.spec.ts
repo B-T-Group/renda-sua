@@ -5007,7 +5007,43 @@ describe('OrdersService', () => {
       );
     });
 
-    it('queued retry marks the stage exhausted (no next retry) after the max attempts', async () => {
+    it('queued retry keeps a 24h cooldown after the max attempts so a later fix can settle', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-10-04T00:00:00Z'));
+      try {
+        jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+          id: 'hold-1',
+          client_hold_amount: 0,
+          item_settlement_completed_at: null,
+        } as any);
+        hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
+          q.includes('SettlementRetryCount')
+            ? { order_holds_by_pk: { settlement_retry_count: 7 } }
+            : { orders_by_pk: { ...baseOrder, current_status: 'complete' } }
+        );
+        distributeItem.mockRejectedValue(new Error('still broken'));
+
+        await expect(
+          service.processOrderPayment('order-123', { isRetry: true })
+        ).resolves.toBe('queued_for_retry');
+        expect(retryQueueWrites()[0][1]).toEqual(
+          expect.objectContaining({
+            settlement_retry_count: 8,
+            settlement_next_retry_at: '2026-10-05T00:00:00.000Z',
+          })
+        );
+        expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+          expect.anything(),
+          'settlement_retry_exhausted',
+          expect.stringContaining('24h cooldown'),
+          expect.anything()
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('does not re-alert exhaustion on a later cooldown retry', async () => {
       jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
         id: 'hold-1',
         client_hold_amount: 0,
@@ -5015,7 +5051,7 @@ describe('OrdersService', () => {
       } as any);
       hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
         q.includes('SettlementRetryCount')
-          ? { order_holds_by_pk: { settlement_retry_count: 7 } }
+          ? { order_holds_by_pk: { settlement_retry_count: 8 } }
           : { orders_by_pk: { ...baseOrder, current_status: 'complete' } }
       );
       distributeItem.mockRejectedValue(new Error('still broken'));
@@ -5025,13 +5061,19 @@ describe('OrdersService', () => {
       ).resolves.toBe('queued_for_retry');
       expect(retryQueueWrites()[0][1]).toEqual(
         expect.objectContaining({
-          settlement_retry_count: 8,
-          settlement_next_retry_at: null,
+          settlement_retry_count: 9,
+          settlement_next_retry_at: expect.any(String),
         })
       );
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect(reportMoneyAnomaly).not.toHaveBeenCalledWith(
         expect.anything(),
         'settlement_retry_exhausted',
+        expect.any(String),
+        expect.anything()
+      );
+      expect(reportMoneyAnomaly).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'settlement_failed',
         expect.any(String),
         expect.anything()
       );

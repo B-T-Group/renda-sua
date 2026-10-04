@@ -17,9 +17,10 @@ import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import {
   RETRY_SETTLEABLE_STATUSES,
   SETTLEMENT_CLAIM_LEASE_MINUTES,
-  SETTLEMENT_RETRY_MAX_ATTEMPTS,
   SettlementStage,
-  settlementRetryDelayMinutes,
+  isSettlementRetryExhausted,
+  justExhaustedSettlementRetry,
+  nextSettlementRetryAtIso,
 } from './order-settlement-retry.util';
 import type { Configuration } from '../config/configuration';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
@@ -14589,24 +14590,56 @@ export class OrdersService {
     order: { id: string; order_number: string },
     error: any
   ): Promise<SettlementOutcome> {
+    try {
+      const recorded = await this.recordSettlementFailure(
+        orderHoldId,
+        stage,
+        order,
+        error
+      );
+      this.reportQueuedSettlementFailure(stage, order, error, recorded);
+    } catch (recordError: any) {
+      this.reportSettlementQueueWriteFailure(stage, order, error, recordError);
+      throw error;
+    }
+    return 'queued_for_retry';
+  }
+
+  private reportQueuedSettlementFailure(
+    stage: SettlementStage,
+    order: { id: string; order_number: string },
+    error: any,
+    recorded: { alreadyExhausted: boolean }
+  ): void {
+    const detail = `stage=${stage} order=${order.order_number} orderId=${order.id}: ${error?.message}`;
+    if (recorded.alreadyExhausted) {
+      this.logger.warn(`settlement_failed_after_exhaustion ${detail}`);
+      return;
+    }
+    reportMoneyAnomaly(this.logger, 'settlement_failed', detail, {
+      orderId: order.id,
+      stage,
+    });
+  }
+
+  private reportSettlementQueueWriteFailure(
+    stage: SettlementStage,
+    order: { id: string; order_number: string },
+    error: any,
+    recordError: any
+  ): void {
     reportMoneyAnomaly(
       this.logger,
       'settlement_failed',
       `stage=${stage} order=${order.order_number} orderId=${order.id}: ${error?.message}`,
       { orderId: order.id, stage }
     );
-    try {
-      await this.recordSettlementFailure(orderHoldId, stage, order, error);
-    } catch (recordError: any) {
-      reportMoneyAnomaly(
-        this.logger,
-        'settlement_retry_queue_failed',
-        `stage=${stage} order=${order.order_number} orderId=${order.id}: could not queue retry (${recordError?.message}); failing the request`,
-        { orderId: order.id, stage }
-      );
-      throw error;
-    }
-    return 'queued_for_retry';
+    reportMoneyAnomaly(
+      this.logger,
+      'settlement_retry_queue_failed',
+      `stage=${stage} order=${order.order_number} orderId=${order.id}: could not queue retry (${recordError?.message}); failing the request`,
+      { orderId: order.id, stage }
+    );
   }
 
   /** Persist a settlement failure + next retry time on order_holds (retry queue). */
@@ -14615,36 +14648,48 @@ export class OrdersService {
     stage: SettlementStage,
     order: { id: string; order_number: string },
     error: any
-  ): Promise<void> {
+  ): Promise<{ alreadyExhausted: boolean }> {
+    const previousCount = await this.readSettlementRetryCount(orderHoldId);
+    const failedAttempts = previousCount + 1;
+    await this.updateOrderHold(orderHoldId, {
+      settlement_failed_stage: stage,
+      settlement_last_error: String(error?.message ?? error).slice(0, 500),
+      settlement_retry_count: failedAttempts,
+      settlement_failed_at: new Date().toISOString(),
+      settlement_next_retry_at: nextSettlementRetryAtIso(failedAttempts),
+    });
+    this.alertIfSettlementJustExhausted(
+      previousCount,
+      failedAttempts,
+      stage,
+      order
+    );
+    return { alreadyExhausted: isSettlementRetryExhausted(previousCount) };
+  }
+
+  private async readSettlementRetryCount(orderHoldId: string): Promise<number> {
     const current = await this.hasuraSystemService.executeQuery(
       `query SettlementRetryCount($id: uuid!) {
         order_holds_by_pk(id: $id) { settlement_retry_count }
       }`,
       { id: orderHoldId }
     );
-    const failedAttempts =
-      Number(current?.order_holds_by_pk?.settlement_retry_count ?? 0) + 1;
-    const exhausted = failedAttempts >= SETTLEMENT_RETRY_MAX_ATTEMPTS;
-    const nextRetryAt = exhausted
-      ? null
-      : new Date(
-          Date.now() + settlementRetryDelayMinutes(failedAttempts) * 60_000
-        ).toISOString();
-    await this.updateOrderHold(orderHoldId, {
-      settlement_failed_stage: stage,
-      settlement_last_error: String(error?.message ?? error).slice(0, 500),
-      settlement_retry_count: failedAttempts,
-      settlement_failed_at: new Date().toISOString(),
-      settlement_next_retry_at: nextRetryAt,
-    });
-    if (exhausted) {
-      reportMoneyAnomaly(
-        this.logger,
-        'settlement_retry_exhausted',
-        `stage=${stage} order=${order.order_number} orderId=${order.id} attempts=${failedAttempts}: automatic retries stopped, manual reconciliation required`,
-        { orderId: order.id, stage, attempts: failedAttempts }
-      );
-    }
+    return Number(current?.order_holds_by_pk?.settlement_retry_count ?? 0);
+  }
+
+  private alertIfSettlementJustExhausted(
+    previousCount: number,
+    failedAttempts: number,
+    stage: SettlementStage,
+    order: { id: string; order_number: string }
+  ): void {
+    if (!justExhaustedSettlementRetry(previousCount, failedAttempts)) return;
+    reportMoneyAnomaly(
+      this.logger,
+      'settlement_retry_exhausted',
+      `stage=${stage} order=${order.order_number} orderId=${order.id} attempts=${failedAttempts}: short retry wave ended, next attempt after 24h cooldown`,
+      { orderId: order.id, stage, attempts: failedAttempts }
+    );
   }
 
   /** Clear the retry-queue marker after a settlement stage succeeds. */
