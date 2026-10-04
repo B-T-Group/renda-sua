@@ -1,10 +1,15 @@
+import { Logger } from '@nestjs/common';
 import { AdminPlatformMetricsService } from './admin-platform-metrics.service';
 
 function count(value: number) {
   return { aggregate: { count: value } };
 }
 
-function money(field: 'total_amount' | 'amount', value: number | string, n = 0) {
+function money(
+  field: 'total_amount' | 'amount',
+  value: number | string,
+  n = 0
+) {
   return { aggregate: { count: n, sum: { [field]: value } } };
 }
 
@@ -17,12 +22,21 @@ describe('AdminPlatformMetricsService', () => {
     service = new AdminPlatformMetricsService(hasura as never);
     hasura.executeQuery.mockImplementation(async (query: string) => {
       if (query.includes('AdminPlatformOrderCurrencies')) {
-        return { orders: [{ currency: 'XAF' }, { currency: 'CAD' }, { currency: 'bad' }] };
+        return {
+          orders: [
+            { currency: 'XAF' },
+            { currency: 'CAD' },
+            { currency: 'bad' },
+          ],
+        };
       }
       if (query.includes('AdminPlatformOrderMetrics')) return orderMetrics();
-      if (query.includes('AdminPlatformPayoutCurrencies')) return payoutCurrencies();
-      if (query.includes('AdminPlatformPayoutAggregates')) return payoutAggregates();
-      if (query.includes('AdminPlatformTopStores')) return { business_locations: stores() };
+      if (query.includes('AdminPlatformPayoutCurrencies'))
+        return payoutCurrencies();
+      if (query.includes('AdminPlatformPayoutAggregates'))
+        return payoutAggregates();
+      if (query.includes('AdminPlatformTopStores'))
+        return { business_locations: stores() };
       return {};
     });
   });
@@ -48,7 +62,13 @@ describe('AdminPlatformMetricsService', () => {
       byFulfillment: { delivery: 6, pickup: 3, shipping: 1 },
     });
     expect(actual.sales).toEqual([
-      { currency: 'CAD', gmv: 0, collected: 90, completedCount: 0, averageOrderValue: 0 },
+      {
+        currency: 'CAD',
+        gmv: 0,
+        collected: 90,
+        completedCount: 0,
+        averageOrderValue: 0,
+      },
       {
         currency: 'XAF',
         gmv: 8000,
@@ -114,7 +134,8 @@ describe('AdminPlatformMetricsService', () => {
       }
       if (query.includes('AdminPlatformOrderCurrencies')) return { orders: [] };
       if (query.includes('AdminPlatformOrderMetrics')) return orderMetrics();
-      if (query.includes('AdminPlatformTopStores')) return { business_locations: [] };
+      if (query.includes('AdminPlatformTopStores'))
+        return { business_locations: [] };
       return {};
     });
 
@@ -127,6 +148,165 @@ describe('AdminPlatformMetricsService', () => {
     expect(actual.payouts).toEqual([]);
     expect(actual.orders.completionRate).toBe(40);
     expect(queryNamed('AdminPlatformPayoutAggregates')).toBeUndefined();
+    expect(queryNamed('AdminPlatformOrderMetrics')).not.toContain('$country');
+    expect(
+      variablesFor('AdminPlatformOrderCurrencies').country
+    ).toBeUndefined();
+  });
+
+  it('clamps in-progress at zero and returns zero rates for an empty window', async () => {
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('AdminPlatformOrderCurrencies')) return { orders: [] };
+      if (query.includes('AdminPlatformOrderMetrics')) {
+        return {
+          total: count(3),
+          completed: count(2),
+          cancelled: count(2),
+          failed: count(0),
+          refunds: count(0),
+          pendingPayment: count(0),
+          uniqueClients: count(0),
+          delivery: count(0),
+          pickup: count(0),
+          shipping: count(0),
+        };
+      }
+      if (query.includes('AdminPlatformPayoutCurrencies'))
+        return emptyPayouts();
+      if (query.includes('AdminPlatformTopStores'))
+        return { business_locations: [] };
+      return {};
+    });
+
+    const over = await service.getPlatformMetrics(window());
+    expect(over.orders.inProgress).toBe(0);
+    expect(over.orders.completionRate).toBeCloseTo(66.7);
+
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('AdminPlatformOrderCurrencies')) return { orders: [] };
+      if (query.includes('AdminPlatformOrderMetrics')) return {};
+      if (query.includes('AdminPlatformPayoutCurrencies'))
+        return emptyPayouts();
+      if (query.includes('AdminPlatformTopStores'))
+        return { business_locations: [] };
+      return {};
+    });
+    const empty = await service.getPlatformMetrics(window());
+    expect(empty.orders).toMatchObject({
+      total: 0,
+      inProgress: 0,
+      completionRate: 0,
+      cancellationRate: 0,
+    });
+  });
+
+  it('drops invalid currencies and treats non-finite money as zero', async () => {
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('AdminPlatformOrderCurrencies')) {
+        return {
+          orders: [
+            { currency: 'xaf' },
+            { currency: 'XAF' },
+            { currency: 'XAF' },
+            { currency: '' },
+            { currency: 'US' },
+            { currency: 'CAD' },
+          ],
+        };
+      }
+      if (query.includes('AdminPlatformOrderMetrics')) {
+        return {
+          ...orderMetrics(),
+          gmv_XAF: money('total_amount', 'nope', 2),
+          collected_CAD: money('total_amount', 'Infinity'),
+        };
+      }
+      if (query.includes('AdminPlatformPayoutCurrencies')) {
+        return {
+          commission_payouts: [{ currency: 'XAF' }],
+          representative_compensation_events: [],
+          business_referral_payouts: [],
+        };
+      }
+      if (query.includes('AdminPlatformPayoutAggregates')) {
+        return {
+          comp_XAF: money('amount', 0.1),
+          bonus_XAF: money('amount', 0.2),
+        };
+      }
+      if (query.includes('AdminPlatformTopStores')) {
+        return {
+          business_locations: [
+            store(
+              'loc-both',
+              4,
+              10,
+              { agent_code: 'A9', user: null },
+              { name: 'Parent Shop', business_code: 'P1' }
+            ),
+          ],
+        };
+      }
+      return {};
+    });
+
+    const actual = await service.getPlatformMetrics({
+      ...window(),
+      countryCode: 'CM',
+    });
+
+    expect(actual.sales.map((row) => row.currency)).toEqual(['CAD', 'XAF']);
+    expect(actual.sales.find((row) => row.currency === 'XAF')?.gmv).toBe(0);
+    expect(actual.sales.find((row) => row.currency === 'CAD')?.collected).toBe(
+      0
+    );
+    expect(actual.payouts).toEqual([
+      expect.objectContaining({ currency: 'XAF', referralCompensation: 0.3 }),
+    ]);
+    expect(actual.topStores[0].referrer).toEqual({
+      kind: 'agent',
+      name: 'A9',
+      code: 'A9',
+    });
+  });
+
+  it('stops store paging on a short page and warns when the cap is hit', async () => {
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      let pages = 0;
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('AdminPlatformTopStores')) {
+          pages += 1;
+          const size = pages === 1 ? 1000 : 1;
+          return { business_locations: manyStores(size, pages) };
+        }
+        return quietMetrics(query);
+      });
+
+      const first = await service.getPlatformMetrics(window());
+      expect(pages).toBe(2);
+      expect(first.topStores).toHaveLength(5);
+      expect(warn).not.toHaveBeenCalled();
+
+      pages = 0;
+      warn.mockClear();
+      hasura.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('AdminPlatformTopStores')) {
+          pages += 1;
+          return { business_locations: manyStores(1000, pages) };
+        }
+        return quietMetrics(query);
+      });
+      await service.getPlatformMetrics(window());
+      expect(pages).toBe(20);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Top stores pagination cap reached')
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   function queryNamed(name: string): string | undefined {
@@ -143,6 +323,24 @@ describe('AdminPlatformMetricsService', () => {
     return (call?.[1] ?? {}) as Record<string, unknown>;
   }
 });
+
+function window() {
+  return { from: '2026-01-01T00:00:00Z', to: '2026-02-01T00:00:00Z' };
+}
+
+function emptyPayouts() {
+  return {
+    commission_payouts: [],
+    representative_compensation_events: [],
+    business_referral_payouts: [],
+  };
+}
+
+function manyStores(count: number, page: number) {
+  return Array.from({ length: count }, (_, index) =>
+    store(`p${page}-${index}`, count - index, index, null, null)
+  );
+}
 
 function orderMetrics() {
   return {
@@ -198,11 +396,21 @@ function agent() {
   };
 }
 
+function quietMetrics(query: string) {
+  if (query.includes('AdminPlatformOrderCurrencies')) return { orders: [] };
+  if (query.includes('AdminPlatformOrderMetrics')) return {};
+  if (query.includes('AdminPlatformPayoutCurrencies')) return emptyPayouts();
+  return {};
+}
+
 function store(
   id: string,
   orderCount: number,
   gmv: number,
-  referringAgent: ReturnType<typeof agent> | null,
+  referringAgent: {
+    agent_code: string | null;
+    user: { first_name: string | null; last_name: string | null } | null;
+  } | null,
   referringBusiness: { name: string; business_code: string } | null
 ) {
   return {

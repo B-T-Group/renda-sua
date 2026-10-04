@@ -24,6 +24,7 @@ import type {
   AdminCreditsTab,
   CreditEventType,
 } from '@/types/adminCredits';
+import { creditCountryLabel } from '@/utils/creditCountryLabel';
 
 type Props = NativeStackScreenProps<BusinessRootStackParamList, 'AdminCredits'>;
 
@@ -43,18 +44,6 @@ const EVENT_LABELS: Record<CreditEventType, [string, string]> = {
     'First-order feedback',
   ],
   my_first_purchase: ['admin.credits.events.firstPurchase', 'First purchase'],
-};
-
-const COUNTRY_LABELS: Record<string, [string, string]> = {
-  CM: ['admin.credits.countries.CM', 'Cameroon'],
-  GA: ['admin.credits.countries.GA', 'Gabon'],
-  TG: ['admin.credits.countries.TG', 'Togo'],
-  BJ: ['admin.credits.countries.BJ', 'Benin'],
-  CI: ['admin.credits.countries.CI', "Côte d'Ivoire"],
-  CG: ['admin.credits.countries.CG', 'Congo'],
-  CA: ['admin.credits.countries.CA', 'Canada'],
-  US: ['admin.credits.countries.US', 'United States'],
-  PH: ['admin.credits.countries.PH', 'Philippines'],
 };
 
 export default function AdminCreditsScreen({ navigation }: Props) {
@@ -219,12 +208,7 @@ export default function AdminCreditsScreen({ navigation }: Props) {
                   }}
                 >
                   <Text style={{ color: colors.text.primary }}>
-                    {opt.flag}{' '}
-                    {t(
-                      COUNTRY_LABELS[opt.isoCode]?.[0] ??
-                        `admin.credits.countries.${opt.isoCode}`,
-                      COUNTRY_LABELS[opt.isoCode]?.[1] ?? opt.isoCode
-                    )}
+                    {opt.flag} {creditCountryLabel(opt.isoCode, t)}
                   </Text>
                 </Pressable>
               );
