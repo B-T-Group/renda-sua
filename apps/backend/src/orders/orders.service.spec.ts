@@ -4696,6 +4696,7 @@ describe('OrdersService', () => {
         id: 'client-account-1',
         available_balance: 0,
       });
+      accountsService.getAccountBalance = jest.fn().mockResolvedValue({ availableBalance: 0 });
       (
         service as any
       ).commissionsService.distributeItemCommissions = jest
@@ -4795,7 +4796,7 @@ describe('OrdersService', () => {
       );
     });
 
-    it('releases only the remaining ledger hold when withheld is short of the bookkeeping amount', async () => {
+    it('releases only the remaining ledger hold when available covers the payment', async () => {
       hasuraSystemService.executeQuery.mockImplementation(
         async (q: string, vars?: { transactionType?: string }) => {
           if (q.includes('SumOrderHolds')) {
@@ -4811,6 +4812,9 @@ describe('OrdersService', () => {
           };
         }
       );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 3000,
+      });
       accountsService.registerTransaction.mockImplementation(async (r: any) =>
         r.transactionType === 'release' && r.amount === 5000
           ? { success: false, error: 'Insufficient funds for this transaction' }
@@ -4833,6 +4837,52 @@ describe('OrdersService', () => {
           transactionType: 'payment',
         })
       );
+    });
+
+    it('keeps a short hold locked when available cannot cover the payment', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? { account_transactions: [] }
+              : { account_transactions: [{ amount: 2000 }] };
+          }
+          if (q.includes('SettlementRetryCount')) {
+            return { order_holds_by_pk: { settlement_retry_count: 0 } };
+          }
+          return {
+            orders_by_pk: {
+              ...paidPickupOrder,
+              pay_after_merchant_confirm: true,
+            },
+          };
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 0,
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'queued_for_retry'
+      );
+
+      expect(accountsService.registerTransaction).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 2000,
+          transactionType: 'release',
+        })
+      );
+      expect(accountsService.registerTransaction).not.toHaveBeenCalledWith(
+        expect.objectContaining({ transactionType: 'payment' })
+      );
+      expect(
+        (service as any).commissionsService.distributeItemCommissions
+      ).not.toHaveBeenCalled();
     });
 
     function payAfterOrder() {
@@ -4859,6 +4909,9 @@ describe('OrdersService', () => {
           return payAfterOrder();
         }
       );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 3200,
+      });
       accountsService.registerTransaction.mockImplementation(async (r: any) =>
         r.transactionType === 'release' && r.amount === 5000
           ? { success: false, error: 'Insufficient funds for this transaction' }
@@ -4886,6 +4939,9 @@ describe('OrdersService', () => {
           return vars?.transactionType === 'release' ? holdRows([]) : holdRows([9000]);
         }
       );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 0,
+      });
       let releaseAttempts = 0;
       accountsService.registerTransaction.mockImplementation(async (r: any) => {
         if (r.transactionType !== 'release') return { success: true };
@@ -4945,6 +5001,9 @@ describe('OrdersService', () => {
           return payAfterOrder();
         }
       );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 3000,
+      });
       accountsService.registerTransaction.mockImplementation(async (r: any) =>
         r.transactionType === 'release'
           ? { success: false, error: 'Insufficient funds for this transaction' }

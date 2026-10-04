@@ -14451,16 +14451,51 @@ export class OrdersService {
       params.accountId,
       params.orderId
     );
-    if (netHeld <= 0) {
-      this.logger.warn(
-        `settlement_skip_unheld_release orderId=${params.orderId} requested=${params.amount}: debiting available`
-      );
-      return { success: true };
+    if (netHeld <= 0) return this.skipUnheldRelease(params);
+    const releaseAmount = Number(Math.min(params.amount, netHeld).toFixed(2));
+    if (await this.partialReleaseCanBeCollected(params, releaseAmount)) {
+      return this.registerHoldRelease(params, releaseAmount);
     }
-    return this.registerHoldRelease(
-      params,
-      Number(Math.min(params.amount, netHeld).toFixed(2))
+    return this.keepShortHoldLocked(params, netHeld);
+  }
+
+  /** No ledger hold: the following payment debits whatever is in available. */
+  private skipUnheldRelease(params: {
+    orderId: string;
+    amount: number;
+  }): { success: true } {
+    this.logger.warn(
+      `settlement_skip_unheld_release orderId=${params.orderId} requested=${params.amount}: debiting available`
     );
+    return { success: true };
+  }
+
+  /**
+   * A short ledger hold must stay withheld when available cannot cover the
+   * payment after the release. Otherwise the customer can withdraw it and
+   * the queued retry never collects.
+   */
+  private keepShortHoldLocked(
+    params: { orderId: string; amount: number },
+    netHeld: number
+  ): { success: false; error: string } {
+    this.logger.warn(
+      `settlement_keep_short_hold orderId=${params.orderId} netHeld=${netHeld} requested=${params.amount}`
+    );
+    return {
+      success: false,
+      error: 'Insufficient funds for this transaction',
+    };
+  }
+
+  private async partialReleaseCanBeCollected(
+    params: { accountId: string; amount: number },
+    releaseAmount: number
+  ): Promise<boolean> {
+    const balance = await this.accountsService.getAccountBalance(params.accountId);
+    const available = Number(balance?.availableBalance ?? 0);
+    const covered = Number((available + releaseAmount).toFixed(2));
+    return covered >= Number(params.amount.toFixed(2));
   }
 
   private async registerHoldRelease(
