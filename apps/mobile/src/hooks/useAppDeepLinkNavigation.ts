@@ -70,7 +70,7 @@ function navigateFoodBrowse(persona: PersonaSlug): boolean {
     rootNavigationRef.dispatch(
       CommonActions.navigate({
         name: 'ClientMainTabs',
-        params: { screen: 'ClientFoods' },
+        params: { screen: 'ClientBrowse', params: { segment: 'food' } },
       })
     );
     return true;

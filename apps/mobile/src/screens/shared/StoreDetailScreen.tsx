@@ -26,6 +26,7 @@ import { useInventoryStore } from '../../hooks/useInventoryStore';
 import { useGuestCatalogCountry } from '../../hooks/useGuestCatalogCountry';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
+import { BusinessFollowButton } from '../../components/browse/BusinessFollowButton';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
 import { InventoryCatalogCard } from '../../components/browse/InventoryCatalogCard';
 import { StatusPill } from '../../components/common/StatusPill';
@@ -418,6 +419,9 @@ function StoreDetailScreen({ route, navigation }: Props) {
           </View>
 
           <View style={styles.headerActions}>
+            {!previewMode && store?.business_id ? (
+              <BusinessFollowButton businessId={store.business_id} />
+            ) : null}
             {store?.is_storefront_visible || previewMode ? (
               <Button
                 mode="contained-tonal"

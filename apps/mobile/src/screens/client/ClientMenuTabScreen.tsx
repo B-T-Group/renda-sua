@@ -138,6 +138,12 @@ function ClientMenuTabScreenBase() {
             onPress={() => goTo('UserLikes')}
           />
           <UserMenuRow
+            icon="store-outline"
+            label={t('client.following.title', 'Following')}
+            subtitle={t('client.following.menuSubtitle', 'Stores you follow')}
+            onPress={() => goTo('FollowingStores')}
+          />
+          <UserMenuRow
             icon="hand-wave-outline"
             label={t('productInterest.clientTitle', 'My interest requests')}
             subtitle={t(

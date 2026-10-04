@@ -1,9 +1,4 @@
-import {
-  Assignment,
-  CarRental,
-  RestaurantMenu,
-  ShoppingBag,
-} from '@mui/icons-material';
+import { Assignment, Person, Search, ShoppingBag } from '@mui/icons-material';
 import { useMediaQuery, useTheme } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,27 +26,22 @@ const ClientBottomNav: React.FC = () => {
 
   const tabs: BottomNavTab[] = [
     {
-      key: 'items',
-      label: t('common.browseItems', 'Browse Items'),
+      key: 'home',
+      label: t('nav.clientTabs.home', 'Home'),
       path: '/items',
       icon: <ShoppingBag />,
       active:
         location.pathname === '/items' ||
-        location.pathname.startsWith('/items/'),
+        location.pathname.startsWith('/items/') ||
+        location.pathname.startsWith('/foods') ||
+        location.pathname.startsWith('/rentals'),
     },
     {
-      key: 'rentals',
-      label: t('rentals.title', 'Rentals'),
-      path: '/rentals',
-      icon: <CarRental />,
-      active: location.pathname.startsWith('/rentals'),
-    },
-    {
-      key: 'foods',
-      label: t('foods.title', 'Food'),
-      path: '/foods',
-      icon: <RestaurantMenu />,
-      active: location.pathname.startsWith('/foods'),
+      key: 'search',
+      label: t('nav.clientTabs.search', 'Search'),
+      path: '/items?focus=search',
+      icon: <Search />,
+      active: location.search.includes('focus=search'),
     },
     {
       key: 'orders',
@@ -59,6 +49,13 @@ const ClientBottomNav: React.FC = () => {
       path: '/orders',
       icon: <Assignment />,
       active: isOrdersActive,
+    },
+    {
+      key: 'account',
+      label: t('nav.tabs.account', 'Account'),
+      path: '/profile',
+      icon: <Person />,
+      active: location.pathname.startsWith('/profile'),
     },
   ];
 

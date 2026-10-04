@@ -1030,6 +1030,10 @@
       "tomorrow": "demain",
       "cancelUnpaid": "Vous n’avez encore rien payé, l’annulation est donc gratuite et rien ne sera débité.",
       "storeNoConfirm": "Si le magasin ne confirme pas dans les 60 minutes, la commande est annulée automatiquement et vous n’êtes pas débité."
+    },
+    "refunds": {
+      "request": "Demander un remboursement",
+      "requested": "Votre demande de remboursement a été envoyée."
     }
   },
   "orderActions": {
@@ -1119,7 +1123,14 @@
     }
   },
   "nav": {
-    "manageRecipients": "Destinataires enregistrés"
+    "manageRecipients": "Destinataires enregistrés",
+    "clientTabs": {
+      "home": "Accueil",
+      "search": "Recherche"
+    },
+    "tabs": {
+      "account": "Compte"
+    }
   },
   "public": {
     "items": {
@@ -3707,7 +3718,15 @@
         "ctaTrack": "Suivre la commande",
         "ctaView": "Voir la commande",
         "cardA11y": "Commande {{number}}, {{title}}"
-      }
+      },
+      "lane": {
+        "shop": "Boutique",
+        "food": "Repas",
+        "rentals": "Locations"
+      },
+      "forYou": "Pour vous",
+      "buyAgain": "Racheter",
+      "buyAgainMore": "et {{count}} de plus"
     },
     "rentals": {
       "title": "Locations",
@@ -3993,17 +4012,17 @@
       "quantity": "Quantité",
       "quantityHint": "Jusqu’à {{max}} disponibles",
       "fulfillment": "Retrait ou livraison",
-      "fulfillmentQuestion": "Comment le recevoir ?",
+      "fulfillmentQuestion": "Comment souhaitez-vous le recevoir ?",
       "fulfillmentRequired": "Choisissez une option pour continuer.",
       "fulfillmentHint": "Vous pouvez modifier ce choix à tout moment.",
-      "delivery": "Livraison",
+      "delivery": "Me le faire livrer",
       "deliveryChoiceHint": "À votre adresse",
       "deliveryPriceAddressRequired": "Choisissez une adresse pour voir le prix de la livraison.",
-      "pickup": "Retrait",
+      "pickup": "Le retirer",
       "pickupChoiceHint": "Au magasin",
       "pickupHint": "Vous paierez lors du retrait en magasin.",
       "pickupHintStripe": "Payez en toute sécurité par carte lors de la commande, puis récupérez votre commande en magasin.",
-      "shipping": "Expédition",
+      "shipping": "Me l'expédier",
       "shippingChoiceHint": "Par transporteur",
       "shippingNotice": "Le vendeur expédie avec un transporteur. Payez maintenant pour passer la commande.",
       "shippingUnavailableMixed": "L’expédition n’est disponible que si tous les articles du panier peuvent être expédiés.",
@@ -4205,6 +4224,49 @@
       "deliveryUnavailable": "La livraison est actuellement indisponible.",
       "deliveryUnavailablePickup": "La livraison est actuellement indisponible. Vous pouvez toujours récupérer cette commande en magasin.",
       "switchToPickup": "Passer au retrait"
+    },
+    "search": {
+      "placeholder": "Rechercher un produit, un magasin, un repas",
+      "emptyTitle": "Aucun résultat",
+      "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
+      "recent": "Recherches récentes"
+    },
+    "following": {
+      "title": "Abonnements",
+      "error": "Impossible de charger les magasins que vous suivez.",
+      "emptyTitle": "Aucun magasin",
+      "emptyBody": "Suivez un magasin pour le retrouver ici.",
+      "browse": "Voir les magasins",
+      "followers": "{{count}} abonnés",
+      "menuSubtitle": "Magasins que vous suivez"
+    },
+    "journey": {
+      "placed": "Passée",
+      "confirmed": "Confirmée",
+      "preparing": "En préparation",
+      "on_the_way": "En route",
+      "delivered": "Livrée",
+      "agentPickingUp": "{{name}} récupère votre commande.",
+      "onTheWay": "Votre commande est en route.",
+      "pay": "Le paiement est la prochaine étape.",
+      "messagePlaced": "Votre commande est chez le magasin.",
+      "messagePreparing": "Votre commande est en préparation.",
+      "messageDelivered": "Votre commande a été livrée."
+    },
+    "card": {
+      "onlyLeft": "Plus que {{count}}",
+      "checkAvailability": "Vérifier la disponibilité",
+      "kitchenClosed": "Cuisine fermée",
+      "orderNow": "Commander",
+      "deal": "Promo"
+    },
+    "payAfter": {
+      "title": "Payez après confirmation du magasin",
+      "body": "Rien n’est débité tant que le magasin n’a pas confirmé qu’il peut honorer la commande.",
+      "step1": "Le magasin confirme que c’est disponible",
+      "step2": "Vous recevez une demande de paiement",
+      "step3": "Payez dans le délai indiqué",
+      "step4": "Le magasin prépare votre commande"
     }
   },
   "auth": {
@@ -4853,6 +4915,22 @@
       "editAddress": "Modifier l'adresse",
       "noAddresses": "Aucune adresse enregistrée.",
       "noAddressesOptional": "Aucune adresse — les commandes à proximité utilisent votre position en direct lorsque disponible."
+    },
+    "now": {
+      "active": "Livraison en cours",
+      "openDelivery": "Ouvrir cette livraison",
+      "deliveries": "Livraisons aujourd’hui",
+      "earnings": "Gains aujourd’hui"
+    },
+    "readiness": {
+      "locationTitle": "Activez la localisation",
+      "locationBody": "La localisation est nécessaire avant de passer en ligne et de prendre des livraisons.",
+      "idTitle": "Ajoutez votre pièce d’identité",
+      "idBody": "Téléversez une pièce d’identité pour prendre des livraisons.",
+      "momoTitle": "Terminez Mobile Money",
+      "momoBody": "Ajoutez un numéro de versement pour commencer à prendre des livraisons.",
+      "pendingTitle": "Pièce d’identité en cours de vérification",
+      "pendingBody": "Vous pourrez prendre des livraisons une fois votre pièce approuvée."
     }
   },
   "completeProfile": {

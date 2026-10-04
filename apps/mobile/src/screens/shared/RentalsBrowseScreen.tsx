@@ -42,12 +42,15 @@ export interface RentalsBrowseScreenProps {
   withAuth?: boolean;
   onOpenListing: (listingId: string) => void;
   headerExtra?: ReactNode;
+  /** When false, the parent already applied the top inset. */
+  applyTopSafeArea?: boolean;
 }
 
 export function RentalsBrowseScreen({
   withAuth: _withAuth,
   onOpenListing,
   headerExtra,
+  applyTopSafeArea = true,
 }: RentalsBrowseScreenProps) {
   void _withAuth;
   const { t } = useTranslation();
@@ -443,7 +446,7 @@ export function RentalsBrowseScreen({
   ]);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.pageBackground }]} edges={['top']}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.pageBackground }]} edges={applyTopSafeArea ? ['top'] : []}>
       <View
         style={[
           styles.searchSticky,

@@ -2,6 +2,7 @@ import { colors, lightColors, darkColors, type ThemeColors, type ThemeMode } fro
 import { typography } from './typography';
 import { spacing, borderRadius, paperRoundness } from './spacing';
 import { shadows } from './shadows';
+import { motion } from './motion';
 
 export type Theme = {
   colors: ThemeColors;
@@ -9,6 +10,7 @@ export type Theme = {
   spacing: typeof spacing;
   borderRadius: typeof borderRadius;
   shadows: typeof shadows;
+  motion: typeof motion;
 };
 
 export function createTheme(palette: ThemeColors): Theme {
@@ -18,6 +20,7 @@ export function createTheme(palette: ThemeColors): Theme {
     spacing,
     borderRadius,
     shadows,
+    motion,
   };
 }
 
@@ -33,8 +36,11 @@ export {
   borderRadius,
   paperRoundness,
   shadows,
+  motion,
 };
 export type { ThemeColors, ThemeMode };
+export { fontFamily } from './fonts';
+export type { MotionSpeed } from './motion';
 export { THEME_MODE_STORAGE_KEY } from './colors';
 export { createPaperTheme, paperTheme, paperDarkTheme } from './paperTheme';
 export {

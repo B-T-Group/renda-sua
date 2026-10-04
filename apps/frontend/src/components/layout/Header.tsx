@@ -12,6 +12,7 @@ import {
     RestaurantMenu,
     ShoppingBag,
     ShoppingCart,
+    Storefront,
     SmartToy,
     SwapHoriz,
 } from '@mui/icons-material';
@@ -442,7 +443,7 @@ const Header: React.FC = () => {
         fontWeight: 400,
         fontSize: '0.875rem',
         fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          'inherit',
         px: { md: 1.5, lg: 2 },
         py: 1,
         minWidth: 'auto',
@@ -534,7 +535,7 @@ const Header: React.FC = () => {
                       width: 36,
                       height: 36,
                       fontSize: '0.75rem',
-                      backgroundColor: '#007aff',
+                      backgroundColor: '#1E3A8A',
                       color: 'white',
                     }}
                   >
@@ -768,7 +769,7 @@ const Header: React.FC = () => {
                       fontWeight: 400,
                       fontSize: '0.875rem',
                       fontFamily:
-                        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        'inherit',
                       px: 2,
                       py: 1,
                       minWidth: 'auto',
@@ -857,6 +858,20 @@ const Header: React.FC = () => {
               )}
               {isAuthenticated && userType === 'client' && (
                 <IconButton
+                  onClick={() => navigate('/following')}
+                  size="small"
+                  aria-label={t('client.following.title', 'Following')}
+                  sx={{
+                    color: '#ffffff',
+                    padding: '6px',
+                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.08)' },
+                  }}
+                >
+                  <Storefront />
+                </IconButton>
+              )}
+              {isAuthenticated && userType === 'client' && (
+                <IconButton
                   onClick={() => navigate('/cart')}
                   size="small"
                   sx={{
@@ -893,10 +908,10 @@ const Header: React.FC = () => {
                         width: 28,
                         height: 28,
                         fontSize: '0.75rem',
-                        backgroundColor: '#007aff',
+                        backgroundColor: '#1E3A8A',
                         color: 'white',
                         fontFamily:
-                          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                          'inherit',
                       }}
                     >
                       {getUserInitials()}
@@ -938,7 +953,7 @@ const Header: React.FC = () => {
                             width: 32,
                             height: 32,
                             fontSize: '0.75rem',
-                            backgroundColor: '#007aff',
+                            backgroundColor: '#1E3A8A',
                             color: 'white',
                           }}
                         >

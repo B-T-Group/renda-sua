@@ -188,6 +188,8 @@ export interface BrowseCatalogScreenProps {
   /** Category chosen on the categories screen. */
   requestedCategory?: string;
   categoryRequestId?: number;
+  /** Extra discovery content above the product grid (rails, buy again). */
+  discoveryExtra?: React.ReactNode;
 }
 
 function BrowseCatalogScreenInner({
@@ -213,6 +215,7 @@ function BrowseCatalogScreenInner({
   onBrowseCategories,
   requestedCategory,
   categoryRequestId,
+  discoveryExtra,
 }: BrowseCatalogScreenProps) {
   const { t, i18n } = useTranslation();
   const { flags } = useClientFlags();
@@ -690,6 +693,7 @@ function BrowseCatalogScreenInner({
           onToggleExportOnly={onToggleExportOnly}
           onClearExportOnly={onClearExportOnly}
         />
+        {discoveryExtra}
       </>
     ),
     [
@@ -723,6 +727,7 @@ function BrowseCatalogScreenInner({
       exportOnly,
       onToggleExportOnly,
       onClearExportOnly,
+      discoveryExtra,
     ]
   );
 

@@ -7,12 +7,16 @@ import { brandTokens } from './brandTokens';
  */
 
 // Spacing utilities
+/** 4, 8, 12, 16, 20, 24, 32, 40, 48, 64. Legacy keys keep their values. */
 export const spacing = {
   xs: 4,
   sm: 8,
+  s12: 12,
   md: 16,
+  s20: 20,
   lg: 24,
   xl: 32,
+  s40: 40,
   xxl: 48,
   xxxl: 64,
 } as const;
@@ -20,23 +24,30 @@ export const spacing = {
 // Border radius utilities
 export const borderRadius = {
   xs: 4,
-  sm: 6,
-  md: 10,
+  sm: 8,
+  md: 12,
   lg: 12,
-  xl: 14,
-  xxl: 18,
+  xl: 16,
+  xxl: 16,
+  chip: 8,
+  button: 12,
+  card: 16,
+  input: 12,
   round: '50%',
 } as const;
 
 // Shadow utilities
+const resting = '0px 1px 2px rgba(15, 23, 42, 0.04)';
+const raised = '0px 4px 12px rgba(15, 23, 42, 0.06)';
+
 export const shadows = {
   none: 'none',
-  xs: '0px 1px 2px rgba(0, 0, 0, 0.05)',
-  sm: '0px 1px 3px rgba(0, 0, 0, 0.1), 0px 1px 2px rgba(0, 0, 0, 0.06)',
-  md: '0px 4px 6px rgba(0, 0, 0, 0.07), 0px 2px 4px rgba(0, 0, 0, 0.06)',
-  lg: '0px 10px 15px rgba(0, 0, 0, 0.1), 0px 4px 6px rgba(0, 0, 0, 0.05)',
-  xl: '0px 20px 25px rgba(0, 0, 0, 0.1), 0px 10px 10px rgba(0, 0, 0, 0.04)',
-  xxl: '0px 25px 50px rgba(0, 0, 0, 0.15)',
+  xs: resting,
+  sm: resting,
+  md: raised,
+  lg: raised,
+  xl: raised,
+  xxl: raised,
 } as const;
 
 // Z-index utilities
@@ -51,11 +62,13 @@ export const zIndex = {
 } as const;
 
 // Animation utilities
+const ease = 'cubic-bezier(0.2, 0, 0, 1)';
+
 export const transitions = {
-  fast: '0.15s ease-out',
-  normal: '0.3s ease-out',
-  slow: '0.5s ease-out',
-  bounce: '0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+  fast: `120ms ${ease}`,
+  normal: `200ms ${ease}`,
+  slow: `320ms ${ease}`,
+  bounce: `200ms ${ease}`,
 } as const;
 
 // Breakpoint utilities
@@ -105,14 +118,10 @@ export const getBorderRadius = (radius: keyof typeof borderRadius) => {
 export const componentStyles = {
   // Card styles
   card: (theme: Theme) => ({
-    borderRadius: getBorderRadius('lg'),
-    boxShadow: getShadow('md'),
+    borderRadius: getBorderRadius('card'),
+    boxShadow: getShadow('sm'),
     border: `1px solid ${theme.palette.divider}`,
-    transition: transitions.normal,
-    '&:hover': {
-      boxShadow: getShadow('lg'),
-      transform: 'translateY(-2px)',
-    },
+    transition: transitions.fast,
   }),
 
   // Button styles

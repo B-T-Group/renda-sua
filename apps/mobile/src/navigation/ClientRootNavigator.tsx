@@ -9,14 +9,15 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../contexts/ThemeContext';
 
 import ClientBrowseHomeScreen from '../screens/client/ClientBrowseHomeScreen';
-import ClientRentalsHomeScreen from '../screens/client/ClientRentalsHomeScreen';
 import ClientOrdersScreen from '../screens/client/ClientOrdersScreen';
+import SearchScreen from '../screens/shared/SearchScreen';
 import ClientMenuTabScreen from '../screens/client/ClientMenuTabScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
 import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import ManageRecipientsScreen from '../screens/client/ManageRecipientsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import UserLikesScreen from '../screens/shared/UserLikesScreen';
+import FollowingStoresScreen from '../screens/client/FollowingStoresScreen';
 import ClientProductInterestScreen from '../screens/client/ClientProductInterestScreen';
 import ProductInterestSuccessScreen from '../screens/client/ProductInterestSuccessScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
@@ -176,44 +177,30 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
           tabPress: () => navigation.setParams({ segment: 'all' }),
         })}
         options={{
-          tabBarLabel: t('nav.clientTabs.browseItems', { defaultValue: 'Browse Items' }),
-          tabBarAccessibilityLabel: t('nav.clientTabs.browseItems', { defaultValue: 'Browse Items' }),
+          tabBarLabel: t('nav.clientTabs.home', 'Home'),
+          tabBarAccessibilityLabel: t('nav.clientTabs.home', 'Home'),
           tabBarBadge: attentionBadgeCount > 0 ? attentionBadgeCount : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.error.main, fontSize: 10 },
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.clientTabs.browseItems', { defaultValue: 'Browse Items' })}>
+            <TabBarIconContent focused={focused} label={t('nav.clientTabs.home', 'Home')}>
               <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
             </TabBarIconContent>
           ),
         }}
       />
       <ClientTab.Screen
-        name="ClientRentals"
-        component={ClientRentalsHomeScreen}
+        name="ClientSearch"
+        component={SearchScreen}
         options={{
-          tabBarLabel: t('nav.clientTabs.rentals', { defaultValue: 'Rentals' }),
-          tabBarAccessibilityLabel: t('nav.clientTabs.rentals', { defaultValue: 'Rentals' }),
+          tabBarLabel: t('nav.clientTabs.search', 'Search'),
+          tabBarAccessibilityLabel: t('nav.clientTabs.search', 'Search'),
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.clientTabs.rentals', { defaultValue: 'Rentals' })}>
-              <MaterialCommunityIcons name={focused ? 'hand-coin' : 'hand-coin-outline'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.clientTabs.search', 'Search')}>
+              <MaterialCommunityIcons name={focused ? 'magnify' : 'magnify'} size={24} color={color} />
             </TabBarIconContent>
           ),
         }}
       />
-      <ClientTab.Screen
-        name="ClientFoods"
-        options={{
-          tabBarLabel: t('nav.clientTabs.foods', { defaultValue: 'Food' }),
-          tabBarAccessibilityLabel: t('nav.clientTabs.foods', { defaultValue: 'Food' }),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.clientTabs.foods', { defaultValue: 'Food' })}>
-              <MaterialCommunityIcons name={focused ? 'food' : 'food-outline'} size={24} color={color} />
-            </TabBarIconContent>
-          ),
-        }}
-      >
-        {() => <ClientBrowseHomeScreen foodOnly />}
-      </ClientTab.Screen>
       {flags.reels_enabled ? (
         <ClientTab.Screen
           name="ClientReels"
@@ -246,11 +233,11 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
         name="ClientMenu"
         component={ClientMenuTabScreen}
         options={{
-          tabBarLabel: t('nav.tabs.menu', 'Menu'),
-          tabBarAccessibilityLabel: t('nav.tabs.menu', 'Menu'),
+          tabBarLabel: t('nav.tabs.account', 'Account'),
+          tabBarAccessibilityLabel: t('nav.tabs.account', 'Account'),
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.tabs.menu', 'Menu')}>
-              <MaterialCommunityIcons name={focused ? 'menu' : 'menu-open'} size={24} color={color} />
+            <TabBarIconContent focused={focused} label={t('nav.tabs.account', 'Account')}>
+              <MaterialCommunityIcons name={focused ? 'account' : 'account-outline'} size={24} color={color} />
             </TabBarIconContent>
           ),
         }}
@@ -452,6 +439,11 @@ export function ClientRootNavigator() {
           name="UserLikes"
           component={UserLikesScreen}
           options={{ title: t('items.likes.title', 'Your favorites') }}
+        />
+        <ClientRootStack.Screen
+          name="FollowingStores"
+          component={FollowingStoresScreen}
+          options={{ title: t('client.following.title', 'Following') }}
         />
         <ClientRootStack.Screen
           name="ClientProductInterest"

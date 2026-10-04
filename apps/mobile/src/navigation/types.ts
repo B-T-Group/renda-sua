@@ -176,10 +176,9 @@ export type GuestTabParamList = {
 
 export type ClientMainTabParamList = {
   ClientBrowse:
-    | { segment?: 'all' | 'food'; category?: string; categoryRequestId?: number }
+    | { segment?: 'all' | 'food' | 'rentals'; category?: string; categoryRequestId?: number }
     | undefined;
-  ClientRentals: undefined;
-  ClientFoods: undefined;
+  ClientSearch: undefined;
   ClientReels: undefined;
   ClientOrders: undefined;
   ClientMenu: undefined;
@@ -221,7 +220,9 @@ export type ClientRootStackParamList = {
     draftMessage?: string;
   };
   Profile: undefined;
+  ManageRecipients: undefined;
   UserLikes: undefined;
+  FollowingStores: undefined;
   ClientProductInterest: undefined;
   ProductInterestSuccess: undefined;
   NotificationPreferences: undefined;

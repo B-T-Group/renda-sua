@@ -2210,6 +2210,22 @@
       "title": "Agent Orders",
       "internalRequired": "This order requires an internal agent. Contact support to become an internal agent.",
       "verificationRequired": "This order requires a verified agent. Please complete your verification to claim high-value orders."
+    },
+    "now": {
+      "active": "Active delivery",
+      "openDelivery": "Open this delivery",
+      "deliveries": "Deliveries today",
+      "earnings": "Earnings today"
+    },
+    "readiness": {
+      "locationTitle": "Turn on location",
+      "locationBody": "Location is required before you can go online and claim deliveries.",
+      "idTitle": "Add your ID",
+      "idBody": "Upload a government ID so you can claim deliveries.",
+      "momoTitle": "Finish Mobile Money",
+      "momoBody": "Add a payout number to start claiming deliveries.",
+      "pendingTitle": "ID under review",
+      "pendingBody": "You can claim deliveries once your ID is approved."
     }
   },
   "auth": {
@@ -4716,7 +4732,57 @@
         "ctaTrack": "Track order",
         "ctaView": "View order",
         "openDetail": "Open the order for details."
-      }
+      },
+      "lane": {
+        "shop": "Shop",
+        "food": "Food",
+        "rentals": "Rentals"
+      },
+      "forYou": "For you",
+      "buyAgain": "Buy again"
+    },
+    "search": {
+      "placeholder": "Search products, stores, food",
+      "emptyTitle": "No matches",
+      "emptyBody": "Try a product, a store, or a category.",
+      "recent": "Recent searches"
+    },
+    "following": {
+      "title": "Following",
+      "error": "Something went wrong while loading stores you follow.",
+      "emptyTitle": "No stores yet",
+      "emptyBody": "Follow a store to find it again here.",
+      "browse": "Browse stores",
+      "followers": "{{count}} followers",
+      "menuSubtitle": "Stores you follow"
+    },
+    "journey": {
+      "placed": "Placed",
+      "confirmed": "Confirmed",
+      "preparing": "Preparing",
+      "on_the_way": "On the way",
+      "delivered": "Delivered",
+      "agentPickingUp": "{{name}} is picking up your order.",
+      "onTheWay": "Your order is on the way.",
+      "pay": "Payment is the next step.",
+      "messagePlaced": "Your order is with the store.",
+      "messagePreparing": "Your order is being prepared.",
+      "messageDelivered": "Your order was delivered."
+    },
+    "card": {
+      "onlyLeft": "Only {{count}} left",
+      "checkAvailability": "Check availability",
+      "kitchenClosed": "Kitchen closed",
+      "orderNow": "Order now",
+      "deal": "Deal"
+    },
+    "payAfter": {
+      "title": "Pay after the store confirms",
+      "body": "Nothing is charged until the store says it can fulfil this order.",
+      "step1": "The store confirms it is available",
+      "step2": "You get a payment request",
+      "step3": "Pay within the time window",
+      "step4": "The store prepares your order"
     }
   },
   "collections": {
@@ -5217,7 +5283,14 @@
     "support": "Support",
     "forBusiness": "For Business",
     "becomeAgent": "Become an Agent",
-    "downloadApp": "Download App"
+    "downloadApp": "Download App",
+    "clientTabs": {
+      "home": "Home",
+      "search": "Search"
+    },
+    "tabs": {
+      "account": "Account"
+    }
   },
   "orderActions": {
     "cancelOrder": "Cancel Order",
@@ -5852,7 +5925,9 @@
       "orderItemsHeading": "Items in this order",
       "deliveryFeesLabel": "Delivery fees",
       "totalLabel": "Order total",
-      "lineTotal": "Line total"
+      "lineTotal": "Line total",
+      "request": "Request a refund",
+      "requested": "Your refund request was sent."
     },
     "confirmOrderCompletionMessage": "Are you sure you want to complete order {{orderNumber}}? This action cannot be undone.",
     "orderCompletionSuccessTitle": "🎉 Order Successfully Completed!",

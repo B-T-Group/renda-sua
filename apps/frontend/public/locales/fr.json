@@ -1938,6 +1938,22 @@
       "title": "Commandes d'Agent",
       "internalRequired": "Cette commande nécessite un agent interne. Contactez le support pour devenir un agent interne.",
       "verificationRequired": "Cette commande nécessite un agent vérifié. Veuillez compléter votre vérification pour réclamer des commandes de grande valeur."
+    },
+    "now": {
+      "active": "Livraison en cours",
+      "openDelivery": "Ouvrir cette livraison",
+      "deliveries": "Livraisons aujourd’hui",
+      "earnings": "Gains aujourd’hui"
+    },
+    "readiness": {
+      "locationTitle": "Activez la localisation",
+      "locationBody": "La localisation est nécessaire avant de passer en ligne et de prendre des livraisons.",
+      "idTitle": "Ajoutez votre pièce d’identité",
+      "idBody": "Téléversez une pièce d’identité pour prendre des livraisons.",
+      "momoTitle": "Terminez Mobile Money",
+      "momoBody": "Ajoutez un numéro de versement pour commencer à prendre des livraisons.",
+      "pendingTitle": "Pièce d’identité en cours de vérification",
+      "pendingBody": "Vous pourrez prendre des livraisons une fois votre pièce approuvée."
     }
   },
   "auth": {
@@ -4438,7 +4454,57 @@
         "ctaTrack": "Suivre la commande",
         "ctaView": "Voir la commande",
         "openDetail": "Ouvrez la commande pour plus de détails."
-      }
+      },
+      "lane": {
+        "shop": "Boutique",
+        "food": "Repas",
+        "rentals": "Locations"
+      },
+      "forYou": "Pour vous",
+      "buyAgain": "Racheter"
+    },
+    "search": {
+      "placeholder": "Rechercher un produit, un magasin, un repas",
+      "emptyTitle": "Aucun résultat",
+      "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
+      "recent": "Recherches récentes"
+    },
+    "following": {
+      "title": "Abonnements",
+      "error": "Impossible de charger les magasins que vous suivez.",
+      "emptyTitle": "Aucun magasin",
+      "emptyBody": "Suivez un magasin pour le retrouver ici.",
+      "browse": "Voir les magasins",
+      "followers": "{{count}} abonnés",
+      "menuSubtitle": "Magasins que vous suivez"
+    },
+    "journey": {
+      "placed": "Passée",
+      "confirmed": "Confirmée",
+      "preparing": "En préparation",
+      "on_the_way": "En route",
+      "delivered": "Livrée",
+      "agentPickingUp": "{{name}} récupère votre commande.",
+      "onTheWay": "Votre commande est en route.",
+      "pay": "Le paiement est la prochaine étape.",
+      "messagePlaced": "Votre commande est chez le magasin.",
+      "messagePreparing": "Votre commande est en préparation.",
+      "messageDelivered": "Votre commande a été livrée."
+    },
+    "card": {
+      "onlyLeft": "Plus que {{count}}",
+      "checkAvailability": "Vérifier la disponibilité",
+      "kitchenClosed": "Cuisine fermée",
+      "orderNow": "Commander",
+      "deal": "Promo"
+    },
+    "payAfter": {
+      "title": "Payez après confirmation du magasin",
+      "body": "Rien n’est débité tant que le magasin n’a pas confirmé qu’il peut honorer la commande.",
+      "step1": "Le magasin confirme que c’est disponible",
+      "step2": "Vous recevez une demande de paiement",
+      "step3": "Payez dans le délai indiqué",
+      "step4": "Le magasin prépare votre commande"
     }
   },
   "collections": {
@@ -4939,7 +5005,14 @@
   "nav": {
     "forBusiness": "Pour les entreprises",
     "becomeAgent": "Devenir agent",
-    "downloadApp": "Télécharger l'appli"
+    "downloadApp": "Télécharger l'appli",
+    "clientTabs": {
+      "home": "Accueil",
+      "search": "Recherche"
+    },
+    "tabs": {
+      "account": "Compte"
+    }
   },
   "orderActions": {
     "cancelOrder": "Annuler la Commande",
@@ -5572,7 +5645,9 @@
       "orderItemsHeading": "Articles de cette commande",
       "deliveryFeesLabel": "Frais de livraison",
       "totalLabel": "Total de la commande",
-      "lineTotal": "Total ligne"
+      "lineTotal": "Total ligne",
+      "request": "Demander un remboursement",
+      "requested": "Votre demande de remboursement a été envoyée."
     },
     "confirmOrderCompletionMessage": "Êtes-vous sûr de vouloir terminer la commande {{orderNumber}} ? Cette action ne peut pas être annulée.",
     "orderCompletionSuccessTitle": "🎉 Commande Terminée avec Succès !",

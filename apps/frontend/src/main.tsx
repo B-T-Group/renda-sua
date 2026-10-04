@@ -5,6 +5,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { StrictMode } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { BrowserRouter, useNavigate } from 'react-router-dom';
+import '@fontsource-variable/inter';
 import './styles/apple-fonts.css';
 
 import App from './app/app';

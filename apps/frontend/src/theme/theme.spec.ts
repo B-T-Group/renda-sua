@@ -1,6 +1,7 @@
 import { PERSONA_HEADER_COLORS } from '../constants/personaTheme';
 import { brandTokens } from './brandTokens';
 import { theme } from './theme';
+import { spacing, transitions } from './themeUtils';
 
 const channelLuminance = (channel: number) => {
   const c = channel / 255;
@@ -59,6 +60,20 @@ describe('Trust Coast Blue palette', () => {
     expect(
       contrastRatio(brandTokens.text.muted, brandTokens.surface.background)
     ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('gives prices a tabular role and shares motion with mobile', () => {
+    expect(theme.typography.price.fontWeight).toBe(700);
+    expect(theme.typography.price.fontVariantNumeric).toBe('tabular-nums');
+    expect(theme.typography.priceLarge.fontWeight).toBe(700);
+    expect(String(theme.typography.priceLarge.fontSize)).toBe('1.75rem');
+    expect(transitions.fast.startsWith('120ms')).toBe(true);
+    expect(transitions.normal.startsWith('200ms')).toBe(true);
+    expect(transitions.slow.startsWith('320ms')).toBe(true);
+    expect(spacing.s20).toBe(20);
+    expect(brandTokens.surface.input).toBe('#F1F5F9');
+    expect(brandTokens.surface.borderStrong).toBe('#CBD5E1');
+    expect(theme.typography.fontFamily).toContain('Inter Variable');
   });
 
   it('maps persona chrome to client blue, agent teal and business accent', () => {

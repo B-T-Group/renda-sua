@@ -10,6 +10,7 @@ import { PaperProvider } from 'react-native-paper';
 import { observer } from 'mobx-react-lite';
 import { StripeAppProvider } from './src/components/payments/StripeAppProvider';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { useBrandFonts } from './src/theme/useBrandFonts';
 import { ClientFlagsProvider } from './src/contexts/ClientFlagsContext';
 import { RootStore, RootStoreProvider } from './src/stores/RootStore';
 import { client } from './src/services/apolloClient';
@@ -167,6 +168,8 @@ function ThemedProviders({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const fontsReady = useBrandFonts();
+  if (!fontsReady) return null;
   return (
     <GestureHandlerRootView style={styles.root}>
       <RootStoreProvider store={rootStore}>

@@ -15,6 +15,7 @@ import {
 } from '../../utils/buildCartLineFromCatalog';
 import { bestPackSavings } from '../../types/business/itemVariant';
 import { ItemLikeButton } from './ItemLikeButton';
+import { resolveProductCardHint } from '../../utils/resolveProductCardHint';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -178,6 +179,8 @@ function InventoryCatalogGridTileInner({
           </Text>
         )}
 
+        <ProductHint item={item} hasDeal={Boolean(hasDeal)} />
+
         {packSavings && !exportAvailable ? (
           <Text
             style={[
@@ -214,6 +217,35 @@ function InventoryCatalogGridTileInner({
         ) : null}
       </View>
     </Pressable>
+  );
+}
+
+function ProductHint({ item, hasDeal }: { item: CatalogInventoryItem; hasDeal: boolean }) {
+  const { t } = useTranslation();
+  const { colors, typography } = useTheme();
+  const hint = resolveProductCardHint({
+    quantity: item.computed_available_quantity,
+    isFood: Boolean(item.food_availability),
+    foodOpen: item.food_availability?.is_available_now,
+    hasDeal,
+  });
+  if (!hint) return null;
+  const label =
+    hint.id === 'low_stock'
+      ? t('client.card.onlyLeft', 'Only {{count}} left', { count: hint.count })
+      : hint.id === 'check_availability'
+        ? t('client.card.checkAvailability', 'Check availability')
+        : hint.id === 'food_closed'
+          ? t('client.card.kitchenClosed', 'Kitchen closed')
+          : hint.id === 'food_open'
+            ? t('client.card.orderNow', 'Order now')
+            : hint.id === 'deal'
+              ? t('client.card.deal', 'Deal')
+              : hint.label;
+  return (
+    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1}>
+      {label}
+    </Text>
   );
 }
 

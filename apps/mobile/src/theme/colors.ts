@@ -26,13 +26,28 @@ export type ThemeColors = {
   info: { main: string; light: string; dark: string };
   /** @deprecated Prefer `pageBackground` / `surface` */
   background: { default: string; paper: string };
-  text: { primary: string; secondary: string; disabled: string };
+  text: { primary: string; secondary: string; muted: string; disabled: string };
   divider: string;
   border: string;
+  borderStrong: string;
   surface: string;
   pageBackground: string;
+  /** Alias of pageBackground. Prefer this name in new layouts. */
+  appBackground: string;
   /** Slightly elevated card on dark (same as surface in light) */
   surfaceElevated: string;
+  surfaceInput: string;
+  surfaceSelected: string;
+  surfaceModal: string;
+  primarySubtle: string;
+  primaryHover: string;
+  cta: {
+    main: string;
+    light: string;
+    dark: string;
+    contrast: string;
+    soft: string;
+  };
   disabled: string;
   disabledText: string;
   overlay: string;
@@ -48,10 +63,17 @@ export type ThemeColors = {
 export const lightColors: ThemeColors = {
   primary: {
     main: '#1E3A8A',
-    light: '#3b82f6',
-    dark: '#1e3a8a',
+    light: '#1D4ED8',
+    dark: '#172554',
     contrast: '#ffffff',
     hover: '#1E3A8A14',
+  },
+  cta: {
+    main: '#C2410C',
+    light: '#EA580C',
+    dark: '#9A3412',
+    contrast: '#ffffff',
+    soft: '#FFEDD5',
   },
   secondary: {
     main: '#0F766E',
@@ -75,9 +97,9 @@ export const lightColors: ThemeColors = {
     dark: '#b91c1c',
   },
   info: {
-    main: '#0891b2',
-    light: '#06b6d4',
-    dark: '#0e7490',
+    main: '#0E7490',
+    light: '#06B6D4',
+    dark: '#155E75',
   },
   background: {
     default: '#F8FAFC',
@@ -86,13 +108,21 @@ export const lightColors: ThemeColors = {
   text: {
     primary: '#0F172A',
     secondary: '#64748B',
+    muted: '#64748B',
     disabled: '#94a3b8',
   },
   divider: '#e2e8f0',
   border: '#e2e8f0',
+  borderStrong: '#CBD5E1',
   surface: '#FFFFFF',
   pageBackground: '#F8FAFC',
+  appBackground: '#F8FAFC',
   surfaceElevated: '#ffffff',
+  surfaceInput: '#F1F5F9',
+  surfaceSelected: '#DBEAFE',
+  surfaceModal: '#FFFFFF',
+  primarySubtle: '#DBEAFE',
+  primaryHover: '#1E3A8A14',
   disabled: '#e5e5ea',
   disabledText: '#94a3b8',
   overlay: 'rgba(0,0,0,0.45)',
@@ -118,6 +148,13 @@ export const darkColors: ThemeColors = {
     light: '#4ade80',
     dark: '#16a34a',
     contrast: '#0f1115',
+  },
+  cta: {
+    main: '#EA580C',
+    light: '#FB923C',
+    dark: '#C2410C',
+    contrast: '#ffffff',
+    soft: '#2A2414',
   },
   success: {
     main: '#22c55e',
@@ -146,13 +183,21 @@ export const darkColors: ThemeColors = {
   text: {
     primary: '#f3f4f6',
     secondary: '#9ca3af',
+    muted: '#9ca3af',
     disabled: '#6b7280',
   },
   divider: '#2d3340',
   border: '#2d3340',
+  borderStrong: '#3d4454',
   surface: '#1a1d23',
   pageBackground: '#0f1115',
+  appBackground: '#0f1115',
   surfaceElevated: '#232730',
+  surfaceInput: '#232730',
+  surfaceSelected: '#1a2744',
+  surfaceModal: '#232730',
+  primarySubtle: '#1a2744',
+  primaryHover: '#3b82f628',
   disabled: '#2d3340',
   disabledText: '#6b7280',
   overlay: 'rgba(0,0,0,0.6)',

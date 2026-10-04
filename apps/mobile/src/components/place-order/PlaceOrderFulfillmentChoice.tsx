@@ -55,7 +55,7 @@ function buildSegments(
   if (args.pickupAvailable) {
     options.push({
       key: 'pickup',
-      label: t('client.placeOrder.pickup', 'Pickup'),
+      label: t('client.placeOrder.pickup', 'Pick it up'),
       icon: 'store-marker-outline',
       disabled: false,
     });
@@ -63,7 +63,7 @@ function buildSegments(
   if (!args.deliveryHidden) {
     options.push({
       key: 'delivery',
-      label: t('client.placeOrder.delivery', 'Delivery'),
+      label: t('client.placeOrder.delivery', 'Get it delivered'),
       icon: 'truck-delivery-outline',
       disabled: args.deliveryDisabled,
     });
@@ -71,7 +71,7 @@ function buildSegments(
   if (args.shippingAvailable || args.shippingDisabled) {
     options.push({
       key: 'shipping',
-      label: t('client.placeOrder.shipping', 'Shipping'),
+      label: t('client.placeOrder.shipping', 'Ship to me'),
       icon: 'package-variant-closed',
       disabled: args.shippingDisabled,
     });

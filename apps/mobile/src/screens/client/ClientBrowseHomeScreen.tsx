@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Badge } from 'react-native-paper';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -8,6 +10,7 @@ import { observer } from 'mobx-react-lite';
 import { Snackbar } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrowseCatalogScreen } from '../shared/BrowseCatalogScreen';
+import ClientRentalsHomeScreen from './ClientRentalsHomeScreen';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
 import { useClientOrders } from '../../hooks/useClientOrders';
@@ -18,7 +21,9 @@ import type {
   ClientRootStackParamList,
 } from '../../navigation/types';
 import { useStore } from '../../stores/RootStore';
-import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
+import { BuyAgainCard, buyAgainLines } from '../../components/client/BuyAgainCard';
+import { DiscoveryRails } from '../../components/client/DiscoveryRails';
+import { HomeLaneSwitcher, type HomeLane } from '../../components/client/HomeLaneSwitcher';
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { AssistantIconButton } from '../../components/common/AssistantIconButton';
@@ -34,11 +39,7 @@ import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import type { Order } from '../../types/agent';
 
 /** Client browse tab: catalog + navigation to item detail on the root stack. */
-function ClientBrowseHomeScreenBase({
-  foodOnly = false,
-}: {
-  foodOnly?: boolean;
-} = {}) {
+function ClientBrowseHomeScreenBase() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -130,6 +131,9 @@ function ClientBrowseHomeScreenBase({
   });
 
   const isClientAuthenticated = auth.isAuthenticated && persona.activePersona === 'client';
+  const lane: HomeLane =
+    route.params?.segment === 'food' ? 'food' : route.params?.segment === 'rentals' ? 'rentals' : 'shop';
+  const foodOnly = lane === 'food';
   const { items: actionsNeededItems, dismissAll } = useActionsNeeded(
     isClientAuthenticated ? 'client' : null
   );
@@ -139,6 +143,21 @@ function ClientBrowseHomeScreenBase({
     !foodOnly && isClientAuthenticated && actionsNeededItems.length > 0;
   const showCredits =
     !foodOnly && isClientAuthenticated && summary.totalRemaining > 0;
+  const buyAgainOrder = useMemo(
+    () =>
+      (clientBrowseOrders ? orders : []).find(
+        (order) => order.current_status === 'complete' || order.current_status === 'delivered'
+      ),
+    [clientBrowseOrders, orders]
+  );
+  const onLaneChange = useCallback(
+    (next: HomeLane) => {
+      tabNav.setParams({
+        segment: next === 'shop' ? 'all' : next,
+      });
+    },
+    [tabNav]
+  );
 
   const onShopCredits = useCallback(() => {
     const grant = summary.primaryGrant;
@@ -162,6 +181,15 @@ function ClientBrowseHomeScreenBase({
     <NotificationBellButton unreadCount={unreadCount} onPress={onOpenNotifications} />
   ) : null;
 
+  if (lane === 'rentals') {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.pageBackground }}>
+        <HomeLaneSwitcher value={lane} onChange={onLaneChange} />
+        <ClientRentalsHomeScreen />
+      </View>
+    );
+  }
+
   return (
     <View
       style={{
@@ -170,6 +198,7 @@ function ClientBrowseHomeScreenBase({
         backgroundColor: colors.pageBackground,
       }}
     >
+      <HomeLaneSwitcher value={lane} onChange={onLaneChange} />
       {showActions ? (
         <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
           <ActionsNeededSection
@@ -193,7 +222,7 @@ function ClientBrowseHomeScreenBase({
       ) : null}
       <BrowseCatalogScreen
         foodOnly={foodOnly}
-        initialSegment={route.params?.segment}
+        initialSegment={foodOnly ? 'food' : 'all'}
         requestedCategory={route.params?.category}
         categoryRequestId={route.params?.categoryRequestId}
         onBrowseCategories={foodOnly ? undefined : onBrowseCategories}
@@ -212,10 +241,26 @@ function ClientBrowseHomeScreenBase({
         onCollectionPress={onCollectionPress}
         onStorePress={onStorePress}
         onSeeAllStores={onSeeAllStores}
-        headerTrailing={notificationBell}
+        headerTrailing={
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <HomeCartButton />
+            {notificationBell}
+          </View>
+        }
         headerMarketTrailing={<AssistantIconButton onPress={openAssistant} />}
+        discoveryExtra={
+          <>
+            {buyAgainOrder ? (
+              <BuyAgainCard
+                orderId={buyAgainOrder.id}
+                orderStatus={buyAgainOrder.current_status}
+                items={buyAgainLines(buyAgainOrder.order_items)}
+              />
+            ) : null}
+            <DiscoveryRails authenticated={isClientAuthenticated} onItemPress={onItemPress} />
+          </>
+        }
       />
-      <BrowseCartFab />
       <CatalogVariantPickerDialog
         open={variantFlow.pickerOpen}
         item={variantFlow.pickerItem}
@@ -229,5 +274,28 @@ function ClientBrowseHomeScreenBase({
     </View>
   );
 }
+
+const HomeCartButton = observer(function HomeCartButton() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const navigation = useNavigation();
+  const { cart } = useStore();
+  const count = cart.lineCount;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('cart.fabA11y', 'Open cart')}
+      onPress={() => (navigation as { navigate: (name: string) => void }).navigate('Cart')}
+      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <MaterialCommunityIcons name="cart-outline" size={24} color={colors.text.primary} />
+      {count > 0 ? (
+        <Badge style={{ position: 'absolute', top: 4, right: 0, backgroundColor: colors.cta.main }} size={16}>
+          {count > 99 ? '99+' : String(count)}
+        </Badge>
+      ) : null}
+    </Pressable>
+  );
+});
 
 export default observer(ClientBrowseHomeScreenBase);

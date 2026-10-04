@@ -21,6 +21,8 @@ import { SectionCard } from '../../../components/common/SectionCard';
 import { InfoRow } from '../../../components/common/InfoRow';
 import { RateOrderModal, type RateOrderMode } from '../../../components/dialogs/RateOrderModal';
 import { OrderPhaseBanner } from '../../../components/orders/OrderPhaseBanner';
+import { OrderJourneyTimeline } from '../../../components/client/OrderJourneyTimeline';
+import { ClientRefundRequestButton } from '../../../components/client/ClientRefundRequestButton';
 import { FirstOrderJourneyCard } from '../../../components/client/FirstOrderJourneyCard';
 import { ShippingTrackingCard } from '../../../components/orders/ShippingTrackingCard';
 import { ContactCard } from '../../../components/orders/shared/ContactCard';
@@ -36,6 +38,7 @@ import { agentApi } from '../../../services/agentApi';
 import type { Address, Order, OrderItem } from '../../../types/agent';
 import { clientCanCancelOrder, clientShowAgentLocation, clientShowDeliveryPin, clientShowNoAgentOptions } from '../../../utils/clientOrderActions';
 import { getClientOrderJourney } from '../../../utils/clientOrderJourney';
+import { isOrderRefundRequestAllowed } from '../../../utils/orderRefundWindow';
 import { trackCancellationEvent } from '../../../utils/cancellationAnalytics';
 import {
   orderItemImageUrl,
@@ -660,6 +663,13 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           <OrderPhaseBanner order={order} role="client" />
         )}
 
+        {firstOrderJourney ? null : (
+          <OrderJourneyTimeline
+            input={orderToPhaseInput(order)}
+            agentName={order.assigned_agent?.user?.first_name}
+          />
+        )}
+
         {showNoAgentOptions ? (
           <View style={{ marginBottom: SECTION_GAP }}>
             <View
@@ -715,6 +725,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             trackingNumber={order.shipping_tracking_number}
             shippedAt={order.shipped_at}
           />
+        ) : null}
+
+        {isOrderRefundRequestAllowed(order.completed_at) ? (
+          <ClientRefundRequestButton orderId={order.id} />
         ) : null}
 
         {/* ── Rating CTAs (eligibility-driven) ─────────────────────────── */}

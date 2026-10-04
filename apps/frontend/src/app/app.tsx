@@ -290,6 +290,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/following"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.FollowingPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/stores" element={<LazyPages.StoresIndexPage />} />
             <Route path="/store/:businessId" element={<LazyPages.StorePage />} />
             <Route path="/categories" element={<LazyPages.CategoriesBrowsePage />} />

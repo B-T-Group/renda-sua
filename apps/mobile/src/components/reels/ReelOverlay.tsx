@@ -107,6 +107,11 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
           </Pressable>
         </View>
         <View style={styles.bottom} pointerEvents="box-none">
+          {reel.caption ? (
+            <Text style={[styles.railLabel, { marginBottom: 8 }]} numberOfLines={2}>
+              {reel.caption}
+            </Text>
+          ) : null}
           {onBuy ? (
             <View style={styles.ctaRow}>
               <IconButton

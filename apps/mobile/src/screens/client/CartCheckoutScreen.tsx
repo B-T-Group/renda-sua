@@ -37,6 +37,7 @@ import { useCartDeliveryFees } from '../../hooks/useCartDeliveryFees';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useResolvedCheckout } from '../../hooks/useResolvedCheckout';
 import { useCheckoutLinkedMoMoPhone } from '../../hooks/useCheckoutLinkedMoMoPhone';
+import { PayAfterConfirmExplainer } from '../../components/client/PayAfterConfirmExplainer';
 import { PlaceOrderDeliveryWindowBlock } from '../../components/browse/PlaceOrderDeliveryWindowBlock';
 import { PlaceOrderPaymentBlock } from '../../components/browse/PlaceOrderPaymentBlock';
 import { appliedPurchaseCredit } from '../../utils/purchaseCredits';
@@ -1379,6 +1380,12 @@ export default observer(function CartCheckoutScreen() {
             onReadyChange={onDwReadyChange}
             onCommit={onDwCommit}
           />
+        ) : null}
+
+        {fulfillmentConfirmed && isCookedFoodMoMoPayAfter ? (
+          <View style={{ marginBottom: spacing.sm }}>
+            <PayAfterConfirmExplainer />
+          </View>
         ) : null}
 
         {fulfillmentConfirmed &&

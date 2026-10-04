@@ -27,6 +27,7 @@ function ClientRentalsHomeScreenBase() {
   return (
     <RentalsBrowseScreen
       withAuth
+      applyTopSafeArea={false}
       onOpenListing={onOpenListing}
       headerExtra={
         <Button mode="contained-tonal" icon="clipboard-list-outline" onPress={onMyRentals}>

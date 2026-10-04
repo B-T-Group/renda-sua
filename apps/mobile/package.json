@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@apollo/client": "^3.11.0",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
     "@lottiefiles/dotlottie-react": "^0.19.5",
     "@react-native-async-storage/async-storage": "2.2.0",

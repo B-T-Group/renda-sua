@@ -387,7 +387,12 @@ export default function ClientMyRentalsScreen() {
               <Button
                 mode="contained-tonal"
                 style={{ marginTop: spacing.md }}
-                onPress={() => navigation.navigate('ClientMainTabs', { screen: 'ClientRentals' })}
+                onPress={() =>
+                  navigation.navigate('ClientMainTabs', {
+                    screen: 'ClientBrowse',
+                    params: { segment: 'rentals' },
+                  })
+                }
               >
                 {t('rentals.clientRequests.browseRentals', 'Browse rentals')}
               </Button>

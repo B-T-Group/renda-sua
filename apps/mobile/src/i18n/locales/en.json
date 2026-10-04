@@ -1045,6 +1045,10 @@
       "tomorrow": "tomorrow",
       "cancelUnpaid": "You haven’t paid yet, so cancelling is free and nothing is charged.",
       "storeNoConfirm": "If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged."
+    },
+    "refunds": {
+      "request": "Request a refund",
+      "requested": "Your refund request was sent."
     }
   },
   "orderActions": {
@@ -1177,7 +1181,14 @@
     }
   },
   "nav": {
-    "manageRecipients": "Saved recipients"
+    "manageRecipients": "Saved recipients",
+    "clientTabs": {
+      "home": "Home",
+      "search": "Search"
+    },
+    "tabs": {
+      "account": "Account"
+    }
   },
   "public": {
     "items": {
@@ -3801,7 +3812,15 @@
         "ctaTrack": "Track order",
         "ctaView": "View order",
         "cardA11y": "Order {{number}}, {{title}}"
-      }
+      },
+      "lane": {
+        "shop": "Shop",
+        "food": "Food",
+        "rentals": "Rentals"
+      },
+      "forYou": "For you",
+      "buyAgain": "Buy again",
+      "buyAgainMore": "and {{count}} more"
     },
     "rentals": {
       "title": "Rentals",
@@ -4087,17 +4106,17 @@
       "quantity": "Quantity",
       "quantityHint": "Max {{max}} available",
       "fulfillment": "Fulfillment",
-      "fulfillmentQuestion": "How do you want it?",
+      "fulfillmentQuestion": "How would you like to receive this?",
       "fulfillmentRequired": "Choose one option to continue.",
       "fulfillmentHint": "You can change this anytime.",
-      "delivery": "Delivery",
+      "delivery": "Get it delivered",
       "deliveryChoiceHint": "To your address",
       "deliveryPriceAddressRequired": "Choose an address to see the delivery price.",
-      "pickup": "Pickup",
+      "pickup": "Pick it up",
       "pickupChoiceHint": "At the store",
       "pickupHint": "Pay when you pick up at the store.",
       "pickupHintStripe": "Pay securely by card when you place your order, then pick up at the store.",
-      "shipping": "Shipping",
+      "shipping": "Ship to me",
       "shippingChoiceHint": "By carrier",
       "shippingNotice": "The seller ships this with a carrier. Pay now to place the order.",
       "shippingUnavailableMixed": "Shipping is only available when every item in your cart can be shipped.",
@@ -4299,6 +4318,49 @@
       "deliveryUnavailable": "Delivery is currently unavailable.",
       "deliveryUnavailablePickup": "Delivery is currently unavailable. You can still pick up this order at the store.",
       "switchToPickup": "Switch to pickup"
+    },
+    "search": {
+      "placeholder": "Search products, stores, food",
+      "emptyTitle": "No matches",
+      "emptyBody": "Try a product, a store, or a category.",
+      "recent": "Recent searches"
+    },
+    "following": {
+      "title": "Following",
+      "error": "Something went wrong while loading stores you follow.",
+      "emptyTitle": "No stores yet",
+      "emptyBody": "Follow a store to find it again here.",
+      "browse": "Browse stores",
+      "followers": "{{count}} followers",
+      "menuSubtitle": "Stores you follow"
+    },
+    "journey": {
+      "placed": "Placed",
+      "confirmed": "Confirmed",
+      "preparing": "Preparing",
+      "on_the_way": "On the way",
+      "delivered": "Delivered",
+      "agentPickingUp": "{{name}} is picking up your order.",
+      "onTheWay": "Your order is on the way.",
+      "pay": "Payment is the next step.",
+      "messagePlaced": "Your order is with the store.",
+      "messagePreparing": "Your order is being prepared.",
+      "messageDelivered": "Your order was delivered."
+    },
+    "card": {
+      "onlyLeft": "Only {{count}} left",
+      "checkAvailability": "Check availability",
+      "kitchenClosed": "Kitchen closed",
+      "orderNow": "Order now",
+      "deal": "Deal"
+    },
+    "payAfter": {
+      "title": "Pay after the store confirms",
+      "body": "Nothing is charged until the store says it can fulfil this order.",
+      "step1": "The store confirms it is available",
+      "step2": "You get a payment request",
+      "step3": "Pay within the time window",
+      "step4": "The store prepares your order"
     }
   },
   "auth": {
@@ -4947,6 +5009,22 @@
       "editAddress": "Edit address",
       "noAddresses": "No saved addresses.",
       "noAddressesOptional": "No saved address — nearby orders use your live location when available."
+    },
+    "now": {
+      "active": "Active delivery",
+      "openDelivery": "Open this delivery",
+      "deliveries": "Deliveries today",
+      "earnings": "Earnings today"
+    },
+    "readiness": {
+      "locationTitle": "Turn on location",
+      "locationBody": "Location is required before you can go online and claim deliveries.",
+      "idTitle": "Add your ID",
+      "idBody": "Upload a government ID so you can claim deliveries.",
+      "momoTitle": "Finish Mobile Money",
+      "momoBody": "Add a payout number to start claiming deliveries.",
+      "pendingTitle": "ID under review",
+      "pendingBody": "You can claim deliveries once your ID is approved."
     }
   },
   "completeProfile": {

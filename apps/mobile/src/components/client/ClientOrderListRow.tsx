@@ -15,6 +15,7 @@ import {
 } from '../../utils/clientOrderListDisplay';
 import { formatCurrency } from '../../utils/formatters';
 import { resolveOrderPricing } from '../../utils/orderAmounts';
+import { BuyAgainCard, buyAgainLines } from './BuyAgainCard';
 import { ClientOrderRowActions } from './ClientOrderRowActions';
 import { ClientOrderJourneyCard } from './ClientOrderJourneyCard';
 
@@ -176,6 +177,11 @@ function ClientOrderListRowInner({
             order={order}
             onOrderMutated={onOrderMutated}
             onRatePress={onRatePress}
+          />
+          <BuyAgainCard
+            orderId={order.id}
+            orderStatus={order.current_status}
+            items={buyAgainLines(order.order_items)}
           />
 
           {/* Details link */}

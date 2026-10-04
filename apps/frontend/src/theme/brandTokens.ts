@@ -66,9 +66,17 @@ export const brandTokens = {
     /** Neutral tint for muted rows, placeholders and empty states. */
     subtle: '#F1F5F9',
     divider: '#E2E8F0',
+    elevated: '#FFFFFF',
+    input: '#F1F5F9',
+    selected: '#DBEAFE',
+    modal: '#FFFFFF',
+    border: '#E2E8F0',
+    borderStrong: '#CBD5E1',
   },
   text: {
     primary: '#0F172A',
+    /** Supporting copy. Same contrast floor as muted. */
+    secondary: '#475569',
     /** Meets AA (4.58:1) against the app background. */
     muted: '#64748B',
   },

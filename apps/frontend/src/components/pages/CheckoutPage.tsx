@@ -3,6 +3,7 @@ import {
   payAfterCopyVariantForPreflight,
   resolveCreatedPayAfter,
 } from '../../utils/payAfterConfirm';
+import { PayAfterConfirmExplainer } from '../checkout/PayAfterConfirmExplainer';
 import {
   Alert,
   Box,
@@ -1496,6 +1497,7 @@ const CheckoutPage: React.FC = () => {
                     )}
 
                   {/* Delivery Time Window — cooked food is ASAP-only */}
+                  {cookedFoodMoMoPayAfterConfirm ? <PayAfterConfirmExplainer /> : null}
                   {cookedFoodAsapOnly ? (
                     <CookedFoodClosedAlert
                       sx={{ mb: 2 }}
