@@ -27,16 +27,17 @@ const contrastRatio = (foreground: string, background: string) => {
   return (lighter + 0.05) / (darker + 0.05);
 };
 
-describe('Trust Coast Blue palette', () => {
+describe('logo brand palette', () => {
   it('exposes the approved brand tokens on the MUI palette', () => {
-    expect(theme.palette.primary.main).toBe('#1E3A8A');
-    expect(theme.palette.secondary.main).toBe('#0F766E');
-    expect(theme.palette.cta.main).toBe('#C2410C');
-    expect(theme.palette.cta.soft).toBe('#FFEDD5');
-    expect(theme.palette.success.main).toBe('#15803D');
+    expect(theme.palette.primary.main).toBe('#0A4FB5');
+    expect(theme.palette.secondary.main).toBe('#0B2E6F');
+    expect(theme.palette.cta.main).toBe('#0B7A3B');
+    expect(theme.palette.cta.soft).toBe('#DCF5E5');
+    expect(theme.palette.success.main).toBe('#0F766E');
+    expect(theme.palette.success.main).not.toBe(theme.palette.cta.main);
     expect(theme.palette.error.main).toBe('#B91C1C');
     expect(theme.palette.warning.main).toBe('#B45309');
-    expect(theme.palette.background.default).toBe('#F8FAFC');
+    expect(theme.palette.background.default).toBe('#FAF9F7');
     expect(theme.palette.background.paper).toBe('#FFFFFF');
     expect(theme.palette.text.primary).toBe('#0F172A');
     expect(theme.palette.text.secondary).toBe('#64748B');
@@ -71,14 +72,16 @@ describe('Trust Coast Blue palette', () => {
     expect(transitions.normal.startsWith('200ms')).toBe(true);
     expect(transitions.slow.startsWith('320ms')).toBe(true);
     expect(spacing.s20).toBe(20);
-    expect(brandTokens.surface.input).toBe('#F1F5F9');
-    expect(brandTokens.surface.borderStrong).toBe('#CBD5E1');
+    expect(brandTokens.surface.input).toBe('#F4F1EC');
+    expect(brandTokens.surface.borderStrong).toBe('#D0C9BE');
     expect(theme.typography.fontFamily).toContain('Inter Variable');
+    expect(String(theme.typography.h1.fontFamily)).toContain('Poppins');
+    expect(String(theme.typography.display.fontFamily)).toContain('Poppins');
   });
 
-  it('maps persona chrome to client blue, agent teal and business accent', () => {
+  it('maps persona chrome to client blue, agent navy and business green', () => {
     expect(PERSONA_HEADER_COLORS.client.main).toBe(brandTokens.primary.main);
     expect(PERSONA_HEADER_COLORS.agent.main).toBe(brandTokens.secondary.main);
-    expect(PERSONA_HEADER_COLORS.business.main).toBe(brandTokens.cta.main);
+    expect(PERSONA_HEADER_COLORS.business.main).toBe(brandTokens.cta.dark);
   });
 });

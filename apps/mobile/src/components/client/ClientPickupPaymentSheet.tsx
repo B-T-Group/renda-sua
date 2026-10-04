@@ -188,6 +188,8 @@ export function ClientPickupPaymentSheet({
             </Button>
             <Button
               mode="contained"
+              buttonColor={colors.cta.main}
+              textColor={colors.cta.contrast}
               loading={loading}
               disabled={!canSubmit || loading}
               onPress={() => void handleSubmit()}

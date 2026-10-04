@@ -536,7 +536,7 @@ const Header: React.FC = () => {
                       width: 36,
                       height: 36,
                       fontSize: '0.75rem',
-                      backgroundColor: '#1E3A8A',
+                      backgroundColor: brandTokens.primary.main,
                       color: 'white',
                     }}
                   >
@@ -911,7 +911,7 @@ const Header: React.FC = () => {
                         width: 28,
                         height: 28,
                         fontSize: '0.75rem',
-                        backgroundColor: '#1E3A8A',
+                        backgroundColor: brandTokens.primary.main,
                         color: 'white',
                         fontFamily:
                           'inherit',
@@ -956,7 +956,7 @@ const Header: React.FC = () => {
                             width: 32,
                             height: 32,
                             fontSize: '0.75rem',
-                            backgroundColor: '#1E3A8A',
+                            backgroundColor: brandTokens.primary.main,
                             color: 'white',
                           }}
                         >

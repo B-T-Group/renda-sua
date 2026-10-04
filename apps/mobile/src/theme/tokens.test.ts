@@ -1,4 +1,5 @@
-import { lightColors } from './colors';
+import { brandTokens } from '../../../frontend/src/theme/brandTokens';
+import { darkColors, lightColors } from './colors';
 import { motion } from './motion';
 import { borderRadius, spacing } from './spacing';
 import { typography } from './typography';
@@ -22,25 +23,37 @@ const contrastRatio = (foreground: string, background: string) => {
 };
 
 describe('mobile design tokens', () => {
-  it('matches the web Trust Coast Blue brand hex values', () => {
-    expect(lightColors.primary.main).toBe('#1E3A8A');
-    expect(lightColors.secondary.main).toBe('#0F766E');
-    expect(lightColors.cta.main).toBe('#C2410C');
-    expect(lightColors.cta.soft).toBe('#FFEDD5');
-    expect(lightColors.success.main).toBe('#15803D');
-    expect(lightColors.error.main).toBe('#B91C1C');
-    expect(lightColors.warning.main).toBe('#B45309');
-    expect(lightColors.info.main).toBe('#0E7490');
-    expect(lightColors.appBackground).toBe('#F8FAFC');
-    expect(lightColors.surface).toBe('#FFFFFF');
-    expect(lightColors.text.primary).toBe('#0F172A');
-    expect(lightColors.text.muted).toBe('#64748B');
+  it('matches the web brand tokens', () => {
+    expect(lightColors.primary.main).toBe(brandTokens.primary.main);
+    expect(lightColors.primary.light).toBe(brandTokens.primary.light);
+    expect(lightColors.primary.dark).toBe(brandTokens.primary.dark);
+    expect(lightColors.secondary.main).toBe(brandTokens.secondary.main);
+    expect(lightColors.cta.main).toBe(brandTokens.cta.main);
+    expect(lightColors.cta.light).toBe(brandTokens.cta.light);
+    expect(lightColors.cta.dark).toBe(brandTokens.cta.dark);
+    expect(lightColors.cta.soft).toBe(brandTokens.cta.soft);
+    expect(lightColors.success.main).toBe(brandTokens.success.main);
+    expect(lightColors.error.main).toBe(brandTokens.error.main);
+    expect(lightColors.warning.main).toBe(brandTokens.warning.main);
+    expect(lightColors.info.main).toBe(brandTokens.info.main);
+    expect(lightColors.appBackground).toBe(brandTokens.surface.background);
+    expect(lightColors.surface).toBe(brandTokens.surface.paper);
+    expect(lightColors.border).toBe(brandTokens.surface.border);
+    expect(lightColors.borderStrong).toBe(brandTokens.surface.borderStrong);
+    expect(lightColors.text.primary).toBe(brandTokens.text.primary);
+    expect(lightColors.text.muted).toBe(brandTokens.text.muted);
+    expect(lightColors.success.main).not.toBe(lightColors.cta.main);
   });
 
   it.each([
-    ['primary', lightColors.primary.main, lightColors.primary.contrast],
-    ['cta', lightColors.cta.main, lightColors.cta.contrast],
-    ['secondary', lightColors.secondary.main, lightColors.secondary.contrast],
+    ['light primary', lightColors.primary.main, lightColors.primary.contrast],
+    ['light cta', lightColors.cta.main, lightColors.cta.contrast],
+    ['light secondary', lightColors.secondary.main, lightColors.secondary.contrast],
+    ['light success', lightColors.success.main, '#ffffff'],
+    ['dark primary', darkColors.primary.main, darkColors.primary.contrast],
+    ['dark cta', darkColors.cta.main, darkColors.cta.contrast],
+    ['dark secondary', darkColors.secondary.main, darkColors.secondary.contrast],
+    ['dark success', darkColors.success.main, '#ffffff'],
   ])('keeps white text on %s above 4.5:1', (_name, background, foreground) => {
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
   });
@@ -72,6 +85,9 @@ describe('mobile design tokens', () => {
   });
 
   it('gives prices their own tabular role', () => {
+    expect(typography.display.fontFamily).toBe('Poppins_700Bold');
+    expect(typography.h2.fontFamily).toBe('Poppins_600SemiBold');
+    expect(typography.price.fontFamily).toBe('Inter_700Bold');
     expect(typography.price.fontWeight).toBe('700');
     expect(typography.price.fontVariant).toEqual(['tabular-nums']);
     expect(typography.priceLarge.fontSize).toBeGreaterThan(typography.price.fontSize);

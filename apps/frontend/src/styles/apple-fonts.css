@@ -1,4 +1,4 @@
-/* Global type rendering. Brand color is Trust Coast Blue, not system blue. */
+/* Global type rendering. Brand color is logo blue, not system blue. */
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -18,7 +18,7 @@ body {
 
 ::selection,
 ::-moz-selection {
-  background-color: rgba(30, 58, 138, 0.16);
+  background-color: rgba(10, 79, 181, 0.16);
   color: #0f172a;
 }
 
@@ -27,7 +27,7 @@ body {
 }
 
 *:focus-visible {
-  outline: 2px solid #1e3a8a;
+  outline: 2px solid #0A4FB5;
   outline-offset: 2px;
   border-radius: 4px;
 }

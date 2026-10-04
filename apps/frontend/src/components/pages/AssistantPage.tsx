@@ -17,10 +17,11 @@ import {
 } from '../../hooks/useAssistantChat';
 import { AssistantEmptyIllustration } from './AssistantEmptyIllustration';
 import { AssistantMarkdown } from './AssistantMarkdown';
+import { brandTokens } from '../../theme/brandTokens';
 
 const PAGE_BG = 'linear-gradient(160deg, #050b16 0%, #0a1726 48%, #061018 100%)';
-const ACCENT = '#00e5ff';
-const ACCENT_DIM = 'rgba(0, 229, 255, 0.14)';
+const ACCENT = brandTokens.primary.light;
+const ACCENT_DIM = 'rgba(47, 111, 214, 0.14)';
 const GLASS = 'rgba(255, 255, 255, 0.05)';
 
 const SUGGESTION_KEYS = [
@@ -81,7 +82,7 @@ function ThinkingOrb() {
           borderRadius: 3,
           background: GLASS,
           border: `1px solid ${ACCENT_DIM}`,
-          boxShadow: '0 0 24px rgba(0,229,255,0.12)',
+          boxShadow: '0 0 24px rgba(47,111,214,0.12)',
         }}
       >
         <Box
@@ -89,8 +90,8 @@ function ThinkingOrb() {
             width: 28,
             height: 28,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 35% 35%, #7ef9ff, #00838f)',
-            boxShadow: '0 0 16px rgba(0,229,255,0.7)',
+            background: `radial-gradient(circle at 35% 35%, ${brandTokens.primary.light}, ${brandTokens.primary.dark})`,
+            boxShadow: '0 0 16px rgba(47,111,214,0.7)',
             animation: 'aiOrbPulse 1.4s ease-in-out infinite',
             position: 'relative',
             '&::after': {
@@ -98,7 +99,7 @@ function ThinkingOrb() {
               position: 'absolute',
               inset: -4,
               borderRadius: '50%',
-              border: '1px solid rgba(0,229,255,0.35)',
+              border: '1px solid rgba(47,111,214,0.35)',
               animation: 'aiRingSpin 2.4s linear infinite',
             },
           }}
@@ -165,7 +166,7 @@ function MessageBubble({
           border: isUser ? 'none' : `1px solid ${ACCENT_DIM}`,
           color: 'white',
           boxShadow: isUser
-            ? '0 8px 28px rgba(0,229,255,0.22)'
+            ? '0 8px 28px rgba(47,111,214,0.22)'
             : '0 4px 18px rgba(0,0,0,0.35)',
           position: 'relative',
           overflow: 'hidden',
@@ -176,7 +177,7 @@ function MessageBubble({
                   position: 'absolute',
                   inset: 0,
                   background:
-                    'linear-gradient(90deg, transparent, rgba(0,229,255,0.08), transparent)',
+                    'linear-gradient(90deg, transparent, rgba(47,111,214,0.08), transparent)',
                   animation: 'aiShimmer 1.4s ease-in-out infinite',
                 },
               }
@@ -266,11 +267,11 @@ function HandoffBanner() {
           target="_blank"
           rel="noopener noreferrer"
           sx={{
-            borderColor: 'rgba(0,229,255,0.35)',
+            borderColor: 'rgba(47,111,214,0.35)',
             color: ACCENT,
             '&:hover': {
               borderColor: ACCENT,
-              background: 'rgba(0,229,255,0.08)',
+              background: 'rgba(47,111,214,0.08)',
             },
           }}
         >
@@ -305,7 +306,7 @@ function AssistantHeader({
         background:
           'linear-gradient(180deg, rgba(5,11,22,0.96) 0%, rgba(5,11,22,0.72) 100%)',
         backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid rgba(0,229,255,0.08)',
+        borderBottom: '1px solid rgba(47,111,214,0.08)',
       }}
     >
       <Stack direction="row" spacing={1.5} alignItems="center">
@@ -318,7 +319,7 @@ function AssistantHeader({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 22px rgba(0,229,255,0.55)',
+            boxShadow: '0 0 22px rgba(47,111,214,0.55)',
             animation: isThinking
               ? 'aiOrbPulse 1.2s ease-in-out infinite'
               : 'aiOrbPulse 3.2s ease-in-out infinite',
@@ -445,10 +446,10 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
                 onClick={() => onPick(label)}
                 sx={{
                   color: 'rgba(255,255,255,0.88)',
-                  bgcolor: 'rgba(0,229,255,0.08)',
-                  border: '1px solid rgba(0,229,255,0.22)',
+                  bgcolor: 'rgba(47,111,214,0.08)',
+                  border: '1px solid rgba(47,111,214,0.22)',
                   '&:hover': {
-                    bgcolor: 'rgba(0,229,255,0.16)',
+                    bgcolor: 'rgba(47,111,214,0.16)',
                     borderColor: ACCENT,
                   },
                 }}
@@ -501,14 +502,14 @@ function AssistantInput({
           alignItems: 'center',
           gap: 0.5,
           background: GLASS,
-          border: '1px solid rgba(0,229,255,0.22)',
+          border: '1px solid rgba(47,111,214,0.22)',
           borderRadius: 3.5,
           px: 2,
           py: 0.85,
           transition: 'border-color 0.2s, box-shadow 0.2s',
           '&:focus-within': {
-            borderColor: 'rgba(0,229,255,0.55)',
-            boxShadow: '0 0 0 1px rgba(0,229,255,0.18), 0 0 28px rgba(0,229,255,0.12)',
+            borderColor: 'rgba(47,111,214,0.55)',
+            boxShadow: '0 0 0 1px rgba(47,111,214,0.18), 0 0 28px rgba(47,111,214,0.12)',
           },
         }}
       >
@@ -546,8 +547,8 @@ function AssistantInput({
               disabled || !value.trim() ? 'transparent' : ACCENT,
             transition: 'all 0.2s',
             '&:not(:disabled):hover': {
-              bgcolor: '#7ef9ff',
-              boxShadow: '0 0 18px rgba(0,229,255,0.45)',
+              bgcolor: brandTokens.primary.light,
+              boxShadow: '0 0 18px rgba(47,111,214,0.45)',
             },
           }}
         >
@@ -609,7 +610,7 @@ const AssistantPage: React.FC = () => {
           position: 'absolute',
           inset: 0,
           backgroundImage:
-            'radial-gradient(circle, rgba(0,229,255,0.07) 1px, transparent 1px)',
+            'radial-gradient(circle, rgba(47,111,214,0.07) 1px, transparent 1px)',
           backgroundSize: '40px 40px',
           pointerEvents: 'none',
           maskImage:
@@ -620,10 +621,10 @@ const AssistantPage: React.FC = () => {
           '30%': { transform: 'translateY(-5px)' },
         },
         '@keyframes aiOrbPulse': {
-          '0%, 100%': { boxShadow: '0 0 18px rgba(0,229,255,0.5)' },
+          '0%, 100%': { boxShadow: '0 0 18px rgba(47,111,214,0.5)' },
           '50%': {
             boxShadow:
-              '0 0 34px rgba(0,229,255,0.95), 0 0 60px rgba(0,229,255,0.28)',
+              '0 0 34px rgba(47,111,214,0.95), 0 0 60px rgba(47,111,214,0.28)',
           },
         },
         '@keyframes aiRingSpin': {
@@ -690,7 +691,7 @@ const AssistantPage: React.FC = () => {
           '&::-webkit-scrollbar': { width: 4 },
           '&::-webkit-scrollbar-track': { background: 'transparent' },
           '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(0,229,255,0.2)',
+            background: 'rgba(47,111,214,0.2)',
             borderRadius: 2,
           },
         }}

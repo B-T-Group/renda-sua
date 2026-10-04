@@ -670,8 +670,8 @@ function InventoryCatalogCardInner({
             icon="cart-outline"
             onPress={() => onPrimaryPress(selectionId)}
             accessibilityLabel={buyA11y}
-            buttonColor={colors.primary.main}
-            textColor={colors.primary.contrast}
+            buttonColor={colors.cta.main}
+            textColor={colors.cta.contrast}
             style={{ flex: 1, minWidth: 0 }}
             contentStyle={styles.ctaContent}
             labelStyle={styles.ctaLabel}

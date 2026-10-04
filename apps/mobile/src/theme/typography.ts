@@ -15,26 +15,28 @@ const regular = fontFamily.regular;
 const medium = fontFamily.medium;
 const semibold = fontFamily.semibold;
 const bold = fontFamily.bold;
+const display = fontFamily.displayBold;
+const displaySemi = fontFamily.display;
 
 export const typography = {
   fontFamily: regular,
 
   display: {
-    fontFamily: bold,
+    fontFamily: display,
     fontWeight: '700' as const,
     fontSize: 32,
     lineHeight: 38,
     letterSpacing: -0.6,
   },
   h1: {
-    fontFamily: bold,
+    fontFamily: display,
     fontWeight: '700' as const,
     fontSize: 28,
     lineHeight: 34,
     letterSpacing: -0.5,
   },
   h2: {
-    fontFamily: semibold,
+    fontFamily: displaySemi,
     fontWeight: '600' as const,
     fontSize: 22,
     lineHeight: 28,

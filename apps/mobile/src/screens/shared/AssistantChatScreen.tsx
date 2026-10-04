@@ -14,13 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Circle, Defs, RadialGradient, Stop, Svg } from 'react-native-svg';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AssistantMarkdownText } from '@/components/common/AssistantMarkdownText';
+import { lightColors } from '@/theme/colors';
 import { useAssistantChat } from '../../hooks/useAssistantChat';
 import type { AssistantUiMessage } from '../../hooks/useAssistantChat';
 
 const BG = '#050b16';
 const SURFACE = 'rgba(255,255,255,0.05)';
-const ACCENT = '#00e5ff';
-const ACCENT_DIM = 'rgba(0,229,255,0.18)';
+const ACCENT = lightColors.primary.light;
+const ACCENT_DIM = 'rgba(47,111,214,0.18)';
 const TEXT_MUTED = 'rgba(255,255,255,0.55)';
 
 const SUGGESTIONS = [
@@ -158,16 +159,16 @@ function AssistantIllustration({ size = 140 }: { size?: number }) {
     >
       <Defs>
         <RadialGradient id="orb" cx="38%" cy="33%">
-          <Stop offset="0%" stopColor="#26c6da" />
-          <Stop offset="100%" stopColor="#00575e" />
+          <Stop offset="0%" stopColor={lightColors.primary.light} />
+          <Stop offset="100%" stopColor={lightColors.primary.dark} />
         </RadialGradient>
         <RadialGradient id="glow" cx="50%" cy="50%">
-          <Stop offset="0%" stopColor="#00e5ff" stopOpacity={0.3} />
-          <Stop offset="100%" stopColor="#00e5ff" stopOpacity={0} />
+          <Stop offset="0%" stopColor={ACCENT} stopOpacity={0.3} />
+          <Stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      <Circle cx="80" cy="80" r="72" fill="none" stroke="#00e5ff" strokeWidth="0.8" strokeOpacity={0.2} />
-      <Circle cx="80" cy="80" r="57" fill="none" stroke="#00e5ff" strokeWidth="0.8" strokeOpacity={0.12} />
+      <Circle cx="80" cy="80" r="72" fill="none" stroke={ACCENT} strokeWidth="0.8" strokeOpacity={0.2} />
+      <Circle cx="80" cy="80" r="57" fill="none" stroke={ACCENT} strokeWidth="0.8" strokeOpacity={0.12} />
       <Circle cx="80" cy="80" r="52" fill="url(#glow)" />
       <Circle cx="80" cy="80" r="37" fill="url(#orb)" />
       <Circle cx="67" cy="80" r="4.5" fill="#fff" fillOpacity={0.9} />
@@ -436,7 +437,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#00838f',
+    backgroundColor: lightColors.info.main,
     borderWidth: 2,
     borderColor: ACCENT,
   },
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
   chip: {
     borderWidth: 1,
     borderColor: ACCENT_DIM,
-    backgroundColor: 'rgba(0,229,255,0.08)',
+    backgroundColor: 'rgba(47,111,214,0.08)',
     borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -492,7 +493,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   userBubble: {
-    backgroundColor: '#00838f',
+    backgroundColor: lightColors.info.main,
     borderBottomRightRadius: 5,
   },
   aiBubble: {

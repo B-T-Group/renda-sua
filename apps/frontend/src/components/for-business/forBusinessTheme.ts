@@ -2,7 +2,7 @@ import { brandTokens } from '../../theme/brandTokens';
 
 /**
  * Shared brand accents for the for-business landing. The business persona sits
- * in the Trust Coast Blue accent family, over deep-blue brand chrome.
+ * in the logo-green accent family, over logo-blue brand chrome.
  */
 export const FB_ACCENT = brandTokens.cta.main;
 export const FB_ACCENT_DARK = brandTokens.cta.dark;

@@ -975,6 +975,8 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           ) : showStickyPrimary ? (
             <Button
               mode="contained"
+              buttonColor={stickyPrimaryId === 'pay' ? colors.cta.main : undefined}
+              textColor={stickyPrimaryId === 'pay' ? colors.cta.contrast : undefined}
               loading={
                 stickyPrimaryId === 'reorder'
                   ? reorderFlow.loading

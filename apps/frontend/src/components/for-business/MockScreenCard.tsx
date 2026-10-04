@@ -1,5 +1,6 @@
 import { Box, Typography, alpha } from '@mui/material';
 import React from 'react';
+import { brandTokens } from '../../theme/brandTokens';
 import { FB_ACCENT } from './forBusinessTheme';
 
 export type MockScreenKind =
@@ -44,7 +45,7 @@ function MockChrome({ children }: { children: React.ReactNode }) {
         }}
         aria-hidden
       >
-        {['#f87171', '#fbbf24', '#4ade80'].map((c) => (
+        {[brandTokens.error.light, brandTokens.warning.light, brandTokens.success.light].map((c) => (
           <Box key={c} sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c }} />
         ))}
       </Box>
@@ -105,7 +106,7 @@ function MockBody({ kind }: { kind: MockScreenKind }) {
   if (kind === 'orders') {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }} aria-hidden>
-        {[FB_ACCENT, '#f59e0b', '#3b82f6'].map((c, i) => (
+        {[FB_ACCENT, brandTokens.warning.main, brandTokens.primary.main].map((c, i) => (
           <Box
             key={i}
             sx={{
@@ -126,7 +127,7 @@ function MockBody({ kind }: { kind: MockScreenKind }) {
     );
   }
   if (kind === 'analytics') {
-    return bars(8, '#1d4ed8');
+    return bars(8, brandTokens.primary.main);
   }
   return (
     <Box aria-hidden>

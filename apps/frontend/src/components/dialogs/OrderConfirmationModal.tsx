@@ -15,6 +15,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { brandTokens } from '../../theme/brandTokens';
 
 interface OrderConfirmationModalProps {
   open: boolean;
@@ -91,7 +92,7 @@ const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
         <Box
           sx={{
             p: 2,
-            bgcolor: 'rgba(25, 118, 210, 0.08)',
+            bgcolor: `${brandTokens.info.main}14`,
             borderRadius: 1,
             mt: 2,
             border: '1px solid',
@@ -102,7 +103,7 @@ const OrderConfirmationModal: React.FC<OrderConfirmationModalProps> = ({
             variant="subtitle2"
             gutterBottom
             sx={{
-              color: '#1976d2',
+              color: brandTokens.info.main,
               fontWeight: 'bold',
             }}
           >

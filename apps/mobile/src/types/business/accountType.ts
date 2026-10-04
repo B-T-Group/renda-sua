@@ -1,3 +1,5 @@
+import { lightColors } from '../../theme/colors';
+
 export type BusinessAccountTypeId = 'STANDARD' | 'PREMIUM' | 'ELITE';
 
 export interface BusinessAccountTypePlan {
@@ -29,8 +31,8 @@ export const BUSINESS_ACCOUNT_TYPE_PLANS: BusinessAccountTypePlan[] = [
     defaultLabel: 'Standard',
     taglineKey: 'business.accountType.plans.standard.tagline',
     defaultTagline: 'Best for getting started',
-    color: '#475569',
-    softColor: '#f1f5f9',
+    color: lightColors.text.secondary,
+    softColor: lightColors.surfaceInput,
     benefitKeys: [
       'business.accountType.plans.standard.benefit1',
       'business.accountType.plans.standard.benefit2',
@@ -54,8 +56,8 @@ export const BUSINESS_ACCOUNT_TYPE_PLANS: BusinessAccountTypePlan[] = [
     defaultLabel: 'Premium',
     taglineKey: 'business.accountType.plans.premium.tagline',
     defaultTagline: 'Grow your reach',
-    color: '#1d4ed8',
-    softColor: '#eff6ff',
+    color: lightColors.primary.main,
+    softColor: lightColors.primaryTint,
     includesFromId: 'STANDARD',
     benefitKeys: [
       'business.accountType.plans.premium.benefit1',
@@ -78,8 +80,8 @@ export const BUSINESS_ACCOUNT_TYPE_PLANS: BusinessAccountTypePlan[] = [
     defaultLabel: 'Elite',
     taglineKey: 'business.accountType.plans.elite.tagline',
     defaultTagline: 'Maximum visibility',
-    color: '#b45309',
-    softColor: '#fffbeb',
+    color: lightColors.warning.main,
+    softColor: lightColors.warningTint,
     includesFromId: 'PREMIUM',
     benefitKeys: [
       'business.accountType.plans.elite.benefit1',

@@ -102,15 +102,12 @@ const LOTTIE: Record<DashboardComposingPersona, AnimationObject> = {
   delegate: BUSINESS_LOTTIE,
 };
 
-/** Business / delegate wash — matches web Trust Coast CTA accent. */
-const BUSINESS_ACCENT = '#C2410C';
-
 function accentFor(
   persona: DashboardComposingPersona,
   colors: ReturnType<typeof useTheme>['colors']
 ): string {
   if (persona === 'agent') return colors.secondary.main;
-  if (persona === 'business' || persona === 'delegate') return BUSINESS_ACCENT;
+  if (persona === 'business' || persona === 'delegate') return colors.cta.main;
   return colors.primary.main;
 }
 

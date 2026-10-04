@@ -157,6 +157,8 @@ export function CartOrderSummary({
       <Button
         mode="contained"
         icon="cart-arrow-right"
+        buttonColor={colors.cta.main}
+        textColor={colors.cta.contrast}
         onPress={onCheckout}
         disabled={checkoutDisabled}
         style={{ marginTop: spacing.md }}

@@ -1070,6 +1070,8 @@ function InventoryItemDetailScreen() {
             </Button>
             <Button
               mode="contained"
+              buttonColor={colors.cta.main}
+              textColor={colors.cta.contrast}
               onPress={onBuy}
               style={{ width: '100%', borderRadius: borderRadius.button }}
               contentStyle={styles.ctaBtnContent}

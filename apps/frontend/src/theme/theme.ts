@@ -5,15 +5,18 @@ import { spacing, borderRadius, shadows, transitions } from './themeUtils';
 const { primary, secondary, cta, success, warning, error, info, surface, text } =
   brandTokens;
 
+const displayFont =
+  '"Poppins", "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
 const brandShadow = (color: string, opacity: number, blur: number, y: number) =>
   `0 ${y}px ${blur}px ${alpha(color, opacity)}`;
 
 export const theme = createTheme({
   palette: {
     mode: 'light',
-    primary, // Trust Coast Blue - app chrome, links and secondary actions
-    secondary, // Deep teal - delivery and agent chrome
-    cta, // Purchase accent - Buy / Pay / Checkout only
+    primary, // Logo blue - app chrome, links and secondary actions
+    secondary, // Navy - delivery and agent chrome
+    cta, // Logo green - Buy / Pay / Checkout only
     success,
     warning,
     error,
@@ -32,6 +35,7 @@ export const theme = createTheme({
     fontFamily:
       '"Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     h1: {
+      fontFamily: displayFont,
       fontWeight: 700,
       fontSize: '3rem',
       color: text.primary,
@@ -39,6 +43,7 @@ export const theme = createTheme({
       lineHeight: 1.1,
     },
     h2: {
+      fontFamily: displayFont,
       fontWeight: 600,
       fontSize: '2.25rem',
       color: text.primary,
@@ -46,6 +51,7 @@ export const theme = createTheme({
       lineHeight: 1.2,
     },
     h3: {
+      fontFamily: displayFont,
       fontWeight: 600,
       fontSize: '1.875rem',
       color: text.primary,
@@ -53,6 +59,7 @@ export const theme = createTheme({
       lineHeight: 1.25,
     },
     h4: {
+      fontFamily: displayFont,
       fontWeight: 600,
       fontSize: '1.5rem',
       color: text.primary,
@@ -106,6 +113,7 @@ export const theme = createTheme({
       lineHeight: 1.57,
     },
     display: {
+      fontFamily: displayFont,
       fontWeight: 700,
       fontSize: '2rem',
       lineHeight: 1.15,
