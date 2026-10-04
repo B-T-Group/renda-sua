@@ -30,6 +30,11 @@ interface FailPickupDialogProps {
   onSuccess?: () => void;
 }
 
+interface NoshowWindow {
+  canCancel: boolean;
+  hours: number;
+}
+
 const FailPickupDialog: React.FC<FailPickupDialogProps> = ({
   open,
   order,
@@ -44,7 +49,37 @@ const FailPickupDialog: React.FC<FailPickupDialogProps> = ({
   const [selectedReasonId, setSelectedReasonId] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [noshowWindow, setNoshowWindow] = useState<NoshowWindow | null>(null);
+  const [windowLoading, setWindowLoading] = useState(false);
   const lockRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      setNoshowWindow(null);
+      setWindowLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setWindowLoading(true);
+    apiClient
+      .get<NoshowWindow>(`/orders/${order.id}/pickup-noshow`)
+      .then((res) => {
+        if (!cancelled) setNoshowWindow(res.data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        enqueueSnackbar(
+          t('orders.pickupNoshow.loadError', 'Could not load pickup options'),
+          { variant: 'error' }
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setWindowLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, order.id, apiClient, enqueueSnackbar, t]);
 
   useEffect(() => {
     if (!open) {
@@ -60,7 +95,7 @@ const FailPickupDialog: React.FC<FailPickupDialogProps> = ({
         `/failed-pickups/reasons?language=${lang}`
       )
       .then((res) => {
-        if (!cancelled) setReasons(res.reasons ?? []);
+        if (!cancelled) setReasons(res.data.reasons ?? []);
       })
       .catch(() => {
         enqueueSnackbar(
@@ -83,6 +118,7 @@ const FailPickupDialog: React.FC<FailPickupDialogProps> = ({
   const needsNotes = selected?.reason_key === 'other';
 
   const handleConfirm = async () => {
+    if (!noshowWindow?.canCancel) return;
     if (!selectedReasonId || (needsNotes && !notes.trim())) {
       enqueueSnackbar(
         t(
@@ -137,69 +173,85 @@ const FailPickupDialog: React.FC<FailPickupDialogProps> = ({
               'The client receives a partial refund after the standard cancellation fee is retained.'
             )}
           </Typography>
-          <Typography variant="subtitle2">
-            {t('orders.failPickup.reasonLabel', 'Why did the pickup fail?')}
-          </Typography>
-          {loadingReasons ? (
+          {windowLoading ? (
             <CircularProgress size={24} />
-          ) : (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {reasons.map((reason) => (
-                <Chip
-                  key={reason.id}
-                  label={reason.reason}
-                  color={
-                    selectedReasonId === reason.id ? 'primary' : 'default'
-                  }
-                  variant={
-                    selectedReasonId === reason.id ? 'filled' : 'outlined'
-                  }
-                  onClick={() => setSelectedReasonId(reason.id)}
-                />
-              ))}
-            </Box>
-          )}
-          {needsNotes && (
-            <TextField
-              label={t(
-                'orders.failPickup.notesLabel',
-                'Please describe the reason'
+          ) : noshowWindow && !noshowWindow.canCancel ? (
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                'orders.pickupNoshow.wait',
+                'You can cancel for a no-show after the order has been ready for {{hours}} hours.',
+                { hours: noshowWindow.hours }
               )}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              multiline
-              minRows={2}
-              fullWidth
-            />
-          )}
-          {!needsNotes && (
-            <TextField
-              label={t('orders.failPickup.notesOptional', 'Notes (optional)')}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              multiline
-              minRows={2}
-              fullWidth
-            />
-          )}
+            </Typography>
+          ) : null}
+          {noshowWindow?.canCancel ? (
+            <>
+              <Typography variant="subtitle2">
+                {t('orders.failPickup.reasonLabel', 'Why did the pickup fail?')}
+              </Typography>
+              {loadingReasons ? (
+                <CircularProgress size={24} />
+              ) : (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {reasons.map((reason) => (
+                    <Chip
+                      key={reason.id}
+                      label={reason.reason}
+                      color={
+                        selectedReasonId === reason.id ? 'primary' : 'default'
+                      }
+                      variant={
+                        selectedReasonId === reason.id ? 'filled' : 'outlined'
+                      }
+                      onClick={() => setSelectedReasonId(reason.id)}
+                    />
+                  ))}
+                </Box>
+              )}
+              {needsNotes ? (
+                <TextField
+                  label={t(
+                    'orders.failPickup.notesLabel',
+                    'Please describe the reason'
+                  )}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  multiline
+                  minRows={2}
+                  fullWidth
+                />
+              ) : (
+                <TextField
+                  label={t('orders.failPickup.notesOptional', 'Notes (optional)')}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  multiline
+                  minRows={2}
+                  fullWidth
+                />
+              )}
+            </>
+          ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={submitting}>
           {t('common.cancel', 'Cancel')}
         </Button>
-        <Button
-          color="error"
-          variant="contained"
-          onClick={() => void handleConfirm()}
-          disabled={submitting || !selectedReasonId}
-        >
-          {submitting ? (
-            <CircularProgress size={20} />
-          ) : (
-            t('orders.failPickup.confirm', 'Mark as failed')
-          )}
-        </Button>
+        {noshowWindow?.canCancel ? (
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => void handleConfirm()}
+            disabled={submitting || !selectedReasonId}
+          >
+            {submitting ? (
+              <CircularProgress size={20} />
+            ) : (
+              t('orders.failPickup.confirm', 'Mark as failed')
+            )}
+          </Button>
+        ) : null}
       </DialogActions>
     </Dialog>
   );

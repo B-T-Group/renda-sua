@@ -216,6 +216,9 @@ export interface CancellationPreview {
   refundAmount: number;
   refundCurrency: string;
   cancellationFee: number;
+  cancellationFeePercent?: number;
+  merchantShare?: number;
+  platformShare?: number;
   estimatedRefundProcessingTime: string;
   paymentSource: string;
   cancellationConsequences: string[];

@@ -1,6 +1,7 @@
 import { Box, Stack } from '@mui/material';
 import React from 'react';
 import { useParams } from 'react-router-dom';
+import { AssignmentProgressSection } from './admin-payment-programs/AssignmentProgressSection';
 import { ProgramHub } from './admin-payment-programs/ProgramHub';
 import { ProgramNav } from './admin-payment-programs/ProgramNav';
 import {
@@ -17,6 +18,7 @@ const SECTIONS = [
   'advances',
   'credits',
   'assignments',
+  'progress',
   'partners',
   'campaigns',
 ] as const;
@@ -32,6 +34,7 @@ export default function AdminPaymentProgramsPage() {
         {section === 'advances' && <AdvanceSection />}
         {section === 'credits' && <CreditSection />}
         {section === 'assignments' && <AssignmentSection />}
+        {section === 'progress' && <AssignmentProgressSection />}
         {section === 'partners' && <PartnerSection />}
         {section === 'campaigns' && <CampaignSection />}
       </Box>

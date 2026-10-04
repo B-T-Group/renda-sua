@@ -25,6 +25,11 @@ const PRIMARY = [
     key: 'admin.paymentPrograms.assignments',
     fallback: 'Assignments',
   },
+  {
+    id: 'progress',
+    key: 'admin.paymentPrograms.progress',
+    fallback: 'Progress',
+  },
 ] as const;
 
 const SUPPORTING = [

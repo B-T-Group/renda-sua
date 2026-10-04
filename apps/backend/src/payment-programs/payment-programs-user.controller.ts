@@ -50,6 +50,13 @@ export class PaymentProgramsUserController {
     return { facilities, grants, assignments };
   }
 
+  @Get('schedules/focus')
+  @ApiOperation({ summary: 'Featured accepted payment plan and the next objective' })
+  async scheduleFocus() {
+    const user = await this.users.getUser();
+    return this.consent.getFocusForAgent(user.id);
+  }
+
   @Get('schedules/:assignmentId')
   @ApiOperation({ summary: 'Payment schedule assignment detail with objectives and progress' })
   async assignmentDetail(@Param('assignmentId') assignmentId: string) {

@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
   ValidateIf,
 } from 'class-validator';
@@ -383,4 +384,23 @@ export class CreateCampaignDto {
   @IsInt()
   @Min(0)
   maxReferrerRewards?: number;
+}
+
+export class AssignmentProgressQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
 }

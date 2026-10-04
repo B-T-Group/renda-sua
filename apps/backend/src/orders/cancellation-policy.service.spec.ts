@@ -1,21 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CancellationPolicyService } from './cancellation-policy.service';
 
-jest.mock('../admin/configurations.service', () => ({
-  ConfigurationsService: class ConfigurationsService {},
-}));
 jest.mock('../hasura/hasura-system.service', () => ({
   HasuraSystemService: class HasuraSystemService {},
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { ConfigurationsService } = require('../admin/configurations.service');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { HasuraSystemService } = require('../hasura/hasura-system.service');
 
 describe('CancellationPolicyService', () => {
   let service: CancellationPolicyService;
-  let configurationsService: jest.Mocked<Pick<ConfigurationsService, 'getConfigurationByKey'>>;
   let hasuraService: jest.Mocked<Pick<HasuraSystemService, 'executeQuery'>>;
 
   const baseOrder = {
@@ -48,9 +42,6 @@ describe('CancellationPolicyService', () => {
   };
 
   beforeEach(async () => {
-    configurationsService = {
-      getConfigurationByKey: jest.fn().mockResolvedValue(null),
-    };
     hasuraService = {
       executeQuery: jest.fn().mockResolvedValue({
         order_cancellation_reasons: clientReasons,
@@ -60,7 +51,6 @@ describe('CancellationPolicyService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CancellationPolicyService,
-        { provide: ConfigurationsService, useValue: configurationsService },
         { provide: HasuraSystemService, useValue: hasuraService },
       ],
     }).compile();
@@ -160,14 +150,10 @@ describe('CancellationPolicyService', () => {
       );
     });
 
-    it('legacy flat cancellation_fee is ignored for cancellations', async () => {
+    it('uses the percent fee, not a flat amount', async () => {
       mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
-      configurationsService.getConfigurationByKey.mockResolvedValue({
-        number_value: 500,
-      } as any);
       const policy = await service.getPolicy(orderWithParts, 'client');
       expect(policy.cancellationFee).toBe(1200);
-      expect(configurationsService.getConfigurationByKey).not.toHaveBeenCalled();
     });
 
     it.each(['pay_at_delivery', 'pay_at_pickup'])(
@@ -288,22 +274,61 @@ describe('CancellationPolicyService', () => {
     });
   });
 
-  describe('fail-pickup (customer no-show) keeps the legacy flat fee', () => {
-    it('uses cancellation_fee, not the percentage', async () => {
-      configurationsService.getConfigurationByKey.mockResolvedValue({
-        number_value: 500,
-      } as any);
+  describe('client fee split', () => {
+    it('gives the merchant floor half and the platform the remainder', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
       const policy = await service.getPolicy(
-        { ...baseOrder, current_status: 'ready_for_pickup' },
-        'client',
-        { legacyFlatFee: true }
+        { ...baseOrder, current_status: 'ready_for_pickup', total_amount: 1001 },
+        'client'
       );
-      expect(policy.cancellationFee).toBe(500);
-      expect(policy.cancellationFeePercent).toBeUndefined();
-      expect(configurationsService.getConfigurationByKey).toHaveBeenCalledWith(
-        'cancellation_fee',
-        'GA'
+      expect(policy.cancellationFee).toBe(300);
+      expect(policy.merchantShare).toBe(150);
+      expect(policy.platformShare).toBe(150);
+    });
+
+    it('charges a paid classic pay-at-pickup no-show the percent fee', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const quote = await service.quoteNoshowFee({
+        ...baseOrder,
+        current_status: 'ready_for_pickup',
+        payment_timing: 'pay_at_pickup',
+        payment_status: 'paid',
+        total_amount: 1000,
+      });
+      expect(quote.cancellationFee).toBe(300);
+      expect(quote.merchantShare).toBe(150);
+      expect(quote.platformShare).toBe(150);
+      expect(quote.refundAmount).toBe(700);
+    });
+
+    it('does not charge an unpaid classic pay-at-pickup no-show', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const quote = await service.quoteNoshowFee({
+        ...baseOrder,
+        current_status: 'ready_for_pickup',
+        payment_timing: 'pay_at_pickup',
+        payment_status: 'pending',
+        total_amount: 1000,
+      });
+      expect(quote.cancellationFee).toBe(0);
+      expect(quote.refundAmount).toBe(1000);
+    });
+
+    it('discloses the percent on unpaid pay-after without charging', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const policy = await service.getPolicy(
+        {
+          ...baseOrder,
+          current_status: 'confirmed',
+          pay_after_merchant_confirm: true,
+          payment_status: 'pending',
+          payment_timing: 'pay_at_pickup',
+        },
+        'client'
       );
+      expect(policy.cancellationFee).toBe(0);
+      expect(policy.cancellationFeePercent).toBe(30);
+      expect(policy.merchantShare).toBe(0);
     });
   });
 

@@ -23,6 +23,7 @@ import ReferralPayoutSnapshot from '../common/ReferralPayoutSnapshot';
 import AgentQuickStats from '../common/AgentQuickStats';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
 import AssistantHomeEntry from '../common/AssistantHomeEntry';
+import { AgentObjectiveFocusCard } from '../common/AgentObjectiveFocusCard';
 import { AgentPaymentPlanActions } from '../common/AgentPaymentPlanActions';
 import { ReferredBusinessesList } from '../referrals/ReferredBusinessesList';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
@@ -91,6 +92,7 @@ const AgentDashboard: React.FC = () => {
         ) : null}
         <ReferralPayoutSnapshot source="agent" walletPath="/profile" />
         <AgentPaymentPlanActions />
+        <AgentObjectiveFocusCard />
         <AssistantHomeEntry />
         <Grid container spacing={1.5} sx={{ width: '100%' }}>
           <Grid size={{ xs: 12, md: 6 }}>

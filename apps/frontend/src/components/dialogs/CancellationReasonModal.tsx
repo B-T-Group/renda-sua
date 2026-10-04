@@ -87,6 +87,8 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellationFee, setCancellationFee] = useState<number | null>(null);
+  const [cancellationFeePercent, setCancellationFeePercent] = useState<number | null>(null);
+  const [refundAmount, setRefundAmount] = useState<number | null>(null);
   const [currency, setCurrency] = useState<string>('XAF');
   const [loadingFeeData, setLoadingFeeData] = useState(false);
 
@@ -122,7 +124,6 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
       open &&
       canCancel &&
       !canCancelForFree &&
-      !isUnpaidPayAfter &&
       persona === 'client'
     ) {
       setLoadingFeeData(true);
@@ -132,6 +133,8 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
         .then((feeData) => {
           if (feeData) {
             setCancellationFee(feeData.cancellationFee);
+            setCancellationFeePercent(feeData.cancellationFeePercent ?? null);
+            setRefundAmount(feeData.refundAmount ?? null);
             setCurrency(feeData.currency);
           }
           setLoadingFeeData(false);
@@ -389,12 +392,23 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
             </Box>
 
             {isUnpaidPayAfter ? (
-              <Typography variant="body2" color="success.dark">
-                {t(
-                  'orders.payAfterConfirm.cancelUnpaid',
-                  "You haven't paid yet, so cancelling is free and nothing is charged."
-                )}
-              </Typography>
+              <Box>
+                <Typography variant="body2" color="success.dark">
+                  {t(
+                    'orders.payAfterConfirm.cancelUnpaid',
+                    "You haven't paid yet, so cancelling is free and nothing is charged."
+                  )}
+                </Typography>
+                {cancellationFeePercent != null && cancellationFeePercent > 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    {t(
+                      'orders.payAfterConfirm.cancelFeeAfterPay',
+                      'If you cancel after you pay, {{percent}}% of the items is kept.',
+                      { percent: cancellationFeePercent }
+                    )}
+                  </Typography>
+                ) : null}
+              </Box>
             ) : canCancelForFree ? (
               <Box>
                 <Typography variant="body2" color="success.dark">
@@ -497,6 +511,24 @@ const CancellationReasonModal: React.FC<CancellationReasonModalProps> = ({
                         >
                           {cancellationFee.toLocaleString()} {currency}
                         </Typography>
+                        {cancellationFeePercent != null && cancellationFeePercent > 0 ? (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            {t(
+                              'orders.cancellationFeePercentOfItems',
+                              '{{percent}}% of the items.',
+                              { percent: cancellationFeePercent }
+                            )}
+                          </Typography>
+                        ) : null}
+                        {refundAmount != null ? (
+                          <Typography variant="body2" color="text.primary" sx={{ mt: 1 }}>
+                            {t(
+                              'orders.cancellationNetRefund',
+                              'You get back {{amount}} {{currency}}.',
+                              { amount: refundAmount.toLocaleString(), currency }
+                            )}
+                          </Typography>
+                        ) : null}
                         <Typography
                           variant="caption"
                           color="text.secondary"

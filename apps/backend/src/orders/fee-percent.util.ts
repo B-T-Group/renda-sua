@@ -110,6 +110,24 @@ export function percentFee(
   return feeMinor / factor;
 }
 
+/**
+ * Half the fee to the merchant (floor), the rest to the platform.
+ * An odd minor unit stays with the platform. Same split as the cancellation lambda.
+ */
+export function splitCancellationFee(
+  fee: number,
+  currency: string | null | undefined
+): { merchantShare: number; platformShare: number } {
+  if (!(fee > 0)) return { merchantShare: 0, platformShare: 0 };
+  const factor = 10 ** currencyDecimals(currency);
+  const feeMinor = Math.round(fee * factor);
+  const merchantMinor = Math.floor(feeMinor / 2);
+  return {
+    merchantShare: merchantMinor / factor,
+    platformShare: (feeMinor - merchantMinor) / factor,
+  };
+}
+
 export interface FeePercentRow {
   country_code?: string | null;
   number_value?: number | string | null;

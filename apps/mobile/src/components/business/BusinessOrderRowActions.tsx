@@ -25,6 +25,7 @@ import { useActivePickupPin } from '../../hooks/business/useActivePickupPin';
 import { BusinessConfirmPickupPinDialog } from './BusinessConfirmPickupPinDialog';
 import { BusinessPickupPaymentDialog } from './BusinessPickupPaymentDialog';
 import { FailPickupSheet } from './FailPickupSheet';
+import { PickupNoshowSheet } from './PickupNoshowSheet';
 import { ReconcileCashDialog } from './ReconcileCashDialog';
 import type { BusinessRootStackParamList } from '@/navigation/types';
 import { resolveFirstOrderJourney } from '../../utils/firstOrderJourney';
@@ -84,6 +85,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [failPickupOpen, setFailPickupOpen] = useState(false);
+  const [noshowOpen, setNoshowOpen] = useState(false);
   const [pickupPinOpen, setPickupPinOpen] = useState(false);
   const [pickupPinError, setPickupPinError] = useState<string | null>(null);
   const {
@@ -151,6 +153,10 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
       }
       if (actionId === 'failPickup') {
         setFailPickupOpen(true);
+        return;
+      }
+      if (actionId === 'pickupFollowUp') {
+        setNoshowOpen(true);
         return;
       }
       if (actionId === 'manageRefunds') {
@@ -370,6 +376,15 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         onDismiss={() => setFailPickupOpen(false)}
         onSuccess={() => {
           setFailPickupOpen(false);
+          onSuccess?.();
+        }}
+      />
+      <PickupNoshowSheet
+        visible={noshowOpen}
+        order={order}
+        onDismiss={() => setNoshowOpen(false)}
+        onSuccess={() => {
+          setNoshowOpen(false);
           onSuccess?.();
         }}
       />

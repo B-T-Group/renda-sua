@@ -299,6 +299,15 @@ function CancellationDetails({
               "You haven't paid yet, so cancelling is free and nothing is charged."
             )}
           </Text>
+          {preview.cancellationFeePercent ? (
+            <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xs }}>
+              {t(
+                'orders.payAfterConfirm.cancelFeeAfterPay',
+                'If you cancel after you pay, {{percent}}% of the items is kept.',
+                { percent: preview.cancellationFeePercent }
+              )}
+            </Text>
+          ) : null}
         </View>
       ) : (
         <>
@@ -313,6 +322,13 @@ function CancellationDetails({
                 amount: preview.cancellationFee.toLocaleString(),
                 currency: preview.refundCurrency,
               })}
+              {preview.cancellationFeePercent
+                ? t(
+                    'orders.cancellationFeePercentOfItems',
+                    ' ({{percent}}% of the items)',
+                    { percent: preview.cancellationFeePercent }
+                  )
+                : ''}
             </Text>
           )}
 

@@ -399,6 +399,23 @@
         "not_ready_now": "Not ready to accept now",
         "targets_unclear": "Targets are unclear",
         "other": "Other"
+      },
+      "focus": {
+        "overall": "{{percent}}% overall",
+        "seeAll": "See all objectives",
+        "allMet": "You've met every objective on this plan.",
+        "otherPlan": "You have another plan",
+        "otherPlans": "You have {{count}} other plans",
+        "gap": {
+          "itemSales": "Next: {{amount}} {{currency}} more in item sales",
+          "rentals": "Next: {{amount}} {{currency}} more in rentals",
+          "clientSignups": "Next: {{count}} more client signups",
+          "clientSignupsOne": "Next: 1 more client signup",
+          "merchantRecruitments": "Next: {{count}} more merchant recruitments",
+          "merchantRecruitmentsOne": "Next: 1 more merchant recruitment",
+          "agentRecruitments": "Next: {{count}} more agent recruitments",
+          "agentRecruitmentsOne": "Next: 1 more agent recruitment"
+        }
       }
     },
     "walletHub": {
@@ -742,6 +759,12 @@
       "advanceImpactNamed": "{{name}} can draw up to {{money}}. Deposits repay that debt first.",
       "creditImpact": "{{who}} receives {{money}} of store credit {{where}}. It cannot be withdrawn and does not cover the reservation deposit.",
       "assignments": "Assignments",
+      "progress": "Progress",
+      "searchAgent": "Search agent name",
+      "emptyProgress": "No accepted plans with objectives.",
+      "allObjectivesMet": "All objectives met",
+      "progressWindow": "Progress window",
+      "progressLoadFailed": "Could not load objective progress.",
       "assignKind": "Apply",
       "template": "Template",
       "supporting": "More",
@@ -5303,6 +5326,7 @@
     "dropOrder": "Drop Order",
     "confirmReceipt": "Confirm receipt",
     "askIfReady": "Ask if my order is ready",
+    "pickupFollowUp": "Pickup follow-up",
     "askIfReadySuccess": "We asked the store if your order is ready",
     "askIfReadyError": "Could not send the reminder",
     "askIfReadyAlready": "You already asked about this order",
@@ -6480,9 +6504,25 @@
       "payByExpired": "The payment window has ended. This order will be cancelled automatically and you will not be charged.",
       "tomorrow": "tomorrow",
       "cancelUnpaid": "You haven’t paid yet, so cancelling is free and nothing is charged.",
+      "cancelFeeAfterPay": "If you cancel after you pay, {{percent}}% of the items is kept.",
       "storeNoConfirm": "If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged."
     },
-    "keepOrder": "Keep order"
+    "keepOrder": "Keep order",
+    "cancellationFeePercentOfItems": "{{percent}}% of the items.",
+    "cancellationNetRefund": "You get back {{amount}} {{currency}}.",
+    "pickupNoshow": {
+      "title": "Client pickup",
+      "remindBody": "Order #{{orderNumber}} is ready. Send a reminder to come and collect it.",
+      "remind": "Remind client",
+      "reminded": "Reminder sent",
+      "remindError": "Could not send the reminder",
+      "loadError": "Could not load pickup options",
+      "feeLine": "Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.",
+      "wait": "You can cancel for a no-show after the order has been ready for {{hours}} hours.",
+      "cancel": "Cancel — client did not pick up",
+      "cancelled": "Pickup cancelled. The client is refunded except for the fee.",
+      "cancelError": "Could not cancel this pickup"
+    }
   },
   "items": {
     "brand": "Brand",

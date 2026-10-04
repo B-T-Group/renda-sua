@@ -11,6 +11,7 @@ import {
   payByUrgency,
   splitAroundTime,
 } from '../../utils/payAfterConfirm';
+import { agentApi } from '../../services/agentApi';
 import {
   resolveOrderPhase,
   orderToPhaseInput,
@@ -71,6 +72,8 @@ interface Props {
     delivery_time_windows?: unknown[] | null;
     order_items?: unknown[] | null;
     order_status_history?: Array<{ status?: string | null; created_at: string }> | null;
+    id?: string;
+    pay_after_merchant_confirm?: boolean | null;
   };
   role: OrderPhaseRole;
   action?: React.ReactNode;
@@ -137,6 +140,9 @@ export function OrderPhaseBanner({ order, role, action }: Props) {
       {payByDeadline ? (
         <PayByLine deadline={payByDeadline} now={now} language={i18n.language} />
       ) : null}
+      {payByDeadline && order.pay_after_merchant_confirm ? (
+        <PayAfterFeeLine orderId={order.id} />
+      ) : null}
       {action}
     </View>
   );
@@ -198,6 +204,34 @@ function PayByLine({
         )}
       </Text>
     </View>
+  );
+}
+
+function PayAfterFeeLine({ orderId }: { orderId?: string }) {
+  const { t } = useTranslation();
+  const { colors, typography } = useTheme();
+  const [percent, setPercent] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!orderId) return undefined;
+    let cancelled = false;
+    agentApi.orders.getCancellationPreview(orderId).then((preview) => {
+      if (!cancelled) setPercent(preview.cancellationFeePercent ?? null);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
+
+  if (percent == null || percent <= 0) return null;
+  return (
+    <Text style={[typography.body2, { color: colors.text.secondary }]}>
+      {t(
+        'orders.payAfterConfirm.cancelFeeAfterPay',
+        'If you cancel after you pay, {{percent}}% of the items is kept.',
+        { percent }
+      )}
+    </Text>
   );
 }
 

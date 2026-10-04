@@ -103,6 +103,20 @@ def percent_fee(base: float, percent: float, currency: Optional[str]) -> float:
     return float(fee_minor / factor)
 
 
+def split_cancellation_fee(fee: float, currency: Optional[str]) -> Tuple[float, float]:
+    """Merchant gets floor(fee / 2); the platform keeps the remainder (odd minor unit).
+
+    Mirror of ``splitCancellationFee`` in ``fee-percent.util.ts``.
+    """
+    if not (fee > 0):
+        return 0.0, 0.0
+    factor = Decimal(10) ** currency_decimals(currency)
+    fee_minor = int((Decimal(str(fee)) * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    merchant_minor = fee_minor // 2
+    platform_minor = fee_minor - merchant_minor
+    return float(Decimal(merchant_minor) / factor), float(Decimal(platform_minor) / factor)
+
+
 def _valid_percent(value: Any, where: str) -> float:
     try:
         n = float(value)

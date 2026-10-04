@@ -9,6 +9,7 @@ import {
   payByUrgency,
   splitAroundTime,
 } from '../../utils/payAfterConfirm';
+import { useCancellationFee } from '../../hooks/useCancellationFee';
 import {
   resolveOrderPhase,
   orderToPhaseInput,
@@ -40,6 +41,8 @@ interface Props {
       item?: { is_cooked_food?: boolean | null } | null;
     }> | null;
     order_status_history?: Array<{ status?: string | null; created_at: string }> | null;
+    id?: string;
+    business_location?: { address?: { country?: string | null } | null } | null;
   };
   role: OrderPhaseRole;
   action?: React.ReactNode;
@@ -100,6 +103,12 @@ export const OrderPhaseBanner: React.FC<Props> = ({ order, role, action }) => {
           deadline={payByDeadline}
           now={now}
           language={i18n.language}
+        />
+      ) : null}
+      {payByDeadline && order.pay_after_merchant_confirm ? (
+        <PayAfterFeeLine
+          orderId={order.id}
+          country={order.business_location?.address?.country}
         />
       ) : null}
       {action}
@@ -170,5 +179,39 @@ const PayByLine: React.FC<{
     </Stack>
   );
 };
+
+function PayAfterFeeLine({
+  orderId,
+  country,
+}: {
+  orderId?: string;
+  country?: string | null;
+}) {
+  const { t } = useTranslation();
+  const { getCancellationFee } = useCancellationFee();
+  const [percent, setPercent] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!orderId) return undefined;
+    let cancelled = false;
+    getCancellationFee(country || 'CM', orderId).then((fee) => {
+      if (!cancelled) setPercent(fee?.cancellationFeePercent ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, country, getCancellationFee]);
+
+  if (percent == null || percent <= 0) return null;
+  return (
+    <Typography variant="body2" color="text.secondary">
+      {t(
+        'orders.payAfterConfirm.cancelFeeAfterPay',
+        'If you cancel after you pay, {{percent}}% of the items is kept.',
+        { percent }
+      )}
+    </Typography>
+  );
+}
 
 export default OrderPhaseBanner;

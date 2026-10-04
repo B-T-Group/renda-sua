@@ -8,6 +8,8 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   PaymentScheduleProgressService,
+  pickFeaturedProgress,
+  progressWindow,
   type ObjectiveProgress,
   type ScheduleObjectives,
 } from './payment-schedule-progress.service';
@@ -27,6 +29,30 @@ export class PaymentScheduleConsentService {
     private readonly progress: PaymentScheduleProgressService,
     private readonly notifications: NotificationsService
   ) {}
+
+  async getFocusForAgent(userId: string) {
+    const result = await this.hasura.executeQuery(FOCUS_ASSIGNMENTS, { userId });
+    const rows = (result.payment_schedule_assignments ?? []) as AssignmentDetail[];
+    const detailed = await Promise.all(rows.map((row) => this.detailOf(row)));
+    const picked = pickFeaturedProgress(detailed);
+    return { assignment: picked.featured, otherCount: picked.otherCount };
+  }
+
+  async listProgress(input: { search?: string; limit?: number; offset?: number }) {
+    const limit = clampPageLimit(input.limit);
+    const offset = Math.max(0, input.offset ?? 0);
+    const result = await this.hasura.executeQuery(PROGRESS_PAGE, {
+      where: progressWhere(input.search),
+      limit,
+      offset,
+    });
+    const rows = (result.payment_schedule_assignments ?? []) as AssignmentDetail[];
+    const items = await Promise.all(rows.map((row) => this.adminRow(row)));
+    const total = Number(
+      result.payment_schedule_assignments_aggregate?.aggregate?.count ?? 0
+    );
+    return { items, total, limit, offset };
+  }
 
   async getDetailForAgent(assignmentId: string, userId: string) {
     const row = await this.requireOwnedAssignment(assignmentId, userId);
@@ -136,6 +162,15 @@ export class PaymentScheduleConsentService {
         actor_user_id: row.created_by ?? null,
       },
     });
+  }
+
+  private async detailOf(row: AssignmentDetail) {
+    return mapAssignmentDetail(row, await this.progressFor(row));
+  }
+
+  private async adminRow(row: AssignmentDetail) {
+    const detail = await this.detailOf(row);
+    return { ...detail, agentName: agentDisplayName(row) };
   }
 
   private async progressFor(row: AssignmentDetail): Promise<ObjectiveProgress> {
@@ -259,6 +294,7 @@ function mapAssignmentDetail(row: AssignmentDetail, progress: ObjectiveProgress)
       rentalAmount: row.target_rental_amount,
     },
     progress,
+    progressWindow: assignmentWindow(row),
     runs: (row.runs ?? []).map((run) => ({
       id: run.id,
       periodStart: run.period_start,
@@ -269,6 +305,47 @@ function mapAssignmentDetail(row: AssignmentDetail, progress: ObjectiveProgress)
       createdAt: run.created_at,
     })),
   };
+}
+
+function assignmentWindow(row: AssignmentDetail) {
+  if (!row.accepted_at) return null;
+  return progressWindow(row.starts_at, row.accepted_at, row.ends_at);
+}
+
+const PAGE_LIMIT = 20;
+const PAGE_LIMIT_MAX = 50;
+
+function clampPageLimit(limit?: number): number {
+  if (!limit || limit < 1) return PAGE_LIMIT;
+  return Math.min(PAGE_LIMIT_MAX, Math.floor(limit));
+}
+
+const OBJECTIVE_FILTER = [
+  { target_agent_recruitments: { _gt: 0 } },
+  { target_client_signups: { _gt: 0 } },
+  { target_merchant_recruitments: { _gt: 0 } },
+  { target_item_sales_amount: { _gt: 0 } },
+  { target_rental_amount: { _gt: 0 } },
+];
+
+function progressWhere(search?: string) {
+  const where: Record<string, unknown> = {
+    decision: { _eq: 'accepted' },
+    status: { _in: ['active', 'paused'] },
+    _or: OBJECTIVE_FILTER,
+  };
+  const term = search?.trim();
+  if (!term) return where;
+  const like = `%${term.replace(/[%_\\]/g, '')}%`;
+  return { ...where, agent: { user: { _or: nameFilters(like) } } };
+}
+
+function nameFilters(like: string) {
+  return [
+    { first_name: { _ilike: like } },
+    { last_name: { _ilike: like } },
+    { email: { _ilike: like } },
+  ];
 }
 
 function agentDisplayName(row: AssignmentDetail): string {
@@ -351,6 +428,53 @@ const UPDATE_ASSIGNMENT_DECISION = `
 const INSERT_DECISION = `
   mutation InsertAssignmentDecision($object: payment_schedule_assignment_decisions_insert_input!) {
     insert_payment_schedule_assignment_decisions_one(object: $object) { id }
+  }
+`;
+
+const ASSIGNMENT_FIELDS = `
+  id agent_id amount currency starts_at ends_at status decision
+  accepted_at reject_reason reject_note created_by
+  target_agent_recruitments target_client_signups target_merchant_recruitments
+  target_item_sales_amount target_rental_amount
+  schedule { id name frequency }
+  agent { user_id user { first_name last_name email } }
+  runs(order_by: { period_start: desc }, limit: 12) {
+    id period_start period_end amount status failure_reason created_at
+  }
+`;
+
+const FOCUS_ASSIGNMENTS = `
+  query FocusScheduleAssignments($userId: uuid!) {
+    payment_schedule_assignments(where: {
+      agent: { user_id: { _eq: $userId } }
+      decision: { _eq: accepted }
+      status: { _in: [active, paused] }
+      _or: [
+        { target_agent_recruitments: { _gt: 0 } }
+        { target_client_signups: { _gt: 0 } }
+        { target_merchant_recruitments: { _gt: 0 } }
+        { target_item_sales_amount: { _gt: 0 } }
+        { target_rental_amount: { _gt: 0 } }
+      ]
+    }) { ${ASSIGNMENT_FIELDS} }
+  }
+`;
+
+const PROGRESS_PAGE = `
+  query AssignmentProgressPage(
+    $where: payment_schedule_assignments_bool_exp!
+    $limit: Int!
+    $offset: Int!
+  ) {
+    payment_schedule_assignments(
+      where: $where
+      order_by: [{ accepted_at: desc }, { id: asc }]
+      limit: $limit
+      offset: $offset
+    ) { ${ASSIGNMENT_FIELDS} }
+    payment_schedule_assignments_aggregate(where: $where) {
+      aggregate { count }
+    }
   }
 `;
 

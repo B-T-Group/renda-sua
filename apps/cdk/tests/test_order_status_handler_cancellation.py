@@ -145,12 +145,28 @@ class CancellationFinancialsTest(unittest.TestCase):
                     handler.client_cancellation_fee_applies(order, "client", prev),
                     expected,
                 )
-        # Only the client is ever charged
+        # A plain business cancel is not charged. A ready paid no-show is.
         self.assertFalse(
             handler.client_cancellation_fee_applies(
                 _order(payment_timing="pay_now", payment_status="paid"),
                 "business",
                 "confirmed",
+            )
+        )
+        self.assertTrue(
+            handler.client_cancellation_fee_applies(
+                _order(payment_timing="pay_now", payment_status="paid"),
+                "business",
+                "ready_for_pickup",
+                "client_no_show",
+            )
+        )
+        self.assertFalse(
+            handler.client_cancellation_fee_applies(
+                _order(payment_timing="pay_at_pickup", payment_status="pending"),
+                "business",
+                "ready_for_pickup",
+                "client_no_show",
             )
         )
 
@@ -360,6 +376,9 @@ class CancellationFinancialsTest(unittest.TestCase):
             "update_order_hold_status": patch.object(
                 handler, "update_order_hold_status", return_value=True
             ),
+            "resolve_platform_account_id": patch.object(
+                handler, "resolve_platform_account_id", return_value="hq-account-1"
+            ),
         }
         return _PatchGroup(patches)
 
@@ -377,6 +396,26 @@ class _PatchGroup:
     def __exit__(self, exc_type, exc_value, traceback):
         for dependency_patch in reversed(self._patches.values()):
             dependency_patch.__exit__(exc_type, exc_value, traceback)
+
+
+class RegisterCancellationFeeGuardTests(unittest.TestCase):
+    def test_missing_platform_account_does_not_debit_the_client(self):
+        from rendasua_core_packages.hasura_client import transactions_service
+
+        with patch.object(transactions_service, "register_account_transaction") as debit:
+            result = transactions_service.register_cancellation_fee_transactions(
+                "order-1",
+                "ORD-1",
+                "client-acct",
+                "biz-acct",
+                1,
+                "XAF",
+                "http://hasura",
+                "secret",
+                platform_account_id=None,
+            )
+        self.assertFalse(result["success"])
+        debit.assert_not_called()
 
 
 if __name__ == "__main__":

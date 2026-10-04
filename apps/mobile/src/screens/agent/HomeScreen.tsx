@@ -46,6 +46,7 @@ import { NotificationBellButton } from '../../components/common/NotificationBell
 import { TintedHeaderBlock } from '../../components/common/TintedHeaderBlock';
 import { AgentActivationChecklist } from '../../components/agent/AgentActivationChecklist';
 import { AgentNowSection } from '../../components/agent/AgentNowSection';
+import { AgentObjectiveFocusCard } from '../../components/agent/AgentObjectiveFocusCard';
 import { FeatureCard } from '../../components/common/FeatureCard';
 import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
@@ -481,6 +482,7 @@ export default function HomeScreen() {
             projectedCurrency={referralPayout?.currency ?? displayCurrency}
             onOpenWallet={() => goTo('AgentAccounts')}
           />
+          <AgentObjectiveFocusCard />
           {creditSummary.totalRemaining > 0 ? (
             <StoreCreditsSnapshot
               grants={usableCredits}

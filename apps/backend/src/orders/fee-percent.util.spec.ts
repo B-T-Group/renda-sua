@@ -3,6 +3,7 @@ import {
   normalizeFeeCountryCode,
   percentFee,
   resolveFeePercent,
+  splitCancellationFee,
 } from './fee-percent.util';
 
 /** Same vectors as apps/cdk/tests/test_cancellation_fee_util.py */
@@ -21,6 +22,25 @@ describe('fee-percent.util', () => {
     ];
     it.each(vectors)('%p at %p%% in %s => %p', (base, pct, cur, expected) => {
       expect(percentFee(base, pct, cur)).toBe(expected);
+    });
+
+    it('splits an odd minor unit to the platform', () => {
+      expect(splitCancellationFee(3000, 'XAF')).toEqual({
+        merchantShare: 1500,
+        platformShare: 1500,
+      });
+      expect(splitCancellationFee(1, 'XAF')).toEqual({
+        merchantShare: 0,
+        platformShare: 1,
+      });
+      expect(splitCancellationFee(3.01, 'CAD')).toEqual({
+        merchantShare: 1.5,
+        platformShare: 1.51,
+      });
+      expect(splitCancellationFee(0, 'XAF')).toEqual({
+        merchantShare: 0,
+        platformShare: 0,
+      });
     });
   });
 

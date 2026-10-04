@@ -9,14 +9,48 @@ export interface ScheduleObjectives {
   targetRentalAmount?: number | null;
 }
 
+export type ObjectiveKey =
+  | 'itemSales'
+  | 'rentals'
+  | 'clientSignups'
+  | 'merchantRecruitments'
+  | 'agentRecruitments';
+
+/** Lowest unfinished percent wins. Equal percents keep this order. */
+export const OBJECTIVE_TIE_ORDER: ObjectiveKey[] = [
+  'itemSales',
+  'rentals',
+  'clientSignups',
+  'merchantRecruitments',
+  'agentRecruitments',
+];
+
+export interface ObjectiveMetric {
+  actual: number;
+  target: number | null;
+  percent: number | null;
+}
+
+export interface ObjectiveActuals {
+  agentRecruitments: number;
+  clientSignups: number;
+  merchantRecruitments: number;
+  itemSales: number;
+  rentals: number;
+}
+
 export interface ObjectiveProgress {
-  agentRecruitments: { actual: number; target: number | null };
-  clientSignups: { actual: number; target: number | null };
-  merchantRecruitments: { actual: number; target: number | null };
-  itemSales: { actual: number; target: number | null };
-  rentals: { actual: number; target: number | null };
+  agentRecruitments: ObjectiveMetric;
+  clientSignups: ObjectiveMetric;
+  merchantRecruitments: ObjectiveMetric;
+  itemSales: ObjectiveMetric;
+  rentals: ObjectiveMetric;
   /** Sales-only completion when a sales target is set; otherwise null. */
   completionPercent: number | null;
+  /** Unweighted mean of objectives that have a target. */
+  overallPercent: number | null;
+  /** Unfinished objective furthest behind, or null when every target is met. */
+  nextObjective: ObjectiveKey | null;
 }
 
 export function salesCompletionPercent(
@@ -25,6 +59,86 @@ export function salesCompletionPercent(
 ): number | null {
   if (target == null || target <= 0) return null;
   return Math.min(100, Math.round((actual / target) * 100));
+}
+
+export function buildObjectiveProgress(
+  actuals: ObjectiveActuals,
+  targets: ScheduleObjectives
+): ObjectiveProgress {
+  const metrics = objectiveMetrics(actuals, targets);
+  return {
+    ...metrics,
+    completionPercent: metrics.itemSales.percent,
+    overallPercent: overallObjectivePercent(metrics),
+    nextObjective: nextObjectiveKey(metrics),
+  };
+}
+
+export function overallObjectivePercent(
+  metrics: Record<ObjectiveKey, ObjectiveMetric>
+): number | null {
+  const values = OBJECTIVE_TIE_ORDER.map((key) => metrics[key].percent).filter(
+    (value): value is number => value != null
+  );
+  if (!values.length) return null;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return Math.round(total / values.length);
+}
+
+export function nextObjectiveKey(
+  metrics: Record<ObjectiveKey, ObjectiveMetric>
+): ObjectiveKey | null {
+  let chosen: ObjectiveKey | null = null;
+  let lowest = 100;
+  for (const key of OBJECTIVE_TIE_ORDER) {
+    const percent = metrics[key].percent;
+    if (percent == null || percent >= 100) continue;
+    if (chosen != null && percent >= lowest) continue;
+    chosen = key;
+    lowest = percent;
+  }
+  return chosen;
+}
+
+export function focusRank(progress: ObjectiveProgress): number {
+  if (!progress.nextObjective) return 100;
+  return progress[progress.nextObjective].percent ?? 100;
+}
+
+export function pickFeaturedProgress<T extends { progress: ObjectiveProgress }>(
+  rows: T[]
+): { featured: T | null; otherCount: number } {
+  if (!rows.length) return { featured: null, otherCount: 0 };
+  let featured = rows[0];
+  for (const row of rows) {
+    if (focusRank(row.progress) < focusRank(featured.progress)) featured = row;
+  }
+  return { featured, otherCount: rows.length - 1 };
+}
+
+function objectiveMetrics(actuals: ObjectiveActuals, targets: ScheduleObjectives) {
+  return {
+    itemSales: metric(actuals.itemSales, targets.targetItemSalesAmount),
+    rentals: metric(actuals.rentals, targets.targetRentalAmount),
+    clientSignups: metric(actuals.clientSignups, targets.targetClientSignups),
+    merchantRecruitments: metric(
+      actuals.merchantRecruitments,
+      targets.targetMerchantRecruitments
+    ),
+    agentRecruitments: metric(
+      actuals.agentRecruitments,
+      targets.targetAgentRecruitments
+    ),
+  };
+}
+
+function metric(actual: number, target?: number | null): ObjectiveMetric {
+  const normalized = target ?? null;
+  return {
+    actual,
+    target: normalized,
+    percent: salesCompletionPercent(actual, normalized),
+  };
 }
 
 export function progressWindow(
@@ -72,32 +186,7 @@ export class PaymentScheduleProgressService {
       from,
       to,
     });
-    return {
-      agentRecruitments: {
-        actual: counts.agentRecruitments,
-        target: params.targets.targetAgentRecruitments ?? null,
-      },
-      clientSignups: {
-        actual: counts.clientSignups,
-        target: params.targets.targetClientSignups ?? null,
-      },
-      merchantRecruitments: {
-        actual: counts.merchantRecruitments,
-        target: params.targets.targetMerchantRecruitments ?? null,
-      },
-      itemSales: {
-        actual: counts.itemSales,
-        target: params.targets.targetItemSalesAmount ?? null,
-      },
-      rentals: {
-        actual: counts.rentals,
-        target: params.targets.targetRentalAmount ?? null,
-      },
-      completionPercent: salesCompletionPercent(
-        counts.itemSales,
-        params.targets.targetItemSalesAmount
-      ),
-    };
+    return buildObjectiveProgress(counts, params.targets);
   }
 
   private async loadCounts(params: {
@@ -152,32 +241,16 @@ export class PaymentScheduleProgressService {
 }
 
 function emptyProgress(targets: ScheduleObjectives): ObjectiveProgress {
-  return {
-    agentRecruitments: {
-      actual: 0,
-      target: targets.targetAgentRecruitments ?? null,
+  return buildObjectiveProgress(
+    {
+      agentRecruitments: 0,
+      clientSignups: 0,
+      merchantRecruitments: 0,
+      itemSales: 0,
+      rentals: 0,
     },
-    clientSignups: {
-      actual: 0,
-      target: targets.targetClientSignups ?? null,
-    },
-    merchantRecruitments: {
-      actual: 0,
-      target: targets.targetMerchantRecruitments ?? null,
-    },
-    itemSales: {
-      actual: 0,
-      target: targets.targetItemSalesAmount ?? null,
-    },
-    rentals: {
-      actual: 0,
-      target: targets.targetRentalAmount ?? null,
-    },
-    completionPercent: salesCompletionPercent(
-      0,
-      targets.targetItemSalesAmount
-    ),
-  };
+    targets
+  );
 }
 
 export function sumUniqueAmounts<T>(

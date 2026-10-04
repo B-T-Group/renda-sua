@@ -1044,11 +1044,25 @@
       "payByExpired": "The payment window has ended. This order will be cancelled automatically and you will not be charged.",
       "tomorrow": "tomorrow",
       "cancelUnpaid": "You haven’t paid yet, so cancelling is free and nothing is charged.",
+      "cancelFeeAfterPay": "If you cancel after you pay, {{percent}}% of the items is kept.",
       "storeNoConfirm": "If the store doesn’t confirm within 60 minutes, your order is cancelled automatically and you are not charged."
     },
     "refunds": {
       "request": "Request a refund",
       "requested": "Your refund request was sent."
+    },
+    "cancellationFeePercentOfItems": "{{percent}}% of the items.",
+    "cancellationNetRefund": "You get back {{amount}} {{currency}}.",
+    "pickupNoshow": {
+      "title": "Client pickup",
+      "remindBody": "Order #{{orderNumber}} is ready. Send a reminder to come and collect it.",
+      "remind": "Remind client",
+      "remindError": "Could not send the reminder",
+      "loadError": "Could not load pickup options",
+      "feeLine": "Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.",
+      "wait": "You can cancel for a no-show after the order has been ready for {{hours}} hours.",
+      "cancel": "Cancel — client did not pick up",
+      "cancelError": "Could not cancel this pickup"
     }
   },
   "orderActions": {
@@ -1071,6 +1085,7 @@
     "printLabel": "Print label",
     "markAsFailed": "Mark as failed",
     "failPickup": "Mark pickup failed",
+    "pickupFollowUp": "Pickup follow-up",
     "switchToPickupFailed": "Could not switch to store pickup."
   },
   "cancellation": {
@@ -5345,6 +5360,23 @@
         "not_ready_now": "Not ready to accept now",
         "targets_unclear": "Targets are unclear",
         "other": "Other"
+      },
+      "focus": {
+        "overall": "{{percent}}% overall",
+        "seeAll": "See all objectives",
+        "allMet": "You've met every objective on this plan.",
+        "otherPlan": "You have another plan",
+        "otherPlans": "You have {{count}} other plans",
+        "gap": {
+          "itemSales": "Next: {{amount}} {{currency}} more in item sales",
+          "rentals": "Next: {{amount}} {{currency}} more in rentals",
+          "clientSignups": "Next: {{count}} more client signups",
+          "clientSignupsOne": "Next: 1 more client signup",
+          "merchantRecruitments": "Next: {{count}} more merchant recruitments",
+          "merchantRecruitmentsOne": "Next: 1 more merchant recruitment",
+          "agentRecruitments": "Next: {{count}} more agent recruitments",
+          "agentRecruitmentsOne": "Next: 1 more agent recruitment"
+        }
       }
     },
     "walletHub": {

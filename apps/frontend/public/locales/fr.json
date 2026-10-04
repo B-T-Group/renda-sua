@@ -142,6 +142,23 @@
         "not_ready_now": "Pas prêt à accepter maintenant",
         "targets_unclear": "Objectifs peu clairs",
         "other": "Autre"
+      },
+      "focus": {
+        "overall": "{{percent}} % au total",
+        "seeAll": "Voir tous les objectifs",
+        "allMet": "Vous avez atteint tous les objectifs de ce plan.",
+        "otherPlan": "Vous avez un autre plan",
+        "otherPlans": "Vous avez {{count}} autres plans",
+        "gap": {
+          "itemSales": "Ensuite : {{amount}} {{currency}} de ventes d'articles en plus",
+          "rentals": "Ensuite : {{amount}} {{currency}} de locations en plus",
+          "clientSignups": "Ensuite : {{count}} inscriptions clients de plus",
+          "clientSignupsOne": "Ensuite : 1 inscription client de plus",
+          "merchantRecruitments": "Ensuite : {{count}} recrutements de commerçants de plus",
+          "merchantRecruitmentsOne": "Ensuite : 1 recrutement de commerçant de plus",
+          "agentRecruitments": "Ensuite : {{count}} recrutements d'agents de plus",
+          "agentRecruitmentsOne": "Ensuite : 1 recrutement d'agent de plus"
+        }
       }
     },
     "walletHub": {
@@ -485,6 +502,12 @@
       "advanceImpactNamed": "{{name}} peut tirer jusqu'à {{money}}. Les dépôts remboursent d'abord cette dette.",
       "creditImpact": "{{who}} reçoit {{money}} de crédit magasin {{where}}. Ce crédit ne peut pas être retiré et ne couvre pas l'acompte de réservation.",
       "assignments": "Attributions",
+      "progress": "Progression",
+      "searchAgent": "Nom de l'agent",
+      "emptyProgress": "Aucun plan accepté avec des objectifs.",
+      "allObjectivesMet": "Tous les objectifs sont atteints",
+      "progressWindow": "Période suivie",
+      "progressLoadFailed": "Impossible de charger la progression.",
       "assignKind": "Appliquer",
       "template": "Modèle",
       "supporting": "Autres",
@@ -5025,6 +5048,7 @@
     "dropOrder": "Abandonner la Commande",
     "confirmReceipt": "Confirmer la réception",
     "askIfReady": "Demander si ma commande est prête",
+    "pickupFollowUp": "Suivi du retrait",
     "askIfReadySuccess": "Nous avons demandé au magasin si votre commande est prête",
     "askIfReadyError": "Impossible d’envoyer le rappel",
     "askIfReadyAlready": "Vous avez déjà demandé des nouvelles de cette commande",
@@ -6199,9 +6223,25 @@
       "payByExpired": "Le délai de paiement est dépassé. La commande sera annulée automatiquement et vous ne serez pas débité.",
       "tomorrow": "demain",
       "cancelUnpaid": "Vous n’avez encore rien payé, l’annulation est donc gratuite et rien ne sera débité.",
+      "cancelFeeAfterPay": "Si vous annulez après avoir payé, {{percent}} % des articles sont conservés.",
       "storeNoConfirm": "Si le magasin ne confirme pas dans les 60 minutes, la commande est annulée automatiquement et vous n’êtes pas débité."
     },
-    "keepOrder": "Garder la commande"
+    "keepOrder": "Garder la commande",
+    "cancellationFeePercentOfItems": "{{percent}} % des articles.",
+    "cancellationNetRefund": "Vous récupérez {{amount}} {{currency}}.",
+    "pickupNoshow": {
+      "title": "Retrait client",
+      "remindBody": "La commande n°{{orderNumber}} est prête. Envoyez un rappel pour venir la chercher.",
+      "remind": "Rappeler le client",
+      "reminded": "Rappel envoyé",
+      "remindError": "Impossible d’envoyer le rappel",
+      "loadError": "Impossible de charger les options de retrait",
+      "feeLine": "Frais {{fee}} {{currency}} ({{percent}} % des articles). Vous recevez {{share}} {{currency}}. Le client récupère {{refund}} {{currency}}.",
+      "wait": "Vous pouvez annuler pour absence après {{hours}} heures au statut prêt.",
+      "cancel": "Annuler — le client n’est pas venu",
+      "cancelled": "Retrait annulé. Le client est remboursé, moins les frais.",
+      "cancelError": "Impossible d’annuler ce retrait"
+    }
   },
   "items": {
     "brand": "Marque",

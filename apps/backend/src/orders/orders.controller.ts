@@ -879,6 +879,58 @@ export class OrdersController {
     });
   }
 
+  @Get(':orderId/pickup-noshow')
+  @ApiOperation({
+    summary: 'Preview a paid pickup no-show cancel',
+    description:
+      'Business only. Returns whether the ready-for-pickup window has elapsed and the cancellation fee split.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'No-show preview' })
+  getPickupNoshow(@Param('orderId') orderId: string) {
+    return this.ordersService.getPickupNoshowPreview(orderId);
+  }
+
+  @Post(':orderId/pickup-reminder')
+  @ApiOperation({
+    summary: 'Remind the client to collect a ready pickup order',
+    description: 'Push and WhatsApp. Cooldown is 30 minutes.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Reminder sent' })
+  sendPickupReminder(@Param('orderId') orderId: string) {
+    return this.ordersService.sendPickupReminder(orderId);
+  }
+
+  @Post(':orderId/cancel-uncollected-pickup')
+  @ApiOperation({
+    summary: 'Cancel a paid pickup the client did not collect',
+    description:
+      'Allowed only after pickup_noshow_cancel_hours (default 2) in ready_for_pickup. Charges the client cancellation fee. Half goes to the merchant.',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['failure_reason_id'],
+      properties: {
+        failure_reason_id: { type: 'string', format: 'uuid' },
+        notes: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Uncollected pickup cancelled' })
+  cancelUncollectedPickup(
+    @Param('orderId') orderId: string,
+    @Body() body: { failure_reason_id: string; notes?: string }
+  ) {
+    return this.ordersService.cancelUncollectedPickup({
+      orderId,
+      failure_reason_id: body.failure_reason_id,
+      notes: body.notes,
+    });
+  }
+
   @Post('cancel')
   @ApiOperation({
     summary: 'Cancel an order',
@@ -2081,6 +2133,9 @@ export class OrdersController {
           success: true,
           cancellationFee: preview.cancellationFee,
           cancellationFeePercent: preview.cancellationFeePercent ?? 0,
+          merchantShare: preview.merchantShare,
+          platformShare: preview.platformShare,
+          refundAmount: preview.refundAmount,
           currency: preview.refundCurrency,
           country,
           message: 'Cancellation fee retrieved successfully',

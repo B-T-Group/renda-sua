@@ -1030,11 +1030,25 @@
       "payByExpired": "Le délai de paiement est dépassé. La commande sera annulée automatiquement et vous ne serez pas débité.",
       "tomorrow": "demain",
       "cancelUnpaid": "Vous n’avez encore rien payé, l’annulation est donc gratuite et rien ne sera débité.",
+      "cancelFeeAfterPay": "Si vous annulez après avoir payé, {{percent}} % des articles sont conservés.",
       "storeNoConfirm": "Si le magasin ne confirme pas dans les 60 minutes, la commande est annulée automatiquement et vous n’êtes pas débité."
     },
     "refunds": {
       "request": "Demander un remboursement",
       "requested": "Votre demande de remboursement a été envoyée."
+    },
+    "cancellationFeePercentOfItems": "{{percent}} % des articles.",
+    "cancellationNetRefund": "Vous récupérez {{amount}} {{currency}}.",
+    "pickupNoshow": {
+      "title": "Retrait client",
+      "remindBody": "La commande n°{{orderNumber}} est prête. Envoyez un rappel pour venir la chercher.",
+      "remind": "Rappeler le client",
+      "remindError": "Impossible d’envoyer le rappel",
+      "loadError": "Impossible de charger les options de retrait",
+      "feeLine": "Frais {{fee}} {{currency}} ({{percent}} % des articles). Vous recevez {{share}} {{currency}}. Le client récupère {{refund}} {{currency}}.",
+      "wait": "Vous pouvez annuler pour absence après {{hours}} heures au statut prêt.",
+      "cancel": "Annuler — le client n’est pas venu",
+      "cancelError": "Impossible d’annuler ce retrait"
     }
   },
   "orderActions": {
@@ -1057,6 +1071,7 @@
     "printLabel": "Imprimer l’étiquette",
     "markAsFailed": "Marquer comme échoué",
     "failPickup": "Marquer le retrait échoué",
+    "pickupFollowUp": "Suivi du retrait",
     "switchToPickupFailed": "Impossible de passer au retrait en magasin."
   },
   "profile": {
@@ -5252,6 +5267,23 @@
         "not_ready_now": "Pas prêt à accepter maintenant",
         "targets_unclear": "Objectifs peu clairs",
         "other": "Autre"
+      },
+      "focus": {
+        "overall": "{{percent}} % au total",
+        "seeAll": "Voir tous les objectifs",
+        "allMet": "Vous avez atteint tous les objectifs de ce plan.",
+        "otherPlan": "Vous avez un autre plan",
+        "otherPlans": "Vous avez {{count}} autres plans",
+        "gap": {
+          "itemSales": "Ensuite : {{amount}} {{currency}} de ventes d'articles en plus",
+          "rentals": "Ensuite : {{amount}} {{currency}} de locations en plus",
+          "clientSignups": "Ensuite : {{count}} inscriptions clients de plus",
+          "clientSignupsOne": "Ensuite : 1 inscription client de plus",
+          "merchantRecruitments": "Ensuite : {{count}} recrutements de commerçants de plus",
+          "merchantRecruitmentsOne": "Ensuite : 1 recrutement de commerçant de plus",
+          "agentRecruitments": "Ensuite : {{count}} recrutements d'agents de plus",
+          "agentRecruitmentsOne": "Ensuite : 1 recrutement d'agent de plus"
+        }
       }
     },
     "walletHub": {

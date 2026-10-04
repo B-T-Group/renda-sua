@@ -80,6 +80,8 @@ function shouldSkipGlobalLoadingForUrl(url: string | undefined): boolean {
     '/business-images/bulk',
     '/orders/complete-delivery',
     '/availability-check',
+    '/payment-programs/schedules/focus',
+    '/admin/payment-programs/assignments/progress',
   ];
   if (substrings.some((s) => url.includes(s))) return true;
   if (url.includes('disassociate-item')) return false;
