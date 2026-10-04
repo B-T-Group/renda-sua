@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Chip, IconButton, Text } from 'react-native-paper';
@@ -9,6 +9,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 import type { FeedReel } from '../../services/reelsApi';
 import { usePageShare } from '../../hooks/usePageShare';
+import { AppImage } from '../common/AppImage';
+import { BottomSheet } from '../common/BottomSheet';
 import { ReportContentSheet } from './ReportContentSheet';
 import { ReelCommentsSheet } from './ReelCommentsSheet';
 import { setReelLike } from '../../services/reelsApi';
@@ -20,9 +22,40 @@ interface Props {
   onBuy?: () => void;
   onAddToCart?: () => void;
   inCart?: boolean;
+  /** Increments on double-tap so the heart rail stays in sync with the like. */
+  likeSignal?: number;
 }
 
-export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props) {
+function useDoubleTapLike(
+  reelId: string,
+  likeSignal: number,
+  liked: boolean,
+  setLiked: (value: boolean) => void,
+  setLikeCount: React.Dispatch<React.SetStateAction<number>>
+) {
+  const seen = useRef(likeSignal);
+  useEffect(() => {
+    if (likeSignal === seen.current || liked) {
+      seen.current = likeSignal;
+      return;
+    }
+    seen.current = likeSignal;
+    setLiked(true);
+    setLikeCount((count) => count + 1);
+    void setReelLike(reelId, true).catch(() => {
+      setLiked(false);
+      setLikeCount((count) => count - 1);
+    });
+  }, [likeSignal, liked, reelId, setLikeCount, setLiked]);
+}
+
+export function ReelOverlay({
+  reel,
+  onBuy,
+  onAddToCart,
+  inCart = false,
+  likeSignal = 0,
+}: Props) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const navigation = useNavigation();
@@ -31,8 +64,10 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
   const { shareNative } = usePageShare();
   const [liked, setLiked] = useState(reel.liked ?? false);
   const [likeCount, setLikeCount] = useState(reel.like_count);
+  useDoubleTapLike(reel.id, likeSignal, liked, setLiked, setLikeCount);
   const [reportOpen, setReportOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(false);
   const { flags } = useClientFlags();
 
   const toggleLike = async () => {
@@ -112,6 +147,11 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
               {reel.caption}
             </Text>
           ) : null}
+          {reel.inventoryItemId ? (
+            <Pressable onPress={() => setShopOpen(true)} style={{ marginBottom: 8 }}>
+              <Text style={styles.railLabel}>{t('reels.shop', 'Shop this')}</Text>
+            </Pressable>
+          ) : null}
           {onBuy ? (
             <View style={styles.ctaRow}>
               <IconButton
@@ -152,6 +192,30 @@ export function ReelOverlay({ reel, onBuy, onAddToCart, inCart = false }: Props)
           ) : null}
         </View>
       </View>
+      <BottomSheet
+        visible={shopOpen}
+        onClose={() => setShopOpen(false)}
+        title={reel.business.name}
+        footer={
+          <View style={{ gap: 8 }}>
+            {onAddToCart ? (
+              <Button mode="contained" onPress={() => { setShopOpen(false); onAddToCart(); }}>
+                {t('cart.addToCart', 'Add to cart')}
+              </Button>
+            ) : null}
+            {reel.inventoryItemId ? (
+              <Button mode="outlined" onPress={() => {
+                setShopOpen(false);
+                (navigation as { navigate: (name: string, params: object) => void }).navigate('InventoryItemDetail', { inventoryItemId: reel.inventoryItemId });
+              }}>
+                {t('reels.viewProduct', 'View product')}
+              </Button>
+            ) : null}
+          </View>
+        }
+      >
+        <AppImage uri={reel.thumbnail_url} style={{ width: '100%', height: 180, borderRadius: 12 }} />
+      </BottomSheet>
       <ReportContentSheet
         visible={reportOpen}
         subjectType="reel"

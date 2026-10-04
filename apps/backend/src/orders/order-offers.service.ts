@@ -55,6 +55,7 @@ interface OfferRow {
   estimated_earnings: number | string | null;
   currency: string | null;
   expires_at: string;
+  created_at?: string | null;
   order: {
     id: string;
     order_number: string;
@@ -69,6 +70,12 @@ interface OfferRow {
   } | null;
 }
 
+function offerWindowSeconds(createdAt: string | null | undefined, expiresAt: string): number {
+  if (!createdAt) return 0;
+  const seconds = Math.round((new Date(expiresAt).getTime() - new Date(createdAt).getTime()) / 1000);
+  return seconds > 0 ? seconds : 0;
+}
+
 export interface OfferDetailsResponse {
   success: boolean;
   active: boolean;
@@ -76,6 +83,7 @@ export interface OfferDetailsResponse {
     orderId: string;
     orderNumber: string;
     expiresAt: string;
+    ttlSeconds: number;
     distanceKm: number | null;
     estimatedEarnings: number | null;
     currency: string | null;
@@ -524,6 +532,7 @@ export class OrderOffersService {
           estimated_earnings
           currency
           expires_at
+          created_at
           order {
             id
             order_number
@@ -584,6 +593,7 @@ export class OrderOffersService {
           estimated_earnings
           currency
           expires_at
+          created_at
           order {
             id
             order_number
@@ -647,6 +657,7 @@ export class OrderOffersService {
         orderId: order.id,
         orderNumber: order.order_number,
         expiresAt: row.expires_at,
+        ttlSeconds: offerWindowSeconds(row.created_at, row.expires_at),
         distanceKm: row.distance_km != null ? Number(row.distance_km) : null,
         estimatedEarnings:
           row.estimated_earnings != null
@@ -886,6 +897,7 @@ export class OrderOffersService {
     earnings: { amount: number | null; currency: string },
     expiresAt: string
   ): Promise<void> {
+    const offeredAt = new Date().toISOString();
     const objects = candidates.map((c) => ({
       order_id: order.id,
       agent_id: c.agentId,
@@ -895,6 +907,7 @@ export class OrderOffersService {
       estimated_earnings: earnings.amount,
       currency: earnings.currency,
       expires_at: expiresAt,
+      created_at: offeredAt,
     }));
     const mutation = `
       mutation UpsertOffers($objects: [order_offers_insert_input!]!) {
@@ -908,6 +921,7 @@ export class OrderOffersService {
               estimated_earnings
               currency
               expires_at
+              created_at
               responded_at
             ]
           }

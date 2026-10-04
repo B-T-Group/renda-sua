@@ -72,7 +72,11 @@ export type InventoryItemDetailParams = {
 };
 
 /** Client stack: place order for one catalog line (mirrors web place order). */
-export type PlaceOrderParams = { inventoryItemId: string; variantId?: string };
+export type PlaceOrderParams = {
+  inventoryItemId: string;
+  variantId?: string;
+  quantity?: number;
+};
 
 /** After checkout: next steps depend on payment timing (aligned with web OrderConfirmationPage). */
 export type CashAdvanceDrawSuccessParams = {

@@ -1,15 +1,9 @@
 import React, { useMemo } from 'react';
-import {
-  FlatList,
-  Modal,
-  Pressable,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { BottomSheet } from '../common/BottomSheet';
 import { useTranslation } from 'react-i18next';
 import { Button, Text } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusPill } from '../common/StatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { MobileMoneyVerificationMethod, MobilePaymentPhone } from '../../types/mobilePaymentPhone';
@@ -45,9 +39,7 @@ export function MobilePaymentPhoneChooserSheet({
   onSelectNone,
 }: MobilePaymentPhoneChooserSheetProps) {
   const { t } = useTranslation();
-  const { colors, spacing, borderRadius, shadows, typography } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
+  const { colors, spacing } = useTheme();
 
   const sorted = useMemo(() => {
     return [...phones].sort((a, b) => {
@@ -64,38 +56,51 @@ export function MobilePaymentPhoneChooserSheet({
   const primaryIsVerify = Boolean(verifyFirst && firstUnverified && onVerify);
 
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onDismiss}
-      statusBarTranslucent
-    >
-      <Pressable style={styles.scrim} onPress={onDismiss}>
-        <Pressable
-          style={[
-            styles.sheet,
-            shadows.md ?? {},
-            {
-              backgroundColor: colors.surface,
-              borderRadius: borderRadius.xl ?? 20,
-              paddingBottom: Math.max(insets.bottom, spacing.md),
-              maxHeight: screenHeight * 0.85,
-            },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <Text
-            variant="titleLarge"
-            style={[typography.h6, { color: colors.text.primary, padding: spacing.md }]}
+      onClose={onDismiss}
+      snapPoints={['70%']}
+      unwrapped
+      footer={
+        <View style={[styles.actions, { gap: spacing.sm }]}>
+          {allowNone && onSelectNone ? (
+            <Button mode="outlined" onPress={onSelectNone}>
+              {t('mobilePaymentPhone.noneForLocation', 'None for this location')}
+            </Button>
+          ) : null}
+          {primaryIsVerify && firstUnverified && onVerify ? (
+            <Button
+              mode="contained"
+              onPress={() => onVerify(firstUnverified)}
+              contentStyle={styles.primaryBtn}
+            >
+              {t('mobilePaymentPhone.verifyThisNumber', 'Verify this number')}
+            </Button>
+          ) : null}
+          <Button
+            mode={primaryIsVerify ? 'outlined' : 'contained'}
+            onPress={onAddNew}
+            contentStyle={styles.primaryBtn}
           >
+            {t('mobilePaymentPhone.addNewCta', 'Add a new number')}
+          </Button>
+          <Button mode="text" onPress={onDismiss}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+        </View>
+      }
+    >
+      <BottomSheetScrollView
+        style={styles.list}
+        contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}
+      >
+          <Text variant="titleMedium" style={{ color: colors.text.primary, marginBottom: spacing.sm }}>
             {t('mobilePaymentPhone.chooseTitle', 'Mobile money number')}
           </Text>
           <Text
             variant="bodyMedium"
             style={{
               color: colors.text.secondary,
-              paddingHorizontal: spacing.md,
               marginBottom: spacing.sm,
             }}
           >
@@ -121,7 +126,6 @@ export function MobilePaymentPhoneChooserSheet({
               variant="bodyMedium"
               style={{
                 color: colors.text.secondary,
-                paddingHorizontal: spacing.md,
                 paddingVertical: spacing.lg,
                 textAlign: 'center',
               }}
@@ -132,17 +136,14 @@ export function MobilePaymentPhoneChooserSheet({
               )}
             </Text>
           ) : (
-            <FlatList
-              data={sorted}
-              keyExtractor={(item) => item.id}
-              style={{ maxHeight: screenHeight * 0.4 }}
-              contentContainerStyle={{ paddingHorizontal: spacing.md }}
-              renderItem={({ item }) => {
+            <>
+            {sorted.map((item) => {
                 const selected = item.id === selectedPhoneId;
                 const isPrimaryUnverified =
                   primaryIsVerify && item.id === firstUnverified?.id;
                 return (
                   <Pressable
+                    key={item.id}
                     onPress={() => {
                       if (item.is_verified) {
                         onSelect(item);
@@ -203,51 +204,16 @@ export function MobilePaymentPhoneChooserSheet({
                     ) : null}
                   </Pressable>
                 );
-              }}
-            />
+            })}
+            </>
           )}
-
-          <View style={[styles.actions, { padding: spacing.md, gap: spacing.sm }]}>
-            {allowNone && onSelectNone ? (
-              <Button mode="outlined" onPress={onSelectNone}>
-                {t('mobilePaymentPhone.noneForLocation', 'None for this location')}
-              </Button>
-            ) : null}
-            {primaryIsVerify && firstUnverified && onVerify ? (
-              <Button
-                mode="contained"
-                onPress={() => onVerify(firstUnverified)}
-                contentStyle={styles.primaryBtn}
-              >
-                {t('mobilePaymentPhone.verifyThisNumber', 'Verify this number')}
-              </Button>
-            ) : null}
-            <Button
-              mode={primaryIsVerify ? 'outlined' : 'contained'}
-              onPress={onAddNew}
-              contentStyle={styles.primaryBtn}
-            >
-              {t('mobilePaymentPhone.addNewCta', 'Add a new number')}
-            </Button>
-            <Button mode="text" onPress={onDismiss}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      </BottomSheetScrollView>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    width: '100%',
-  },
+  list: { flex: 1 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

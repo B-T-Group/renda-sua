@@ -20,6 +20,7 @@ import { ReelPlayer } from '../../components/reels/ReelPlayer';
 import { ReelOverlay } from '../../components/reels/ReelOverlay';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
 import { recordReelView, type FeedReel } from '../../services/reelsApi';
+import { haptics } from '@/services/haptics';
 import {
   fetchAuthenticatedInventoryItemById,
   fetchPublicInventoryItemById,
@@ -27,7 +28,7 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
 import { useReportTabBarScroll } from '../../navigation/floatingTabBarVisibility';
-import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
+import { placeOrderParamsFromCatalog, useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useStore } from '../../stores/RootStore';
 
 const HOME_TAB: Record<string, string> = {
@@ -51,6 +52,7 @@ function ReelsFeedScreen() {
     useReelsFeed(marketHydrated ? selectedMarket?.countryCode : undefined);
   const [activeIndex, setActiveIndex] = useState(0);
   const [snack, setSnack] = useState<string | null>(null);
+  const [likeSignals, setLikeSignals] = useState<Record<string, number>>({});
   const viewStartRef = useRef<number>(Date.now());
   const addingRef = useRef(false);
   const listRef = useRef<FlatList<FeedReel>>(null);
@@ -154,12 +156,12 @@ function ReelsFeedScreen() {
 
   const { requestAddToCart, pickerOpen, pickerItem, closePicker, onPickerConfirm, confirmLabel } =
     useCatalogVariantFlow({
-      onPlaceOrder: (catalogItem, cartVariantId) => {
+      onPlaceOrder: (catalogItem, cartVariantId, quantity) => {
         const nav = navigation as { navigate: (n: string, p: object) => void };
-        nav.navigate('PlaceOrder', {
-          inventoryItemId: catalogItem.id,
-          ...(cartVariantId ? { variantId: cartVariantId } : {}),
-        });
+        nav.navigate(
+          'PlaceOrder',
+          placeOrderParamsFromCatalog(catalogItem, cartVariantId, quantity)
+        );
       },
       onCartResult: (result) => {
         setSnack(
@@ -203,8 +205,16 @@ function ReelsFeedScreen() {
         {item.video_url ? (
           <ReelPlayer
             uri={item.video_url}
+            preloadUri={items[index + 1]?.video_url}
             active={isFocused && index === activeIndex}
             posterUri={item.thumbnail_url}
+            onDoubleTap={() => {
+              void haptics.success();
+              setLikeSignals((prev) => ({
+                ...prev,
+                [item.id]: (prev[item.id] ?? 0) + 1,
+              }));
+            }}
             onMaxLoopsReached={
               index === activeIndex ? advanceToNextReel : undefined
             }
@@ -217,6 +227,7 @@ function ReelsFeedScreen() {
           inCart={
             !!item.inventoryItemId && cart.isListingInCart(item.inventoryItemId)
           }
+          likeSignal={likeSignals[item.id] ?? 0}
         />
       </View>
     ),
@@ -227,6 +238,8 @@ function ReelsFeedScreen() {
       height,
       isFocused,
       onAddToCart,
+      items,
+      likeSignals,
       onBuy,
       showCtas,
     ]

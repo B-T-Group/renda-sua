@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal, Portal, Text } from 'react-native-paper';
+import { Button, Text } from 'react-native-paper';
+import { BottomSheet } from '../common/BottomSheet';
 import { useTheme } from '../../contexts/ThemeContext';
 import { agentApi } from '../../services/agentApi';
 import type { Order } from '../../types/agent';
@@ -32,9 +33,7 @@ export function NoAgentOptionsSheet({
   onCancelInstead,
 }: Props) {
   const { t } = useTranslation();
-  const { colors, spacing, borderRadius } = useTheme();
-  const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const { colors, spacing } = useTheme();
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -68,36 +67,17 @@ export function NoAgentOptionsSheet({
     }
   }, [order.id, onSwitchedToPickup, t]);
 
-  if (!visible) return null;
-
   return (
-    <Portal>
-      <Modal
+    <>
+      <BottomSheet
         visible={visible}
-        onDismiss={handleDismiss}
-        contentContainerStyle={[
-          styles.modal,
-          {
-            width,
-            maxHeight: height - insets.top - 32,
-            paddingBottom: insets.bottom + spacing.md,
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: borderRadius.lg,
-            borderTopRightRadius: borderRadius.lg,
-          },
-        ]}
+        onClose={handleDismiss}
+        title={t('orders.noAgent.title', "We couldn't find a nearby courier")}
       >
-        <ScrollView
-          contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}
-          showsVerticalScrollIndicator={false}
-        >
+        <BottomSheetScrollView showsVerticalScrollIndicator={false}>
           <View style={{ alignItems: 'center', marginBottom: spacing.sm }}>
             <NoCourierFoundIllustration />
           </View>
-
-          <Text variant="titleLarge" style={{ textAlign: 'center', marginBottom: spacing.xs }}>
-            {t('orders.noAgent.title', "We couldn't find a nearby courier")}
-          </Text>
           <Text
             variant="bodyMedium"
             style={{ color: colors.text.secondary, textAlign: 'center', marginBottom: spacing.lg }}
@@ -140,22 +120,14 @@ export function NoAgentOptionsSheet({
               {t('orders.noAgent.decideLater', "I'll decide later")}
             </Button>
           </View>
-        </ScrollView>
-      </Modal>
+        </BottomSheetScrollView>
+      </BottomSheet>
 
       <ActionLoadingDialog
         visible={submitting}
         action="ready_for_pickup"
         message={t('orders.noAgent.switching', 'Switching to store pickup…')}
       />
-    </Portal>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  modal: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-  },
-});

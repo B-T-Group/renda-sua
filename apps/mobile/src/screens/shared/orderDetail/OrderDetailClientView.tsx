@@ -22,6 +22,7 @@ import { InfoRow } from '../../../components/common/InfoRow';
 import { RateOrderModal, type RateOrderMode } from '../../../components/dialogs/RateOrderModal';
 import { OrderPhaseBanner } from '../../../components/orders/OrderPhaseBanner';
 import { OrderJourneyTimeline } from '../../../components/client/OrderJourneyTimeline';
+import { ClientTrackingHero } from '../../../components/client/ClientTrackingHero';
 import { ClientRefundRequestButton } from '../../../components/client/ClientRefundRequestButton';
 import { FirstOrderJourneyCard } from '../../../components/client/FirstOrderJourneyCard';
 import { ShippingTrackingCard } from '../../../components/orders/ShippingTrackingCard';
@@ -669,6 +670,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             agentName={order.assigned_agent?.user?.first_name}
           />
         )}
+        <ClientTrackingHero
+          phase={phaseInfo.phase}
+          status={order.current_status}
+          fulfillment={order.fulfillment_method}
+          agentName={order.assigned_agent?.user?.first_name}
+          storeName={order.business_location?.name}
+          storeAddress={order.business_location?.address?.address_line_1}
+          onOpenMap={phaseInfo.phase === 'in_delivery' ? () => setMapOpen(true) : undefined}
+        />
 
         {showNoAgentOptions ? (
           <View style={{ marginBottom: SECTION_GAP }}>

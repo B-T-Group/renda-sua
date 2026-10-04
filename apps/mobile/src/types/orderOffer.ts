@@ -18,6 +18,8 @@ export interface OrderOfferDetails {
   orderId: string;
   orderNumber: string;
   expiresAt: string;
+  /** Full offer window in seconds. Remaining time is derived from expiresAt. */
+  ttlSeconds?: number;
   distanceKm: number | null;
   estimatedEarnings: number | null;
   currency: string | null;

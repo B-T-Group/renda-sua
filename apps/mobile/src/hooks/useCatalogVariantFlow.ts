@@ -7,9 +7,25 @@ import {
   catalogRequiresVariantSelection,
   catalogUnitPriceForSelection,
 } from '../utils/buildCartLineFromCatalog';
+import type { PlaceOrderParams } from '../navigation/types';
 import { toCartVariantId } from '../utils/shopperVariantSelection';
 
 type PendingAction = 'cart' | 'order';
+
+export type PickerConfirmResult = 'added' | 'closed' | 'unchanged';
+
+export function placeOrderParamsFromCatalog(
+  item: CatalogInventoryItem,
+  cartVariantId?: string,
+  quantity?: number
+): PlaceOrderParams {
+  const qty = Math.max(1, Math.floor(quantity ?? 1));
+  return {
+    inventoryItemId: item.id,
+    ...(cartVariantId ? { variantId: cartVariantId } : {}),
+    quantity: qty,
+  };
+}
 
 function emitAddToCartMeta(
   item: CatalogInventoryItem,
@@ -39,7 +55,8 @@ export function useCatalogVariantFlow(params: {
   onCartResult?: (result: 'added' | 'updated') => void;
   onPlaceOrder: (
     item: CatalogInventoryItem,
-    cartVariantId?: string
+    cartVariantId?: string,
+    quantity?: number
   ) => void;
   requireAuth?: () => boolean;
 }) {
@@ -69,24 +86,24 @@ export function useCatalogVariantFlow(params: {
     (
       item: CatalogInventoryItem,
       selectionId: string,
-      action: PendingAction
-    ) => {
+      action: PendingAction,
+      quantity = 1
+    ): PickerConfirmResult => {
       if (action === 'order') {
         const cartVariantId = toCartVariantId(selectionId);
-        onPlaceOrderRef.current(item, cartVariantId);
+        onPlaceOrderRef.current(item, cartVariantId, Math.max(1, quantity));
         closePicker();
-        return;
+        return 'closed';
       }
       const before = cart.quantityForLine(item.id, toCartVariantId(selectionId));
-      const result = cart.addFromCatalog(item, 1, selectionId, baseLabel);
-      if (result === 'needs_variant') return;
+      const result = cart.addFromCatalog(item, Math.max(1, quantity), selectionId, baseLabel);
+      if (result === 'needs_variant') return 'unchanged';
       const after = cart.quantityForLine(item.id, toCartVariantId(selectionId));
       const added = after - before;
-      if (added > 0) {
-        emitAddToCartMeta(item, selectionId, auth.isAuthenticated, added);
-        onCartResultRef.current?.(result);
-      }
-      closePicker();
+      if (added <= 0) return 'unchanged';
+      emitAddToCartMeta(item, selectionId, auth.isAuthenticated, added);
+      onCartResultRef.current?.(result);
+      return 'added';
     },
     [auth.isAuthenticated, baseLabel, cart, closePicker]
   );
@@ -138,9 +155,9 @@ export function useCatalogVariantFlow(params: {
   );
 
   const onPickerConfirm = useCallback(
-    (selectionId: string) => {
-      if (!pickerItem || !pendingAction) return;
-      completeWithSelection(pickerItem, selectionId, pendingAction);
+    (selectionId: string, quantity = 1): PickerConfirmResult => {
+      if (!pickerItem || !pendingAction) return 'unchanged';
+      return completeWithSelection(pickerItem, selectionId, pendingAction, quantity);
     },
     [completeWithSelection, pendingAction, pickerItem]
   );

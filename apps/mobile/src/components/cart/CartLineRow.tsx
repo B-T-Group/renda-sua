@@ -1,4 +1,5 @@
 import { Image, Pressable, StyleSheet, View } from 'react-native';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -29,6 +30,21 @@ export function CartLineRow({ item, onUpdateQuantity, onRemove }: CartLineRowPro
   const openingSoon = item.itemData.merchantCanAcceptOrders === false;
 
   return (
+    <ReanimatedSwipeable
+      friction={2}
+      rightThreshold={48}
+      renderRightActions={() => (
+        <Pressable
+          onPress={onRemove}
+          accessibilityRole="button"
+          accessibilityLabel={t('cart.removeLine', 'Remove')}
+          style={[styles.swipeRemove, { backgroundColor: colors.error.main }]}
+        >
+          <Text style={{ color: colors.onDark }}>{t('cart.removeLine', 'Remove')}</Text>
+        </Pressable>
+      )}
+      onSwipeableOpen={() => onRemove()}
+    >
     <View
       style={[
         styles.row,
@@ -131,6 +147,7 @@ export function CartLineRow({ item, onUpdateQuantity, onRemove }: CartLineRowPro
         {formatCatalogMoney(lineSubtotal(item), item.itemData.currency)}
       </Text>
     </View>
+    </ReanimatedSwipeable>
   );
 }
 
@@ -155,4 +172,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qty: { minWidth: 28, textAlign: 'center', fontWeight: '700' },
+  swipeRemove: { justifyContent: 'center', paddingHorizontal: 20, marginBottom: 8 },
 });

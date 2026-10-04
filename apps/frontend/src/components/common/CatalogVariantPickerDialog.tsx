@@ -1,10 +1,4 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-} from '@mui/material';
+import { Box, Button, SwipeableDrawer, Typography } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { InventoryItem } from '../../hooks/useInventoryItems';
@@ -63,11 +57,11 @@ const CatalogVariantPickerDialog: React.FC<CatalogVariantPickerDialogProps> = ({
   if (!item) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>
+    <SwipeableDrawer anchor="bottom" open={open} onClose={onClose} onOpen={() => undefined}>
+      <Box sx={{ p: 2, pb: 3 }}>
+      <Typography variant="h6" sx={{ mb: 1 }}>
         {t('orders.variant.selectDialogTitle', 'Choose an option')}
-      </DialogTitle>
-      <DialogContent>
+      </Typography>
         <VariantSelector
           variants={options}
           value={selectedId}
@@ -82,8 +76,7 @@ const CatalogVariantPickerDialog: React.FC<CatalogVariantPickerDialogProps> = ({
           currency={item.item.currency}
           formatCurrency={formatCurrency}
         />
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
         <Button onClick={onClose}>
           {t('common.cancel', 'Cancel')}
         </Button>
@@ -98,8 +91,9 @@ const CatalogVariantPickerDialog: React.FC<CatalogVariantPickerDialogProps> = ({
           {confirmLabel ||
             t('orders.variant.confirmSelection', 'Add to cart')}
         </Button>
-      </DialogActions>
-    </Dialog>
+      </Box>
+      </Box>
+    </SwipeableDrawer>
   );
 };
 

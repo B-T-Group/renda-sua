@@ -39,6 +39,7 @@ import {
   PlaceOrderFulfillmentChoice,
   type OrderFulfillment,
 } from '../../components/place-order/PlaceOrderFulfillmentChoice';
+import { GuidedCheckoutCard } from '../../components/checkout/GuidedCheckoutCard';
 import { PlaceOrderSpecialInstructions } from '../../components/place-order/PlaceOrderSpecialInstructions';
 import { AddressCapture } from '../../components/forms/AddressCapture';
 import type { DeliveryAddressFormValue } from '../../components/forms/DeliveryAddressForm';
@@ -138,7 +139,7 @@ export default function PlaceOrderScreen() {
   const keyboardVerticalOffset = useKeyboardVerticalOffset();
   const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
   const route = useRoute<RouteProp<{ PlaceOrder: PlaceOrderParams }, 'PlaceOrder'>>();
-  const { inventoryItemId, variantId: initialVariantId } = route.params;
+  const { inventoryItemId, variantId: initialVariantId, quantity: routeQuantity } = route.params;
 
   const { item, loading: itemLoading, error: itemError } = useInventoryItemDetail(inventoryItemId, {
     withAuth: true,
@@ -154,7 +155,7 @@ export default function PlaceOrderScreen() {
   const shippingEnabled = Boolean(item?.item.shipping_enabled);
   const payAtDeliveryEnabled = Boolean(item?.item.pay_on_delivery_enabled);
 
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(() => Math.max(1, Math.floor(routeQuantity ?? 1)));
   const [addressId, setAddressId] = useState('');
   const [variantId, setVariantId] = useState<string | null>(null);
   const [fulfillment, setFulfillment] = useState<Fulfillment>('pickup');
@@ -417,11 +418,16 @@ export default function PlaceOrderScreen() {
   }, [item, variantId]);
 
   useEffect(() => {
+    setQuantity(Math.max(1, Math.floor(routeQuantity ?? 1)));
+  }, [inventoryItemId, routeQuantity]);
+
+  useEffect(() => {
+    if (!item) return;
     setQuantity((q) => {
       if (quantityBounds.max < 1) return 0;
       return Math.min(Math.max(q, quantityBounds.min), quantityBounds.max);
     });
-  }, [quantityBounds.max, quantityBounds.min]);
+  }, [item, quantityBounds.max, quantityBounds.min]);
 
   const minQ = quantityBounds.min || 1;
   const maxQ = quantityBounds.max;
@@ -970,6 +976,7 @@ export default function PlaceOrderScreen() {
 
   const stickyFulfillment =
     pickupEnabled || shippingEnabled ? (
+      <GuidedCheckoutCard title={t('client.placeOrder.fulfillmentQuestion', 'How would you like to receive this?')}>
       <PlaceOrderFulfillmentChoice
         compact
         value={fulfillment}
@@ -999,6 +1006,7 @@ export default function PlaceOrderScreen() {
               : undefined
         }
       />
+      </GuidedCheckoutCard>
     ) : null;
 
   const imgs = item ? catalogOrderedImages(item) : [];
@@ -1630,6 +1638,7 @@ export default function PlaceOrderScreen() {
         ) : null}
 
         {fulfillmentConfirmed && fulfillment === 'delivery' && selectedAddress ? (
+          <GuidedCheckoutCard title={t('client.placeOrder.addressAndTime', 'Address and time')}>
           <PlaceOrderDeliveryWindowBlock
             countryCode={selectedAddress.country?.trim() ?? ''}
             stateCode={selectedAddress.state?.trim() ?? ''}
@@ -1645,6 +1654,7 @@ export default function PlaceOrderScreen() {
             onReadyChange={onDwReadyChange}
             onCommit={onDwCommit}
           />
+          </GuidedCheckoutCard>
         ) : null}
 
         {fulfillmentConfirmed && fulfillment === 'pickup' ? (
@@ -1683,10 +1693,7 @@ export default function PlaceOrderScreen() {
         !isDiaspora &&
         momoPayNowDeliveryEnabled &&
         !isCookedFoodMoMoPayAfter ? (
-          <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-            <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-              {t('client.placeOrder.paymentTiming', 'Payment')}
-            </Text>
+          <GuidedCheckoutCard title={t('client.placeOrder.paymentTiming', 'Payment')}>
             <SegmentedButtons
               value={payTiming === 'pay_at_delivery' ? 'pad' : 'now'}
               onValueChange={(v) => setPayTiming(v === 'pad' ? 'pay_at_delivery' : 'pay_now')}
@@ -1695,7 +1702,7 @@ export default function PlaceOrderScreen() {
                 { value: 'pad', label: t('client.placeOrder.payAtDelivery', 'Pay at delivery') },
               ]}
             />
-          </View>
+          </GuidedCheckoutCard>
         ) : null}
 
         {/* Payment method (country-locked) - driven by preflight, not client country */}

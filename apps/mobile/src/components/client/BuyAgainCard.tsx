@@ -1,4 +1,5 @@
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
+import { AppImage } from '../common/AppImage';
 import { Snackbar } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
@@ -105,5 +106,5 @@ function PreviewImage({ uri }: { uri?: string | null }) {
       </View>
     );
   }
-  return <Image source={{ uri }} style={frame} resizeMode="cover" />;
+  return <AppImage uri={uri} style={frame} recyclingKey={uri} />;
 }

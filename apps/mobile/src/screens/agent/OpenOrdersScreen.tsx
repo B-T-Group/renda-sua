@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Linking,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -657,7 +657,7 @@ export default function OpenOrdersScreen() {
           claimBlockedLabel={claimBlockedLabel}
         />
       ) : (
-      <FlatList
+      <FlashList
         data={sortedOrders}
         keyExtractor={keyExtractor}
         renderItem={renderItem}

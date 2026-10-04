@@ -13,3 +13,7 @@ export const motion = {
 } as const;
 
 export type MotionSpeed = keyof typeof motion.duration;
+
+export function motionDuration(speed: MotionSpeed, reduceMotion: boolean): number {
+  return reduceMotion ? 0 : motion.duration[speed];
+}

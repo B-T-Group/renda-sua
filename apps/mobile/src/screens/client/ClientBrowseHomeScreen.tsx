@@ -14,7 +14,7 @@ import ClientRentalsHomeScreen from './ClientRentalsHomeScreen';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
 import { useClientOrders } from '../../hooks/useClientOrders';
-import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
+import { placeOrderParamsFromCatalog, useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useNearbyAgentsCount } from '../../hooks/useNearbyAgentsCount';
 import type {
   ClientMainTabParamList,
@@ -106,11 +106,11 @@ function ClientBrowseHomeScreenBase() {
   }, [rootNav]);
 
   const onPlaceOrder = useCallback(
-    (catalogItem: CatalogInventoryItem, cartVariantId?: string) => {
-      rootNav?.navigate('PlaceOrder', {
-        inventoryItemId: catalogItem.id,
-        ...(cartVariantId ? { variantId: cartVariantId } : {}),
-      });
+    (catalogItem: CatalogInventoryItem, cartVariantId?: string, quantity?: number) => {
+      rootNav?.navigate(
+        'PlaceOrder',
+        placeOrderParamsFromCatalog(catalogItem, cartVariantId, quantity)
+      );
     },
     [rootNav]
   );

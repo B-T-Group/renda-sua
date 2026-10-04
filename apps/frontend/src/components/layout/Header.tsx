@@ -62,6 +62,7 @@ import PersonaSwitchOverlay from '../common/PersonaSwitchOverlay';
 import UserBalanceSummary from '../common/UserBalanceSummary';
 import UserRatingSummary from '../common/UserRatingSummary';
 import { MarketSelector } from '../market/MarketSelector';
+import { HeaderSearchPopover } from './HeaderSearchPopover';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
 import { brandTokens } from '../../theme/brandTokens';
@@ -838,6 +839,8 @@ const Header: React.FC = () => {
 
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
               {!isMobile && <LanguageSwitcher inverted />}
+
+              {(userType === 'client' || !isAuthenticated) && <HeaderSearchPopover />}
 
               {/* Favorites + Cart - clients */}
               {isAuthenticated && userType === 'client' && (

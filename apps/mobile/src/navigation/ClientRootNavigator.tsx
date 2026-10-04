@@ -145,11 +145,12 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
     if (!auth.postAuthResumeInventoryItemId?.trim()) return;
 
     const task = deferWithCancel(() => {
-      const id = auth.consumePostAuthResumeForInventoryItem();
-      if (!id) return;
+      const resume = auth.consumePostAuthResumeForInventoryItem();
+      if (!resume) return;
       const stackNav = navigation.getParent() ?? navigation;
       (stackNav as { navigate: (name: string, params: PlaceOrderParams) => void }).navigate('PlaceOrder', {
-        inventoryItemId: id,
+        inventoryItemId: resume.id,
+        quantity: resume.quantity,
       });
     });
     return () => task.cancel();

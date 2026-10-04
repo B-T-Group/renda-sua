@@ -3,7 +3,7 @@ import { publicApiGet } from '../services/publicApiClient';
 
 export type SearchSuggestion =
   | { kind: 'term'; value: string }
-  | { kind: 'product'; inventoryId: string; title: string; price: number; currency: string }
+  | { kind: 'product'; inventoryId: string; title: string; price: number; currency: string; imageUrl?: string | null }
   | { kind: 'category'; value: string }
   | { kind: 'seller'; businessId: string; name: string };
 

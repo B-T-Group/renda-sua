@@ -5,7 +5,7 @@ import { observer } from 'mobx-react-lite';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Dialog, Portal, Text } from 'react-native-paper';
+import { Button, Dialog, Portal, Snackbar, Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useStore } from '../../stores/RootStore';
@@ -55,6 +55,7 @@ export default observer(function CartScreen() {
   const reorderBanner = route.params?.reorderBanner;
   const { cart, auth } = useStore();
   const [signInPromptVisible, setSignInPromptVisible] = useState(false);
+  const [removed, setRemoved] = useState<CartLine | null>(null);
   const [footerHeight, setFooterHeight] = useState(220);
 
   const countryInfo = cart.countryInfo;
@@ -104,7 +105,10 @@ export default observer(function CartScreen() {
       <CartLineRow
         item={item}
         onUpdateQuantity={(quantity) => cart.updateQuantity(item.inventoryItemId, quantity, item.variantId)}
-        onRemove={() => cart.removeLine(item.inventoryItemId, item.variantId)}
+        onRemove={() => {
+          setRemoved(item);
+          cart.removeLine(item.inventoryItemId, item.variantId);
+        }}
       />
     ),
     [cart]
@@ -135,6 +139,7 @@ export default observer(function CartScreen() {
         <Button mode="contained" style={{ marginTop: spacing.lg }} onPress={() => navigation.goBack()}>
           {t('cart.continueShopping', 'Continue shopping')}
         </Button>
+        <CartUndoSnackbar line={removed} onUndo={() => cart.addLines(removed ? [removed] : [])} onDismiss={() => setRemoved(null)} />
       </View>
     );
   }
@@ -241,9 +246,32 @@ export default observer(function CartScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+      <CartUndoSnackbar line={removed} onUndo={() => cart.addLines(removed ? [removed] : [])} onDismiss={() => setRemoved(null)} />
     </View>
   );
 });
+
+function CartUndoSnackbar({
+  line,
+  onUndo,
+  onDismiss,
+}: {
+  line: CartLine | null;
+  onUndo: () => void;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Snackbar
+      visible={line != null}
+      onDismiss={onDismiss}
+      duration={4000}
+      action={{ label: t('common.undo', 'Undo'), onPress: onUndo }}
+    >
+      {t('cart.removed', 'Removed from cart')}
+    </Snackbar>
+  );
+}
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },

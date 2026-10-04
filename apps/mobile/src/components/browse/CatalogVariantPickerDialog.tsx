@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Button, Text } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useStore } from '../../stores/RootStore';
+import { haptics } from '@/services/haptics';
+import { AppButton } from '../common/AppButton';
+import { BottomSheet } from '../common/BottomSheet';
+import type { PickerConfirmResult } from '../../hooks/useCatalogVariantFlow';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
 import { catalogOrderedImages } from '../../utils/catalogInventoryDisplay';
 import { shopperVariantOptions } from '../../utils/shopperVariantSelection';
@@ -19,9 +18,26 @@ export interface CatalogVariantPickerDialogProps {
   open: boolean;
   item: CatalogInventoryItem | null;
   onDismiss: () => void;
-  /** Called with shopper selection id (`__base__` or variant UUID). */
-  onConfirm: (selectionId: string) => void;
+  /** `added` when the cart quantity increased. `closed` when checkout continues. */
+  onConfirm: (selectionId: string, quantity?: number) => PickerConfirmResult;
   confirmLabel?: string;
+}
+
+type GuestNav = {
+  navigate: (name: string, params?: object) => void;
+  getState?: () => { routeNames?: string[] };
+};
+
+function openGuestLogin(navigation: GuestNav) {
+  const names = navigation.getState?.().routeNames ?? [];
+  if (names.includes('GuestAuth')) {
+    navigation.navigate('GuestAuth', { screen: 'Login' });
+    return;
+  }
+  navigation.navigate('GuestTabs', {
+    screen: 'GuestAuth',
+    params: { screen: 'Login' },
+  });
 }
 
 export function CatalogVariantPickerDialog({
@@ -32,12 +48,14 @@ export function CatalogVariantPickerDialog({
   confirmLabel,
 }: CatalogVariantPickerDialogProps) {
   const { t } = useTranslation();
-  const { colors, spacing, borderRadius, shadows } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
+  const { colors, spacing } = useTheme();
+  const navigation = useNavigation();
+  const { auth } = useStore();
   const defaultLabel = t('orders.variant.defaultOption', 'Default');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const optionsMaxHeight = Math.min(360, screenHeight * 0.45);
+  const [quantity, setQuantity] = useState(1);
+  const [added, setAdded] = useState(false);
+  const [limitNote, setLimitNote] = useState<string | null>(null);
 
   const parentImageUrl = useMemo(() => {
     if (!item) return null;
@@ -54,115 +72,110 @@ export function CatalogVariantPickerDialog({
   }, [item, defaultLabel, parentImageUrl]);
 
   useEffect(() => {
-    if (!open) {
-      setSelectedId(null);
-      return;
-    }
     setSelectedId(null);
+    setQuantity(1);
+    setAdded(false);
+    setLimitNote(null);
   }, [open, item?.id]);
 
-  if (!item) return null;
-
-  const confirmText =
-    confirmLabel || t('orders.variant.confirmSelection', 'Add to cart');
+  const confirmText = confirmLabel || t('orders.variant.confirmSelection', 'Add to cart');
+  const goToCart = () => {
+    onDismiss();
+    (navigation as { navigate: (name: string) => void }).navigate('Cart');
+  };
+  const goToCheckout = () => {
+    onDismiss();
+    if (auth.isAuthenticated) {
+      (navigation as { navigate: (name: string) => void }).navigate('CartCheckout');
+      return;
+    }
+    void auth.setPostAuthResumeForCartCheckout().then(() => {
+      openGuestLogin(navigation as GuestNav);
+    });
+  };
 
   return (
-    <Modal
-      visible={open}
-      transparent
-      animationType="fade"
-      onRequestClose={onDismiss}
-      statusBarTranslucent
+    <BottomSheet
+      visible={open && item != null}
+      onClose={onDismiss}
+      title={added ? t('cart.added', 'Added') : t('orders.variant.selectDialogTitle', 'Choose an option')}
+      footer={
+        added ? (
+          <View style={styles.actions}>
+            <AppButton label={t('cart.viewCart', 'View cart')} variant="outline" onPress={goToCart} style={styles.flex} />
+            <AppButton label={t('checkout.progress.checkout', 'Checkout')} variant="cta" onPress={goToCheckout} style={styles.flex} />
+          </View>
+        ) : (
+          <AppButton
+            label={confirmText}
+            variant="cta"
+            disabled={!selectedId}
+            onPress={() => {
+              if (!selectedId) return;
+              const result = onConfirm(selectedId, quantity);
+              if (result !== 'added') {
+                if (result === 'unchanged') {
+                  haptics.warning();
+                  setLimitNote(
+                    t('cart.quantityUnavailable', 'That quantity is not available. Try a smaller amount.')
+                  );
+                }
+                return;
+              }
+              setLimitNote(null);
+              haptics.success();
+              setAdded(true);
+            }}
+          />
+        )
+      }
     >
-      <Pressable
-        style={styles.scrim}
-        onPress={onDismiss}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.close', 'Close')}
-      >
-        <Pressable
-          style={[
-            styles.sheet,
-            shadows.md ?? {},
-            {
-              backgroundColor: colors.surface,
-              borderRadius: borderRadius.xl ?? 20,
-              paddingBottom: Math.max(insets.bottom, spacing.md),
-              maxHeight: screenHeight * 0.85,
-            },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <Text
-            variant="titleLarge"
-            style={[styles.title, { color: colors.text.primary }]}
-          >
-            {t('orders.variant.selectDialogTitle', 'Choose an option')}
-          </Text>
-
-          <View style={{ paddingHorizontal: spacing.md, flexShrink: 1 }}>
-            <VariantOptionPicker
-              variants={options}
-              value={selectedId}
-              onChange={setSelectedId}
-              listingSellingPrice={item.selling_price}
-              priceOverrides={item.variant_price_overrides}
-              hasActiveDeal={item.hasActiveDeal}
-              originalPrice={item.original_price}
-              discountedPrice={item.discounted_price}
-              currency={item.item.currency || 'XAF'}
-              hideHeading
-              maxHeight={optionsMaxHeight}
-            />
+      {item && !added ? (
+        <View>
+          <VariantOptionPicker
+            variants={options}
+            value={selectedId}
+            onChange={(id) => {
+              haptics.selection();
+              setSelectedId(id);
+            }}
+            listingSellingPrice={item.selling_price}
+            priceOverrides={item.variant_price_overrides}
+            hasActiveDeal={item.hasActiveDeal}
+            originalPrice={item.original_price}
+            discountedPrice={item.discounted_price}
+            currency={item.item.currency || 'XAF'}
+            hideHeading
+          />
+          <View style={styles.stepper}>
+            <Text style={{ color: colors.text.secondary }}>{t('cart.quantity', 'Quantity')}</Text>
+            <View style={styles.stepperBtns}>
+              <Pressable accessibilityRole="button" onPress={() => setQuantity((q) => Math.max(1, q - 1))} style={styles.step}>
+                <Text>−</Text>
+              </Pressable>
+              <Text>{quantity}</Text>
+              <Pressable accessibilityRole="button" onPress={() => setQuantity((q) => q + 1)} style={styles.step}>
+                <Text>+</Text>
+              </Pressable>
+            </View>
           </View>
-
-          <View
-            style={[
-              styles.actions,
-              { paddingHorizontal: spacing.lg, gap: spacing.sm },
-            ]}
-          >
-            <Button mode="text" onPress={onDismiss}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button
-              mode="contained"
-              disabled={!selectedId}
-              onPress={() => {
-                if (!selectedId) return;
-                onConfirm(selectedId);
-              }}
-            >
-              {confirmText}
-            </Button>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+          {limitNote ? (
+            <Text style={{ color: colors.error.main, marginTop: spacing.sm }}>{limitNote}</Text>
+          ) : null}
+        </View>
+      ) : (
+        <Text style={{ color: colors.text.primary, marginBottom: spacing.sm }}>
+          {t('cart.addedBody', 'This item is in your cart.')}
+        </Text>
+      )}
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    width: '100%',
-    overflow: 'hidden',
-    paddingTop: 20,
-  },
-  title: {
-    paddingHorizontal: 24,
-    marginBottom: 8,
-    fontWeight: '700',
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingTop: 8,
-  },
+  actions: { flexDirection: 'row', gap: 8 },
+  flex: { flex: 1 },
+  stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+  stepperBtns: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  step: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });

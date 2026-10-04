@@ -9,7 +9,6 @@ import React, {
   type ReactNode,
 } from 'react';
 import {
-  Animated,
   StyleSheet,
   View,
   type NativeScrollEvent,
@@ -17,6 +16,14 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { BottomTabBar, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useIsFocused } from '@react-navigation/native';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
@@ -37,7 +44,7 @@ function isTabBarDisplayNone(style: StyleProp<ViewStyle> | undefined): boolean {
 }
 
 type FloatingTabBarVisibilityValue = {
-  hiddenProgress: Animated.Value;
+  hiddenProgress: SharedValue<number>;
   reportScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   showTabBar: () => void;
 };
@@ -50,7 +57,7 @@ export function FloatingTabBarVisibilityProvider({
 }: {
   children: ReactNode;
 }) {
-  const hiddenProgress = useRef(new Animated.Value(0)).current;
+  const hiddenProgress = useSharedValue(0);
   const lastYRef = useRef(0);
   const hiddenRef = useRef(false);
   const ignoreScrollUntilRef = useRef(0);
@@ -59,11 +66,7 @@ export function FloatingTabBarVisibilityProvider({
     (hidden: boolean) => {
       if (hiddenRef.current === hidden) return;
       hiddenRef.current = hidden;
-      Animated.timing(hiddenProgress, {
-        toValue: hidden ? 1 : 0,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
+      hiddenProgress.value = withTiming(hidden ? 1 : 0, { duration: 220 });
     },
     [hiddenProgress]
   );
@@ -157,13 +160,22 @@ export function FloatingAnimatedTabBar(props: BottomTabBarProps) {
     if (!tabBarHidden) ctx?.showTabBar();
   }, [focusedKey, ctx, tabBarHidden]);
 
-  useEffect(() => {
-    if (!ctx) return;
-    const id = ctx.hiddenProgress.addListener(({ value }) => {
-      setPointerEvents(value > 0.85 ? 'none' : 'auto');
-    });
-    return () => ctx.hiddenProgress.removeListener(id);
-  }, [ctx]);
+  const fallbackProgress = useSharedValue(0);
+  const progress = ctx?.hiddenProgress ?? fallbackProgress;
+  const barMotion = useAnimatedStyle(() => ({
+    transform: [{ translateY: progress.value * hideDistance }],
+    opacity: 1 - progress.value * 0.65,
+  }));
+  const applyPointer = useCallback((hidden: boolean) => {
+    setPointerEvents(hidden ? 'none' : 'auto');
+  }, []);
+  useAnimatedReaction(
+    () => progress.value > 0.85,
+    (hidden, prev) => {
+      if (hidden !== prev) runOnJS(applyPointer)(hidden);
+    },
+    [applyPointer]
+  );
 
   if (!geometry.floatingNavEnabled) {
     return <BottomTabBar {...props} />;
@@ -174,15 +186,6 @@ export function FloatingAnimatedTabBar(props: BottomTabBarProps) {
   if (tabBarHidden) {
     return null;
   }
-
-  const translateY = ctx?.hiddenProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, hideDistance],
-  });
-  const fade = ctx?.hiddenProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0.35],
-  });
 
   const bar = <BottomTabBar {...props} />;
 
@@ -201,14 +204,7 @@ export function FloatingAnimatedTabBar(props: BottomTabBarProps) {
   }
 
   return (
-    <Animated.View
-      pointerEvents={pointerEvents}
-      style={{
-        ...hostStyle,
-        transform: [{ translateY }],
-        opacity: fade,
-      }}
-    >
+    <Animated.View pointerEvents={pointerEvents} style={[hostStyle, barMotion]}>
       {bar}
     </Animated.View>
   );

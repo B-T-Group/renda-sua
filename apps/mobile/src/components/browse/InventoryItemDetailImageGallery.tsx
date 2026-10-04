@@ -9,9 +9,10 @@ import {
   useWindowDimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
-  type ImageLoadEventData,
 } from 'react-native';
 import { AppModal } from '../common/AppModal';
+import { useSharedValue } from 'react-native-reanimated';
+import { GalleryParallaxPage } from './GalleryParallaxPage';
 import { useTranslation } from 'react-i18next';
 import { IconButton, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +62,7 @@ export function InventoryItemDetailImageGallery({
   const lightboxRef = useRef<FlatList<InventoryGalleryImage>>(null);
   const openIndexRef = useRef(0);
   const { heroIndex, onHeroScroll } = useHeroIndex(images.length);
+  const scrollX = useSharedValue(0);
 
   const maxHeroH = winH * 0.7;
   const activeId = images[heroIndex]?.id;
@@ -75,14 +77,6 @@ export function InventoryItemDetailImageGallery({
     const next = width / height;
     setAspectById((prev) => (prev[id] === next ? prev : { ...prev, [id]: next }));
   }, []);
-
-  const onHeroImageLoad = useCallback(
-    (id: string, e: NativeSyntheticEvent<ImageLoadEventData>) => {
-      const src = e.nativeEvent.source;
-      rememberAspect(id, src?.width ?? 0, src?.height ?? 0);
-    },
-    [rememberAspect]
-  );
 
   const openLightbox = useCallback((index: number) => {
     openIndexRef.current = index;
@@ -151,27 +145,21 @@ export function InventoryItemDetailImageGallery({
         style={{ height: heroH }}
         onMomentumScrollEnd={onHeroScroll}
         onScrollEndDrag={onHeroScroll}
+        onScroll={(event) => {
+          scrollX.value = event.nativeEvent.contentOffset.x;
+        }}
+        scrollEventThrottle={16}
         renderItem={({ item: img, index }) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('public.items.detail.viewFullImage', 'View full image')}
+          <GalleryParallaxPage
+            uri={img.image_url}
+            index={index}
+            width={winW}
+            height={heroH}
+            scrollX={scrollX}
+            label={t('public.items.detail.viewFullImage', 'View full image')}
             onPress={() => openLightbox(index)}
-            style={{
-              width: winW,
-              height: heroH,
-              backgroundColor: colors.surface,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <Image
-              source={{ uri: img.image_url }}
-              style={{ width: winW, height: heroH }}
-              resizeMode="contain"
-              onLoad={(e) => onHeroImageLoad(img.id, e)}
-              accessibilityLabel={itemName}
-            />
-          </Pressable>
+            onLoadSize={(width, height) => rememberAspect(img.id, width, height)}
+          />
         )}
       />
       {showDots ? (

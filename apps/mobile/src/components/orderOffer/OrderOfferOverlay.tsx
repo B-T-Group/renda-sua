@@ -5,6 +5,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useCountdown } from '../../hooks/useCountdown';
 import { useStore } from '../../stores/RootStore';
 import { AppModal } from '../common/AppModal';
+import { haptics } from '@/services/haptics';
 import { OrderOfferView } from './OrderOfferView';
 
 /**
@@ -43,7 +44,13 @@ function OrderOfferOverlayBase() {
           details={orderOffer.details}
           message={orderOffer.message}
           secondsLeft={secondsLeft}
-          onAccept={() => orderOffer.accept()}
+          onAccept={() => {
+            void orderOffer.accept().then(() => {
+              const failed = orderOffer.uiState === 'error' || orderOffer.uiState === 'insufficientFunds' || orderOffer.uiState === 'unavailable';
+              if (failed) void haptics.warning();
+              else void haptics.success();
+            });
+          }}
           onDecline={() => orderOffer.decline()}
           onClose={() => orderOffer.dismiss()}
           onGoToAvailable={() => orderOffer.goToAvailableOrders()}

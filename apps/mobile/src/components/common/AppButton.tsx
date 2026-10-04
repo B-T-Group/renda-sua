@@ -8,6 +8,8 @@ import {
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { usePressScale } from '@/theme/motionHooks';
 import { Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -100,10 +102,14 @@ export function AppButton({
   const vStyle = variants[variant];
   const isInert = loading || disabled;
   const height = size === 'small' ? 44 : size === 'medium' ? 48 : 52;
+  const press = usePressScale();
 
   return (
+    <Animated.View style={[fullWidth && styles.fullWidth, press.animatedStyle]}>
     <Pressable
       onPress={isInert ? undefined : onPress}
+      onPressIn={isInert ? undefined : press.onPressIn}
+      onPressOut={press.onPressOut}
       disabled={isInert}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
@@ -149,6 +155,7 @@ export function AppButton({
         </View>
       )}
     </Pressable>
+    </Animated.View>
   );
 }
 

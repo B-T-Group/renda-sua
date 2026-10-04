@@ -22,6 +22,7 @@ export function OrderJourneyTimeline({ order }: { order: OrderPhaseSource }) {
   return (
     <Box sx={{ mb: 2 }}>
       <Typography variant="h3">{message}</Typography>
+      <JourneySubtitle phase={phase} fulfillment={order.fulfillment_method} />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1.5 }}>
         {STEPS.map((step, index) => (
           <Box key={step} sx={{ flex: 1, textAlign: 'center' }}>
@@ -32,6 +33,31 @@ export function OrderJourneyTimeline({ order }: { order: OrderPhaseSource }) {
       </Box>
     </Box>
   );
+}
+
+function JourneySubtitle({
+  phase,
+  fulfillment,
+}: {
+  phase: string;
+  fulfillment?: string | null;
+}) {
+  const { t } = useTranslation();
+  if (phase === 'in_delivery') {
+    return (
+      <Typography variant="body1" sx={{ mt: 0.5 }}>
+        {t('client.tracking.outForDelivery', 'Out for delivery')}
+      </Typography>
+    );
+  }
+  if (phase === 'ready' && fulfillment === 'pickup') {
+    return (
+      <Typography variant="body1" sx={{ mt: 0.5 }}>
+        {t('client.tracking.readyForPickup', 'Ready for pickup')}
+      </Typography>
+    );
+  }
+  return null;
 }
 
 function stepLabel(step: (typeof STEPS)[number]): string {

@@ -3,6 +3,8 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import LottieView from 'lottie-react-native';
+import { haptics } from '@/services/haptics';
 import { ActivityIndicator, Button, Chip, Snackbar, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -98,6 +100,9 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
+  useEffect(() => {
+    void haptics.success();
+  }, []);
   const primaryOrderLabel = orderNumbers.length === 1 ? orderNumbers[0] : orderNumbers.join(', ');
   const { user: meUser, loading: profileLoading, refetch: refetchProfile } = useClientProfileForPlaceOrder();
   const { isStripeRail, loading: stripeRailLoading } = useIsStripeRail();
@@ -167,7 +172,12 @@ export const OrderPlacedSuccessView = observer(function OrderPlacedSuccessView(
         contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.lg }}
       >
         <View style={{ alignItems: 'center', marginBottom: spacing.lg }}>
-          <MaterialCommunityIcons name="check-circle" size={72} color={colors.success.main} />
+          <LottieView
+            source={require('../../../assets/animations/product-success.json')}
+            autoPlay
+            loop={false}
+            style={{ width: 120, height: 120 }}
+          />
           <Text
             variant="headlineSmall"
             style={{ color: colors.success.main, textAlign: 'center', marginTop: spacing.sm, fontWeight: '700' }}

@@ -1,4 +1,5 @@
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useClientFlags } from '@/contexts/ClientFlagsContext';
@@ -6,6 +7,10 @@ import { useCatalogExperience } from '@/hooks/useCatalogExperience';
 import { InventoryCatalogGridTile } from '../browse/InventoryCatalogGridTile';
 import { RailSkeleton } from '../common/skeletons';
 import { SectionHeader } from '../common/SectionHeader';
+
+const RAIL_TILE_WIDTH = 160;
+/** 4:5 photo plus a two-line title, price, hint, and rating. */
+const RAIL_HEIGHT = 360;
 
 type Props = {
   authenticated: boolean;
@@ -29,13 +34,19 @@ export function DiscoveryRails({ authenticated, countryCode, onItemPress }: Prop
       {modules.map((module) => (
         <View key={module.id} style={{ marginBottom: spacing.lg }}>
           <SectionHeader title={module.title || t('client.home.forYou', 'For you')} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.md }}>
-            {module.products.slice(0, 8).map((product) => (
-              <View key={product.id} style={{ width: 160, marginRight: spacing.sm }}>
+          <FlashList
+            horizontal
+            data={module.products.slice(0, 8)}
+            keyExtractor={(product) => product.id}
+            style={{ height: RAIL_HEIGHT }}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: spacing.md }}
+            renderItem={({ item: product }) => (
+              <View style={{ width: RAIL_TILE_WIDTH, marginRight: spacing.sm }}>
                 <InventoryCatalogGridTile item={product} onPress={onItemPress} />
               </View>
-            ))}
-          </ScrollView>
+            )}
+          />
         </View>
       ))}
     </View>

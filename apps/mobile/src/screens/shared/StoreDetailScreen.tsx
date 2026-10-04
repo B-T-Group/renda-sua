@@ -31,7 +31,7 @@ import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVaria
 import { InventoryCatalogCard } from '../../components/browse/InventoryCatalogCard';
 import { StatusPill } from '../../components/common/StatusPill';
 import { StoreDefaultAvatar } from '../../components/illustrations/StoreDefaultAvatar';
-import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
+import { placeOrderParamsFromCatalog, useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useStockAvailabilityChecks } from '../../hooks/useStockAvailabilityChecks';
 import { businessApi } from '../../services/businessApi';
 import { shadows } from '../../theme';
@@ -169,16 +169,16 @@ function StoreDetailScreen({ route, navigation }: Props) {
     requestAddToCart,
     confirmLabel,
   } = useCatalogVariantFlow({
-    onPlaceOrder: (item, cartVariantId) => {
+    onPlaceOrder: (item, cartVariantId, quantity) => {
       trackView(item.id);
       const nav = navigation as {
         navigate: (name: string, params: object) => void;
       };
       if (persona.activePersona === 'client') {
-        nav.navigate('PlaceOrder', {
-          inventoryItemId: item.id,
-          ...(cartVariantId ? { variantId: cartVariantId } : {}),
-        });
+        nav.navigate(
+          'PlaceOrder',
+          placeOrderParamsFromCatalog(item, cartVariantId, quantity)
+        );
         return;
       }
       openItem(item.id);
