@@ -41,6 +41,19 @@ interface SegmentOption {
   disabled: boolean;
 }
 
+export function offeredFulfillmentCount(args: {
+  pickupAvailable: boolean;
+  deliveryHidden: boolean;
+  shippingAvailable: boolean;
+  shippingDisabled?: boolean;
+}): number {
+  let count = 0;
+  if (args.pickupAvailable) count += 1;
+  if (!args.deliveryHidden) count += 1;
+  if (args.shippingAvailable || args.shippingDisabled) count += 1;
+  return count;
+}
+
 function buildSegments(
   t: Translate,
   args: {
@@ -84,6 +97,31 @@ function pickupSummary(locations: FulfillmentPickupLocation[]): string | null {
     .map((loc) => [loc.name, loc.address].filter(Boolean).join(' · '))
     .filter((line) => line.length > 0);
   return lines[0] ?? null;
+}
+
+function SingleMethodNote({
+  label,
+  icon,
+  hint,
+}: {
+  label: string;
+  icon: IconName;
+  hint?: string | null;
+}) {
+  const { colors, spacing, typography } = useTheme();
+  return (
+    <View style={{ gap: spacing.xs }}>
+      <View style={[styles.contextRow, { gap: spacing.xs, alignItems: 'center' }]}>
+        <MaterialCommunityIcons name={icon} size={16} color={colors.primary.main} />
+        <Text style={[typography.subtitle2, { color: colors.text.primary, fontWeight: '700' }]}>
+          {label}
+        </Text>
+      </View>
+      {hint ? (
+        <Text style={[typography.caption, { color: colors.warning.main }]}>{hint}</Text>
+      ) : null}
+    </View>
+  );
 }
 
 function ContextLine({
@@ -152,6 +190,16 @@ export function PlaceOrderFulfillmentChoice({
       : null;
 
   if (segments.length === 0) return null;
+  if (segments.length === 1) {
+    const only = segments[0];
+    return (
+      <SingleMethodNote
+        label={only.label}
+        icon={only.icon}
+        hint={only.disabled ? helper : null}
+      />
+    );
+  }
 
   const storeLine = pickupSummary(pickupLocations);
   const showPickupContext = value === 'pickup' && !!storeLine;

@@ -261,6 +261,7 @@
     "orderStillReserved": "Bonne nouvelle : votre commande est toujours réservée ! Nous avons sauvegardé vos articles pendant que vous complétez votre paiement.",
     "businessOrder": "Commande chez le vendeur",
     "placeOrders": "Passer les commandes",
+    "resolving": "Préparation de votre paiement…",
     "merchantNotAcceptingOrders": "Ce marchand termine la configuration de son compte et n'accepte pas encore les commandes.",
     "taxAtCheckout": "La taxe de vente est calculée au paiement",
     "payment": {

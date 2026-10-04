@@ -36,6 +36,7 @@ import { appliedPurchaseCredit } from '../../utils/purchaseCredits';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
 import { PlaceOrderDeliveryAddressBlock } from '../../components/place-order/PlaceOrderDeliveryAddressBlock';
 import {
+  offeredFulfillmentCount,
   PlaceOrderFulfillmentChoice,
   type OrderFulfillment,
 } from '../../components/place-order/PlaceOrderFulfillmentChoice';
@@ -72,6 +73,7 @@ import {
 } from '../../utils/catalogInventoryDisplay';
 import { alignCatalogAddressToCscFields } from '../../utils/addressRegionMatch';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
+import { checkoutStickyDisabledReason } from '../../utils/checkoutStickyDisabledReason';
 import { isAddressComplete } from '../../utils/addressCompleteness';
 import {
   cartShippingAvailability,
@@ -974,40 +976,54 @@ export default function PlaceOrderScreen() {
     t,
   ]);
 
-  const stickyFulfillment =
-    pickupEnabled || shippingEnabled ? (
-      <GuidedCheckoutCard title={t('client.placeOrder.fulfillmentQuestion', 'How would you like to receive this?')}>
-      <PlaceOrderFulfillmentChoice
-        compact
-        value={fulfillment}
-        onChange={chooseFulfillment}
-        deliveryHidden={!deliveryOffered}
-        deliveryDisabledReason={t(
-          'client.placeOrder.deliveryUnavailable',
-          'Delivery is currently unavailable.'
-        )}
-        pickupAvailable={pickupEnabled}
-        shippingAvailable={shippingEnabled}
-        pickupLocations={pickupLocations}
-        deliveryPriceLabel={
-          !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
-            ? formatCatalogMoney(deliveryAmount, currency)
+  const fulfillmentChoice = (
+    <PlaceOrderFulfillmentChoice
+      compact
+      value={fulfillment}
+      onChange={chooseFulfillment}
+      deliveryHidden={!deliveryOffered}
+      deliveryDisabledReason={t(
+        'client.placeOrder.deliveryUnavailable',
+        'Delivery is currently unavailable.'
+      )}
+      pickupAvailable={pickupEnabled}
+      shippingAvailable={shippingEnabled}
+      pickupLocations={pickupLocations}
+      deliveryPriceLabel={
+        !deliveryAddressMissing && !deliveryFeeState.loading && !deliveryFeeState.error
+          ? formatCatalogMoney(deliveryAmount, currency)
+          : undefined
+      }
+      deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
+      deliveryPriceHint={
+        deliveryAddressMissing
+          ? t(
+              'client.placeOrder.deliveryPriceAddressRequired',
+              'Choose an address to see the delivery price.'
+            )
+          : deliveryFeeState.error
+            ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
             : undefined
-        }
-        deliveryPriceLoading={fulfillment === 'delivery' && deliveryFeeState.loading}
-        deliveryPriceHint={
-          deliveryAddressMissing
-            ? t(
-                'client.placeOrder.deliveryPriceAddressRequired',
-                'Choose an address to see the delivery price.'
-              )
-            : deliveryFeeState.error
-              ? t('client.placeOrder.summary.deliveryFeeError', 'Unable to calculate')
-              : undefined
-        }
-      />
-      </GuidedCheckoutCard>
-    ) : null;
+      }
+    />
+  );
+  const fulfillmentOptions = offeredFulfillmentCount({
+    pickupAvailable: pickupEnabled,
+    deliveryHidden: !deliveryOffered,
+    shippingAvailable: shippingEnabled,
+  });
+  const stickyFulfillment =
+    fulfillmentOptions === 0
+      ? null
+      : fulfillmentOptions === 1
+        ? fulfillmentChoice
+        : (
+          <GuidedCheckoutCard
+            title={t('client.placeOrder.fulfillmentQuestion', 'How would you like to receive this?')}
+          >
+            {fulfillmentChoice}
+          </GuidedCheckoutCard>
+        );
 
   const imgs = item ? catalogOrderedImages(item) : [];
   const selectedVariant =
@@ -1117,6 +1133,29 @@ export default function PlaceOrderScreen() {
     needsLinkedMoMoPhone,
     linkedMoMo.selectedPhoneId,
   ]);
+
+  const stickyDisabledReason = checkoutStickyDisabledReason({
+    recipientIncomplete: isRecipientDraftIncomplete(someoneElseReceiving, recipient),
+    recipientAddressMissing: captureRecipientAddress && !deliveryAddressId,
+    momoMissing: needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId,
+    blockerCode: checkoutBlocker?.code,
+    blockerMessage: checkoutBlocker?.message,
+    addressMissing: deliveryAddressMissing && !captureRecipientAddress,
+    windowMissing: fulfillmentNeedsWindow(fulfillment) && !deliveryScheduleOk,
+    loading: Boolean(preflightRequest && preflightLoading),
+    recipientIncompleteText: t('diaspora.selectRecipientToPay', 'Select a recipient before paying'),
+    recipientAddressText: t(
+      'diaspora.selectRecipientAddressToPay',
+      'Add the recipient’s delivery address before paying'
+    ),
+    momoText: t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.'),
+    addressText: t(
+      'client.placeOrder.noAddresses',
+      'Add an address in your profile to place a delivery order.'
+    ),
+    windowText: t('client.placeOrder.deliveryWindow.pickSlot', 'Select a time slot'),
+    loadingText: t('checkout.resolving', 'Preparing your checkout…'),
+  });
 
   const onSubmit = useCallback(async () => {
     if (!item || submitting || !canSubmit) return;
@@ -1778,15 +1817,7 @@ export default function PlaceOrderScreen() {
             onPress={() => { if (!submitting) void onSubmit(); }}
             loading={submitting}
             disabled={!canSubmit}
-            disabledReason={
-              isRecipientDraftIncomplete(someoneElseReceiving, recipient)
-                ? t('diaspora.selectRecipientToPay', 'Select a recipient before paying')
-                : captureRecipientAddress && !deliveryAddressId
-                  ? t('diaspora.selectRecipientAddressToPay', 'Add the recipient’s delivery address before paying')
-                  : needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId
-                    ? t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.')
-                    : undefined
-            }
+            disabledReason={stickyDisabledReason}
           />
         )}
       </View>

@@ -16,7 +16,6 @@ import { useBusinessVerificationStatus } from '../../hooks/useBusinessVerificati
 import Logo from '../../components/Logo';
 import { PersonaQuickSwitch } from '../../components/persona/PersonaQuickSwitch';
 import { MenuLanguageSwitcher } from '../../components/menu/MenuLanguageSwitcher';
-import { MenuThemeSwitcher } from '../../components/menu/MenuThemeSwitcher';
 import { UserMenuRow } from '../../components/common/UserMenuRow';
 import { UserMenuSection } from '../../components/common/UserMenuSection';
 import { UserProfileHeaderCard } from '../../components/common/UserProfileHeaderCard';
@@ -187,7 +186,6 @@ function BusinessMenuTabScreenBase() {
             )}
             onPress={() => goTo('NotificationPreferences')}
           />
-          <MenuThemeSwitcher />
           <TipsRemindersToggleRow />
         </UserMenuSection>
 

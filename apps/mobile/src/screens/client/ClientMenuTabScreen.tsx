@@ -13,7 +13,6 @@ import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBot
 import Logo from '../../components/Logo';
 import { PersonaQuickSwitch } from '../../components/persona/PersonaQuickSwitch';
 import { MenuLanguageSwitcher } from '../../components/menu/MenuLanguageSwitcher';
-import { MenuThemeSwitcher } from '../../components/menu/MenuThemeSwitcher';
 import { TabAwareSnackbar } from '../../components/feedback/TabAwareSnackbar';
 import { UserMenuRow } from '../../components/common/UserMenuRow';
 import { UserMenuSection } from '../../components/common/UserMenuSection';
@@ -199,7 +198,6 @@ function ClientMenuTabScreenBase() {
             )}
             onPress={() => goTo('NotificationPreferences')}
           />
-          <MenuThemeSwitcher />
         </UserMenuSection>
 
         <UserMenuSection title={t('menuTab.sections.support', 'Support')}>
