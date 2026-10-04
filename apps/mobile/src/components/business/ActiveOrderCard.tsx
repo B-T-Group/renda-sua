@@ -81,7 +81,10 @@ export function ActiveOrderCard({
         )}
         style={({ pressed }) => [
           styles.body,
-          { opacity: pressed ? 0.96 : 1, paddingBottom: spacing.sm },
+          {
+            opacity: pressed ? 0.96 : 1,
+            paddingBottom: model.showCta ? spacing.sm : 16,
+          },
         ]}
       >
         <Text
@@ -148,17 +151,19 @@ export function ActiveOrderCard({
           {t(model.subtitleKey, model.subtitleDefault)}
         </Text>
       </Pressable>
-      <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-        <Button
-          mode="contained"
-          icon={readyCtaIcon(model.ctaKey)}
-          onPress={onPressCta}
-          style={{ borderRadius: borderRadius.md }}
-          contentStyle={{ minHeight: 44 }}
-        >
-          {t(model.ctaKey, model.ctaDefault)}
-        </Button>
-      </View>
+      {model.showCta ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+          <Button
+            mode="contained"
+            icon={readyCtaIcon(model.ctaKey)}
+            onPress={onPressCta}
+            style={{ borderRadius: borderRadius.md }}
+            contentStyle={{ minHeight: 44 }}
+          >
+            {t(model.ctaKey, model.ctaDefault)}
+          </Button>
+        </View>
+      ) : null}
     </View>
   );
 }

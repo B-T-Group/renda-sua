@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-03 for platform performance metrics on `/admin/performance` and the pay-after MoMo finalize hold fix (NODE-NESTJS-3F). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-03 for platform performance metrics on `/admin/performance`, the pay-after MoMo finalize hold fix (NODE-NESTJS-3F), the mobile business dashboard pending-payment card, NODE-NESTJS-3G settlement hold-release fallback, and the pay-at-confirm ready-for-pickup copy (no PIN). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
@@ -10,6 +10,9 @@
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
+| pay-at-confirm ready card | – | **Business dashboard active-order card (mobile):** a paid pay-at-confirm pickup that is ready no longer shows Confirm Pickup. The subtitle says the customer completes the order in the app. The store marks a failed pickup from the order details page. Tapping the card still opens that page. | §2.2 Orders |
+| pay-at-confirm ready copy | – | **Business "Mark ready for pickup?" dialog (mobile):** pay-at-confirm store pickup tells the merchant to ask the customer to tap Complete order. It no longer mentions a pickup PIN or capturing payment. Prepaid pickup still uses the PIN. Delivery mark-ready copy is unchanged. | §2.2 Orders |
+| mobile pending payment card | – | **Business dashboard active-order card (mobile):** a confirmed pay-after order that is still unpaid shows "Pending payment" (title, subtitle, and button) and opens the order. It no longer offers Ready / mark-ready. Once payment is paid or authorized, Ready returns. Classic pay-at-delivery and pay-at-pickup are unchanged. | §2.2 Orders |
 | platform performance | – | **`/admin/performance` shows platform results for the selected period and market (web only):** order counts (total, completed, cancelled, failed, refunds, in progress, awaiting payment, completion and cancellation rates, unique customers, delivery/pickup/shipping split), per-currency GMV vs collected sales, payout breakdown (platform revenue, agent delivery pay, partner commissions, merchant payouts, referral compensation, funded delivery), and the top 5 stores with their referrer. Custom date range added. Mobile `AdminPerformance` is unchanged (enrollment + agents only). `GET /admin/performance/platform`. | §2.5 Analytics, Appendix D |
 | NODE-NESTJS-3F | Sentry 7770650518 | **Pay-after MoMo success at `confirmed` holds instead of settling.** Callback load-by-number now selects `pay_after_merchant_confirm` / `is_cooked_food_pickup`. `finalizePayAtDeliveryPaymentAndComplete` re-reads the order and reroutes pay-after to the hold/prepare path. Classic PAD/PAP settlement is unchanged. | §3.4.5 |
 | store links | – | **Store share links open the mobile app:** `https://rendasua.com/store/:id` is now claimed by the app (iOS `apple-app-site-association` `/store/*`, Android intent filter `/store/`) and routes to `StoreDetail` in any shell, including guests (`appDeepLink.ts`, `useAppDeepLinkNavigation.ts`). Without the app, the link still opens the web store. Android needs a new native build; iOS works once the web deploys plus an OTA update. | Client/guest browse (store page), Appendix D |
@@ -35,6 +38,7 @@
 | web location MoMo remove | – | **Getting paid Remove unlinks this location only:** web `GettingPaidSection` no longer calls `DELETE /mobile-payment-phones/:id` after the location PATCH. Registry delete unlinked every location (and the agent profile) that shared the number. Matches mobile list unlink. Delete the number from payment-phone management if the merchant wants it gone everywhere. | §1.3 Locations |
 | #438 | #438 | **Keyed deposit remainder:** a retry of an idempotency-keyed deposit no longer treats the cash-advance `:repay` row as proof the whole deposit finished. Only the original key short-circuits; if just `:repay` exists, the unpaid remainder is credited (a repayment that consumed the full amount stays done). | §3.1 |
 | location settings payout | – | **Stripe auto-payout stays on when a location section is saved.** Web location settings and mobile name/phone saves no longer set `auto_withdraw_commissions` to false as a side effect. That flag also triggers the Stripe Connect payout after a commission credit. Mobile create of a Stripe location omits the flag so the database default (true) applies. | §3 payouts |
+| NODE-NESTJS-3G | NODE-NESTJS-3G | **Settlement hold release:** if a client item/delivery `release` hits insufficient withheld, settlement measures this order's net ledger hold (`hold` − `release`) and either releases that remainder or skips the release and debits `available` (MoMo/Stripe credit that was never held). Real withheld shortfalls that still have a ledger hold still fail and queue a retry. | §3.3 |
 
 Not yet reflected anywhere in the body: per-section text, the Appendix C flag list (new config key `cancellation_fee_percent`, `failed_delivery_fee_percent`), and the Appendix D file index (`fee-percent.util.ts`, `order-settlement-retry.*`, `common/utils/money-alert.util.ts`).
 
@@ -248,7 +252,7 @@ Permission keys (27): `moderate.items`, `moderate.rentals`, `ops.user_documents`
 | Money | Force refund, pending mobile payments (provider status, resolve), account recharge (credit user wallet), commission accounts & transactions, payment programs (schedules, assignments, cash-advance programs/facilities, purchase credits, partners, campaigns), credits | `/admin/refunds`, `/admin/pending-mobile-payments`, `/admin/account-recharge`, `/admin/commission-accounts`, `/admin/payment-programs/:section?`, `/admin/credits` | `AccountRecharge`, `AdminCredits` | `admin-refunds`, `admin-mobile-payments`, `account-recharge`, `payment-programs-admin`, `credit-campaign-admin`, `admin-credits` |
 | Config | Application configurations, application setup & delivery pricing, country onboarding, Stripe tax codes sync, taxonomy/brands | `/admin/configurations`, `/admin/application-setup`, `/admin/country-onboarding`, `/content-management/*` | – | `configurations`, `admin`, `stripe-tax-admin` |
 | Comms | Broadcasts, WhatsApp inbox/templates, user messages | `/admin/broadcasts`, `/admin/follow-ups` | `AdminBroadcasts`, `AdminWhatsAppInbox/Conversation` | `admin-broadcast`, `admin-whatsapp-*` |
-| Analytics | Site events funnel; performance (web: enrollment, orders, sales, payouts, top stores; mobile: enrollment and agents only); map | `/admin/site-events`, `/admin/performance`, `/admin/map` | `AdminPerformance` | `admin-site-events`, `admin-performance`, `admin-platform-metrics`, `admin-map` |
+| Analytics | Site events funnel, performance, map | `/admin/site-events`, `/admin/performance`, `/admin/map` | `AdminPerformance` | `admin-site-events`, `admin-performance`, `admin-map` |
 | Referral review | Business-referral review queue | `/business/dashboard/admin` (**[I]**) | `BusinessReferralReview` | `admin/business-referral-review.controller.ts` (guarded by `dashboard.platform_stats`) |
 
 ### 2.6 Other actors
@@ -349,7 +353,7 @@ flowchart TD
 ```
 
 **Item settlement** (`processOrderPayment`, idempotency flag `order_holds.item_settlement_completed_at`):
-1. pay_now: release client item hold → `payment` debit of item amount from client. PAD/PAP: release deposit hold (if any) → `payment` debit of full item amount (the MoMo "collect" credit just landed in the wallet).
+1. pay_now: release client item hold → `payment` debit of item amount from client. If the bookkeeping `client_hold_amount` exceeds withheld (hold never placed, e.g. pay-after MoMo sitting in `available`), release the order's remaining ledger hold or skip release, then still `payment` from available. PAD/PAP: release deposit hold (if any) → `payment` debit of full item amount (the MoMo "collect" credit just landed in the wallet).
 2. `commissionsService.distributeItemCommissions`: business **location account** `deposit` = `subtotal − subtotal × commission%` (memo `order_subtotal`); HQ `deposit` = `subtotal × commission% − partner shares`; each partner `deposit` = `rendasuaItemAmount × partner.item_commission%`. Launch-promo business ⇒ commission 0 (`consumePromoOrder`).
 3. Each payout is a wallet `deposit` + `commission_payouts` audit row + push notification; if `auto_withdraw_commissions` is on for the recipient, a MoMo payout or Stripe payout is attempted (failure is non-fatal).
 
@@ -416,7 +420,7 @@ Risk: until the business reconciles, nobody is paid (G-12).
 |---|---|
 | Create (MoMo, wallet insufficient) | `pay_after_merchant_confirm`: order `pending`, **no hold**, no deposit, no stock check, ASAP only |
 | Merchant confirms | full-amount MoMo request (`initiateCookedFoodFullPaymentAfterConfirm`); if wallet covers: C `hold` instead |
-| Paid | C `deposit` (callback) + hold. Callback routing keys on `orders.pay_after_merchant_confirm` (not `payment_timing` alone) so a confirmed pay-after order is **not** settled/completed. Cooked: order → `preparing` (auto prep clock) → `ready_for_pickup`. Non-cooked goods stay `confirmed` until the store marks ready. |
+| Paid | C `deposit` (callback) + hold; order → `preparing` (auto prep clock) → `ready_for_pickup` automatically |
 | Pickup completes | `confirm-pickup` (merchant PIN) or `complete-pickup`: item settlement (B/HQ/P); no delivery fee |
 | Unpaid after confirm | `cancelUnpaidCookedFoodAfterConfirm` — no fee (fee not charged for unpaid pay-after) |
 | Business `fail-pickup` (customer no-show, paid) | fee retained = client cancellation fee; refund = total − fee (`failed_pickups`); `order.cancelled` (cancelledBy `client`) → lambda: C `fee`, B `deposit` fee; rest released; Stripe authorization released |
@@ -768,4 +772,3 @@ Notes: cancellation only via `POST /orders/cancel` (client: `pending_payment…r
 | Delegations | `delegations/*`, migration `20260814171600_location_delegations` |
 | Flags | `app-config/client-flags.constants.ts`, `app-config.service.ts`, web `hooks/useClientFlags.ts`, mobile `services/clientFlagsApi.ts` |
 | Routes | web `apps/frontend/src/app/app.tsx`; mobile `apps/mobile/src/navigation/*RootNavigator.tsx` |
-| Platform performance | `admin/admin-platform-metrics.service.ts`, `admin/admin-platform-metrics.queries.ts`, `GET /admin/performance/platform`; web `components/pages/AdminPerformancePage.tsx` |

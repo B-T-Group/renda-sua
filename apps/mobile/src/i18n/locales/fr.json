@@ -2194,6 +2194,7 @@
         "receivedDays": "Reçue il y a {{count}} jours",
         "titles": {
           "newOrder": "Nouvelle commande",
+          "pendingPayment": "Paiement en attente",
           "preparing": "Préparation en cours",
           "ready": "Prête pour le retrait",
           "agentAssigned": "Livreur assigné",
@@ -2203,7 +2204,9 @@
         },
         "subtitles": {
           "newOrder": "Un client attend votre réponse.",
+          "pendingPayment": "En attente du paiement du client.",
           "preparing": "Continuez à préparer cette commande.",
+          "readyPickupPayAfter": "Le client termine cette commande dans l'application au moment du retrait.",
           "readyPickup": "Le client peut venir récupérer la commande.",
           "readyDelivery": "En attente d'un livreur.",
           "agentAssigned": "Le livreur est en route pour le retrait.",
@@ -2214,6 +2217,7 @@
         "cta": {
           "accept": "Accepter la commande",
           "openOrder": "Ouvrir la commande",
+          "pendingPayment": "Paiement en attente",
           "markReady": "Prêt",
           "viewStatus": "Voir le statut",
           "trackDelivery": "Suivre la livraison",
@@ -2574,6 +2578,7 @@
       "readyConfirmTitle": "Marquer prêt pour enlèvement ?",
       "readyConfirmBody": "Rendasua cherchera un livreur pour récupérer cette commande chez vous.",
       "readyConfirmBodyStore": "Le client sera informé que sa commande est prête à retirer en magasin. À son arrivée, demandez son PIN de retrait pour confirmer la remise et capturer le paiement.",
+      "readyConfirmBodyStorePayAfter": "Le client sera informé que sa commande est prête à retirer en magasin. À son arrivée, demandez-lui d'appuyer sur Terminer la commande dans l'application. Aucun PIN de retrait n'est nécessaire.",
       "confirmConsequenceDelivery": "Le client sera informé. Préparez la commande, puis marquez-la prête — un livreur n’est envoyé qu’après.",
       "confirmConsequencePickup": "Le client sera informé. Préparez la commande, puis marquez-la prête quand il peut la retirer.",
       "confirmConsequenceShipping": "Le client sera informé. Préparez la commande, puis marquez-la expédiée avec le suivi.",
