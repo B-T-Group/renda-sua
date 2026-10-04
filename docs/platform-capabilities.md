@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-04 for short settlement holds staying locked when available balance cannot cover the payment (NODE-NESTJS-3G follow-up). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-04 for the web item-detail low-stock availability check (client asks the store to confirm when 1–5 units remain) and for short settlement holds staying locked when available balance cannot cover the payment (NODE-NESTJS-3G follow-up). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
@@ -10,6 +10,7 @@
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
+| web low-stock check | – | **Client item details (web):** when a non-food listing has 1–5 units left, the scarcity chip includes “Check availability with store”. `POST /inventory-items/:inventoryId/availability-check` (clients only; same low-stock gate as mobile). Guests are asked to sign in first. Cooked food stays excluded. Mobile item detail and catalog cards already had this action. | §2.1 Client |
 | pay-at-confirm ready card | – | **Business dashboard active-order card (mobile):** a paid pay-at-confirm pickup that is ready no longer shows Confirm Pickup. The subtitle says the customer completes the order in the app. The store marks a failed pickup from the order details page. Tapping the card still opens that page. | §2.2 Orders |
 | pay-at-confirm ready copy | – | **Business "Mark ready for pickup?" dialog (mobile):** pay-at-confirm store pickup tells the merchant to ask the customer to tap Complete order. It no longer mentions a pickup PIN or capturing payment. Prepaid pickup still uses the PIN. Delivery mark-ready copy is unchanged. | §2.2 Orders |
 | mobile pending payment card | – | **Business dashboard active-order card (mobile):** a confirmed pay-after order that is still unpaid shows "Pending payment" (title, subtitle, and button) and opens the order. It no longer offers Ready / mark-ready. Once payment is paid or authorized, Ready returns. Classic pay-at-delivery and pay-at-pickup are unchanged. | §2.2 Orders |
@@ -168,7 +169,7 @@ Legend: **W** = web (`apps/frontend`), **M** = mobile (`apps/mobile`), **B** = b
 
 | Area | Capabilities | W | M | Backend / pointers |
 |---|---|---|---|---|
-| Browse / discovery | Items, categories, collections, stores, deals, food menu, exports ("export_available" items → submit interest instead of buying), search, likes (favourites), follow stores | `/items`, `/foods`, `/stores`, `/deals`, `/exports`, `/likes` | `ClientBrowse`, `ClientFoods`, `StoresList`, `UserLikes`, `CategoriesBrowse`, `CollectionDetail` | `marketplace-public`, `item-likes`, `business-follows`, `collections`, `item-deals` |
+| Browse / discovery | Items, categories, collections, stores, deals, food menu, exports ("export_available" items → submit interest instead of buying), search, likes (favourites), follow stores. Low-stock check (1–5 left, not cooked food): web item detail asks the store to confirm; mobile catalog card and item detail already do | `/items`, `/items/:id`, `/foods`, `/stores`, `/deals`, `/exports`, `/likes` | `ClientBrowse`, `ClientFoods`, `StoresList`, `UserLikes`, `CategoriesBrowse`, `CollectionDetail`, `InventoryItemDetail` | `marketplace-public`, `item-likes`, `business-follows`, `collections`, `item-deals`, `POST /inventory-items/:id/availability-check` |
 | Catalog experience v1 | Curated rails/stops on the items page | `ItemsPage.tsx` | `BrowseCatalogScreen.tsx` | flag `catalog_experience_v1` (**on in prod**) |
 | Reels | Vertical product video feed, like, view; comments | **no web feed route found [V]** (`/admin/reels/*` only) | `ClientReels` tab, `ReelOverlay` | `reels/reels-feed.controller.ts`, flags `reels_enabled` (on), `reels_comments_enabled` (**off**) |
 | Rentals (renter) | Browse rental listings, request / book, pay (Stripe auth incl. security deposit; MoMo = reserve & pay at pickup), start-PIN handover, return, rate | `/rentals*`, `/rentals/requests`, `/rentals/bookings/:id` | `ClientRentalsHome`, `RentalListingDetail`, `ClientMyRentals`, `RentalBookingDetail`, `RentalRateBooking` | `rentals/rentals.controller.ts` |

@@ -77,7 +77,7 @@ import { ItemDetailDealCountdown } from '../common/ItemDetailDealCountdown';
 import { ItemDetailFaqAccordion } from '../common/ItemDetailFaqAccordion';
 import { ItemDetailHowItWorks } from '../common/ItemDetailHowItWorks';
 import { ItemDetailRatingSummary } from '../common/ItemDetailRatingSummary';
-import { ItemDetailScarcityBadge } from '../common/ItemDetailScarcityBadge';
+import { ItemDetailAvailabilityCheck } from '../common/ItemDetailAvailabilityCheck';
 import { ItemDetailSocialProof } from '../common/ItemDetailSocialProof';
 import { ItemDetailTrustStrip } from '../common/ItemDetailTrustStrip';
 import { ImageLightboxTapZones } from '../common/ImageLightboxTapZones';
@@ -1361,7 +1361,9 @@ export default function ItemDetailPage() {
             />
 
             {!foodAvailability ? (
-              <ItemDetailScarcityBadge
+              <ItemDetailAvailabilityCheck
+                inventoryId={inventoryItem.id}
+                itemName={item.name}
                 quantity={optionHasStock ? selectedAvailable : 0}
               />
             ) : null}

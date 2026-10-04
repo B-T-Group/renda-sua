@@ -6149,6 +6149,13 @@
     "notFound": "Article introuvable",
     "perishable": "Périssable",
     "productInformation": "Informations produit",
+    "availability": {
+      "checkCta": "Vérifier la disponibilité auprès du magasin",
+      "checkCtaA11y": "Vérifier la disponibilité de {{name}} auprès du magasin",
+      "pending": "En attente du magasin…",
+      "requestSent": "Nous avons demandé au magasin de confirmer. Vous serez notifié de leur réponse.",
+      "requestFailed": "Impossible d’envoyer la demande. Réessayez bientôt."
+    },
     "reviews": "Avis",
     "sku": "Référence",
     "specialHandling": "Manutention spéciale",

@@ -6430,6 +6430,13 @@
     "notFound": "Item not found",
     "perishable": "Perishable",
     "productInformation": "Product Information",
+    "availability": {
+      "checkCta": "Check availability with store",
+      "checkCtaA11y": "Check availability of {{name}} with the store",
+      "pending": "Waiting for the store…",
+      "requestSent": "We’ve asked the store to confirm availability. You’ll be notified when they reply.",
+      "requestFailed": "Could not send the availability check. Try again shortly."
+    },
     "reviews": "Reviews",
     "sku": "SKU",
     "specialHandling": "Special handling",
