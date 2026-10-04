@@ -7660,7 +7660,11 @@
     "pickupNotice": "No delivery fee. Collect your order at each store once it is ready.",
     "pickupNoFee": "Waived (store pickup)",
     "diaspora": {
+      "eyebrow": "For someone special",
+      "illustrationLabel": "A gift for someone special",
       "title": "Sending an order home",
+      "localTitle": "Send this order as a gift",
+      "localLine": "A personal delivery, handed over in their name.",
       "payingFrom": "Paying from {{country}}",
       "deliveringTo": "Delivering to {{country}}",
       "sendingToSomeoneElse": "Someone else is receiving this order",

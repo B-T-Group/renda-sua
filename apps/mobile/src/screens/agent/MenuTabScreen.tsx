@@ -116,6 +116,10 @@ function MenuTabScreen() {
 
         <PersonaQuickSwitch />
 
+        <UserMenuSection>
+          <MenuLanguageSwitcher />
+        </UserMenuSection>
+
         <UserMenuSection title={t('menuTab.sections.account', 'Account')}>
           <UserMenuRow
             icon="account-outline"
@@ -211,7 +215,6 @@ function MenuTabScreen() {
             )}
             onPress={() => goTo('NotificationPreferences')}
           />
-          <MenuLanguageSwitcher />
           <MenuThemeSwitcher />
         </UserMenuSection>
 

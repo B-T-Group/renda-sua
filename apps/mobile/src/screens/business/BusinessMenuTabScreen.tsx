@@ -128,6 +128,10 @@ function BusinessMenuTabScreenBase() {
 
         <PersonaQuickSwitch />
 
+        <UserMenuSection>
+          <MenuLanguageSwitcher />
+        </UserMenuSection>
+
         <UserMenuSection title={t('menuTab.sections.catalog', 'Catalog')}>
           {me?.business?.main_interest === 'rent_items' ? (
             <UserMenuRow
@@ -183,7 +187,6 @@ function BusinessMenuTabScreenBase() {
             )}
             onPress={() => goTo('NotificationPreferences')}
           />
-          <MenuLanguageSwitcher />
           <MenuThemeSwitcher />
           <TipsRemindersToggleRow />
         </UserMenuSection>

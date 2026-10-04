@@ -1701,10 +1701,13 @@ export default function PlaceOrderScreen() {
         {/* Payment method (country-locked) - driven by preflight, not client country */}
         {fulfillmentConfirmed && preflightConfig ? (
           <>
-            <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-              <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-                {t('checkout.paymentMethod', 'Payment method')}
-              </Text>
+            <View
+              style={[
+                styles.block,
+                styles.paymentMethodBlock,
+                { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md },
+              ]}
+            >
               <PaymentMethodLockedRow
                 method={resolvedIsStripeRail ? 'stripe' : 'mobile_money'}
                 countryIsos={[sellerCountry]}
@@ -1864,6 +1867,7 @@ export default function PlaceOrderScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   block: { padding: 16, borderWidth: 1, marginBottom: 12 },
+  paymentMethodBlock: { paddingVertical: 10 },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',

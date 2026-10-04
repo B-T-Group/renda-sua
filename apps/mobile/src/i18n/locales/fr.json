@@ -7038,6 +7038,8 @@
     "someoneElseReceiving": "Quelqu'un d'autre recevra cette commande",
     "someoneElseHelp": "Activez cette option pour choisir qui recevra la commande. Nous lui enverrons les mises à jour de livraison.",
     "checkoutHeader": "Checkout diaspora",
+    "eyebrow": "Pour quelqu'un de spécial",
+    "illustrationLabel": "Un cadeau pour quelqu'un de spécial",
     "selectRecipientTitle": "Qui reçoit cette commande ?",
     "selectRecipientPrompt": "Touchez un destinataire pour continuer",
     "selectRecipientToPay": "Sélectionnez un destinataire avant de payer",

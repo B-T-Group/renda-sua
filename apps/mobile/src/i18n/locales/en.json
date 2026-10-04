@@ -7117,6 +7117,8 @@
     "someoneElseReceiving": "Someone else is receiving this order",
     "someoneElseHelp": "Turn this on to choose who will receive the order. We will send them delivery updates.",
     "checkoutHeader": "Diaspora checkout",
+    "eyebrow": "For someone special",
+    "illustrationLabel": "A gift for someone special",
     "selectRecipientTitle": "Who is receiving this order?",
     "selectRecipientPrompt": "Tap a recipient to continue",
     "selectRecipientToPay": "Select a recipient before paying",

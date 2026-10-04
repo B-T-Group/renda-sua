@@ -5,7 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { shadows } from '@/theme/shadows';
 
 export interface UserMenuSectionProps {
-  title: string;
+  title?: string;
   children: React.ReactNode;
 }
 
@@ -19,15 +19,17 @@ export function UserMenuSection({ title, children }: UserMenuSectionProps) {
 
   return (
     <View style={[styles.wrapper, { marginBottom: spacing.lg }]}>
-      <Text
-        variant="labelSmall"
-        style={[
-          styles.title,
-          { color: colors.text.disabled, paddingHorizontal: spacing.md },
-        ]}
-      >
-        {title.toUpperCase()}
-      </Text>
+      {title ? (
+        <Text
+          variant="labelSmall"
+          style={[
+            styles.title,
+            { color: colors.text.disabled, paddingHorizontal: spacing.md },
+          ]}
+        >
+          {title.toUpperCase()}
+        </Text>
+      ) : null}
       <View
         style={[
           styles.body,

@@ -58,20 +58,33 @@ export function PaymentMethodLockedRow({
   countryIsos,
 }: PaymentMethodLockedRowProps) {
   const { t } = useTranslation();
-  const { spacing } = useTheme();
+  const { colors, spacing } = useTheme();
   const marks = itemPaymentMarks({ method, countryIsos });
   const label = marks.map((mark) => markLabel(t, mark)).join(', ');
-
-  if (marks[0] === 'generic') {
-    return <GenericPaymentMark label={label} />;
-  }
+  const heading = t('checkout.paymentMethod', 'Payment method');
 
   return (
     <View
-      accessibilityRole="image"
-      accessibilityLabel={label}
+      accessibilityRole="text"
+      accessibilityLabel={`${heading}. ${label}`}
       style={[styles.row, { gap: spacing.sm }]}
     >
+      <Text
+        variant="bodyMedium"
+        style={{ color: colors.text.secondary, flexShrink: 1 }}
+      >
+        {heading}
+      </Text>
+      <PaymentMarks marks={marks} label={label} />
+    </View>
+  );
+}
+
+function PaymentMarks({ marks, label }: { marks: PaymentMark[]; label: string }) {
+  const { spacing } = useTheme();
+  if (marks[0] === 'generic') return <GenericPaymentMark label={label} />;
+  return (
+    <View style={[styles.marks, { gap: spacing.xs }]}>
       {marks.map((mark) =>
         mark === 'generic' ? null : <PaymentMarkView key={mark} mark={mark} />
       )}
@@ -107,21 +120,14 @@ function BrandLogo({ mark }: { mark: 'cm' | 'airtel' | 'moov' }) {
 
 function CardMark() {
   const { t } = useTranslation();
-  const { colors, borderRadius } = useTheme();
+  const { colors } = useTheme();
   return (
     <View
       accessibilityRole="image"
       accessibilityLabel={markLabel(t, 'card')}
-      style={[
-        styles.cardChip,
-        {
-          borderColor: colors.divider,
-          backgroundColor: colors.surface,
-          borderRadius: borderRadius.md,
-        },
-      ]}
+      style={styles.cardChip}
     >
-      <Svg width={28} height={20} viewBox="0 0 28 20">
+      <Svg width={22} height={16} viewBox="0 0 28 20">
         <Rect width="28" height="20" rx="3" fill={colors.primary.main} />
         <Rect y="5" width="28" height="4" fill="#FFFFFF" opacity={0.9} />
         <Rect x="3" y="12" width="8" height="3" rx="1" fill="#FFFFFF" />
@@ -134,24 +140,11 @@ function CardMark() {
 }
 
 function GenericPaymentMark({ label }: { label: string }) {
-  const { colors, borderRadius, spacing } = useTheme();
+  const { colors, spacing } = useTheme();
   return (
-    <View
-      accessibilityRole="text"
-      style={[
-        styles.generic,
-        {
-          gap: spacing.sm,
-          borderColor: colors.divider,
-          backgroundColor: colors.surface,
-          borderRadius: borderRadius.md,
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm,
-        },
-      ]}
-    >
-      <MaterialCommunityIcons name="cellphone" size={22} color={colors.text.secondary} />
-      <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
+    <View style={[styles.generic, { gap: spacing.xs }]}>
+      <MaterialCommunityIcons name="cellphone" size={18} color={colors.text.secondary} />
+      <Text variant="labelLarge" style={{ color: colors.text.primary, fontWeight: '600' }}>
         {label}
       </Text>
     </View>
@@ -162,9 +155,13 @@ const styles = StyleSheet.create({
   row: {
     width: '100%',
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+  },
+  marks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   logo: {
     borderRadius: 8,
@@ -172,15 +169,10 @@ const styles = StyleSheet.create({
   cardChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 6,
   },
   generic: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    borderWidth: 1,
   },
 });

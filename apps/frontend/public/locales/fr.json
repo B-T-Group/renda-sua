@@ -7376,7 +7376,11 @@
     "pickupNotice": "Pas de frais de livraison. Récupérez votre commande dans chaque magasin dès qu'elle est prête.",
     "pickupNoFee": "Offert (retrait en magasin)",
     "diaspora": {
+      "eyebrow": "Pour quelqu'un de spécial",
+      "illustrationLabel": "Un cadeau pour quelqu'un de spécial",
       "title": "Envoyer une commande au pays",
+      "localTitle": "Offrir cette commande",
+      "localLine": "Une livraison personnelle, remise en son nom.",
       "payingFrom": "Paiement depuis {{country}}",
       "deliveringTo": "Livraison vers {{country}}",
       "sendingToSomeoneElse": "Une autre personne reçoit cette commande",
