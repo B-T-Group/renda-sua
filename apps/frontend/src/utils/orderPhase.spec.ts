@@ -1,4 +1,40 @@
-import { orderToPhaseInput, resolveOrderPhase } from './orderPhase';
+import {
+  clientJourneyActiveIndex,
+  clientJourneyMessage,
+  clientJourneySteps,
+  isClientJourneyPickup,
+  orderToPhaseInput,
+  resolveOrderPhase,
+} from './orderPhase';
+
+describe('clientJourneySteps', () => {
+  it('uses picked up instead of delivered for pickup orders', () => {
+    expect(
+      isClientJourneyPickup({
+        fulfillmentMethod: 'pickup',
+        paymentTiming: 'pay_now',
+      })
+    ).toBe(true);
+    expect(clientJourneySteps(true)).toEqual([
+      'placed',
+      'confirmed',
+      'preparing',
+      'picked_up',
+    ]);
+    expect(clientJourneyActiveIndex('done', 4)).toBe(3);
+    expect(clientJourneyMessage('done', true).fallback).toBe(
+      'Your order was picked up.'
+    );
+  });
+
+  it('keeps on the way for delivery orders', () => {
+    expect(isClientJourneyPickup({ fulfillmentMethod: 'delivery' })).toBe(false);
+    expect(clientJourneySteps(false)).toContain('on_the_way');
+    expect(clientJourneyMessage('done', false).key).toBe(
+      'client.journey.messageDelivered'
+    );
+  });
+});
 
 describe('orderToPhaseInput cooked-food pickup', () => {
   it('infers cooked-food pickup from line flags when the order flag is missing', () => {

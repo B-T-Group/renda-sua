@@ -436,6 +436,28 @@ La commande {{1}} est en route. Donnez votre code de livraison uniquement au liv
   },
   {
     kind: 'content',
+    name: 'rs_recipient_complete_pickup',
+    category: 'UTILITY',
+    exampleValues: ['ORD-1001', 'Acme Store'],
+    quickReplies: [
+      {
+        id: 'complete_order',
+        text: { en: 'Complete order', fr: 'Terminer la commande' },
+      },
+    ],
+    body: {
+      en: `Rendasua: your order is ready for pickup.
+
+Order {{1}} can be collected at {{2}}.
+After you collect it, tap Complete order so the store can be paid.`,
+      fr: `Rendasua : votre commande est prête pour le retrait.
+
+La commande {{1}} peut être récupérée chez {{2}}.
+Après l'avoir récupérée, appuyez sur Terminer la commande pour que le magasin soit payé.`,
+    },
+  },
+  {
+    kind: 'content',
     name: 'rs_recipient_order_ready',
     category: 'UTILITY',
     exampleValues: ['ORD-1001', 'Acme Store'],

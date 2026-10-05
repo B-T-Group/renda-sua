@@ -447,6 +447,110 @@ export function orderProgressSteps(fulfillmentMethod?: string | null): string[] 
   ];
 }
 
+export const DELIVERY_JOURNEY_STEPS = [
+  'placed',
+  'confirmed',
+  'preparing',
+  'on_the_way',
+  'delivered',
+] as const;
+
+export const PICKUP_JOURNEY_STEPS = [
+  'placed',
+  'confirmed',
+  'preparing',
+  'picked_up',
+] as const;
+
+export type ClientJourneyStep =
+  | (typeof DELIVERY_JOURNEY_STEPS)[number]
+  | (typeof PICKUP_JOURNEY_STEPS)[number];
+
+export function isClientJourneyPickup(input: {
+  fulfillmentMethod?: string | null;
+  paymentTiming?: string | null;
+}): boolean {
+  return (
+    input.fulfillmentMethod === 'pickup' ||
+    input.paymentTiming === 'pay_at_pickup'
+  );
+}
+
+export function clientJourneySteps(pickup: boolean): readonly ClientJourneyStep[] {
+  return pickup ? PICKUP_JOURNEY_STEPS : DELIVERY_JOURNEY_STEPS;
+}
+
+export function clientJourneyActiveIndex(phase: string, stepCount: number): number {
+  if (phase === 'done') return Math.max(0, stepCount - 1);
+  if (phase === 'in_delivery') return Math.min(3, stepCount - 1);
+  if (phase === 'ready' || phase === 'prepare') return 2;
+  if (phase === 'confirm') return 1;
+  return 0;
+}
+
+export function clientJourneyMessage(
+  phase: string,
+  pickup: boolean
+): { key: string; fallback: string } {
+  if (phase === 'in_delivery') {
+    return { key: 'client.journey.onTheWay', fallback: 'Your order is on the way.' };
+  }
+  if (phase === 'ready' && pickup) return readyPickupJourneyMessage();
+  if (phase === 'prepare' || phase === 'ready') return preparingJourneyMessage();
+  if (phase === 'done') return doneJourneyMessage(pickup);
+  if (phase === 'pay') {
+    return { key: 'client.journey.pay', fallback: 'Payment is the next step.' };
+  }
+  return placedJourneyMessage();
+}
+
+function readyPickupJourneyMessage(): { key: string; fallback: string } {
+  return {
+    key: 'client.journey.messageReadyPickup',
+    fallback: 'Ready for pickup.',
+  };
+}
+
+function preparingJourneyMessage(): { key: string; fallback: string } {
+  return {
+    key: 'client.journey.messagePreparing',
+    fallback: 'Your order is being prepared.',
+  };
+}
+
+function doneJourneyMessage(pickup: boolean): { key: string; fallback: string } {
+  if (pickup) {
+    return {
+      key: 'client.journey.messagePickedUp',
+      fallback: 'Your order was picked up.',
+    };
+  }
+  return {
+    key: 'client.journey.messageDelivered',
+    fallback: 'Your order was delivered.',
+  };
+}
+
+function placedJourneyMessage(): { key: string; fallback: string } {
+  return {
+    key: 'client.journey.messagePlaced',
+    fallback: 'Your order is with the store.',
+  };
+}
+
+const JOURNEY_STEP_LABELS: Record<string, string> = {
+  placed: 'Placed',
+  confirmed: 'Confirmed',
+  preparing: 'Preparing',
+  on_the_way: 'On the way',
+  delivered: 'Delivered',
+  picked_up: 'Picked up',
+};
+
+export function clientJourneyStepFallback(step: string): string {
+  return JOURNEY_STEP_LABELS[step] ?? step;
+}
+
 export function messagesDefaultExpandedForOrder(status: string): boolean {
   return (
     status === 'out_for_delivery' ||

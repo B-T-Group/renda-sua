@@ -4,10 +4,16 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { motion } from '@/theme/motion';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
-import { resolveOrderPhase, type OrderPhaseInput } from '@/utils/orderPhase';
+import {
+  clientJourneyActiveIndex,
+  clientJourneyMessage,
+  clientJourneyStepFallback,
+  clientJourneySteps,
+  isClientJourneyPickup,
+  resolveOrderPhase,
+  type OrderPhaseInput,
+} from '@/utils/orderPhase';
 import { AppText } from '../common/AppText';
-
-const DELIVERY_STEPS = ['placed', 'confirmed', 'preparing', 'on_the_way', 'delivered'] as const;
 
 type Props = {
   input: OrderPhaseInput;
@@ -18,16 +24,19 @@ type Props = {
 export function OrderJourneyTimeline({ input, agentName }: Props) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
+  const pickup = isClientJourneyPickup(input);
+  const steps = clientJourneySteps(pickup);
   const phase = resolveOrderPhase(input, 'client');
-  const active = activeIndex(phase.phase);
-  const fill = useSharedValue(active / (DELIVERY_STEPS.length - 1));
+  const active = clientJourneyActiveIndex(phase.phase, steps.length);
+  const fill = useSharedValue(active / (steps.length - 1));
   useEffect(() => {
-    fill.value = withTiming(active / (DELIVERY_STEPS.length - 1), { duration: motion.duration.slow });
-  }, [active, fill]);
+    fill.value = withTiming(active / (steps.length - 1), { duration: motion.duration.slow });
+  }, [active, fill, steps.length]);
   const bar = useAnimatedStyle(() => ({ width: `${Math.round(fill.value * 100)}%` }));
   const message = journeyMessage(
     t as (key: string, fallback: string, options?: Record<string, string>) => string,
     phase.phase,
+    pickup,
     agentName,
     input.status
   );
@@ -38,7 +47,7 @@ export function OrderJourneyTimeline({ input, agentName }: Props) {
         <Animated.View style={[styles.fill, bar, { backgroundColor: colors.primary.main }]} />
       </View>
       <View style={[styles.row, { marginTop: spacing.sm }]}>
-        {DELIVERY_STEPS.map((step, index) => (
+        {steps.map((step, index) => (
           <View key={step} style={styles.step}>
             <View
               style={[
@@ -47,29 +56,13 @@ export function OrderJourneyTimeline({ input, agentName }: Props) {
               ]}
             />
             <AppText role="caption" style={{ textAlign: 'center', marginTop: spacing.xxs }}>
-              {t(`client.journey.${step}`, defaultLabel(step))}
+              {t(`client.journey.${step}`, clientJourneyStepFallback(step))}
             </AppText>
           </View>
         ))}
       </View>
     </View>
   );
-}
-
-function activeIndex(phase: string): number {
-  if (phase === 'done') return 4;
-  if (phase === 'in_delivery') return 3;
-  if (phase === 'ready' || phase === 'prepare') return 2;
-  if (phase === 'confirm') return 1;
-  return 0;
-}
-
-function defaultLabel(step: (typeof DELIVERY_STEPS)[number]): string {
-  if (step === 'placed') return 'Placed';
-  if (step === 'confirmed') return 'Confirmed';
-  if (step === 'preparing') return 'Preparing';
-  if (step === 'on_the_way') return 'On the way';
-  return 'Delivered';
 }
 
 function deliveryMessage(
@@ -98,14 +91,13 @@ function deliveryMessage(
 function journeyMessage(
   t: (key: string, fallback: string, options?: Record<string, string>) => string,
   phase: string,
+  pickup: boolean,
   agentName?: string | null,
   status?: string | null
 ): string {
-  if (phase === 'in_delivery') return deliveryMessage(t, agentName, status);
-  if (phase === 'prepare' || phase === 'ready') return t('client.journey.messagePreparing', 'Your order is being prepared.');
-  if (phase === 'done') return t('client.journey.messageDelivered', 'Your order was delivered.');
-  if (phase === 'pay') return t('client.journey.pay', 'Payment is the next step.');
-  return t('client.journey.messagePlaced', 'Your order is with the store.');
+  if (phase === 'in_delivery' && !pickup) return deliveryMessage(t, agentName, status);
+  const copy = clientJourneyMessage(phase, pickup);
+  return t(copy.key, copy.fallback);
 }
 
 const styles = StyleSheet.create({

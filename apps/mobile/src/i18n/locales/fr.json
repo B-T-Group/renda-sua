@@ -4274,12 +4274,15 @@
       "preparing": "En préparation",
       "on_the_way": "En route",
       "delivered": "Livrée",
+      "picked_up": "Récupérée",
       "agentPickingUp": "{{name}} récupère votre commande.",
       "onTheWay": "Votre commande est en route.",
       "pay": "Le paiement est la prochaine étape.",
       "messagePlaced": "Votre commande est chez le magasin.",
       "messagePreparing": "Votre commande est en préparation.",
-      "messageDelivered": "Votre commande a été livrée."
+      "messageReadyPickup": "Prête pour le retrait.",
+      "messageDelivered": "Votre commande a été livrée.",
+      "messagePickedUp": "Votre commande a été récupérée."
     },
     "card": {
       "onlyLeft": "Plus que {{count}}",

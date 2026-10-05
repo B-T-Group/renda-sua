@@ -19,7 +19,7 @@ const THIRD_PARTY_ORDER = {
 };
 
 describe('OrderRecipientNotificationsService', () => {
-  let hasura: { executeQuery: jest.Mock };
+  let hasura: { executeQuery: jest.Mock; executeMutation: jest.Mock };
   let sms: { sendSms: jest.Mock };
   let whatsApp: { send: jest.Mock };
   let service: OrderRecipientNotificationsService;
@@ -27,6 +27,7 @@ describe('OrderRecipientNotificationsService', () => {
   function build(order: unknown = THIRD_PARTY_ORDER, smsEnabled = true) {
     hasura = {
       executeQuery: jest.fn().mockResolvedValue({ orders_by_pk: order }),
+      executeMutation: jest.fn().mockResolvedValue({}),
     };
     sms = { sendSms: jest.fn().mockResolvedValue({ success: true }) };
     whatsApp = { send: jest.fn().mockResolvedValue({ status: 'sent' }) };
@@ -103,6 +104,54 @@ describe('OrderRecipientNotificationsService', () => {
           storeName: 'Chez Nkoghe',
         },
       });
+    });
+
+    it('sends complete-order to a diaspora pickup recipient and binds the message', async () => {
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        fulfillment_method: 'pickup',
+        is_diaspora_order: true,
+        payment_status: 'authorized',
+      });
+      whatsApp.send.mockResolvedValue({
+        status: 'sent',
+        providerMessageId: 'wamid.ready',
+      });
+
+      await service.notifyStatusChange('order-1', 'ready_for_pickup');
+
+      expect(whatsApp.send.mock.calls[0][0].payload.templateKey).toBe(
+        'recipient_complete_pickup'
+      );
+      expect(hasura.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('BindRecipientComplete'),
+        expect.objectContaining({
+          object: expect.objectContaining({
+            notification_type: 'order.recipient.complete_pickup',
+            provider_message_id: 'wamid.ready',
+            entity_id: 'order-1',
+          }),
+        })
+      );
+      expect(sms.sendSms).not.toHaveBeenCalled();
+    });
+
+    it('keeps the ready notice for a non-diaspora pickup', async () => {
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        fulfillment_method: 'pickup',
+        is_diaspora_order: false,
+        payment_status: 'authorized',
+      });
+
+      await service.notifyStatusChange('order-1', 'ready_for_pickup');
+
+      expect(whatsApp.send.mock.calls[0][0].payload.templateKey).toBe(
+        'recipient_order_ready'
+      );
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
     });
 
     it('uses the recipient update template for confirmed/delivered/cancelled', async () => {

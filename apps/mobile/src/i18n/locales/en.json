@@ -4367,12 +4367,15 @@
       "preparing": "Preparing",
       "on_the_way": "On the way",
       "delivered": "Delivered",
+      "picked_up": "Picked up",
       "agentPickingUp": "{{name}} is picking up your order.",
       "onTheWay": "Your order is on the way.",
       "pay": "Payment is the next step.",
       "messagePlaced": "Your order is with the store.",
       "messagePreparing": "Your order is being prepared.",
-      "messageDelivered": "Your order was delivered."
+      "messageReadyPickup": "Ready for pickup.",
+      "messageDelivered": "Your order was delivered.",
+      "messagePickedUp": "Your order was picked up."
     },
     "card": {
       "onlyLeft": "Only {{count}} left",

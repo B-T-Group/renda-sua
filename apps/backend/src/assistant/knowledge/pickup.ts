@@ -6,6 +6,7 @@ const EN = `In-store pickup on Rendasua:
 - At checkout (or by switching fulfillment), customers can choose pickup instead of delivery.
 - Pay-at-pickup is for mobile money (not Stripe cards): when the order is ready, go to the store, tap Pay in the app, and approve the mobile money request on your phone. After approval the order is complete and you can collect your items. The merchant can also send a payment request if you need help.
 - Prepaid pickup (card or pay-now) uses a pickup PIN instead of a payment request.
+- On a diaspora prepaid store pickup, the person receiving the order can tap Complete order on the WhatsApp message after collecting it. That completes the order and pays the store. The person who paid can still tap Complete in the app.
 - Pay-after-confirm pickup (the store confirms, then you pay by mobile money): when the order is ready, tap Complete order in the app at the store. There is no pickup PIN.
 - The order shows pickup instructions and timing in the app.
 - Cooked-food pickup is ASAP only (no future pickup slot). Place the order during the dish's serving hours, which override the location's store hours.
@@ -19,6 +20,7 @@ const FR = `Retrait en magasin sur Rendasua :
 - Au checkout (ou en changeant le mode de fulfillment), le client peut choisir le retrait plutôt que la livraison.
 - Le paiement au retrait concerne le mobile money (pas Stripe) : lorsque la commande est prête, rendez-vous au magasin, appuyez sur Payer dans l'application et approuvez la demande de paiement mobile sur votre téléphone. Une fois approuvée, la commande est finalisée et vous pouvez récupérer vos articles. Le commerçant peut aussi envoyer une demande si vous avez besoin d'aide.
 - Un retrait déjà payé (carte ou paiement immédiat) utilise un code PIN de retrait, pas une demande de paiement.
+- Pour un retrait diaspora déjà payé, la personne qui reçoit la commande peut appuyer sur Terminer la commande dans le message WhatsApp après l'avoir récupérée. Cela termine la commande et paie le magasin. La personne qui a payé peut toujours appuyer sur Terminer dans l'application.
 - Retrait avec paiement après confirmation (le magasin confirme, puis vous payez par mobile money) : lorsque la commande est prête, appuyez sur Terminer la commande dans l'application au magasin. Il n'y a pas de PIN de retrait.
 - La commande affiche les instructions et horaires de retrait dans l'application.
 - Le retrait de plats cuisinés est ASAP uniquement (pas de créneau futur). Passez commande pendant les horaires de service du plat, qui priment sur les horaires du lieu.
