@@ -1547,6 +1547,43 @@ describe('CheckoutPreflightService', () => {
       );
       expect(result.groups[0].pay_after_merchant_confirm_eligible).toBe(false);
     });
+
+    it('multi-location cart: any flagged location makes whole cart pay-after', async () => {
+      const flaggedRow = makeInventoryRow({
+        id: 'inv-flagged',
+        locationId: 'loc-flagged',
+        initialDepositEnabled: false,
+      });
+      (flaggedRow.business_location as any).pay_at_confirm = true;
+
+      const unflaggedRow = makeInventoryRow({
+        id: 'inv-unflagged',
+        locationId: 'loc-unflagged',
+        initialDepositEnabled: true,
+        initialDepositPercent: 10,
+      });
+      (unflaggedRow.business_location as any).pay_at_confirm = false;
+
+      mockFlags({ [KILL]: true }, [flaggedRow, unflaggedRow]);
+      const result = await service.resolve(
+        {
+          items: [
+            { business_inventory_id: 'inv-flagged', quantity: 1 },
+            { business_inventory_id: 'inv-unflagged', quantity: 1 },
+          ],
+          provisional_country: 'CM',
+          payment_timing: 'pay_now',
+        },
+        false
+      );
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.pay_after_merchant_confirm_eligible).toBe(true);
+      const group = result.groups[0];
+      expect(group.pay_after_merchant_confirm_eligible).toBe(true);
+      expect(group.deposit_required).toBeUndefined();
+      expect(group.schedule_allowed).toBe(false);
+    });
   });
 
   describe('MoMo deposit quote', () => {

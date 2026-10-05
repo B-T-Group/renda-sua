@@ -1539,6 +1539,126 @@ describe('OrdersService', () => {
       expect(finalizeSpy).toHaveBeenCalled();
     });
 
+    // ---- Multi-location any-flagged twin ----
+    it('multi-location cart with any flagged location: whole cart becomes pay-after', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest.spyOn(service as any, 'updateReservedQuantities').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      jest.spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ id: 'order-123', order_number: '12345678' });
+      jest.spyOn(service as any, 'sendOrderPlacedNotifications').mockResolvedValue(undefined);
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+      const finalizeSpy = jest.spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+
+      const flaggedInv = {
+        id: 'inv-flagged',
+        computed_available_quantity: 10,
+        selling_price: 1000,
+        is_active: true,
+        business_location_id: 'loc-flagged',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        business_location: {
+          business_id: 'biz-1',
+          is_active: true,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: { country: 'CM' },
+          business: {
+            id: 'biz-1',
+            name: 'Flagged Store',
+            can_accept_orders: true,
+            is_verified: true,
+            user: { id: 'm-1', country: 'CM' },
+          },
+        },
+        item: {
+          id: 'item-f',
+          name: 'Flagged Item',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          currency: 'XAF',
+          item_variants: [],
+          item_sub_category: { item_category: { name: 'Hardware' } },
+        },
+      };
+      const unflaggedInv = {
+        ...flaggedInv,
+        id: 'inv-unflagged',
+        business_location_id: 'loc-unflagged',
+        business_location: {
+          ...flaggedInv.business_location,
+          id: 'loc-unflagged',
+          pay_at_confirm: false,
+        },
+        item: { ...flaggedInv.item, id: 'item-u', name: 'Unflagged Item', pay_at_pickup_enabled: true },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ business_inventory: [flaggedInv, unflaggedInv] })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-123',
+            order_number: '12345678',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+237654100000',
+        items: [
+          { business_inventory_id: 'inv-flagged', quantity: 1 },
+          { business_inventory_id: 'inv-unflagged', quantity: 1 },
+        ],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: true })
+      );
+      expect(finalizeSpy).not.toHaveBeenCalled();
+    });
+
     it('calculates the MoMo deposit from the post-credit total', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.sessionPersonaContext.mockReturnValue({
