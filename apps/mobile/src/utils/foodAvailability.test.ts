@@ -4,6 +4,7 @@ import {
   FOOD_CATEGORY_NAME,
   FOOD_SUB_CATEGORY_NAME,
   formatNextOpening,
+  weekdayInTimezone,
   formatSlotRange,
   formatSlotTime,
   foodWeekdayName,
@@ -273,6 +274,16 @@ describe('groupFoodSlotsByDay', () => {
     expect(actual.map((row) => row.dayOfWeek)).toEqual([1, 5]);
     expect(actual[0].slots).toHaveLength(2);
     expect(actual[0].slots[0].start_time).toBe('12:30:00');
+  });
+});
+
+describe('weekdayInTimezone', () => {
+  it('uses the restaurant clock, not the device clock', () => {
+    const mondayNoonDouala = new Date('2026-08-24T11:30:00.000Z');
+    expect(weekdayInTimezone('Africa/Douala', mondayNoonDouala)).toBe(1);
+    expect(weekdayInTimezone('not-a-zone', mondayNoonDouala)).toBe(
+      mondayNoonDouala.getDay()
+    );
   });
 });
 

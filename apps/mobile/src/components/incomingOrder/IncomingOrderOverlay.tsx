@@ -185,8 +185,8 @@ function IncomingOrderOverlayBase() {
           visible={incomingOrder.showCancelDialog}
           order={orderForDialog}
           onDismiss={() => incomingOrder.closeCancel()}
-          onSubmit={async (notes) => {
-            await incomingOrder.decline(notes);
+          onSubmit={async (payload) => {
+            await incomingOrder.decline(payload);
           }}
         />
       ) : null}

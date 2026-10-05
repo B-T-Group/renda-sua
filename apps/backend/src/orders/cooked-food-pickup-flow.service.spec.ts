@@ -39,6 +39,20 @@ describe('CookedFoodPickupFlowService', () => {
     expect(() => service.normalizeReadyInMinutes(2)).toThrow();
   });
 
+  it('marks no table and clears eat-in for take-out', async () => {
+    const { service, hasura } = makeService();
+    await service.markEatInUnavailable('o1');
+    await service.clearEatIn('o1');
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('eat_in_unavailable: true'),
+      { id: 'o1' }
+    );
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('eat_in: false'),
+      { id: 'o1' }
+    );
+  });
+
   it('schedules auto-mark-ready after preparing', async () => {
     const { service, wait, status } = makeService();
     await service.enterPreparingAndScheduleReady('o1', 15);

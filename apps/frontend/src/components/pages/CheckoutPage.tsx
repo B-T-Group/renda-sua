@@ -4,6 +4,7 @@ import {
   resolveCreatedPayAfter,
 } from '../../utils/payAfterConfirm';
 import { PayAfterConfirmExplainer } from '../checkout/PayAfterConfirmExplainer';
+import { FoodServiceChoice } from '../orders/FoodServiceChoice';
 import {
   Alert,
   Box,
@@ -634,6 +635,7 @@ const CheckoutPage: React.FC = () => {
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>(
     reorderPrefill?.fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery'
   );
+  const [eatIn, setEatIn] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string>(
     reorderPrefill?.deliveryAddressId ?? ''
   );
@@ -786,6 +788,9 @@ const CheckoutPage: React.FC = () => {
   const pickupEligible =
     preflightGroups.length > 0 &&
     preflightGroups.every((g) => g.pickup_eligible === true);
+  const eatInAvailable =
+    pickupEligible &&
+    preflightGroups.every((g) => g.all_cooked_food === true);
 
   const depositBreakdown = useMemo(() => {
     if (cookedFoodMoMoPayAfterConfirm || cookedFoodAsapOnly) return null;
@@ -1165,7 +1170,8 @@ const CheckoutPage: React.FC = () => {
           sendingToSomeoneElse,
           recipient: recipientPayload,
         },
-        paymentPhoneId
+        paymentPhoneId,
+        eatIn && isPickup
       );
 
       if (isPickup) {
@@ -1365,7 +1371,31 @@ const CheckoutPage: React.FC = () => {
               </Typography>
 
               {/* Fulfillment method (pickup offered when all sellers support it) */}
-              {pickupEligible && (
+              {eatInAvailable ? (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                    {t('checkout.fulfillmentTitle', 'How do you want to receive your order?')}
+                  </Typography>
+                  <FoodServiceChoice
+                    value={
+                      fulfillment === 'delivery' ? 'delivery' : eatIn ? 'eat_in' : 'take_out'
+                    }
+                    showDelivery={!deliveryUnavailable}
+                    disabled={checkoutLoading}
+                    onChange={(value) => {
+                      if (value === 'delivery') {
+                        setFulfillment('delivery');
+                        setEatIn(false);
+                        return;
+                      }
+                      setFulfillment('pickup');
+                      setEatIn(value === 'eat_in');
+                    }}
+                  />
+                </Box>
+              ) : null}
+
+              {pickupEligible && !eatInAvailable && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" sx={{ mb: 1 }}>
                     {t('checkout.fulfillmentTitle', 'How do you want to receive your order?')}

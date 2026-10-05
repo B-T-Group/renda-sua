@@ -5,6 +5,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Divider, Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import { StatusPill } from '../common/StatusPill';
+import { FoodServiceStyleLabel } from '../orders/FoodServiceStyleLabel';
 import { shadows } from '../../theme/shadows';
 import { useLanguage } from '../../hooks/useLanguage';
 import type { BusinessOrder } from '../../types/business/orders';
@@ -107,6 +108,7 @@ export function BusinessOrderListRow({
             <Text variant="titleSmall" style={{ fontWeight: '700', color: colors.text.primary }}>
               #{order.order_number}
             </Text>
+            <FoodServiceStyleLabel order={order} />
             <StatusPill
               compact
               label={statusLabel}

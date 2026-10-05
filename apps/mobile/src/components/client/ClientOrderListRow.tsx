@@ -68,16 +68,7 @@ function ClientOrderListRowInner({
   const chipBorder = stripeColor + '55';
 
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${t('orders.details', 'Details')} #${order.order_number}`}
-      style={({ pressed }) => [
-        styles.pressable,
-        { marginBottom: spacing.sm, opacity: pressed && onPress ? 0.92 : 1 },
-      ]}
-    >
+    <View style={[styles.pressable, { marginBottom: spacing.sm }]}>
       <View
         style={[
           styles.card,
@@ -92,6 +83,13 @@ function ClientOrderListRowInner({
         <View style={[styles.stripe, { backgroundColor: stripeColor }]} />
 
         <View style={styles.body}>
+        <Pressable
+          onPress={onPress}
+          disabled={!onPress}
+          accessibilityRole={onPress ? 'button' : undefined}
+          accessibilityLabel={`${t('orders.details', 'Details')} #${order.order_number}`}
+          style={({ pressed }) => [{ opacity: pressed && onPress ? 0.92 : 1 }]}
+        >
           {/* Row 1: Order number + status badge + fast-delivery badge */}
           <View style={styles.headerRow}>
             <Text style={[styles.orderNumber, { color: colors.text.primary }]} numberOfLines={1}>
@@ -178,13 +176,6 @@ function ClientOrderListRowInner({
             onOrderMutated={onOrderMutated}
             onRatePress={onRatePress}
           />
-          <BuyAgainCard
-            orderId={order.id}
-            orderStatus={order.current_status}
-            items={buyAgainLines(order.order_items)}
-          />
-
-          {/* Details link */}
           {onPress ? (
             <View style={[styles.detailsRow, { borderTopColor: colors.divider }]}>
               <Text style={[styles.detailsLabel, { color: colors.primary.main }]}>
@@ -193,9 +184,16 @@ function ClientOrderListRowInner({
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.primary.main} />
             </View>
           ) : null}
+        </Pressable>
+        <BuyAgainCard
+          embedded
+          orderId={order.id}
+          orderStatus={order.current_status}
+          items={buyAgainLines(order.order_items)}
+        />
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 

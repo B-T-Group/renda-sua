@@ -109,6 +109,8 @@ export class IncomingOrderStore {
   showCancelDialog = false;
   /** Bumped on foreground location/delegate pushes so open-order lists can refresh. */
   ordersRefreshEpoch = 0;
+  /** Bumped when the business orders subscription sees a create or status change. */
+  liveRevision = 0;
   /** Other unsnoozed pending orders behind the one on screen. */
   waitingCount = 0;
 
@@ -186,6 +188,10 @@ export class IncomingOrderStore {
       return;
     }
     await this.present(nextId);
+  }
+
+  bumpLiveRevision(): void {
+    this.liveRevision += 1;
   }
 
   /** Vibrate + list refresh without presenting the owner acceptance overlay. */
@@ -431,7 +437,10 @@ export class IncomingOrderStore {
     delete this.busyReminderTimers[orderId];
   }
 
-  async decline(notes: string): Promise<void> {
+  async decline(payload: {
+    cancellationReasonId: number;
+    notes: string;
+  }): Promise<void> {
     if (!this.orderId || !this.details) return;
     const snapshot = {
       id: this.orderId,
@@ -442,7 +451,8 @@ export class IncomingOrderStore {
     await businessApi.orders.cancel(
       {
         orderId: this.orderId,
-        notes: notes.trim() || 'Declined from incoming order screen',
+        notes: payload.notes.trim() || 'Declined from incoming order screen',
+        cancellationReasonId: payload.cancellationReasonId,
       },
       BUSINESS_PERSONA_HEADERS
     );

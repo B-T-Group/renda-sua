@@ -72,6 +72,24 @@ export function isCookedFoodPickupOrder(params: {
   return everyLineIsCookedFood(params.itemFlags);
 }
 
+/** True when a requested eat-in flag is allowed to be stored. */
+export function eatInRequestAllowed(params: {
+  requested?: boolean | null;
+  fulfillmentMethod?: string | null;
+  itemFlags: Array<CookedFoodLine>;
+}): boolean {
+  if (params.requested !== true) return true;
+  return isCookedFoodPickupOrder(params);
+}
+
+/** Kitchen refused a table and the customer has not paid yet. */
+export function shouldClearEatInForTakeOut(order: {
+  eat_in?: boolean | null;
+  eat_in_unavailable?: boolean | null;
+}): boolean {
+  return order.eat_in === true && order.eat_in_unavailable === true;
+}
+
 /**
  * Post-create cooked-food check from the ORDER snapshot only (never the location).
  *

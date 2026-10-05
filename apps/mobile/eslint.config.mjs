@@ -56,6 +56,8 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         fetch: 'readonly',
+        atob: 'readonly',
+        btoa: 'readonly',
         FormData: 'readonly',
         Alert: 'readonly',
         global: 'readonly',

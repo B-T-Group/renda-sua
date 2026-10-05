@@ -1,28 +1,63 @@
 const HASURA_CLAIMS = 'https://hasura.io/jwt/claims';
 
-export function decodeAuth0SubFromToken(token: string): string | undefined {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const part = token.split('.')[1];
-    if (!part) return undefined;
+    if (!part) return null;
     const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
-    const payload = JSON.parse(json) as { sub?: string };
-    return typeof payload.sub === 'string' ? payload.sub : undefined;
+    return JSON.parse(json) as Record<string, unknown>;
   } catch {
-    return undefined;
+    return null;
   }
+}
+
+function readHasuraClaims(token: string): Record<string, unknown> | null {
+  const claims = decodeJwtPayload(token)?.[HASURA_CLAIMS];
+  if (!claims || typeof claims !== 'object') return null;
+  return claims as Record<string, unknown>;
+}
+
+function parseAllowedRoles(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((entry): entry is string => typeof entry === 'string');
+  }
+  if (typeof raw !== 'string') return [];
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  if (!trimmed.startsWith('[')) return [trimmed];
+  try {
+    return parseAllowedRoles(JSON.parse(trimmed));
+  } catch {
+    return [];
+  }
+}
+
+export function decodeAuth0SubFromToken(token: string): string | undefined {
+  const sub = decodeJwtPayload(token)?.sub;
+  return typeof sub === 'string' ? sub : undefined;
 }
 
 export function decodeHasuraUserIdFromAccessToken(
   token: string
 ): string | undefined {
-  try {
-    const part = token.split('.')[1];
-    if (!part) return undefined;
-    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
-    const payload = JSON.parse(json) as Record<string, unknown>;
-    const claims = payload[HASURA_CLAIMS] as Record<string, string> | undefined;
-    return claims?.['x-hasura-user-id'];
-  } catch {
-    return undefined;
-  }
+  const userId = readHasuraClaims(token)?.['x-hasura-user-id'];
+  return typeof userId === 'string' ? userId : undefined;
+}
+
+export function decodeHasuraAllowedRoles(token: string): string[] {
+  return parseAllowedRoles(readHasuraClaims(token)?.['x-hasura-allowed-roles']);
+}
+
+export function tokenAllowsHasuraRole(token: string, role: string): boolean {
+  return decodeHasuraAllowedRoles(token).includes(role);
+}
+
+/** Role header for the business live-orders socket. Empty when it must not be sent. */
+export function businessHasuraRoleHeaders(
+  token: string | null | undefined,
+  persona: string | null | undefined
+): Record<string, string> {
+  if (!token || persona !== 'business') return {};
+  if (!tokenAllowsHasuraRole(token, 'business')) return {};
+  return { 'x-hasura-role': 'business' };
 }

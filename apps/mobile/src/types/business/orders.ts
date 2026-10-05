@@ -25,6 +25,7 @@ export interface ConfirmOrderPayload {
   orderId: string;
   notes?: string;
   ready_in_minutes?: number;
+  eat_in_unavailable?: boolean;
   delivery_time_window_id?: string;
   delivery_window_details?: {
     slot_id: string;
@@ -36,6 +37,7 @@ export interface ConfirmOrderPayload {
 export interface OrderActionPayload {
   orderId: string;
   notes?: string;
+  cancellationReasonId?: number;
 }
 
 export interface ReconcileCashPayload {

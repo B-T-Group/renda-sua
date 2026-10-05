@@ -382,6 +382,13 @@
     }
   },
   "orders": {
+    "eatIn": {
+      "eatIn": "Sur place",
+      "takeOut": "À emporter",
+      "noTable": "Pas de table",
+      "noTableKitchen": "Il n'y a pas de table. Le client a été prévenu. S'il approuve le paiement, préparez la commande à emporter.",
+      "noTableClient": "Il n'y a pas de table. Approuvez la demande de paiement pour emporter, ou annulez la commande."
+    },
     "item": "article",
     "items": "articles",
     "earnings": "Vos gains",
@@ -7072,7 +7079,8 @@
     },
     "schedule": {
       "title": "Heures de service",
-      "alwaysAvailable": "Disponible à tout moment"
+      "alwaysAvailable": "Disponible à tout moment",
+      "closedToday": "Fermé"
     },
     "empty": {
       "noMatches": "Aucun plat ne correspond à votre recherche",

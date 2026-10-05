@@ -1,6 +1,7 @@
 import type { FoodAvailability } from '../types/food';
 import {
   formatNextOpening,
+  weekdayInTimezone,
   formatSlotRange,
   formatSlotTime,
   groupFoodSlotsByDay,
@@ -223,6 +224,16 @@ describe('groupFoodSlotsByDay', () => {
     expect([...actual.keys()]).toEqual([1, 5]);
     expect(actual.get(1)).toHaveLength(2);
     expect(actual.get(1)?.[0].start_time).toBe('12:30:00');
+  });
+});
+
+describe('weekdayInTimezone', () => {
+  it('uses the restaurant clock, not the device clock', () => {
+    const mondayNoonDouala = new Date('2026-08-24T11:30:00.000Z');
+    expect(weekdayInTimezone('Africa/Douala', mondayNoonDouala)).toBe(1);
+    expect(weekdayInTimezone('not-a-zone', mondayNoonDouala)).toBe(
+      mondayNoonDouala.getDay()
+    );
   });
 });
 

@@ -165,7 +165,7 @@ interface UseOrdersReturn {
   loading: boolean;
   error: string | null;
   fetchOrders: (filters?: OrderFilters) => Promise<void>;
-  refreshOrders: () => Promise<void>;
+  refreshOrders: (silent?: boolean) => Promise<void>;
 }
 
 export const useOrders = (options?: UseOrdersOptions): UseOrdersReturn => {
@@ -177,14 +177,16 @@ export const useOrders = (options?: UseOrdersOptions): UseOrdersReturn => {
   const apiClient = useApiClient();
 
   const fetchOrders = useCallback(
-    async (filters?: OrderFilters) => {
-      setLoading(true);
-      setError(null);
+    async (filters?: OrderFilters, silent = false) => {
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
       setLastFilters(filters);
 
       try {
         if (!apiClient) {
-          setError('API client not available');
+          if (!silent) setError('API client not available');
           return;
         }
 
@@ -215,21 +217,22 @@ export const useOrders = (options?: UseOrdersOptions): UseOrdersReturn => {
 
         if (response.data.success) {
           setOrders(response.data.orders || []);
-        } else {
+        } else if (!silent) {
           setError(response.data.error || 'Failed to fetch orders');
         }
       } catch (err: any) {
+        if (silent) return;
         console.error('Error fetching orders:', err);
         setError(err.message || 'An error occurred while fetching orders');
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     },
     [apiClient]
   );
 
-  const refreshOrders = useCallback(async () => {
-    await fetchOrders(lastFilters);
+  const refreshOrders = useCallback(async (silent = false) => {
+    await fetchOrders(lastFilters, silent);
   }, [fetchOrders, lastFilters]);
 
   useEffect(() => {

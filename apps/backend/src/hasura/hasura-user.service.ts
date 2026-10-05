@@ -57,6 +57,10 @@ export interface CreateOrderRequest {
   delivery_address_id?: string;
   /** Defaults to delivery when omitted. delivery = agent-based, pickup = store pickup, shipping = carrier shipping. */
   fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
+  /**
+   * Cooked-food pickup only. Asks for a table. Does not change fulfillment_method.
+   */
+  eat_in?: boolean;
   phone_number?: string;
   /**
    * Client Mobile Money registry phone to charge. Owned by the current user;

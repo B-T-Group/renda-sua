@@ -100,11 +100,12 @@ const DealsPage: React.FC = () => {
 
   const variantFlow = useCatalogVariantFlow({
     onCartBuilt,
-    requireAuth: () => {
+    requireAuth: (run) => {
       if (!isAuthenticated) {
         handleLogin();
         return false;
       }
+      void run();
       return true;
     },
   });

@@ -11,6 +11,7 @@ import { useBackendOrders } from './useBackendOrders';
 import type { OrderData } from './useOrderById';
 import { useApiClient } from './useApiClient';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
+import { useBusinessOrdersLiveRevision } from './useBusinessOrdersLive';
 import { withOrdersApiPrefix } from '../contexts/OrdersApiPrefixContext';
 import {
   incomingInterruptSecondsLeft,
@@ -81,6 +82,8 @@ export function IncomingOrderInterruptProvider({
   const [waitingCount, setWaitingCount] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const loadEpochRef = useRef(0);
+  const liveRevision = useBusinessOrdersLiveRevision();
+  const seenLiveRevision = useRef(liveRevision);
   const snoozedUntilRef = useRef<Record<string, number>>({});
   const isBusinessPersona = userType === 'business';
   const interruptEnabled = isBusinessPersona || isDelegationContext;
@@ -181,6 +184,13 @@ export function IncomingOrderInterruptProvider({
     orderPath,
     visible,
   ]);
+
+  useEffect(() => {
+    if (!interruptEnabled) return;
+    if (liveRevision === seenLiveRevision.current) return;
+    seenLiveRevision.current = liveRevision;
+    void refreshPending();
+  }, [interruptEnabled, liveRevision, refreshPending]);
 
   useEffect(() => {
     if (!interruptEnabled) {

@@ -1,6 +1,9 @@
 import {
+  businessHasuraRoleHeaders,
   decodeAuth0SubFromToken,
+  decodeHasuraAllowedRoles,
   decodeHasuraUserIdFromAccessToken,
+  tokenAllowsHasuraRole,
 } from './jwtHasura';
 
 function token(payload: object): string {
@@ -26,6 +29,36 @@ describe('jwtHasura', () => {
       )
     ).toBe('uuid-1');
     expect(decodeHasuraUserIdFromAccessToken(token({ sub: 'auth0|abc' }))).toBeUndefined();
+  });
+
+  it('reads allowed Hasura roles from an array or a JSON string', () => {
+    const withArray = token({
+      'https://hasura.io/jwt/claims': {
+        'x-hasura-allowed-roles': ['client', 'business'],
+      },
+    });
+    const withString = token({
+      'https://hasura.io/jwt/claims': {
+        'x-hasura-allowed-roles': '["business"]',
+      },
+    });
+    expect(decodeHasuraAllowedRoles(withArray)).toEqual(['client', 'business']);
+    expect(tokenAllowsHasuraRole(withString, 'business')).toBe(true);
+    expect(tokenAllowsHasuraRole(withArray, 'agent')).toBe(false);
+  });
+
+  it('sends the business role header only for an allowed business session', () => {
+    const tokenValue = token({
+      'https://hasura.io/jwt/claims': {
+        'x-hasura-allowed-roles': ['client', 'business'],
+      },
+    });
+    expect(businessHasuraRoleHeaders(tokenValue, 'business')).toEqual({
+      'x-hasura-role': 'business',
+    });
+    expect(businessHasuraRoleHeaders(tokenValue, 'client')).toEqual({});
+    expect(businessHasuraRoleHeaders(tokenValue, 'agent')).toEqual({});
+    expect(businessHasuraRoleHeaders(null, 'business')).toEqual({});
   });
 
   it('returns undefined for a missing or corrupt payload', () => {

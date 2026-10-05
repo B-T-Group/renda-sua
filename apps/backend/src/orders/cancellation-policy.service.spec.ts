@@ -301,6 +301,19 @@ describe('CancellationPolicyService', () => {
       expect(quote.refundAmount).toBe(700);
     });
 
+    it('charges an authorized card the same no-show fee as a captured payment', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const quote = await service.quoteNoshowFee({
+        ...baseOrder,
+        current_status: 'ready_for_pickup',
+        payment_status: 'authorized',
+        total_amount: 1000,
+      });
+      expect(quote.cancellationFee).toBe(300);
+      expect(quote.merchantShare).toBe(150);
+      expect(quote.refundAmount).toBe(700);
+    });
+
     it('does not charge an unpaid classic pay-at-pickup no-show', async () => {
       mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
       const quote = await service.quoteNoshowFee({
@@ -312,6 +325,51 @@ describe('CancellationPolicyService', () => {
       });
       expect(quote.cancellationFee).toBe(0);
       expect(quote.refundAmount).toBe(1000);
+      expect(quote.cancellationFeePercent).toBe(0);
+    });
+
+    it('discloses the percent on an unpaid pay-after no-show and refunds the whole total', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const quote = await service.quoteNoshowFee({
+        ...baseOrder,
+        current_status: 'ready_for_pickup',
+        pay_after_merchant_confirm: true,
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+        total_amount: 1000,
+      });
+      expect(quote.cancellationFee).toBe(0);
+      expect(quote.cancellationFeePercent).toBe(30);
+      expect(quote.merchantShare).toBe(0);
+      expect(quote.platformShare).toBe(0);
+      expect(quote.refundAmount).toBe(1000);
+    });
+
+    it('keeps a waived delivery fee out of the no-show base and never refunds a negative amount', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const waived = await service.quoteNoshowFee({
+        ...baseOrder,
+        current_status: 'ready_for_pickup',
+        payment_status: 'paid',
+        total_amount: 4200,
+        base_delivery_fee: 500,
+        per_km_delivery_fee: 300,
+        delivery_fee_waived: true,
+        tax_amount: 200,
+      });
+      expect(waived.cancellationFee).toBe(1200);
+      expect(waived.refundAmount).toBe(3000);
+
+      mockFeeRows([{ country_code: 'GA', number_value: 100 }]);
+      const over = await service.quoteNoshowFee({
+        ...baseOrder,
+        current_status: 'ready_for_pickup',
+        payment_status: 'paid',
+        total_amount: 1000,
+        tax_amount: -100,
+      });
+      expect(over.cancellationFee).toBe(1100);
+      expect(over.refundAmount).toBe(0);
     });
 
     it('discloses the percent on unpaid pay-after without charging', async () => {

@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
 import { View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { AppImage } from '../common/AppImage';
-import { Snackbar } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useClientFlags } from '@/contexts/ClientFlagsContext';
@@ -9,7 +10,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import type { OrderItem } from '@/types/agent';
 import { orderItemImageUrl } from '@/utils/clientOrderListDisplay';
 import { ReorderCartConflictSheet } from '../orders/ReorderCartConflictSheet';
-import { AppButton } from '../common/AppButton';
 import { AppText } from '../common/AppText';
 
 export type BuyAgainLine = { name: string; imageUrl?: string | null };
@@ -18,6 +18,8 @@ type Props = {
   orderId: string;
   orderStatus?: string | null;
   items?: BuyAgainLine[];
+  /** Drop outer padding when the card already sits inside a padded row. */
+  embedded?: boolean;
 };
 
 /** Product lines for a buy-again card, skipping empty rows. */
@@ -31,24 +33,47 @@ export function buyAgainLines(items: OrderItem[] | null | undefined): BuyAgainLi
 }
 
 /** Reuses the existing reorder flow. Hidden unless reorder_v1 is on and the order is done. */
-export function BuyAgainCard({ orderId, orderStatus, items = [] }: Props) {
+export function BuyAgainCard({ orderId, orderStatus, items = [], embedded = false }: Props) {
   const { t } = useTranslation();
   const { flags } = useClientFlags();
-  const { spacing } = useTheme();
+  const { colors, spacing, borderRadius, typography } = useTheme();
   const flow = useClientReorderFlow(orderId, orderStatus);
+  useEffect(() => {
+    if (!flow.snack) return;
+    const timer = setTimeout(() => flow.setSnack(null), 4000);
+    return () => clearTimeout(timer);
+  }, [flow.snack, flow.setSnack]);
   if (!flags.reorder_v1 || !flow.enabled) return null;
+  const label = t('orders.reorder.action', 'Order again');
   return (
-    <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
+    <View style={{ paddingHorizontal: embedded ? 0 : spacing.md, paddingBottom: spacing.md }}>
       <AppText role="label">{t('client.home.buyAgain', 'Buy again')}</AppText>
       <BuyAgainPreview items={items} />
-      <AppButton
-        label={t('orders.reorder.action', 'Order again')}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        disabled={flow.loading}
         onPress={() => void flow.onReorderPress()}
-        loading={flow.loading}
-        variant="outline"
-        size="medium"
-        style={{ marginTop: spacing.sm }}
-      />
+        style={{
+          marginTop: spacing.sm,
+          minHeight: 48,
+          borderRadius: borderRadius.button,
+          borderWidth: 1.5,
+          borderColor: colors.primary.main,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: flow.loading ? 0.6 : 1,
+        }}
+      >
+        <AppText role="label" color={colors.primary.main} style={typography.button}>
+          {flow.loading ? t('common.loading', 'Loading...') : label}
+        </AppText>
+      </Pressable>
+      {flow.snack ? (
+        <AppText role="caption" color={colors.error.main} style={{ marginTop: spacing.xs }}>
+          {flow.snack}
+        </AppText>
+      ) : null}
       <ReorderCartConflictSheet
         visible={flow.sheetOpen}
         allowAdd={flow.allowAdd}
@@ -57,9 +82,6 @@ export function BuyAgainCard({ orderId, orderStatus, items = [] }: Props) {
         onAdd={flow.onAdd}
         onDismiss={flow.onDismissSheet}
       />
-      <Snackbar visible={!!flow.snack} onDismiss={() => flow.setSnack(null)} duration={4000}>
-        {flow.snack}
-      </Snackbar>
     </View>
   );
 }

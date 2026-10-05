@@ -390,6 +390,13 @@
     }
   },
   "orders": {
+    "eatIn": {
+      "eatIn": "Eat in",
+      "takeOut": "Take out",
+      "noTable": "No table",
+      "noTableKitchen": "There is no table. The customer was told. If they approve the payment, prepare this as take out.",
+      "noTableClient": "There is no table. Approve the payment request to take this order out, or cancel it."
+    },
     "item": "item",
     "items": "items",
     "pickupLabel": "Pick up from",
@@ -7150,7 +7157,8 @@
     },
     "schedule": {
       "title": "Serving hours",
-      "alwaysAvailable": "Available at any time"
+      "alwaysAvailable": "Available at any time",
+      "closedToday": "Closed"
     },
     "empty": {
       "noMatches": "No dishes match your search",

@@ -17,7 +17,6 @@ import {
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActionLoadingDialog } from '../feedback/ActionLoadingDialog';
 import { AppModal } from '../common/AppModal';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -27,11 +26,16 @@ import {
 import type { BusinessOrder } from '../../types/business/orders';
 import { businessMayCancelOrder } from '../../utils/businessOrderUtils';
 
+export type BusinessCancelSubmit = {
+  cancellationReasonId: number;
+  notes: string;
+};
+
 interface Props {
   visible: boolean;
   order: BusinessOrder | null;
   onDismiss: () => void;
-  onSubmit: (notes: string) => Promise<void>;
+  onSubmit: (payload: BusinessCancelSubmit) => Promise<void>;
 }
 
 export function BusinessCancelOrderDialog({ visible, order, onDismiss, onSubmit }: Props) {
@@ -140,7 +144,7 @@ export function BusinessCancelOrderDialog({ visible, order, onDismiss, onSubmit 
     setSubmitting(true);
     setError(null);
     try {
-      await onSubmit(notes);
+      await onSubmit({ cancellationReasonId: selectedId, notes });
       onDismiss();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('orders.cancelFailed', 'Failed to cancel order'));
@@ -152,12 +156,13 @@ export function BusinessCancelOrderDialog({ visible, order, onDismiss, onSubmit 
   if (!order) return null;
 
   return (
-    <>
       <AppModal
-        visible={visible && !submitting}
+        visible={visible}
         animationType="slide"
         presentationStyle="fullScreen"
-        onRequestClose={onDismiss}
+        onRequestClose={() => {
+          if (!submitting) onDismiss();
+        }}
       >
         <KeyboardAvoidingView
           style={[styles.flex, { backgroundColor: colors.pageBackground }]}
@@ -177,6 +182,7 @@ export function BusinessCancelOrderDialog({ visible, order, onDismiss, onSubmit 
           >
             <Pressable
               onPress={onDismiss}
+              disabled={submitting}
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel={t('common.close', 'Close')}
@@ -417,8 +423,6 @@ export function BusinessCancelOrderDialog({ visible, order, onDismiss, onSubmit 
           </View>
         </KeyboardAvoidingView>
       </AppModal>
-      <ActionLoadingDialog visible={submitting} action="cancel_order" />
-    </>
   );
 }
 

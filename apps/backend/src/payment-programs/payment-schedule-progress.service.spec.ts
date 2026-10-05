@@ -43,6 +43,17 @@ describe('progressWindow', () => {
     expect(window.from).toBe('2026-01-10T00:00:00.000Z');
     expect(window.to).toBe('2026-01-20T00:00:00.000Z');
   });
+
+  it('stops at ends_at once the schedule is already over', () => {
+    const window = progressWindow(
+      '2026-01-01T00:00:00.000Z',
+      '2026-01-02T00:00:00.000Z',
+      '2026-01-10T00:00:00.000Z',
+      new Date('2026-01-20T00:00:00.000Z')
+    );
+    expect(window.from).toBe('2026-01-02T00:00:00.000Z');
+    expect(window.to).toBe('2026-01-10T00:00:00.000Z');
+  });
 });
 
 describe('sumUniqueAmounts', () => {
@@ -232,5 +243,19 @@ describe('objective summary', () => {
     expect(picked.featured?.id).toBe('behind');
     expect(picked.otherCount).toBe(1);
     expect(pickFeaturedProgress([]).featured).toBeNull();
+    expect(pickFeaturedProgress([]).otherCount).toBe(0);
+  });
+
+  it('keeps the first plan when two are equally behind', () => {
+    const progress = buildObjectiveProgress(
+      { ...zeros, clientSignups: 1 },
+      { targetClientSignups: 4 }
+    );
+    const picked = pickFeaturedProgress([
+      { id: 'first', progress },
+      { id: 'second', progress },
+    ]);
+    expect(picked.featured?.id).toBe('first');
+    expect(picked.otherCount).toBe(1);
   });
 });

@@ -104,6 +104,7 @@ import {
   buildOrderAcceptanceReminderPushMessage,
   buildOrderAutoDeclinedPushMessage,
   buildOrderBusyPushMessage,
+  buildEatInUnavailablePushMessage,
   buildOrderNoAgentPushMessage,
   buildPendingPaymentCleanupDigestPushMessage,
   buildRentalStartPinSharedPushMessage,
@@ -949,6 +950,32 @@ export class NotificationsService {
       });
     } catch (error: any) {
       this.logger.warn(`sendOrderBusyPush failed: ${error?.message ?? String(error)}`);
+    }
+  }
+
+  async sendEatInUnavailablePush(params: {
+    clientUserId?: string | null;
+    orderId: string;
+    orderNumber: string;
+    preferredLanguage?: string | null;
+    awaitingPayment: boolean;
+  }): Promise<void> {
+    const userId = params.clientUserId?.trim();
+    if (!userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const { title, body } = buildEatInUnavailablePushMessage(params);
+    try {
+      await this.sendPushNotificationByUserId(userId, title, body, {
+        url: `/orders/${params.orderId}`,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'eat_in_unavailable',
+        persona: 'client',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendEatInUnavailablePush failed: ${error?.message ?? String(error)}`
+      );
     }
   }
 

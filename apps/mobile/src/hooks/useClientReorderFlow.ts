@@ -16,6 +16,7 @@ import {
   mapReorderLineToCartLine,
   resolveReorderCartAction,
 } from '../utils/reorderCart';
+import { reorderNavigator } from '../utils/reorderNavigator';
 
 type Nav = NativeStackNavigationProp<ClientRootStackParamList>;
 
@@ -71,10 +72,21 @@ export function useClientReorderFlow(orderId: string, orderStatus?: string | nul
       const skipToast = buildSkipToast(payload);
       if (skipToast) setSnack(skipToast);
 
-      if (payload.navigation_hint === 'none') return;
+      if (payload.navigation_hint === 'none') {
+        if (!skipToast) {
+          setSnack(
+            t(
+              'orders.reorder.unavailable',
+              'These items are not available to order again.'
+            )
+          );
+        }
+        return;
+      }
 
+      const stack = reorderNavigator(navigation);
       if (payload.navigation_hint === 'checkout') {
-        navigation.navigate('CartCheckout', {
+        stack.navigate('CartCheckout', {
           deliveryAddressId: payload.fulfillment.address_id ?? undefined,
           fulfillmentMethod: payload.fulfillment.type,
         });
@@ -87,9 +99,12 @@ export function useClientReorderFlow(orderId: string, orderStatus?: string | nul
       } else if (!payload.fulfillment.address_valid) {
         banner = 'address_invalid';
       }
-      navigation.navigate('Cart', banner ? { reorderBanner: banner } : undefined);
+      reorderNavigator(navigation).navigate(
+        'Cart',
+        banner ? { reorderBanner: banner } : undefined
+      );
     },
-    [buildSkipToast, navigation, orderId]
+    [buildSkipToast, navigation, orderId, t]
   );
 
   const applyLines = useCallback(

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  foodServiceStyle,
+  showEatInUnavailableNotice,
   isCookedFoodAwaitingClientPayment,
   isCookedFoodPayAfterPaid,
   isCookedFoodReadyFailEligible,
@@ -14,6 +16,31 @@ const asapPickup = {
   fulfillment_method: 'pickup' as const,
   fulfillment_timing: 'asap' as const,
 };
+
+describe('foodServiceStyle', () => {
+  it('labels cooked pickup as eat in or take out', () => {
+    expect(foodServiceStyle({ is_cooked_food_pickup: true, eat_in: true })).toBe('eat_in');
+    expect(foodServiceStyle({ is_cooked_food_pickup: true, eat_in: false })).toBe('take_out');
+    expect(foodServiceStyle({ is_cooked_food_pickup: false })).toBeNull();
+  });
+
+  it('shows the no-table notice only while unpaid', () => {
+    expect(
+      showEatInUnavailableNotice({
+        eat_in: true,
+        eat_in_unavailable: true,
+        payment_status: 'pending',
+      })
+    ).toBe(true);
+    expect(
+      showEatInUnavailableNotice({
+        eat_in: true,
+        eat_in_unavailable: true,
+        payment_status: 'paid',
+      })
+    ).toBe(false);
+  });
+});
 
 describe('shouldUseCookedFoodConfirmModal', () => {
   it('uses the ready-in modal for ASAP pickup of cooked food', () => {

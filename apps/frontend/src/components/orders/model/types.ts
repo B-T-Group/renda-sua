@@ -172,6 +172,8 @@ export interface OrderLike {
   assigned_agent_id?: string | null;
   reconciliation_status?: string | null;
   is_cooked_food_pickup?: boolean | null;
+  eat_in?: boolean | null;
+  eat_in_unavailable?: boolean | null;
   pay_after_merchant_confirm?: boolean | null;
   acceptance_deadline_at?: string | null;
   estimated_delivery_time?: string | null;

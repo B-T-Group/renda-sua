@@ -927,6 +927,7 @@ describe('OrdersService', () => {
         fulfillment_method: 'pickup',
         payment_timing: 'pay_at_pickup',
         phone_number: '+23765410000',
+        eat_in: true,
         items: [{ business_inventory_id: 'inventory-cooked-123', quantity: 1 }],
       });
 
@@ -940,6 +941,7 @@ describe('OrdersService', () => {
           payAfterMerchantConfirm: true,
           paymentStatus: 'pending',
           currentStatus: 'pending',
+          eatIn: true,
         })
       );
       expect(result).toMatchObject({

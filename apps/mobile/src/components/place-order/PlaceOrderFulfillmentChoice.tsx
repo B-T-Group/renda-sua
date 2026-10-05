@@ -1,5 +1,8 @@
 import { type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { DeliveryIllustration } from '../illustrations/DeliveryIllustration';
+import { EatInIllustration } from '../illustrations/EatInIllustration';
+import { TakeOutIllustration } from '../illustrations/TakeOutIllustration';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text } from 'react-native-paper';
@@ -32,6 +35,10 @@ interface PlaceOrderFulfillmentChoiceProps {
   deliveryPriceHint?: string;
   /** Compact segmented control for sticky checkout bars. */
   compact?: boolean;
+  /** Cooked-food pickup: show Eat in and Take out pictures. Both stay pickup. */
+  eatInAvailable?: boolean;
+  eatIn?: boolean;
+  onEatInChange?: (eatIn: boolean) => void;
 }
 
 interface SegmentOption {
@@ -166,16 +173,22 @@ export function PlaceOrderFulfillmentChoice({
   deliveryPriceLoading = false,
   deliveryPriceHint,
   compact = true,
+  eatInAvailable = false,
+  eatIn = false,
+  onEatInChange,
 }: PlaceOrderFulfillmentChoiceProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const segments = buildSegments(t, {
     deliveryDisabled,
     deliveryHidden,
-    pickupAvailable,
+    pickupAvailable: eatInAvailable ? false : pickupAvailable,
     shippingAvailable,
     shippingDisabled,
   });
+  const trailingSegments = eatInAvailable
+    ? segments.filter((option) => option.key !== 'delivery')
+    : segments;
 
   const helper =
     !deliveryHidden && deliveryDisabled
@@ -189,8 +202,8 @@ export function PlaceOrderFulfillmentChoice({
         )
       : null;
 
-  if (segments.length === 0) return null;
-  if (segments.length === 1) {
+  if (!eatInAvailable && segments.length === 0) return null;
+  if (!eatInAvailable && segments.length === 1) {
     const only = segments[0];
     return (
       <SingleMethodNote
@@ -219,6 +232,42 @@ export function PlaceOrderFulfillmentChoice({
         </Text>
       ) : null}
 
+      {eatInAvailable ? (
+        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          <FoodPictureChoice
+            label={t('orders.eatIn.eatIn', 'Eat in')}
+            selected={value === 'pickup' && eatIn}
+            onPress={() => {
+              onChange('pickup');
+              onEatInChange?.(true);
+            }}
+          >
+            <EatInIllustration size={40} colored={value === 'pickup' && eatIn} />
+          </FoodPictureChoice>
+          <FoodPictureChoice
+            label={t('orders.eatIn.takeOut', 'Take out')}
+            selected={value === 'pickup' && !eatIn}
+            onPress={() => {
+              onChange('pickup');
+              onEatInChange?.(false);
+            }}
+          >
+            <TakeOutIllustration size={40} colored={value === 'pickup' && !eatIn} />
+          </FoodPictureChoice>
+          {!deliveryHidden ? (
+            <FoodPictureChoice
+              label={t('checkout.progress.delivery', 'Delivery')}
+              selected={value === 'delivery'}
+              disabled={deliveryDisabled}
+              onPress={() => onChange('delivery')}
+            >
+              <DeliveryIllustration size={40} colored={value === 'delivery' && !deliveryDisabled} />
+            </FoodPictureChoice>
+          ) : null}
+        </View>
+      ) : null}
+
+      {trailingSegments.length > 0 ? (
       <View
         style={[
           styles.segmentTrack,
@@ -230,7 +279,7 @@ export function PlaceOrderFulfillmentChoice({
           },
         ]}
       >
-        {segments.map((option) => {
+        {trailingSegments.map((option) => {
           const selected = value === option.key;
           return (
             <Pressable
@@ -281,6 +330,7 @@ export function PlaceOrderFulfillmentChoice({
           );
         })}
       </View>
+      ) : null}
 
       {showPickupContext ? (
         <ContextLine icon="map-marker-outline">{storeLine}</ContextLine>
@@ -296,6 +346,58 @@ export function PlaceOrderFulfillmentChoice({
         <Text style={[typography.caption, { color: colors.warning.main }]}>{helper}</Text>
       ) : null}
     </View>
+  );
+}
+
+function FoodPictureChoice({
+  label,
+  selected,
+  disabled = false,
+  onPress,
+  children,
+}: {
+  label: string;
+  selected: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  const { colors, spacing, borderRadius, typography } = useTheme();
+  const active = selected && !disabled;
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: active, disabled }}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        alignItems: 'center',
+        gap: 2,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: 4,
+        borderWidth: 1.5,
+        borderColor: active ? colors.primary.main : colors.borderStrong,
+        backgroundColor: active ? colors.primaryTint : colors.surface,
+        borderRadius: borderRadius.md,
+        opacity: disabled ? 0.45 : 1,
+      }}
+    >
+      {children}
+      {active ? (
+        <Text
+          numberOfLines={1}
+          style={[
+            typography.caption,
+            { fontWeight: '700', textAlign: 'center', color: colors.primary.main },
+          ]}
+        >
+          {label}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 

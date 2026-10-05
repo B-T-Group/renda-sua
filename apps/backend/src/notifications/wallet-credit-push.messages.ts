@@ -309,6 +309,28 @@ export function buildPendingPaymentCleanupDigestPushMessage(params: {
   return { title, body };
 }
 
+export function buildEatInUnavailablePushMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+  awaitingPayment: boolean;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Pas de table',
+      body: params.awaitingPayment
+        ? `Pas de table pour la commande ${params.orderNumber}. Approuvez la demande de paiement pour emporter, ou refusez-la pour annuler.`
+        : `Pas de table pour la commande ${params.orderNumber}. Elle sera préparée à emporter. Vous pouvez annuler si vous ne la voulez plus.`,
+    };
+  }
+  return {
+    title: 'No table',
+    body: params.awaitingPayment
+      ? `There is no table for order ${params.orderNumber}. Approve the payment request to take it out, or reject it to cancel.`
+      : `There is no table for order ${params.orderNumber}. It will be prepared for take out. You can cancel if you do not want it.`,
+  };
+}
+
 export function buildOrderBusyPushMessage(params: {
   orderNumber: string;
   estimatedPrepMinutes: number;
