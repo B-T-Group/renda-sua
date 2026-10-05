@@ -86,12 +86,23 @@ describe('buildStoresCacheKey', () => {
         includeUnavailable: 'false',
         limit: 20,
       })
-    ).toBe('stores:market:CM:Littoral:true:false:20');
+    ).toBe('stores:market:CM:Littoral:true:false:20:all');
+  });
+
+  it('keeps cooked-food restaurants on a separate key from all stores', () => {
+    expect(
+      buildStoresCacheKey({
+        hasOrigin: false,
+        countryCode: 'CM',
+        limit: 20,
+        foodOnly: true,
+      })
+    ).toBe('stores:all:CM:all:any:false:20:food');
   });
 
   it('defaults unset filters so public rails share a stable key', () => {
     expect(buildStoresCacheKey({ hasOrigin: false, limit: 20 })).toBe(
-      'stores:all:global:all:any:false:20'
+      'stores:all:global:all:any:false:20:all'
     );
     expect(storesActiveFilter(undefined)).toBe('any');
     expect(storesActiveFilter('false')).toBe('false');

@@ -1056,10 +1056,12 @@ export class InventoryItemsService {
     origin_lat?: number;
     origin_lng?: number;
   }): Promise<{ lat: number; lng: number } | null> {
+    const explicit = parseOptionalLatLng(query.origin_lat, query.origin_lng);
+    if (explicit) return explicit;
     try {
       const addr = await this.addressesService.getCurrentUserPrimaryAddress();
       if (!addr) {
-        return parseOptionalLatLng(query.origin_lat, query.origin_lng);
+        return null;
       }
       if (addr.latitude != null && addr.longitude != null) {
         return parseOptionalLatLng(
@@ -1521,7 +1523,7 @@ export class InventoryItemsService {
       | 'origin_lat'
       | 'origin_lng'
       | 'business_id'
-    > & { search?: string; partners_only?: boolean } = {}
+    > & { search?: string; partners_only?: boolean; food_only?: boolean } = {}
   ): Promise<TopInventoryStoreRow[]> {
     const take = Math.min(Math.max(limit, 1), 50);
     const { country_code, state } = await this.resolveInventoryListGeo(query);
@@ -1531,6 +1533,7 @@ export class InventoryItemsService {
       country_code,
       state,
       business_id: query.business_id,
+      food_only: query.food_only,
     });
     if ('unsupported' in built) return [];
     const counts = await this.countDistinctCatalogItemsByLocation(built.where);
@@ -3300,13 +3303,13 @@ export class InventoryItemsService {
       let originId: string;
       let originFormatted: string;
 
-      if (primary) {
-        originId = primary.id;
-        originFormatted = this.formatAddressForGoogle(primary);
-      } else if (anonymousOrigin) {
+      if (anonymousOrigin) {
         const { lat, lng } = anonymousOrigin;
         originId = `anon:${lat.toFixed(5)}:${lng.toFixed(5)}`;
         originFormatted = `${lat},${lng}`;
+      } else if (primary) {
+        originId = primary.id;
+        originFormatted = this.formatAddressForGoogle(primary);
       } else {
         return items;
       }
@@ -3379,7 +3382,8 @@ export class InventoryItemsService {
         ...item,
         distance_text: hasDistance && el?.distance ? el.distance.text : undefined,
         duration_text: hasDistance && el?.duration ? el.duration.text : undefined,
-        distance_value: hasDistance && el?.distance ? el.distance.value : undefined,
+        distance_value:
+          hasDistance && el?.distance ? el.distance.value : item.distance_value,
       };
     });
   }

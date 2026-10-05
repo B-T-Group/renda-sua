@@ -222,6 +222,13 @@ export class InventoryItemsController {
     type: String,
     description: 'When set, only return locations for this business UUID',
   })
+  @ApiQuery({
+    name: 'food_only',
+    required: false,
+    type: Boolean,
+    description:
+      'When true, only locations that sell cooked food (restaurant directory)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Stores with item counts and optional distance',
@@ -236,7 +243,8 @@ export class InventoryItemsController {
     @Query('origin_lat') origin_lat?: string,
     @Query('origin_lng') origin_lng?: string,
     @Query('partners_only') partners_only?: string,
-    @Query('business_id') business_id?: string
+    @Query('business_id') business_id?: string,
+    @Query('food_only') food_only?: string
   ): Promise<{
     success: boolean;
     data: { stores: TopInventoryStoreRow[] };
@@ -250,6 +258,7 @@ export class InventoryItemsController {
     const hasOrigin = Number.isFinite(lat) && Number.isFinite(lng);
     const partnersOnly = partners_only === 'true';
     const businessId = business_id?.trim() || undefined;
+    const foodOnly = food_only === 'true';
     const cacheKey = buildStoresCacheKey({
       hasOrigin,
       search,
@@ -260,6 +269,7 @@ export class InventoryItemsController {
       limit: n,
       partnersOnly,
       businessId,
+      foodOnly,
     });
     const storeQuery = {
       search,
@@ -277,6 +287,7 @@ export class InventoryItemsController {
           : undefined,
       partners_only: partnersOnly || undefined,
       business_id: businessId,
+      food_only: foodOnly || undefined,
       ...(hasOrigin && { origin_lat: lat, origin_lng: lng }),
     };
 

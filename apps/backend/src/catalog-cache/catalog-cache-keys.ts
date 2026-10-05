@@ -48,6 +48,7 @@ export function buildStoresCacheKey(input: {
   limit: number;
   partnersOnly?: boolean;
   businessId?: string;
+  foodOnly?: boolean;
 }): string | null {
   if (input.hasOrigin) return null;
   if (input.partnersOnly || input.businessId) return null;
@@ -59,6 +60,7 @@ export function buildStoresCacheKey(input: {
     storesActiveFilter(input.isActive),
     input.includeUnavailable === 'true' ? 'true' : 'false',
     input.limit,
+    input.foodOnly ? 'food' : 'all',
   ].join(':');
 }
 
