@@ -244,6 +244,9 @@ type ItemDetailMobileOrderBarProps = {
   questionSlot?: React.ReactNode;
   onOrder: () => void;
   orderDisabled?: boolean;
+  /** Lift the bar above the mobile tab bar so Browse stays tappable. */
+  aboveBottomNav?: boolean;
+  onHeight?: (height: number) => void;
 };
 
 function ItemDetailMobileOrderBar({
@@ -254,6 +257,8 @@ function ItemDetailMobileOrderBar({
   questionSlot,
   onOrder,
   orderDisabled = false,
+  aboveBottomNav = false,
+  onHeight,
 }: ItemDetailMobileOrderBarProps) {
   const navRef = React.useRef<HTMLDivElement | null>(null);
   const [shouldPulse, setShouldPulse] = React.useState(false);
@@ -278,6 +283,21 @@ function ItemDetailMobileOrderBar({
     obs.observe(el);
     return () => obs.disconnect();
   }, [visible]);
+
+  React.useEffect(() => {
+    if (!visible) {
+      onHeight?.(0);
+      return;
+    }
+    const el = navRef.current;
+    if (!el || !onHeight) return;
+    const report = () => onHeight(el.getBoundingClientRect().height);
+    report();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visible, aboveBottomNav, onHeight]);
   if (!visible) return null;
   return (
     <Paper
@@ -289,7 +309,9 @@ function ItemDetailMobileOrderBar({
         position: 'fixed',
         left: 0,
         right: 0,
-        bottom: 0,
+        bottom: aboveBottomNav
+          ? 'calc(64px + env(safe-area-inset-bottom, 0px))'
+          : 0,
         zIndex: (theme) => theme.zIndex.appBar,
         px: 2,
         py: 1,
@@ -305,7 +327,7 @@ function ItemDetailMobileOrderBar({
         backdropFilter: 'saturate(1.1)',
         boxShadow: (theme) =>
           `0 -8px 32px ${alpha(theme.palette.common.black, 0.12)}`,
-        pb: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+        pb: aboveBottomNav ? 1 : 'calc(8px + env(safe-area-inset-bottom, 0px))',
         '@keyframes rendaCtaPulse': {
           '0%': { transform: 'scale(1)', filter: 'brightness(1)' },
           '40%': { transform: 'scale(1.03)', filter: 'brightness(1.06)' },
@@ -447,6 +469,7 @@ export default function ItemDetailPage() {
   const [imageLightboxOpen, setImageLightboxOpen] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
   const [marketPickerOpen, setMarketPickerOpen] = React.useState(false);
+  const [orderBarHeight, setOrderBarHeight] = React.useState(0);
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
   const { selectedMarket, markets, setMarket } = useMarket();
@@ -931,6 +954,10 @@ export default function ItemDetailPage() {
     paymentsEnabled &&
     merchantCanAcceptOrders &&
     variantSelectionReady;
+  const userType = profile?.user_type_id;
+  const hasMobileBottomNav =
+    isMobile &&
+    (!isAuthenticated || userType === 'client' || userType === 'agent');
   const showMobileStickyOrderBar = isMobile && canPurchase;
   const showInlineOrderNow = canPurchase && !showMobileStickyOrderBar;
   const showAddToCart = isClientUser && canPurchase;
@@ -1000,7 +1027,15 @@ export default function ItemDetailPage() {
         component="main"
         sx={{
           pt: { xs: 1, md: 4 },
-          pb: { xs: isMobile && showMobileStickyOrderBar ? 18 : 2, md: 4 },
+          pb: {
+            xs:
+              isMobile && showMobileStickyOrderBar
+                ? hasMobileBottomNav
+                  ? `calc(${Math.max(orderBarHeight, 168)}px + env(safe-area-inset-bottom, 0px))`
+                  : `${Math.max(orderBarHeight, 168)}px`
+                : 2,
+            md: 4,
+          },
         }}
       >
         <Stack spacing={isMobile ? 0 : 1.5} sx={{ mb: isMobile ? 1 : 2 }}>
@@ -1506,12 +1541,10 @@ export default function ItemDetailPage() {
                   ) : null}
                 </Box>
                 {foodAvailability.has_schedule && (
-                  <>
-                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                      {t('foods.schedule.title', 'Serving hours')}
-                    </Typography>
-                    <FoodScheduleList slots={foodAvailability.slots} />
-                  </>
+                  <FoodScheduleList
+                    slots={foodAvailability.slots}
+                    timezone={foodAvailability.timezone}
+                  />
                 )}
               </Box>
             )}
@@ -1925,6 +1958,8 @@ export default function ItemDetailPage() {
           ) : null
         }
         onOrder={handleOrderClick}
+        aboveBottomNav={hasMobileBottomNav}
+        onHeight={setOrderBarHeight}
       />
       <ProductInterestDialog
         open={interestOpen}

@@ -7079,7 +7079,8 @@
     },
     "schedule": {
       "title": "Heures de service",
-      "alwaysAvailable": "Disponible à tout moment"
+      "alwaysAvailable": "Disponible à tout moment",
+      "closedToday": "Fermé"
     },
     "empty": {
       "noMatches": "Aucun plat ne correspond à votre recherche",

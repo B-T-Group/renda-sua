@@ -1,6 +1,7 @@
-import { Box, ButtonBase, Stack, Typography } from '@mui/material';
+import { alpha, Box, ButtonBase, Stack, Typography, useTheme } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { DeliveryIllustration } from './DeliveryIllustration';
 import { EatInIllustration } from './EatInIllustration';
 import { TakeOutIllustration } from './TakeOutIllustration';
 
@@ -24,33 +25,50 @@ export function FoodServiceChoice({
     ? ['eat_in', 'take_out', 'delivery']
     : ['eat_in', 'take_out'];
   return (
-    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+    <Stack
+      direction="row"
+      spacing={1}
+      role="radiogroup"
+      aria-label={t('checkout.fulfillmentTitle', 'How do you want to receive your order?')}
+      sx={{ mb: 2 }}
+    >
       {options.map((key) => (
         <ChoiceCard
           key={key}
           selected={value === key}
           disabled={disabled}
-          label={
-            key === 'eat_in'
-              ? t('orders.eatIn.eatIn', 'Eat in')
-              : key === 'take_out'
-                ? t('orders.eatIn.takeOut', 'Take out')
-                : t('checkout.fulfillmentDelivery', 'Delivery')
-          }
+          label={choiceLabel(t, key)}
           onPress={() => onChange(key)}
         >
-          {key === 'eat_in' ? (
-            <EatInIllustration size={40} color={value === key ? 'primary.main' : 'text.secondary'} />
-          ) : null}
-          {key === 'take_out' ? (
-            <TakeOutIllustration size={40} color={value === key ? 'primary.main' : 'text.secondary'} />
-          ) : null}
-          {key === 'delivery' ? (
-            <DeliveryMark color={value === key ? 'primary.main' : 'text.secondary'} />
-          ) : null}
+          <ChoiceArt kind={key} colored={value === key} />
         </ChoiceCard>
       ))}
     </Stack>
+  );
+}
+
+function choiceLabel(
+  t: (key: string, defaultValue: string) => string,
+  key: FoodServiceChoiceValue
+): string {
+  if (key === 'eat_in') return t('orders.eatIn.eatIn', 'Eat in');
+  if (key === 'take_out') return t('orders.eatIn.takeOut', 'Take out');
+  return t('checkout.fulfillmentDelivery', 'Delivery');
+}
+
+function ChoiceArt({ kind, colored }: { kind: FoodServiceChoiceValue; colored: boolean }) {
+  const art =
+    kind === 'eat_in' ? (
+      <EatInIllustration size={40} />
+    ) : kind === 'take_out' ? (
+      <TakeOutIllustration size={40} />
+    ) : (
+      <DeliveryIllustration size={40} />
+    );
+  return (
+    <Box sx={{ filter: colored ? 'none' : 'grayscale(1)', opacity: colored ? 1 : 0.72, lineHeight: 0 }}>
+      {art}
+    </Box>
   );
 }
 
@@ -67,62 +85,44 @@ function ChoiceCard({
   onPress: () => void;
   children: React.ReactNode;
 }) {
+  const theme = useTheme();
+  const border = selected
+    ? theme.palette.primary.main
+    : alpha(theme.palette.text.primary, 0.22);
+  const fill = selected ? alpha(theme.palette.primary.main, 0.1) : theme.palette.background.paper;
   return (
     <ButtonBase
       disabled={disabled}
       onClick={onPress}
+      role="radio"
+      aria-checked={selected}
       aria-label={label}
-      aria-pressed={selected}
       sx={{
         flex: 1,
         minWidth: 0,
         px: 0.5,
-        py: 0.5,
+        py: 1,
         borderRadius: 2,
+        border: '1.5px solid',
+        borderColor: border,
+        bgcolor: fill,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 0.25,
-        color: selected ? 'primary.main' : 'text.secondary',
+        gap: 0.5,
+        boxShadow: selected ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.16)}` : 'none',
+        '&:hover': {
+          borderColor: theme.palette.primary.main,
+          bgcolor: alpha(theme.palette.primary.main, selected ? 0.14 : 0.05),
+        },
       }}
     >
       {children}
       {selected ? (
-        <Typography
-          variant="caption"
-          fontWeight={700}
-          textAlign="center"
-          color="primary.main"
-          sx={{ lineHeight: 1.2 }}
-        >
+        <Typography variant="caption" fontWeight={700} textAlign="center" color="primary.main">
           {label}
         </Typography>
       ) : null}
     </ButtonBase>
-  );
-}
-
-function DeliveryMark({ color }: { color: string }) {
-  return (
-    <Box
-      aria-hidden
-      sx={{
-        width: 40,
-        height: 29,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color,
-      }}
-    >
-      <Box component="span" sx={{ fontSize: 28, lineHeight: 1 }}>
-        <svg width="36" height="28" viewBox="0 0 48 36" fill="none">
-          <path d="M4 22h28V10H4v12z" stroke="currentColor" strokeWidth="2.5" />
-          <path d="M32 16h8l4 6v6h-12V16z" stroke="currentColor" strokeWidth="2.5" />
-          <circle cx="12" cy="28" r="3" stroke="currentColor" strokeWidth="2.5" />
-          <circle cx="36" cy="28" r="3" stroke="currentColor" strokeWidth="2.5" />
-        </svg>
-      </Box>
-    </Box>
   );
 }

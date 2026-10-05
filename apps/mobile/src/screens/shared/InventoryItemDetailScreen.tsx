@@ -11,7 +11,6 @@ import { InventoryItemShareButton } from '../../components/browse/InventoryItemS
 import { ItemLikeButton } from '../../components/browse/ItemLikeButton';
 import { InventoryItemDetailImageGallery } from '../../components/browse/InventoryItemDetailImageGallery';
 import { DetailVariantCarousel } from '../../components/browse/DetailVariantCarousel';
-import { InventoryItemDetailHowItWorks } from '../../components/browse/InventoryItemDetailHowItWorks';
 import { InventoryItemDetailProductInfo } from '../../components/browse/InventoryItemDetailProductInfo';
 import { ItemDetailFtueNudge } from '../../components/browse/ItemDetailFtueNudge';
 import { InventoryItemDetailViewsRow } from '../../components/browse/InventoryItemDetailViewsRow';
@@ -103,6 +102,7 @@ function InventoryItemDetailScreen() {
   const { submitInterest } = useProductInterest();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [variantId, setVariantId] = useState<string | null>(null);
+  const [stickyBarHeight, setStickyBarHeight] = useState(0);
   const [availabilityPending, setAvailabilityPending] = useState(false);
   const [availabilitySending, setAvailabilitySending] = useState(false);
   const { trackView } = useTrackItemView();
@@ -538,7 +538,9 @@ function InventoryItemDetailScreen() {
     <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
       <ScrollView
         contentContainerStyle={{
-          paddingBottom: insets.bottom + (showStickyBar ? 152 : spacing.lg),
+          paddingBottom: showStickyBar
+            ? (stickyBarHeight || 240) + spacing.md
+            : insets.bottom + spacing.lg,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -591,15 +593,10 @@ function InventoryItemDetailScreen() {
               ) : null}
               {item.food_availability.has_schedule ? (
                 <View style={{ marginTop: spacing.xs }}>
-                  <Text
-                    style={[
-                      typography.caption,
-                      { color: colors.text.secondary, fontWeight: '600', marginBottom: 4 },
-                    ]}
-                  >
-                    {t('foods.schedule.title', 'Serving hours')}
-                  </Text>
-                  <FoodScheduleList slots={item.food_availability.slots} />
+                  <FoodScheduleList
+                    slots={item.food_availability.slots}
+                    timezone={item.food_availability.timezone}
+                  />
                 </View>
               ) : null}
             </View>
@@ -943,7 +940,6 @@ function InventoryItemDetailScreen() {
             ) : null}
           </View>
 
-          <InventoryItemDetailHowItWorks />
           <ItemDetailFtueNudge />
 
           <InventoryItemDetailProductInfo
@@ -984,6 +980,7 @@ function InventoryItemDetailScreen() {
 
         {showStickyBar ? (
         <View
+          onLayout={(event) => setStickyBarHeight(event.nativeEvent.layout.height)}
           style={[
             styles.bottomBarWrap,
             {

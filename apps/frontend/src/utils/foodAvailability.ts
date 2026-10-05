@@ -104,6 +104,23 @@ export function formatSlotRange(slot: FoodAvailabilitySlot): string {
   return `${formatSlotTime(slot.start_time)} - ${formatSlotTime(slot.end_time)}`;
 }
 
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Sunday-first weekday in the restaurant timezone. Falls back to the device clock. */
+export function weekdayInTimezone(timezone?: string, now: Date = new Date()): number {
+  try {
+    const label = new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      timeZone: timezone || undefined,
+    }).format(now);
+    const index = WEEKDAY_SHORT.indexOf(label);
+    if (index >= 0) return index;
+  } catch {
+    // Invalid timezone: use the device clock.
+  }
+  return now.getDay();
+}
+
 /**
  * Weekday plus time of the next serving window, rendered in the restaurant's
  * timezone so a traveller sees the kitchen's clock rather than their own.

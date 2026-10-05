@@ -1,5 +1,6 @@
 import { type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { DeliveryIllustration } from '../illustrations/DeliveryIllustration';
 import { EatInIllustration } from '../illustrations/EatInIllustration';
 import { TakeOutIllustration } from '../illustrations/TakeOutIllustration';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -213,8 +214,6 @@ export function PlaceOrderFulfillmentChoice({
     );
   }
 
-  const ink = (selected: boolean) =>
-    selected ? colors.primary.main : colors.text.secondary;
   const storeLine = pickupSummary(pickupLocations);
   const showPickupContext = value === 'pickup' && !!storeLine;
   const showDeliveryContext =
@@ -243,7 +242,7 @@ export function PlaceOrderFulfillmentChoice({
               onEatInChange?.(true);
             }}
           >
-            <EatInIllustration size={36} color={ink(value === 'pickup' && eatIn)} />
+            <EatInIllustration size={40} colored={value === 'pickup' && eatIn} />
           </FoodPictureChoice>
           <FoodPictureChoice
             label={t('orders.eatIn.takeOut', 'Take out')}
@@ -253,7 +252,7 @@ export function PlaceOrderFulfillmentChoice({
               onEatInChange?.(false);
             }}
           >
-            <TakeOutIllustration size={36} color={ink(value === 'pickup' && !eatIn)} />
+            <TakeOutIllustration size={40} colored={value === 'pickup' && !eatIn} />
           </FoodPictureChoice>
           {!deliveryHidden ? (
             <FoodPictureChoice
@@ -262,11 +261,7 @@ export function PlaceOrderFulfillmentChoice({
               disabled={deliveryDisabled}
               onPress={() => onChange('delivery')}
             >
-              <MaterialCommunityIcons
-                name="truck-delivery-outline"
-                size={28}
-                color={ink(value === 'delivery' && !deliveryDisabled)}
-              />
+              <DeliveryIllustration size={40} colored={value === 'delivery' && !deliveryDisabled} />
             </FoodPictureChoice>
           ) : null}
         </View>
@@ -367,7 +362,7 @@ function FoodPictureChoice({
   onPress: () => void;
   children: ReactNode;
 }) {
-  const { colors, spacing, typography } = useTheme();
+  const { colors, spacing, borderRadius, typography } = useTheme();
   const active = selected && !disabled;
   return (
     <Pressable
@@ -381,8 +376,12 @@ function FoodPictureChoice({
         minWidth: 0,
         alignItems: 'center',
         gap: 2,
-        paddingVertical: spacing.xs,
+        paddingVertical: spacing.sm,
         paddingHorizontal: 4,
+        borderWidth: 1.5,
+        borderColor: active ? colors.primary.main : colors.borderStrong,
+        backgroundColor: active ? colors.primaryTint : colors.surface,
+        borderRadius: borderRadius.md,
         opacity: disabled ? 0.45 : 1,
       }}
     >

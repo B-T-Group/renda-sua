@@ -1,33 +1,31 @@
 import { View } from 'react-native';
-import Svg, { Ellipse, Path, Rect } from 'react-native-svg';
-import { useTheme } from '../../contexts/ThemeContext';
+import Svg, { Circle, Ellipse, Rect } from 'react-native-svg';
 
-/** Set table: the customer wants to eat in. */
+/** Set table: plate of food on a wooden table. */
 export function EatInIllustration({
   size = 96,
-  color,
+  colored = true,
 }: {
   size?: number;
-  color?: string;
+  colored?: boolean;
 }) {
-  const { colors } = useTheme();
-  const height = Math.round(size * 0.72);
-  const ink = color ?? colors.primary.main;
   return (
-    <View accessible accessibilityRole="image" accessibilityLabel="Eat in">
-      <Svg width={size} height={height} viewBox="0 0 120 86">
-        <Rect x="18" y="58" width="84" height="8" rx="2" fill={ink} opacity={0.25} />
-        <Rect x="28" y="66" width="6" height="14" rx="1" fill={ink} />
-        <Rect x="86" y="66" width="6" height="14" rx="1" fill={ink} />
-        <Ellipse cx="60" cy="40" rx="22" ry="10" stroke={ink} strokeWidth={3} fill="none" />
-        <Path d="M48 40c2 8 22 8 24 0" stroke={ink} strokeWidth={3} fill="none" />
-        <Path
-          d="M38 28c6-10 14-10 16 0M66 28c2-10 10-10 16 0"
-          stroke={ink}
-          strokeWidth={3}
-          strokeLinecap="round"
-          fill="none"
-        />
+    <View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel="Eat in"
+      style={colored ? undefined : { filter: 'grayscale(1)', opacity: 0.72 }}
+    >
+      <Svg width={size} height={size} viewBox="0 0 64 64">
+        <Ellipse cx="32" cy="26" rx="20" ry="11" fill="#FFF8F1" stroke="#E4D3C0" strokeWidth={2} />
+        <Ellipse cx="32" cy="24" rx="11" ry="6" fill="#F4A261" />
+        <Circle cx="23" cy="22" r="4" fill="#2A9D8F" />
+        <Circle cx="41" cy="21" r="3.5" fill="#E76F51" />
+        <Circle cx="32" cy="20" r="2.2" fill="#E9C46A" />
+        <Rect x="2" y="36" width="60" height="10" rx="2" fill="#E7C08A" />
+        <Rect x="2" y="44" width="60" height="4" fill="#B8884E" />
+        <Rect x="8" y="48" width="6" height="12" rx="2" fill="#8D5A2B" />
+        <Rect x="50" y="48" width="6" height="12" rx="2" fill="#8D5A2B" />
       </Svg>
     </View>
   );

@@ -1,29 +1,25 @@
 import { Box } from '@mui/material';
 import React from 'react';
 
-/** Set table: the customer wants to eat in. */
-export function EatInIllustration({
-  size = 96,
-  color = 'primary.main',
-}: {
-  size?: number;
-  color?: string;
-}) {
-  const height = Math.round(size * 0.72);
+/** Set table: plate of food on a wooden table. */
+export function EatInIllustration({ size = 96 }: { size?: number }) {
   return (
     <Box
       component="svg"
-      viewBox="0 0 120 86"
+      viewBox="0 0 64 64"
       role="img"
       aria-label="Eat in"
-      sx={{ width: size, height, display: 'block', color }}
+      sx={{ width: size, height: size, display: 'block' }}
     >
-      <rect x="18" y="58" width="84" height="8" rx="2" fill="currentColor" opacity={0.25} />
-      <rect x="28" y="66" width="6" height="14" rx="1" fill="currentColor" />
-      <rect x="86" y="66" width="6" height="14" rx="1" fill="currentColor" />
-      <ellipse cx="60" cy="40" rx="22" ry="10" fill="none" stroke="currentColor" strokeWidth="3" />
-      <path d="M48 40c2 8 22 8 24 0" fill="none" stroke="currentColor" strokeWidth="3" />
-      <path d="M38 28c6-10 14-10 16 0M66 28c2-10 10-10 16 0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <ellipse cx="32" cy="26" rx="20" ry="11" fill="#FFF8F1" stroke="#E4D3C0" strokeWidth="2" />
+      <ellipse cx="32" cy="24" rx="11" ry="6" fill="#F4A261" />
+      <circle cx="23" cy="22" r="4" fill="#2A9D8F" />
+      <circle cx="41" cy="21" r="3.5" fill="#E76F51" />
+      <circle cx="32" cy="20" r="2.2" fill="#E9C46A" />
+      <rect x="2" y="36" width="60" height="10" rx="2" fill="#E7C08A" />
+      <rect x="2" y="44" width="60" height="4" fill="#B8884E" />
+      <rect x="8" y="48" width="6" height="12" rx="2" fill="#8D5A2B" />
+      <rect x="50" y="48" width="6" height="12" rx="2" fill="#8D5A2B" />
     </Box>
   );
 }

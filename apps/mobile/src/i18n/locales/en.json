@@ -7157,7 +7157,8 @@
     },
     "schedule": {
       "title": "Serving hours",
-      "alwaysAvailable": "Available at any time"
+      "alwaysAvailable": "Available at any time",
+      "closedToday": "Closed"
     },
     "empty": {
       "noMatches": "No dishes match your search",

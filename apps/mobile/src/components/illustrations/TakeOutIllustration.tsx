@@ -1,31 +1,38 @@
 import { View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { useTheme } from '../../contexts/ThemeContext';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-/** Takeout bag: the customer will collect the order. */
+/** Takeout bag the customer collects. */
 export function TakeOutIllustration({
   size = 96,
-  color,
+  colored = true,
 }: {
   size?: number;
-  color?: string;
+  colored?: boolean;
 }) {
-  const { colors } = useTheme();
-  const height = Math.round(size * 0.72);
-  const ink = color ?? colors.primary.main;
   return (
-    <View accessible accessibilityRole="image" accessibilityLabel="Take out">
-      <Svg width={size} height={height} viewBox="0 0 120 86">
+    <View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel="Take out"
+      style={colored ? undefined : { filter: 'grayscale(1)', opacity: 0.72 }}
+    >
+      <Svg width={size} height={size} viewBox="0 0 64 64">
         <Path
-          d="M34 34h52l-4 40H38L34 34z"
-          fill={ink}
-          opacity={0.15}
-          stroke={ink}
-          strokeWidth={3}
+          d="M12 20h40l-4 38H16L12 20z"
+          fill="#F6D7A8"
+          stroke="#C9956A"
+          strokeWidth={2.5}
           strokeLinejoin="round"
         />
-        <Path d="M46 34c0-10 6-16 14-16s14 6 14 16" stroke={ink} strokeWidth={3} fill="none" />
-        <Path d="M52 48h16" stroke={ink} strokeWidth={3} strokeLinecap="round" />
+        <Path
+          d="M24 20c0-8 4-12 8-12s8 4 8 12"
+          fill="none"
+          stroke="#8D5A2B"
+          strokeWidth={3}
+          strokeLinecap="round"
+        />
+        <Rect x="16" y="34" width="32" height="8" fill="#0B7A3B" />
+        <Circle cx="32" cy="38" r="2" fill="#F6D7A8" />
       </Svg>
     </View>
   );
