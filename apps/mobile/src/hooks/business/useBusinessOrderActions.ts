@@ -57,10 +57,17 @@ export function useBusinessOrderActions(onSuccess?: () => void) {
   );
 
   const cancelOrder = useCallback(
-    async (order: BusinessOrder, notes: string) => {
+    async (
+      order: BusinessOrder,
+      payload: { cancellationReasonId: number; notes?: string }
+    ) => {
       setActingId(order.id);
       try {
-        await ordersApi.cancel({ orderId: order.id, notes });
+        await ordersApi.cancel({
+          orderId: order.id,
+          notes: payload.notes,
+          cancellationReasonId: payload.cancellationReasonId,
+        });
         await syncTerminalPin(order, 'cancelled');
         finish();
       } catch (e: unknown) {

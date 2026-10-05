@@ -350,7 +350,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
         visible={cancelOpen}
         order={order}
         onDismiss={() => setCancelOpen(false)}
-        onSubmit={(notes) => cancelOrder(order, notes)}
+        onSubmit={(payload) => cancelOrder(order, payload)}
       />
       <BusinessPickupPaymentDialog
         visible={pickupOpen}

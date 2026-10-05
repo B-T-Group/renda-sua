@@ -431,7 +431,10 @@ export class IncomingOrderStore {
     delete this.busyReminderTimers[orderId];
   }
 
-  async decline(notes: string): Promise<void> {
+  async decline(payload: {
+    cancellationReasonId: number;
+    notes: string;
+  }): Promise<void> {
     if (!this.orderId || !this.details) return;
     const snapshot = {
       id: this.orderId,
@@ -442,7 +445,8 @@ export class IncomingOrderStore {
     await businessApi.orders.cancel(
       {
         orderId: this.orderId,
-        notes: notes.trim() || 'Declined from incoming order screen',
+        notes: payload.notes.trim() || 'Declined from incoming order screen',
+        cancellationReasonId: payload.cancellationReasonId,
       },
       BUSINESS_PERSONA_HEADERS
     );

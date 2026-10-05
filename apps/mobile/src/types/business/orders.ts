@@ -36,6 +36,7 @@ export interface ConfirmOrderPayload {
 export interface OrderActionPayload {
   orderId: string;
   notes?: string;
+  cancellationReasonId?: number;
 }
 
 export interface ReconcileCashPayload {
