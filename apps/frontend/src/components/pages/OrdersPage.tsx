@@ -36,11 +36,12 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useOrders, type OrderFilters } from '../../hooks';
+import { useBusinessOrdersLiveRevision } from '../../hooks/useBusinessOrdersLive';
 import { sortOrdersByModifiedDesc } from '../../utils/orderListSort';
 import {
   BUSINESS_ORDER_QUEUE_FILTERS,
@@ -166,7 +167,7 @@ const OrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { profile } = useUserProfileContext();
+  const { profile, userType } = useUserProfileContext();
   /** Orders UI follows `users.user_type_id`, not nested client/agent/business rows. */
   const isOrdersAgent = profile?.user_type_id === 'agent';
   const isOrdersBusiness = profile?.user_type_id === 'business';
@@ -186,6 +187,8 @@ const OrdersPage: React.FC = () => {
 
   // Use unified orders hook that handles user type on backend
   const { orders, loading, error, fetchOrders, refreshOrders } = useOrders();
+  const liveRevision = useBusinessOrdersLiveRevision();
+  const seenLiveRevision = useRef(liveRevision);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Deep link from the pay-after confirm dialog: /orders?queue=prep
@@ -201,6 +204,13 @@ const OrdersPage: React.FC = () => {
 
   const isCashReconciliationView =
     isOrdersBusiness && searchParams.get('cashReconciliation') === 'pending';
+
+  useEffect(() => {
+    if (userType !== 'business') return;
+    if (liveRevision === seenLiveRevision.current) return;
+    seenLiveRevision.current = liveRevision;
+    void refreshOrders(true);
+  }, [liveRevision, refreshOrders, userType]);
 
   useEffect(() => {
     if (!isCashReconciliationView) {

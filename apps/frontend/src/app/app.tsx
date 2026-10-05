@@ -36,6 +36,7 @@ import { useAgentLocationConsent } from '../hooks/useAgentLocationConsent';
 import { useAuthFlow } from '../hooks/useAuthFlow';
 import { useDetectedCountry } from '../hooks/useDetectedCountry';
 import { useFlushPendingLike } from '../hooks/useFlushPendingLike';
+import { BusinessOrdersLiveProvider } from '../hooks/useBusinessOrdersLive';
 import { IncomingOrderInterruptProvider } from '../hooks/useIncomingOrderInterrupt';
 import { StorePickupReminderProvider } from '../hooks/useStorePickupReminder';
 import { useMetaPixelAdvancedMatching } from '../hooks/useMetaPixelAdvancedMatching';
@@ -185,6 +186,7 @@ function App() {
   }
 
   return (
+    <BusinessOrdersLiveProvider>
     <IncomingOrderInterruptProvider>
       <StorePickupReminderProvider>
       <Box
@@ -1102,6 +1104,7 @@ function App() {
       </Box>
       </StorePickupReminderProvider>
     </IncomingOrderInterruptProvider>
+    </BusinessOrdersLiveProvider>
   );
 }
 

@@ -32,18 +32,6 @@ function parseAllowedRoles(raw: unknown): string[] {
   }
 }
 
-export function decodeAuth0SubFromToken(token: string): string | undefined {
-  const sub = decodeJwtPayload(token)?.sub;
-  return typeof sub === 'string' ? sub : undefined;
-}
-
-export function decodeHasuraUserIdFromAccessToken(
-  token: string
-): string | undefined {
-  const userId = readHasuraClaims(token)?.['x-hasura-user-id'];
-  return typeof userId === 'string' ? userId : undefined;
-}
-
 export function decodeHasuraAllowedRoles(token: string): string[] {
   return parseAllowedRoles(readHasuraClaims(token)?.['x-hasura-allowed-roles']);
 }

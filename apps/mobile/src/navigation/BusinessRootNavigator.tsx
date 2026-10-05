@@ -102,6 +102,7 @@ import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
 import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotificationPermissionOnStart';
 import { useBusinessActiveOrders } from '../hooks/business/useBusinessActiveOrders';
+import { useBusinessOrdersLive } from '../hooks/business/useBusinessOrdersLive';
 import { useProfileMe } from '../hooks/useProfileMe';
 import { OwnerOrdersApiProvider } from '../contexts/OrdersApiContext';
 import {
@@ -128,9 +129,7 @@ function BusinessMainTabsScreen() {
   const floatingSafeAreaInsets = useFloatingTabBarSafeAreaInsets();
   const { totalCount: attentionBadgeCount, appIconBadgeCount } =
     usePersonaAttentionBadge('business');
-  const { activeCount: activeOrdersCount } = useBusinessActiveOrders({
-    pollWhileFocused: false,
-  });
+  const { activeCount: activeOrdersCount } = useBusinessActiveOrders();
   const { me } = useProfileMe();
   const isRentalFocused = me?.business?.main_interest === 'rent_items';
   useAppIconBadge(appIconBadgeCount);
@@ -266,6 +265,7 @@ function BusinessMainTabsScreen() {
 }
 
 export function BusinessRootNavigator() {
+  useBusinessOrdersLive();
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
 

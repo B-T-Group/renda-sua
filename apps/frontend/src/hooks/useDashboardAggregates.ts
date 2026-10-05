@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiClient } from './useApiClient';
+import { useBusinessOrdersLiveRevision } from './useBusinessOrdersLive';
 
 export interface TopViewedProduct {
   inventoryItemId: string;
@@ -46,14 +47,18 @@ export function useDashboardAggregates(businessId: string | undefined) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAggregates = useCallback(async () => {
+  const fetchAggregates = useCallback(async (silent = false) => {
     if (!apiClient || !businessId) {
-      setData(null);
-      setLoading(false);
+      if (!silent) {
+        setData(null);
+        setLoading(false);
+      }
       return;
     }
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const response = await apiClient.get<{
         success: boolean;
@@ -61,20 +66,31 @@ export function useDashboardAggregates(businessId: string | undefined) {
       }>('/dashboard/aggregates');
       if (response.data.success && response.data.data) {
         setData(response.data.data);
-      } else {
+      } else if (!silent) {
         setData(null);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? err?.message ?? 'Failed to load dashboard');
-      setData(null);
+      if (!silent) {
+        setError(err?.response?.data?.error ?? err?.message ?? 'Failed to load dashboard');
+        setData(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [apiClient, businessId]);
 
+  const liveRevision = useBusinessOrdersLiveRevision();
+  const seenRevision = useRef(liveRevision);
+
   useEffect(() => {
-    fetchAggregates();
+    void fetchAggregates();
   }, [fetchAggregates]);
+
+  useEffect(() => {
+    if (liveRevision === seenRevision.current) return;
+    seenRevision.current = liveRevision;
+    void fetchAggregates(true);
+  }, [fetchAggregates, liveRevision]);
 
   return {
     aggregates: data,

@@ -11,29 +11,16 @@ import {
 } from '../../utils/orderListGrouping';
 import { sortActiveOrders } from '../../utils/buildActiveOrderCardModel';
 
-const POLL_MS = 15_000;
-
 const ACTIVE_ORDERS_FILTER = {
   current_status: { _nin: [...TERMINAL_ORDER_STATUSES] },
 };
 
-export type UseBusinessActiveOrdersOptions = {
-  /**
-   * When true (default), refresh on focus and poll every 15s while focused.
-   * Set false for badge-only consumers (e.g. tab bar) to avoid duplicate polling
-   * alongside the dashboard carousel hook.
-   */
-  pollWhileFocused?: boolean;
-};
-
 /**
  * Loads non-terminal business orders for the dashboard Active Orders carousel.
- * Refreshes on focus, pull-to-refresh, IncomingOrderStore changes, and a 15s poll while focused.
+ * Refreshes on focus, when the app returns to the foreground, and when the
+ * business orders subscription reports a new or updated order.
  */
-export function useBusinessActiveOrders(
-  options?: UseBusinessActiveOrdersOptions
-) {
-  const pollWhileFocused = options?.pollWhileFocused !== false;
+export function useBusinessActiveOrders() {
   const { incomingOrder } = useStore();
   const [orders, setOrders] = useState<BusinessOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,21 +59,10 @@ export function useBusinessActiveOrders(
       focusedRef.current = true;
       setLoading(true);
       void fetchOrders();
-      if (!pollWhileFocused) {
-        return () => {
-          focusedRef.current = false;
-        };
-      }
-      const id = setInterval(() => {
-        if (focusedRef.current && AppState.currentState === 'active') {
-          void fetchRef.current();
-        }
-      }, POLL_MS);
       return () => {
         focusedRef.current = false;
-        clearInterval(id);
       };
-    }, [fetchOrders, pollWhileFocused])
+    }, [fetchOrders])
   );
 
   useEffect(() => {
@@ -95,9 +71,10 @@ export function useBusinessActiveOrders(
         visible: incomingOrder.visible,
         orderId: incomingOrder.orderId,
         uiState: incomingOrder.uiState,
+        liveRevision: incomingOrder.liveRevision,
       }),
       () => {
-        if (focusedRef.current) void fetchRef.current();
+        void fetchRef.current();
       }
     );
     return dispose;

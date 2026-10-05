@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { reaction } from 'mobx';
 import { Share } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -72,6 +73,15 @@ export function useBusinessDashboardScreen() {
   const { ftue, incomingOrder } = useStore();
   const { data, loading, error, refresh } = useDashboardAggregates();
   const activeOrdersState = useBusinessActiveOrders();
+
+  useEffect(() => {
+    return reaction(
+      () => incomingOrder.liveRevision,
+      () => {
+        void refresh({ silent: true });
+      }
+    );
+  }, [incomingOrder, refresh]);
   const { me, loading: profileLoading, refetch: refetchMe } = useProfileMe();
   const verification = useBusinessVerificationStatus();
   const [tipEpoch, setTipEpoch] = useState(0);

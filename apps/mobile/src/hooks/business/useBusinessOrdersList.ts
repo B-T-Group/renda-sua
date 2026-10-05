@@ -13,22 +13,25 @@ export function useBusinessOrdersList(initialFilters?: BusinessOrderFilters) {
   const [filters, setFilters] = useState<BusinessOrderFilters | undefined>(initialFilters);
 
   const fetchOrders = useCallback(
-    async (nextFilters?: BusinessOrderFilters) => {
+    async (nextFilters?: BusinessOrderFilters, silent = false) => {
       const f = nextFilters ?? filters;
-      setLoading(true);
-      setError(null);
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
       try {
         const res = await ordersApi.list(f);
         if (res.success && res.orders) {
           setOrders(res.orders as BusinessOrder[]);
-        } else {
+        } else if (!silent) {
           setOrders([]);
         }
       } catch (e: unknown) {
+        if (silent) return;
         setError(e instanceof Error ? e.message : 'Failed to load orders');
         setOrders([]);
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     },
     [filters, ordersApi]
@@ -44,6 +47,16 @@ export function useBusinessOrdersList(initialFilters?: BusinessOrderFilters) {
       () => incomingOrder.ordersRefreshEpoch,
       () => {
         void fetchOrders();
+      }
+    );
+    return dispose;
+  }, [incomingOrder, fetchOrders]);
+
+  useEffect(() => {
+    const dispose = reaction(
+      () => incomingOrder.liveRevision,
+      () => {
+        void fetchOrders(undefined, true);
       }
     );
     return dispose;

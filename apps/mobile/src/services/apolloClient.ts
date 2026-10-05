@@ -17,10 +17,35 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { fromError, fromPromise } from '@apollo/client/link/utils';
 import { getMainDefinition } from '@apollo/client/utilities';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from 'graphql-ws';
+import { createClient, type Client } from 'graphql-ws';
 import { getHasuraGraphqlUri } from '../config/auth0';
 import { registerEnvChangeListener } from '../config/envSwitch';
+import { readStoredContext } from '../utils/activePersonaStorage';
+import { businessHasuraRoleHeaders } from '../utils/jwtHasura';
 import Auth0DirectService from './auth0DirectService';
+
+let hasuraWsClient: Client | null = null;
+
+export function terminateHasuraWebsocket(): void {
+  hasuraWsClient?.terminate();
+}
+
+async function websocketConnectionParams(): Promise<Record<string, unknown>> {
+  try {
+    const token = await Auth0DirectService.getAccessToken();
+    if (!token) return {};
+    const stored = await readStoredContext();
+    const persona = stored?.kind === 'persona' ? stored.persona : undefined;
+    return {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...businessHasuraRoleHeaders(token, persona),
+      },
+    };
+  } catch {
+    return {};
+  }
+}
 
 const TOKENS_KEY = '@RendasuaAgent:tokens';
 const EXPIRATION_BUFFER = 5 * 60 * 1000;
@@ -116,24 +141,18 @@ function getHasuraWsUri(): string {
     .replace(/^https:\/\//, 'wss://');
 }
 
-const wsLink = new GraphQLWsLink(
-  createClient({
-    url: getHasuraWsUri,
-    connectionParams: async () => {
-      try {
-        const token = await Auth0DirectService.getAccessToken();
-        return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-      } catch {
-        return {};
-      }
-    },
-    retryAttempts: 5,
-    retryWait: (retryCount) =>
-      new Promise((resolve) =>
-        setTimeout(resolve, Math.min(1000 * 2 ** retryCount, 10000))
-      ),
-  })
-);
+const hasuraSocket = createClient({
+  url: getHasuraWsUri,
+  connectionParams: () => websocketConnectionParams(),
+  retryAttempts: 5,
+  retryWait: (retryCount) =>
+    new Promise((resolve) =>
+      setTimeout(resolve, Math.min(1000 * 2 ** retryCount, 10000))
+    ),
+});
+hasuraWsClient = hasuraSocket;
+
+const wsLink = new GraphQLWsLink(hasuraSocket);
 
 const httpChain = ApolloLink.from([errorLink, authLink, httpLink]);
 

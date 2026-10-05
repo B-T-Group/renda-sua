@@ -109,6 +109,8 @@ export class IncomingOrderStore {
   showCancelDialog = false;
   /** Bumped on foreground location/delegate pushes so open-order lists can refresh. */
   ordersRefreshEpoch = 0;
+  /** Bumped when the business orders subscription sees a create or status change. */
+  liveRevision = 0;
   /** Other unsnoozed pending orders behind the one on screen. */
   waitingCount = 0;
 
@@ -186,6 +188,10 @@ export class IncomingOrderStore {
       return;
     }
     await this.present(nextId);
+  }
+
+  bumpLiveRevision(): void {
+    this.liveRevision += 1;
   }
 
   /** Vibrate + list refresh without presenting the owner acceptance overlay. */

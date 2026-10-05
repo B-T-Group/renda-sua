@@ -1,8 +1,7 @@
+import { describe, expect, it } from 'vitest';
 import {
   businessHasuraRoleHeaders,
-  decodeAuth0SubFromToken,
   decodeHasuraAllowedRoles,
-  decodeHasuraUserIdFromAccessToken,
   tokenAllowsHasuraRole,
 } from './jwtHasura';
 
@@ -15,22 +14,6 @@ function token(payload: object): string {
 }
 
 describe('jwtHasura', () => {
-  it('reads the Auth0 sub and ignores a non-string sub', () => {
-    expect(decodeAuth0SubFromToken(token({ sub: 'auth0|abc' }))).toBe('auth0|abc');
-    expect(decodeAuth0SubFromToken(token({ sub: 12 }))).toBeUndefined();
-  });
-
-  it('reads the Hasura user id from namespaced claims', () => {
-    expect(
-      decodeHasuraUserIdFromAccessToken(
-        token({
-          'https://hasura.io/jwt/claims': { 'x-hasura-user-id': 'uuid-1' },
-        })
-      )
-    ).toBe('uuid-1');
-    expect(decodeHasuraUserIdFromAccessToken(token({ sub: 'auth0|abc' }))).toBeUndefined();
-  });
-
   it('reads allowed Hasura roles from an array or a JSON string', () => {
     const withArray = token({
       'https://hasura.io/jwt/claims': {
@@ -57,13 +40,14 @@ describe('jwtHasura', () => {
       'x-hasura-role': 'business',
     });
     expect(businessHasuraRoleHeaders(tokenValue, 'client')).toEqual({});
-    expect(businessHasuraRoleHeaders(tokenValue, 'agent')).toEqual({});
     expect(businessHasuraRoleHeaders(null, 'business')).toEqual({});
-  });
-
-  it('returns undefined for a missing or corrupt payload', () => {
-    expect(decodeAuth0SubFromToken('not-a-jwt')).toBeUndefined();
-    expect(decodeHasuraUserIdFromAccessToken('hdr.')).toBeUndefined();
-    expect(decodeAuth0SubFromToken('hdr.@@@.sig')).toBeUndefined();
+    expect(
+      businessHasuraRoleHeaders(
+        token({
+          'https://hasura.io/jwt/claims': { 'x-hasura-allowed-roles': ['client'] },
+        }),
+        'business'
+      )
+    ).toEqual({});
   });
 });

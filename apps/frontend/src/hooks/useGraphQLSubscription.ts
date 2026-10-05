@@ -8,10 +8,37 @@ import {
 import { setContext } from '@apollo/client/link/context';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
-import { createClient } from 'graphql-ws';
+import { createClient, type Client } from 'graphql-ws';
 import { useEffect, useState } from 'react';
 import { environment } from '../config/environment';
 import { useSessionAuth } from '../contexts/SessionAuthContext';
+import { readStoredActivePersonaSlug } from '../utils/activePersonaStorage';
+import { businessHasuraRoleHeaders } from '../utils/jwtHasura';
+
+let hasuraWsClient: Client | null = null;
+
+export function terminateHasuraWebsocket(): void {
+  hasuraWsClient?.terminate();
+}
+
+async function websocketConnectionParams(
+  getAccessToken: () => Promise<string | null>
+): Promise<Record<string, unknown>> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return {};
+    const persona = readStoredActivePersonaSlug();
+    return {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...businessHasuraRoleHeaders(token, persona),
+      },
+    };
+  } catch (error) {
+    console.error('Failed to get token for WebSocket:', error);
+    return {};
+  }
+}
 
 export const useGraphQLSubscription = () => {
   const { getAccessToken, isAuthenticated } = useSessionAuth();
@@ -21,6 +48,7 @@ export const useGraphQLSubscription = () => {
 
   useEffect(() => {
     let isMounted = true;
+    let localWsClient: Client | null = null;
 
     const setupClient = async () => {
       if (!isAuthenticated) {
@@ -72,19 +100,7 @@ export const useGraphQLSubscription = () => {
 
           const wsClient = createClient({
             url: wsUrl,
-            connectionParams: async () => {
-              try {
-                const token = await getAccessToken();
-                return {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  },
-                };
-              } catch (error) {
-                console.error('Failed to get token for WebSocket:', error);
-                return {};
-              }
-            },
+            connectionParams: () => websocketConnectionParams(getAccessToken),
             retryAttempts: 3,
             retryWait: (retryCount) =>
               new Promise((resolve) =>
@@ -96,6 +112,12 @@ export const useGraphQLSubscription = () => {
             },
           });
 
+          if (!isMounted) {
+            wsClient.dispose();
+            return;
+          }
+          localWsClient = wsClient;
+          hasuraWsClient = wsClient;
           wsLink = new GraphQLWsLink(wsClient);
           console.log('WebSocket link created successfully');
         } catch (wsError) {
@@ -149,6 +171,8 @@ export const useGraphQLSubscription = () => {
 
     return () => {
       isMounted = false;
+      localWsClient?.dispose();
+      if (hasuraWsClient === localWsClient) hasuraWsClient = null;
     };
   }, [isAuthenticated, getAccessToken]);
 
