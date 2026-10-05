@@ -94,10 +94,13 @@ export default observer(function GuestBrowseScreen({
   );
 
   const onStorePress = useCallback(
-    (businessLocationId: string) => {
+    (businessLocationId: string, options?: { foodOnly?: boolean }) => {
       (navigation.getParent() as { navigate?: (name: string, params: object) => void } | undefined)?.navigate?.(
         'StoreDetail',
-        { businessId: businessLocationId }
+        {
+          businessId: businessLocationId,
+          ...(options?.foodOnly && { foodOnly: true }),
+        }
       );
     },
     [navigation]

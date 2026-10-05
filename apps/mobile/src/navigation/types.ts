@@ -145,6 +145,8 @@ export type StoreDetailParams = {
   businessId: string;
   /** Merchant preview chrome + owner catalog visibility. */
   previewMode?: boolean;
+  /** Opened from Foods: show this location's cooked-food menu. */
+  foodOnly?: boolean;
 };
 
 export type StoresListParams = {

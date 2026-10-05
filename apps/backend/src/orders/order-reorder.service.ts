@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { FOOD_CATEGORY_NAME } from '../food/food.constants';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -63,6 +64,7 @@ const ORDER_FOR_REORDER_QUERY = `
         item_name
         variant_name
         quantity
+        is_cooked_food
       }
     }
   }
@@ -165,6 +167,7 @@ type ReorderOrderRow = {
     item_name?: string | null;
     variant_name?: string | null;
     quantity: number;
+    is_cooked_food?: boolean | null;
   }>;
 };
 
@@ -183,7 +186,10 @@ export class OrderReorderService {
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService
   ) {}
 
-  async reorder(orderId: string): Promise<ReorderOrderResponseDto> {
+  async reorder(
+    orderId: string,
+    foodOnly = false
+  ): Promise<ReorderOrderResponseDto> {
     const user = await this.hasuraUserService.getUser();
     this.requireClientPersona(user);
     const order = await this.loadOrder(orderId);
@@ -194,7 +200,7 @@ export class OrderReorderService {
       await this.orderAcceptanceService.isBusinessAcceptingOrders(
         order.business_id
       );
-    const { lines, skipped } = await this.buildLines(order, accepting);
+    const { lines, skipped } = await this.buildLines(order, accepting, foodOnly);
     const fulfillmentType = this.resolveFulfillmentType(
       order.fulfillment_method
     );
@@ -336,7 +342,8 @@ export class OrderReorderService {
 
   private async buildLines(
     order: ReorderOrderRow,
-    accepting: boolean
+    accepting: boolean,
+    foodOnly = false
   ): Promise<{ lines: ReorderLineDto[]; skipped: ReorderSkippedDto[] }> {
     const items = order.order_items ?? [];
     if (items.length === 0) return { lines: [], skipped: [] };
@@ -350,9 +357,11 @@ export class OrderReorderService {
     const lines: ReorderLineDto[] = [];
     const skipped: ReorderSkippedDto[] = [];
     for (const item of items) {
+      const inventory = inventoryById.get(item.business_inventory_id);
+      if (foodOnly && !this.isFoodLine(item, inventory)) continue;
       const result = this.resolveLine(
         item,
-        inventoryById.get(item.business_inventory_id),
+        inventory,
         stripeCountries,
         accepting
       );
@@ -371,6 +380,14 @@ export class OrderReorderService {
     return new Map(
       (result.business_inventory ?? []).map((row) => [row.id, row])
     );
+  }
+
+  private isFoodLine(
+    item: ReorderOrderRow['order_items'][number],
+    inv: any
+  ): boolean {
+    if (item.is_cooked_food === true || inv?.item?.is_cooked_food === true) return true;
+    return inv?.item?.item_sub_category?.item_category?.name === FOOD_CATEGORY_NAME;
   }
 
   private resolveLine(

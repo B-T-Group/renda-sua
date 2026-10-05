@@ -23,6 +23,8 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInventoryCatalog } from '../../hooks/useInventoryCatalog';
 import { useInventoryStore } from '../../hooks/useInventoryStore';
+import { useCatalogOrigin } from '../../hooks/useCatalogOrigin';
+import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { useGuestCatalogCountry } from '../../hooks/useGuestCatalogCountry';
 import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { BrowseCartFab } from '../../components/browse/BrowseCartFab';
@@ -53,7 +55,7 @@ type Props =
   | NativeStackScreenProps<BusinessRootStackParamList, 'StoreDetail'>;
 
 function StoreDetailScreen({ route, navigation }: Props) {
-  const { businessId: locationOrBusinessId, previewMode } = route.params;
+  const { businessId: locationOrBusinessId, previewMode, foodOnly } = route.params;
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const { auth, persona, cart } = useStore();
@@ -103,10 +105,12 @@ function StoreDetailScreen({ route, navigation }: Props) {
   const withAuth = auth.isAuthenticated;
   const catalogReady = withAuth || !guestCountry.loading;
   const countryCode = withAuth ? undefined : guestCountry.countryCode;
+  const { origin } = useCatalogOrigin('relevance', catalogReady, foodOnly === true);
 
   const storeQuery = useInventoryStore({
     businessId: locationOrBusinessId,
     countryCode,
+    origin,
     withAuth: withAuth || !!previewMode,
     previewMode: !!previewMode,
     enabled: catalogReady,
@@ -131,6 +135,8 @@ function StoreDetailScreen({ route, navigation }: Props) {
     // country or cross-market store pages can return an empty product list.
     withAuth: withAuth || !!previewMode,
     owner_preview: !!previewMode,
+    origin,
+    food_only: foodOnly === true || undefined,
     enabled: catalogReady && storeMatchesRoute && Boolean(store?.business_location_id),
   });
 
@@ -263,6 +269,7 @@ function StoreDetailScreen({ route, navigation }: Props) {
   );
 
   const name = store?.name?.trim() || t('stores.unnamed', 'Store');
+  const distanceKm = formatDistanceKm(store?.distance_meters);
   const openingSoon = !!store?.is_storefront_visible && !store?.can_accept_orders;
   const isEmpty = !catalog.loading && catalog.items.length === 0;
   const palette = storeAvatarPalette(name);
@@ -384,10 +391,22 @@ function StoreDetailScreen({ route, navigation }: Props) {
                 variant="bodyMedium"
                 style={{ color: colors.text.secondary, marginTop: 4 }}
               >
-                {t('stores.itemCount', '{{count}} items', {
-                  count: store?.item_count ?? catalog.total,
-                })}
+                {foodOnly
+                  ? t('foods.restaurants.dishCount', '{{count}} dishes', {
+                      count: catalog.total,
+                    })
+                  : t('stores.itemCount', '{{count}} items', {
+                      count: store?.item_count ?? catalog.total,
+                    })}
               </Text>
+              {distanceKm ? (
+                <Text
+                  variant="bodyMedium"
+                  style={{ color: colors.primary.main, fontWeight: '700', marginTop: 4 }}
+                >
+                  {t('foods.distanceFromYou', '{{km}} km from you', { km: distanceKm })}
+                </Text>
+              ) : null}
               <View style={styles.badges}>
                 {store?.is_verified ? (
                   <StatusPill

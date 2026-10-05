@@ -17,6 +17,7 @@ import {
 } from '../../utils/buildCartLineFromCatalog';
 import { bestPackSavings } from '../../types/business/itemVariant';
 import { ItemLikeButton } from './ItemLikeButton';
+import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { resolveProductCardHint } from '../../utils/resolveProductCardHint';
 
 function formatMoney(amount: number, currency: string): string {
@@ -72,6 +73,7 @@ function InventoryCatalogGridTileInner({
     [hasVariantOptions, item, unitPrice]
   );
   const currency = item.item.currency || 'XAF';
+  const distanceKm = exportAvailable ? null : formatDistanceKm(item.distance_value);
   const packSavings = useMemo(
     () =>
       bestPackSavings({
@@ -172,6 +174,18 @@ function InventoryCatalogGridTileInner({
               : formatMoney(unitPrice, currency)}
           </Text>
         )}
+
+        {distanceKm ? (
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.text.secondary, marginTop: 2, fontWeight: '600' },
+            ]}
+            numberOfLines={1}
+          >
+            {t('foods.distanceFromYou', '{{km}} km from you', { km: distanceKm })}
+          </Text>
+        ) : null}
 
         <ProductHint item={item} hasDeal={Boolean(hasDeal)} />
 

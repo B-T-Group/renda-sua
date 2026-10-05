@@ -37,6 +37,12 @@ export interface BrowseCatalogListHeaderProps {
   itemsLength: number;
   onListRefresh: () => void;
   foodOnly?: boolean;
+  /** Foods browse: restaurants (default) or the dish grid. */
+  foodsView?: 'restaurants' | 'dishes';
+  onFoodsViewChange?: (view: 'restaurants' | 'dishes') => void;
+  /** Hide dish filters when the Food tab is showing restaurants. */
+  showDishTools?: boolean;
+  restaurantsSlot?: React.ReactNode;
   /** Show Exports quick-pick (destination markets with export catalog). */
   showExportsChip?: boolean;
   exportOnly?: boolean;
@@ -68,6 +74,10 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
   itemsLength,
   onListRefresh,
   foodOnly = false,
+  foodsView = 'restaurants',
+  onFoodsViewChange,
+  showDishTools = true,
+  restaurantsSlot,
   showExportsChip = false,
   exportOnly = false,
   onToggleExportOnly,
@@ -94,6 +104,22 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
               onSeeAll={onSeeAllHomeOrders}
             />
           ) : null}
+          <View style={[styles.toolbar, { marginTop: spacing.sm }]}>
+            <Chip
+              mode={foodsView === 'restaurants' ? 'flat' : 'outlined'}
+              selected={foodsView === 'restaurants'}
+              onPress={() => onFoodsViewChange?.('restaurants')}
+            >
+              {t('foods.restaurants.tab', 'Restaurants')}
+            </Chip>
+            <Chip
+              mode={foodsView === 'dishes' ? 'flat' : 'outlined'}
+              selected={foodsView === 'dishes'}
+              onPress={() => onFoodsViewChange?.('dishes')}
+            >
+              {t('foods.dishes.tab', 'Dishes')}
+            </Chip>
+          </View>
         </View>
       ) : (
         <CatalogBrowseHero
@@ -117,71 +143,75 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
 
       {discoverySlot}
 
-      <View style={[styles.toolbar, { marginTop: spacing.md }]}>
-        {/* Filters — filled primary when active, outlined when empty */}
-        <Button
-          mode={activeFilterCount > 0 ? 'contained' : 'outlined'}
-          icon="tune-variant"
-          onPress={onOpenFilterSheet}
-          buttonColor={activeFilterCount > 0 ? colors.primary.main : undefined}
-          textColor={activeFilterCount > 0 ? colors.primary.contrast : undefined}
-          contentStyle={styles.filterBtnContent}
-        >
-          {activeFilterCount > 0
-            ? `${t('public.items.filters.heading', 'Filters')} (${activeFilterCount})`
-            : t('public.items.filters.heading', 'Filters')}
-        </Button>
-        {/* Sort — visually separate from the filter control */}
-        <Chip
-          icon="sort-variant"
-          mode="outlined"
-          onPress={onOpenFilterSheet}
-          style={styles.sortChip}
-          elevated
-        >
-          {sortSummaryLabel}
-        </Chip>
-        {!foodOnly && showExportsChip && onToggleExportOnly ? (
-          <Chip
-            icon="airplane"
-            mode={exportOnly ? 'flat' : 'outlined'}
-            selected={exportOnly}
-            onPress={onToggleExportOnly}
-            style={styles.sortChip}
-            elevated
+      {showDishTools ? (
+        <>
+          <View style={[styles.toolbar, { marginTop: spacing.md }]}>
+            <Button
+              mode={activeFilterCount > 0 ? 'contained' : 'outlined'}
+              icon="tune-variant"
+              onPress={onOpenFilterSheet}
+              buttonColor={activeFilterCount > 0 ? colors.primary.main : undefined}
+              textColor={activeFilterCount > 0 ? colors.primary.contrast : undefined}
+              contentStyle={styles.filterBtnContent}
+            >
+              {activeFilterCount > 0
+                ? `${t('public.items.filters.heading', 'Filters')} (${activeFilterCount})`
+                : t('public.items.filters.heading', 'Filters')}
+            </Button>
+            <Chip
+              icon="sort-variant"
+              mode="outlined"
+              onPress={onOpenFilterSheet}
+              style={styles.sortChip}
+              elevated
+            >
+              {sortSummaryLabel}
+            </Chip>
+            {!foodOnly && showExportsChip && onToggleExportOnly ? (
+              <Chip
+                icon="airplane"
+                mode={exportOnly ? 'flat' : 'outlined'}
+                selected={exportOnly}
+                onPress={onToggleExportOnly}
+                style={styles.sortChip}
+                elevated
+              >
+                {t('exportCatalog.chip', 'Exports')}
+              </Chip>
+            ) : null}
+          </View>
+
+          <CatalogBrowseActiveFilterChips
+            values={catalogFilters}
+            onClearField={onClearFilterField}
+            onClearAll={onClearAllFilters}
+            exportOnly={exportOnly}
+            onClearExportOnly={onClearExportOnly}
+          />
+
+          <Text
+            style={[
+              typography.subtitle1,
+              { color: colors.text.primary, marginTop: spacing.md, marginBottom: spacing.sm },
+            ]}
           >
-            {t('exportCatalog.chip', 'Exports')}
-          </Chip>
-        ) : null}
-      </View>
+            {foodOnly
+              ? t('foods.catalogTitle', 'Available dishes')
+              : t('public.items.catalogTitle', 'Available items')}
+          </Text>
 
-      <CatalogBrowseActiveFilterChips
-        values={catalogFilters}
-        onClearField={onClearFilterField}
-        onClearAll={onClearAllFilters}
-        exportOnly={exportOnly}
-        onClearExportOnly={onClearExportOnly}
-      />
-
-      <Text
-        style={[
-          typography.subtitle1,
-          { color: colors.text.primary, marginTop: spacing.md, marginBottom: spacing.sm },
-        ]}
-      >
-        {foodOnly
-          ? t('foods.catalogTitle', 'Available dishes')
-          : t('public.items.catalogTitle', 'Available items')}
-      </Text>
-
-      {error && itemsLength === 0 ? (
-        <View style={[styles.errorBox, { borderColor: colors.error.light }]}>
-          <Text style={[typography.body2, { color: colors.error.main }]}>{error}</Text>
-          <Chip icon="refresh" onPress={onListRefresh} style={{ marginTop: spacing.sm }}>
-            {t('common.retry', 'Retry')}
-          </Chip>
-        </View>
-      ) : null}
+          {error && itemsLength === 0 ? (
+            <View style={[styles.errorBox, { borderColor: colors.error.light }]}>
+              <Text style={[typography.body2, { color: colors.error.main }]}>{error}</Text>
+              <Chip icon="refresh" onPress={onListRefresh} style={{ marginTop: spacing.sm }}>
+                {t('common.retry', 'Retry')}
+              </Chip>
+            </View>
+          ) : null}
+        </>
+      ) : (
+        restaurantsSlot
+      )}
     </View>
   );
 });

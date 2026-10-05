@@ -15,6 +15,7 @@ export interface UseCatalogStoresOptions {
   enabled?: boolean;
   partnersOnly?: boolean;
   businessId?: string;
+  foodOnly?: boolean;
 }
 
 export function useCatalogStores({
@@ -27,6 +28,7 @@ export function useCatalogStores({
   enabled = true,
   partnersOnly = false,
   businessId,
+  foodOnly = false,
 }: UseCatalogStoresOptions) {
   const [stores, setStores] = useState<CatalogStore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,7 @@ export function useCatalogStores({
           ...(origin && { origin_lat: origin.lat, origin_lng: origin.lng }),
           ...(partnersOnly && { partners_only: true }),
           ...(businessId?.trim() && { business_id: businessId.trim() }),
+          ...(foodOnly && { food_only: true }),
         },
         { signal: controller.signal }
       );
@@ -82,6 +85,7 @@ export function useCatalogStores({
     origin?.lng,
     partnersOnly,
     businessId,
+    foodOnly,
   ]);
 
   useEffect(() => {

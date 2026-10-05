@@ -27,6 +27,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import { resolveProductCardHint } from '../../utils/resolveProductCardHint';
+import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
@@ -136,6 +137,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
   const { trackSiteEvent } = useTrackSiteEvent();
   const { getListingQuantityInCart } = useCart();
   const exportAvailable = inventory.item?.export_available === true;
+  const distanceKm = formatDistanceKm(inventory.distance_value);
   const inCartQuantity = getListingQuantityInCart(inventory.id);
   const inCart = inCartQuantity > 0;
   const inCartLabel =
@@ -1139,6 +1141,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
           {!exportAvailable &&
             (distanceLoading ||
               distanceError ||
+              distanceKm ||
               (estimatedDistance && estimatedDuration)) && (
             <Box sx={{ mb: 1 }}>
               {distanceLoading && (
@@ -1159,7 +1162,17 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   {distanceErrorLabel}: {distanceError}
                 </Typography>
               )}
-              {estimatedDistance && estimatedDuration && (
+              {distanceKm ? (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+                >
+                  {t('foods.distanceFromYou', '{{km}} km from you', {
+                    km: distanceKm,
+                  })}
+                </Typography>
+              ) : estimatedDistance && estimatedDuration ? (
                 <Typography
                   variant="caption"
                   color="text.secondary"
@@ -1167,7 +1180,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 >
                   {estimatedDistance} • {estimatedDuration}
                 </Typography>
-              )}
+              ) : null}
             </Box>
           )}
         </CardContent>

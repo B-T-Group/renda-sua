@@ -24,7 +24,11 @@ function isReorderEligible(status: string | undefined | null): boolean {
   return status === 'complete' || status === 'delivered';
 }
 
-export function useClientReorderFlow(orderId: string, orderStatus?: string | null) {
+export function useClientReorderFlow(
+  orderId: string,
+  orderStatus?: string | null,
+  foodOnly = false
+) {
   const { t } = useTranslation();
   const navigation = useNavigation<Nav>();
   const { flags } = useClientFlags();
@@ -122,7 +126,7 @@ export function useClientReorderFlow(orderId: string, orderStatus?: string | nul
   const onReorderPress = useCallback(async () => {
     trackReorderEvent('reorder_tap', { orderId });
     try {
-      const payload = await reorder(orderId);
+      const payload = await reorder(orderId, foodOnly);
       if (payload.lines.length === 0) {
         navigateAfterApply(payload, 'replace');
         return;
@@ -150,7 +154,7 @@ export function useClientReorderFlow(orderId: string, orderStatus?: string | nul
           : t('orders.reorder.failed', 'Could not reorder. Try again.');
       setSnack(msg);
     }
-  }, [applyLines, cart.items, navigateAfterApply, orderId, reorder, t]);
+  }, [applyLines, cart.items, foodOnly, navigateAfterApply, orderId, reorder, t]);
 
   const onReplace = useCallback(() => {
     if (!pending) return;

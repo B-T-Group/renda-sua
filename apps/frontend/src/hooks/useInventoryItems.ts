@@ -319,11 +319,10 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           }),
           ...(query.food_only === true && { food_only: true }),
           ...(query.export_only === true && { export_only: true }),
-          ...(!isAuthenticated &&
-            query.anonymousOrigin && {
-              origin_lat: query.anonymousOrigin.lat,
-              origin_lng: query.anonymousOrigin.lng,
-            }),
+          ...(query.anonymousOrigin && {
+            origin_lat: query.anonymousOrigin.lat,
+            origin_lng: query.anonymousOrigin.lng,
+          }),
         },
         signal: controller.signal,
       });

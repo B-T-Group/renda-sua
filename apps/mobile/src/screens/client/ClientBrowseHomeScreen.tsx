@@ -22,6 +22,7 @@ import type {
 } from '../../navigation/types';
 import { useStore } from '../../stores/RootStore';
 import { BuyAgainCard, buyAgainLines } from '../../components/client/BuyAgainCard';
+import { selectBuyAgainOrder } from '../../utils/selectBuyAgainOrder';
 import { DiscoveryRails } from '../../components/client/DiscoveryRails';
 import { HomeLaneSwitcher, type HomeLane } from '../../components/client/HomeLaneSwitcher';
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
@@ -91,8 +92,11 @@ function ClientBrowseHomeScreenBase() {
   );
 
   const onStorePress = useCallback(
-    (businessLocationId: string) => {
-      rootNav?.navigate('StoreDetail', { businessId: businessLocationId });
+    (businessLocationId: string, options?: { foodOnly?: boolean }) => {
+      rootNav?.navigate('StoreDetail', {
+        businessId: businessLocationId,
+        ...(options?.foodOnly && { foodOnly: true }),
+      });
     },
     [rootNav]
   );
@@ -143,12 +147,9 @@ function ClientBrowseHomeScreenBase() {
     !foodOnly && isClientAuthenticated && actionsNeededItems.length > 0;
   const showCredits =
     !foodOnly && isClientAuthenticated && summary.totalRemaining > 0;
-  const buyAgainOrder = useMemo(
-    () =>
-      (clientBrowseOrders ? orders : []).find(
-        (order) => order.current_status === 'complete' || order.current_status === 'delivered'
-      ),
-    [clientBrowseOrders, orders]
+  const buyAgain = useMemo(
+    () => selectBuyAgainOrder(clientBrowseOrders ? orders : [], foodOnly),
+    [clientBrowseOrders, orders, foodOnly]
   );
   const onLaneChange = useCallback(
     (next: HomeLane) => {
@@ -250,11 +251,12 @@ function ClientBrowseHomeScreenBase() {
         headerMarketTrailing={<AssistantIconButton onPress={openAssistant} />}
         discoveryExtra={
           <>
-            {buyAgainOrder ? (
+            {buyAgain ? (
               <BuyAgainCard
-                orderId={buyAgainOrder.id}
-                orderStatus={buyAgainOrder.current_status}
-                items={buyAgainLines(buyAgainOrder.order_items)}
+                orderId={buyAgain.order.id}
+                orderStatus={buyAgain.order.current_status}
+                items={buyAgainLines(buyAgain.lines)}
+                foodOnly={foodOnly}
               />
             ) : null}
             <DiscoveryRails authenticated={isClientAuthenticated} onItemPress={onItemPress} />

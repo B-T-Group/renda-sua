@@ -30,6 +30,8 @@ export interface CatalogInventoryItem {
   pay_after_confirm_badge?: boolean;
   distance_text?: string;
   duration_text?: string;
+  /** Straight-line or road distance in meters, when an origin is known. */
+  distance_value?: number;
   avg_rating?: number | null;
   rating_count?: number | null;
   /** Present only for items in the cooked-food category. */

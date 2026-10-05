@@ -7,6 +7,7 @@ export interface OrderItem {
   quantity: number;
   special_instructions?: string;
   item_name?: string;
+  is_cooked_food?: boolean | null;
   variant_name?: string | null;
   variant_snapshot?: { image_url?: string | null } | null;
   unit_price?: number;

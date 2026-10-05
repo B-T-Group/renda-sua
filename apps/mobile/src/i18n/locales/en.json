@@ -7146,6 +7146,21 @@
       "illustrationLabel": "Order food, restaurant prepares it, you get notified"
     },
     "searchPlaceholder": "Search dishes",
+    "distanceFromYou": "{{km}} km from you",
+    "dishes": {
+      "tab": "Dishes"
+    },
+    "restaurants": {
+      "tab": "Restaurants",
+      "searchPlaceholder": "Search restaurants",
+      "dishCount": "{{count}} dishes",
+      "openMenu": "Open {{name}} menu",
+      "loading": "Loading restaurants…",
+      "none": "No restaurants to show",
+      "count": "{{count}} restaurants",
+      "noMatches": "No restaurants match your search",
+      "tryAgain": "Try another restaurant name."
+    },
     "catalogTitle": "Available dishes",
     "prepMinutes": "~{{count}} min prep",
     "filters": {
