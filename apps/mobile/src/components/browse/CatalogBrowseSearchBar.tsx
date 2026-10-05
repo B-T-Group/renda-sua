@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { StyleSheet } from 'react-native';
-import { Searchbar } from 'react-native-paper';
+import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
-import type { Theme } from '../../theme';
+import { shadows, type Theme } from '../../theme';
 
 export interface CatalogBrowseSearchBarProps {
   theme: Theme;
@@ -22,18 +23,10 @@ export const CatalogBrowseSearchBar = memo(function CatalogBrowseSearchBar({
 }: CatalogBrowseSearchBarProps) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius } = theme;
+  const hasValue = value.length > 0;
 
   return (
-    <Searchbar
-      placeholder={
-        placeholder ??
-        t('public.items.searchPlaceholder', 'Search products, stores...')
-      }
-      value={value}
-      onChangeText={onChangeText}
-      onClearIconPress={() => onChangeText('')}
-      icon="magnify"
-      loading={loading}
+    <View
       style={[
         styles.search,
         {
@@ -42,22 +35,78 @@ export const CatalogBrowseSearchBar = memo(function CatalogBrowseSearchBar({
           borderRadius: borderRadius.full,
         },
       ]}
-      inputStyle={[typography.body1, styles.input]}
-      elevation={1}
-      autoCorrect={false}
-      autoCapitalize="none"
-      returnKeyType="search"
-      enablesReturnKeyAutomatically
-    />
+    >
+      <MaterialCommunityIcons
+        name="magnify"
+        size={22}
+        color={colors.text.secondary}
+        style={styles.leading}
+      />
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={
+          placeholder ??
+          t('public.items.searchPlaceholder', 'Search products, stores...')
+        }
+        placeholderTextColor={colors.text.secondary}
+        style={[typography.body1, styles.input, { color: colors.text.primary }]}
+        autoCorrect={false}
+        autoCapitalize="none"
+        returnKeyType="search"
+        enablesReturnKeyAutomatically
+        clearButtonMode="never"
+        accessibilityRole="search"
+      />
+      {loading && hasValue ? (
+        <ActivityIndicator
+          size="small"
+          color={colors.text.secondary}
+          style={styles.spinner}
+        />
+      ) : null}
+      {hasValue ? (
+        <Pressable
+          onPress={() => onChangeText('')}
+          onPressIn={() => onChangeText('')}
+          style={styles.clear}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.clearSearch', 'Clear search')}
+        >
+          <MaterialCommunityIcons
+            name="close-circle"
+            size={20}
+            color={colors.text.secondary}
+          />
+        </Pressable>
+      ) : null}
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
   search: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
+    height: 48,
+    paddingHorizontal: 12,
+    ...shadows.sm,
+  },
+  leading: {
+    marginRight: 8,
   },
   input: {
-    minHeight: 44,
+    flex: 1,
     paddingVertical: 0,
+    minHeight: 44,
+  },
+  spinner: {
+    marginLeft: 8,
+  },
+  clear: {
+    marginLeft: 8,
+    padding: 2,
   },
 });

@@ -37,7 +37,7 @@ export const NonProdEnvBanner = observer(function NonProdEnvBanner() {
   return (
     <View
       pointerEvents="none"
-      style={[styles.wrap, { top, right: Math.max(insets.right, 16) }]}
+      style={[styles.wrap, { top, left: 0, right: 0 }]}
       accessibilityRole="text"
       accessibilityLabel={label}
     >
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     zIndex: 100,
-    alignItems: 'flex-end',
+    alignItems: 'center',
   },
   pill: {
     paddingHorizontal: 8,
