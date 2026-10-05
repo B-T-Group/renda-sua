@@ -730,7 +730,12 @@ describe('OrderReorderService', () => {
     expect(result.skipped).toHaveLength(0);
   });
 
-  describe('pay_at_confirm flagged locations', () => {
+  describe('flagged locations (pay_at_confirm column)', () => {
+    // Reorder does not expose pay_at_confirm or determine pay-after eligibility;
+    // it returns cart lines with pricing and stock. Pay-after eligibility is
+    // asserted at preflight / createOrder after the client adds reordered lines.
+    // These tests verify reorder works correctly with flagged locations.
+
     function flaggedInventory(flag: boolean) {
       return {
         ...baseInventory,
@@ -741,7 +746,7 @@ describe('OrderReorderService', () => {
       };
     }
 
-    it('returns lines for a flagged location order with non-cooked goods', async () => {
+    it('returns lines from a flagged location without breaking', async () => {
       mockOrderAndInventory(baseOrder, [flaggedInventory(true)]);
       const result = await service.reorder('order-1');
       expect(result.lines).toHaveLength(1);
@@ -750,7 +755,7 @@ describe('OrderReorderService', () => {
       expect(result.skipped).toHaveLength(0);
     });
 
-    it('returns lines for an unflagged location order', async () => {
+    it('returns lines from an unflagged location', async () => {
       mockOrderAndInventory(baseOrder, [flaggedInventory(false)]);
       const result = await service.reorder('order-1');
       expect(result.lines).toHaveLength(1);
@@ -758,7 +763,7 @@ describe('OrderReorderService', () => {
       expect(result.navigation_hint).toBe('checkout');
     });
 
-    it('handles flagged location with stock-tracked items correctly', async () => {
+    it('respects available stock for flagged location items', async () => {
       mockOrderAndInventory(baseOrder, [
         {
           ...flaggedInventory(true),
@@ -772,7 +777,7 @@ describe('OrderReorderService', () => {
       expect(result.navigation_hint).toBe('checkout');
     });
 
-    it('skips out-of-stock flagged location items', async () => {
+    it('skips out-of-stock items from flagged locations', async () => {
       mockOrderAndInventory(baseOrder, [
         {
           ...flaggedInventory(true),
@@ -786,7 +791,7 @@ describe('OrderReorderService', () => {
       expect(result.navigation_hint).toBe('none');
     });
 
-    it('handles mixed flagged and unflagged locations', async () => {
+    it('returns lines from mixed flagged and unflagged locations', async () => {
       const order = {
         ...baseOrder,
         order_items: [
@@ -812,7 +817,7 @@ describe('OrderReorderService', () => {
       expect(result.navigation_hint).toBe('checkout');
     });
 
-    it('respects max_order_quantity for flagged location items', async () => {
+    it('respects max_order_quantity from flagged locations', async () => {
       mockOrderAndInventory(
         {
           ...baseOrder,
