@@ -109,6 +109,20 @@ export const ClientOrderDetails: React.FC<ClientOrderDetailsProps> = ({
       {tracking}
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
+        {vm.contacts.recipient ? (
+          <Grid size={{ xs: 12 }}>
+            <ContactCard
+              title={t('orders.deliveryContactRecipient', 'Recipient')}
+              contact={{
+                ...vm.contacts.recipient,
+                subtitle: t(
+                  'orders.recipientReceives',
+                  'Receives this order'
+                ),
+              }}
+            />
+          </Grid>
+        ) : null}
         <Grid size={{ xs: 12, md: 6 }}>
           <ContactCard
             title={t('orders.client.actions.contactBusiness', 'Contact business')}

@@ -5441,6 +5441,9 @@
         "contactBusiness": "Contacter le commerce",
         "contactCustomer": "Contacter le client"
       },
+      "contact": {
+        "recipient": "Destinataire"
+      },
       "distance": "{{km}} km",
       "earnings": "Gains",
       "packageInfo": "Informations du colis",
@@ -6188,6 +6191,7 @@
     "outForRecipient": "Pour {{name}}",
     "recipientNotifiedNotice": "{{name}} reçoit le suivi et le code de livraison par SMS. Aucune connexion de votre part n'est nécessaire.",
     "deliveryContactRecipient": "Destinataire",
+    "recipientReceives": "Reçoit cette commande",
     "orderedBy": "Commandé par {{name}}",
     "earningsPendingRelease": "Gains en attente · Versés quand le livreur confirme le retrait",
     "reorder": {

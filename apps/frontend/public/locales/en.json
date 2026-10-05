@@ -5719,6 +5719,9 @@
         "contactBusiness": "Contact Business",
         "contactCustomer": "Contact Customer"
       },
+      "contact": {
+        "recipient": "Recipient"
+      },
       "distance": "{{km}} km",
       "earnings": "Earnings",
       "packageInfo": "Package information",
@@ -6469,6 +6472,7 @@
     "outForRecipient": "Out for {{name}}",
     "recipientNotifiedNotice": "{{name}} gets tracking updates and the delivery code by text. They do not need your login.",
     "deliveryContactRecipient": "Recipient",
+    "recipientReceives": "Receives this order",
     "orderedBy": "Ordered by {{name}}",
     "earningsPendingRelease": "Earnings pending · Releases when agent confirms pickup",
     "reorder": {

@@ -119,6 +119,16 @@ export interface Order {
   business: Business;
   business_location: BusinessLocation;
   delivery_address: Address;
+  is_diaspora_order?: boolean | null;
+  is_third_party_recipient?: boolean | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  recipient_email?: string | null;
+  delivery_contact?: {
+    name: string;
+    phone: string | null;
+    is_recipient: boolean;
+  } | null;
   order_items: OrderItem[];
   fulfillment_method?: string | null;
   fulfillment_timing?: 'asap' | 'scheduled' | null;

@@ -26,6 +26,18 @@ export function personName(user?: {
   return name || null;
 }
 
+/** Person receiving a diaspora (or other third-party) order. */
+export function recipientContact(order: OrderLike): ContactInfo | null {
+  const forSomeoneElse =
+    order.is_diaspora_order === true || order.is_third_party_recipient === true;
+  if (!forSomeoneElse) return null;
+  const name = order.recipient_name?.trim() || null;
+  const phone = order.recipient_phone?.trim() || null;
+  const email = order.recipient_email?.trim() || null;
+  if (!name && !phone && !email) return null;
+  return { name, phone, email };
+}
+
 export function toContact(
   user?: {
     first_name?: string | null;

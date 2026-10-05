@@ -405,6 +405,8 @@
     "merchantLocationLabel": "From store",
     "merchantAddressLabel": "Store address",
     "deliveryAddressLabel": "Delivery address",
+    "deliveryContactRecipient": "Recipient",
+    "recipientReceives": "Receives this order",
     "weight": "Weight",
     "dimensions": "Dimensions",
     "totalQuantity": "Total quantity",
@@ -730,6 +732,9 @@
         "contactCustomer": "Contact Customer",
         "runningLate": "Running late",
         "reportPickupIssue": "Report a problem"
+      },
+      "contact": {
+        "recipient": "Recipient"
       },
       "distance": "{{km}} km",
       "earnings": "Earnings",

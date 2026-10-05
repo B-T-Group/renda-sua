@@ -71,6 +71,7 @@ export interface ClientOrderViewModel {
   contacts: {
     business: ContactInfo | null;
     agent: ContactInfo | null;
+    recipient: ContactInfo | null;
   };
   timeline: TimelineEntry[];
   items: ProductListItem[];
@@ -93,6 +94,7 @@ export interface BusinessOrderViewModel {
   phase: OrderPhase;
   primaryActionId: OrderPrimaryActionId;
   customer: ContactInfo | null;
+  recipient: ContactInfo | null;
   items: ProductListItem[];
   notes: string | null;
   paymentStatus: string | null;
@@ -108,6 +110,8 @@ export interface DeliveryStopView {
   title: string;
   address: AddressFields | null;
   contact: ContactInfo | null;
+  /** True when the delivery contact is the diaspora recipient, not the payer. */
+  isRecipient?: boolean;
   instructions: string | null;
 }
 
@@ -221,6 +225,16 @@ export interface OrderLike {
       email?: string | null;
     } | null;
   } | null;
+  delivery_contact?: {
+    name: string;
+    phone: string | null;
+    is_recipient: boolean;
+  } | null;
+  is_diaspora_order?: boolean | null;
+  is_third_party_recipient?: boolean | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  recipient_email?: string | null;
   delivery_address?: AddressFields | null;
   order_items?: Array<{
     id: string;

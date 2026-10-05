@@ -669,6 +669,9 @@
         "runningLate": "En retard",
         "reportPickupIssue": "Signaler un problème"
       },
+      "contact": {
+        "recipient": "Destinataire"
+      },
       "distance": "{{km}} km",
       "earnings": "Gains",
       "packageInfo": "Informations du colis",
@@ -813,6 +816,8 @@
     "merchantLocationLabel": "Depuis le magasin",
     "merchantAddressLabel": "Adresse du magasin",
     "deliveryAddressLabel": "Adresse de Livraison",
+    "deliveryContactRecipient": "Destinataire",
+    "recipientReceives": "Reçoit cette commande",
     "weight": "Poids",
     "dimensions": "Dimensions",
     "totalQuantity": "Quantité Totale",

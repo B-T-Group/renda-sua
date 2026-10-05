@@ -6,6 +6,7 @@ import {
   mapItems,
   moneySummary,
   phaseFor,
+  recipientContact,
   toContact,
 } from './helpers';
 import type {
@@ -134,6 +135,7 @@ export function buildBusinessOrderViewModel(
     phase: phase.phase,
     primaryActionId: phase.primaryActionId,
     customer: toContact(order.client?.user),
+    recipient: recipientContact(order),
     items: mapItems(order, true),
     notes: order.special_instructions ?? null,
     paymentStatus: order.payment_status ?? null,

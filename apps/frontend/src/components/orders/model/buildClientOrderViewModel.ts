@@ -7,6 +7,7 @@ import {
   moneySummary,
   phaseFor,
   progressFor,
+  recipientContact,
   toContact,
 } from './helpers';
 import type {
@@ -122,6 +123,7 @@ export function buildClientOrderViewModel(
     contacts: {
       business: toContact(order.business?.user, order.business?.name),
       agent: toContact(order.assigned_agent?.user),
+      recipient: recipientContact(order),
     },
     timeline: mapTimeline(order),
     items: mapItems(order, true),
