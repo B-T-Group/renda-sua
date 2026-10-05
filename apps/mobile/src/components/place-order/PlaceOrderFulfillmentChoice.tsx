@@ -185,6 +185,9 @@ export function PlaceOrderFulfillmentChoice({
     shippingAvailable,
     shippingDisabled,
   });
+  const trailingSegments = eatInAvailable
+    ? segments.filter((option) => option.key !== 'delivery')
+    : segments;
 
   const helper =
     !deliveryHidden && deliveryDisabled
@@ -210,6 +213,8 @@ export function PlaceOrderFulfillmentChoice({
     );
   }
 
+  const ink = (selected: boolean) =>
+    selected ? colors.primary.main : colors.text.secondary;
   const storeLine = pickupSummary(pickupLocations);
   const showPickupContext = value === 'pickup' && !!storeLine;
   const showDeliveryContext =
@@ -232,17 +237,13 @@ export function PlaceOrderFulfillmentChoice({
         <View style={{ flexDirection: 'row', gap: spacing.xs }}>
           <FoodPictureChoice
             label={t('orders.eatIn.eatIn', 'Eat in')}
-            hint={t(
-              'orders.eatIn.hint',
-              'You are asking for a table. The kitchen may not have one.'
-            )}
             selected={value === 'pickup' && eatIn}
             onPress={() => {
               onChange('pickup');
               onEatInChange?.(true);
             }}
           >
-            <EatInIllustration size={64} />
+            <EatInIllustration size={36} color={ink(value === 'pickup' && eatIn)} />
           </FoodPictureChoice>
           <FoodPictureChoice
             label={t('orders.eatIn.takeOut', 'Take out')}
@@ -252,12 +253,26 @@ export function PlaceOrderFulfillmentChoice({
               onEatInChange?.(false);
             }}
           >
-            <TakeOutIllustration size={64} />
+            <TakeOutIllustration size={36} color={ink(value === 'pickup' && !eatIn)} />
           </FoodPictureChoice>
+          {!deliveryHidden ? (
+            <FoodPictureChoice
+              label={t('checkout.progress.delivery', 'Delivery')}
+              selected={value === 'delivery'}
+              disabled={deliveryDisabled}
+              onPress={() => onChange('delivery')}
+            >
+              <MaterialCommunityIcons
+                name="truck-delivery-outline"
+                size={28}
+                color={ink(value === 'delivery' && !deliveryDisabled)}
+              />
+            </FoodPictureChoice>
+          ) : null}
         </View>
       ) : null}
 
-      {segments.length > 0 ? (
+      {trailingSegments.length > 0 ? (
       <View
         style={[
           styles.segmentTrack,
@@ -269,7 +284,7 @@ export function PlaceOrderFulfillmentChoice({
           },
         ]}
       >
-        {segments.map((option) => {
+        {trailingSegments.map((option) => {
           const selected = value === option.key;
           return (
             <Pressable
@@ -341,41 +356,46 @@ export function PlaceOrderFulfillmentChoice({
 
 function FoodPictureChoice({
   label,
-  hint,
   selected,
+  disabled = false,
   onPress,
   children,
 }: {
   label: string;
-  hint?: string;
   selected: boolean;
+  disabled?: boolean;
   onPress: () => void;
   children: ReactNode;
 }) {
-  const { colors, spacing, borderRadius, typography } = useTheme();
+  const { colors, spacing, typography } = useTheme();
+  const active = selected && !disabled;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
+      accessibilityLabel={label}
+      accessibilityState={{ checked: active, disabled }}
       style={{
         flex: 1,
+        minWidth: 0,
         alignItems: 'center',
-        gap: spacing.xs,
-        padding: spacing.sm,
-        borderRadius: borderRadius.md,
-        borderWidth: 2,
-        borderColor: selected ? colors.primary.main : colors.divider,
-        backgroundColor: selected ? colors.primary.main + '14' : colors.surface,
+        gap: 2,
+        paddingVertical: spacing.xs,
+        paddingHorizontal: 4,
+        opacity: disabled ? 0.45 : 1,
       }}
     >
       {children}
-      <Text style={[typography.subtitle2, { fontWeight: '700', color: colors.text.primary }]}>
-        {label}
-      </Text>
-      {hint ? (
-        <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center' }]}>
-          {hint}
+      {active ? (
+        <Text
+          numberOfLines={1}
+          style={[
+            typography.caption,
+            { fontWeight: '700', textAlign: 'center', color: colors.primary.main },
+          ]}
+        >
+          {label}
         </Text>
       ) : null}
     </Pressable>

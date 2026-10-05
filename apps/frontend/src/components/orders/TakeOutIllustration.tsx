@@ -2,7 +2,13 @@ import { Box } from '@mui/material';
 import React from 'react';
 
 /** Takeout bag: the customer will collect the order. */
-export function TakeOutIllustration({ size = 96 }: { size?: number }) {
+export function TakeOutIllustration({
+  size = 96,
+  color = 'primary.main',
+}: {
+  size?: number;
+  color?: string;
+}) {
   const height = Math.round(size * 0.72);
   return (
     <Box
@@ -10,7 +16,7 @@ export function TakeOutIllustration({ size = 96 }: { size?: number }) {
       viewBox="0 0 120 86"
       role="img"
       aria-label="Take out"
-      sx={{ width: size, height, display: 'block', color: 'primary.main' }}
+      sx={{ width: size, height, display: 'block', color }}
     >
       <path
         d="M34 34h52l-4 40H38L34 34z"

@@ -24,7 +24,7 @@ export function FoodServiceChoice({
     ? ['eat_in', 'take_out', 'delivery']
     : ['eat_in', 'take_out'];
   return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
+    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
       {options.map((key) => (
         <ChoiceCard
           key={key}
@@ -37,12 +37,17 @@ export function FoodServiceChoice({
                 ? t('orders.eatIn.takeOut', 'Take out')
                 : t('checkout.fulfillmentDelivery', 'Delivery')
           }
-          hint={key === 'eat_in' ? t('orders.eatIn.hint', 'You are asking for a table. The kitchen may not have one.') : undefined}
           onPress={() => onChange(key)}
         >
-          {key === 'eat_in' ? <EatInIllustration size={72} /> : null}
-          {key === 'take_out' ? <TakeOutIllustration size={72} /> : null}
-          {key === 'delivery' ? <DeliveryMark /> : null}
+          {key === 'eat_in' ? (
+            <EatInIllustration size={40} color={value === key ? 'primary.main' : 'text.secondary'} />
+          ) : null}
+          {key === 'take_out' ? (
+            <TakeOutIllustration size={40} color={value === key ? 'primary.main' : 'text.secondary'} />
+          ) : null}
+          {key === 'delivery' ? (
+            <DeliveryMark color={value === key ? 'primary.main' : 'text.secondary'} />
+          ) : null}
         </ChoiceCard>
       ))}
     </Stack>
@@ -53,14 +58,12 @@ function ChoiceCard({
   selected,
   disabled,
   label,
-  hint,
   onPress,
   children,
 }: {
   selected: boolean;
   disabled: boolean;
   label: string;
-  hint?: string;
   onPress: () => void;
   children: React.ReactNode;
 }) {
@@ -68,48 +71,52 @@ function ChoiceCard({
     <ButtonBase
       disabled={disabled}
       onClick={onPress}
+      aria-label={label}
+      aria-pressed={selected}
       sx={{
         flex: 1,
-        p: 1.5,
+        minWidth: 0,
+        px: 0.5,
+        py: 0.5,
         borderRadius: 2,
-        border: 2,
-        borderColor: selected ? 'primary.main' : 'divider',
-        bgcolor: selected ? 'primary.50' : 'background.paper',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 0.5,
+        gap: 0.25,
+        color: selected ? 'primary.main' : 'text.secondary',
       }}
     >
       {children}
-      <Typography variant="subtitle2" fontWeight={700}>
-        {label}
-      </Typography>
-      {hint ? (
-        <Typography variant="caption" color="text.secondary" textAlign="center">
-          {hint}
+      {selected ? (
+        <Typography
+          variant="caption"
+          fontWeight={700}
+          textAlign="center"
+          color="primary.main"
+          sx={{ lineHeight: 1.2 }}
+        >
+          {label}
         </Typography>
       ) : null}
     </ButtonBase>
   );
 }
 
-function DeliveryMark() {
+function DeliveryMark({ color }: { color: string }) {
   return (
     <Box
       aria-hidden
       sx={{
-        width: 72,
-        height: 52,
+        width: 40,
+        height: 29,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: 'primary.main',
-        fontSize: 28,
+        color,
       }}
     >
       <Box component="span" sx={{ fontSize: 28, lineHeight: 1 }}>
-        <svg width="48" height="36" viewBox="0 0 48 36" fill="none">
+        <svg width="36" height="28" viewBox="0 0 48 36" fill="none">
           <path d="M4 22h28V10H4v12z" stroke="currentColor" strokeWidth="2.5" />
           <path d="M32 16h8l4 6v6h-12V16z" stroke="currentColor" strokeWidth="2.5" />
           <circle cx="12" cy="28" r="3" stroke="currentColor" strokeWidth="2.5" />

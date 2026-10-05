@@ -2,7 +2,13 @@ import { Box } from '@mui/material';
 import React from 'react';
 
 /** Set table: the customer wants to eat in. */
-export function EatInIllustration({ size = 96 }: { size?: number }) {
+export function EatInIllustration({
+  size = 96,
+  color = 'primary.main',
+}: {
+  size?: number;
+  color?: string;
+}) {
   const height = Math.round(size * 0.72);
   return (
     <Box
@@ -10,7 +16,7 @@ export function EatInIllustration({ size = 96 }: { size?: number }) {
       viewBox="0 0 120 86"
       role="img"
       aria-label="Eat in"
-      sx={{ width: size, height, display: 'block', color: 'primary.main' }}
+      sx={{ width: size, height, display: 'block', color }}
     >
       <rect x="18" y="58" width="84" height="8" rx="2" fill="currentColor" opacity={0.25} />
       <rect x="28" y="66" width="6" height="14" rx="1" fill="currentColor" />
