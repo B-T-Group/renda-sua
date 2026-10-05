@@ -22,4 +22,15 @@ describe('resolveProductCardHint', () => {
       label: 'Pickup today',
     });
   });
+
+  it('keeps an open kitchen ahead of low stock and stops the low-stock hint at 5', () => {
+    expect(resolveProductCardHint({ isFood: true, foodOpen: true, quantity: 1 })).toEqual({
+      id: 'food_open',
+    });
+    expect(resolveProductCardHint({ quantity: 5 })).toEqual({ id: 'low_stock', count: 5 });
+    expect(resolveProductCardHint({ quantity: 6, hasDeal: true })).toEqual({ id: 'deal' });
+    expect(resolveProductCardHint({ quantity: 0, hasDeal: true })).toEqual({
+      id: 'check_availability',
+    });
+  });
 });
