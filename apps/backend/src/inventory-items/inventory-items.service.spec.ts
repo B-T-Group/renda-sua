@@ -772,6 +772,20 @@ describe('InventoryItemsService store directory partner filters', () => {
     ]);
   });
 
+  it('limits the directory to cooked food when food_only is set', async () => {
+    const service = createService();
+    const buildWhere = jest.spyOn(service as any, 'buildInventoryCatalogWhere');
+
+    await service.getTopInventoryStores(20, {
+      country_code: 'CM',
+      food_only: true,
+    });
+
+    expect(buildWhere).toHaveBeenCalledWith(
+      expect.objectContaining({ food_only: true, country_code: 'CM' })
+    );
+  });
+
   it('filters the directory by store name before partner tagging', async () => {
     const rows = await createService().getTopInventoryStores(20, {
       country_code: 'CM',

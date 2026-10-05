@@ -27,6 +27,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `recipient_order_placed` | `rs_recipient_order_placed` | UTILITY (IN_APPEAL) | payerName, storeName, orderNumber | none |
 | `recipient_out_for_delivery` | `rs_recipient_out_for_delivery` | UTILITY (IN_APPEAL) | orderNumber | none |
 | `recipient_order_ready` | `rs_recipient_order_ready` | UTILITY (IN_APPEAL) | orderNumber, storeName | none |
+| `recipient_complete_pickup` | `rs_recipient_complete_pickup` | UTILITY (PENDING, submitted 2026-10-05) | orderNumber, storeName | QUICK_REPLY: Complete order (`complete_order`) |
 | `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | none |
 
 ## Meta body rules (important)
@@ -472,6 +473,32 @@ Meta owns the body copy. Do not submit custom en/fr strings.
 
 **Vars:** `{{1}}` orderNumber  
 **Button:** none
+
+---
+
+## 15a. `rs_recipient_complete_pickup`
+
+Sent instead of `rs_recipient_order_ready` when a diaspora store-pickup order is ready and the card is already paid or authorized. The quick reply completes the order and pays the store.
+
+**Vars:** `{{1}}` orderNumber · `{{2}}` storeName  
+**Button:** QUICK_REPLY Complete order / Terminer la commande (id `complete_order`)  
+**Consent:** only send when `recipient_notify_whatsapp` is true.
+
+**en**
+```
+Rendasua: your order is ready for pickup.
+
+Order {{1}} can be collected at {{2}}.
+After you collect it, tap Complete order so the store can be paid.
+```
+
+**fr**
+```
+Rendasua : votre commande est prête pour le retrait.
+
+La commande {{1}} peut être récupérée chez {{2}}.
+Après l'avoir récupérée, appuyez sur Terminer la commande pour que le magasin soit payé.
+```
 
 ---
 

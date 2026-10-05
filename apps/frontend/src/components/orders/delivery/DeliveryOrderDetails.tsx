@@ -190,10 +190,12 @@ export const DeliveryOrderDetails: React.FC<DeliveryOrderDetailsProps> = ({
                         'orders.delivery.actions.contactBusiness',
                         'Contact Business'
                       )
-                    : t(
-                        'orders.delivery.actions.contactCustomer',
-                        'Contact Customer'
-                      )
+                    : stop.isRecipient
+                      ? t('orders.deliveryContactRecipient', 'Recipient')
+                      : t(
+                          'orders.delivery.actions.contactCustomer',
+                          'Contact Customer'
+                        )
                 }
                 contact={stop.contact}
               />

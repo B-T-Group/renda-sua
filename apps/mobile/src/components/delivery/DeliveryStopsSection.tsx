@@ -11,12 +11,16 @@ export interface DeliveryStopsSectionProps {
 }
 
 function contactTitle(
-  kind: DeliveryStopView['kind'],
+  stop: DeliveryStopView,
   t: (key: string, defaultValue: string) => string
 ): string {
-  return kind === 'pickup'
-    ? t('orders.delivery.actions.contactBusiness', 'Contact Business')
-    : t('orders.delivery.actions.contactCustomer', 'Contact Customer');
+  if (stop.kind === 'pickup') {
+    return t('orders.delivery.actions.contactBusiness', 'Contact Business');
+  }
+  if (stop.isRecipient) {
+    return t('orders.deliveryContactRecipient', 'Recipient');
+  }
+  return t('orders.delivery.actions.contactCustomer', 'Contact Customer');
 }
 
 export function DeliveryStopsSection({
@@ -39,7 +43,7 @@ export function DeliveryStopsSection({
               showNavigate
             />
             <ContactCard
-              title={contactTitle(stop.kind, t)}
+              title={contactTitle(stop, t)}
               contact={hideContact ? null : stop.contact}
             />
           </View>

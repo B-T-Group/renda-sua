@@ -48,6 +48,7 @@ import { buildCatalogFilterOptions } from '../../utils/catalogFilterOptions';
 import { InventoryCatalogCard } from '../../components/browse/InventoryCatalogCard';
 import { InventoryCatalogGridTile } from '../../components/browse/InventoryCatalogGridTile';
 import { BrowseCatalogListHeader } from '../../components/browse/BrowseCatalogListHeader';
+import { FoodsRestaurantList } from '../../components/browse/FoodsRestaurantList';
 import { CatalogBrowseSearchBar } from '../../components/browse/CatalogBrowseSearchBar';
 import { CatalogBrowseFilterSheet } from '../../components/browse/CatalogBrowseFilterSheet';
 import { CatalogItemSkeleton } from '../../components/browse/CatalogItemSkeleton';
@@ -58,6 +59,7 @@ import { CatalogFeedStop } from '../../components/browse/CatalogFeedStop';
 import { CATALOG_SORT_OPTIONS } from '../../constants/catalogSortOptions';
 import { FOOD_CATEGORY_NAME } from '../../utils/foodAvailability';
 import { useCatalogOrigin } from '../../hooks/useCatalogOrigin';
+import { useCatalogStores } from '../../hooks/useCatalogStores';
 import { useHeroCarouselActions } from '../../hooks/useHeroCarouselActions';
 import { BrowseFtueNudge } from '../../hooks/useBrowseFtueNudge';
 import { useReportTabBarScroll } from '../../navigation/floatingTabBarVisibility';
@@ -168,7 +170,10 @@ export interface BrowseCatalogScreenProps {
   ) => void;
   onItemPress?: (inventoryItemId: string) => void;
   onCollectionPress?: (slug: string) => void;
-  onStorePress?: (businessLocationId: string) => void;
+  onStorePress?: (
+    businessLocationId: string,
+    options?: { foodOnly?: boolean }
+  ) => void;
   onSeeAllStores?: () => void;
   homeOrders?: Order[];
   homeOrdersTotalActive?: number;
@@ -239,6 +244,8 @@ function BrowseCatalogScreenInner({
     setCatalogSegment(legacyFoodOnly ? 'food' : initialSegment);
   }, [initialSegment, legacyFoodOnly]);
   const foodOnly = legacyFoodOnly || catalogSegment === 'food';
+  const [foodsView, setFoodsView] = useState<'restaurants' | 'dishes'>('restaurants');
+  const showRestaurants = foodOnly && foodsView === 'restaurants';
   const tabBarHeight = useBottomTabBarHeight();
   const bottomPad = tabBarHeight + spacing.lg;
   const isWideHero = width >= 640;
@@ -314,7 +321,7 @@ function BrowseCatalogScreenInner({
   const catalogState = selectedMarket?.stateCode ?? undefined;
   const catalogReady = marketHydrated;
 
-  const { origin: catalogOrigin } = useCatalogOrigin(sort, catalogReady);
+  const { origin: catalogOrigin } = useCatalogOrigin(sort, catalogReady, foodOnly);
 
   const { facetItems, facetLoading, refetchFacets } = useInventoryCatalogFacets({
     withAuth: inventoryRequestsWithAuth,
@@ -350,7 +357,23 @@ function BrowseCatalogScreenInner({
     food_only: foodOnly || undefined,
     export_only: exportOnly || undefined,
     withAuth: inventoryRequestsWithAuth,
-    enabled: catalogReady,
+    enabled: catalogReady && !showRestaurants,
+  });
+
+  const {
+    stores: restaurants,
+    loading: restaurantsLoading,
+    error: restaurantsError,
+    refetch: refetchRestaurants,
+  } = useCatalogStores({
+    limit: 50,
+    search: debouncedSearch,
+    countryCode: catalogCountryCode,
+    state: catalogState,
+    origin: catalogOrigin,
+    withAuth: inventoryRequestsWithAuth,
+    enabled: catalogReady && showRestaurants,
+    foodOnly: true,
   });
 
   const activeFilterCount = useMemo(() => {
@@ -508,6 +531,17 @@ function BrowseCatalogScreenInner({
   });
 
   const resultsLabel = useMemo(() => {
+    if (showRestaurants) {
+      if (restaurantsLoading && restaurants.length === 0) {
+        return t('foods.restaurants.loading', 'Loading restaurants…');
+      }
+      if (restaurants.length === 0) {
+        return t('foods.restaurants.none', 'No restaurants to show');
+      }
+      return t('foods.restaurants.count', '{{count}} restaurants', {
+        count: restaurants.length,
+      });
+    }
     if (foodOnly) {
       if (loading && items.length === 0) {
         return t('foods.results.loading', 'Loading dishes…');
@@ -518,7 +552,7 @@ function BrowseCatalogScreenInner({
     if (loading && items.length === 0) return t('public.items.results.loading', 'Loading items…');
     if (total === 0) return t('public.items.results.none', 'No items to show');
     return t('public.items.results.count', '{{count}} items', { count: total });
-  }, [foodOnly, loading, items.length, total, t]);
+  }, [foodOnly, showRestaurants, restaurantsLoading, restaurants.length, loading, items.length, total, t]);
 
   const sortSummaryLabel = useMemo(() => {
     const opt = CATALOG_SORT_OPTIONS.find((o) => o.key === sort);
@@ -594,12 +628,13 @@ function BrowseCatalogScreenInner({
 
   const isSearchFetching =
     searchDraft.trim() !== debouncedSearch ||
-    (loading && debouncedSearch.length > 0);
+    ((showRestaurants ? restaurantsLoading : loading) && debouncedSearch.length > 0);
 
   const onListRefresh = useCallback(async () => {
     setPullRefreshing(true);
     try {
       const tasks: Promise<unknown>[] = [refetch(), refetchFacets()];
+      if (showRestaurants) tasks.push(refetchRestaurants());
       if (dealsStopEnabled) tasks.push(refetchDealsStop());
       if (categoryStopEnabled) tasks.push(refetchTopInCategory());
       if (essentialsStopEnabled) tasks.push(refetchEssentials());
@@ -622,6 +657,8 @@ function BrowseCatalogScreenInner({
     refetchFeaturedStore,
     bagComplementsStopEnabled,
     refetchBagComplements,
+    showRestaurants,
+    refetchRestaurants,
   ]);
 
   const onClearFilterField = useCallback((field: keyof CatalogFilterState) => {
@@ -702,6 +739,25 @@ function BrowseCatalogScreenInner({
             ) : undefined
           }
           foodOnly={foodOnly}
+          foodsView={foodsView}
+          onFoodsViewChange={setFoodsView}
+          showDishTools={!showRestaurants}
+          restaurantsSlot={
+            showRestaurants ? (
+              <FoodsRestaurantList
+                stores={restaurants}
+                loading={restaurantsLoading}
+                error={restaurantsError}
+                hasSearch={debouncedSearch.length > 0}
+                onPress={(businessLocationId) =>
+                  onStorePress?.(businessLocationId, { foodOnly: true })
+                }
+                onRetry={() => {
+                  void refetchRestaurants();
+                }}
+              />
+            ) : null
+          }
           catalogFilters={catalogFilters}
           onClearFilterField={onClearFilterField}
           onClearAllFilters={onClearAllFilters}
@@ -746,6 +802,14 @@ function BrowseCatalogScreenInner({
       items.length,
       onListRefresh,
       foodOnly,
+      foodsView,
+      showRestaurants,
+      restaurants,
+      restaurantsLoading,
+      restaurantsError,
+      debouncedSearch,
+      onStorePress,
+      refetchRestaurants,
       showExportsChip,
       exportOnly,
       onToggleExportOnly,
@@ -898,7 +962,9 @@ function BrowseCatalogScreenInner({
               loading={isSearchFetching}
               placeholder={
                 foodOnly
-                  ? t('foods.searchPlaceholder', 'Search dishes')
+                  ? showRestaurants
+                    ? t('foods.restaurants.searchPlaceholder', 'Search restaurants')
+                    : t('foods.searchPlaceholder', 'Search dishes')
                   : undefined
               }
             />
@@ -914,7 +980,7 @@ function BrowseCatalogScreenInner({
       </Reanimated.View>
       <FlashList
         ref={listRef}
-        data={feedRows}
+        data={showRestaurants ? [] : feedRows}
         keyExtractor={keyExtractorRow}
         ListHeaderComponent={listHeaderElement}
         keyboardShouldPersistTaps="handled"
@@ -931,10 +997,10 @@ function BrowseCatalogScreenInner({
         onScroll={onFeedScroll}
         scrollEventThrottle={16}
         onEndReached={() => {
-          if (canLoadMore) loadMore();
+          if (!showRestaurants && canLoadMore) loadMore();
         }}
         onEndReachedThreshold={0.35}
-        ListEmptyComponent={listEmpty}
+        ListEmptyComponent={showRestaurants ? null : listEmpty}
         ListFooterComponent={
           <View style={[styles.footer, { paddingBottom: bottomPad }]}>
             {loadingMore ? <ActivityIndicator color={colors.primary.main} /> : null}

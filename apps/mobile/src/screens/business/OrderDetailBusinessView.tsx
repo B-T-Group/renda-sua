@@ -17,6 +17,7 @@ import { BusinessOrderItemsCard } from '../../components/business/BusinessOrderI
 import { BusinessOrderRowActions } from '../../components/business/BusinessOrderRowActions';
 import { FirstOrderJourneyCard } from '../../components/business/FirstOrderJourneyCard';
 import { SectionCard } from '../../components/common/SectionCard';
+import { ContactCard } from '../../components/orders/shared/ContactCard';
 import { InfoRow } from '../../components/common/InfoRow';
 import { OrderPhaseBanner } from '../../components/orders/OrderPhaseBanner';
 import { ShippingTrackingCard } from '../../components/orders/ShippingTrackingCard';
@@ -35,6 +36,7 @@ import {
 } from '../../utils/businessOrderListDisplay';
 import { formatPreferredDate, formatTimeSlotValue } from '../../utils/deliveryWindowUtils';
 import { isCarrierShipping } from '../../utils/fulfillmentMethod';
+import { recipientContact } from '../../orders/model/helpers';
 import { orderToPhaseInput, resolveOrderPhase } from '../../utils/orderPhase';
 import { OrderClientSummaryCard } from '../shared/orderDetail/OrderClientSummaryCard';
 
@@ -112,6 +114,7 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
 
   const clientName = [order.client?.user?.first_name, order.client?.user?.last_name].filter(Boolean).join(' ');
   const clientPhone = order.client?.user?.phone_number;
+  const recipient = recipientContact(order);
   const agentLabel = businessOrderAgentLabel(order);
   const agentPhone = order.assigned_agent?.user?.phone_number;
   const isPickup = isStorePickupOrder(order);
@@ -178,6 +181,18 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
           onRefetch={() => void refetch()}
           onNotify={(msg) => setSnack(msg)}
         />
+
+        {recipient ? (
+          <View style={{ marginBottom: spacing.xs }}>
+            <ContactCard
+              title={t('orders.deliveryContactRecipient', 'Recipient')}
+              contact={{
+                ...recipient,
+                subtitle: t('orders.recipientReceives', 'Receives this order'),
+              }}
+            />
+          </View>
+        ) : null}
 
         <SegmentedButtons
           value={tab}

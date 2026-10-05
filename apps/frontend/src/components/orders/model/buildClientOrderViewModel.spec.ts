@@ -66,6 +66,50 @@ describe('persona order view models', () => {
     expect(vm.businessName).toBe('Demo Store');
     expect(vm.availableActions.some((a) => a.id === 'track')).toBe(true);
     expect(vm.contacts.agent?.name).toContain('Dan');
+    expect(vm.contacts.recipient).toBeNull();
+  });
+
+  it('includes the diaspora recipient on client and business order details', () => {
+    const diaspora = baseOrder({
+      is_diaspora_order: true,
+      is_third_party_recipient: true,
+      recipient_name: 'Awa Ndong',
+      recipient_phone: '+241077123456',
+      recipient_email: 'awa@example.com',
+    });
+
+    const clientVm = buildClientOrderViewModel(diaspora, ctx);
+    const businessVm = buildBusinessOrderViewModel(diaspora, ctx);
+
+    expect(clientVm.contacts.recipient).toEqual({
+      name: 'Awa Ndong',
+      phone: '+241077123456',
+      email: 'awa@example.com',
+    });
+    expect(businessVm.recipient?.name).toBe('Awa Ndong');
+    expect(businessVm.recipient?.phone).toBe('+241077123456');
+  });
+
+  it('shows the recipient as the agent delivery contact on a diaspora order', () => {
+    const vm = buildDeliveryOrderViewModel(
+      baseOrder({
+        current_status: 'assigned_to_agent',
+        assigned_agent_id: 'a1',
+        is_diaspora_order: true,
+        delivery_contact: {
+          name: 'Awa Ndong',
+          phone: '+241077123456',
+          is_recipient: true,
+        },
+      }),
+      ctx
+    );
+
+    expect(vm.stops[1].isRecipient).toBe(true);
+    expect(vm.stops[1].contact?.name).toBe('Awa Ndong');
+    expect(vm.stops[1].contact?.phone).toBe('+241077123456');
+    expect(vm.stops[1].contact?.email).toBeNull();
+    expect(vm.stops[1].contact?.subtitle).toBe('Receives this order');
   });
 
   it('builds business VM with required action hero', () => {

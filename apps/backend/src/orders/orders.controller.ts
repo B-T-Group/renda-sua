@@ -1461,8 +1461,16 @@ export class OrdersController {
   })
   @ApiResponse({ status: 403, description: 'Not authorized for this order' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  async reorderOrder(@Param('id') orderId: string) {
-    return this.orderReorderService.reorder(orderId);
+  @ApiQuery({
+    name: 'food_only',
+    required: false,
+    description: 'When true, only cooked-food lines are returned',
+  })
+  async reorderOrder(
+    @Param('id') orderId: string,
+    @Query('food_only') foodOnly?: string
+  ) {
+    return this.orderReorderService.reorder(orderId, foodOnly === 'true');
   }
 
   @Post(':id/retry-payment')

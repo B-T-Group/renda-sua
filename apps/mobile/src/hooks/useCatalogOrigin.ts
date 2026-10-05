@@ -8,12 +8,16 @@ export interface CatalogOrigin {
 }
 
 /**
- * Resolves device coordinates when catalog sort is proximity-based ("Nearest").
- * Returns null when sort does not need origin or permission is denied.
+ * Resolves device coordinates for “Nearest” sort, or whenever `always` is set
+ * (the Food tab, so distance can show without changing sort).
  */
-export function useCatalogOrigin(sort: InventorySortMode, enabled = true) {
+export function useCatalogOrigin(
+  sort: InventorySortMode,
+  enabled = true,
+  always = false
+) {
   const [origin, setOrigin] = useState<CatalogOrigin | null>(null);
-  const needsOrigin = sort === 'fastest';
+  const needsOrigin = always || sort === 'fastest';
 
   const resolveOrigin = useCallback(async () => {
     if (!needsOrigin || !enabled) {

@@ -30,6 +30,7 @@ describe('WhatsAppReplyService', () => {
       return undefined;
     }),
   };
+  const recipientComplete = { handleComplete: jest.fn() };
   const service = new WhatsAppReplyService(
     prefs as any,
     analytics as any,
@@ -38,7 +39,8 @@ describe('WhatsAppReplyService', () => {
     assistant as any,
     identity as any,
     inbox as any,
-    config as any
+    config as any,
+    recipientComplete as any
   );
 
   async function flushBackground(times = 6): Promise<void> {
@@ -84,6 +86,15 @@ describe('WhatsAppReplyService', () => {
     expect(service.parseButtonReply('decline')).toBe('DECLINE');
     expect(service.parseButtonReply('mark_as_ready')).toBe('MARK_AS_READY');
     expect(service.parseButtonReply('not_ready')).toBe('NOT_READY');
+    expect(service.parseButtonReply('complete_order')).toBe('COMPLETE_ORDER');
+    expect(service.parseButtonReply('Complete order', 'Complete order')).toBe(
+      'COMPLETE_ORDER'
+    );
+    expect(service.parseButtonReply(undefined, 'Terminer la commande')).toBe(
+      'COMPLETE_ORDER'
+    );
+    expect(service.parseCommand('COMPLETE')).toBe('COMPLETE');
+    expect(service.parseCommand('Complete order')).toBe('UNKNOWN');
   });
 
   it('parses mark-as-ready aliases', () => {
@@ -146,6 +157,39 @@ describe('WhatsAppReplyService', () => {
       action: 'DECLINE',
       contextMessageId: undefined,
     });
+  });
+
+  it('completes a diaspora pickup from the button, not from typed COMPLETE', async () => {
+    prefs.findUserIdByPhoneE164.mockResolvedValue(null);
+    recipientComplete.handleComplete.mockResolvedValue({
+      handled: true,
+      message: 'Order ORD-1 is complete. The store has been paid.',
+    });
+    whatsapp.isConfigured.mockReturnValue(true);
+
+    const tapped = await service.handleInteractiveReply({
+      fromPhone: '+24177123456',
+      buttonId: 'Complete order',
+      buttonTitle: 'Complete order',
+      contextMessageId: 'wamid.ready',
+    });
+    const typed = await service.handleInboundText({
+      fromPhone: '+24177123456',
+      text: 'COMPLETE',
+    });
+
+    expect(tapped.command).toBe('COMPLETE_ORDER');
+    expect(recipientComplete.handleComplete).toHaveBeenCalledTimes(1);
+    expect(recipientComplete.handleComplete).toHaveBeenCalledWith({
+      fromPhone: '+24177123456',
+      contextMessageId: 'wamid.ready',
+    });
+    expect(whatsapp.sendSessionText).toHaveBeenCalledWith({
+      to: '+24177123456',
+      body: 'Order ORD-1 is complete. The store has been paid.',
+    });
+    expect(typed.command).toBe('COMPLETE');
+    expect(recipientComplete.handleComplete).toHaveBeenCalledTimes(1);
   });
 
   it('does not mutate orders for unknown text', async () => {

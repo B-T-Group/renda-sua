@@ -44,6 +44,8 @@ export interface FetchCatalogStoresParams {
   owner_preview?: boolean;
   partners_only?: boolean;
   business_id?: string;
+  /** Only locations that sell cooked food. */
+  food_only?: boolean;
 }
 
 /** Exported for tests — Food-tab queries must pin the cooked-food category. */
@@ -121,7 +123,7 @@ export async function fetchAuthenticatedInventoryItemById(
   return apiRequest<InventoryItemByIdEnvelope>(path, { method: 'GET', signal: init?.signal });
 }
 
-function catalogStoresPath(params: FetchCatalogStoresParams): string {
+export function catalogStoresPath(params: FetchCatalogStoresParams): string {
   const search = new URLSearchParams();
   search.set('limit', String(params.limit ?? 20));
   if (params.search?.trim()) search.set('search', params.search.trim());
@@ -130,6 +132,7 @@ function catalogStoresPath(params: FetchCatalogStoresParams): string {
   if (params.include_unavailable === true) search.set('include_unavailable', 'true');
   if (params.partners_only === true) search.set('partners_only', 'true');
   if (params.business_id?.trim()) search.set('business_id', params.business_id.trim());
+  if (params.food_only === true) search.set('food_only', 'true');
   if (typeof params.origin_lat === 'number' && Number.isFinite(params.origin_lat)) {
     search.set('origin_lat', String(params.origin_lat));
   }

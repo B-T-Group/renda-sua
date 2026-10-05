@@ -98,7 +98,7 @@ export type RootStackParamList = {
   SupportTickets: undefined;
   AgentLocationTracking: undefined;
   StoresList: { partnersOnly?: boolean; businessId?: string } | undefined;
-  StoreDetail: { businessId: string; previewMode?: boolean };
+  StoreDetail: { businessId: string; previewMode?: boolean; foodOnly?: boolean };
   EnrollPersonaExplain: EnrollPersonaParams;
   EnrollPersonaSetup: EnrollPersonaParams;
   EnrollPersonaSuccess: EnrollPersonaParams;

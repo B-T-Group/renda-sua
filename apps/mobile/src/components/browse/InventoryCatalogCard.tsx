@@ -36,6 +36,7 @@ import {
 import { FoodAvailabilityChip } from '../food/FoodAvailabilityChip';
 import { LOW_STOCK_THRESHOLD } from '../../constants/stock';
 import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
+import { formatDistanceKm } from '../../utils/formatDistanceKm';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -82,6 +83,7 @@ function InventoryCatalogCardInner({
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing } = useTheme();
   const exportAvailable = item.item.export_available === true;
+  const distanceKm = exportAvailable ? null : formatDistanceKm(item.distance_value);
   const defaultLabel = t('orders.variant.defaultOption', 'Default');
   const variantOptionCount = useMemo(
     () => shopperVariantOptionCount(item),
@@ -599,7 +601,7 @@ function InventoryCatalogCardInner({
             style={{ marginTop: spacing.xs }}
           />
         ) : null}
-        {item.distance_text ? (
+        {distanceKm ? (
           <View style={[styles.distanceRow, { marginTop: 2 }]}>
             <MaterialCommunityIcons
               name="map-marker-outline"
@@ -613,8 +615,7 @@ function InventoryCatalogCardInner({
               ]}
               numberOfLines={1}
             >
-              {item.distance_text}{' '}
-              {t('public.items.card.distanceAway', 'away')}
+              {t('foods.distanceFromYou', '{{km}} km from you', { km: distanceKm })}
             </Text>
           </View>
         ) : null}

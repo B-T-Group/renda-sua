@@ -669,6 +669,9 @@
         "runningLate": "En retard",
         "reportPickupIssue": "Signaler un problème"
       },
+      "contact": {
+        "recipient": "Destinataire"
+      },
       "distance": "{{km}} km",
       "earnings": "Gains",
       "packageInfo": "Informations du colis",
@@ -813,6 +816,8 @@
     "merchantLocationLabel": "Depuis le magasin",
     "merchantAddressLabel": "Adresse du magasin",
     "deliveryAddressLabel": "Adresse de Livraison",
+    "deliveryContactRecipient": "Destinataire",
+    "recipientReceives": "Reçoit cette commande",
     "weight": "Poids",
     "dimensions": "Dimensions",
     "totalQuantity": "Quantité Totale",
@@ -4269,12 +4274,15 @@
       "preparing": "En préparation",
       "on_the_way": "En route",
       "delivered": "Livrée",
+      "picked_up": "Récupérée",
       "agentPickingUp": "{{name}} récupère votre commande.",
       "onTheWay": "Votre commande est en route.",
       "pay": "Le paiement est la prochaine étape.",
       "messagePlaced": "Votre commande est chez le magasin.",
       "messagePreparing": "Votre commande est en préparation.",
-      "messageDelivered": "Votre commande a été livrée."
+      "messageReadyPickup": "Prête pour le retrait.",
+      "messageDelivered": "Votre commande a été livrée.",
+      "messagePickedUp": "Votre commande a été récupérée."
     },
     "card": {
       "onlyLeft": "Plus que {{count}}",
@@ -7060,6 +7068,21 @@
       "illustrationLabel": "Commandez un plat, le restaurant le prépare, vous êtes notifié"
     },
     "searchPlaceholder": "Rechercher un plat",
+    "distanceFromYou": "{{km}} km de vous",
+    "dishes": {
+      "tab": "Plats"
+    },
+    "restaurants": {
+      "tab": "Restaurants",
+      "searchPlaceholder": "Rechercher un restaurant",
+      "dishCount": "{{count}} plats",
+      "openMenu": "Ouvrir le menu de {{name}}",
+      "loading": "Chargement des restaurants…",
+      "none": "Aucun restaurant à afficher",
+      "count": "{{count}} restaurants",
+      "noMatches": "Aucun restaurant ne correspond à votre recherche",
+      "tryAgain": "Essayez un autre nom de restaurant."
+    },
     "catalogTitle": "Plats disponibles",
     "prepMinutes": "~{{count}} min de préparation",
     "filters": {

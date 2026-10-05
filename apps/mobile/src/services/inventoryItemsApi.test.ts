@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FOOD_CATEGORY_NAME } from '../utils/foodAvailability';
-import { buildInventoryItemsQuery } from './inventoryItemsApi';
+import { buildInventoryItemsQuery, catalogStoresPath } from './inventoryItemsApi';
 
 describe('buildInventoryItemsQuery', () => {
   it('pins the cooked-food category when food_only is set', () => {
@@ -32,5 +32,14 @@ describe('buildInventoryItemsQuery', () => {
     expect(
       buildInventoryItemsQuery({ export_only: true }).get('export_only')
     ).toBe('true');
+  });
+});
+
+describe('catalogStoresPath', () => {
+  it('asks for cooked-food locations when food_only is set', () => {
+    const path = catalogStoresPath({ limit: 50, food_only: true, country_code: 'CM' });
+    const query = new URLSearchParams(path.split('?')[1]);
+    expect(query.get('food_only')).toBe('true');
+    expect(query.get('country_code')).toBe('CM');
   });
 });

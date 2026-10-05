@@ -70,6 +70,7 @@ import { PickupProgressService } from './pickup-progress.service';
 import { RefundsModule } from './refunds.module';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
+import { WhatsAppRecipientCompleteService } from './whatsapp-recipient-complete.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
@@ -158,6 +159,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     AdminOrderContactService,
     AdminOrdersService,
     WhatsAppOrderActionService,
+    WhatsAppRecipientCompleteService,
     DepositCalculationService,
     DepositLedgerService,
     DepositRefundService,
@@ -182,6 +184,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     FailedDeliveriesService,
     FailedPickupsService,
     WhatsAppOrderActionService,
+    WhatsAppRecipientCompleteService,
     DepositCalculationService,
     DepositLedgerService,
     DepositRefundService,

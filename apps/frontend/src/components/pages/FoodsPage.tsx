@@ -18,6 +18,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useCatalogVariantFlow } from '../../hooks/useCatalogVariantFlow';
 import { useFoodSubCategories } from '../../hooks/useFoodSubCategories';
+import { useCatalogStores } from '../../hooks/useCatalogStores';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import {
   InventoryItem,
@@ -28,6 +29,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import FoodsMenuHero from '../foods/FoodsMenuHero';
+import RestaurantCard from '../foods/RestaurantCard';
 import FoodsEmptyStateIllustration from '../illustrations/FoodsEmptyStateIllustration';
 import { MarketSelector } from '../market/MarketSelector';
 import { useMarket } from '../../hooks/useMarket';
@@ -73,11 +75,24 @@ const FoodsPage: React.FC = () => {
   const search = searchParams.get('q')?.trim() || undefined;
   const subcategory = searchParams.get('subcategory')?.trim() || undefined;
   const sort = (searchParams.get('sort') as InventorySortMode) || 'relevance';
+  const showingDishes = searchParams.get('view') === 'dishes';
 
   const isClientUser =
     isAuthenticated && profile?.client !== null && profile?.client !== undefined;
-  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const browserGeo = usePublicBrowserGeo(true);
   const { subCategories } = useFoodSubCategories();
+
+  const {
+    stores,
+    loading: restaurantsLoading,
+    error: restaurantsError,
+  } = useCatalogStores({
+    limit: 50,
+    search,
+    anonymousOrigin: browserGeo,
+    foodOnly: true,
+    enabled: !showingDishes,
+  });
 
   const {
     inventoryItems,
@@ -86,6 +101,7 @@ const FoodsPage: React.FC = () => {
     error,
     pagination,
   } = useInventoryItems({
+    enabled: showingDishes,
     food_only: true,
     page,
     limit: PAGE_SIZE,
@@ -97,7 +113,7 @@ const FoodsPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [search, subcategory, sort, selectedMarket?.id]);
+  }, [search, subcategory, sort, selectedMarket?.id, showingDishes]);
 
   const updateParam = useCallback(
     (key: string, value?: string) => {
@@ -166,7 +182,9 @@ const FoodsPage: React.FC = () => {
   }, [page, totalPages, loading, loadingMore]);
 
   const hasFilters = Boolean(search || subcategory);
-  const showEmptyState = !loading && inventoryItems.length === 0;
+  const showEmptyState = showingDishes && !loading && inventoryItems.length === 0;
+  const showRestaurantEmpty =
+    !showingDishes && !restaurantsLoading && stores.length === 0;
 
   const sortChips = useMemo(
     () =>
@@ -208,7 +226,11 @@ const FoodsPage: React.FC = () => {
               size="small"
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
-              placeholder={t('foods.searchPlaceholder', 'Search dishes')}
+              placeholder={
+                showingDishes
+                  ? t('foods.searchPlaceholder', 'Search dishes')
+                  : t('foods.restaurants.searchPlaceholder', 'Search restaurants')
+              }
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -219,9 +241,26 @@ const FoodsPage: React.FC = () => {
             />
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{sortChips}</Box>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip
+              label={t('foods.restaurants.tab', 'Restaurants')}
+              onClick={() => updateParam('view', undefined)}
+              color={!showingDishes ? 'primary' : 'default'}
+              variant={!showingDishes ? 'filled' : 'outlined'}
+            />
+            <Chip
+              label={t('foods.dishes.tab', 'Dishes')}
+              onClick={() => updateParam('view', 'dishes')}
+              color={showingDishes ? 'primary' : 'default'}
+              variant={showingDishes ? 'filled' : 'outlined'}
+            />
+          </Box>
 
-          {subCategories.length > 0 && (
+          {showingDishes ? (
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{sortChips}</Box>
+          ) : null}
+
+          {showingDishes && subCategories.length > 0 && (
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Chip
                 label={t('foods.allDishes', 'All dishes')}
@@ -244,13 +283,48 @@ const FoodsPage: React.FC = () => {
           )}
         </Stack>
 
-        {error && (
+        {(showingDishes ? error : restaurantsError) && (
           <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
+            {showingDishes ? error : restaurantsError}
           </Alert>
         )}
 
-        {loading && inventoryItems.length === 0 ? (
+        {!showingDishes ? (
+          restaurantsLoading && stores.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : showRestaurantEmpty ? (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <FoodsEmptyStateIllustration />
+              <Typography variant="h6" sx={{ mt: 2 }}>
+                {search
+                  ? t('foods.restaurants.noMatches', 'No restaurants match your search')
+                  : t('foods.empty.noDishes', 'No restaurants near you yet')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {search
+                  ? t('foods.restaurants.tryAgain', 'Try another restaurant name.')
+                  : t(
+                      'foods.empty.checkBack',
+                      'Check back soon as restaurants join the platform.'
+                    )}
+              </Typography>
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1.5,
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              }}
+            >
+              {stores.map((store) => (
+                <RestaurantCard key={store.business_location_id} store={store} />
+              ))}
+            </Box>
+          )
+        ) : loading && inventoryItems.length === 0 ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
           </Box>

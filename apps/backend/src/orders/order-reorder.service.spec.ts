@@ -139,6 +139,39 @@ describe('OrderReorderService', () => {
     });
   }
 
+  it('food_only keeps cooked dishes and drops other lines', async () => {
+    const order = {
+      ...baseOrder,
+      order_items: [
+        { ...baseOrder.order_items[0], is_cooked_food: true, item_name: 'Ndolé' },
+        {
+          id: 'oi-2',
+          business_inventory_id: 'inv-2',
+          item_id: 'item-2',
+          item_variant_id: null,
+          item_name: 'Soap',
+          variant_name: null,
+          quantity: 1,
+          is_cooked_food: false,
+        },
+      ],
+    };
+    const dish = {
+      ...baseInventory,
+      item: { ...baseInventory.item, name: 'Ndolé', is_cooked_food: true },
+    };
+    const soap = {
+      ...baseInventory,
+      id: 'inv-2',
+      item: { ...baseInventory.item, id: 'item-2', name: 'Soap', is_cooked_food: false },
+    };
+    mockOrderAndInventory(order, [dish, soap]);
+    const result = await service.reorder('order-1', true);
+    expect(result.lines).toHaveLength(1);
+    expect(result.lines[0].quantity).toBe(2);
+    expect(result.skipped).toHaveLength(0);
+  });
+
   it('returns checkout hint when all lines available, accepting, address valid', async () => {
     mockOrderAndInventory(baseOrder, [baseInventory]);
     const result = await service.reorder('order-1');

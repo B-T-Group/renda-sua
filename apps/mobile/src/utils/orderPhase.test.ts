@@ -1,9 +1,51 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clientJourneyActiveIndex,
+  clientJourneyMessage,
+  clientJourneySteps,
+  isClientJourneyPickup,
   orderProgressSteps,
   orderToPhaseInput,
   resolveOrderPhase,
 } from './orderPhase';
+
+describe('clientJourneySteps', () => {
+  it('drops on the way and ends at picked up for store pickup', () => {
+    expect(isClientJourneyPickup({ fulfillmentMethod: 'pickup' })).toBe(true);
+    expect(isClientJourneyPickup({ paymentTiming: 'pay_at_pickup' })).toBe(true);
+    expect(clientJourneySteps(true)).toEqual([
+      'placed',
+      'confirmed',
+      'preparing',
+      'picked_up',
+    ]);
+  });
+
+  it('keeps the delivery path for delivery and shipping', () => {
+    expect(isClientJourneyPickup({ fulfillmentMethod: 'delivery' })).toBe(false);
+    expect(clientJourneySteps(false)).toEqual([
+      'placed',
+      'confirmed',
+      'preparing',
+      'on_the_way',
+      'delivered',
+    ]);
+  });
+
+  it('fills the last pickup step when the order is done', () => {
+    expect(clientJourneyActiveIndex('done', 4)).toBe(3);
+    expect(clientJourneyActiveIndex('ready', 4)).toBe(2);
+    expect(clientJourneyMessage('done', true).key).toBe(
+      'client.journey.messagePickedUp'
+    );
+    expect(clientJourneyMessage('ready', true).key).toBe(
+      'client.journey.messageReadyPickup'
+    );
+    expect(clientJourneyMessage('done', false).key).toBe(
+      'client.journey.messageDelivered'
+    );
+  });
+});
 
 describe('orderProgressSteps', () => {
   it('uses a short carrier shipping path', () => {

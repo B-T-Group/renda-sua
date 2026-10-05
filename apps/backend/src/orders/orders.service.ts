@@ -22,6 +22,7 @@ import {
   justExhaustedSettlementRetry,
   nextSettlementRetryAtIso,
 } from './order-settlement-retry.util';
+import { canRecipientCompletePickup } from './recipient-pickup-complete.util';
 import type { Configuration } from '../config/configuration';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -4505,10 +4506,7 @@ export class OrdersService {
       paymentStatus === 'paid' || paymentStatus === 'authorized';
 
     if (paidOrAuthorized) {
-      await this.captureStripeAuthorizedOrderIfNeeded(order);
-      await this.processOrderPayment(orderId);
-      await this.processOrderDeliveryPayment(orderId);
-      await this.completeOrderWithSideEffects(
+      await this.settleAuthorizedPickup(
         order,
         'Order completed by client after store pickup'
       );
@@ -4531,6 +4529,29 @@ export class OrdersService {
       'Order payment must be authorized or paid before completing pickup',
       HttpStatus.PAYMENT_REQUIRED
     );
+  }
+
+  /**
+   * Diaspora pickup recipient tapped Complete on WhatsApp. Same settlement as
+   * the paying client's Complete, without a user account.
+   */
+  async completeDiasporaRecipientPickup(orderId: string) {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) return 'not_allowed' as const;
+    if (order.current_status === 'complete') return 'already_complete' as const;
+    if (!canRecipientCompletePickup(order)) return 'not_allowed' as const;
+    await this.settleAuthorizedPickup(
+      order,
+      'Order completed by recipient on WhatsApp'
+    );
+    return 'completed' as const;
+  }
+
+  private async settleAuthorizedPickup(order: Orders, history: string): Promise<void> {
+    await this.captureStripeAuthorizedOrderIfNeeded(order);
+    await this.processOrderPayment(order.id);
+    await this.processOrderDeliveryPayment(order.id);
+    await this.completeOrderWithSideEffects(order, history);
   }
 
   /** MoMo pay-after-confirm success: hold funds, then prepare once confirmed. */
@@ -8591,6 +8612,7 @@ export class OrdersService {
           client_id
           delivery_address_id
           fulfillment_method
+          is_diaspora_order
           dispatch_ready_at
           pickup_by
           dispatch_round

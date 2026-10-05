@@ -25,6 +25,7 @@ export function useCatalogStores(options: {
   include_unavailable?: boolean;
   anonymousOrigin?: PublicBrowserGeo | null;
   enabled?: boolean;
+  foodOnly?: boolean;
 }) {
   const catalogGeo = useCatalogGeoParams();
   const api = useApiClient();
@@ -37,6 +38,7 @@ export function useCatalogStores(options: {
   const includeUnavailable = options.include_unavailable ?? false;
   const anonymousOrigin = options.anonymousOrigin;
   const requested = options.enabled !== false;
+  const foodOnly = options.foodOnly === true;
 
   const fetchStores = useCallback(async () => {
     if (!requested) {
@@ -61,6 +63,7 @@ export function useCatalogStores(options: {
           ...(search && { search }),
           ...catalogGeoQueryParams(catalogGeo),
           include_unavailable: includeUnavailable,
+          ...(foodOnly && { food_only: true }),
           ...(anonymousOrigin && {
             origin_lat: anonymousOrigin.lat,
             origin_lng: anonymousOrigin.lng,
@@ -88,6 +91,7 @@ export function useCatalogStores(options: {
     limit,
     search,
     includeUnavailable,
+    foodOnly,
     anonymousOrigin,
   ]);
 

@@ -4785,12 +4785,15 @@
       "preparing": "Preparing",
       "on_the_way": "On the way",
       "delivered": "Delivered",
+      "picked_up": "Picked up",
       "agentPickingUp": "{{name}} is picking up your order.",
       "onTheWay": "Your order is on the way.",
       "pay": "Payment is the next step.",
       "messagePlaced": "Your order is with the store.",
       "messagePreparing": "Your order is being prepared.",
-      "messageDelivered": "Your order was delivered."
+      "messageReadyPickup": "Ready for pickup.",
+      "messageDelivered": "Your order was delivered.",
+      "messagePickedUp": "Your order was picked up."
     },
     "card": {
       "onlyLeft": "Only {{count}} left",
@@ -5719,6 +5722,9 @@
         "contactBusiness": "Contact Business",
         "contactCustomer": "Contact Customer"
       },
+      "contact": {
+        "recipient": "Recipient"
+      },
       "distance": "{{km}} km",
       "earnings": "Earnings",
       "packageInfo": "Package information",
@@ -6469,6 +6475,7 @@
     "outForRecipient": "Out for {{name}}",
     "recipientNotifiedNotice": "{{name}} gets tracking updates and the delivery code by text. They do not need your login.",
     "deliveryContactRecipient": "Recipient",
+    "recipientReceives": "Receives this order",
     "orderedBy": "Ordered by {{name}}",
     "earningsPendingRelease": "Earnings pending · Releases when agent confirms pickup",
     "reorder": {
@@ -8409,6 +8416,21 @@
       "illustrationLabel": "Order food, restaurant prepares it, you get notified"
     },
     "searchPlaceholder": "Search dishes",
+    "distanceFromYou": "{{km}} km from you",
+    "dishes": {
+      "tab": "Dishes"
+    },
+    "restaurants": {
+      "tab": "Restaurants",
+      "searchPlaceholder": "Search restaurants",
+      "dishCount": "{{count}} dishes",
+      "openMenu": "Open {{name}} menu",
+      "loading": "Loading restaurants…",
+      "none": "No restaurants to show",
+      "count": "{{count}} restaurants",
+      "noMatches": "No restaurants match your search",
+      "tryAgain": "Try another restaurant name."
+    },
     "allDishes": "All dishes",
     "prepMinutes": "~{{count}} min prep",
     "sort": {

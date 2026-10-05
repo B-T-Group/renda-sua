@@ -14,6 +14,7 @@ import {
   smsRecipientOutForDelivery,
   type RecipientSmsContext,
 } from './order-recipient-sms.messages';
+import { normalizeAlertPhone } from './merchant-order-notify.util';
 import { WhatsAppChannel } from './orchestration/channels/whatsapp.channel';
 
 /** Order fields needed to reach a recipient who has no Rendasua account. */
@@ -29,6 +30,8 @@ export interface OrderRecipientContact {
   businessName: string | null;
   fulfillmentCountry: string | null;
   fulfillmentMethod: string | null;
+  isDiasporaOrder: boolean;
+  paymentStatus: string | null;
 }
 
 /** Statuses a recipient is told about. Anything else stays payer-only. */
@@ -52,6 +55,26 @@ const FRENCH_COUNTRIES = new Set(['GA', 'CM', 'CI', 'SN', 'CD', 'CG', 'BJ', 'TG'
  */
 const DEDUPE_TTL_MS = 10 * 60 * 1000;
 
+const BIND_COMPLETE_MUTATION = `
+  mutation BindRecipientComplete($object: notification_events_insert_input!) {
+    insert_notification_events_one(object: $object) { id }
+  }
+`;
+
+function completeBindObject(wamid: string, orderId: string, phone: string) {
+  const normalized = normalizeAlertPhone(phone);
+  return {
+    notification_type: 'order.recipient.complete_pickup',
+    category: 'actionable',
+    channel: 'whatsapp',
+    status: 'sent',
+    provider_message_id: wamid,
+    entity_type: 'order',
+    entity_id: orderId,
+    meta: normalized ? { phone: normalized } : null,
+  };
+}
+
 const ORDER_RECIPIENT_QUERY = `
   query GetOrderRecipientContact($orderId: uuid!) {
     orders_by_pk(id: $orderId) {
@@ -65,6 +88,8 @@ const ORDER_RECIPIENT_QUERY = `
       payer_phone
       fulfillment_country
       fulfillment_method
+      is_diaspora_order
+      payment_status
       business { name }
     }
   }
@@ -167,6 +192,8 @@ export class OrderRecipientNotificationsService {
       businessName: order.business?.name ?? null,
       fulfillmentCountry: order.fulfillment_country ?? null,
       fulfillmentMethod: order.fulfillment_method ?? null,
+      isDiasporaOrder: order.is_diaspora_order === true,
+      paymentStatus: order.payment_status ?? null,
     };
   }
 
@@ -207,6 +234,14 @@ export class OrderRecipientNotificationsService {
           variables: message.whatsapp.variables,
         },
       });
+      if (result.status === 'sent') {
+        await this.bindIfComplete(
+          message.whatsapp.templateKey,
+          result.providerMessageId,
+          contact,
+          phone
+        );
+      }
       return result.status === 'sent';
     } catch (error: any) {
       this.logger.warn(
@@ -304,10 +339,7 @@ export class OrderRecipientNotificationsService {
           variables: { orderNumber },
         };
       case 'ready_for_pickup':
-        return {
-          templateKey: 'recipient_order_ready',
-          variables: { orderNumber, storeName },
-        };
+        return this.readyWhatsAppPayload(contact, orderNumber, storeName);
       case 'confirmed':
       case 'delivered':
       case 'complete':
@@ -321,6 +353,53 @@ export class OrderRecipientNotificationsService {
         };
       default:
         return null;
+    }
+  }
+
+  private readyWhatsAppPayload(
+    contact: OrderRecipientContact,
+    orderNumber: string,
+    storeName: string
+  ): { templateKey: string; variables: Record<string, string> } {
+    const templateKey = this.offersRecipientComplete(contact)
+      ? 'recipient_complete_pickup'
+      : 'recipient_order_ready';
+    return { templateKey, variables: { orderNumber, storeName } };
+  }
+
+  private offersRecipientComplete(contact: OrderRecipientContact): boolean {
+    if (!contact.isDiasporaOrder || contact.fulfillmentMethod !== 'pickup') {
+      return false;
+    }
+    return (
+      contact.paymentStatus === 'paid' || contact.paymentStatus === 'authorized'
+    );
+  }
+
+  private async bindIfComplete(
+    templateKey: string,
+    wamid: string | undefined,
+    contact: OrderRecipientContact,
+    phone: string
+  ): Promise<void> {
+    if (templateKey !== 'recipient_complete_pickup') return;
+    await this.bindCompleteMessage(wamid, contact.orderId, phone);
+  }
+
+  private async bindCompleteMessage(
+    wamid: string | undefined,
+    orderId: string,
+    phone: string
+  ): Promise<void> {
+    if (!wamid) return;
+    try {
+      await this.hasuraSystemService.executeMutation(BIND_COMPLETE_MUTATION, {
+        object: completeBindObject(wamid, orderId, phone),
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Recipient complete bind failed for ${orderId}: ${error?.message ?? error}`
+      );
     }
   }
 

@@ -199,7 +199,19 @@ export function buildDeliveryOrderViewModel(
         kind: 'delivery',
         title: ctx.t('orders.delivery.stops.delivery', 'Delivery location'),
         address: order.delivery_address ?? null,
-        contact: claimed ? toContact(order.client?.user) : null,
+        isRecipient: order.delivery_contact?.is_recipient === true,
+        contact: order.delivery_contact
+          ? {
+              name: order.delivery_contact.name,
+              phone: claimed ? order.delivery_contact.phone : null,
+              email: null,
+              subtitle: order.delivery_contact.is_recipient
+                ? ctx.t('orders.recipientReceives', 'Receives this order')
+                : null,
+            }
+          : claimed
+            ? toContact(order.client?.user)
+            : null,
         instructions:
           order.delivery_address?.instructions ??
           order.special_instructions ??

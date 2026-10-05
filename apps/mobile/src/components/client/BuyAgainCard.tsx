@@ -20,6 +20,8 @@ type Props = {
   items?: BuyAgainLine[];
   /** Drop outer padding when the card already sits inside a padded row. */
   embedded?: boolean;
+  /** Restaurants: reorder only the cooked-food lines. */
+  foodOnly?: boolean;
 };
 
 /** Product lines for a buy-again card, skipping empty rows. */
@@ -33,11 +35,17 @@ export function buyAgainLines(items: OrderItem[] | null | undefined): BuyAgainLi
 }
 
 /** Reuses the existing reorder flow. Hidden unless reorder_v1 is on and the order is done. */
-export function BuyAgainCard({ orderId, orderStatus, items = [], embedded = false }: Props) {
+export function BuyAgainCard({
+  orderId,
+  orderStatus,
+  items = [],
+  embedded = false,
+  foodOnly = false,
+}: Props) {
   const { t } = useTranslation();
   const { flags } = useClientFlags();
   const { colors, spacing, borderRadius, typography } = useTheme();
-  const flow = useClientReorderFlow(orderId, orderStatus);
+  const flow = useClientReorderFlow(orderId, orderStatus, foodOnly);
   useEffect(() => {
     if (!flow.snack) return;
     const timer = setTimeout(() => flow.setSnack(null), 4000);

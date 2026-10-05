@@ -867,6 +867,18 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           ) : null}
         </SectionCard>
 
+        {clientVm?.contacts.recipient ? (
+          <View style={styles.section}>
+            <ContactCard
+              title={t('orders.deliveryContactRecipient', 'Recipient')}
+              contact={{
+                ...clientVm.contacts.recipient,
+                subtitle: t('orders.recipientReceives', 'Receives this order'),
+              }}
+            />
+          </View>
+        ) : null}
+
         {/* ── Delivery / Pickup ─────────────────────────────────────────── */}
         <SectionCard
           title={

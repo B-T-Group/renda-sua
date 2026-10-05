@@ -47,6 +47,7 @@ import DashboardItemCard from '../common/DashboardItemCard';
 import SEOHead from '../seo/SEOHead';
 import { StoreDefaultAvatar } from '../illustrations/StoreDefaultAvatar';
 import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
+import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { alpha } from '@mui/material/styles';
 
 const ITEMS_PER_PAGE = 24;
@@ -61,13 +62,17 @@ const StorePage: React.FC = () => {
     () => new URLSearchParams(location.search).get('preview') === '1',
     [location.search]
   );
+  const foodMenu = useMemo(
+    () => new URLSearchParams(location.search).get('menu') === 'food',
+    [location.search]
+  );
   const { t } = useTranslation();
   const { isAuthenticated } = useSessionAuth();
   const { openLoginDialog, loginMethodDialog } = useLoginMethodDialog();
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
   const [currentPage, setCurrentPage] = useState(1);
-  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const browserGeo = usePublicBrowserGeo(!isAuthenticated || foodMenu);
   const isClientUser = profile?.user_type_id === 'client';
   const wantsOwnerPreview =
     previewMode && Boolean(profile?.business?.id);
@@ -95,7 +100,9 @@ const StorePage: React.FC = () => {
       return;
     }
     setCurrentPage(1);
-    navigate(`/store/${nextLocationId}?preview=1`);
+    const preview = 'preview=1';
+    const menu = foodMenu ? '&menu=food' : '';
+    navigate(`/store/${nextLocationId}?${preview}${menu}`);
   };
 
   const storeMatchesRoute =
@@ -119,6 +126,7 @@ const StorePage: React.FC = () => {
         }
       : {}),
     anonymousOrigin: browserGeo,
+    ...(foodMenu && { food_only: true }),
   });
 
   const { trackView } = useTrackItemView(null);
@@ -212,6 +220,8 @@ const StorePage: React.FC = () => {
   const catalogLoading = storeLoading || loading;
   const isEmpty = !catalogLoading && inventoryItems.length === 0;
   const palette = storeAvatarPalette(name);
+  const distanceKm = formatDistanceKm(store?.distance_meters);
+  const catalogCount = store?.item_count ?? pagination?.total ?? 0;
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -353,11 +363,31 @@ const StorePage: React.FC = () => {
                 <Typography variant="h4" fontWeight={800} gutterBottom>
                   {storeLoading ? '…' : name}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  {t('stores.itemCount', '{{count}} items', {
-                    count: store?.item_count ?? pagination?.total ?? 0,
-                  })}
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: distanceKm ? 0.5 : 1 }}
+                >
+                  {foodMenu
+                    ? t('foods.restaurants.dishCount', '{{count}} dishes', {
+                        count: pagination?.total ?? catalogCount,
+                      })
+                    : t('stores.itemCount', '{{count}} items', {
+                        count: catalogCount,
+                      })}
                 </Typography>
+                {distanceKm ? (
+                  <Typography
+                    variant="body2"
+                    color="primary.main"
+                    fontWeight={600}
+                    sx={{ mb: 1 }}
+                  >
+                    {t('foods.distanceFromYou', '{{km}} km from you', {
+                      km: distanceKm,
+                    })}
+                  </Typography>
+                ) : null}
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
                   {store?.is_verified ? (
                     <Chip
