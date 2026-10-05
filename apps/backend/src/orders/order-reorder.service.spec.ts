@@ -729,4 +729,106 @@ describe('OrderReorderService', () => {
     expect(result.lines[0].item_data.available_quantity).toBeNull();
     expect(result.skipped).toHaveLength(0);
   });
+
+  describe('pay_at_confirm flagged locations', () => {
+    function flaggedInventory(flag: boolean) {
+      return {
+        ...baseInventory,
+        business_location: {
+          ...baseInventory.business_location,
+          pay_at_confirm: flag,
+        },
+      };
+    }
+
+    it('returns lines for a flagged location order with non-cooked goods', async () => {
+      mockOrderAndInventory(baseOrder, [flaggedInventory(true)]);
+      const result = await service.reorder('order-1');
+      expect(result.lines).toHaveLength(1);
+      expect(result.lines[0].quantity).toBe(2);
+      expect(result.navigation_hint).toBe('checkout');
+      expect(result.skipped).toHaveLength(0);
+    });
+
+    it('returns lines for an unflagged location order', async () => {
+      mockOrderAndInventory(baseOrder, [flaggedInventory(false)]);
+      const result = await service.reorder('order-1');
+      expect(result.lines).toHaveLength(1);
+      expect(result.lines[0].quantity).toBe(2);
+      expect(result.navigation_hint).toBe('checkout');
+    });
+
+    it('handles flagged location with stock-tracked items correctly', async () => {
+      mockOrderAndInventory(baseOrder, [
+        {
+          ...flaggedInventory(true),
+          computed_available_quantity: 5,
+        },
+      ]);
+      const result = await service.reorder('order-1');
+      expect(result.lines).toHaveLength(1);
+      expect(result.lines[0].quantity).toBe(2);
+      expect(result.lines[0].item_data.available_quantity).toBe(5);
+      expect(result.navigation_hint).toBe('checkout');
+    });
+
+    it('skips out-of-stock flagged location items', async () => {
+      mockOrderAndInventory(baseOrder, [
+        {
+          ...flaggedInventory(true),
+          computed_available_quantity: 0,
+        },
+      ]);
+      const result = await service.reorder('order-1');
+      expect(result.lines).toHaveLength(0);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].reason).toBe('out_of_stock');
+      expect(result.navigation_hint).toBe('none');
+    });
+
+    it('handles mixed flagged and unflagged locations', async () => {
+      const order = {
+        ...baseOrder,
+        order_items: [
+          { ...baseOrder.order_items[0], business_inventory_id: 'inv-1' },
+          {
+            ...baseOrder.order_items[0],
+            id: 'oi-2',
+            business_inventory_id: 'inv-2',
+            item_name: 'Soap',
+          },
+        ],
+      };
+      mockOrderAndInventory(order, [
+        { ...flaggedInventory(true), id: 'inv-1' },
+        {
+          ...flaggedInventory(false),
+          id: 'inv-2',
+          item: { ...baseInventory.item, id: 'item-2', name: 'Soap' },
+        },
+      ]);
+      const result = await service.reorder('order-1');
+      expect(result.lines).toHaveLength(2);
+      expect(result.navigation_hint).toBe('checkout');
+    });
+
+    it('respects max_order_quantity for flagged location items', async () => {
+      mockOrderAndInventory(
+        {
+          ...baseOrder,
+          order_items: [{ ...baseOrder.order_items[0], quantity: 10 }],
+        },
+        [
+          {
+            ...flaggedInventory(true),
+            computed_available_quantity: 50,
+            item: { ...baseInventory.item, max_order_quantity: 5 },
+          },
+        ]
+      );
+      const result = await service.reorder('order-1');
+      expect(result.lines[0].quantity).toBe(5);
+      expect(result.lines[0].ordered_quantity).toBe(10);
+    });
+  });
 });
