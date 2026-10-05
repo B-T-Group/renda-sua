@@ -11,6 +11,30 @@ import { toCartVariantId } from '../utils/shopperVariantSelection';
 
 type PendingAction = 'cart' | 'order';
 
+type AuthGuard = (
+  run: () => void | Promise<void>
+) => boolean | Promise<boolean>;
+
+/** Runs the catalog action after auth. A guard that returns true without calling run still continues. */
+export async function runAfterAuthGuard(
+  guard: AuthGuard | undefined,
+  run: () => void | Promise<void>
+): Promise<boolean> {
+  if (!guard) {
+    await run();
+    return true;
+  }
+  let invoked = false;
+  const wrapped = () => {
+    invoked = true;
+    return run();
+  };
+  const result = guard(wrapped);
+  const ok = result instanceof Promise ? await result : result;
+  if (ok && !invoked) await run();
+  return ok;
+}
+
 /**
  * Catalog add/buy flow: opens a variant picker when the listing has options
  * and no selection was already made on the card.
@@ -60,15 +84,8 @@ export function useCatalogVariantFlow(params: {
   );
 
   const guardAuth = useCallback(
-    async (run: () => void | Promise<void>): Promise<boolean> => {
-      const guard = requireAuthRef.current;
-      if (!guard) {
-        await run();
-        return true;
-      }
-      const result = guard(run);
-      return result instanceof Promise ? result : result;
-    },
+    (run: () => void | Promise<void>) =>
+      runAfterAuthGuard(requireAuthRef.current, run),
     []
   );
 
