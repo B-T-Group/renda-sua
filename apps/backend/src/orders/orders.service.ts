@@ -164,6 +164,8 @@ import {
   isCookedFoodFulfillmentOrder,
   anyLineIsCookedFood,
   lineIsCookedFood,
+  eatInRequestAllowed,
+  shouldClearEatInForTakeOut,
 } from '../food/cooked-food-flag.util';
 import type { FoodConfirmationStockUpdate } from '../food/food-confirmation-stock.util';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
@@ -224,6 +226,8 @@ export interface ConfirmOrderRequest {
    * WhatsApp one-tap defaults to 30.
    */
   ready_in_minutes?: number;
+  /** Kitchen has no table for an eat-in request. Payment request is unchanged. */
+  eat_in_unavailable?: boolean;
 }
 
 export interface GetOrderRequest {
@@ -1567,6 +1571,35 @@ export class OrdersService {
     });
   }
 
+  private async applyEatInUnavailable(
+    request: ConfirmOrderRequest,
+    order: { eat_in?: boolean | null; eat_in_unavailable?: boolean }
+  ): Promise<void> {
+    if (request.eat_in_unavailable !== true) return;
+    if (order.eat_in !== true) {
+      throw new HttpException(
+        'Eat in was not requested for this order',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    await this.cookedFoodPickupFlow.markEatInUnavailable(request.orderId);
+    order.eat_in_unavailable = true;
+  }
+
+  private notifyEatInUnavailable(order: any): void {
+    const awaitingPayment =
+      order.pay_after_merchant_confirm === true &&
+      order.payment_status !== 'paid' &&
+      order.payment_status !== 'authorized';
+    void this.notificationsService.sendEatInUnavailablePush({
+      clientUserId: order.client?.user_id,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      preferredLanguage: order.client?.user?.preferred_language,
+      awaitingPayment,
+    });
+  }
+
   async confirmOrder(
     request: ConfirmOrderRequest,
     actor?: AuthorizedBusinessActor
@@ -1581,6 +1614,7 @@ export class OrdersService {
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     this.orderAcceptanceService.assertConfirmableAcceptance(order as any);
+    await this.applyEatInUnavailable(request, order as any);
 
     const isAsapConfirm =
       (order as any).fulfillment_timing === 'asap' ||
@@ -1747,6 +1781,10 @@ export class OrdersService {
       request.notes
     );
 
+    if ((order as any).eat_in_unavailable === true) {
+      this.notifyEatInUnavailable(order);
+    }
+
     if (isCookedFoodAsapReadyIn && cookedReadyInMinutes != null) {
       const cookedFoodResult = await this.afterCookedFoodConfirm(
         request.orderId,
@@ -1805,6 +1843,8 @@ export class OrdersService {
       pay_after_merchant_confirm?: boolean | null;
       payment_status?: string | null;
       total_amount?: number | null;
+      eat_in?: boolean | null;
+      eat_in_unavailable?: boolean | null;
       delivery_time_windows?: Array<{ id: string }>;
     },
     readyInMinutes: number
@@ -1819,6 +1859,9 @@ export class OrdersService {
 
     // Stripe/wallet are already paid/authorized; unpaid is rare. Auto-ready
     // still waits for paid/authorized before marking ready.
+    if (shouldClearEatInForTakeOut(order)) {
+      await this.cookedFoodPickupFlow.clearEatIn(orderId);
+    }
     await this.cookedFoodPickupFlow.enterPreparingAndScheduleReady(
       orderId,
       readyInMinutes
@@ -4648,6 +4691,9 @@ export class OrdersService {
     if (afterPay.current_status !== 'confirmed') return;
     // Auto-prepare / auto-mark-ready are kitchen behaviours: keyed on the cooked
     // line snapshots, not on pay_after_merchant_confirm.
+    if (shouldClearEatInForTakeOut(afterPay as any)) {
+      await this.cookedFoodPickupFlow.clearEatIn(orderId);
+    }
     if (!isCookedFoodOrderSnapshot(afterPay as any)) {
       // Non-cooked goods stay `confirmed` after payment; the merchant marks ready.
       // Start the (WhatsApp) mark-ready reminder clock now that the order is paid.
@@ -7593,6 +7639,8 @@ export class OrdersService {
           payment_timing
           reconciliation_status
           is_cooked_food_pickup
+          eat_in
+          eat_in_unavailable
           pay_after_merchant_confirm
           verified_agent_delivery
           created_at
@@ -7824,6 +7872,8 @@ export class OrdersService {
           payment_timing
           reconciliation_status
           is_cooked_food_pickup
+          eat_in
+          eat_in_unavailable
           pay_after_merchant_confirm
           verified_agent_delivery
           deposit_amount
@@ -8525,6 +8575,8 @@ export class OrdersService {
           payer_phone
           reconciliation_status
           is_cooked_food_pickup
+          eat_in
+          eat_in_unavailable
           pay_after_merchant_confirm
           deposit_amount
           deposit_mobile_payment_transaction_id
@@ -8725,6 +8777,8 @@ export class OrdersService {
           payment_timing
           reconciliation_status
           is_cooked_food_pickup
+          eat_in
+          eat_in_unavailable
           pay_after_merchant_confirm
           deposit_amount
           deposit_mobile_payment_transaction_id
@@ -12221,6 +12275,23 @@ export class OrdersService {
       fulfillmentMethod,
       itemFlags: itemCookedFlags,
     });
+    if (
+      !eatInRequestAllowed({
+        requested: orderData.eat_in,
+        fulfillmentMethod,
+        itemFlags: itemCookedFlags,
+      })
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Eat in is only available for cooked-food pickup orders',
+          error: 'EAT_IN_NOT_AVAILABLE',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const eatIn = orderData.eat_in === true;
     const payAfterMerchantConfirm = resolvePayAfterConfirm({
       lines: itemCookedFlags,
       fulfillment: fulfillmentMethod,
@@ -12373,7 +12444,8 @@ export class OrdersService {
         $presentmentFxSource: String,
         $metaCapiContext: jsonb,
         $isCookedFoodPickup: Boolean!,
-        $payAfterMerchantConfirm: Boolean!
+        $payAfterMerchantConfirm: Boolean!,
+        $eatIn: Boolean!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -12427,6 +12499,7 @@ export class OrdersService {
           meta_capi_context: $metaCapiContext,
           is_cooked_food_pickup: $isCookedFoodPickup,
           pay_after_merchant_confirm: $payAfterMerchantConfirm,
+          eat_in: $eatIn,
           order_items: {
             data: $orderItems
           }
@@ -12478,6 +12551,8 @@ export class OrdersService {
           presentment_fx_rate
           presentment_fx_source
           is_cooked_food_pickup
+          eat_in
+          eat_in_unavailable
           pay_after_merchant_confirm
           order_items {
             id
@@ -12600,6 +12675,7 @@ export class OrdersService {
         }),
         isCookedFoodPickup,
         payAfterMerchantConfirm,
+        eatIn,
       }
     );
 

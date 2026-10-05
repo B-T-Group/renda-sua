@@ -161,6 +161,7 @@ export default function PlaceOrderScreen() {
   const [addressId, setAddressId] = useState('');
   const [variantId, setVariantId] = useState<string | null>(null);
   const [fulfillment, setFulfillment] = useState<Fulfillment>('pickup');
+  const [eatIn, setEatIn] = useState(false);
   // Pickup is the default when available; confirmed immediately.
   const [hasChosenFulfillment, setHasChosenFulfillment] = useState(true);
   // Default to pay_at_delivery (safe default when momo_pay_now_delivery_enabled may be false)
@@ -314,6 +315,7 @@ export default function PlaceOrderScreen() {
     (value: Fulfillment) => {
       if (value === 'delivery' && !deliveryOffered) return;
       setFulfillment(value);
+      if (value !== 'pickup') setEatIn(false);
       setHasChosenFulfillment(true);
     },
     [deliveryOffered]
@@ -987,6 +989,9 @@ export default function PlaceOrderScreen() {
         'Delivery is currently unavailable.'
       )}
       pickupAvailable={pickupEnabled}
+      eatInAvailable={pickupEnabled && Boolean(item && isFoodCatalogItem(item))}
+      eatIn={eatIn}
+      onEatInChange={setEatIn}
       shippingAvailable={shippingEnabled}
       pickupLocations={pickupLocations}
       deliveryPriceLabel={
@@ -1171,6 +1176,7 @@ export default function PlaceOrderScreen() {
     const body: CreateOrderPayload = {
       items: [line],
       fulfillment_method: fulfillment,
+      ...(fulfillment === 'pickup' && eatIn ? { eat_in: true } : {}),
       ...(fulfillmentNeedsAddress(fulfillment) ? { delivery_address_id: deliveryAddressId } : {}),
       ...(fulfillmentNeedsWindow(fulfillment) && deliveryWindow
         ? { delivery_window: deliveryWindow }
@@ -1303,6 +1309,7 @@ export default function PlaceOrderScreen() {
     discountCode.appliedCode,
     deliveryWindow,
     fulfillment,
+    eatIn,
     instructions,
     resolvedIsStripeRail,
     item,

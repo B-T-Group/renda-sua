@@ -43,6 +43,8 @@ export interface OrderData {
   busy_extra_prep_minutes?: number | null;
   estimated_prep_minutes?: number | null;
   is_cooked_food_pickup?: boolean | null;
+  eat_in?: boolean | null;
+  eat_in_unavailable?: boolean | null;
   pay_after_merchant_confirm?: boolean | null;
   estimated_delivery_time?: string;
   actual_delivery_time?: string;

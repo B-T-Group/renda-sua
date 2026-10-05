@@ -362,6 +362,8 @@ select_permissions:
         - client_ready_nudge_sent_at
         - fulfillment_timing
         - is_cooked_food_pickup
+        - eat_in
+        - eat_in_unavailable
         - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by
@@ -467,6 +469,8 @@ select_permissions:
         - client_ready_nudge_sent_at
         - fulfillment_timing
         - is_cooked_food_pickup
+        - eat_in
+        - eat_in_unavailable
         - pay_after_merchant_confirm
         - promised_ready_at
         - promised_fulfill_by

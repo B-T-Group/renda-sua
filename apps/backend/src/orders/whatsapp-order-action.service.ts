@@ -103,7 +103,7 @@ const ORDER_ACTION_FIELDS = `
   busy_extra_prep_minutes estimated_prep_minutes
   created_at total_amount currency fulfillment_method
   fulfillment_timing business_id business_location_id
-  is_cooked_food_pickup pay_after_merchant_confirm
+  is_cooked_food_pickup eat_in eat_in_unavailable pay_after_merchant_confirm
   delivery_time_windows(limit: 1) { id }
 `;
 

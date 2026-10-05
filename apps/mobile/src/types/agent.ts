@@ -90,6 +90,8 @@ export interface Order {
   busy_extra_prep_minutes?: number | null;
   estimated_prep_minutes?: number | null;
   is_cooked_food_pickup?: boolean | null;
+  eat_in?: boolean | null;
+  eat_in_unavailable?: boolean | null;
   pay_after_merchant_confirm?: boolean | null;
   client_ready_nudge_sent_at?: string | null;
   estimated_delivery_time?: string;

@@ -10,7 +10,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessOrder } from '../../types/business/orders';
 import type { ConfirmOrderPayload } from '../../types/business/orders';
 import { rootNavigationRef } from '@/navigation/rootNavigationRef';
-import { isStorePayAfterConfirmOrder } from '../../utils/cookedFoodOrder';
+import { isStorePayAfterConfirmOrder, foodServiceStyle } from '../../utils/cookedFoodOrder';
+import { EatInIllustration } from '../illustrations/EatInIllustration';
+import { TakeOutIllustration } from '../illustrations/TakeOutIllustration';
 import { PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES } from '../../utils/payAfterConfirm';
 
 const PRESETS = [15, 30, 45, 60] as const;
@@ -64,6 +66,7 @@ export function CookedFoodConfirmOrderDialog({
   const [customMinutes, setCustomMinutes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [noTable, setNoTable] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -71,6 +74,7 @@ export function CookedFoodConfirmOrderDialog({
     setSelected(30);
     setCustomMinutes('');
     setError(null);
+    setNoTable(false);
   }, [visible, order?.id]);
 
   const resolveMinutes = useCallback((): number | null => {
@@ -84,7 +88,7 @@ export function CookedFoodConfirmOrderDialog({
   // Flagged-location goods: no ready-in prompt; explain pay-after + auto-cancel.
   const storePayAfter = order ? isStorePayAfterConfirmOrder(order) : false;
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (eatInUnavailable = false) => {
     if (!order) return;
     const readyInMinutes = storePayAfter ? undefined : resolveMinutes();
     if (!storePayAfter && readyInMinutes == null) {
@@ -103,7 +107,9 @@ export function CookedFoodConfirmOrderDialog({
       const result = await onConfirm({
         orderId: order.id,
         ...(readyInMinutes != null ? { ready_in_minutes: readyInMinutes } : {}),
+        ...(eatInUnavailable ? { eat_in_unavailable: true } : {}),
       });
+      if (eatInUnavailable) setNoTable(true);
       if (result.pay_after_merchant_confirm) {
         setStep(2);
       } else {
@@ -119,6 +125,15 @@ export function CookedFoodConfirmOrderDialog({
   if (!order) return null;
 
   const isPickup = order.fulfillment_method === 'pickup' || order.is_cooked_food_pickup === true;
+  const serviceStyle = foodServiceStyle(order);
+  const serviceLabel =
+    serviceStyle === 'eat_in'
+      ? t('orders.eatIn.eatIn', 'Eat in')
+      : serviceStyle === 'take_out'
+        ? t('orders.eatIn.takeOut', 'Take out')
+        : isPickup
+          ? t('orders.cookedFood.pickup', 'Pickup')
+          : t('orders.cookedFood.delivery', 'Delivery');
   const readyMinutes = resolveMinutes();
 
   return (
@@ -144,9 +159,7 @@ export function CookedFoodConfirmOrderDialog({
                 number: order.order_number,
               })}
               {' · '}
-              {isPickup
-                ? t('orders.cookedFood.pickup', 'Pickup')
-                : t('orders.cookedFood.delivery', 'Delivery')}
+              {serviceLabel}
             </Text>
             <Text variant="titleLarge" style={{ marginTop: spacing.xs }}>
               {storePayAfter
@@ -162,6 +175,11 @@ export function CookedFoodConfirmOrderDialog({
             contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
             keyboardShouldPersistTaps="handled"
           >
+            {serviceStyle && step === 1 ? (
+              <View style={{ alignItems: 'center' }}>
+                {serviceStyle === 'eat_in' ? <EatInIllustration /> : <TakeOutIllustration />}
+              </View>
+            ) : null}
             {storePayAfter ? (
               step === 1 ? (
                 <StoreConfirmBody error={error} />
@@ -180,7 +198,7 @@ export function CookedFoodConfirmOrderDialog({
                 onCustomChange={setCustomMinutes}
               />
             ) : (
-              <WaitPaymentBody isPickup={isPickup} />
+              <WaitPaymentBody isPickup={isPickup} noTable={noTable} />
             )}
           </ScrollView>
           <View style={[styles.actions, { paddingHorizontal: spacing.lg, gap: spacing.sm }]}>
@@ -190,7 +208,7 @@ export function CookedFoodConfirmOrderDialog({
                   mode="contained"
                   loading={submitting}
                   disabled={!storePayAfter && readyMinutes == null}
-                  onPress={() => void handleSubmit()}
+                  onPress={() => void handleSubmit(false)}
                 >
                   {storePayAfter
                     ? t('orders.payAfterConfirm.business.confirmCta', 'Confirm order')
@@ -200,6 +218,15 @@ export function CookedFoodConfirmOrderDialog({
                         m: readyMinutes,
                       })}
                 </Button>
+                {order.eat_in === true ? (
+                  <Button
+                    mode="outlined"
+                    disabled={submitting || (!storePayAfter && readyMinutes == null)}
+                    onPress={() => void handleSubmit(true)}
+                  >
+                    {t('orders.eatIn.noTable', 'No table')}
+                  </Button>
+                ) : null}
                 <Button onPress={onDismiss} disabled={submitting}>
                   {t('common.back', 'Back')}
                 </Button>
@@ -431,7 +458,13 @@ function MinuteTile({
   );
 }
 
-function WaitPaymentBody({ isPickup }: { isPickup: boolean }) {
+function WaitPaymentBody({
+  isPickup,
+  noTable = false,
+}: {
+  isPickup: boolean;
+  noTable?: boolean;
+}) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const steps = [
@@ -442,8 +475,16 @@ function WaitPaymentBody({ isPickup }: { isPickup: boolean }) {
   return (
     <View style={{ gap: spacing.md }}>
       <View style={{ alignItems: 'center' }}>
-        <ReadyClock color={colors.warning.main} />
+        {noTable ? <TakeOutIllustration /> : <ReadyClock color={colors.warning.main} />}
       </View>
+      {noTable ? (
+        <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
+          {t(
+            'orders.eatIn.noTableKitchen',
+            'There is no table. The customer was told. If they approve the payment, prepare this as take out.'
+          )}
+        </Text>
+      ) : null}
       {steps.map((label, index) => (
         <View key={label} style={{ flexDirection: 'row', gap: spacing.sm }}>
           <Text variant="titleMedium" style={{ fontWeight: '700', width: 22 }}>

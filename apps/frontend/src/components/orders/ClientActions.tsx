@@ -10,6 +10,7 @@ import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import ClientRefundRequestDialog from '../dialogs/ClientRefundRequestDialog';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 import { ClientDeliveryPinButton } from './ClientDeliveryPinButton';
+import { EatInUnavailableNotice } from './EatInUnavailableNotice';
 import { ReorderCartConflictDialog } from './ReorderCartConflictDialog';
 
 interface ClientActionsProps {
@@ -338,11 +339,12 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     );
 
   if (availableActions.length === 0 && !showPin && !reorderFlow.enabled) {
-    return null;
+    return <EatInUnavailableNotice order={order} />;
   }
 
   return (
     <>
+      <EatInUnavailableNotice order={order} />
       {(availableActions.length > 0 || showPin) && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {showPin && (

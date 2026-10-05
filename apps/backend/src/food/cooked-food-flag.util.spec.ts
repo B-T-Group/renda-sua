@@ -4,6 +4,8 @@ import {
   isCookedFoodItem,
   isCookedFoodFulfillmentOrder,
   isCookedFoodPickupOrder,
+  eatInRequestAllowed,
+  shouldClearEatInForTakeOut,
 } from './cooked-food-flag.util';
 
 describe('cooked-food-flag.util', () => {
@@ -121,6 +123,47 @@ describe('cooked-food-flag.util', () => {
         fulfillmentMethod: 'delivery',
         itemFlags: [{ is_cooked_food: true }],
       })
+    ).toBe(false);
+  });
+
+  it('allows eat-in only for cooked-food pickup', () => {
+    const cooked = [{ is_cooked_food: true }];
+    expect(
+      eatInRequestAllowed({
+        requested: true,
+        fulfillmentMethod: 'pickup',
+        itemFlags: cooked,
+      })
+    ).toBe(true);
+    expect(
+      eatInRequestAllowed({
+        requested: true,
+        fulfillmentMethod: 'delivery',
+        itemFlags: cooked,
+      })
+    ).toBe(false);
+    expect(
+      eatInRequestAllowed({
+        requested: true,
+        fulfillmentMethod: 'pickup',
+        itemFlags: [{ is_cooked_food: false }],
+      })
+    ).toBe(false);
+    expect(
+      eatInRequestAllowed({
+        requested: false,
+        fulfillmentMethod: 'delivery',
+        itemFlags: cooked,
+      })
+    ).toBe(true);
+  });
+
+  it('clears eat-in only after the kitchen says there is no table', () => {
+    expect(
+      shouldClearEatInForTakeOut({ eat_in: true, eat_in_unavailable: true })
+    ).toBe(true);
+    expect(
+      shouldClearEatInForTakeOut({ eat_in: true, eat_in_unavailable: false })
     ).toBe(false);
   });
 

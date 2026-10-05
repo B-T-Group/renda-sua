@@ -15,6 +15,7 @@ import { buildBusinessOrderViewModel } from '../model/buildBusinessOrderViewMode
 import { useOrderViewModelContext } from '../model/useOrderViewModelContext';
 import { Countdown, StatusBadge } from '../shared';
 import BusinessOrderActions from './BusinessOrderActions';
+import { FoodServiceStyleLabel } from '../FoodServiceStyleLabel';
 
 export interface BusinessOrderCardProps {
   order: OrderData | Record<string, unknown>;
@@ -59,6 +60,7 @@ export const BusinessOrderCard: React.FC<BusinessOrderCardProps> = ({
             </Typography>
             <StatusBadge status={vm.status} label={vm.statusMessage} />
           </Stack>
+          <FoodServiceStyleLabel order={order as OrderData} />
 
           <Typography variant="h6" fontWeight={800} color="warning.dark">
             {vm.requiredAction}

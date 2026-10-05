@@ -141,6 +141,7 @@ export default observer(function CartCheckoutScreen() {
   const [fulfillment, setFulfillment] = useState<Fulfillment>(
     (reorderPrefill?.fulfillmentMethod as Fulfillment) || 'pickup'
   );
+  const [eatIn, setEatIn] = useState(false);
   // Pickup is the default when available; confirmed immediately.
   const [hasChosenFulfillment, setHasChosenFulfillment] = useState(true);
   const [couponExpanded, setCouponExpanded] = useState(false);
@@ -334,6 +335,7 @@ export default observer(function CartCheckoutScreen() {
     (value: Fulfillment) => {
       if (value === 'delivery' && !deliveryOffered) return;
       setFulfillment(value);
+      if (value !== 'pickup') setEatIn(false);
       setHasChosenFulfillment(true);
     },
     [deliveryOffered]
@@ -749,6 +751,13 @@ export default observer(function CartCheckoutScreen() {
           'Delivery is currently unavailable.'
         )}
         pickupAvailable={pickupEligible}
+        eatInAvailable={
+          pickupEligible &&
+          (preflightConfig?.groups ?? []).every((g) => g.all_cooked_food === true) &&
+          (preflightConfig?.groups ?? []).length > 0
+        }
+        eatIn={eatIn}
+        onEatInChange={setEatIn}
         shippingAvailable={shippingEligible}
         shippingDisabled={shippingPartial}
         pickupLocations={pickupLocations}
@@ -933,6 +942,7 @@ export default observer(function CartCheckoutScreen() {
     
     const common = {
       fulfillment_method: fulfillment,
+      ...(isPickup && eatIn ? { eat_in: true } : {}),
       ...(isPickup ? {} : { delivery_address_id: deliveryAddressId }),
       ...(fulfillmentNeedsWindow(fulfillment) && deliveryWindow
         ? { delivery_window: deliveryWindow }
@@ -1061,6 +1071,7 @@ export default observer(function CartCheckoutScreen() {
     deliveryWindow,
     discountCode.appliedCode,
     fulfillment,
+    eatIn,
     instructions,
     resolvedIsStripeRail,
     meUser?.phone_number,

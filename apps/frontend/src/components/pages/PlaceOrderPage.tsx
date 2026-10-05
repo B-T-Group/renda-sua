@@ -17,6 +17,7 @@ import {
   payAfterCopyVariantForPreflight,
   resolveCreatedPayAfter,
 } from '../../utils/payAfterConfirm';
+import { FoodServiceChoice } from '../orders/FoodServiceChoice';
 import {
   Alert,
   Box,
@@ -244,6 +245,10 @@ interface OrderSummaryProps {
   pickupEligible?: boolean;
   pickupSelected?: boolean;
   onPickupChange?: (checked: boolean) => void;
+  /** Cooked food: picture choice of eat in or take out instead of the pickup checkbox. */
+  eatInAvailable?: boolean;
+  eatInSelected?: boolean;
+  onFoodServiceChange?: (value: 'delivery' | 'eat_in' | 'take_out') => void;
   pickupLocationLabel?: string;
   /** When true, pickup is paid by card at checkout (Stripe rail). */
   pickupPayAtCheckout?: boolean;
@@ -297,6 +302,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   pickupEligible = false,
   pickupSelected = false,
   onPickupChange,
+  eatInAvailable = false,
+  eatInSelected = false,
+  onFoodServiceChange,
   pickupLocationLabel,
   pickupPayAtCheckout = false,
   deliveryAddressMissing = false,
@@ -527,7 +535,18 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
             </Alert>
           )}
 
-          {pickupEligible && onPickupChange && allowDelivery && (
+          {eatInAvailable && onFoodServiceChange ? (
+            <FoodServiceChoice
+              value={
+                !pickupSelected ? 'delivery' : eatInSelected ? 'eat_in' : 'take_out'
+              }
+              onChange={onFoodServiceChange}
+              showDelivery={allowDelivery}
+              disabled={loading}
+            />
+          ) : null}
+
+          {pickupEligible && onPickupChange && allowDelivery && !eatInAvailable && (
             <Paper
               variant="outlined"
               sx={{
@@ -897,6 +916,7 @@ const PlaceOrderPage: React.FC = () => {
     'pay_now' | 'pay_at_delivery' | 'pay_at_pickup'
   >('pay_now');
   const [pickupAtStore, setPickupAtStore] = useState(false);
+  const [eatIn, setEatIn] = useState(false);
   const [pickupChosenByUser, setPickupChosenByUser] = useState(false);
   const { trackSiteEvent } = useTrackSiteEvent();
   const [specialInstructions, setSpecialInstructions] = useState('');
@@ -1206,6 +1226,7 @@ const PlaceOrderPage: React.FC = () => {
   useEffect(() => {
     if (!isPickupEligible && pickupAtStore) {
       setPickupAtStore(false);
+      setEatIn(false);
     }
   }, [isPickupEligible, pickupAtStore]);
 
@@ -1572,9 +1593,10 @@ const PlaceOrderPage: React.FC = () => {
               : {}),
           },
         ],
-        ...(isPickupOrder
+              ...(isPickupOrder
           ? {
               fulfillment_method: 'pickup' as const,
+              ...(eatIn ? { eat_in: true } : {}),
               payment_timing: (itemCountrySupportsStripe
                 ? 'pay_now'
                 : 'pay_at_pickup') as const,
@@ -3279,6 +3301,17 @@ const PlaceOrderPage: React.FC = () => {
               pickupPayAtCheckout={isStripeStorePickup}
               pickupSelected={pickupAtStore}
               onPickupChange={handlePickupChange}
+              eatInAvailable={cookedFoodAsapOnly && isPickupEligible}
+              eatInSelected={eatIn}
+              onFoodServiceChange={(value) => {
+                if (value === 'delivery') {
+                  handlePickupChange(false);
+                  setEatIn(false);
+                  return;
+                }
+                handlePickupChange(true);
+                setEatIn(value === 'eat_in');
+              }}
               pickupLocationLabel={pickupLocationSummary || undefined}
               deliveryAddressMissing={deliveryAddressMissing}
               firstOrderBaseDeliveryDiscountAmount={
@@ -4139,6 +4172,17 @@ const PlaceOrderPage: React.FC = () => {
               pickupPayAtCheckout={isStripeStorePickup}
               pickupSelected={pickupAtStore}
               onPickupChange={handlePickupChange}
+              eatInAvailable={cookedFoodAsapOnly && isPickupEligible}
+              eatInSelected={eatIn}
+              onFoodServiceChange={(value) => {
+                if (value === 'delivery') {
+                  handlePickupChange(false);
+                  setEatIn(false);
+                  return;
+                }
+                handlePickupChange(true);
+                setEatIn(value === 'eat_in');
+              }}
               pickupLocationLabel={pickupLocationSummary || undefined}
               deliveryAddressMissing={deliveryAddressMissing}
               firstOrderBaseDeliveryDiscountAmount={

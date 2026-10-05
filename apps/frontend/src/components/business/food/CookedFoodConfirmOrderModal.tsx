@@ -24,6 +24,9 @@ import type { OrderData } from '../../../hooks/useOrderById';
 import type { FoodConfirmationStockUpdate } from '../../../types/food';
 import { isStorePayAfterConfirmOrder } from '../../../utils/cookedFoodOrder';
 import { PAY_AFTER_GOODS_UNPAID_CANCEL_MINUTES } from '../../../utils/payAfterConfirm';
+import { EatInIllustration } from '../../orders/EatInIllustration';
+import { TakeOutIllustration } from '../../orders/TakeOutIllustration';
+import { foodServiceStyle } from '../../../utils/cookedFoodOrder';
 import FoodOrderStockPrompt, { type FoodOrderLine } from './FoodOrderStockPrompt';
 import { CookedFoodReadyClockIllustration } from './CookedFoodReadyClockIllustration';
 import { CookedFoodWaitPaymentIllustration } from './CookedFoodWaitPaymentIllustration';
@@ -57,6 +60,7 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
   const [foodStockUpdates, setFoodStockUpdates] = useState<
     Record<string, FoodConfirmationStockUpdate>
   >({});
+  const [noTable, setNoTable] = useState(false);
 
   const foodLines: FoodOrderLine[] = useMemo(
     () =>
@@ -83,6 +87,7 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
     setCustomMinutes('');
     setError('');
     setFoodStockUpdates({});
+    setNoTable(false);
   }, [open, order?.id]);
 
   // Flagged-location goods: no ready-in prompt; explain pay-after + 45-min auto-cancel.
@@ -96,7 +101,7 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
     return parsed;
   }, [customMinutes, selectedMinutes]);
 
-  const handleConfirmReady = useCallback(async () => {
+  const handleConfirmReady = useCallback(async (eatInUnavailable = false) => {
     setError('');
     const readyInMinutes = storePayAfter ? undefined : resolveReadyMinutes();
     if (!storePayAfter && readyInMinutes == null) {
@@ -118,12 +123,14 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
       const payload: ConfirmOrderData = {
         orderId: order.id,
         ...(readyInMinutes != null ? { ready_in_minutes: readyInMinutes } : {}),
+        ...(eatInUnavailable ? { eat_in_unavailable: true } : {}),
       };
       const stockUpdates = Object.values(foodStockUpdates);
       if (stockUpdates.length > 0) {
         payload.food_stock_updates = stockUpdates;
       }
       const result = await onConfirm(payload);
+      if (eatInUnavailable) setNoTable(true);
       if (result?.pay_after_merchant_confirm) {
         setStep(2);
       } else {
@@ -143,7 +150,16 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
 
   const busy = loading || submitting;
   const isPickup = order.fulfillment_method === 'pickup';
+  const serviceStyle = foodServiceStyle(order);
   const readyMinutes = resolveReadyMinutes();
+  const serviceLabel =
+    serviceStyle === 'eat_in'
+      ? t('orders.eatIn.eatIn', 'Eat in')
+      : serviceStyle === 'take_out'
+        ? t('orders.eatIn.takeOut', 'Take out')
+        : isPickup
+          ? t('orders.cookedFood.pickup', 'Pickup')
+          : t('orders.cookedFood.delivery', 'Delivery');
 
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
@@ -153,9 +169,7 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
             number: order.order_number,
           })}
           {' · '}
-          {isPickup
-            ? t('orders.cookedFood.pickup', 'Pickup')
-            : t('orders.cookedFood.delivery', 'Delivery')}
+          {serviceLabel}
         </Typography>
         <Typography variant="h6">
           {storePayAfter
@@ -169,6 +183,11 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
       </DialogTitle>
 
       <DialogContent>
+        {serviceStyle && step === 1 ? (
+          <Stack alignItems="center" sx={{ mb: 1 }}>
+            {serviceStyle === 'eat_in' ? <EatInIllustration /> : <TakeOutIllustration />}
+          </Stack>
+        ) : null}
         {storePayAfter ? (
           step === 1 ? (
             <StoreConfirmStep error={error} />
@@ -189,7 +208,7 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
             onStockChange={setFoodStockUpdates}
           />
         ) : (
-          <WaitPaymentStep isPickup={isPickup} />
+          <WaitPaymentStep isPickup={isPickup} noTable={noTable} />
         )}
       </DialogContent>
 
@@ -200,7 +219,9 @@ const CookedFoodConfirmOrderModal: React.FC<CookedFoodConfirmOrderModalProps> = 
             readyMinutes={storePayAfter ? 0 : readyMinutes}
             plain={storePayAfter}
             onClose={onClose}
-            onConfirm={() => void handleConfirmReady()}
+            showNoTable={order.eat_in === true}
+            onNoTable={() => void handleConfirmReady(true)}
+            onConfirm={() => void handleConfirmReady(false)}
           />
         ) : (
           <WaitActions
@@ -354,7 +375,7 @@ function MinuteTile({
   );
 }
 
-function WaitPaymentStep({ isPickup }: { isPickup: boolean }) {
+function WaitPaymentStep({ isPickup, noTable = false }: { isPickup: boolean; noTable?: boolean }) {
   const { t } = useTranslation();
   const steps = [
     t('orders.cookedFood.waitStepSent', 'A Mobile Money request is on the client’s phone.'),
@@ -363,7 +384,15 @@ function WaitPaymentStep({ isPickup }: { isPickup: boolean }) {
   ];
   return (
     <Stack spacing={2}>
-      <CookedFoodWaitPaymentIllustration />
+      {noTable ? <TakeOutIllustration /> : <CookedFoodWaitPaymentIllustration />}
+      {noTable ? (
+        <Alert severity="info">
+          {t(
+            'orders.eatIn.noTableKitchen',
+            'There is no table. The customer was told. If they approve the payment, prepare this as take out.'
+          )}
+        </Alert>
+      ) : null}
       {steps.map((label, index) => (
         <WaitRow key={label} index={index + 1} label={label} />
       ))}
@@ -448,14 +477,18 @@ function ConfirmActions({
   busy,
   readyMinutes,
   plain,
+  showNoTable,
   onClose,
   onConfirm,
+  onNoTable,
 }: {
   busy: boolean;
   readyMinutes: number | null;
   plain?: boolean;
+  showNoTable?: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  onNoTable?: () => void;
 }) {
   const { t } = useTranslation();
   const label = plain
@@ -468,6 +501,11 @@ function ConfirmActions({
       <Button onClick={onClose} disabled={busy}>
         {t('common.back', 'Back')}
       </Button>
+      {showNoTable ? (
+        <Button onClick={onNoTable} disabled={busy || readyMinutes == null}>
+          {t('orders.eatIn.noTable', 'No table')}
+        </Button>
+      ) : null}
       <Button
         variant="contained"
         onClick={onConfirm}

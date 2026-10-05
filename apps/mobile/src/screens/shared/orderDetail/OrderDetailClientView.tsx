@@ -59,6 +59,7 @@ import {
   resolveOrderPhase,
 } from '../../../utils/orderPhase';
 import { OrderClientSummaryCard } from './OrderClientSummaryCard';
+import { EatInUnavailableNotice } from '../../../components/orders/EatInUnavailableNotice';
 import { ClientOrderJourneyCard } from '../../../components/client/ClientOrderJourneyCard';
 import {
   buildClientOrderViewModel,
@@ -646,6 +647,8 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       <ScrollView ref={scrollRef} contentContainerStyle={scrollPad} showsVerticalScrollIndicator={false}>
 
         {/* ── Timeline ─────────────────────────────────────────────────── */}
+        <EatInUnavailableNotice order={order} />
+
         <ClientOrderHeroCard
           order={order}
           locale={locale}

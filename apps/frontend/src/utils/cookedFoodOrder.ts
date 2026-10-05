@@ -1,7 +1,30 @@
 import { everyLineIsCookedFood } from '../constants/food';
 
+export type FoodServiceStyle = 'eat_in' | 'take_out';
+
+/** Cooked pickup is eat-in while the flag is set, otherwise take-out. */
+export function foodServiceStyle(order: {
+  is_cooked_food_pickup?: boolean | null;
+  eat_in?: boolean | null;
+}): FoodServiceStyle | null {
+  if (order.is_cooked_food_pickup !== true && order.eat_in !== true) return null;
+  return order.eat_in === true ? 'eat_in' : 'take_out';
+}
+
+/** Unpaid order whose kitchen said there is no table. */
+export function showEatInUnavailableNotice(order: {
+  eat_in?: boolean | null;
+  eat_in_unavailable?: boolean | null;
+  payment_status?: string | null;
+}): boolean {
+  if (order.eat_in !== true || order.eat_in_unavailable !== true) return false;
+  return order.payment_status !== 'paid' && order.payment_status !== 'authorized';
+}
+
 export type CookedFoodOrderLike = {
   is_cooked_food_pickup?: boolean | null;
+  eat_in?: boolean | null;
+  eat_in_unavailable?: boolean | null;
   fulfillment_method?: string | null;
   fulfillment_timing?: string | null;
   pay_after_merchant_confirm?: boolean | null;

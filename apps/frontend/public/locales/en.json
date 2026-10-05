@@ -5360,6 +5360,14 @@
     "title": "Order History"
   },
   "orders": {
+    "eatIn": {
+      "eatIn": "Eat in",
+      "takeOut": "Take out",
+      "hint": "You are asking for a table. The kitchen may not have one.",
+      "noTable": "No table",
+      "noTableKitchen": "There is no table. The customer was told. If they approve the payment, prepare this as take out.",
+      "noTableClient": "There is no table. Approve the payment request to take this order out, or cancel it."
+    },
     "cashReconciliationViewBanner": "Showing only orders pending cash reconciliation. Open an order to collect mobile payment and settle payouts.",
     "cashReconciliationClearFilter": "Show all orders",
     "noCashReconciliationOrders": "No orders are waiting for cash reconciliation right now.",

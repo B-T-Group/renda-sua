@@ -1,5 +1,7 @@
 import { type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { EatInIllustration } from '../illustrations/EatInIllustration';
+import { TakeOutIllustration } from '../illustrations/TakeOutIllustration';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text } from 'react-native-paper';
@@ -32,6 +34,10 @@ interface PlaceOrderFulfillmentChoiceProps {
   deliveryPriceHint?: string;
   /** Compact segmented control for sticky checkout bars. */
   compact?: boolean;
+  /** Cooked-food pickup: show Eat in and Take out pictures. Both stay pickup. */
+  eatInAvailable?: boolean;
+  eatIn?: boolean;
+  onEatInChange?: (eatIn: boolean) => void;
 }
 
 interface SegmentOption {
@@ -166,13 +172,16 @@ export function PlaceOrderFulfillmentChoice({
   deliveryPriceLoading = false,
   deliveryPriceHint,
   compact = true,
+  eatInAvailable = false,
+  eatIn = false,
+  onEatInChange,
 }: PlaceOrderFulfillmentChoiceProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const segments = buildSegments(t, {
     deliveryDisabled,
     deliveryHidden,
-    pickupAvailable,
+    pickupAvailable: eatInAvailable ? false : pickupAvailable,
     shippingAvailable,
     shippingDisabled,
   });
@@ -189,8 +198,8 @@ export function PlaceOrderFulfillmentChoice({
         )
       : null;
 
-  if (segments.length === 0) return null;
-  if (segments.length === 1) {
+  if (!eatInAvailable && segments.length === 0) return null;
+  if (!eatInAvailable && segments.length === 1) {
     const only = segments[0];
     return (
       <SingleMethodNote
@@ -219,6 +228,36 @@ export function PlaceOrderFulfillmentChoice({
         </Text>
       ) : null}
 
+      {eatInAvailable ? (
+        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          <FoodPictureChoice
+            label={t('orders.eatIn.eatIn', 'Eat in')}
+            hint={t(
+              'orders.eatIn.hint',
+              'You are asking for a table. The kitchen may not have one.'
+            )}
+            selected={value === 'pickup' && eatIn}
+            onPress={() => {
+              onChange('pickup');
+              onEatInChange?.(true);
+            }}
+          >
+            <EatInIllustration size={64} />
+          </FoodPictureChoice>
+          <FoodPictureChoice
+            label={t('orders.eatIn.takeOut', 'Take out')}
+            selected={value === 'pickup' && !eatIn}
+            onPress={() => {
+              onChange('pickup');
+              onEatInChange?.(false);
+            }}
+          >
+            <TakeOutIllustration size={64} />
+          </FoodPictureChoice>
+        </View>
+      ) : null}
+
+      {segments.length > 0 ? (
       <View
         style={[
           styles.segmentTrack,
@@ -281,6 +320,7 @@ export function PlaceOrderFulfillmentChoice({
           );
         })}
       </View>
+      ) : null}
 
       {showPickupContext ? (
         <ContextLine icon="map-marker-outline">{storeLine}</ContextLine>
@@ -296,6 +336,49 @@ export function PlaceOrderFulfillmentChoice({
         <Text style={[typography.caption, { color: colors.warning.main }]}>{helper}</Text>
       ) : null}
     </View>
+  );
+}
+
+function FoodPictureChoice({
+  label,
+  hint,
+  selected,
+  onPress,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  selected: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  const { colors, spacing, borderRadius, typography } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        gap: spacing.xs,
+        padding: spacing.sm,
+        borderRadius: borderRadius.md,
+        borderWidth: 2,
+        borderColor: selected ? colors.primary.main : colors.divider,
+        backgroundColor: selected ? colors.primary.main + '14' : colors.surface,
+      }}
+    >
+      {children}
+      <Text style={[typography.subtitle2, { fontWeight: '700', color: colors.text.primary }]}>
+        {label}
+      </Text>
+      {hint ? (
+        <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center' }]}>
+          {hint}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 

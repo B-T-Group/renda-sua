@@ -22,6 +22,8 @@ export interface CreateOrderPayload {
   items: CreateOrderLineItem[];
   special_instructions?: string;
   fulfillment_method?: 'delivery' | 'pickup' | 'shipping';
+  /** Cooked-food pickup only. Asks for a table. */
+  eat_in?: boolean;
   delivery_address_id?: string;
   /** Linked `user_mobile_payment_phones` row for MoMo checkout. */
   mobile_payment_phone_id?: string;

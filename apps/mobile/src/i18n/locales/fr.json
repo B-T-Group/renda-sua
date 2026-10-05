@@ -382,6 +382,14 @@
     }
   },
   "orders": {
+    "eatIn": {
+      "eatIn": "Sur place",
+      "takeOut": "À emporter",
+      "hint": "Vous demandez une table. La cuisine peut ne pas en avoir.",
+      "noTable": "Pas de table",
+      "noTableKitchen": "Il n'y a pas de table. Le client a été prévenu. S'il approuve le paiement, préparez la commande à emporter.",
+      "noTableClient": "Il n'y a pas de table. Approuvez la demande de paiement pour emporter, ou annulez la commande."
+    },
     "item": "article",
     "items": "articles",
     "earnings": "Vos gains",

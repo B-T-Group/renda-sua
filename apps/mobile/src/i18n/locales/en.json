@@ -390,6 +390,14 @@
     }
   },
   "orders": {
+    "eatIn": {
+      "eatIn": "Eat in",
+      "takeOut": "Take out",
+      "hint": "You are asking for a table. The kitchen may not have one.",
+      "noTable": "No table",
+      "noTableKitchen": "There is no table. The customer was told. If they approve the payment, prepare this as take out.",
+      "noTableClient": "There is no table. Approve the payment request to take this order out, or cancel it."
+    },
     "item": "item",
     "items": "items",
     "pickupLabel": "Pick up from",

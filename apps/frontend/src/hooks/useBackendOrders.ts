@@ -82,6 +82,8 @@ export interface ConfirmOrderData {
   ready_in_minutes?: number;
   /** Optional stock corrections for cooked-food lines on this order. */
   food_stock_updates?: FoodConfirmationStockUpdate[];
+  /** Kitchen has no table. The payment request is unchanged. */
+  eat_in_unavailable?: boolean;
 }
 
 export interface GetOrderRequest {

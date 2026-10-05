@@ -119,6 +119,30 @@ export class CookedFoodPickupFlowService {
     );
   }
 
+  async markEatInUnavailable(orderId: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation MarkEatInUnavailable($id: uuid!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: { eat_in_unavailable: true }
+        ) { id }
+      }`,
+      { id: orderId }
+    );
+  }
+
+  async clearEatIn(orderId: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation ClearEatIn($id: uuid!) {
+        update_orders_by_pk(
+          pk_columns: { id: $id }
+          _set: { eat_in: false }
+        ) { id }
+      }`,
+      { id: orderId }
+    );
+  }
+
   async clearEstimatedPrepMinutes(orderId: string): Promise<void> {
     await this.hasura.executeMutation(
       `mutation ClearEstimatedPrep($id: uuid!) {
