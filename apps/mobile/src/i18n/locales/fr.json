@@ -7074,7 +7074,12 @@
     },
     "restaurants": {
       "tab": "Restaurants",
+      "section": "Restaurants",
       "searchPlaceholder": "Rechercher un restaurant",
+      "more": "Plus",
+      "moreHint": "Tous les restaurants",
+      "moreA11y": "Voir tous les restaurants",
+      "backToDishes": "Retour aux plats",
       "dishCount": "{{count}} plats",
       "openMenu": "Ouvrir le menu de {{name}}",
       "loading": "Chargement des restaurants…",

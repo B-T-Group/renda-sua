@@ -37,10 +37,9 @@ export interface BrowseCatalogListHeaderProps {
   itemsLength: number;
   onListRefresh: () => void;
   foodOnly?: boolean;
-  /** Foods browse: restaurants (default) or the dish grid. */
-  foodsView?: 'restaurants' | 'dishes';
-  onFoodsViewChange?: (view: 'restaurants' | 'dishes') => void;
-  /** Hide dish filters when the Food tab is showing restaurants. */
+  /** Nearest restaurants, shown above the dish list. */
+  restaurantsCarousel?: React.ReactNode;
+  /** Hide dish filters when browsing every restaurant. */
   showDishTools?: boolean;
   restaurantsSlot?: React.ReactNode;
   /** Show Exports quick-pick (destination markets with export catalog). */
@@ -74,8 +73,7 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
   itemsLength,
   onListRefresh,
   foodOnly = false,
-  foodsView = 'restaurants',
-  onFoodsViewChange,
+  restaurantsCarousel,
   showDishTools = true,
   restaurantsSlot,
   showExportsChip = false,
@@ -104,22 +102,7 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
               onSeeAll={onSeeAllHomeOrders}
             />
           ) : null}
-          <View style={[styles.toolbar, { marginTop: spacing.sm }]}>
-            <Chip
-              mode={foodsView === 'restaurants' ? 'flat' : 'outlined'}
-              selected={foodsView === 'restaurants'}
-              onPress={() => onFoodsViewChange?.('restaurants')}
-            >
-              {t('foods.restaurants.tab', 'Restaurants')}
-            </Chip>
-            <Chip
-              mode={foodsView === 'dishes' ? 'flat' : 'outlined'}
-              selected={foodsView === 'dishes'}
-              onPress={() => onFoodsViewChange?.('dishes')}
-            >
-              {t('foods.dishes.tab', 'Dishes')}
-            </Chip>
-          </View>
+          {restaurantsCarousel}
         </View>
       ) : (
         <CatalogBrowseHero

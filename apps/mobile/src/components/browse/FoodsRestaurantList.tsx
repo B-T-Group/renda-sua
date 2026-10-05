@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -8,6 +8,9 @@ import { formatDistanceKm } from '../../utils/formatDistanceKm';
 import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
 import type { CatalogStore } from '../../types/stores';
 
+const CAROUSEL_WIDTH = 260;
+const CAROUSEL_HEIGHT = 152;
+
 type Props = {
   stores: CatalogStore[];
   loading: boolean;
@@ -16,6 +19,42 @@ type Props = {
   onPress: (businessLocationId: string) => void;
   onRetry: () => void;
 };
+
+type CarouselProps = {
+  stores: CatalogStore[];
+  loading: boolean;
+  onPress: (businessLocationId: string) => void;
+  onMore: () => void;
+};
+
+export function FoodsRestaurantCarousel({ stores, loading, onPress, onMore }: CarouselProps) {
+  const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
+  if (loading && stores.length === 0) {
+    return (
+      <ActivityIndicator color={colors.primary.main} style={{ marginVertical: spacing.md }} />
+    );
+  }
+  if (stores.length === 0) return null;
+  return (
+    <View style={{ marginTop: spacing.md }}>
+      <Text style={[typography.subtitle1, { color: colors.text.primary, marginBottom: spacing.sm }]}>
+        {t('foods.restaurants.section', 'Restaurants')}
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {stores.map((store) => (
+          <View
+            key={store.business_location_id}
+            style={{ width: CAROUSEL_WIDTH, height: CAROUSEL_HEIGHT, marginRight: 12 }}
+          >
+            <RestaurantRow store={store} onPress={onPress} borderRadius={12} fill />
+          </View>
+        ))}
+        <MoreRestaurantsTile onPress={onMore} />
+      </ScrollView>
+    </View>
+  );
+}
 
 export function FoodsRestaurantList({
   stores,
@@ -84,10 +123,12 @@ function RestaurantRow({
   store,
   onPress,
   borderRadius,
+  fill = false,
 }: {
   store: CatalogStore;
   onPress: (id: string) => void;
   borderRadius: number;
+  fill?: boolean;
 }) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
@@ -101,11 +142,13 @@ function RestaurantRow({
       onPress={() => onPress(store.business_location_id)}
       accessibilityRole="button"
       accessibilityLabel={t('foods.restaurants.openMenu', 'Open {{name}} menu', { name })}
+      style={fill ? styles.fill : undefined}
     >
       <View
         style={[
           styles.row,
           shadows.sm,
+          fill ? styles.fill : null,
           {
             padding: spacing.md,
             borderRadius,
@@ -124,7 +167,11 @@ function RestaurantRow({
           <StoreDefaultAvatar name={name} size={64} />
         )}
         <View style={styles.body}>
-          <Text variant="titleMedium" numberOfLines={2} style={{ fontWeight: '800', color: colors.text.primary }}>
+          <Text
+            variant="titleMedium"
+            numberOfLines={fill ? 1 : 2}
+            style={{ fontWeight: '800', color: colors.text.primary }}
+          >
             {name}
           </Text>
           {city ? (
@@ -150,6 +197,31 @@ function RestaurantRow({
   );
 }
 
+function MoreRestaurantsTile({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t('foods.restaurants.moreA11y', 'Browse all restaurants')}
+      style={[styles.more, { backgroundColor: colors.primaryTint }]}
+    >
+      <View style={styles.mark}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <View key={index} style={[styles.dot, { backgroundColor: colors.primary.main }]} />
+        ))}
+      </View>
+      <Text style={[styles.moreLabel, { color: colors.text.primary }]}>
+        {t('foods.restaurants.more', 'More')}
+      </Text>
+      <Text style={[styles.moreHint, { color: colors.text.secondary }]}>
+        {t('foods.restaurants.moreHint', 'All restaurants')}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
@@ -165,4 +237,17 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  fill: { flex: 1, height: '100%' },
+  more: {
+    width: CAROUSEL_WIDTH,
+    height: CAROUSEL_HEIGHT,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  moreLabel: { fontWeight: '800', marginTop: 8 },
+  moreHint: { marginTop: 2, fontSize: 12 },
+  mark: { width: 56, height: 56, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  dot: { width: 24, height: 24, borderRadius: 6 },
 });

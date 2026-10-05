@@ -7152,7 +7152,12 @@
     },
     "restaurants": {
       "tab": "Restaurants",
+      "section": "Restaurants",
       "searchPlaceholder": "Search restaurants",
+      "more": "More",
+      "moreHint": "All restaurants",
+      "moreA11y": "Browse all restaurants",
+      "backToDishes": "Back to dishes",
       "dishCount": "{{count}} dishes",
       "openMenu": "Open {{name}} menu",
       "loading": "Loading restaurants…",

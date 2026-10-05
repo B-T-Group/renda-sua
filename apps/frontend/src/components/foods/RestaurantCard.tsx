@@ -13,9 +13,11 @@ import { storeAvatarPalette } from '../../utils/storeAvatarPalette';
 
 type Props = {
   store: CatalogStore;
+  /** Stretch to the carousel tile so every card is the same height. */
+  fill?: boolean;
 };
 
-export default function RestaurantCard({ store }: Props) {
+export default function RestaurantCard({ store, fill = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const name = store.name?.trim() || t('stores.unnamed', 'Store');
@@ -29,13 +31,20 @@ export default function RestaurantCard({ store }: Props) {
   return (
     <ButtonBase
       onClick={openMenu}
-      sx={{ textAlign: 'left', borderRadius: 2, display: 'block', width: '100%' }}
+      sx={{
+        textAlign: 'left',
+        borderRadius: 2,
+        display: 'flex',
+        width: '100%',
+        height: fill ? '100%' : undefined,
+      }}
       aria-label={t('foods.restaurants.openMenu', 'Open {{name}} menu', { name })}
     >
       <Paper
         elevation={0}
         sx={{
           width: '100%',
+          height: fill ? '100%' : undefined,
           p: 2,
           border: 1,
           borderColor: alpha(palette.bg, 0.28),
@@ -43,6 +52,7 @@ export default function RestaurantCard({ store }: Props) {
           display: 'flex',
           gap: 1.5,
           alignItems: 'center',
+          boxSizing: 'border-box',
         }}
       >
         <RestaurantLogo store={store} name={name} />

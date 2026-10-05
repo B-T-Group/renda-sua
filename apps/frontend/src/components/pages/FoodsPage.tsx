@@ -29,6 +29,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import CatalogVariantPickerDialog from '../common/CatalogVariantPickerDialog';
 import DashboardItemCard from '../common/DashboardItemCard';
 import FoodsMenuHero from '../foods/FoodsMenuHero';
+import { RestaurantCarousel } from '../foods/RestaurantCarousel';
 import RestaurantCard from '../foods/RestaurantCard';
 import FoodsEmptyStateIllustration from '../illustrations/FoodsEmptyStateIllustration';
 import { MarketSelector } from '../market/MarketSelector';
@@ -75,12 +76,22 @@ const FoodsPage: React.FC = () => {
   const search = searchParams.get('q')?.trim() || undefined;
   const subcategory = searchParams.get('subcategory')?.trim() || undefined;
   const sort = (searchParams.get('sort') as InventorySortMode) || 'relevance';
-  const showingDishes = searchParams.get('view') === 'dishes';
+  const showingAllRestaurants = searchParams.get('view') === 'restaurants';
 
   const isClientUser =
     isAuthenticated && profile?.client !== null && profile?.client !== undefined;
   const browserGeo = usePublicBrowserGeo(true);
   const { subCategories } = useFoodSubCategories();
+
+  const {
+    stores: restaurantPreview,
+    loading: restaurantPreviewLoading,
+  } = useCatalogStores({
+    limit: 12,
+    anonymousOrigin: browserGeo,
+    foodOnly: true,
+    enabled: !showingAllRestaurants,
+  });
 
   const {
     stores,
@@ -91,7 +102,7 @@ const FoodsPage: React.FC = () => {
     search,
     anonymousOrigin: browserGeo,
     foodOnly: true,
-    enabled: !showingDishes,
+    enabled: showingAllRestaurants,
   });
 
   const {
@@ -101,7 +112,7 @@ const FoodsPage: React.FC = () => {
     error,
     pagination,
   } = useInventoryItems({
-    enabled: showingDishes,
+    enabled: !showingAllRestaurants,
     food_only: true,
     page,
     limit: PAGE_SIZE,
@@ -113,7 +124,7 @@ const FoodsPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [search, subcategory, sort, selectedMarket?.id, showingDishes]);
+  }, [search, subcategory, sort, selectedMarket?.id, showingAllRestaurants]);
 
   const updateParam = useCallback(
     (key: string, value?: string) => {
@@ -132,6 +143,16 @@ const FoodsPage: React.FC = () => {
     },
     [searchDraft, updateParam]
   );
+
+  const openAllRestaurants = useCallback(() => {
+    setSearchDraft('');
+    setSearchParams(new URLSearchParams({ view: 'restaurants' }), { replace: true });
+  }, [setSearchParams]);
+
+  const backToDishes = useCallback(() => {
+    setSearchDraft('');
+    setSearchParams(new URLSearchParams(), { replace: true });
+  }, [setSearchParams]);
 
   const variantFlow = useCatalogVariantFlow({
     onCartBuilt: (cartItem) => addToCart(cartItem),
@@ -182,9 +203,9 @@ const FoodsPage: React.FC = () => {
   }, [page, totalPages, loading, loadingMore]);
 
   const hasFilters = Boolean(search || subcategory);
-  const showEmptyState = showingDishes && !loading && inventoryItems.length === 0;
+  const showEmptyState = !showingAllRestaurants && !loading && inventoryItems.length === 0;
   const showRestaurantEmpty =
-    !showingDishes && !restaurantsLoading && stores.length === 0;
+    showingAllRestaurants && !restaurantsLoading && stores.length === 0;
 
   const sortChips = useMemo(
     () =>
@@ -227,9 +248,9 @@ const FoodsPage: React.FC = () => {
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
               placeholder={
-                showingDishes
-                  ? t('foods.searchPlaceholder', 'Search dishes')
-                  : t('foods.restaurants.searchPlaceholder', 'Search restaurants')
+                showingAllRestaurants
+                  ? t('foods.restaurants.searchPlaceholder', 'Search restaurants')
+                  : t('foods.searchPlaceholder', 'Search dishes')
               }
               InputProps={{
                 startAdornment: (
@@ -241,26 +262,18 @@ const FoodsPage: React.FC = () => {
             />
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {showingAllRestaurants ? (
             <Chip
-              label={t('foods.restaurants.tab', 'Restaurants')}
-              onClick={() => updateParam('view', undefined)}
-              color={!showingDishes ? 'primary' : 'default'}
-              variant={!showingDishes ? 'filled' : 'outlined'}
+              label={t('foods.restaurants.backToDishes', 'Back to dishes')}
+              onClick={backToDishes}
+              variant="outlined"
+              sx={{ alignSelf: 'flex-start' }}
             />
-            <Chip
-              label={t('foods.dishes.tab', 'Dishes')}
-              onClick={() => updateParam('view', 'dishes')}
-              color={showingDishes ? 'primary' : 'default'}
-              variant={showingDishes ? 'filled' : 'outlined'}
-            />
-          </Box>
-
-          {showingDishes ? (
+          ) : (
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{sortChips}</Box>
-          ) : null}
+          )}
 
-          {showingDishes && subCategories.length > 0 && (
+          {!showingAllRestaurants && subCategories.length > 0 && (
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Chip
                 label={t('foods.allDishes', 'All dishes')}
@@ -283,13 +296,28 @@ const FoodsPage: React.FC = () => {
           )}
         </Stack>
 
-        {(showingDishes ? error : restaurantsError) && (
+        {(showingAllRestaurants ? restaurantsError : error) && (
           <Alert severity="error" sx={{ mb: 2 }}>
-            {showingDishes ? error : restaurantsError}
+            {showingAllRestaurants ? restaurantsError : error}
           </Alert>
         )}
 
-        {!showingDishes ? (
+        {!showingAllRestaurants && !restaurantPreviewLoading ? (
+          <RestaurantCarousel stores={restaurantPreview} onMore={openAllRestaurants} />
+        ) : null}
+        {!showingAllRestaurants && restaurantPreviewLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : null}
+
+        {!showingAllRestaurants ? (
+          <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>
+            {t('foods.catalogTitle', 'Available dishes')}
+          </Typography>
+        ) : null}
+
+        {showingAllRestaurants ? (
           restaurantsLoading && stores.length === 0 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
               <CircularProgress />

@@ -894,3 +894,45 @@ describe('InventoryItemsService pay-after storefront badge', () => {
   });
 });
 
+describe('InventoryItemsService store distance region', () => {
+  function service() {
+    return new InventoryItemsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+  }
+
+  const origin = { lat: 4.05, lng: 9.7 };
+  const store = {
+    country: 'CM',
+    state: 'Littoral',
+    latitude: 4.051,
+    longitude: 9.708,
+  };
+
+  it('computes meters only when the shopper and store share country and state', () => {
+    const meters = (service() as any).metersWithinRegion(
+      origin,
+      { country: 'CM', state: 'Littoral Region' },
+      store
+    );
+    expect(meters).toEqual(expect.any(Number));
+    expect(meters).toBeGreaterThan(0);
+  });
+
+  it('returns no distance for a different state or country', () => {
+    const api = service() as any;
+    expect(
+      api.metersWithinRegion(origin, { country: 'CM', state: 'Centre' }, store)
+    ).toBeNull();
+    expect(
+      api.metersWithinRegion(origin, { country: 'CA', state: 'Ontario' }, store)
+    ).toBeNull();
+  });
+});
+
