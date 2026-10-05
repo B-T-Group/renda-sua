@@ -304,4 +304,39 @@ describe('PaymentScheduleConsentService', () => {
       { id: 'a2', scheduleName: 'Payment schedule' },
     ]);
   });
+
+  it('strips search wildcards and clamps the progress page', async () => {
+    const executeQuery = jest.fn(async () => ({
+      payment_schedule_assignments: [],
+      payment_schedule_assignments_aggregate: { aggregate: { count: 3 } },
+    }));
+    const result = await service({
+      hasura: { executeQuery, executeMutation: jest.fn() },
+    }).listProgress({ search: ' a_b%c\\ ', limit: 999, offset: -4 });
+
+    expect(result).toEqual({ items: [], total: 3, limit: 50, offset: 0 });
+    const where = executeQuery.mock.calls[0][1].where;
+    expect(where.decision).toEqual({ _eq: 'accepted' });
+    expect(where.status).toEqual({ _in: ['active', 'paused'] });
+    expect(where.agent.user._or).toEqual([
+      { first_name: { _ilike: '%abc%' } },
+      { last_name: { _ilike: '%abc%' } },
+      { email: { _ilike: '%abc%' } },
+    ]);
+    expect(String(executeQuery.mock.calls[0][0])).toContain('$limit: Int!');
+  });
+
+  it('uses a 20-row page and skips the name filter when search is blank', async () => {
+    const executeQuery = jest.fn(async () => ({
+      payment_schedule_assignments: [],
+      payment_schedule_assignments_aggregate: { aggregate: { count: 0 } },
+    }));
+    const result = await service({
+      hasura: { executeQuery, executeMutation: jest.fn() },
+    }).listProgress({ search: '   ', limit: 0 });
+
+    expect(result.limit).toBe(20);
+    expect(result.offset).toBe(0);
+    expect(executeQuery.mock.calls[0][1].where.agent).toBeUndefined();
+  });
 });
