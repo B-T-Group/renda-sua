@@ -69,6 +69,8 @@ import {
 import { PdfService } from '../pdf/pdf.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
+import { SiteEventsService } from '../site-events/site-events.service';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
@@ -600,6 +602,7 @@ export class OrdersService {
     private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
     private readonly variantInventory: VariantInventoryService,
+    private readonly siteEventsService: SiteEventsService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -2588,7 +2591,11 @@ export class OrdersService {
       );
   }
 
-  async claimOrder(request: GetOrderRequest, platformHeader?: string) {
+  async claimOrder(
+    request: GetOrderRequest,
+    platformHeader?: string,
+    fundsCheckSource?: 'claim' | 'offer_accept'
+  ) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -2628,6 +2635,13 @@ export class OrdersService {
       );
     }
     const holdAmount = await this.resolveOrderHoldAmount(order);
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
+    const rail = order.business_id
+      ? await this.paymentRoutingService.resolveRailForBusiness(
+          order.business_id
+        )
+      : ('mobile_money' as const);
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
       order.currency
@@ -2641,13 +2655,32 @@ export class OrdersService {
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // balance checks
     if (holdAmount > 0) {
-      if (Number(agentAccount.available_balance) < 0) {
+      const availableBalance = Number(agentAccount.available_balance);
+      // Emit funds check (Phase 0 #453)
+      this.emitClaimFundsCheck({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: agent.id,
+        city: (order as any).business_location?.address?.city ?? null,
+        state: (order as any).business_location?.address?.state ?? null,
+        subtotal: order.subtotal,
+        currency: order.currency,
+        holdPercentage,
+        holdAmount,
+        availableBalance,
+        needsTopUp: availableBalance < holdAmount,
+        hasEnoughFunds: availableBalance >= holdAmount,
+        rail,
+        source: fundsCheckSource || 'claim',
+      });
+
+      if (availableBalance < 0) {
         throw new HttpException(
           `Account balance is negative. Please top up your account before claiming orders. Current balance: ${agentAccount.available_balance} ${order.currency}`,
           HttpStatus.FORBIDDEN
         );
       }
-      if (Number(agentAccount.available_balance) < holdAmount)
+      if (availableBalance < holdAmount)
         throw new HttpException(
           `Insufficient balance. Required: ${holdAmount} ${order.currency}, Available: ${agentAccount.available_balance} ${order.currency}`,
           HttpStatus.FORBIDDEN
@@ -2774,7 +2807,7 @@ export class OrdersService {
     }
 
     try {
-      return await this.claimOrder(request, platformHeader);
+      return await this.claimOrder(request, platformHeader, 'offer_accept');
     } catch (error: any) {
       const responseError =
         error instanceof HttpException
@@ -2866,6 +2899,13 @@ export class OrdersService {
     // Calculate required hold amount (0 for internal agents and
     // Stripe-enabled orders, which do not require a caution/hold)
     const holdAmount = await this.resolveOrderHoldAmount(order);
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
+    const rail = order.business_id
+      ? await this.paymentRoutingService.resolveRailForBusiness(
+          order.business_id
+        )
+      : ('mobile_money' as const);
 
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
@@ -2901,6 +2941,31 @@ export class OrdersService {
       };
     }
 
+    // Get or create agent account
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      user.id,
+      order.currency
+    );
+    const availableBalance = Number(agentAccount?.available_balance ?? 0);
+
+    // Emit funds check (Phase 0 #453)
+    this.emitClaimFundsCheck({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      agentId: agent.id,
+      city: (order as any).business_location?.address?.city ?? null,
+      state: (order as any).business_location?.address?.state ?? null,
+      subtotal: order.subtotal,
+      currency: order.currency,
+      holdPercentage,
+      holdAmount,
+      availableBalance,
+      needsTopUp: true,
+      hasEnoughFunds: false,
+      rail,
+      source: 'claim_topup',
+    });
+
     // Block if another agent has a pending claim (claim-with-topup) on this order
     const hasPendingClaim =
       await this.mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber(
@@ -2916,12 +2981,6 @@ export class OrdersService {
         HttpStatus.CONFLICT
       );
     }
-
-    // Get or create agent account
-    const agentAccount = await this.hasuraSystemService.getAccount(
-      user.id,
-      order.currency
-    );
 
     // Get payment provider from the order item country (not the agent's phone).
     const phoneNumber = await this.resolveClaimTopupPhone(
@@ -3019,6 +3078,17 @@ export class OrdersService {
       this.logger.log(
         `Payment initiated successfully for claim order ${order.order_number}, transaction ID: ${paymentTransaction.transactionId}`
       );
+
+      // Emit topup started event (Phase 0 #453)
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_started', {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: agent.id,
+        holdAmount,
+        transactionId: paymentTransaction.transactionId,
+        provider,
+        currency: order.currency,
+      });
 
       // Schedule payment timeout (wait-and-execute state machine)
       try {
@@ -3139,6 +3209,22 @@ export class OrdersService {
         error_code: 'CLAIM_REQUEST_CANCELLED',
       }
     );
+
+    // Fetch full transaction for event metadata (Phase 0 #453)
+    const fullTransaction = await this.mobilePaymentsDatabaseService.getTransactionById(
+      pendingClaimTransaction.id
+    );
+
+    // Emit topup cancelled event (Phase 0 #453)
+    emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_cancelled', {
+      orderId: order.id,
+      orderNumber: order.order_number,
+      agentId: agent.id,
+      holdAmount: fullTransaction?.amount ?? 0,
+      transactionId: pendingClaimTransaction.transaction_id,
+      provider: pendingClaimTransaction.provider,
+      currency: fullTransaction?.currency ?? order.currency,
+    });
 
     return {
       success: true,
@@ -7449,6 +7535,13 @@ export class OrdersService {
     }
 
     const holdAmount = await this.resolveOrderHoldAmount(order);
+    const holdPercentage =
+      await this.agentHoldService.getHoldPercentageForAgent();
+    const rail = order.business_id
+      ? await this.paymentRoutingService.resolveRailForBusiness(
+          order.business_id
+        )
+      : ('mobile_money' as const);
 
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
@@ -7497,6 +7590,31 @@ export class OrdersService {
       );
     }
 
+    const agentAccount = await this.hasuraSystemService.getAccount(
+      user.id,
+      order.currency
+    );
+    const availableBalance = Number(agentAccount?.available_balance ?? 0);
+    const hasEnoughFundsForHold = availableBalance >= holdAmount;
+
+    // Emit funds check event (Phase 0 #453)
+    this.emitClaimFundsCheck({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      agentId: agent.id,
+      city: (order as any).business_location?.address?.city ?? null,
+      state: (order as any).business_location?.address?.state ?? null,
+      subtotal: order.subtotal,
+      currency: order.currency,
+      holdPercentage,
+      holdAmount,
+      availableBalance,
+      needsTopUp: !hasEnoughFundsForHold && holdAmount > 0,
+      hasEnoughFunds: hasEnoughFundsForHold,
+      rail,
+      source: 'availability',
+    });
+
     if (holdAmount <= 0) {
       return {
         success: true,
@@ -7507,13 +7625,6 @@ export class OrdersService {
         message: 'Order is open and available to claim',
       };
     }
-
-    const agentAccount = await this.hasuraSystemService.getAccount(
-      user.id,
-      order.currency
-    );
-    const availableBalance = Number(agentAccount?.available_balance ?? 0);
-    const hasEnoughFundsForHold = availableBalance >= holdAmount;
 
     return {
       success: true,
@@ -10517,6 +10628,22 @@ export class OrdersService {
       freshAssignment: slot === 'assigned',
     });
     if (slot === 'assigned') await this.recordNewClaimAssignment(ctx);
+
+    // Emit topup succeeded event (Phase 0 #453)
+    const durationMs = transaction.updated_at && transaction.created_at
+      ? new Date(transaction.updated_at).getTime() - new Date(transaction.created_at).getTime()
+      : undefined;
+    emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_succeeded', {
+      orderId: ctx.order.id,
+      orderNumber: ctx.order.order_number,
+      agentId: ctx.agentId,
+      holdAmount: transaction.amount,
+      transactionId: transaction.transaction_id,
+      provider: transaction.provider,
+      currency: transaction.currency,
+      ...(durationMs !== undefined ? { durationMs } : {}),
+    });
+
     this.logger.log(this.claimPaymentDoneMessage(ctx.order.order_number, transaction));
   }
 
@@ -11053,6 +11180,86 @@ export class OrdersService {
     const holdPercentage =
       await this.agentHoldService.getHoldPercentageForAgent();
     return (order.subtotal * holdPercentage) / 100;
+  }
+
+  /**
+   * Emit agent.claim_funds_check event (Phase 0 #453).
+   * Fire-and-forget; failures are caught and logged.
+   */
+  private emitClaimFundsCheck(params: {
+    orderId: string;
+    orderNumber: string;
+    agentId: string;
+    city: string | null;
+    state: string | null;
+    subtotal: number;
+    currency: string;
+    holdPercentage: number;
+    holdAmount: number;
+    availableBalance: number;
+    needsTopUp: boolean;
+    hasEnoughFunds: boolean;
+    rail: 'mobile_money' | 'stripe';
+    source: 'availability' | 'claim' | 'claim_topup' | 'offer_accept';
+  }): void {
+    const shortfall = Math.max(0, params.holdAmount - params.availableBalance);
+    emitServerSiteEvent(this.siteEventsService, 'agent.claim_funds_check', {
+      orderId: params.orderId,
+      orderNumber: params.orderNumber,
+      agentId: params.agentId,
+      city: params.city,
+      state: params.state,
+      subtotal: params.subtotal,
+      currency: params.currency,
+      holdPercentage: params.holdPercentage,
+      holdAmount: params.holdAmount,
+      availableBalance: params.availableBalance,
+      needsTopUp: params.needsTopUp,
+      hasEnoughFunds: params.hasEnoughFunds,
+      shortfall,
+      rail: params.rail,
+      source: params.source,
+    });
+  }
+
+  /**
+   * Emit agent.claim_topup_failed event (Phase 0 #453).
+   * Public so payment callback handler can call it.
+   */
+  async emitClaimTopupFailed(
+    transaction: MobilePaymentTransaction,
+    reason: string
+  ): Promise<void> {
+    try {
+      const order = await this.getOrderForProcessingByNumber(
+        transaction.entity_id || transaction.reference
+      );
+      if (!transaction.account_id) {
+        this.logger.warn(`Cannot emit claim_topup_failed: missing account_id for transaction ${transaction.id}`);
+        return;
+      }
+      const account = await this.hasuraSystemService.getAccountById(
+        transaction.account_id
+      );
+      if (!account) return;
+      const user = await this.hasuraSystemService.getUserById(account.user_id);
+      if (!user || !userHasPersona(user, 'agent') || !user.agent) return;
+
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: user.agent.id,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        reason,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not emit claim_topup_failed for transaction ${transaction.id}: ${error?.message}`
+      );
+    }
   }
 
   private createClaimAvailabilityFailure(

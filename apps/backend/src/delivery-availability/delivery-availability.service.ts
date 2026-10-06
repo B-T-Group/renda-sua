@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { SiteEventsService } from '../site-events/site-events.service';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import {
   DELIVERY_AVAILABILITY_RULES,
   DeliveryAvailabilityContext,
@@ -23,7 +25,9 @@ export class DeliveryAvailabilityService {
   constructor(
     @Optional()
     @Inject(DELIVERY_AVAILABILITY_RULES)
-    rules: DeliveryAvailabilityRule[] | null
+    rules: DeliveryAvailabilityRule[] | null,
+    @Optional()
+    private readonly siteEventsService?: SiteEventsService
   ) {
     this.rules = [...(rules ?? [])].sort((a, b) => a.order - b.order);
   }
@@ -91,19 +95,40 @@ export class DeliveryAvailabilityService {
     result: DeliveryAvailabilityResult,
     durationMs: number
   ): void {
-    this.logger.log(
-      JSON.stringify({
-        event: 'delivery_availability.evaluated',
-        businessId: ctx.businessId,
-        sellerCountry: ctx.sellerCountry,
-        sellerState: ctx.sellerState,
-        clientId: ctx.clientId ?? null,
-        available: result.available,
-        reason: result.reason,
-        ruleId: result.ruleId,
-        metadata: result.metadata ?? null,
-        durationMs,
-      })
-    );
+    const logPayload = {
+      event: 'delivery_availability.evaluated',
+      businessId: ctx.businessId,
+      businessLocationId: ctx.businessLocationId ?? null,
+      sellerCountry: ctx.sellerCountry,
+      sellerState: ctx.sellerState,
+      clientId: ctx.clientId ?? null,
+      available: result.available,
+      reason: result.reason,
+      ruleId: result.ruleId,
+      metadata: result.metadata ?? null,
+      durationMs,
+    };
+    this.logger.log(JSON.stringify(logPayload));
+
+    // Emit durable site_event (Phase 0 #453)
+    if (this.siteEventsService) {
+      emitServerSiteEvent(
+        this.siteEventsService,
+        'checkout.delivery_availability',
+        {
+          businessId: ctx.businessId,
+          businessLocationId: ctx.businessLocationId ?? null,
+          sellerCountry: ctx.sellerCountry,
+          sellerState: ctx.sellerState,
+          clientId: ctx.clientId ?? null,
+          available: result.available,
+          reason: result.reason,
+          ruleId: result.ruleId,
+          eligibleAgentCount: result.metadata?.eligibleAgentCount ?? null,
+          radiusKm: result.metadata?.radiusKm ?? null,
+          durationMs,
+        }
+      );
+    }
   }
 }

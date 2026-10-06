@@ -97,6 +97,13 @@ export const SITE_EVENT_TYPES_V1 = [
   'auth_session_observed',
   'catalog.module.impression',
   'catalog.module.click',
+  // Agent claim friction & delivery availability (Phase 0 #453)
+  'agent.claim_funds_check',
+  'agent.claim_topup_started',
+  'agent.claim_topup_succeeded',
+  'agent.claim_topup_failed',
+  'agent.claim_topup_cancelled',
+  'checkout.delivery_availability',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];
