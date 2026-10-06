@@ -1,6 +1,8 @@
 import { brandTokens } from '../../theme/brandTokens';
 import {
   RENDA_COLORS,
+  RendaEngine,
+  RendaNodes,
   RING_WEDGES,
   SWEEP_WEDGES,
   eyeShapeFor,
@@ -78,5 +80,57 @@ describe('colours (tokens only, no gold or orange)', () => {
       expect(b).toBeGreaterThanOrEqual(g);
     }
     expect(RING_WEDGES).toHaveLength(120);
+  });
+});
+
+describe('RendaEngine blinks', () => {
+  const el = () => {
+    const attrs: Record<string, string> = {};
+    return {
+      attrs,
+      setAttribute: (k: string, v: string) => {
+        attrs[k] = v;
+      },
+    };
+  };
+  function fakeNodes() {
+    const open = el();
+    return {
+      open,
+      nodes: {
+        body: el(),
+        halo: el(),
+        bloom: el(),
+        bloomRot: el(),
+        ringRot: el(),
+        echoes: el(),
+        echoG: [el(), el(), el()],
+        sweep: el(),
+        sweepRot: el(),
+        orbits: el(),
+        orbitRot: [el(), el()],
+        eyes: [{ g: el(), open, arc: el() }],
+        sparks: [],
+        ripples: [],
+      } as unknown as RendaNodes,
+    };
+  }
+
+  it('a character that mounts already Attentive still blinks (first blink within ~1 s)', () => {
+    const { nodes, open } = fakeNodes();
+    const engine = new RendaEngine(
+      nodes,
+      { size: 160, eyes: 'expressive', surface: 'hero' },
+      'attentive',
+      () => 0
+    );
+    expect(engine.isQuiescent(false, 0)).toBe(false);
+    let minScaleY = 1;
+    for (let t = 0; t < 1000; t += 16) {
+      engine.step(16, false, 0);
+      const m = /scale\(1 ([\d.]+)\)/.exec(open.attrs.transform || '');
+      if (m) minScaleY = Math.min(minScaleY, Number(m[1]));
+    }
+    expect(minScaleY).toBeLessThan(0.5);
   });
 });

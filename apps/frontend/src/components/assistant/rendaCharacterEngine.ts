@@ -330,6 +330,9 @@ export class RendaEngine {
     // 4 px diamonds, never smaller than 6 units at hero sizes.
     this.sparkD = Math.max((4 / o.size) * 100, 6);
     this.applyInstant();
+    // A character that mounts already Attentive/Listening (e.g. the hero after
+    // "Start over" with the composer focused) still blinks.
+    if (this.cfg().blink) this.blinkAt = 700 + this.random() * 300;
   }
 
   private cfg(state = this.state): StateConfig {
