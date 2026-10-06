@@ -7,6 +7,56 @@ from .base import HasuraClient, HasuraClientConfig
 from .logging import log_info, log_error
 
 
+def get_order_hold(
+    order_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str
+) -> Optional[OrderHold]:
+    """
+    Return the order's existing hold row, or None when the order has none.
+
+    Never creates a row. Raises on Hasura errors so callers fail closed instead of
+    treating an outage as "nothing held".
+    """
+    query = """
+    query GetExistingOrderHold($orderId: uuid!) {
+      order_holds(where: { order_id: { _eq: $orderId } }, limit: 1) {
+        id
+        order_id
+        client_id
+        agent_id
+        client_hold_amount
+        agent_hold_amount
+        delivery_fees
+        currency
+        status
+        created_at
+        updated_at
+      }
+    }
+    """
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    data = client.execute(query, {"orderId": order_id})
+    rows = data.get("order_holds") or []
+    if not rows:
+        log_info("No order hold row for order", order_id=order_id)
+        return None
+    hold_data = rows[0]
+    return OrderHold.model_construct(
+        id=hold_data["id"],
+        order_id=hold_data["order_id"],
+        client_id=hold_data["client_id"],
+        agent_id=hold_data.get("agent_id"),
+        client_hold_amount=float(hold_data.get("client_hold_amount") or 0),
+        agent_hold_amount=float(hold_data.get("agent_hold_amount") or 0),
+        delivery_fees=float(hold_data.get("delivery_fees") or 0),
+        currency=hold_data["currency"],
+        status=hold_data["status"],
+        created_at=parse_datetime(hold_data["created_at"]),
+        updated_at=parse_datetime(hold_data["updated_at"]),
+    )
+
+
 def get_or_create_order_hold(
     order_id: str,
     order: Order,

@@ -25,6 +25,8 @@ class Order(BaseModel):
     delivery_address_id: str
     delivery_time_window: Optional[DeliveryTimeWindow] | None = None
     delivery_time_window_id: Optional[str] | None = None
+    deposit_amount: Optional[float] | None = None
+    deposit_status: Optional[str] | None = None
     estimated_delivery_time: Optional[datetime.datetime] | None = None
     fulfillment_method: Optional[str] | None = None
     id: str

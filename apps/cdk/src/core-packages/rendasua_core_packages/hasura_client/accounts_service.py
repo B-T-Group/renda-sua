@@ -286,10 +286,17 @@ def register_account_transaction(
     memo: str,
     reference_id: str,
     hasura_endpoint: str,
-    hasura_admin_secret: str
+    hasura_admin_secret: str,
+    idempotency_key: Optional[str] = None,
 ) -> Optional[str]:
     """
     Register an account transaction and update account balances.
+
+    When ``idempotency_key`` is set the move happens at most once: if a row with
+    that key already exists its id is returned and balances are left alone. The
+    row insert and the balance ``_inc`` run in one Hasura mutation request (one
+    Postgres transaction), and the key is UNIQUE on account_transactions, so a
+    racing duplicate aborts both and moves nothing.
     
     Args:
         account_id: Account ID
@@ -319,6 +326,17 @@ def register_account_transaction(
     log_info("Fetching account for transaction", account_id=account_id, transaction_type=transaction_type)
     
     try:
+        if idempotency_key:
+            existing_id = _find_transaction_by_idempotency_key(client, idempotency_key)
+            if existing_id:
+                log_info(
+                    "Transaction already registered for idempotency key; skipping",
+                    account_id=account_id,
+                    idempotency_key=idempotency_key,
+                    transaction_id=existing_id,
+                )
+                return existing_id
+
         data = client.execute(query, {"accountId": account_id})
         account_data = data.get("accounts_by_pk")
         
@@ -345,10 +363,7 @@ def register_account_transaction(
         # Calculate new balances (handle None values by defaulting to 0)
         current_available = account.available_balance or 0
         current_withheld = account.withheld_balance or 0
-        new_available = current_available + balance_update.available
-        new_withheld = current_withheld + balance_update.withheld
-        new_total = new_available + new_withheld
-        
+
         # Validate sufficient funds before processing transaction
         # For hold transactions, check available balance
         if transaction_type == "hold":
@@ -394,73 +409,112 @@ def register_account_transaction(
                 )
                 return None
         
-        # Insert transaction
+        # Insert the ledger row and apply the balance delta in ONE GraphQL request.
+        # Hasura runs every root field of a mutation request in a single Postgres
+        # transaction, so either both land or neither does:
+        #   * a duplicate idempotency key (UNIQUE) aborts the insert and the balance
+        #     move together, so a retried or concurrent duplicate never moves money;
+        #   * a failed balance update never leaves a keyed row behind that would make
+        #     every retry a silent no-op;
+        #   * `_inc` is applied by Postgres to the current row, so a concurrent backend
+        #     move on the same account (the backend also uses `_inc`) is never
+        #     overwritten by this snapshot (the old `_set` of absolute balances was a
+        #     lost update).
+        # The funds check above is still a snapshot check, as before.
         mutation = """
-        mutation InsertTransaction(
+        mutation RegisterLedgerMove(
           $accountId: uuid!,
           $amount: numeric!,
           $transactionType: transaction_type_enum!,
           $memo: String,
-          $referenceId: uuid
+          $referenceId: uuid,
+          $idempotencyKey: String,
+          $inc: accounts_inc_input!
         ) {
           insert_account_transactions_one(object: {
             account_id: $accountId,
             amount: $amount,
             transaction_type: $transactionType,
             memo: $memo,
-            reference_id: $referenceId
+            reference_id: $referenceId,
+            idempotency_key: $idempotencyKey
           }) {
             id
           }
-        }
-        """
-        
-        transaction_data = client.execute(
-            mutation,
-            {
-                "accountId": account_id,
-                "amount": amount,
-                "transactionType": transaction_type.lower(),
-                "memo": memo,
-                "referenceId": reference_id,
-            },
-        )
-        
-        transaction_id = transaction_data.get("insert_account_transactions_one", {}).get("id")
-        
-        if not transaction_id:
-            log_error("Failed to insert transaction", account_id=account_id)
-            return None
-        
-        # Update account balances
-        update_mutation = """
-        mutation UpdateAccountBalances(
-          $accountId: uuid!,
-          $availableBalance: numeric!,
-          $withheldBalance: numeric!
-        ) {
-          update_accounts_by_pk(
-            pk_columns: { id: $accountId },
-            _set: {
-              available_balance: $availableBalance,
-              withheld_balance: $withheldBalance,
-              updated_at: "now()"
-            }
+          update_accounts(
+            where: { id: { _eq: $accountId } },
+            _inc: $inc,
+            _set: { updated_at: "now()" }
           ) {
-            id
+            affected_rows
+            returning {
+              available_balance
+              withheld_balance
+            }
           }
         }
         """
-        
-        client.execute(
-            update_mutation,
-            {
-                "accountId": account_id,
-                "availableBalance": new_available,
-                "withheldBalance": new_withheld,
-            },
-        )
-        
+
+        try:
+            transaction_data = client.execute(
+                mutation,
+                {
+                    "accountId": account_id,
+                    "amount": amount,
+                    "transactionType": transaction_type.lower(),
+                    "memo": memo,
+                    "referenceId": reference_id,
+                    "idempotencyKey": idempotency_key,
+                    "inc": {
+                        "available_balance": balance_update.available,
+                        "withheld_balance": balance_update.withheld,
+                    },
+                },
+            )
+        except Exception:
+            # A concurrent run inserted the same key first: the whole request rolled
+            # back, so nothing moved. Report the winner's row.
+            if idempotency_key:
+                existing_id = _find_transaction_by_idempotency_key(client, idempotency_key)
+                if existing_id:
+                    log_info(
+                        "Idempotency key won by a concurrent insert; skipping",
+                        account_id=account_id,
+                        idempotency_key=idempotency_key,
+                        transaction_id=existing_id,
+                    )
+                    return existing_id
+            raise
+
+        transaction_id = (transaction_data.get("insert_account_transactions_one") or {}).get("id")
+        update_result = transaction_data.get("update_accounts") or {}
+
+        if not transaction_id or not update_result.get("affected_rows"):
+            # Cannot happen inside one transaction unless Hasura returned an odd
+            # payload; surface it loudly rather than report success.
+            log_error(
+                "ledger_move_incomplete",
+                account_id=account_id,
+                transaction_id=transaction_id,
+                affected_rows=update_result.get("affected_rows"),
+                idempotency_key=idempotency_key,
+            )
+            return None
+
+        returned = (update_result.get("returning") or [{}])[0]
+        new_available = float(returned.get("available_balance") or 0)
+        new_withheld = float(returned.get("withheld_balance") or 0)
+        if new_available < 0 or new_withheld < 0:
+            log_error(
+                "ledger_balance_negative_after_move",
+                account_id=account_id,
+                transaction_id=transaction_id,
+                transaction_type=transaction_type,
+                amount=amount,
+                available_balance=new_available,
+                withheld_balance=new_withheld,
+            )
+
         log_info("Transaction registered successfully", account_id=account_id, transaction_id=transaction_id, transaction_type=transaction_type)
         return transaction_id
         
@@ -469,3 +523,67 @@ def register_account_transaction(
         return None
 
 
+
+
+def _find_transaction_by_idempotency_key(client: HasuraClient, idempotency_key: str) -> Optional[str]:
+    data = client.execute(
+        """
+        query TransactionByIdempotencyKey($key: String!) {
+          account_transactions(where: { idempotency_key: { _eq: $key } }, limit: 1) {
+            id
+          }
+        }
+        """,
+        {"key": idempotency_key},
+    )
+    rows = data.get("account_transactions") or []
+    return rows[0]["id"] if rows else None
+
+
+def get_reference_held_amount(
+    account_id: str,
+    reference_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    exclude_release_key_prefix: Optional[str] = None,
+) -> float:
+    """
+    Amount still withheld on ``account_id`` for ledger rows referencing ``reference_id``
+    (sum of holds minus sum of releases).
+
+    Releases whose idempotency key starts with ``exclude_release_key_prefix`` are not
+    subtracted, so a caller retrying its own keyed releases sees the amount that was
+    held before its first attempt. Raises on Hasura errors so callers fail closed.
+    """
+    release_filter = '{ transaction_type: { _eq: "release" } }'
+    variables: dict = {"accountId": account_id, "referenceId": reference_id}
+    if exclude_release_key_prefix:
+        release_filter = (
+            '{ transaction_type: { _eq: "release" }, _or: ['
+            "{ idempotency_key: { _is_null: true } }, "
+            "{ idempotency_key: { _nlike: $excludePattern } }] }"
+        )
+        variables["excludePattern"] = f"{exclude_release_key_prefix}%"
+    pattern_var = ", $excludePattern: String!" if exclude_release_key_prefix else ""
+    query = f"""
+    query ReferenceHeldAmount($accountId: uuid!, $referenceId: uuid!{pattern_var}) {{
+      holds: account_transactions_aggregate(where: {{
+        account_id: {{ _eq: $accountId }},
+        reference_id: {{ _eq: $referenceId }},
+        transaction_type: {{ _eq: "hold" }}
+      }}) {{ aggregate {{ sum {{ amount }} }} }}
+      releases: account_transactions_aggregate(where: {{
+        account_id: {{ _eq: $accountId }},
+        reference_id: {{ _eq: $referenceId }},
+        _and: [{release_filter}]
+      }}) {{ aggregate {{ sum {{ amount }} }} }}
+    }}
+    """
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    data = client.execute(query, variables)
+
+    def _sum(alias: str) -> float:
+        agg = ((data.get(alias) or {}).get("aggregate") or {}).get("sum") or {}
+        return float(agg.get("amount") or 0)
+
+    return max(0.0, round(_sum("holds") - _sum("releases"), 2))

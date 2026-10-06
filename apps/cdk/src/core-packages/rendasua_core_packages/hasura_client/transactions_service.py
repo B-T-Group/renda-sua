@@ -15,10 +15,14 @@ def register_cancellation_fee_transactions(
     hasura_endpoint: str,
     hasura_admin_secret: str,
     platform_account_id: Optional[str] = None,
+    idempotency_key_prefix: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Register cancellation fee transactions: debit the client the full fee,
     credit the merchant floor(half), and credit the platform the remainder.
+
+    With ``idempotency_key_prefix`` each leg uses ``<prefix>:client|business|platform``
+    so a retried cancellation never charges or credits the fee twice.
     
     Args:
         order_id: Order ID
@@ -55,7 +59,8 @@ def register_cancellation_fee_transactions(
         client_debit_memo,
         order_id,
         hasura_endpoint,
-        hasura_admin_secret
+        hasura_admin_secret,
+        idempotency_key=_leg_key(idempotency_key_prefix, "client"),
     )
     
     if not client_transaction_id:
@@ -68,6 +73,7 @@ def register_cancellation_fee_transactions(
         business_account_id, merchant_share, order_id, order_number,
         f"Cancellation fee received for order {order_number}",
         hasura_endpoint, hasura_admin_secret, "business",
+        idempotency_key=_leg_key(idempotency_key_prefix, "business"),
     )
     if merchant_share > 0 and not business_transaction_id:
         return {"success": False, "error": "Failed to credit business account"}
@@ -76,6 +82,7 @@ def register_cancellation_fee_transactions(
         platform_account_id, platform_share, order_id, order_number,
         f"Cancellation fee platform share for order {order_number}",
         hasura_endpoint, hasura_admin_secret, "platform",
+        idempotency_key=_leg_key(idempotency_key_prefix, "platform"),
     )
     if platform_share > 0 and not platform_transaction_id:
         return {"success": False, "error": "Failed to credit platform account"}
@@ -99,11 +106,13 @@ def _credit_share(
     hasura_endpoint: str,
     hasura_admin_secret: str,
     label: str,
+    idempotency_key: Optional[str] = None,
 ):
     if not (amount > 0) or not account_id:
         return None
     transaction_id = register_account_transaction(
-        account_id, amount, "deposit", memo, order_id, hasura_endpoint, hasura_admin_secret
+        account_id, amount, "deposit", memo, order_id, hasura_endpoint, hasura_admin_secret,
+        idempotency_key=idempotency_key,
     )
     if not transaction_id:
         log_error(f"Failed to register {label} cancellation fee transaction", order_id=order_id)
@@ -117,3 +126,7 @@ def _credit_share(
     )
     return transaction_id
 
+
+
+def _leg_key(prefix: Optional[str], leg: str) -> Optional[str]:
+    return f"{prefix}:{leg}" if prefix else None
