@@ -173,10 +173,10 @@ describe('OrdersService Phase 0 Events', () => {
     jest.spyOn(service as any, 'requireAgentRecord').mockReturnValue(mockAgent);
     jest
       .spyOn(service as any, 'requireActivePersona')
-      .mockImplementation(() => {});
+      .mockImplementation(jest.fn());
     jest
       .spyOn(service as any, 'assertAgentVerifiedForClaim')
-      .mockImplementation(() => {});
+      .mockImplementation(jest.fn());
   });
 
   describe('checkOrderClaimAvailability', () => {

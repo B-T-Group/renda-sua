@@ -11,14 +11,7 @@ import {
   SITE_EVENT_TYPES_V1,
 } from './site-event-types';
 import { csvLine } from './site-events-csv.util';
-import {
-  normalizeSiteEventMetadata,
-  valueLooksLikePii,
-} from './site-event-metadata.util';
-
-function valueLooksLikePiiInMetadata(key: string, value: unknown): boolean {
-  return valueLooksLikePii(key, value);
-}
+import { normalizeSiteEventMetadata } from './site-event-metadata.util';
 
 export interface SiteEventAdminRow {
   id: string;
