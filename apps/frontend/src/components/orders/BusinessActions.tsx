@@ -48,6 +48,7 @@ import {
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import FailPickupDialog from '../dialogs/FailPickupDialog';
 import PickupNoshowDialog from '../dialogs/PickupNoshowDialog';
+import { hasCashExceptionBlockingDeposit } from '../../utils/depositRemainder';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 
 /** ISO 3166-1 alpha-2 from order addresses; falls back when missing or not a 2-letter code. */
@@ -383,7 +384,8 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     // Owner-only: no /delegate equivalents (matches mobile DELEGATE_HIDDEN_ACTIONS)
     if (
       !isDelegate &&
-      order.reconciliation_status === 'pending_manual_reconciliation'
+      order.reconciliation_status === 'pending_manual_reconciliation' &&
+      !hasCashExceptionBlockingDeposit(order)
     ) {
       actions.push({
         label: t('orders.reconciliation.button', 'Reconcile cash exception'),

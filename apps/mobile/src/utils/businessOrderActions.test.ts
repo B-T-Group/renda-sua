@@ -179,3 +179,71 @@ describe('getBusinessOrderActions flagged-location goods (pay-after)', () => {
     expect(actions.find((a) => a.id === 'completePreparation')).toBeUndefined();
   });
 });
+
+describe('getBusinessOrderActions cash exception reconcile', () => {
+  it('offers reconcile cash exception for non-deposit orders', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        reconciliation_status: 'pending_manual_reconciliation',
+        deposit_amount: 0,
+        deposit_status: 'none',
+      })
+    );
+    expect(actions.map((a) => a.id)).toContain('reconcileCash');
+  });
+
+  it('hides reconcile cash exception for orders with paid deposits', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        reconciliation_status: 'pending_manual_reconciliation',
+        deposit_amount: 2000,
+        deposit_status: 'paid',
+      })
+    );
+    expect(actions.find((a) => a.id === 'reconcileCash')).toBeUndefined();
+  });
+
+  it('hides reconcile cash exception for orders with applied deposits', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        reconciliation_status: 'pending_manual_reconciliation',
+        deposit_amount: 2000,
+        deposit_status: 'applied',
+      })
+    );
+    expect(actions.find((a) => a.id === 'reconcileCash')).toBeUndefined();
+  });
+
+  it('hides reconcile cash exception for orders with forfeited deposits', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        reconciliation_status: 'pending_manual_reconciliation',
+        deposit_amount: 2000,
+        deposit_status: 'forfeited',
+      })
+    );
+    expect(actions.find((a) => a.id === 'reconcileCash')).toBeUndefined();
+  });
+
+  it('offers reconcile for orders with pending deposits', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        reconciliation_status: 'pending_manual_reconciliation',
+        deposit_amount: 2000,
+        deposit_status: 'pending',
+      })
+    );
+    expect(actions.map((a) => a.id)).toContain('reconcileCash');
+  });
+
+  it('hides reconcile cash exception in delegate mode', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({
+        reconciliation_status: 'pending_manual_reconciliation',
+        deposit_amount: 0,
+      }),
+      { mode: 'delegate' }
+    );
+    expect(actions.find((a) => a.id === 'reconcileCash')).toBeUndefined();
+  });
+});
