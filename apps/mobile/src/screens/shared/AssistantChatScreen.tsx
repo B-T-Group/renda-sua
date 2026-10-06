@@ -1,28 +1,224 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { observer } from 'mobx-react-lite';
 import {
   Animated,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
   View,
 } from 'react-native';
-import { Text, TextInput } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Circle, Defs, RadialGradient, Stop, Svg } from 'react-native-svg';
+import { useHeaderHeight } from '@react-navigation/elements';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AssistantMarkdownText } from '@/components/common/AssistantMarkdownText';
-import { lightColors } from '@/theme/colors';
-import { useAssistantChat } from '../../hooks/useAssistantChat';
-import type { AssistantUiMessage } from '../../hooks/useAssistantChat';
+import { AppTextInput } from '@/components/common/AppTextInput';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useStore } from '@/stores/RootStore';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { spacing, borderRadius } from '@/theme/spacing';
+import { motion, motionDuration } from '@/theme/motion';
+import { postAssistantChat, type AssistantChatMessagePayload } from '@/services/assistantApi';
+import type { AssistantMessage } from '@/stores/AssistantStore';
 
-const BG = '#050b16';
-const SURFACE = 'rgba(255,255,255,0.05)';
-const ACCENT = lightColors.primary.light;
-const ACCENT_DIM = 'rgba(47,111,214,0.18)';
-const TEXT_MUTED = 'rgba(255,255,255,0.55)';
+const MAX_API_MESSAGES = 20;
+
+function MiniOrb({ size = 36 }: { size?: number }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[
+        styles.miniOrb,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: colors.info.main,
+        },
+      ]}
+    >
+      <MaterialIcons name="smart-toy" size={size * 0.6} color={colors.primary.contrast} />
+    </View>
+  );
+}
+
+function TypingIndicator() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
+  const duration = motionDuration('normal', reduceMotion);
+
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const createLoop = (anim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration: 320, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0, duration: 320, useNativeDriver: true }),
+          Animated.delay(Math.max(0, 560 - delay)),
+        ])
+      );
+    };
+    const loop1 = createLoop(dot1, 0);
+    const loop2 = createLoop(dot2, 160);
+    const loop3 = createLoop(dot3, 320);
+    loop1.start();
+    loop2.start();
+    loop3.start();
+    return () => {
+      loop1.stop();
+      loop2.stop();
+      loop3.stop();
+    };
+  }, [dot1, dot2, dot3, reduceMotion]);
+
+  const dotStyle = (anim: Animated.Value) => ({
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 2,
+    backgroundColor: colors.text.muted,
+    opacity: reduceMotion ? 0.5 : anim,
+  });
+
+  return (
+    <View
+      style={[
+        styles.typingRow,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+      ]}
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={t('assistant.thinking', 'Thinking…')}
+    >
+      <View style={styles.typingDots}>
+        <Animated.View style={dotStyle(dot1)} />
+        <Animated.View style={dotStyle(dot2)} />
+        <Animated.View style={dotStyle(dot3)} />
+      </View>
+    </View>
+  );
+}
+
+function MessageBubble({ item, isUser }: { item: AssistantMessage; isUser: boolean }) {
+  const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
+  const duration = motionDuration('normal', reduceMotion);
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration,
+      useNativeDriver: true,
+    }).start();
+  }, [anim, duration]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.bubbleWrap,
+        {
+          alignSelf: isUser ? 'flex-end' : 'flex-start',
+          opacity: reduceMotion ? 1 : anim,
+          transform: reduceMotion
+            ? []
+            : [
+                {
+                  translateY: anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [12, 0],
+                  }),
+                },
+              ],
+        },
+      ]}
+    >
+      {!isUser && <MiniOrb size={36} />}
+      <View
+        style={[
+          styles.bubble,
+          isUser
+            ? {
+                backgroundColor: colors.primary.main,
+                borderBottomRightRadius: 4,
+              }
+            : {
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderBottomLeftRadius: 4,
+              },
+        ]}
+      >
+        {isUser ? (
+          <Text style={[styles.bubbleText, { color: colors.primary.contrast }]}>
+            {item.content}
+          </Text>
+        ) : (
+          <AssistantMarkdownText
+            content={item.content}
+            color={colors.text.primary}
+            style={styles.bubbleText}
+          />
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const store = useStore();
+  const firstName = store.auth.user?.firstName;
+  const nameParam = firstName ? `, ${firstName}` : '';
+
+  return (
+    <View style={styles.empty}>
+      <MiniOrb size={88} />
+      <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
+        {t('assistant.emptyTitle', {
+          defaultValue: 'Hi{{name}}! What do you need today?',
+          name: nameParam,
+        })}
+      </Text>
+      <View style={styles.chips}>
+        {SUGGESTIONS.map((item) => {
+          const label = t(item.key, item.fallback);
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => onPick(label)}
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.chipText, { color: colors.primary.main }]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 const SUGGESTIONS = [
   { key: 'assistant.suggestion.location', fallback: 'Where are you located?' },
@@ -40,270 +236,56 @@ const SUGGESTIONS = [
   },
 ] as const;
 
-function usePulse(delay: number) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 320,
-          useNativeDriver: true,
-        }),
-        Animated.timing(anim, {
-          toValue: 0,
-          duration: 320,
-          useNativeDriver: true,
-        }),
-        Animated.delay(Math.max(0, 560 - delay)),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [anim, delay]);
-  return anim;
-}
-
-function TypingDot({ delay }: { delay: number }) {
-  const anim = usePulse(delay);
-  return (
-    <Animated.View
-      style={[
-        styles.dot,
-        {
-          backgroundColor: ACCENT,
-          opacity: anim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.25, 1],
-          }),
-          transform: [
-            {
-              translateY: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, -6],
-              }),
-            },
-          ],
-        },
-      ]}
-    />
-  );
-}
-
-function ThinkingOrb() {
+const AssistantChatScreen = observer(function AssistantChatScreen() {
   const { t } = useTranslation();
-  const glow = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glow, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glow, {
-          toValue: 0,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [glow]);
-
-  return (
-    <View style={styles.thinkingRow}>
-      <Animated.View
-        style={[
-          styles.thinkingOrb,
-          {
-            opacity: glow.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.7, 1],
-            }),
-            transform: [
-              {
-                scale: glow.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.92, 1.08],
-                }),
-              },
-            ],
-          },
-        ]}
-      />
-      <View>
-        <Text style={styles.thinkingLabel}>
-          {t('assistant.thinking', 'Thinking…')}
-        </Text>
-        <View style={styles.typingRow}>
-          <TypingDot delay={0} />
-          <TypingDot delay={160} />
-          <TypingDot delay={320} />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function AssistantIllustration({ size = 140 }: { size?: number }) {
-  return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 160 160"
-      accessibilityRole="image"
-      accessibilityLabel="AI assistant"
-    >
-      <Defs>
-        <RadialGradient id="orb" cx="38%" cy="33%">
-          <Stop offset="0%" stopColor={lightColors.primary.light} />
-          <Stop offset="100%" stopColor={lightColors.primary.dark} />
-        </RadialGradient>
-        <RadialGradient id="glow" cx="50%" cy="50%">
-          <Stop offset="0%" stopColor={ACCENT} stopOpacity={0.3} />
-          <Stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Circle cx="80" cy="80" r="72" fill="none" stroke={ACCENT} strokeWidth="0.8" strokeOpacity={0.2} />
-      <Circle cx="80" cy="80" r="57" fill="none" stroke={ACCENT} strokeWidth="0.8" strokeOpacity={0.12} />
-      <Circle cx="80" cy="80" r="52" fill="url(#glow)" />
-      <Circle cx="80" cy="80" r="37" fill="url(#orb)" />
-      <Circle cx="67" cy="80" r="4.5" fill="#fff" fillOpacity={0.9} />
-      <Circle cx="80" cy="80" r="4.5" fill="#fff" fillOpacity={0.9} />
-      <Circle cx="93" cy="80" r="4.5" fill="#fff" fillOpacity={0.9} />
-    </Svg>
-  );
-}
-
-function MessageBubble({
-  item,
-  isUser,
-}: {
-  item: AssistantUiMessage;
-  isUser: boolean;
-}) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 260,
-      useNativeDriver: true,
-    }).start();
-  }, [anim]);
-
-  return (
-    <Animated.View
-      style={[
-        styles.bubbleWrap,
-        {
-          alignSelf: isUser ? 'flex-end' : 'flex-start',
-          opacity: anim,
-          transform: [
-            {
-              translateY: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [12, 0],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <View
-        style={[
-          styles.bubble,
-          isUser ? styles.userBubble : styles.aiBubble,
-        ]}
-      >
-        {!isUser ? (
-          <View style={styles.aiTag}>
-            <MaterialCommunityIcons name="creation" size={12} color={ACCENT} />
-            <Text style={styles.aiTagText}>AI</Text>
-          </View>
-        ) : null}
-        {isUser ? (
-          <Text style={styles.bubbleText}>{item.content}</Text>
-        ) : (
-          <AssistantMarkdownText
-            content={item.content}
-            color="#e8f7fa"
-            style={styles.bubbleText}
-          />
-        )}
-      </View>
-    </Animated.View>
-  );
-}
-
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.empty}>
-      <AssistantIllustration size={140} />
-      <Text style={styles.emptyTitle}>
-        {t('assistant.emptyTitle', 'What can I help you with?')}
-      </Text>
-      <Text style={styles.emptySubtitle}>
-        {t(
-          'assistant.emptySubtitle',
-          'Ask about our services, delivery, payments, or pickup locations.'
-        )}
-      </Text>
-      <View style={styles.chips}>
-        {SUGGESTIONS.map((item) => {
-          const label = t(item.key, item.fallback);
-          return (
-            <Pressable
-              key={item.key}
-              onPress={() => onPick(label)}
-              style={({ pressed }) => [
-                styles.chip,
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={styles.chipText}>{label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-export default function AssistantChatScreen() {
-  const { t } = useTranslation();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const listRef = useRef<FlatList<AssistantUiMessage>>(null);
+  const headerHeight = useHeaderHeight();
+  const store = useStore();
+  const { assistant } = store;
+  const listRef = useRef<FlatList<AssistantMessage>>(null);
   const [draft, setDraft] = useState('');
-  const { messages, isSending, error, handoff, sendMessage, clearChat } =
-    useAssistantChat();
-
-  const statusLabel = useMemo(
-    () =>
-      isSending
-        ? t('assistant.statusThinking', 'Generating response')
-        : t('assistant.statusOnline', 'Online · AI powered'),
-    [isSending, t]
-  );
+  const requestIdRef = useRef(0);
 
   const onSend = useCallback(
     async (override?: string) => {
       const text = (override ?? draft).trim();
-      if (!text || isSending) return;
+      if (!text || assistant.isSending) return;
       setDraft('');
-      await sendMessage(text);
-      requestAnimationFrame(() =>
-        listRef.current?.scrollToEnd({ animated: true })
-      );
+      assistant.addUserMessage(text);
+      assistant.setIsSending(true);
+      assistant.setError(null);
+      const requestId = ++requestIdRef.current;
+
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+
+      try {
+        const payload: AssistantChatMessagePayload[] = assistant.messages
+          .slice(-MAX_API_MESSAGES)
+          .map((m) => ({
+            role: m.role,
+            content: m.content,
+          }));
+        const data = await postAssistantChat(payload);
+        if (requestId !== requestIdRef.current) return;
+        if (data.reply?.trim()) {
+          assistant.addAssistantMessage(data.reply.trim());
+        }
+        if (data.handoff) assistant.setHandoff(true);
+      } catch (e: any) {
+        if (requestId !== requestIdRef.current) return;
+        assistant.setError(e?.message ?? 'Failed to reach the assistant');
+      } finally {
+        if (requestId === requestIdRef.current) {
+          assistant.setIsSending(false);
+        }
+      }
     },
-    [draft, isSending, sendMessage]
+    [assistant, draft]
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: AssistantUiMessage }) => (
+    ({ item }: { item: AssistantMessage }) => (
       <View style={styles.messageRow}>
         <MessageBubble item={item} isUser={item.role === 'user'} />
       </View>
@@ -311,279 +293,266 @@ export default function AssistantChatScreen() {
     []
   );
 
+  const onRetry = useCallback(() => {
+    assistant.setError(null);
+    if (assistant.messages.length > 0) {
+      const last = assistant.messages[assistant.messages.length - 1];
+      if (last.role === 'user') {
+        void onSend(last.content);
+      }
+    }
+  }, [assistant, onSend]);
+
+  const onOpenWhatsApp = useCallback(() => {
+    void Linking.openURL('https://wa.me/18556488855');
+  }, []);
+
   return (
     <KeyboardAvoidingView
-      style={styles.root}
+      style={[styles.root, { backgroundColor: colors.pageBackground }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      keyboardVerticalOffset={headerHeight}
     >
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.headerOrb, isSending && styles.headerOrbBusy]} />
-          <View>
-            <Text style={styles.headerTitle}>
-              {t('assistant.title', 'Rendasua Assistant')}
-            </Text>
-            <Text style={styles.headerStatus}>{statusLabel}</Text>
-          </View>
-        </View>
-        {messages.length > 0 ? (
-          <Pressable onPress={clearChat} accessibilityRole="button">
-            <MaterialCommunityIcons
-              name="delete-sweep-outline"
-              size={20}
-              color={ACCENT}
-            />
-          </Pressable>
-        ) : null}
-      </View>
-
       <FlatList
         ref={listRef}
-        data={messages}
+        data={assistant.messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
         ListEmptyComponent={<EmptyState onPick={(text) => void onSend(text)} />}
-        ListFooterComponent={isSending ? <ThinkingOrb /> : null}
-        onContentSizeChange={() =>
-          listRef.current?.scrollToEnd({ animated: true })
-        }
+        ListFooterComponent={assistant.isSending ? <TypingIndicator /> : null}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
       />
 
-      {handoff ? (
-        <View style={styles.banner}>
+      {assistant.handoff ? (
+        <View
+          style={[
+            styles.banner,
+            {
+              borderColor: colors.info.light,
+              backgroundColor: colors.infoTint,
+            },
+          ]}
+        >
           <MaterialCommunityIcons
-            name="account-group-outline"
-            size={18}
-            color={ACCENT}
+            name="face-agent"
+            size={20}
+            color={colors.info.main}
+            style={styles.bannerIcon}
           />
           <View style={styles.bannerText}>
-            <Text style={styles.bannerTitle}>
-              {t('assistant.handoffTitle', 'Connecting you to our team')}
+            <Text style={[styles.bannerTitle, { color: colors.info.main }]}>
+              {t('assistant.handoffTitle', 'A team member will help you')}
             </Text>
-            <Text style={styles.bannerBody}>
+            <Text style={[styles.bannerBody, { color: colors.text.secondary }]}>
               {t(
                 'assistant.handoffBody',
-                'You can also reach us on WhatsApp.'
+                'Continue on WhatsApp. We usually reply within 1 hour.'
               )}
             </Text>
+            <Pressable
+              onPress={onOpenWhatsApp}
+              style={({ pressed }) => [
+                styles.bannerButton,
+                {
+                  backgroundColor: colors.info.main,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.bannerButtonText, { color: colors.primary.contrast }]}>
+                {t('assistant.handoffButton', 'Open WhatsApp')}
+              </Text>
+            </Pressable>
           </View>
         </View>
       ) : null}
 
-      {error ? (
-        <View style={[styles.banner, styles.errorBanner]}>
-          <Text style={styles.errorText}>
-            {t(
-              'assistant.errorGeneric',
-              'Something went wrong. Please try again.'
-            )}
+      {assistant.error ? (
+        <View
+          style={[
+            styles.banner,
+            {
+              borderColor: colors.error.light,
+              backgroundColor: colors.errorTint,
+            },
+          ]}
+        >
+          <Text style={[styles.errorText, { color: colors.error.main }]}>
+            {t('assistant.errorGeneric', 'Message not sent. Check your connection.')}
           </Text>
+          <Pressable
+            onPress={onRetry}
+            style={({ pressed }) => [
+              styles.retryButton,
+              {
+                backgroundColor: colors.error.main,
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.primary.contrast }]}>
+              {t('assistant.errorRetry', 'Retry')}
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 
       <View
         style={[
           styles.composer,
-          { paddingBottom: Math.max(insets.bottom, 10) },
+          {
+            borderTopColor: colors.divider,
+            paddingBottom: Math.max(insets.bottom, 10),
+          },
         ]}
       >
-        <TextInput
-          mode="flat"
+        <AppTextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder={t('assistant.placeholder', 'Type your question…')}
-          style={styles.input}
-          dense
-          disabled={isSending}
-          textColor="#fff"
-          placeholderTextColor={TEXT_MUTED}
-          underlineColor="transparent"
-          activeUnderlineColor="transparent"
+          placeholder={t(
+            'assistant.placeholder',
+            'Ask about an item, order or delivery…'
+          )}
+          multiline
+          disabled={assistant.isSending}
           onSubmitEditing={() => void onSend()}
           blurOnSubmit={false}
+          containerStyle={[
+            styles.input,
+            {
+              backgroundColor: colors.surfaceInput,
+            },
+          ]}
         />
         <Pressable
           onPress={() => void onSend()}
-          disabled={isSending || !draft.trim()}
+          disabled={assistant.isSending || !draft.trim()}
           style={({ pressed }) => [
             styles.sendBtn,
             {
-              opacity: isSending || !draft.trim() ? 0.35 : pressed ? 0.8 : 1,
+              backgroundColor: colors.primary.main,
+              opacity: assistant.isSending || !draft.trim() ? 0.35 : pressed ? 0.8 : 1,
             },
           ]}
+          accessibilityRole="button"
+          accessibilityLabel={t('assistant.send', 'Send')}
         >
-          <MaterialCommunityIcons name="send" size={18} color="#041018" />
+          <MaterialIcons name="send" size={20} color={colors.primary.contrast} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
-}
+});
+
+export default AssistantChatScreen;
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: ACCENT_DIM,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerOrb: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: lightColors.info.main,
-    borderWidth: 2,
-    borderColor: ACCENT,
-  },
-  headerOrbBusy: {
-    shadowColor: ACCENT,
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
-  },
-  headerTitle: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  headerStatus: { color: ACCENT, fontSize: 11, marginTop: 2, opacity: 0.9 },
-  listContent: { flexGrow: 1, padding: 16, paddingBottom: 20 },
+  root: { flex: 1 },
+  listContent: { flexGrow: 1, padding: spacing.md, paddingBottom: spacing.s20 },
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 28,
+    paddingHorizontal: spacing.s20,
+    paddingTop: spacing.lg,
   },
   emptyTitle: {
-    color: '#fff',
     fontWeight: '700',
     fontSize: 18,
-    marginTop: 18,
+    marginTop: spacing.md,
     textAlign: 'center',
-  },
-  emptySubtitle: {
-    color: TEXT_MUTED,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-    marginBottom: 18,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.xs,
+    marginTop: spacing.md,
   },
   chip: {
     borderWidth: 1,
-    borderColor: ACCENT_DIM,
-    backgroundColor: 'rgba(47,111,214,0.08)',
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: borderRadius.chip,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    minHeight: 40,
+    justifyContent: 'center',
   },
-  chipText: { color: 'rgba(255,255,255,0.9)', fontSize: 12 },
-  messageRow: { marginBottom: 10 },
-  bubbleWrap: { maxWidth: '88%' },
+  chipText: { fontSize: 14, fontWeight: '500' },
+  messageRow: { marginBottom: spacing.sm },
+  bubbleWrap: {
+    maxWidth: '80%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
+  miniOrb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    flex: 1,
+    borderRadius: borderRadius.card,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.sm - 1,
   },
-  userBubble: {
-    backgroundColor: lightColors.info.main,
-    borderBottomRightRadius: 5,
-  },
-  aiBubble: {
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: ACCENT_DIM,
-    borderBottomLeftRadius: 5,
-  },
-  aiTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 6,
-  },
-  aiTagText: {
-    color: ACCENT,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  bubbleText: { color: '#fff', lineHeight: 20 },
-  thinkingRow: {
+  bubbleText: { lineHeight: 22, fontSize: 15 },
+  typingRow: {
     alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: SURFACE,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.card,
     borderWidth: 1,
-    borderColor: ACCENT_DIM,
+    marginTop: spacing.xs,
   },
-  thinkingOrb: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: ACCENT,
-  },
-  thinkingLabel: {
-    color: ACCENT,
-    fontWeight: '700',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  typingRow: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3, marginHorizontal: 2 },
+  typingDots: { flexDirection: 'row', alignItems: 'center' },
   banner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 12,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+    padding: spacing.sm,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: ACCENT_DIM,
-    backgroundColor: 'rgba(0,188,212,0.08)',
   },
+  bannerIcon: { marginRight: spacing.xs },
   bannerText: { flex: 1 },
-  bannerTitle: { color: ACCENT, fontWeight: '700', fontSize: 13 },
-  bannerBody: { color: TEXT_MUTED, fontSize: 12, marginTop: 2 },
-  errorBanner: {
-    borderColor: 'rgba(255,120,120,0.35)',
-    backgroundColor: 'rgba(255,80,80,0.12)',
+  bannerTitle: { fontWeight: '700', fontSize: 13 },
+  bannerBody: { fontSize: 12, marginTop: 2 },
+  bannerButton: {
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.button,
+    alignSelf: 'flex-start',
   },
-  errorText: { color: 'rgba(255,160,160,0.95)', fontSize: 12 },
+  bannerButtonText: { fontSize: 13, fontWeight: '600' },
+  errorText: { flex: 1, fontSize: 12 },
+  retryButton: {
+    paddingVertical: spacing.xs - 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.button,
+    marginLeft: spacing.xs,
+  },
+  retryButtonText: { fontSize: 12, fontWeight: '600' },
   composer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: ACCENT_DIM,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    backgroundColor: '#07101c',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
   },
   input: {
     flex: 1,
-    backgroundColor: SURFACE,
-    borderRadius: 18,
-    paddingHorizontal: 4,
+    borderRadius: borderRadius.input,
+    minHeight: 48,
   },
   sendBtn: {
-    marginLeft: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: ACCENT,
   },
 });

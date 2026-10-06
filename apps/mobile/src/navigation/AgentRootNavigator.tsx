@@ -27,6 +27,10 @@ import TermsScreen from '../screens/shared/TermsScreen';
 import PrivacyPolicyScreen from '../screens/shared/PrivacyPolicyScreen';
 import FAQScreen from '../screens/shared/FAQScreen';
 import AssistantChatScreen from '../screens/shared/AssistantChatScreen';
+import {
+  AssistantHeaderTitle,
+  AssistantHeaderRight,
+} from '../components/assistant/AssistantHeaderComponents';
 import MessagesScreen from '../screens/shared/MessagesScreen';
 import ThreadDetailScreen from '../screens/shared/ThreadDetailScreen';
 import SupportTicketsScreen from '../screens/shared/SupportTicketsScreen';
@@ -229,6 +233,7 @@ export function AgentRootNavigator() {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
+  const store = useStore();
   return (
     <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
       <View style={{ paddingTop: insets.top }}>
@@ -355,7 +360,12 @@ export function AgentRootNavigator() {
           <RootStack.Screen
             name="AssistantChat"
             component={AssistantChatScreen}
-            options={{ title: t('assistant.title', 'Rendasua Assistant') }}
+            options={{
+              headerTitle: () => <AssistantHeaderTitle />,
+              headerRight: () => (
+                <AssistantHeaderRight onPress={() => store.assistant.clearChat()} />
+              ),
+            }}
           />
           <RootStack.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
           <RootStack.Screen name="ThreadDetail" component={ThreadDetailScreen} options={{ headerShown: false }} />
