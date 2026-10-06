@@ -45,13 +45,42 @@ export function isAssistantOrbRoute(
 }
 
 /**
+ * Names for routes outside the launcher allowlist, where client/guest get the header
+ * character instead. Without them every header_icon impression would report
+ * `screen: other` and the once-per-screen dedupe would collapse them into one.
+ */
+const NON_ORB_SCREENS: Array<[RegExp, string]> = [
+  [/^\/cart\/?$/, 'cart'],
+  [/^\/checkout\/?$/, 'checkout'],
+  [/^\/items\/[^/]+\/place_order(?:\/anon-address)?\/?$/, 'place_order'],
+  [/^\/orders\/awaiting-payment\/?$/, 'awaiting_payment'],
+  [/^\/orders\/confirmation\/?$/, 'order_confirmation'],
+  [/^\/orders\/batch\/?$/, 'order_batch'],
+  [/^\/orders\/[^/]+\/messages\/?$/, 'order_messages'],
+  [/^\/messages\/?$/, 'messages'],
+  [/^\/rentals\/(?:requests|request-submitted)\/?$/, 'rental_requests'],
+  [/^\/rentals\/[^/]+\/?$/, 'rental_detail'],
+  [/^\/categories\/?$/, 'categories'],
+  [/^\/collections\/?$/, 'collections'],
+  [/^\/collections\/[^/]+\/?$/, 'collection_detail'],
+  [/^\/deals\/?$/, 'deals'],
+  [/^\/support(?:\/.*)?$/, 'support'],
+  [/^\/profile(?:\/.*)?$/, 'profile'],
+];
+
+/**
  * Route name for analytics `screen` (the #458 validator accepts [A-Za-z0-9_.-]{1,40};
  * raw paths with ids are never sent).
  */
 export function assistantScreenName(pathname: string): string {
   if (pathname === '/assistant' || pathname === '/assistant/')
     return 'assistant';
-  return matchRule(pathname)?.screen ?? 'other';
+  const orb = matchRule(pathname);
+  if (orb) return orb.screen;
+  for (const [pattern, screen] of NON_ORB_SCREENS) {
+    if (pattern.test(pathname)) return screen;
+  }
+  return 'other';
 }
 
 export interface AssistantEntryInputs {

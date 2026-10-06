@@ -58,7 +58,16 @@ describe('assistantScreenName', () => {
     expect(assistantScreenName('/orders/7c9e6679-7425-40de-944b-e07fc1f90ae7')).toBe('order_detail');
     expect(assistantScreenName('/items/42')).toBe('item_detail');
     expect(assistantScreenName('/assistant')).toBe('assistant');
-    expect(assistantScreenName('/cart')).toBe('other');
+    expect(assistantScreenName('/cart')).toBe('cart');
+    expect(assistantScreenName('/checkout')).toBe('checkout');
+    expect(assistantScreenName('/items/42/place_order')).toBe('place_order');
+    expect(assistantScreenName('/orders/awaiting-payment')).toBe('awaiting_payment');
+    expect(assistantScreenName('/orders/confirmation')).toBe('order_confirmation');
+    expect(assistantScreenName('/orders/7c9e6679-7425-40de-944b-e07fc1f90ae7/messages')).toBe('order_messages');
+    expect(assistantScreenName('/rentals/requests')).toBe('rental_requests');
+    expect(assistantScreenName('/rentals/7c9e6679-7425-40de-944b-e07fc1f90ae7')).toBe('rental_detail');
+    expect(assistantScreenName('/support/tickets')).toBe('support');
+    expect(assistantScreenName('/about')).toBe('other');
     for (const p of ['/', '/items', '/store/x', '/orders/y', '/foo/bar']) {
       expect(assistantScreenName(p)).toMatch(/^[A-Za-z0-9_.-]{1,40}$/);
     }
