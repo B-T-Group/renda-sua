@@ -70,7 +70,7 @@ async function resolveNoshowHours(
   );
   const rows = await loadHourRows(hasura, country);
   const match = pickHourRow(rows, country);
-  if (!match) {
+  if (!match || match.number_value == null) {
     logger.warn(
       `pickup_noshow_hours_missing order=${order.id} country=${country ?? 'unknown'}; using ${DEFAULT_PICKUP_NOSHOW_HOURS}`
     );
@@ -89,11 +89,22 @@ function pickHourRow(
   return countryRow ?? rows.find((row) => !row.country_code);
 }
 
+/**
+ * At least 1 hour: a store-recorded no-show forfeits the reservation deposit,
+ * so it must never open the instant the order is ready (QA #459 N-8).
+ */
+export const MIN_PICKUP_NOSHOW_HOURS = 1;
+export const MAX_PICKUP_NOSHOW_HOURS = 168;
+
 function validHours(value: number | string | null | undefined): number {
   const hours = Number(value);
-  if (!Number.isFinite(hours) || hours < 0 || hours > 168) {
+  if (
+    !Number.isFinite(hours) ||
+    hours < MIN_PICKUP_NOSHOW_HOURS ||
+    hours > MAX_PICKUP_NOSHOW_HOURS
+  ) {
     throw new HttpException(
-      'pickup_noshow_cancel_hours must be between 0 and 168',
+      `pickup_noshow_cancel_hours must be between ${MIN_PICKUP_NOSHOW_HOURS} and ${MAX_PICKUP_NOSHOW_HOURS}`,
       HttpStatus.INTERNAL_SERVER_ERROR
     );
   }
