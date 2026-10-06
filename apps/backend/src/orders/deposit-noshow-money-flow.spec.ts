@@ -293,8 +293,11 @@ describe('Reservation deposit money flow (service level)', () => {
       await expect(cancel(h)).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
       expect((await h.service.getPickupNoshowPreview(ORDER_ID)).canCancel).toBe(false);
 
-      // Even if another path reached the deposit policy (e.g. a no-show recorded
-      // elsewhere), the deposit itself cannot move again.
+      // Even if another path reached the deposit directly (forfeit first: on a
+      // legacy 'paid' row this is the QA B-1 double charge), or via the
+      // cancellation deposit policy, the deposit itself cannot move again.
+      const direct = await h.deposits.forfeitDeposit(ORDER_ID, 'customer_no_show_pickup');
+      expect(h.db.snapshot()).toBe(before);
       await (h.service as any).handleDepositOnCancellation(
         h.db.orderDetails(ORDER_ID),
         ORDER_ID,
@@ -303,7 +306,6 @@ describe('Reservation deposit money flow (service level)', () => {
         undefined,
         'client_no_show'
       );
-      const direct = await h.deposits.forfeitDeposit(ORDER_ID, 'customer_no_show_pickup');
 
       expect(direct).toMatchObject({ success: false, errorCode: 'DEPOSIT_APPLIED' });
       expect(h.db.snapshot()).toBe(before);
