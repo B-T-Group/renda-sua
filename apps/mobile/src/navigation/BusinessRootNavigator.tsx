@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useStore } from '../stores/RootStore';
 
 import BusinessDashboardScreen from '../screens/business/BusinessDashboardScreen';
 import BusinessMenuTabScreen from '../screens/business/BusinessMenuTabScreen';

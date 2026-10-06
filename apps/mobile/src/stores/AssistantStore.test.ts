@@ -10,7 +10,6 @@ describe('AssistantStore', () => {
   });
 
   afterEach(() => {
-    store.dispose();
     vi.restoreAllMocks();
   });
 
@@ -37,36 +36,80 @@ describe('AssistantStore', () => {
     expect(store.messages[0].content).toBe('Hi there!');
   });
 
-  it('rotates thread_id on clearChat', () => {
-    const originalThreadId = store.threadId;
-    store.addUserMessage('Test');
-    store.clearChat();
-    expect(store.messages).toEqual([]);
-    expect(store.threadId).not.toBe(originalThreadId);
-    expect(store.error).toBe(null);
-    expect(store.handoff).toBe(false);
-  });
+  describe('thread rotation', () => {
+    it('rotates thread_id and clears messages on clearChat (Start over)', () => {
+      const originalThreadId = store.threadId;
+      store.addUserMessage('Test message');
+      store.addAssistantMessage('Response');
+      expect(store.messages).toHaveLength(2);
 
-  it('rotates thread_id after 30 minutes idle', () => {
-    const originalThreadId = store.threadId;
-    vi.advanceTimersByTime(30 * 60 * 1000);
-    expect(store.threadId).not.toBe(originalThreadId);
-  });
+      store.clearChat();
 
-  it('does not rotate thread_id before 30 minutes', () => {
-    const originalThreadId = store.threadId;
-    vi.advanceTimersByTime(29 * 60 * 1000);
-    expect(store.threadId).toBe(originalThreadId);
-  });
+      expect(store.messages).toEqual([]);
+      expect(store.threadId).not.toBe(originalThreadId);
+      expect(store.error).toBe(null);
+      expect(store.handoff).toBe(false);
+    });
 
-  it('resets idle timer on user activity', () => {
-    const originalThreadId = store.threadId;
-    vi.advanceTimersByTime(29 * 60 * 1000);
-    store.addUserMessage('Keep alive');
-    vi.advanceTimersByTime(29 * 60 * 1000);
-    expect(store.threadId).toBe(originalThreadId);
-    vi.advanceTimersByTime(2 * 60 * 1000);
-    expect(store.threadId).not.toBe(originalThreadId);
+    it('rotates thread_id and clears messages on rotateThread (sign-in/sign-out)', () => {
+      const originalThreadId = store.threadId;
+      store.addUserMessage('Before rotation');
+      store.addAssistantMessage('Response');
+      store.setError('Some error');
+      store.setHandoff(true);
+      expect(store.messages).toHaveLength(2);
+
+      store.rotateThread();
+
+      expect(store.threadId).not.toBe(originalThreadId);
+      expect(store.messages).toEqual([]);
+      expect(store.error).toBe(null);
+      expect(store.handoff).toBe(false);
+    });
+
+    it('does not rotate before 30 minutes elapsed', () => {
+      const originalThreadId = store.threadId;
+      store.addUserMessage('Test');
+      expect(store.messages).toHaveLength(1);
+
+      vi.advanceTimersByTime(29 * 60 * 1000);
+      store.checkAndRotateIfIdle();
+
+      expect(store.threadId).toBe(originalThreadId);
+      expect(store.messages).toHaveLength(1);
+    });
+
+    it('rotates thread_id and clears messages after 30 minutes idle', () => {
+      const originalThreadId = store.threadId;
+      store.addUserMessage('Old message');
+      store.addAssistantMessage('Old response');
+      expect(store.messages).toHaveLength(2);
+
+      vi.advanceTimersByTime(30 * 60 * 1000);
+      store.checkAndRotateIfIdle();
+
+      expect(store.threadId).not.toBe(originalThreadId);
+      expect(store.messages).toEqual([]);
+    });
+
+    it('resets idle timer on user activity', () => {
+      const originalThreadId = store.threadId;
+      vi.advanceTimersByTime(29 * 60 * 1000);
+      
+      store.addUserMessage('Keep alive');
+      
+      vi.advanceTimersByTime(29 * 60 * 1000);
+      store.checkAndRotateIfIdle();
+      
+      expect(store.threadId).toBe(originalThreadId);
+      expect(store.messages).toHaveLength(1);
+
+      vi.advanceTimersByTime(2 * 60 * 1000);
+      store.checkAndRotateIfIdle();
+      
+      expect(store.threadId).not.toBe(originalThreadId);
+      expect(store.messages).toEqual([]);
+    });
   });
 
   it('tracks sending state', () => {
@@ -91,12 +134,17 @@ describe('AssistantStore', () => {
     expect(store.handoff).toBe(true);
   });
 
-  it('rotateThread generates a new thread_id and updates activity', () => {
+  it('rotateThread generates a new thread_id, clears messages, and updates activity', () => {
     const originalThreadId = store.threadId;
     const originalActivity = store.lastActivityAt;
+    store.addUserMessage('Message 1');
+    store.addAssistantMessage('Message 2');
+    
     vi.advanceTimersByTime(1000);
     store.rotateThread();
+    
     expect(store.threadId).not.toBe(originalThreadId);
+    expect(store.messages).toEqual([]);
     expect(store.lastActivityAt).toBeGreaterThan(originalActivity);
   });
 });

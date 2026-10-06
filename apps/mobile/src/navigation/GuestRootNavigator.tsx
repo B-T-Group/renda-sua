@@ -23,11 +23,6 @@ import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
-import AssistantChatScreen from '../screens/shared/AssistantChatScreen';
-import {
-  AssistantHeaderTitle,
-  AssistantHeaderRight,
-} from '../components/assistant/AssistantHeaderComponents';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
 import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import {
@@ -42,7 +37,6 @@ import {
   renderFloatingAnimatedTabBar,
 } from './floatingTabBarVisibility';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
-import { useStore } from '../stores/RootStore';
 
 const GuestTab = createBottomTabNavigator<GuestTabParamList>();
 const GuestAuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -259,7 +253,6 @@ export function GuestRootNavigator({
 } = {}) {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
-  const store = useStore();
 
   return (
     <View style={styles.flex}>
@@ -335,17 +328,6 @@ export function GuestRootNavigator({
             headerShown: true,
             title: t('rentals.title', 'Rentals'),
             headerBackTitle: t('nav.guestTabs.rentals', 'Rentals'),
-          }}
-        />
-        <GuestRootStack.Screen
-          name="AssistantChat"
-          component={AssistantChatScreen}
-          options={{
-            headerTitle: () => <AssistantHeaderTitle />,
-            headerRight: () => (
-              <AssistantHeaderRight onPress={() => store.assistant.clearChat()} />
-            ),
-            headerBackTitle: t('public.items.detail.browseMore', 'Browse more items'),
           }}
         />
         <GuestRootStack.Screen

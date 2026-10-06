@@ -29,32 +29,19 @@ export class AssistantStore {
   error: string | null = null;
   handoff: boolean = false;
 
-  private idleTimer: ReturnType<typeof setTimeout> | null = null;
-
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
-    this.startIdleTimer();
-  }
-
-  private startIdleTimer(): void {
-    this.clearIdleTimer();
-    this.idleTimer = setTimeout(() => {
-      if (Date.now() - this.lastActivityAt >= IDLE_TIMEOUT_MS) {
-        this.rotateThread();
-      }
-    }, IDLE_TIMEOUT_MS);
-  }
-
-  private clearIdleTimer(): void {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = null;
-    }
   }
 
   private updateActivity(): void {
     this.lastActivityAt = Date.now();
-    this.startIdleTimer();
+  }
+
+  /** Check if idle timeout has elapsed and rotate if needed. Call before send or on screen focus. */
+  checkAndRotateIfIdle(): void {
+    if (Date.now() - this.lastActivityAt >= IDLE_TIMEOUT_MS) {
+      this.rotateThread();
+    }
   }
 
   addUserMessage(content: string): AssistantMessage {
@@ -98,14 +85,12 @@ export class AssistantStore {
     this.rotateThread();
   }
 
-  /** Rotate thread_id (called on start over, 30-min idle, auth change) */
+  /** Rotate thread_id and clear messages (called on start over, 30-min idle, auth change) */
   rotateThread(): void {
     this.threadId = makeThreadId();
+    this.messages = [];
+    this.error = null;
+    this.handoff = false;
     this.updateActivity();
-  }
-
-  /** Clean up on unmount */
-  dispose(): void {
-    this.clearIdleTimer();
   }
 }

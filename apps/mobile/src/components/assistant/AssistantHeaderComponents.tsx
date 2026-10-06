@@ -13,7 +13,9 @@ export const AssistantHeaderTitle = observer(function AssistantHeaderTitle() {
   const store = useStore();
   const { assistant } = store;
 
-  const statusLabel = assistant.isSending
+  const statusLabel = assistant.error
+    ? t('assistant.subtitleOffline', 'Offline')
+    : assistant.isSending
     ? t('assistant.subtitleThinking', 'Thinking…')
     : t('assistant.subtitle', 'AI · Replies in seconds');
 

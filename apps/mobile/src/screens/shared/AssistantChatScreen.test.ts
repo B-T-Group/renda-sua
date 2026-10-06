@@ -6,7 +6,7 @@ describe('AssistantChatScreen restyle', () => {
   it('does not contain dark theme hardcoded colors', () => {
     const screenPath = join(
       __dirname,
-      '../screens/shared/AssistantChatScreen.tsx'
+      'AssistantChatScreen.tsx'
     );
     const content = readFileSync(screenPath, 'utf-8');
 
@@ -22,7 +22,7 @@ describe('AssistantChatScreen restyle', () => {
   it('uses theme colors from useTheme', () => {
     const screenPath = join(
       __dirname,
-      '../screens/shared/AssistantChatScreen.tsx'
+      'AssistantChatScreen.tsx'
     );
     const content = readFileSync(screenPath, 'utf-8');
 

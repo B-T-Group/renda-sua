@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import {
@@ -14,6 +14,7 @@ import {
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AssistantMarkdownText } from '@/components/common/AssistantMarkdownText';
@@ -27,6 +28,7 @@ import { postAssistantChat, type AssistantChatMessagePayload } from '@/services/
 import type { AssistantMessage } from '@/stores/AssistantStore';
 
 const MAX_API_MESSAGES = 20;
+const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 
 function MiniOrb({ size = 36 }: { size?: number }) {
   const { colors } = useTheme();
@@ -51,7 +53,6 @@ function TypingIndicator() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
-  const duration = motionDuration('normal', reduceMotion);
 
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
@@ -112,7 +113,13 @@ function TypingIndicator() {
   );
 }
 
-function MessageBubble({ item, isUser }: { item: AssistantMessage; isUser: boolean }) {
+interface MessageBubbleProps {
+  item: AssistantMessage;
+  isUser: boolean;
+  showOrb: boolean;
+}
+
+function MessageBubble({ item, isUser, showOrb }: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
@@ -146,7 +153,8 @@ function MessageBubble({ item, isUser }: { item: AssistantMessage; isUser: boole
         },
       ]}
     >
-      {!isUser && <MiniOrb size={36} />}
+      {!isUser && showOrb && <MiniOrb size={36} />}
+      {!isUser && !showOrb && <View style={{ width: 36 }} />}
       <View
         style={[
           styles.bubble,
@@ -246,16 +254,35 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const [draft, setDraft] = useState('');
   const requestIdRef = useRef(0);
+  const currentThreadIdRef = useRef(assistant.threadId);
+
+  // Track current thread id
+  useEffect(() => {
+    currentThreadIdRef.current = assistant.threadId;
+  }, [assistant.threadId]);
+
+  // Check idle on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      assistant.checkAndRotateIfIdle();
+    }, [assistant])
+  );
 
   const onSend = useCallback(
     async (override?: string) => {
+      // Check idle before sending
+      assistant.checkAndRotateIfIdle();
+
       const text = (override ?? draft).trim();
       if (!text || assistant.isSending) return;
-      setDraft('');
+
+      // Clear draft immediately on successful send start
+      const threadIdAtSend = assistant.threadId;
       assistant.addUserMessage(text);
       assistant.setIsSending(true);
       assistant.setError(null);
       const requestId = ++requestIdRef.current;
+      setDraft('');
 
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
 
@@ -267,16 +294,26 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
             content: m.content,
           }));
         const data = await postAssistantChat(payload);
-        if (requestId !== requestIdRef.current) return;
+
+        // Drop late replies: discard if thread rotated since request
+        if (requestId !== requestIdRef.current || threadIdAtSend !== currentThreadIdRef.current) {
+          return;
+        }
+
         if (data.reply?.trim()) {
           assistant.addAssistantMessage(data.reply.trim());
         }
         if (data.handoff) assistant.setHandoff(true);
       } catch (e: any) {
-        if (requestId !== requestIdRef.current) return;
+        // Drop late errors too
+        if (requestId !== requestIdRef.current || threadIdAtSend !== currentThreadIdRef.current) {
+          return;
+        }
         assistant.setError(e?.message ?? 'Failed to reach the assistant');
+        // Restore draft on error so user can retry
+        setDraft(text);
       } finally {
-        if (requestId === requestIdRef.current) {
+        if (requestId === requestIdRef.current && threadIdAtSend === currentThreadIdRef.current) {
           assistant.setIsSending(false);
         }
       }
@@ -285,26 +322,30 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: AssistantMessage }) => (
-      <View style={styles.messageRow}>
-        <MessageBubble item={item} isUser={item.role === 'user'} />
-      </View>
-    ),
-    []
+    ({ item, index }: { item: AssistantMessage; index: number }) => {
+      // Show orb only on first assistant bubble of a group
+      let showOrb = false;
+      if (item.role === 'assistant') {
+        const prevMsg = index > 0 ? assistant.messages[index - 1] : null;
+        showOrb = !prevMsg || prevMsg.role === 'user';
+      }
+
+      return (
+        <View style={styles.messageRow}>
+          <MessageBubble item={item} isUser={item.role === 'user'} showOrb={showOrb} />
+        </View>
+      );
+    },
+    [assistant.messages]
   );
 
   const onRetry = useCallback(() => {
     assistant.setError(null);
-    if (assistant.messages.length > 0) {
-      const last = assistant.messages[assistant.messages.length - 1];
-      if (last.role === 'user') {
-        void onSend(last.content);
-      }
-    }
+    void onSend();
   }, [assistant, onSend]);
 
   const onOpenWhatsApp = useCallback(() => {
-    void Linking.openURL('https://wa.me/18556488855');
+    void Linking.openURL(`https://wa.me/${WHATSAPP_SUPPORT_NUMBER}`);
   }, []);
 
   return (
@@ -352,6 +393,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
             </Text>
             <Pressable
               onPress={onOpenWhatsApp}
+              accessibilityRole="button"
+              accessibilityLabel={t('assistant.handoffButton', 'Open WhatsApp')}
               style={({ pressed }) => [
                 styles.bannerButton,
                 {
@@ -359,6 +402,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
                   opacity: pressed ? 0.8 : 1,
                 },
               ]}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <Text style={[styles.bannerButtonText, { color: colors.primary.contrast }]}>
                 {t('assistant.handoffButton', 'Open WhatsApp')}
@@ -383,6 +427,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
           </Text>
           <Pressable
             onPress={onRetry}
+            accessibilityRole="button"
+            accessibilityLabel={t('assistant.errorRetry', 'Retry')}
             style={({ pressed }) => [
               styles.retryButton,
               {
@@ -390,6 +436,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
                 opacity: pressed ? 0.8 : 1,
               },
             ]}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <Text style={[styles.retryButtonText, { color: colors.primary.contrast }]}>
               {t('assistant.errorRetry', 'Retry')}
@@ -415,6 +462,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
             'Ask about an item, order or delivery…'
           )}
           multiline
+          numberOfLines={4}
           disabled={assistant.isSending}
           onSubmitEditing={() => void onSend()}
           blurOnSubmit={false}
@@ -521,18 +569,22 @@ const styles = StyleSheet.create({
   bannerBody: { fontSize: 12, marginTop: 2 },
   bannerButton: {
     marginTop: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm - 2,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.button,
     alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
   },
   bannerButtonText: { fontSize: 13, fontWeight: '600' },
   errorText: { flex: 1, fontSize: 12 },
   retryButton: {
-    paddingVertical: spacing.xs - 2,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm - 2,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.button,
     marginLeft: spacing.xs,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   retryButtonText: { fontSize: 12, fontWeight: '600' },
   composer: {

@@ -7,6 +7,7 @@ import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { NavigatorScreenParams, StackActions } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useStore } from '../stores/RootStore';
 
 import HomeScreen from '../screens/agent/HomeScreen';
 import OpenOrdersScreen from '../screens/agent/OpenOrdersScreen';
