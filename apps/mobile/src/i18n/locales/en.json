@@ -7232,7 +7232,7 @@
     "chip": "Exports"
   },
   "assistant": {
-    "title": "Rendasua Assistant",
+    "title": "RendaSua Assistant",
     "subtitle": "AI · Replies in seconds",
     "subtitleThinking": "Thinking…",
     "subtitleOffline": "Offline",
@@ -7249,9 +7249,14 @@
     "handoffBody": "Continue on WhatsApp. We usually reply within 1 hour.",
     "handoffButton": "Open WhatsApp",
     "errorGeneric": "Message not sent. Check your connection.",
+    "errorServer": "Message not sent. Please try again.",
     "errorRetry": "Retry",
     "startOver": "Start over",
     "startOverA11y": "Start a new conversation",
+    "startOverConfirmTitle": "Start over?",
+    "startOverConfirmMessage": "This clears the conversation.",
+    "startOverConfirmCancel": "Cancel",
+    "startOverConfirmAction": "Start over",
     "statusOnline": "Online · AI powered",
     "statusThinking": "Generating response",
     "openA11y": "Open AI assistant",

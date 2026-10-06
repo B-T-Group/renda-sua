@@ -1,4 +1,4 @@
-import { View, StyleSheet, Pressable } from 'react-native';
+import { Alert, View, StyleSheet, Pressable } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
@@ -6,6 +6,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useStore } from '@/stores/RootStore';
 import { spacing } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
 
 export const AssistantHeaderTitle = observer(function AssistantHeaderTitle() {
   const { t } = useTranslation();
@@ -21,14 +22,16 @@ export const AssistantHeaderTitle = observer(function AssistantHeaderTitle() {
 
   return (
     <View style={styles.headerTitleContainer}>
-      <View style={[styles.miniOrb, { backgroundColor: colors.info.main }]}>
+      <View style={[styles.miniOrb, { backgroundColor: colors.primary.main }]}>
         <MaterialIcons name="smart-toy" size={20} color={colors.primary.contrast} />
       </View>
       <View>
-        <Text style={[styles.title, { color: colors.text.primary }]}>
-          {t('assistant.title', 'Rendasua Assistant')}
+        <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
+          {t('assistant.title', 'RendaSua Assistant')}
         </Text>
-        <Text style={[styles.subtitle, { color: colors.text.secondary }]}>{statusLabel}</Text>
+        <Text style={[styles.subtitle, { color: colors.text.secondary }]} numberOfLines={1}>
+          {statusLabel}
+        </Text>
       </View>
     </View>
   );
@@ -50,9 +53,24 @@ export const AssistantHeaderRight = observer(function AssistantHeaderRight({
     return null;
   }
 
+  const confirmStartOver = () => {
+    Alert.alert(
+      t('assistant.startOverConfirmTitle', 'Start over?'),
+      t('assistant.startOverConfirmMessage', 'This clears the conversation.'),
+      [
+        { text: t('assistant.startOverConfirmCancel', 'Cancel'), style: 'cancel' },
+        {
+          text: t('assistant.startOverConfirmAction', 'Start over'),
+          style: 'destructive',
+          onPress,
+        },
+      ]
+    );
+  };
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={confirmStartOver}
       accessibilityRole="button"
       accessibilityLabel={t('assistant.startOverA11y', 'Start a new conversation')}
       style={({ pressed }) => [
@@ -80,8 +98,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontWeight: '600',
-    fontSize: 15,
+    ...typography.h6,
   },
   subtitle: {
     fontSize: 11,

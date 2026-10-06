@@ -41,7 +41,7 @@ function MiniOrb({ size = 36 }: { size?: number }) {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: colors.info.main,
+          backgroundColor: colors.primary.main,
         },
       ]}
     >
@@ -192,7 +192,7 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const store = useStore();
-  const firstName = store.auth.user?.firstName;
+  const firstName = store.auth.user?.firstName?.trim();
 
   return (
     <View style={styles.empty}>
@@ -212,6 +212,8 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
             <Pressable
               key={item.key}
               onPress={() => onPick(label)}
+              accessibilityRole="button"
+              hitSlop={{ top: 4, bottom: 4 }}
               style={({ pressed }) => [
                 styles.chip,
                 {
@@ -277,15 +279,14 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
 
   const renderItem = useCallback(
     ({ item, index }: { item: AssistantMessage; index: number }) => {
+      const prevMsg = index > 0 ? assistant.messages[index - 1] : null;
       // Show orb only on first assistant bubble of a group
-      let showOrb = false;
-      if (item.role === 'assistant') {
-        const prevMsg = index > 0 ? assistant.messages[index - 1] : null;
-        showOrb = !prevMsg || prevMsg.role === 'user';
-      }
+      const showOrb = item.role === 'assistant' && prevMsg?.role !== 'assistant';
+      // AC3: 8 within a group, 16 between turns
+      const marginTop = !prevMsg ? 0 : prevMsg.role === item.role ? spacing.xs : spacing.md;
 
       return (
-        <View style={styles.messageRow}>
+        <View style={{ marginTop }}>
           <MessageBubble item={item} isUser={item.role === 'user'} showOrb={showOrb} />
         </View>
       );
@@ -376,7 +377,9 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
           ]}
         >
           <Text style={[styles.errorText, { color: colors.error.main }]}>
-            {t('assistant.errorGeneric', 'Message not sent. Check your connection.')}
+            {assistant.errorKind === 'network'
+              ? t('assistant.errorGeneric', 'Message not sent. Check your connection.')
+              : t('assistant.errorServer', 'Message not sent. Please try again.')}
           </Text>
           <Pressable
             onPress={onRetry}
@@ -429,6 +432,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
         <Pressable
           onPress={() => void onSend()}
           disabled={assistant.isSending || !draft.trim()}
+          accessibilityState={{ disabled: assistant.isSending || !draft.trim() }}
           style={({ pressed }) => [
             styles.sendBtn,
             {
@@ -480,7 +484,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipText: { fontSize: 14, fontWeight: '500' },
-  messageRow: { marginBottom: spacing.sm },
   bubbleWrap: {
     maxWidth: '80%',
     flexDirection: 'row',
@@ -492,7 +495,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   bubble: {
-    flex: 1,
+    flexShrink: 1,
     borderRadius: borderRadius.card,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.sm - 1,
