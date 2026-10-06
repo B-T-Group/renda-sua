@@ -5,8 +5,9 @@
  *
  * Motion uses RN core Animated with `useNativeDriver: true` and animates
  * transform / opacity only (eng plan §6.1: no Reanimated / worklets here).
- * Reduce Motion (hooks/useReducedMotion) gives a static ring; the eye shape
- * still switches per state. Decorative: hidden from screen readers.
+ * Idle on the hero / launcher runs the eye life cycle (Rest→Wake→Glance→Blink
+ * →Drowse); the header stays static. Reduce Motion: no life cycle; eye shapes
+ * still switch per state. Decorative: hidden from screen readers.
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -52,8 +53,22 @@ import {
   type RendaEyes,
 } from './rendaCharacterModel';
 import {
+  GLANCE_OFFSETS,
+  IDLE_EYE_TIMING,
+  advanceDotBlink,
+  advanceIdleEyeLife,
+  idleEyeMode,
+  poseForPhase,
+  startDotBlink,
+  startIdleEyeLife,
+  type GlanceDir,
+  type IdleEyePhase,
+  type IdleEyePose,
+} from './rendaIdleEyeLife';
+import {
   ArcEyes,
   BLOOM_SQUARE,
+  DotEye,
   DotEyes,
   ECHO_DEFS,
   EchoEllipse,
@@ -72,6 +87,7 @@ import {
   Sparkle,
   frameStyle,
   layerStyles,
+  dotEyeBox,
   openEyeBox,
 } from './rendaCharacterLayers';
 import { RendaCharacterStatic } from './RendaCharacterStatic';
@@ -97,6 +113,11 @@ export type RendaCharacterProps = {
   dark?: boolean;
   /** Bump to replay the current state's one-shot (e.g. the attention ripple). */
   replayKey?: number;
+  /**
+   * Review / harness only: freeze the Idle eye life cycle on one phase
+   * (Rest / Wake / Glance / Blink / Drowse) so screenshots are deterministic.
+   */
+  idleEyeForce?: { phase: IdleEyePhase; glance?: GlanceDir; blinkProgress?: number };
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };
@@ -175,6 +196,7 @@ function RendaCharacterAnimated({
   paused = false,
   dark,
   replayKey = 0,
+  idleEyeForce,
   style,
   testID,
 }: AnimatedProps) {
@@ -194,6 +216,14 @@ function RendaCharacterAnimated({
   });
   const eyeShape = eyeShapeFor(eyeLevel, cfg);
   const motionCapable = !reducedMotion;
+  const lifeMode = idleEyeMode({
+    eyes: eyeLevel,
+    staticIdle,
+    reducedMotion,
+    paused: effectivePaused,
+    enabled: state === 'idle',
+  });
+  const lifeActive = lifeMode !== 'off';
 
   // ---- animated values -------------------------------------------------
   const breath = useValue(0);
@@ -277,8 +307,11 @@ function RendaCharacterAnimated({
   }, [haloFollow, haloFixed, cfg.halo, cfg.loops, motionCapable]);
 
   // ---- eyes: shape morph + offset (instant under reduce motion) --------
+  // When the Idle life cycle owns the eyes, skip these — it drives eyeMix /
+  // offset / blink itself. Cancel + restart from Rest on return to Idle.
   const attentionEyes = state === 'attention' && cfg.oneShots;
   useEffect(() => {
+    if (lifeActive || idleEyeForce) return undefined;
     const target = eyeShape === 'open' ? 1 : 0;
     const morph = (to: number) =>
       Animated.timing(eyeMix, {
@@ -298,9 +331,10 @@ function RendaCharacterAnimated({
       anim.stop();
       if (timer) clearTimeout(timer);
     };
-  }, [eyeMix, eyeShape, motionCapable, attentionEyes, replayKey]);
+  }, [eyeMix, eyeShape, motionCapable, attentionEyes, replayKey, lifeActive, idleEyeForce]);
 
   useEffect(() => {
+    if (lifeActive || idleEyeForce) return undefined;
     const duration = motionCapable ? RENDA_TIMING.eyeOffset : 0;
     const easing = Easing.out(Easing.cubic);
     const anim = Animated.parallel([
@@ -309,10 +343,11 @@ function RendaCharacterAnimated({
     ]);
     anim.start();
     return () => anim.stop();
-  }, [eyeX, eyeY, cfg.offset, k, motionCapable]);
+  }, [eyeX, eyeY, cfg.offset, k, motionCapable, lifeActive, idleEyeForce]);
 
   // ---- blink every 4–7 s (attentive / listening) -----------------------
   useEffect(() => {
+    if (lifeActive || idleEyeForce) return undefined;
     if (!cfg.blink || eyeShape !== 'open') return undefined;
     let timer: ReturnType<typeof setTimeout>;
     const half = RENDA_TIMING.blink / 2;
@@ -331,7 +366,173 @@ function RendaCharacterAnimated({
       clearTimeout(timer);
       blink.setValue(1);
     };
-  }, [blink, cfg.blink, eyeShape]);
+  }, [blink, cfg.blink, eyeShape, lifeActive, idleEyeForce]);
+
+  // ---- Idle eye life cycle (hero + launcher; header staticIdle = off) ----
+  useEffect(() => {
+    if (idleEyeForce) {
+      const pose = poseForPhase(idleEyeForce.phase, idleEyeForce);
+      eyeMix.setValue(pose.eyeMix);
+      eyeX.setValue(pose.offset[0] * k);
+      eyeY.setValue(pose.offset[1] * k);
+      blink.setValue(pose.blink);
+      return undefined;
+    }
+    // Full expressive life cycle only (dots use the blink-only effect below).
+    if (lifeMode !== 'full') {
+      if (state === 'idle' && lifeMode === 'off') {
+        const dur = motionCapable ? RENDA_TIMING.settleEase : 0;
+        Animated.parallel([
+          Animated.timing(eyeMix, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: ND }),
+          Animated.timing(eyeX, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: ND }),
+          Animated.timing(eyeY, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: ND }),
+          Animated.timing(blink, { toValue: 1, duration: dur, useNativeDriver: ND }),
+        ]).start();
+      }
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let running: Animated.CompositeAnimation | null = null;
+    const easeOut = Easing.out(Easing.cubic);
+    const easeIn = Easing.in(Easing.cubic);
+
+    const snap = (pose: IdleEyePose) => {
+      eyeMix.setValue(pose.eyeMix);
+      eyeX.setValue(pose.offset[0] * k);
+      eyeY.setValue(pose.offset[1] * k);
+      blink.setValue(pose.blink);
+    };
+
+    const endTarget = (life: ReturnType<typeof startIdleEyeLife>): IdleEyePose => {
+      if (life.phase === 'wake') return { phase: 'wake', eyeMix: 1, offset: [0, 0], blink: 1 };
+      if (life.phase === 'drowse') return { phase: 'drowse', eyeMix: 0, offset: [0, 0], blink: 1 };
+      if (life.phase === 'rest') return { phase: 'rest', eyeMix: 0, offset: [0, 0], blink: 1 };
+      if (life.phase === 'blink') return { phase: 'blink', eyeMix: 1, offset: [0, 0], blink: 1 };
+      const off = life.glanceDir ? GLANCE_OFFSETS[life.glanceDir] : ([0, 0] as const);
+      if (life.leg === 2) return { phase: 'glance', eyeMix: 1, offset: [0, 0], blink: 1 };
+      return { phase: 'glance', eyeMix: 1, offset: off, blink: 1 };
+    };
+
+    const driveLeg = (life: ReturnType<typeof startIdleEyeLife>) => {
+      running?.stop();
+      const dur = Math.max(0, life.legEndsAt - life.legStartedAt);
+      const end = endTarget(life);
+      if (life.phase === 'blink' && life.leg === 0) {
+        const half = IDLE_EYE_TIMING.blink / 2;
+        blink.setValue(1);
+        running = Animated.sequence([
+          Animated.timing(blink, { toValue: 0.1, duration: half, easing: Easing.out(Easing.sin), useNativeDriver: ND }),
+          Animated.timing(blink, { toValue: 1, duration: half, easing: Easing.in(Easing.sin), useNativeDriver: ND }),
+        ]);
+        running.start();
+        return;
+      }
+      if (life.phase === 'wake' && life.leg === 0) {
+        eyeMix.setValue(0);
+        running = Animated.timing(eyeMix, { toValue: 1, duration: dur, easing: easeOut, useNativeDriver: ND });
+        running.start();
+        return;
+      }
+      if (life.phase === 'drowse') {
+        eyeMix.setValue(1);
+        running = Animated.timing(eyeMix, { toValue: 0, duration: dur, easing: easeIn, useNativeDriver: ND });
+        running.start();
+        return;
+      }
+      if (life.phase === 'glance' && (life.leg === 0 || life.leg === 2)) {
+        running = Animated.parallel([
+          Animated.timing(eyeX, { toValue: end.offset[0] * k, duration: dur, easing: easeOut, useNativeDriver: ND }),
+          Animated.timing(eyeY, { toValue: end.offset[1] * k, duration: dur, easing: easeOut, useNativeDriver: ND }),
+        ]);
+        running.start();
+        return;
+      }
+      snap(end);
+    };
+
+    // Restart from Rest every time Idle becomes active again.
+    let life = startIdleEyeLife(Date.now());
+    snap(life.pose);
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        const { state: next, startedLeg } = advanceIdleEyeLife(life, Math.max(Date.now(), life.legEndsAt));
+        life = next;
+        if (startedLeg) driveLeg(life);
+        schedule();
+      }, Math.max(0, life.legEndsAt - Date.now()));
+    };
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      running?.stop();
+    };
+  }, [lifeMode, idleEyeForce, state, k, eyeMix, eyeX, eyeY, blink, motionCapable]);
+
+  // ---- Dot-eye blink-only life cycle (sizes 20–35 on hero/launcher) ------
+  useEffect(() => {
+    if (lifeMode !== 'blinkOnly' || idleEyeForce) return undefined;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let running: Animated.CompositeAnimation | null = null;
+    let dot = startDotBlink(Date.now());
+    blink.setValue(1);
+
+    const schedule = () => {
+      if (cancelled) return;
+      const delay = Math.max(16, dot.nextBlinkAt - Date.now());
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        const now = Date.now();
+        const { state: next } = advanceDotBlink(dot, now);
+        dot = next;
+        if (dot.blinking) {
+          const half = IDLE_EYE_TIMING.blink / 2;
+          running?.stop();
+          running = Animated.sequence([
+            Animated.timing(blink, { toValue: 0.1, duration: half, easing: Easing.out(Easing.sin), useNativeDriver: ND }),
+            Animated.timing(blink, { toValue: 1, duration: half, easing: Easing.in(Easing.sin), useNativeDriver: ND }),
+          ]);
+          if (dot.pendingDouble) {
+            // First blink; second is scheduled after gap by advanceDotBlink's timeline.
+            // Drive first only; poll for the second.
+            running.start(({ finished }) => {
+              if (!finished || cancelled) return;
+              timer = setTimeout(() => {
+                if (cancelled) return;
+                const half2 = IDLE_EYE_TIMING.blink / 2;
+                running = Animated.sequence([
+                  Animated.timing(blink, { toValue: 0.1, duration: half2, easing: Easing.out(Easing.sin), useNativeDriver: ND }),
+                  Animated.timing(blink, { toValue: 1, duration: half2, easing: Easing.in(Easing.sin), useNativeDriver: ND }),
+                ]);
+                running.start();
+              }, IDLE_EYE_TIMING.doubleBlinkGap);
+            });
+          } else {
+            running.start();
+          }
+          // Advance past the blink so nextBlinkAt is set.
+          const end = now + IDLE_EYE_TIMING.blink + (dot.pendingDouble ? IDLE_EYE_TIMING.doubleBlinkGap + IDLE_EYE_TIMING.blink : 0);
+          const advanced = advanceDotBlink(dot, end);
+          dot = advanced.state;
+        }
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      running?.stop();
+      blink.setValue(1);
+    };
+  }, [lifeMode, idleEyeForce, blink]);
 
   // ---- one-shots on state entry ----------------------------------------
   useEffect(() => {
@@ -574,7 +775,19 @@ function RendaCharacterAnimated({
             {eyeShape === 'dot' ? (
               <>
                 {dark ? <EyeGlow k={k} id={id} /> : null}
-                <DotEyes k={k} />
+                {lifeMode === 'blinkOnly' || idleEyeForce
+                  ? EYE_CENTERS.map(([x, y]) => {
+                      const b = dotEyeBox(x, y);
+                      return (
+                        <Animated.View
+                          key={x}
+                          style={[frameStyle(k, b.x, b.y, b.w, b.h), { transform: [{ scaleY: blink }] }]}
+                        >
+                          <DotEye k={k} x={x} y={y} />
+                        </Animated.View>
+                      );
+                    })
+                  : <DotEyes k={k} />}
               </>
             ) : (
               <>
