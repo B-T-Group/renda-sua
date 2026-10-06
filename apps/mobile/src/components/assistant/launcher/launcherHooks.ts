@@ -4,14 +4,18 @@ import { rootNavigationRef } from '../../../navigation/rootNavigationRef';
 import { SETTLE_AFTER_MS } from '../../../utils/assistantLauncher';
 import { lastLauncherInteractionAt, subscribeLauncherInteraction } from './launcherSignals';
 
-/** Deepest focused route name of the root navigation container. */
+/** Deepest focused route name of the (untyped) root navigation container. */
+export function currentRouteName(): string | undefined {
+  if (!rootNavigationRef.isReady()) return undefined;
+  const route = rootNavigationRef.getCurrentRoute() as { name?: string } | undefined;
+  return route?.name;
+}
+
 export function useFocusedRouteName(): string | undefined {
-  const [name, setName] = useState<string | undefined>(() =>
-    rootNavigationRef.isReady() ? rootNavigationRef.getCurrentRoute()?.name : undefined
-  );
+  const [name, setName] = useState<string | undefined>(currentRouteName);
   useEffect(() => {
     const read = () => {
-      if (rootNavigationRef.isReady()) setName(rootNavigationRef.getCurrentRoute()?.name);
+      if (rootNavigationRef.isReady()) setName(currentRouteName());
     };
     read();
     const off = rootNavigationRef.addListener('state', read);

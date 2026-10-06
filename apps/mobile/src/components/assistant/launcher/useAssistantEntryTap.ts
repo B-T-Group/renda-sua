@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClientFlags } from '../../../contexts/ClientFlagsContext';
-import { rootNavigationRef } from '../../../navigation/rootNavigationRef';
+import { currentRouteName } from './launcherHooks';
 import { useStore } from '../../../stores/RootStore';
 import { assistantViewer } from '../../../utils/assistantLauncher';
 import {
@@ -24,7 +24,7 @@ export function useAssistantEntryTap(): (variant: LauncherVariant | undefined, e
       if (!flagOn) return;
       const viewer = assistantViewer(auth.isAuthenticated, persona.activePersona);
       if (viewer !== 'client' && viewer !== 'guest') return;
-      const screen = rootNavigationRef.isReady() ? rootNavigationRef.getCurrentRoute()?.name : undefined;
+      const screen = currentRouteName();
       trackLauncherTap(
         {
           persona: viewer,
