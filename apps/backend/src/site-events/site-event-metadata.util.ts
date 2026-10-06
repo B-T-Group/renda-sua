@@ -36,12 +36,56 @@ const SERVER_EVENT_ID_ALLOWLIST = new Set([
   'clientId',
 ]);
 
+// Assistant metadata allowlist (Phase 0 #451): keys that should pass through for assistant.* events
+const ASSISTANT_METADATA_ALLOWLIST = new Set([
+  'thread_id',
+  'target_id',
+  'order_id',
+  'turn',
+  'chip_id',
+  'position',
+  'context',
+  'input',
+  'intent',
+  'confidence',
+  'tools_used',
+  'grounded',
+  'type',
+  'minutes_since_tap',
+  'via',
+  'trigger',
+  'rating',
+  'reason',
+  'card_type',
+  'kind',
+  'length_bucket',
+  'entry',
+  'variant',
+  'motion',
+  'screen',
+  'dismiss_reason',
+  'is_signed_in',
+  'has_active_order',
+  'reorder_eligible',
+]);
+
 const SENSITIVE_VALUE_KEY = /^(code|otp|password|loginhint|login_hint|email|phone|phone_number)$/i;
+
+// UUID regex: 8-4-4-4-12 hex pattern
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const logger = new Logger('SiteEventMetadata');
 
 export function isAuthSiteEventType(eventType: string): boolean {
   return eventType.startsWith('auth_');
+}
+
+export function isAssistantSiteEventType(eventType: string): boolean {
+  return eventType.startsWith('assistant.');
+}
+
+function isUuidValue(value: string): boolean {
+  return UUID_REGEX.test(value);
 }
 
 export function filterAuthEventMetadata(
@@ -50,6 +94,18 @@ export function filterAuthEventMetadata(
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
     if (AUTH_METADATA_ALLOWLIST.has(key)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+export function filterAssistantEventMetadata(
+  metadata: Record<string, unknown>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (ASSISTANT_METADATA_ALLOWLIST.has(key)) {
       out[key] = value;
     }
   }
@@ -78,12 +134,18 @@ function looksLikeShortCode(value: string): boolean {
 export function valueLooksLikePii(
   key: string,
   value: unknown,
-  isServerEvent: boolean
+  isServerEvent: boolean,
+  isAssistantEvent = false
 ): boolean {
   if (typeof value !== 'string') return false;
   if (SENSITIVE_VALUE_KEY.test(key)) return true;
   // For server events, allow specific ID keys even if they contain digits
   if (isServerEvent && SERVER_EVENT_ID_ALLOWLIST.has(key)) return false;
+  // For assistant events, allow UUID-shaped thread_id, target_id, and order_id
+  // even though they fail the phone heuristic (≥7 digits)
+  if (isAssistantEvent && ['thread_id', 'target_id', 'order_id'].includes(key)) {
+    return !isUuidValue(value);
+  }
   if (looksLikeEmail(value)) return true;
   if (looksLikePhone(value)) return true;
   if (looksLikeShortCode(value)) return true;
@@ -92,16 +154,17 @@ export function valueLooksLikePii(
 
 export function stripPiiFromMetadata(
   metadata: Record<string, unknown>,
-  isServerEvent: boolean
+  isServerEvent: boolean,
+  isAssistantEvent = false
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (valueLooksLikePii(key, value, isServerEvent)) {
+    if (valueLooksLikePii(key, value, isServerEvent, isAssistantEvent)) {
       logger.warn(`Dropping PII-like key "${key}" from site_event metadata`);
       continue;
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
-      out[key] = stripPiiFromMetadata(value as Record<string, unknown>, isServerEvent);
+      out[key] = stripPiiFromMetadata(value as Record<string, unknown>, isServerEvent, isAssistantEvent);
       continue;
     }
     out[key] = value;
@@ -116,8 +179,14 @@ export function normalizeSiteEventMetadata(
 ): Record<string, unknown> {
   if (!metadata || typeof metadata !== 'object') return {};
   const isServerEvent = viewerType === 'server';
-  const base = isAuthSiteEventType(eventType)
-    ? filterAuthEventMetadata(metadata)
-    : { ...metadata };
-  return stripPiiFromMetadata(base, isServerEvent);
+  const isAssistantEvent = isAssistantSiteEventType(eventType);
+  let base: Record<string, unknown>;
+  if (isAuthSiteEventType(eventType)) {
+    base = filterAuthEventMetadata(metadata);
+  } else if (isAssistantEvent) {
+    base = filterAssistantEventMetadata(metadata);
+  } else {
+    base = { ...metadata };
+  }
+  return stripPiiFromMetadata(base, isServerEvent, isAssistantEvent);
 }

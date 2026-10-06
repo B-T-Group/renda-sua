@@ -12,6 +12,7 @@ import {
   fetchClientFlags,
   type ClientFlags,
 } from '../services/clientFlagsApi';
+import { useMarket } from '../hooks/useMarket';
 
 type ClientFlagsContextValue = {
   flags: ClientFlags;
@@ -28,13 +29,15 @@ const ClientFlagsContext = createContext<ClientFlagsContextValue>({
 export function ClientFlagsProvider({ children }: { children: React.ReactNode }) {
   const [flags, setFlags] = useState<ClientFlags>(DEFAULT_CLIENT_FLAGS);
   const [loading, setLoading] = useState(true);
+  const { selectedMarket } = useMarket();
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const next = await fetchClientFlags();
+    const country = selectedMarket?.countryCode;
+    const next = await fetchClientFlags(country);
     setFlags(next);
     setLoading(false);
-  }, []);
+  }, [selectedMarket]);
 
   useEffect(() => {
     void refresh();

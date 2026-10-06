@@ -6,7 +6,9 @@ export type ClientFlagKey =
   | 'reels_merchant_allowlist_only'
   | 'floating_nav_enabled'
   | 'reorder_v1'
-  | 'catalog_experience_v1';
+  | 'catalog_experience_v1'
+  | 'assistant_launcher_v1'
+  | 'assistant_shopping_v1';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -18,6 +20,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   /** Backend defaults on in non-production; keep false until flags load. */
   reorder_v1: false,
   catalog_experience_v1: false,
+  assistant_launcher_v1: false,
+  assistant_shopping_v1: false,
 };
 
 type ClientFlagsResponse = {

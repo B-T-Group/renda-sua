@@ -97,6 +97,28 @@ export const SITE_EVENT_TYPES_V1 = [
   'auth_session_observed',
   'catalog.module.impression',
   'catalog.module.click',
+  // Reorder (mobile + web, #336 PR #344)
+  'orders.reorder.impression',
+  'orders.reorder.tap',
+  'orders.reorder.result',
+  // Assistant (#451)
+  'assistant.launcher.impression',
+  'assistant.launcher.tap',
+  'assistant.nudge.shown',
+  'assistant.nudge.dismissed',
+  'assistant.attention.played',
+  'assistant.chat.opened',
+  'assistant.chip.tap',
+  'assistant.message.sent',
+  'assistant.message.classified',
+  'assistant.deeplink.shown',
+  'assistant.deeplink.tap',
+  'assistant.attributed.add_to_cart',
+  'assistant.attributed.order_created',
+  'assistant.handoff.requested',
+  'assistant.support.deflected',
+  'assistant.feedback.submitted',
+  'assistant.error.shown',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event
