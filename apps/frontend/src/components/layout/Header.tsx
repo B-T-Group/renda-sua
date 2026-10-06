@@ -70,7 +70,7 @@ import {
   SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
   SITE_EVENT_ASSISTANT_LAUNCHER_TAP,
 } from '../../hooks/useTrackSiteEvent';
-import { RendaCharacter } from '../assistant/RendaCharacter';
+import { RendaAvatar } from '../assistant/RendaAvatar';
 import {
   HeaderAssistantEntry,
   assistantScreenName,
@@ -97,7 +97,8 @@ export interface HeaderProps {
   /**
    * Assistant button treatment (#451 PR-6): `icon` = today's SmartToy, `character` =
    * the 28 px Renda character (client/guest with `assistant_launcher_v1`), `hidden`
-   * where the floating launcher shows or on /assistant itself.
+   * where the floating launcher shows or on /assistant itself, `pending` = slot kept
+   * but invisible while client flags resolve (no icon flash before the launcher).
    */
   assistantEntry?: HeaderAssistantEntry;
 }
@@ -863,7 +864,13 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
                 onClick={assistantEntry === 'character' ? onAssistantHeaderTap : undefined}
                 data-assistant-entry={assistantEntry}
                 aria-label={t('assistant.headerLabel', 'Ask Rendasua assistant')}
+                // `pending` (client/guest while flags resolve, ≤ 3 s): keep the slot so
+                // nothing shifts, but don't flash an icon the flag may be about to hide.
+                {...(assistantEntry === 'pending'
+                  ? { 'aria-hidden': true, tabIndex: -1 }
+                  : {})}
                 sx={{
+                  visibility: assistantEntry === 'pending' ? 'hidden' : undefined,
                   color: '#ffffff',
                   padding: '10px',
                   minWidth: 44,
@@ -877,7 +884,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
                 }}
               >
                 {assistantEntry === 'character' ? (
-                  <RendaCharacter size={28} surface="avatar" animated={false} style={{ margin: -4 }} />
+                  <RendaAvatar size={28} style={{ margin: -4 }} />
                 ) : (
                   <SmartToy fontSize="small" />
                 )}

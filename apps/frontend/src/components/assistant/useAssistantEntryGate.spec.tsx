@@ -19,11 +19,13 @@ jest.mock('./AssistantLauncher', () => ({
 }));
 
 /** Mirrors the composition in app.tsx (app.spec cannot run: lottie canvas, pre-existing). */
-function Floating({ persona, path, isMobile = false }: { persona: 'guest' | 'client' | 'business' | 'agent'; path: string; isMobile?: boolean }) {
+type Persona = 'guest' | 'client' | 'business' | 'agent' | 'loading';
+function Floating({ persona, path, isMobile = false }: { persona: Persona; path: string; isMobile?: boolean }) {
   const isAuthenticated = persona !== 'guest';
   const gate = useAssistantEntryGate({
     isAuthenticated,
-    userType: isAuthenticated ? persona : null,
+    userType: isAuthenticated && persona !== 'loading' ? persona : null,
+    personaLoading: persona === 'loading',
     pathname: path,
     isMobile,
   });
@@ -45,7 +47,7 @@ function Floating({ persona, path, isMobile = false }: { persona: 'guest' | 'cli
   );
 }
 
-async function renderAt(persona: 'guest' | 'client' | 'business' | 'agent', path: string, isMobile = false) {
+async function renderAt(persona: Persona, path: string, isMobile = false) {
   render(
     <MemoryRouter initialEntries={[path]}>
       <Floating persona={persona} path={path} isMobile={isMobile} />
@@ -112,5 +114,42 @@ describe('D2: the orb replaces the floating WhatsApp bubble (flag-gated)', () =>
     await renderAt('guest', '/items');
     expect(screen.queryByTestId('whatsapp-bubble')).toBeNull();
     expect(screen.queryByTestId('assistant-launcher')).toBeNull();
+  });
+
+  it('flags fetch failed or timed out (loaded, defaults): guest on /items gets the bubble and the icon', async () => {
+    // useClientFlags reports loaded=true with the defaults on failure or after CLIENT_FLAGS_WAIT_MS.
+    mockFlags.loaded = true;
+    mockFlags.flags.assistant_launcher_v1 = false;
+    await renderAt('guest', '/items');
+    expect(await screen.findByTestId('whatsapp-bubble')).toBeInTheDocument();
+    expect(screen.queryByTestId('assistant-launcher')).toBeNull();
+    expect(screen.getByTestId('header-entry').textContent).toBe('icon');
+  });
+
+  it('client/guest: the header slot is pending (invisible) until flags resolve', async () => {
+    mockFlags.loaded = false;
+    await renderAt('client', '/cart');
+    expect(screen.getByTestId('header-entry').textContent).toBe('pending');
+  });
+
+  it.each(['agent', 'business'] as const)('%s is never held while flags load (bubble + icon as today)', async (persona) => {
+    mockFlags.loaded = false;
+    await renderAt(persona, '/');
+    expect(await screen.findByTestId('whatsapp-bubble')).toBeInTheDocument();
+    expect(screen.getByTestId('header-entry').textContent).toBe('icon');
+  });
+
+  it('flag on + signed-in persona still loading: nothing flashes before the persona is known', async () => {
+    mockFlags.flags.assistant_launcher_v1 = true;
+    await renderAt('loading', '/');
+    expect(screen.queryByTestId('whatsapp-bubble')).toBeNull();
+    expect(screen.queryByTestId('assistant-launcher')).toBeNull();
+    expect(screen.getByTestId('header-entry').textContent).toBe('pending');
+  });
+
+  it('flag off + signed-in persona still loading: today\'s bubble and icon', async () => {
+    await renderAt('loading', '/');
+    expect(await screen.findByTestId('whatsapp-bubble')).toBeInTheDocument();
+    expect(screen.getByTestId('header-entry').textContent).toBe('icon');
   });
 });

@@ -82,7 +82,11 @@ export function orbReplacesWhatsApp(i: AssistantEntryInputs): boolean {
   );
 }
 
-export type HeaderAssistantEntry = 'icon' | 'character' | 'hidden';
+/**
+ * `pending`: client/guest while the client flags (or a signed-in persona) are still
+ * resolving; the header keeps the slot but shows nothing yet (no icon flash).
+ */
+export type HeaderAssistantEntry = 'icon' | 'character' | 'hidden' | 'pending';
 
 /**
  * Site header assistant button. One entry point at a time: hidden where the

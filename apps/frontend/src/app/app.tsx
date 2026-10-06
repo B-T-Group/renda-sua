@@ -124,6 +124,7 @@ function App() {
   const assistantEntry = useAssistantEntryGate({
     isAuthenticated,
     userType,
+    personaLoading: profileLoading,
     pathname: location.pathname,
     isMobile,
   });
