@@ -1,5 +1,5 @@
 import { OrdersService } from './orders.service';
-import { randomUUID } from 'crypto';
+import { ForbiddenException } from '@nestjs/common';
 
 function mockOrder() {
   return {
@@ -40,6 +40,20 @@ function mockUser() {
 
 function createHarness() {
   const trackEvent = jest.fn().mockResolvedValue(undefined);
+  const hasuraSystemService = {
+    executeQuery: jest.fn().mockResolvedValue({
+      agents_by_pk: { status: 'active' },
+    }),
+    getAccount: jest.fn().mockResolvedValue({
+      id: 'account-123',
+      available_balance: 5000,
+    }),
+    getAccountById: jest.fn().mockResolvedValue({
+      id: 'account-123',
+      user_id: 'user-123',
+    }),
+    getUserById: jest.fn().mockResolvedValue(mockUser()),
+  };
   const service = Object.create(OrdersService.prototype) as OrdersService;
   Object.assign(service, {
     hasuraUserService: {
@@ -49,14 +63,10 @@ function createHarness() {
         jwtAllowedRoles: ['agent'],
       }),
     },
-    hasuraSystemService: {
-      executeQuery: jest.fn().mockResolvedValue({
-        agents_by_pk: { status: 'active' },
-      }),
-      getAccount: jest.fn().mockResolvedValue({
-        id: 'account-123',
-        available_balance: 5000,
-      }),
+    hasuraSystemService,
+    mobilePaymentsDatabaseService: {
+      hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
+      getPendingClaimOrderTransactionForUserAndOrderNumber: jest.fn().mockResolvedValue(null),
     },
     siteEventsService: { trackEvent },
     logger: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -74,7 +84,7 @@ function createHarness() {
     holdAmount: 8000,
   });
 
-  return { service, trackEvent };
+  return { service, trackEvent, hasuraSystemService };
 }
 
 describe('OrdersService Phase 0 Events', () => {
@@ -86,15 +96,9 @@ describe('OrdersService Phase 0 Events', () => {
         available_balance: 3000, // Less than holdAmount (8000)
       });
 
-      jest
-        .spyOn(harness.service as any, 'mobilePaymentsDatabaseService', 'get')
-        .mockReturnValue({
-          hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
-        });
-
       await expect(
         harness.service.claimOrder({ orderId: 'order-123' })
-      ).rejects.toThrow();
+      ).rejects.toThrow(ForbiddenException);
 
       // Wait for async emission
       await new Promise((resolve) => setImmediate(resolve));
@@ -130,14 +134,16 @@ describe('OrdersService Phase 0 Events', () => {
   describe('acceptOrderOffer', () => {
     it('emits funds check with source offer_accept', async () => {
       const harness = createHarness();
+      harness.hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 10000, // Sufficient balance >= holdAmount (8000)
+      });
+      
       const mockOrderOffersService = {
         getActiveOfferForAgent: jest.fn().mockResolvedValue({ id: 'offer-1' }),
       };
       Object.assign(harness.service, {
         orderOffersService: mockOrderOffersService,
-        mobilePaymentsDatabaseService: {
-          hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
-        },
         assignOrderToAgent: jest.fn().mockResolvedValue({ id: 'order-123' }),
         getOrCreateOrderHold: jest.fn().mockResolvedValue({ id: 'hold-1' }),
         updateOrderHold: jest.fn().mockResolvedValue(undefined),
@@ -176,17 +182,6 @@ describe('OrdersService Phase 0 Events', () => {
         account_id: 'account-123',
         created_at: new Date().toISOString(),
       };
-
-      Object.assign(harness.service, {
-        hasuraSystemService: {
-          ...harness.service.hasuraSystemService,
-          getAccountById: jest.fn().mockResolvedValue({
-            id: 'account-123',
-            user_id: 'user-123',
-          }),
-          getUserById: jest.fn().mockResolvedValue(mockUser()),
-        },
-      });
 
       jest.spyOn(harness.service as any, 'getOrderForProcessingByNumber').mockResolvedValue(mockOrder());
       jest.spyOn(harness.service as any, 'loadClaimPaymentContext').mockResolvedValue({

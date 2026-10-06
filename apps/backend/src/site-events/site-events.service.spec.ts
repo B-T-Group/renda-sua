@@ -72,4 +72,33 @@ describe('SiteEventsService', () => {
       })
     );
   });
+
+  it('strips phone and email under non-allowlisted keys even for server events', async () => {
+    await service.trackEvent(
+      {
+        eventType: 'agent.claim_funds_check',
+        metadata: {
+          orderId: randomUUID(),
+          userPhone: '+237612345678',
+          userEmail: 'test@example.com',
+          someData: 'safe-value',
+        },
+      },
+      {
+        viewerType: 'server',
+        viewerId: 'system',
+        jwtVerified: false,
+      }
+    );
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledTimes(1);
+    const variables = hasuraSystemService.executeMutation.mock.calls[0][1];
+
+    // Phone and email should be stripped (not in allowlist)
+    expect(variables.object.metadata).not.toHaveProperty('userPhone');
+    expect(variables.object.metadata).not.toHaveProperty('userEmail');
+    // Safe data should be preserved
+    expect(variables.object.metadata).toHaveProperty('someData', 'safe-value');
+    expect(variables.object.metadata).toHaveProperty('orderId');
+  });
 });

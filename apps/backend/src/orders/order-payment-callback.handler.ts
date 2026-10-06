@@ -100,7 +100,9 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
       void this.ordersService.emitClaimTopupFailed(
         transaction,
         message
-      );
+      ).catch((error) => {
+        this.logger.error('Failed to emit claim topup failed event', error);
+      });
     }
   }
 }

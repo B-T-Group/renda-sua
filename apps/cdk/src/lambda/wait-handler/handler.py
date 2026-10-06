@@ -100,14 +100,18 @@ def _cancel_momo_tx_if_pending(
     transaction_id: str,
     hasura_endpoint: str,
     hasura_admin_secret: str,
-) -> None:
-    """Mark mobile_payment_transactions row cancelled when still pending."""
+) -> bool:
+    """Mark mobile_payment_transactions row cancelled when still pending.
+    
+    Returns True if the transaction was actually flipped from pending to cancelled,
+    False otherwise (already not pending, or not found).
+    """
     tx = get_transaction_by_id(
         transaction_id, hasura_endpoint, hasura_admin_secret
     )
     if not tx:
         log_error("Transaction not found for MoMo cancel", transaction_id=transaction_id)
-        return
+        return False
     status = tx.get("status")
     if status != "pending":
         log_info(
@@ -115,11 +119,12 @@ def _cancel_momo_tx_if_pending(
             transaction_id=transaction_id,
             status=status,
         )
-        return
+        return False
     log_info("Cancelling pending MoMo transaction", transaction_id=transaction_id)
     update_transaction_status(
         transaction_id, "cancelled", hasura_endpoint, hasura_admin_secret
     )
+    return True
 
 
 def _handle_unpaid_order_timeout(
@@ -166,46 +171,6 @@ def _handle_unpaid_order_timeout(
     }
 
 
-def _insert_site_event(
-    event_type: str,
-    metadata: Dict[str, Any],
-    hasura_endpoint: str,
-    hasura_admin_secret: str,
-) -> None:
-    """Insert a site_event row (Phase 0 #453). Failures are caught and logged."""
-    mutation = """
-    mutation InsertSiteEvent($object: site_events_insert_input!) {
-      insert_site_events_one(object: $object) {
-        id
-      }
-    }
-    """
-    variables = {
-        "object": {
-            "event_type": event_type,
-            "viewer_type": "server",
-            "viewer_id": "system",
-            "metadata": metadata,
-        }
-    }
-    try:
-        payload = json.dumps({"query": mutation, "variables": variables}).encode("utf-8")
-        req = urllib.request.Request(
-            hasura_endpoint,
-            data=payload,
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "x-hasura-admin-secret": hasura_admin_secret,
-            },
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            resp.read()
-        log_info(f"Site event inserted: {event_type}")
-    except Exception as e:
-        log_error(f"Failed to insert site_event {event_type}", error=e)
-
-
 def _handle_order_claim_initiated(
     payload: Dict[str, Any],
     order_id: str,
@@ -219,27 +184,40 @@ def _handle_order_claim_initiated(
         order_id=order_id,
         transaction_id=transaction_id,
     )
-    _cancel_momo_tx_if_pending(
+    was_cancelled = _cancel_momo_tx_if_pending(
         transaction_id, hasura_endpoint, hasura_admin_secret
     )
     
-    # Emit agent.claim_topup_failed for timeout (Phase 0 #453)
-    try:
-        # Fetch transaction details for metadata
-        tx = get_transaction_by_id(
-            transaction_id, hasura_endpoint, hasura_admin_secret
-        )
-        if tx:
-            # Query order for order_number and agent_id
-            order_query = """
-            query GetOrder($orderId: uuid!) {
+    # Emit agent.claim_topup_failed for timeout ONLY if we actually cancelled it (Phase 0 #453)
+    if was_cancelled:
+        try:
+            # Fetch transaction + account + user + agent in one query
+            query = """
+            query GetClaimTimeoutData($transactionId: String!, $orderId: uuid!) {
+              mobile_payment_transactions(where: {transaction_id: {_eq: $transactionId}}, limit: 1) {
+                transaction_id
+                amount
+                currency
+                provider
+                account_id
+                account {
+                  user {
+                    agent {
+                      id
+                    }
+                  }
+                }
+              }
               orders_by_pk(id: $orderId) {
                 order_number
-                assigned_agent_id
               }
             }
             """
-            query_payload = json.dumps({"query": order_query, "variables": {"orderId": order_id}}).encode("utf-8")
+            query_payload = json.dumps({
+                "query": query,
+                "variables": {"transactionId": transaction_id, "orderId": order_id}
+            }).encode("utf-8")
+            
             req = urllib.request.Request(
                 hasura_endpoint,
                 data=query_payload,
@@ -250,26 +228,69 @@ def _handle_order_claim_initiated(
                 },
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
-                order_data = json.loads(resp.read().decode("utf-8"))
-                order = order_data.get("data", {}).get("orders_by_pk")
+                data = json.loads(resp.read().decode("utf-8"))
+            
+            # Check for GraphQL errors
+            if "errors" in data and data["errors"]:
+                raise Exception(f"GraphQL errors: {data['errors']}")
+            
+            tx_rows = data.get("data", {}).get("mobile_payment_transactions", [])
+            order = data.get("data", {}).get("orders_by_pk")
+            
+            if tx_rows and order:
+                tx = tx_rows[0]
+                agent_id = None
+                if tx.get("account") and tx["account"].get("user") and tx["account"]["user"].get("agent"):
+                    agent_id = tx["account"]["user"]["agent"]["id"]
                 
-            if order:
-                _insert_site_event(
-                    "agent.claim_topup_failed",
-                    {
-                        "orderId": order_id,
-                        "orderNumber": order.get("order_number"),
-                        "agentId": order.get("assigned_agent_id") or "unknown",
-                        "transactionId": tx.get("transaction_id"),
-                        "holdAmount": tx.get("amount", 0),
-                        "currency": tx.get("currency", "XAF"),
-                        "reason": "timeout",
-                    },
-                    hasura_endpoint,
-                    hasura_admin_secret,
-                )
-    except Exception as e:
-        log_error("Failed to emit timeout site_event", error=e)
+                if not agent_id:
+                    log_error("Cannot emit timeout event: agent not found via account", transaction_id=transaction_id)
+                else:
+                    # Insert site_event matching backend emitClaimTopupFailed metadata
+                    mutation = """
+                    mutation InsertSiteEvent($object: site_events_insert_input!) {
+                      insert_site_events_one(object: $object) {
+                        id
+                      }
+                    }
+                    """
+                    variables = {
+                        "object": {
+                            "event_type": "agent.claim_topup_failed",
+                            "viewer_type": "server",
+                            "viewer_id": "system",
+                            "metadata": {
+                                "orderId": order_id,
+                                "orderNumber": order.get("order_number"),
+                                "agentId": agent_id,
+                                "holdAmount": tx.get("amount", 0),
+                                "transactionId": tx.get("transaction_id"),
+                                "provider": tx.get("provider"),
+                                "currency": tx.get("currency"),
+                                "reason": "timeout",
+                            },
+                        }
+                    }
+                    mutation_payload = json.dumps({"query": mutation, "variables": variables}).encode("utf-8")
+                    req = urllib.request.Request(
+                        hasura_endpoint,
+                        data=mutation_payload,
+                        method="POST",
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-hasura-admin-secret": hasura_admin_secret,
+                        },
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        mutation_result = json.loads(resp.read().decode("utf-8"))
+                    
+                    # Check for GraphQL errors
+                    if "errors" in mutation_result and mutation_result["errors"]:
+                        raise Exception(f"GraphQL mutation errors: {mutation_result['errors']}")
+                    
+                    log_info("Site event inserted: agent.claim_topup_failed (timeout)")
+        except Exception as e:
+            log_error("Failed to emit timeout site_event", error=e)
     
     return {
         "success": True,
