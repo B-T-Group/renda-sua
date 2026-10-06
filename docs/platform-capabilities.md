@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-05 for pickup order timelines (Picked up, no On the way) and diaspora recipient WhatsApp complete (`rs_recipient_complete_pickup`). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-05 for pickup order timelines (Picked up, no On the way) and diaspora recipient WhatsApp complete (`rs_recipient_complete_pickup`). 2026-10-06 for #451 PR-0+1 (assistant analytics events + feature flags). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
@@ -10,6 +10,7 @@
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
+| #451 PR-0+1 | #451 | **Shopping assistant analytics plumbing + feature flags (#458).** Added 17 `assistant.*` event types: 15 client events in `SITE_EVENT_TYPES_V1` and 2 server-only events (`assistant.message.classified`, `assistant.support.deflected`) in `SERVER_SITE_EVENT_TYPES`, which the public `/track-site-event` rejects with 400. Also added the 3 missing `orders.reorder.*` types (#336), whose events had been dropped with a 400. `assistant.*` metadata is validated per key, and anything that fails is dropped: enums (incl. `persona`, `market`, `locale`, `channel`, `currency`, `shown_stock_bucket`), booleans, integers 0–999999 (`turn`, `position`, `minutes_since_tap`), `shown_price` as a whole number 0–99,999,999, `screen`/`chip_id` matching `^[A-Za-z0-9_.-]{1,40}$`, `tools_used` as known tool names (max 10), `thread_id`/`target_id`/`order_id` only as strict UUIDs, and no nested objects or other arrays. `orders.reorder.*` keep `orderId` only when it is a strict UUID. Client flags `assistant_launcher_v1` (orb, nudge, chips) and `assistant_shopping_v1` (catalog tools, per market) are seeded in Hasura with default false. The mobile flags fetch passes the market country, refetches on market change, and keeps the last known flags on a failed refetch (defaults only before the first success). See Appendix C.1. | Appendix C.1 flag table (updated) |
 | same-region distance | – | **Store distance is shown only in the same country and state.** Catalog, store, and item distances are omitted when the shopper and the store differ by country or state. | §2.1 Client |
 | pickup timeline | – | **Client order timeline is pickup-aware (web + mobile).** Store pickup shows Placed, Confirmed, Preparing, Picked up. Delivery still includes On the way and Delivered. | §2.1 Order tracking |
 | diaspora recipient complete | – | **Diaspora store-pickup recipient can complete on WhatsApp.** When the order is ready and the card is paid or authorized, `rs_recipient_complete_pickup` (quick reply Complete order) settles like the payer's `complete-pickup` and pays the store. The payer can still complete in the app. Delivery diaspora is unchanged (merchant paid at agent pickup; recipient still gets the PIN). Template must be approved in Meta before it sends. | §2.1, §3.4.5, diaspora checkout |
@@ -753,7 +754,7 @@ stateDiagram-v2
 Notes: client cancellation via `POST /orders/cancel` (`pending_payment…ready_for_pickup` before assignment). Business early cancel is a full refund, except a paid pickup no-show after `pickup_noshow_cancel_hours`: cooked food goes `ready_for_pickup→failed` via `fail-pickup`, other goods via `POST /orders/:id/cancel-uncollected-pickup` (`cancelled`, restocked). System/admin: `cancelOrderAsAdmin`. Shipping uses `awaiting_shipment/shipped` with `mark-shipped`, `tracking`, `confirm-receipt`.
 
 ## Appendix C — Flag / config table
-### C.1 Client flags (public endpoint `GET https://prod.api.rendasua.com/api/app-config/client-flags`, fetched 2026-10-01)
+### C.1 Client flags (public endpoint `GET https://prod.api.rendasua.com/api/app-config/client-flags`, fetched 2026-10-01; updated 2026-10-06 for #451)
 | Flag | Prod value | Code default | Consumers |
 |---|---|---|---|
 | `reels_enabled` | **true** | false | mobile navigators/dashboard; backend per-merchant allowlist |
@@ -763,6 +764,8 @@ Notes: client cancellation via `POST /orders/cancel` (`pending_payment…ready_f
 | `reorder_v1` | **true** | `NODE_ENV !== 'production'` | web + mobile `useClientReorderFlow` |
 | `auth_web_inapp_gates` | **false** | false | web OTP/auth gate, funnel tracking |
 | `catalog_experience_v1` | **true** | `NODE_ENV !== 'production'` | web `ItemsPage`, mobile `BrowseCatalogScreen` |
+| `assistant_launcher_v1` | **false** | false | #451 Phase 0b: orb, nudge, quick-question chips (web + mobile) |
+| `assistant_shopping_v1` | **false** | false | #451 Phase 1: `search_catalog`, `get_reorder_options` tools (per market, after 15% intent gate) |
 
 ### C.2 Server-side `application_configurations` keys read by code (prod values not exposed)
 `momo_pay_now_delivery_enabled` (default false; migration `20260909140000_momo_reservation_deposit`), `location_delegations` (seed false, enabled by `1788545588636`), `merchant_agreement_provider`, `mobile_money_verification_method` (seed `question`), `first_order_discount_percentage`, `cancellation_fee` (legacy flat, no longer used for cancellations or fail-pickup), `cancellation_fee_percent` (CM/GA 30, CA 0), `pickup_noshow_cancel_hours` (global seed 2; migration `20261004180000_pickup_noshow_cancel_hours`), `pickup_sla_minutes` (40), `pickup_reminder_minutes_before` (10), `pickup_overdue_grace_minutes` (15), `pickup_reassignment_grace_minutes` (40) (migration `20260803162000`), order-risk keys, `business_referral_payout_enabled`, `business_referral_payout_amount[_internal]`, `business_to_business_referral_amount`, `agent_referral_commission`, `referral_pyramid_gen{1,2,3}_percent`, `launch_promo_*`, `rembg_cleanup`, `openai_image_cleanup_model`, `{internal,verified,unverified}_agent_hold_percentage`, `{unverified,verified}_agent_{base,per_km}_delivery_commission`, `rendasua_item_commission_percentage` (legacy).

@@ -7,6 +7,8 @@ export const CLIENT_FLAG_KEYS = [
   'reorder_v1',
   'auth_web_inapp_gates',
   'catalog_experience_v1',
+  'assistant_launcher_v1',
+  'assistant_shopping_v1',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -26,4 +28,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   auth_web_inapp_gates: false,
   /** On in non-production when no DB row exists; off in production until configured. */
   catalog_experience_v1: isNonProduction,
+  /** Shopping assistant launcher (orb, nudge, chips) - default off until Phase 0b. */
+  assistant_launcher_v1: false,
+  /** Shopping assistant catalog tools (search_catalog, get_reorder_options) - per market. */
+  assistant_shopping_v1: false,
 };
