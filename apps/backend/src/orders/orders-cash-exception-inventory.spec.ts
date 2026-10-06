@@ -89,6 +89,10 @@ describe('OrdersService cash-exception inventory', () => {
           useValue: { sendOrderCompletedMessage: jest.fn().mockResolvedValue(undefined) },
         },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        {
+          provide: require('../site-events/site-events.service').SiteEventsService,
+          useValue: { trackEvent: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     })
       .useMocker(() => ({}))

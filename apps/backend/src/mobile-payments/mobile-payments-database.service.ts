@@ -768,6 +768,8 @@ export class MobilePaymentsDatabaseService {
             status
             created_at
             account_id
+            amount
+            currency
           }
         }
       `;

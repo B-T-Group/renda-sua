@@ -166,6 +166,46 @@ def _handle_unpaid_order_timeout(
     }
 
 
+def _insert_site_event(
+    event_type: str,
+    metadata: Dict[str, Any],
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+) -> None:
+    """Insert a site_event row (Phase 0 #453). Failures are caught and logged."""
+    mutation = """
+    mutation InsertSiteEvent($object: site_events_insert_input!) {
+      insert_site_events_one(object: $object) {
+        id
+      }
+    }
+    """
+    variables = {
+        "object": {
+            "event_type": event_type,
+            "viewer_type": "server",
+            "viewer_id": "system",
+            "metadata": metadata,
+        }
+    }
+    try:
+        payload = json.dumps({"query": mutation, "variables": variables}).encode("utf-8")
+        req = urllib.request.Request(
+            hasura_endpoint,
+            data=payload,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-hasura-admin-secret": hasura_admin_secret,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+        log_info(f"Site event inserted: {event_type}")
+    except Exception as e:
+        log_error(f"Failed to insert site_event {event_type}", error=e)
+
+
 def _handle_order_claim_initiated(
     payload: Dict[str, Any],
     order_id: str,
@@ -173,7 +213,7 @@ def _handle_order_claim_initiated(
     hasura_endpoint: str,
     hasura_admin_secret: str,
 ) -> Dict[str, Any]:
-    """Only cancel transaction; no order changes."""
+    """Only cancel transaction; no order changes. Emits timeout event (Phase 0 #453)."""
     log_info(
         "Claim timeout: transaction cancelled only",
         order_id=order_id,
@@ -182,6 +222,55 @@ def _handle_order_claim_initiated(
     _cancel_momo_tx_if_pending(
         transaction_id, hasura_endpoint, hasura_admin_secret
     )
+    
+    # Emit agent.claim_topup_failed for timeout (Phase 0 #453)
+    try:
+        # Fetch transaction details for metadata
+        tx = get_transaction_by_id(
+            transaction_id, hasura_endpoint, hasura_admin_secret
+        )
+        if tx:
+            # Query order for order_number and agent_id
+            order_query = """
+            query GetOrder($orderId: uuid!) {
+              orders_by_pk(id: $orderId) {
+                order_number
+                assigned_agent_id
+              }
+            }
+            """
+            query_payload = json.dumps({"query": order_query, "variables": {"orderId": order_id}}).encode("utf-8")
+            req = urllib.request.Request(
+                hasura_endpoint,
+                data=query_payload,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-hasura-admin-secret": hasura_admin_secret,
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                order_data = json.loads(resp.read().decode("utf-8"))
+                order = order_data.get("data", {}).get("orders_by_pk")
+                
+            if order:
+                _insert_site_event(
+                    "agent.claim_topup_failed",
+                    {
+                        "orderId": order_id,
+                        "orderNumber": order.get("order_number"),
+                        "agentId": order.get("assigned_agent_id") or "unknown",
+                        "transactionId": tx.get("transaction_id"),
+                        "holdAmount": tx.get("amount", 0),
+                        "currency": tx.get("currency", "XAF"),
+                        "reason": "timeout",
+                    },
+                    hasura_endpoint,
+                    hasura_admin_secret,
+                )
+    except Exception as e:
+        log_error("Failed to emit timeout site_event", error=e)
+    
     return {
         "success": True,
         "event_type": "order.claim_initiated",

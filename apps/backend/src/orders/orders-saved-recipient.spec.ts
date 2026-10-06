@@ -75,6 +75,10 @@ describe('OrdersService - Saved Recipient Auth', () => {
           provide: HasuraUserService,
           useValue: mockHasuraUserService,
         },
+        {
+          provide: require('../site-events/site-events.service').SiteEventsService,
+          useValue: { trackEvent: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

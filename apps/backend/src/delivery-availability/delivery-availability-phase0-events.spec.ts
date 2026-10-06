@@ -140,7 +140,7 @@ describe('DeliveryAvailabilityService Phase 0 Events', () => {
       providers: [
         DeliveryAvailabilityService,
         { provide: DELIVERY_AVAILABILITY_RULES, useValue: [] },
-        // SiteEventsService not provided (optional)
+        { provide: SiteEventsService, useValue: { trackEvent: jest.fn() } },
       ],
     }).compile();
 

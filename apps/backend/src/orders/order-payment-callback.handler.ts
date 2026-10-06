@@ -97,7 +97,7 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
         `Claim order payment failed for order ${transaction.reference}`
       );
       // Emit topup failed event (Phase 0 #453)
-      await this.ordersService.emitClaimTopupFailed(
+      void this.ordersService.emitClaimTopupFailed(
         transaction,
         message
       );

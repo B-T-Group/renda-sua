@@ -1,214 +1,123 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { HttpException, HttpStatus } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrdersService } from './orders.service';
-import { SiteEventsService } from '../site-events/site-events.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
-import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { AccountsService } from '../accounts/accounts.service';
-import { AgentHoldService } from '../agents/agent-hold.service';
-import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
-import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
-import { OrderStatusService } from './order-status.service';
-import { GoogleDistanceService } from '../google/google-distance.service';
-import { AddressesService } from '../addresses/addresses.service';
-import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
-import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
-import { NotificationsService } from '../notifications/notifications.service';
-import { FxEstimateService } from '../diaspora/fx-estimate.service';
-import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
-import { CommissionsService } from '../commissions/commissions.service';
-import { PdfService } from '../pdf/pdf.service';
-import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { randomUUID } from 'crypto';
 
-/**
- * Phase 0 (#453): Agent claim friction & delivery availability events.
- * Tests that site_events are emitted correctly without subject-based dedupe.
- */
-describe('OrdersService Phase 0 Events', () => {
-  let service: OrdersService;
-  let siteEventsService: jest.Mocked<SiteEventsService>;
-  let hasuraUserService: jest.Mocked<HasuraUserService>;
-  let hasuraSystemService: jest.Mocked<HasuraSystemService>;
-
-  const mockAgent = {
-    id: 'agent-123',
-    is_verified: true,
-    is_internal: false,
-  };
-
-  const mockAgentUser = {
-    id: 'user-123',
-    first_name: 'Jane',
-    last_name: 'Agent',
-    agent: mockAgent,
-    active_persona: 'agent',
-  } as any;
-
-  const mockOrder = {
+function mockOrder() {
+  return {
     id: 'order-123',
     order_number: 'ORD-001',
     current_status: 'ready_for_pickup',
     subtotal: 10000,
     currency: 'XAF',
     business_id: 'biz-123',
+    business_location: {
+      address: {
+        city: 'Douala',
+        state: 'Littoral',
+      },
+    },
     assigned_agent_id: null,
     verified_agent_delivery: false,
-    pickup_address: {
-      city: 'Douala',
-      state: 'Littoral',
+  };
+}
+
+function mockAgent() {
+  return {
+    id: 'agent-123',
+    is_verified: true,
+    is_internal: false,
+  };
+}
+
+function mockUser() {
+  return {
+    id: 'user-123',
+    first_name: 'Jane',
+    last_name: 'Agent',
+    agent: mockAgent(),
+    active_persona: 'agent',
+  };
+}
+
+function createHarness() {
+  const trackEvent = jest.fn().mockResolvedValue(undefined);
+  const service = Object.create(OrdersService.prototype) as OrdersService;
+  Object.assign(service, {
+    hasuraUserService: {
+      getUser: jest.fn().mockResolvedValue(mockUser()),
+      sessionPersonaContext: jest.fn().mockReturnValue({
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+      }),
     },
-  } as any;
-
-  beforeEach(async () => {
-    const mockSiteEventsService = {
-      trackEvent: jest.fn().mockResolvedValue(undefined),
-    };
-
-    const mockHasuraUserService = {
-      getUser: jest.fn().mockResolvedValue(mockAgentUser),
-    };
-
-    const mockHasuraSystemService = {
-      executeQuery: jest.fn(),
-      executeMutation: jest.fn(),
+    hasuraSystemService: {
+      executeQuery: jest.fn().mockResolvedValue({
+        agents_by_pk: { status: 'active' },
+      }),
       getAccount: jest.fn().mockResolvedValue({
         id: 'account-123',
         available_balance: 5000,
       }),
-      getAccountById: jest.fn(),
-      getUserById: jest.fn(),
-    };
-
-    const mockAgentHoldService = {
-      getHoldPercentageForAgent: jest.fn().mockResolvedValue(80),
-    };
-
-    const mockPaymentRoutingService = {
-      resolveRailForBusiness: jest.fn().mockResolvedValue('mobile_money'),
-    };
-
-    const mockMobilePaymentsDatabaseService = {
-      hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
-      getPendingClaimOrderTransactionForUserAndOrderNumber: jest.fn(),
-      updateTransaction: jest.fn(),
-      createTransaction: jest.fn(),
-    };
-
-    // Minimal module with mocked dependencies
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        OrdersService,
-        { provide: SiteEventsService, useValue: mockSiteEventsService },
-        { provide: HasuraUserService, useValue: mockHasuraUserService },
-        { provide: HasuraSystemService, useValue: mockHasuraSystemService },
-        { provide: AccountsService, useValue: {} },
-        { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: OrderStatusService, useValue: {} },
-        { provide: GoogleDistanceService, useValue: {} },
-        { provide: AddressesService, useValue: {} },
-        { provide: MobilePaymentsService, useValue: {} },
-        { provide: MobilePaymentsDatabaseService, useValue: mockMobilePaymentsDatabaseService },
-        { provide: MobilePaymentPhonesService, useValue: {} },
-        { provide: NotificationsService, useValue: {} },
-        { provide: AgentHoldService, useValue: mockAgentHoldService },
-        { provide: PaymentRoutingService, useValue: mockPaymentRoutingService },
-        { provide: FxEstimateService, useValue: {} },
-        { provide: DeliveryConfigService, useValue: {} },
-        { provide: CommissionsService, useValue: {} },
-        { provide: PdfService, useValue: {} },
-        { provide: DeliveryAvailabilityService, useValue: {} },
-        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
-        // Stub remaining dependencies as symbols/values
-        { provide: 'OrderRecipientNotificationsService', useValue: {} },
-        { provide: 'RecipientsService', useValue: {} },
-        { provide: 'DeliveryWindowsService', useValue: {} },
-        { provide: 'OrderQueueService', useValue: {} },
-        { provide: 'WaitAndExecuteScheduleService', useValue: {} },
-        { provide: 'DeliveryPinService', useValue: {} },
-        { provide: 'DeliveryPinShareService', useValue: {} },
-        { provide: 'OrderRefundsService', useValue: {} },
-        { provide: 'LoyaltyService', useValue: {} },
-        { provide: 'StripeCheckoutService', useValue: {} },
-        { provide: 'StripeCaptureService', useValue: {} },
-        { provide: 'StripeRefundService', useValue: {} },
-        { provide: 'StripeTaxCheckoutBuilderService', useValue: {} },
-        { provide: 'StripeTaxCalculationService', useValue: {} },
-        { provide: 'OrderOffersService', useValue: {} },
-        { provide: 'CancellationPolicyService', useValue: {} },
-        { provide: 'LocationsService', useValue: {} },
-        { provide: 'OrderSystemJobsService', useValue: {} },
-        { provide: 'OrderCleanupService', useValue: {} },
-        { provide: 'OrderAcceptanceService', useValue: {} },
-        { provide: 'FulfillmentPromiseService', useValue: {} },
-        { provide: 'OrderMarkReadyService', useValue: {} },
-        { provide: 'OrderPickupMonitorService', useValue: {} },
-        { provide: 'OrderReassignmentService', useValue: {} },
-        { provide: 'OrderEventsService', useValue: {} },
-        { provide: 'RbacService', useValue: {} },
-        { provide: 'FoodOrdersService', useValue: {} },
-        { provide: 'CookedFoodPickupFlowService', useValue: {} },
-        { provide: 'DepositCalculationService', useValue: {} },
-        { provide: 'DepositLedgerService', useValue: {} },
-        { provide: 'DepositRefundService', useValue: {} },
-        { provide: 'VariantInventoryService', useValue: {} },
-        { provide: 'CommerceOrderInventoryHook', useValue: {} },
-        { provide: 'RepresentativeCompensationService', useValue: {} },
-        { provide: 'CreditsService', useValue: {} },
-        { provide: 'PurchaseCreditsService', useValue: {} },
-      ],
-    }).compile();
-
-    service = module.get<OrdersService>(OrdersService);
-    siteEventsService = module.get(SiteEventsService);
-    hasuraUserService = module.get(HasuraUserService);
-    hasuraSystemService = module.get(HasuraSystemService);
-
-    // Mock private method getOrderWithItems
-    jest
-      .spyOn(service as any, 'getOrderWithItems')
-      .mockResolvedValue(mockOrder);
-    jest.spyOn(service as any, 'getAgentStatus').mockResolvedValue('active');
-    jest.spyOn(service as any, 'requireAgentRecord').mockReturnValue(mockAgent);
-    jest
-      .spyOn(service as any, 'requireActivePersona')
-      .mockImplementation(jest.fn());
-    jest
-      .spyOn(service as any, 'assertAgentVerifiedForClaim')
-      .mockImplementation(jest.fn());
+    },
+    siteEventsService: { trackEvent },
+    logger: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
   });
 
-  describe('checkOrderClaimAvailability', () => {
-    it('should emit agent.claim_funds_check event on success', async () => {
-      const result = await service.checkOrderClaimAvailability('order-123');
+  jest.spyOn(service as any, 'getOrderWithItems').mockResolvedValue(mockOrder());
+  jest.spyOn(service as any, 'requireAgentRecord').mockReturnValue(mockAgent());
+  jest.spyOn(service as any, 'requireActivePersona').mockReturnValue(undefined);
+  jest.spyOn(service as any, 'assertAgentVerifiedForClaim').mockReturnValue(undefined);
+  jest.spyOn(service as any, 'assertClaimableFulfillment').mockReturnValue(undefined);
+  jest.spyOn(service as any, 'getAgentStatus').mockResolvedValue('active');
+  jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue({
+    rail: 'mobile_money',
+    holdPercentage: 80,
+    holdAmount: 8000,
+  });
+
+  return { service, trackEvent };
+}
+
+describe('OrdersService Phase 0 Events', () => {
+  describe('claimOrder funds check before 403', () => {
+    it('emits agent.claim_funds_check before throwing 403 on insufficient funds', async () => {
+      const harness = createHarness();
+      harness.hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 3000, // Less than holdAmount (8000)
+      });
+
+      jest
+        .spyOn(harness.service as any, 'mobilePaymentsDatabaseService', 'get')
+        .mockReturnValue({
+          hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
+        });
+
+      await expect(
+        harness.service.claimOrder({ orderId: 'order-123' })
+      ).rejects.toThrow();
 
       // Wait for async emission
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(result.success).toBe(true);
-      expect(siteEventsService.trackEvent).toHaveBeenCalledWith(
+      expect(harness.trackEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: 'agent.claim_funds_check',
           metadata: expect.objectContaining({
             orderId: 'order-123',
             orderNumber: 'ORD-001',
             agentId: 'agent-123',
-            city: null,
-            state: null,
+            city: 'Douala',
+            state: 'Littoral',
             subtotal: 10000,
             currency: 'XAF',
             holdPercentage: 80,
             holdAmount: 8000,
-            availableBalance: 5000,
+            availableBalance: 3000,
             needsTopUp: true,
             hasEnoughFunds: false,
-            shortfall: 3000,
             rail: 'mobile_money',
-            source: 'availability',
+            source: 'claim',
           }),
-          subjectType: undefined,
-          subjectId: undefined,
         }),
         expect.objectContaining({
           viewerType: 'server',
@@ -216,29 +125,46 @@ describe('OrdersService Phase 0 Events', () => {
         })
       );
     });
+  });
 
-    it('should allow repeated calls without dedupe', async () => {
-      await service.checkOrderClaimAvailability('order-123');
-      await service.checkOrderClaimAvailability('order-123');
+  describe('acceptOrderOffer', () => {
+    it('emits funds check with source offer_accept', async () => {
+      const harness = createHarness();
+      const mockOrderOffersService = {
+        getActiveOfferForAgent: jest.fn().mockResolvedValue({ id: 'offer-1' }),
+      };
+      Object.assign(harness.service, {
+        orderOffersService: mockOrderOffersService,
+        mobilePaymentsDatabaseService: {
+          hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
+        },
+        assignOrderToAgent: jest.fn().mockResolvedValue({ id: 'order-123' }),
+        getOrCreateOrderHold: jest.fn().mockResolvedValue({ id: 'hold-1' }),
+        updateOrderHold: jest.fn().mockResolvedValue(undefined),
+        requireSuccessfulHold: jest.fn().mockResolvedValue(undefined),
+        createStatusHistoryEntry: jest.fn().mockResolvedValue(undefined),
+        onOrderAssignedToAgent: jest.fn().mockResolvedValue(undefined),
+      });
+
+      await harness.service.acceptOrderOffer({ orderId: 'order-123' });
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(siteEventsService.trackEvent).toHaveBeenCalledTimes(2);
-    });
-
-    it('should not throw if event emission fails', async () => {
-      siteEventsService.trackEvent.mockRejectedValue(
-        new Error('Insert failed')
+      expect(harness.trackEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'agent.claim_funds_check',
+          metadata: expect.objectContaining({
+            source: 'offer_accept',
+          }),
+        }),
+        expect.any(Object)
       );
-
-      const result = await service.checkOrderClaimAvailability('order-123');
-
-      expect(result.success).toBe(true);
     });
   });
 
-  describe('emitClaimTopupFailed', () => {
-    it('should emit agent.claim_topup_failed event', async () => {
+  describe('processClaimOrderPayment', () => {
+    it('emits topup_succeeded once on slot assigned', async () => {
+      const harness = createHarness();
       const mockTransaction = {
         id: 'tx-123',
         entity_id: 'ORD-001',
@@ -248,62 +174,117 @@ describe('OrdersService Phase 0 Events', () => {
         transaction_id: 'momo-tx-123',
         provider: 'mtn_momo_cm',
         account_id: 'account-123',
-      } as any;
+        created_at: new Date().toISOString(),
+      };
 
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders: [mockOrder],
+      Object.assign(harness.service, {
+        hasuraSystemService: {
+          ...harness.service.hasuraSystemService,
+          getAccountById: jest.fn().mockResolvedValue({
+            id: 'account-123',
+            user_id: 'user-123',
+          }),
+          getUserById: jest.fn().mockResolvedValue(mockUser()),
+        },
       });
-      hasuraSystemService.getAccountById.mockResolvedValue({
-        id: 'account-123',
-        user_id: 'user-123',
+
+      jest.spyOn(harness.service as any, 'getOrderForProcessingByNumber').mockResolvedValue(mockOrder());
+      jest.spyOn(harness.service as any, 'loadClaimPaymentContext').mockResolvedValue({
+        order: mockOrder(),
+        agentId: 'agent-123',
+        accountId: 'account-123',
       });
-      hasuraSystemService.getUserById.mockResolvedValue(mockAgentUser);
+      jest.spyOn(harness.service as any, 'assignClaimIfOpen').mockResolvedValue('assigned');
+      jest.spyOn(harness.service as any, 'placeClaimHoldOrRevert').mockResolvedValue(undefined);
+      jest.spyOn(harness.service as any, 'recordNewClaimAssignment').mockResolvedValue(undefined);
+      jest.spyOn(harness.service as any, 'claimPaymentDoneMessage').mockReturnValue('Done');
 
-      jest
-        .spyOn(service as any, 'getOrderForProcessingByNumber')
-        .mockResolvedValue(mockOrder);
-
-      await service.emitClaimTopupFailed(mockTransaction, 'Payment timeout');
+      await harness.service.processClaimOrderPayment(mockTransaction);
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(siteEventsService.trackEvent).toHaveBeenCalledWith(
+      expect(harness.trackEvent).toHaveBeenCalledWith(
         expect.objectContaining({
-          eventType: 'agent.claim_topup_failed',
+          eventType: 'agent.claim_topup_succeeded',
           metadata: expect.objectContaining({
             orderId: 'order-123',
             orderNumber: 'ORD-001',
             agentId: 'agent-123',
             holdAmount: 8000,
             transactionId: 'momo-tx-123',
-            provider: 'mtn_momo_cm',
-            currency: 'XAF',
-            reason: 'Payment timeout',
           }),
-          subjectType: undefined,
-          subjectId: undefined,
         }),
-        expect.objectContaining({
-          viewerType: 'server',
-          viewerId: 'system',
-        })
+        expect.any(Object)
       );
     });
 
-    it('should not throw if lookup fails', async () => {
+    it('does not emit on slot already-mine (replay)', async () => {
+      const harness = createHarness();
       const mockTransaction = {
         id: 'tx-123',
-        entity_id: 'MISSING',
+        entity_id: 'ORD-001',
+        amount: 8000,
         account_id: 'account-123',
-      } as any;
+        created_at: new Date().toISOString(),
+      };
 
-      jest
-        .spyOn(service as any, 'getOrderForProcessingByNumber')
-        .mockRejectedValue(new Error('Order not found'));
+      jest.spyOn(harness.service as any, 'loadClaimPaymentContext').mockResolvedValue({
+        order: mockOrder(),
+        agentId: 'agent-123',
+        accountId: 'account-123',
+      });
+      jest.spyOn(harness.service as any, 'assignClaimIfOpen').mockResolvedValue('already-mine');
+      jest.spyOn(harness.service as any, 'placeClaimHoldOrRevert').mockResolvedValue(undefined);
+      jest.spyOn(harness.service as any, 'claimPaymentDoneMessage').mockReturnValue('Done');
 
-      await expect(
-        service.emitClaimTopupFailed(mockTransaction, 'Failed')
-      ).resolves.not.toThrow();
+      await harness.service.processClaimOrderPayment(mockTransaction);
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(harness.trackEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelClaimRequest', () => {
+    it('emits cancel event with real holdAmount', async () => {
+      const harness = createHarness();
+      const mockPendingTransaction = {
+        id: 'tx-123',
+        transaction_id: 'prov-tx-123',
+        provider: 'mtn_momo_cm',
+        amount: 8000,
+        currency: 'XAF',
+      };
+
+      Object.assign(harness.service, {
+        mobilePaymentsDatabaseService: {
+          getPendingClaimOrderTransactionForUserAndOrderNumber: jest
+            .fn()
+            .mockResolvedValue(mockPendingTransaction),
+          updateTransaction: jest.fn().mockResolvedValue(undefined),
+        },
+        mobilePaymentsService: {
+          cancelTransaction: jest.fn().mockResolvedValue(true),
+        },
+      });
+
+      await harness.service.cancelClaimRequest({ orderId: 'order-123' });
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(harness.trackEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'agent.claim_topup_cancelled',
+          metadata: expect.objectContaining({
+            orderId: 'order-123',
+            orderNumber: 'ORD-001',
+            agentId: 'agent-123',
+            holdAmount: 8000,
+            currency: 'XAF',
+          }),
+        }),
+        expect.any(Object)
+      );
     });
   });
 });

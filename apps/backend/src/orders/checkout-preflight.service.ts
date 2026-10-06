@@ -109,7 +109,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           default_estimated_prep_minutes
           user { id country }
         }
-        address { country state latitude longitude }
+        address { country state city latitude longitude }
       }
       food_settings {
         marked_unavailable_at

@@ -11777,6 +11777,7 @@ export class OrdersService {
             }
           }
           business_location {
+            id
             business_id
             is_active
             pay_at_confirm
