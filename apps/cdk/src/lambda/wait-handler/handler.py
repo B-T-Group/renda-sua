@@ -191,10 +191,12 @@ def _handle_order_claim_initiated(
     # Emit agent.claim_topup_failed for timeout ONLY if we actually cancelled it (Phase 0 #453)
     if was_cancelled:
         try:
-            # Fetch transaction + account + user + agent in one query
+            # Fetch transaction + account + user + agent in one query.
+            # transaction_id here is the mobile_payment_transactions.id row UUID
+            # (scheduled as transaction.id), NOT the provider transaction_id.
             query = """
-            query GetClaimTimeoutData($transactionId: String!, $orderId: uuid!) {
-              mobile_payment_transactions(where: {transaction_id: {_eq: $transactionId}}, limit: 1) {
+            query GetClaimTimeoutData($id: uuid!, $orderId: uuid!) {
+              mobile_payment_transactions_by_pk(id: $id) {
                 transaction_id
                 amount
                 currency
@@ -215,7 +217,7 @@ def _handle_order_claim_initiated(
             """
             query_payload = json.dumps({
                 "query": query,
-                "variables": {"transactionId": transaction_id, "orderId": order_id}
+                "variables": {"id": transaction_id, "orderId": order_id}
             }).encode("utf-8")
             
             req = urllib.request.Request(
@@ -234,11 +236,19 @@ def _handle_order_claim_initiated(
             if "errors" in data and data["errors"]:
                 raise Exception(f"GraphQL errors: {data['errors']}")
             
-            tx_rows = data.get("data", {}).get("mobile_payment_transactions", [])
-            order = data.get("data", {}).get("orders_by_pk")
-            
-            if tx_rows and order:
-                tx = tx_rows[0]
+            result_data = data.get("data") or {}
+            tx = result_data.get("mobile_payment_transactions_by_pk")
+            order = result_data.get("orders_by_pk")
+
+            if not tx or not order:
+                log_error(
+                    "Cannot emit timeout event: transaction or order not found",
+                    transaction_id=transaction_id,
+                    order_id=order_id,
+                    tx_found=bool(tx),
+                    order_found=bool(order),
+                )
+            else:
                 agent_id = None
                 if tx.get("account") and tx["account"].get("user") and tx["account"]["user"].get("agent"):
                     agent_id = tx["account"]["user"]["agent"]["id"]
