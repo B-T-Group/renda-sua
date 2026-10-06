@@ -39,11 +39,14 @@ const TOOL_RESULT_BLOCK_KINDS = new Set(['item', 'store', 'order', 'reorder']);
  * the character's Success state. Plain FAQ answers, link-only blocks and handoffs
  * never count.
  */
-export function replyHasToolSuccess(data: Partial<ChatApiResponse> | null | undefined): boolean {
+export function replyHasToolSuccess(
+  data: Partial<ChatApiResponse> | null | undefined
+): boolean {
   if (!data || data.handoff) return false;
   if (!Array.isArray(data.blocks)) return false;
   return data.blocks.some(
-    (b) => !!b && typeof b.kind === 'string' && TOOL_RESULT_BLOCK_KINDS.has(b.kind)
+    (b) =>
+      !!b && typeof b.kind === 'string' && TOOL_RESULT_BLOCK_KINDS.has(b.kind)
   );
 }
 
@@ -54,7 +57,11 @@ export type LastAssistantReply = {
   handoff: boolean;
 };
 
-const NO_REPLY: LastAssistantReply = { seq: 0, toolSuccess: false, handoff: false };
+const NO_REPLY: LastAssistantReply = {
+  seq: 0,
+  toolSuccess: false,
+  handoff: false,
+};
 
 interface AssistantChatContextType {
   messages: AssistantChatMessage[];
@@ -527,6 +534,11 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       {children}
     </AssistantChatContext.Provider>
   );
+}
+
+/** Null outside the provider (shared widgets that only need the thread id). */
+export function useOptionalAssistantChat(): AssistantChatContextType | null {
+  return useContext(AssistantChatContext);
 }
 
 export function useAssistantChat(): AssistantChatContextType {

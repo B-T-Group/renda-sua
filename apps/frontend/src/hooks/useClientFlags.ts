@@ -30,6 +30,8 @@ const DEFAULT_FLAGS: ClientFlags = {
 export function useClientFlags() {
   const apiClient = useApiClient();
   const [flags, setFlags] = useState<ClientFlags>(DEFAULT_FLAGS);
+  /** True once the fetch settled (success or failure, failure keeps the defaults). */
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!apiClient) return;
@@ -43,16 +45,19 @@ export function useClientFlags() {
       .then((res) => {
         if (cancelled) return;
         setFlags({ ...DEFAULT_FLAGS, ...(res.data?.data ?? {}) });
+        setLoaded(true);
       })
       .catch(() => {
-        if (!cancelled) setFlags(DEFAULT_FLAGS);
+        if (cancelled) return;
+        setFlags(DEFAULT_FLAGS);
+        setLoaded(true);
       });
     return () => {
       cancelled = true;
     };
   }, [apiClient]);
 
-  return { flags };
+  return { flags, loaded };
 }
 
 export function useReorderOrder() {

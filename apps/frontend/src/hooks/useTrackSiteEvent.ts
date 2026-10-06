@@ -103,6 +103,16 @@ export const SITE_EVENT_CATALOG_MODULE_IMPRESSION =
 export const SITE_EVENT_CATALOG_MODULE_CLICK =
   'catalog.module.click' as const;
 
+// Assistant launcher (#451 §3.3; types allowlisted by #458).
+export const SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION =
+  'assistant.launcher.impression' as const;
+export const SITE_EVENT_ASSISTANT_LAUNCHER_TAP = 'assistant.launcher.tap' as const;
+export const SITE_EVENT_ASSISTANT_NUDGE_SHOWN = 'assistant.nudge.shown' as const;
+export const SITE_EVENT_ASSISTANT_NUDGE_DISMISSED =
+  'assistant.nudge.dismissed' as const;
+export const SITE_EVENT_ASSISTANT_ATTENTION_PLAYED =
+  'assistant.attention.played' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -143,7 +153,12 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_AUTH_REAUTH_NOTICE_ACTION
   | typeof SITE_EVENT_AUTH_SESSION_OBSERVED
   | typeof SITE_EVENT_CATALOG_MODULE_IMPRESSION
-  | typeof SITE_EVENT_CATALOG_MODULE_CLICK;
+  | typeof SITE_EVENT_CATALOG_MODULE_CLICK
+  | typeof SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION
+  | typeof SITE_EVENT_ASSISTANT_LAUNCHER_TAP
+  | typeof SITE_EVENT_ASSISTANT_NUDGE_SHOWN
+  | typeof SITE_EVENT_ASSISTANT_NUDGE_DISMISSED
+  | typeof SITE_EVENT_ASSISTANT_ATTENTION_PLAYED;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;
@@ -152,12 +167,24 @@ export type TrackInventoryCtaSiteEventInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type TrackSiteEventOptions = {
+  /**
+   * Guest identity override. Assistant events from guests are keyed by the chat
+   * thread id instead of the stable per-install id (#451 §3.3, §7b.9 Q2); an empty
+   * value sends no anonymous id (the server falls back to ip|ua).
+   */
+  anonymousId?: string | null;
+};
+
 export function useTrackSiteEvent() {
   const apiClient = useApiClient();
   const { isAuthenticated, user } = useSessionAuth();
 
   const trackSiteEvent = useCallback(
-    async (payload: TrackInventoryCtaSiteEventInput) => {
+    async (
+      payload: TrackInventoryCtaSiteEventInput,
+      options?: TrackSiteEventOptions
+    ) => {
       if (!apiClient) {
         return;
       }
@@ -165,6 +192,8 @@ export function useTrackSiteEvent() {
       const headers: Record<string, string> = {};
       if (isAuthenticated && user?.sub) {
         headers['X-User-Id'] = user.sub;
+      } else if (options && 'anonymousId' in options) {
+        if (options.anonymousId) headers['X-Anonymous-Id'] = options.anonymousId;
       } else {
         headers['X-Anonymous-Id'] = getOrCreateRsAnonymousId();
       }
