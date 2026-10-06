@@ -6661,11 +6661,23 @@ export class OrdersService {
     const quote = await this.quoteNoshowOutcome(order);
     await this.releaseStripeAuthorizationIfNeeded(order);
     const previousStatus = order.current_status;
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
+    
+    const eligibleFromStatuses = ['ready_for_pickup'];
+    const casSuccess = await this.casCancelUncollectedPickup(
       request.orderId,
-      'cancelled',
-      { viaCancelEndpoint: true }
+      eligibleFromStatuses
     );
+    if (!casSuccess) {
+      throw new HttpException(
+        'Order status has changed. Only orders in ready_for_pickup status can be cancelled as uncollected.',
+        HttpStatus.CONFLICT
+      );
+    }
+    
+    const updatedOrder = { 
+      id: request.orderId, 
+      current_status: 'cancelled' as const 
+    };
     await this.finishNoshowCancel(
       order,
       request,
@@ -6682,6 +6694,40 @@ export class OrdersService {
       deposit_forfeit_amount: quote.depositForfeitAmount,
       message: 'Pickup cancelled because the client did not collect it',
     };
+  }
+
+  private async casCancelUncollectedPickup(
+    orderId: string,
+    eligibleFromStatuses: string[]
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation CasCancelUncollectedPickup(
+        $orderId: uuid!
+        $eligibleFromStatuses: [order_status!]!
+        $now: timestamptz!
+      ) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _in: $eligibleFromStatuses }
+          }
+          _set: {
+            current_status: cancelled
+            updated_at: $now
+          }
+        ) { affected_rows }
+      }
+      `,
+      {
+        orderId,
+        eligibleFromStatuses,
+        now: new Date().toISOString(),
+      }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
   private async finishNoshowCancel(
@@ -10721,26 +10767,49 @@ export class OrdersService {
     forfeitReason: DepositForfeitReason,
     actorUserId?: string
   ): Promise<void> {
-    try {
-      const forfeitResult = await this.depositRefundService.forfeitDeposit(
-        orderId,
-        forfeitReason,
-        { forfeitedByUserId: actorUserId ?? null }
-      );
-      if (!forfeitResult.success) {
+    const forfeitResult = await this.depositRefundService.forfeitDeposit(
+      orderId,
+      forfeitReason,
+      { forfeitedByUserId: actorUserId ?? null }
+    );
+    if (!forfeitResult.success) {
+      const errorCode = forfeitResult.errorCode || 'FORFEIT_ERROR';
+      const message = forfeitResult.message || 'Deposit forfeit failed';
+      
+      if (errorCode === 'FORFEIT_LEDGER_INCOMPLETE') {
         this.logger.error(
-          `Deposit forfeit failed for ${forfeitReason} on order ${orderId}: ${forfeitResult.message}`
+          `deposit_forfeit_ledger_incomplete orderId=${orderId} reason=${forfeitReason}: ${message}`,
+          { orderId, forfeitReason, errorCode, message }
         );
-        return;
+        throw new HttpException(
+          {
+            message: 'Deposit forfeit incomplete. The deposit claim succeeded but ledger entries are incomplete. Contact support to resume.',
+            errorCode: 'FORFEIT_LEDGER_INCOMPLETE',
+            orderId,
+            forfeitReason,
+            details: message,
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
       }
-      this.logger.log(
-        `Deposit forfeited (${forfeitReason}) for order ${orderId}`
-      );
-    } catch (error: any) {
+      
       this.logger.error(
-        `Failed to process deposit forfeit (${forfeitReason}) for ${orderId}: ${error.message}`
+        `Deposit forfeit failed for ${forfeitReason} on order ${orderId}: ${message}`,
+        { orderId, forfeitReason, errorCode, message }
+      );
+      throw new HttpException(
+        {
+          message,
+          errorCode,
+          orderId,
+          forfeitReason,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+    this.logger.log(
+      `Deposit forfeited (${forfeitReason}) for order ${orderId}`
+    );
   }
 
   private async releaseStripeAuthorizationIfNeeded(order: Orders): Promise<void> {

@@ -257,6 +257,16 @@ export class FakeMoneyDb {
       }
       return { update_orders: { affected_rows: 0 } };
     },
+    // ---- OrdersService (cancel uncollected pickup CAS)
+    CasCancelUncollectedPickup: (v: Row) => {
+      const order = this.orders.get(v.orderId);
+      if (!order || !(v.eligibleFromStatuses as string[]).includes(order.current_status)) {
+        return { update_orders: { affected_rows: 0 } };
+      }
+      order.current_status = 'cancelled';
+      order.updated_at = v.now;
+      return { update_orders: { affected_rows: 1 } };
+    },
     // ---- pickup no-show clock
     PickupNoshowHours: () => ({
       application_configurations: [{ country_code: null, number_value: 2 }],
